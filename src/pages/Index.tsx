@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
+import { TestTracker } from "@/components/test-tracker/TestTracker";
+import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
@@ -14,18 +16,15 @@ const Index = () => {
     switch (activeModule) {
       case "dashboard":
         return <Dashboard onNavigate={handleNavigation} />;
+      case "test-tracker":
+        return <TestTracker />;
+      case "flow-info":
+        return <FlowInfo />;
       case "monitor":
         return (
           <div className="p-6">
             <h1 className="text-3xl font-bold">生產監控牆</h1>
             <p className="text-muted-foreground">實時機台狀態監控 - 開發中</p>
-          </div>
-        );
-      case "flow":
-        return (
-          <div className="p-6">
-            <h1 className="text-3xl font-bold">測試流程設計</h1>
-            <p className="text-muted-foreground">流程版本化管理 - 開發中</p>
           </div>
         );
       case "issues":
