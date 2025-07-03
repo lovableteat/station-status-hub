@@ -94,15 +94,9 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
         </div>
       </nav>
 
-      {/* Theme Toggle & Status */}
+      {/* Theme Toggle */}
       <div className="p-4 border-t border-border">
-        <div className="flex items-center justify-between">
-          {!collapsed && (
-            <div className="text-xs text-muted-foreground">
-              <div>系統狀態: 正常運行</div>
-              <div>在線站點: 4/4</div>
-            </div>
-          )}
+        <div className="flex justify-center">
           <Button
             variant="ghost"
             size="sm"

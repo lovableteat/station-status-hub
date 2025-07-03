@@ -32,13 +32,13 @@ All colors MUST be HSL for proper theming support.
 
     /* Status colors for testing system */
     --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
-    --warning: 45 93% 47%;
-    --warning-foreground: 0 0% 98%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
     --danger: 0 84% 60%;
-    --danger-foreground: 0 0% 98%;
+    --danger-foreground: 210 40% 98%;
     --info: 217 91% 60%;
-    --info-foreground: 0 0% 98%;
+    --info-foreground: 210 40% 98%;
     
     /* Station status colors */
     --station-idle: 210 40% 96%;
@@ -107,13 +107,13 @@ All colors MUST be HSL for proper theming support.
     
     /* Dark mode status colors */
     --success: 142 76% 46%;
-    --success-foreground: 222.2 84% 4.9%;
-    --warning: 45 93% 58%;
-    --warning-foreground: 222.2 84% 4.9%;
+    --success-foreground: 0 0% 0%;
+    --warning: 38 92% 65%;
+    --warning-foreground: 0 0% 0%;
     --danger: 0 84% 60%;
     --danger-foreground: 210 40% 98%;
     --info: 217 91% 60%;
-    --info-foreground: 222.2 84% 4.9%;
+    --info-foreground: 0 0% 0%;
     
     /* Dark mode station colors */
     --station-idle: 217.2 32.6% 17.5%;
