@@ -538,6 +538,71 @@ export type Database = {
           },
         ]
       }
+      test_flow_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_minutes: number | null
+          id: string
+          item_name: string
+          item_order: number
+          station_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          item_name: string
+          item_order: number
+          station_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          item_name?: string
+          item_order?: number
+          station_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_flow_items_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_flow_stations: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          station_name: string
+          station_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          station_name: string
+          station_order: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          station_name?: string
+          station_order?: number
+        }
+        Relationships: []
+      }
       test_items: {
         Row: {
           created_at: string | null
@@ -572,6 +637,73 @@ export type Database = {
             columns: ["station_id"]
             isOneToOne: false
             referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_progress: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          item_id: string
+          notes: string | null
+          progress_percent: number | null
+          started_at: string | null
+          station_id: string
+          status: string | null
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          item_id: string
+          notes?: string | null
+          progress_percent?: number | null
+          started_at?: string | null
+          station_id: string
+          status?: string | null
+          system_id: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          item_id?: string
+          notes?: string | null
+          progress_percent?: number | null
+          started_at?: string | null
+          station_id?: string
+          status?: string | null
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_progress_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_progress_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_progress_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
             referencedColumns: ["id"]
           },
         ]
@@ -612,6 +744,45 @@ export type Database = {
           passed_tests?: number | null
           total_tests?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      test_systems: {
+        Row: {
+          assigned_engineer: string | null
+          created_at: string
+          current_station: string | null
+          id: string
+          model: string | null
+          overall_progress: number | null
+          serial_number: string | null
+          status: string | null
+          system_name: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_engineer?: string | null
+          created_at?: string
+          current_station?: string | null
+          id?: string
+          model?: string | null
+          overall_progress?: number | null
+          serial_number?: string | null
+          status?: string | null
+          system_name: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_engineer?: string | null
+          created_at?: string
+          current_station?: string | null
+          id?: string
+          model?: string | null
+          overall_progress?: number | null
+          serial_number?: string | null
+          status?: string | null
+          system_name?: string
+          updated_at?: string
         }
         Relationships: []
       }

@@ -11,7 +11,9 @@ import {
   Menu,
   Home,
   Moon,
-  Sun
+  Sun,
+  ListChecks,
+  FileText
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -22,8 +24,9 @@ interface SidebarProps {
 
 const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
+  { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
+  { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
-  { id: "flow", label: "測試流程", icon: Workflow, description: "流程設計" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
   { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
