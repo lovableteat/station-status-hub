@@ -20,9 +20,9 @@ const stations: Station[] = [
 const getStatusColor = (status: Station['status']) => {
   switch (status) {
     case 'idle': return 'bg-station-idle border-station-idle';
-    case 'working': return 'bg-station-working border-station-working animate-pulse-slow';
+    case 'working': return 'bg-station-working border-station-working';
     case 'warning': return 'bg-station-warning border-station-warning';
-    case 'error': return 'bg-station-error border-station-error animate-pulse';
+    case 'error': return 'bg-station-error border-station-error';
     case 'complete': return 'bg-station-complete border-station-complete';
     default: return 'bg-muted border-border';
   }
