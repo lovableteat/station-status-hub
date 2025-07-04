@@ -292,6 +292,63 @@ export function ProductionMonitor() {
         </Card>
       </div>
 
+      {/* All Systems Overview Grid */}
+      <Card>
+        <CardHeader>
+          <CardTitle>所有機台即時狀況</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+            {systems.map(system => (
+              <div 
+                key={system.id}
+                className="relative p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                style={{
+                  borderColor: system.status === 'Done' ? 'hsl(var(--success))' : 
+                              system.status === 'On-going' ? 'hsl(var(--warning))' : 
+                              'hsl(var(--muted-foreground))',
+                  backgroundColor: system.status === 'Done' ? 'hsl(var(--success) / 0.1)' : 
+                                  system.status === 'On-going' ? 'hsl(var(--warning) / 0.1)' : 
+                                  'hsl(var(--muted) / 0.5)'
+                }}
+                onClick={() => setFocusedSystem(system.system_name)}
+              >
+                <div className="text-center space-y-1">
+                  <div className="font-medium text-sm truncate">{system.system_name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{system.assigned_engineer}</div>
+                  <div className="text-xs">{system.current_station}</div>
+                  <div className="w-full bg-muted rounded-full h-1.5 mt-2">
+                    <div 
+                      className="h-1.5 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${system.overall_progress}%`,
+                        backgroundColor: system.status === 'Done' ? 'hsl(var(--success))' : 
+                                        system.status === 'On-going' ? 'hsl(var(--warning))' : 
+                                        'hsl(var(--muted-foreground))'
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs font-medium">{system.overall_progress}%</div>
+                </div>
+                
+                {/* Animated status indicator */}
+                {system.status === 'On-going' && (
+                  <div className="absolute -top-1 -right-1">
+                    <div className="w-3 h-3 bg-warning rounded-full animate-ping"></div>
+                    <div className="absolute top-0 w-3 h-3 bg-warning rounded-full"></div>
+                  </div>
+                )}
+                {system.status === 'Done' && (
+                  <div className="absolute -top-1 -right-1">
+                    <div className="w-3 h-3 bg-success rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Systems Status Summary */}
       <Card>
         <CardHeader>
@@ -299,19 +356,19 @@ export function ProductionMonitor() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-success/10 rounded-lg border border-success/20">
-              <div className="text-2xl font-bold text-success">
+            <div className="text-center p-4 bg-success/10 rounded-lg border border-success/20 animate-fade-in">
+              <div className="text-2xl font-bold text-success animate-pulse">
                 {systems.filter(s => s.status === 'Done').length}
               </div>
               <div className="text-sm text-muted-foreground">已完成系統</div>
             </div>
-            <div className="text-center p-4 bg-warning/10 rounded-lg border border-warning/20">
-              <div className="text-2xl font-bold text-warning">
+            <div className="text-center p-4 bg-warning/10 rounded-lg border border-warning/20 animate-fade-in">
+              <div className="text-2xl font-bold text-warning animate-pulse">
                 {systems.filter(s => s.status === 'On-going').length}
               </div>
               <div className="text-sm text-muted-foreground">進行中系統</div>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg border">
+            <div className="text-center p-4 bg-muted/50 rounded-lg border animate-fade-in">
               <div className="text-2xl font-bold text-muted-foreground">
                 {systems.filter(s => s.status === 'Not Start').length}
               </div>

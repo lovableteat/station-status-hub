@@ -74,6 +74,11 @@ export function TestProgressTable({
   getStatusColor,
   onSystemUpdate,
 }: TestProgressTableProps) {
+  // Filter stations to only show Station 0-3
+  const filteredStations = stations.filter(station => 
+    station.station_order >= 0 && station.station_order <= 3
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -83,11 +88,11 @@ export function TestProgressTable({
         <div className="overflow-x-auto">
           <div className="min-w-[1400px]">
             {/* Header Row */}
-            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
+            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)` }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">負責人</div>
               <div className="font-semibold">當前站點</div>
-              {stations.map(station => (
+              {filteredStations.map(station => (
                 <div key={station.id} className="font-semibold text-center">
                   {station.station_name}
                 </div>
@@ -96,7 +101,7 @@ export function TestProgressTable({
 
             {/* Data Rows */}
             {filteredSystems.map(system => (
-              <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
+              <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)` }}>
                 <div className="flex items-center gap-2">
                   <button 
                     className="font-medium text-primary hover:underline cursor-pointer text-left"
@@ -137,7 +142,7 @@ export function TestProgressTable({
                   </Badge>
                 </div>
                 
-                {stations.map(station => {
+                {filteredStations.map(station => {
                   const stationItems = items.filter(item => item.station_id === station.id);
                   const completedItems = stationItems.filter(item => {
                     const prog = getProgressForSystemItem(system.id, station.id, item.id);
