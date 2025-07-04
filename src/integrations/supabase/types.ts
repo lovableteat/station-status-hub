@@ -311,6 +311,33 @@ export type Database = {
         }
         Relationships: []
       }
+      production_targets: {
+        Row: {
+          created_at: string
+          daily_target: number
+          id: string
+          target_date: string
+          updated_at: string
+          weekly_target: number
+        }
+        Insert: {
+          created_at?: string
+          daily_target?: number
+          id?: string
+          target_date?: string
+          updated_at?: string
+          weekly_target?: number
+        }
+        Update: {
+          created_at?: string
+          daily_target?: number
+          id?: string
+          target_date?: string
+          updated_at?: string
+          weekly_target?: number
+        }
+        Relationships: []
+      }
       project_tasks: {
         Row: {
           assigned_to: string | null
@@ -464,6 +491,42 @@ export type Database = {
           serial_number?: string
           status?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      system_users: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          password_hash: string
+          permissions: Json | null
+          role: string
+          status: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          password_hash: string
+          permissions?: Json | null
+          role?: string
+          status?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          password_hash?: string
+          permissions?: Json | null
+          role?: string
+          status?: string | null
+          updated_at?: string
+          username?: string
         }
         Relationships: []
       }
