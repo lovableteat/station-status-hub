@@ -3,8 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, FileText } from "lucide-react";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { TestRecordDetailDialog } from "./TestRecordDetailDialog";
 
 interface TestRecord {
   id: string;
@@ -27,6 +28,8 @@ interface CollapsibleTestRecordsProps {
 export function CollapsibleTestRecords({ records, getStatusColor }: CollapsibleTestRecordsProps) {
   const { systems, stations, testItems, progress } = useUnifiedData();
   const [expandedSystems, setExpandedSystems] = useState<Set<string>>(new Set());
+  const [selectedRecord, setSelectedRecord] = useState<TestRecord | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
   // Group records by system
   const groupedRecords = records.reduce((acc, record) => {
@@ -61,6 +64,11 @@ export function CollapsibleTestRecords({ records, getStatusColor }: CollapsibleT
       progress: overallProgress,
       assignedEngineer: systemRecords[0]?.assigned_engineer || 'Unassigned'
     };
+  };
+
+  const handleViewDetails = (record: TestRecord) => {
+    setSelectedRecord(record);
+    setIsDetailDialogOpen(true);
   };
 
   return (
@@ -173,10 +181,21 @@ export function CollapsibleTestRecords({ records, getStatusColor }: CollapsibleT
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-xs">{record.start_date}</TableCell>
-                                  <TableCell className="text-xs">{record.completion_date || '-'}</TableCell>
-                                  <TableCell className="max-w-24 text-xs truncate">
-                                    {record.notes || '-'}
-                                  </TableCell>
+                                   <TableCell className="text-xs">{record.completion_date || '-'}</TableCell>
+                                   <TableCell className="max-w-24 text-xs">
+                                     <div className="flex items-center gap-2">
+                                       <span className="truncate">{record.notes || '-'}</span>
+                                       <Button 
+                                         variant="ghost" 
+                                         size="sm" 
+                                         className="h-6 w-6 p-0"
+                                         onClick={() => handleViewDetails(record)}
+                                         title="查看詳細資料"
+                                       >
+                                         <FileText className="h-3 w-3" />
+                                       </Button>
+                                     </div>
+                                   </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -191,6 +210,13 @@ export function CollapsibleTestRecords({ records, getStatusColor }: CollapsibleT
           })}
         </TableBody>
       </Table>
+      
+      <TestRecordDetailDialog
+        record={selectedRecord}
+        isOpen={isDetailDialogOpen}
+        onClose={() => setIsDetailDialogOpen(false)}
+        getStatusColor={getStatusColor}
+      />
     </div>
   );
 }
