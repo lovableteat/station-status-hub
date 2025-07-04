@@ -20,7 +20,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
 
     // Simple authentication logic
-    if (username === "admin" && password === "admin123") {
+    if (username === "liu52417" && password === "liu52417") {
       onLogin(username, "super_admin");
       toast({
         title: "登入成功",
@@ -78,12 +78,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {isLoading ? "登入中..." : "登入"}
             </Button>
           </form>
-          
-          <div className="mt-6 space-y-2 text-sm text-muted-foreground">
-            <p className="font-semibold">測試帳號:</p>
-            <p>管理員: admin / admin123</p>
-            <p>工程師: engineer / engineer123</p>
-          </div>
         </CardContent>
       </Card>
     </div>
