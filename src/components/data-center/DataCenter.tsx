@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
 import { PDFExportManager } from "./PDFExportManager";
+import { CollapsibleTestRecords } from "./CollapsibleTestRecords";
 
 interface TestRecord {
   id: string;
@@ -220,74 +221,24 @@ export function DataCenter() {
         </CardContent>
       </Card>
 
-      {/* Data Table */}
+      {/* Data Table - Collapsible by System */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            測試記錄表
+            測試記錄表 - 依系統分組
             <Badge variant="outline" className="ml-auto">
               {filteredRecords.length} 筆記錄
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>系統編號</TableHead>
-                <TableHead>測試站點</TableHead>
-                <TableHead>測試項目</TableHead>
-                <TableHead>狀態</TableHead>
-                <TableHead>進度</TableHead>
-                <TableHead>負責工程師</TableHead>
-                <TableHead>開始日期</TableHead>
-                <TableHead>完成日期</TableHead>
-                <TableHead>備註</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRecords.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell className="font-medium">{record.system_name}</TableCell>
-                  <TableCell>{record.station_name}</TableCell>
-                  <TableCell>{record.test_item}</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(record.status)}>
-                      {record.status === 'Done' && '已完成'}
-                      {record.status === 'On-going' && '進行中'}
-                      {record.status === 'Not Start' && '未開始'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${record.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-sm">{record.progress}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{record.assigned_engineer}</TableCell>
-                  <TableCell>{record.start_date}</TableCell>
-                  <TableCell>{record.completion_date || '-'}</TableCell>
-                  <TableCell className="max-w-32 truncate">
-                    {record.notes || '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {filteredRecords.length === 0 && (
+          {filteredRecords.length > 0 ? (
+            <CollapsibleTestRecords 
+              records={filteredRecords} 
+              getStatusColor={getStatusColor}
+            />
+          ) : (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">沒有找到相關記錄</h3>
