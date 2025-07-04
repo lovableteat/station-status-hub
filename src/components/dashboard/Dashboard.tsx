@@ -7,6 +7,7 @@ import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
 import { ProjectGanttChart } from "./ProjectGanttChart";
 import { SystemStatusList } from "./SystemStatusList";
+import { StationOverview } from "./StationOverview";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
@@ -61,6 +62,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           測試管理系統總覽 - 實時監控測試進度與系統狀態
         </p>
       </div>
+
+      {/* Station Overview */}
+      <StationOverview />
 
       {/* Key Performance Indicators */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
