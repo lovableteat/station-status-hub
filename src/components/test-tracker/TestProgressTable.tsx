@@ -79,6 +79,16 @@ export function TestProgressTable({
     station.station_order >= 0 && station.station_order <= 3
   );
 
+  const getStationTeam = (stationName: string) => {
+    switch (stationName) {
+      case 'Station 0': return 'ME TEAM';
+      case 'Station 1': return 'BIOS/BMC TEAM';
+      case 'Station 2': return 'EE TEAM';
+      case 'Station 3': return 'SIT/RAD TEAM';
+      default: return 'TEAM';
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -137,8 +147,11 @@ export function TestProgressTable({
                   />
                 </div>
                 <div>
-                  <Badge className={getStatusColor(system.status)}>
-                    {system.current_station}
+                  <Badge 
+                    variant="secondary" 
+                    className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium"
+                  >
+                    {system.current_station} - {getStationTeam(system.current_station)}
                   </Badge>
                 </div>
                 
