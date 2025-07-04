@@ -7,10 +7,17 @@ import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
-import { UserManagement } from "@/components/user-management/UserManagement";
+import { AdminPanel } from "@/components/admin/AdminPanel";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { useUser } from "@/components/auth/UserContext";
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
+  const { user, login, isLoggedIn } = useUser();
+
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={login} />;
+  }
 
   const handleNavigation = (module: string, params?: any) => {
     setActiveModule(module);
@@ -34,7 +41,7 @@ const Index = () => {
       case "tools":
         return <ToolsManagement />;
       case "users":
-        return <UserManagement />;
+        return user?.role === "super_admin" ? <AdminPanel /> : <Dashboard onNavigate={handleNavigation} />;
       default:
         return <Dashboard onNavigate={handleNavigation} />;
     }
