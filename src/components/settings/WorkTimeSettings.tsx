@@ -62,7 +62,7 @@ export function WorkTimeSettings() {
       }
 
       if (data) {
-        setConfig(data.settings as WorkTimeConfig);
+        setConfig(data.settings as unknown as WorkTimeConfig);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -78,7 +78,7 @@ export function WorkTimeSettings() {
         .from('system_settings')
         .upsert({
           category: 'work_time',
-          settings: config,
+          settings: config as any,
           updated_at: new Date().toISOString()
         });
 
