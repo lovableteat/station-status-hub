@@ -5,6 +5,8 @@ import { StationTimeComparison } from "./StationTimeComparison";
 import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
+import { ProjectGanttChart } from "./ProjectGanttChart";
+import { SystemStatusList } from "./SystemStatusList";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
@@ -133,6 +135,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Gantt Chart */}
+      <ProjectGanttChart />
+
+      {/* System Status List */}
+      <SystemStatusList onNavigate={onNavigate} />
 
       {/* Station Heatmap */}
       <Card>
