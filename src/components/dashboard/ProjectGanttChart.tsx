@@ -8,6 +8,7 @@ import { Plus, Edit, Trash2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { supabase } from '@/integrations/supabase/client';
+import { SystemGanttEditor } from './SystemGanttEditor';
 
 interface GanttTask {
   id: string;
@@ -30,6 +31,7 @@ export function ProjectGanttChart() {
   const [projects, setProjects] = useState<GanttProject[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<GanttTask | null>(null);
+  const [systemTimelines, setSystemTimelines] = useState<Record<string, { start: string; end: string }>>({});
   const [formData, setFormData] = useState({
     name: '',
     startDate: '',
@@ -37,6 +39,27 @@ export function ProjectGanttChart() {
     progress: 0
   });
   const { toast } = useToast();
+
+  useEffect(() => {
+    const loadSystemTimelines = async () => {
+      // Load existing timelines from database
+      const { data: tasks } = await supabase
+        .from('project_tasks')
+        .select('task_name, start_date, end_date')
+        .in('task_name', systems.map(s => s.system_name));
+
+      const timelines: Record<string, { start: string; end: string }> = {};
+      tasks?.forEach(task => {
+        timelines[task.task_name] = {
+          start: task.start_date || '',
+          end: task.end_date || ''
+        };
+      });
+      setSystemTimelines(timelines);
+    };
+
+    loadSystemTimelines();
+  }, [systems]);
 
   useEffect(() => {
     // Convert systems data to gantt format
@@ -49,11 +72,19 @@ export function ProjectGanttChart() {
           ? systemProgress.reduce((sum, p) => sum + (p.progress_percent || 0), 0) / systemProgress.length 
           : 0;
 
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() + (index * 7)); // Stagger start dates
+        // Use custom timeline if available, otherwise use default
+        const timeline = systemTimelines[system.system_name];
+        let startDate, endDate;
         
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 28); // 4 weeks duration
+        if (timeline && timeline.start && timeline.end) {
+          startDate = new Date(timeline.start);
+          endDate = new Date(timeline.end);
+        } else {
+          startDate = new Date();
+          startDate.setDate(startDate.getDate() + (index * 7)); // Stagger start dates
+          endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 28); // 4 weeks duration
+        }
 
         return {
           id: system.id,
@@ -67,7 +98,7 @@ export function ProjectGanttChart() {
     }];
     
     setProjects(ganttProjects);
-  }, [systems, progress]);
+  }, [systems, progress, systemTimelines]);
 
   const getTaskColor = (status: string) => {
     switch (status) {
@@ -156,8 +187,33 @@ export function ProjectGanttChart() {
 
           return (
             <div key={task.id} className="grid grid-cols-12 gap-2 items-center py-1">
-              <div className="col-span-3 text-sm font-medium truncate">
+              <div className="col-span-3 text-sm font-medium truncate flex items-center gap-2">
                 {task.name}
+                <SystemGanttEditor
+                  systemId={task.id}
+                  systemName={task.name}
+                  currentStartDate={systemTimelines[task.name]?.start}
+                  currentEndDate={systemTimelines[task.name]?.end}
+                  onUpdate={() => {
+                    // Refresh timeline data
+                    const loadSystemTimelines = async () => {
+                      const { data: tasks } = await supabase
+                        .from('project_tasks')
+                        .select('task_name, start_date, end_date')
+                        .in('task_name', systems.map(s => s.system_name));
+
+                      const timelines: Record<string, { start: string; end: string }> = {};
+                      tasks?.forEach(task => {
+                        timelines[task.task_name] = {
+                          start: task.start_date || '',
+                          end: task.end_date || ''
+                        };
+                      });
+                      setSystemTimelines(timelines);
+                    };
+                    loadSystemTimelines();
+                  }}
+                />
               </div>
               <div className="col-span-9 relative h-6 bg-muted rounded">
                 <div

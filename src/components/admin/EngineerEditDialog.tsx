@@ -14,17 +14,19 @@ interface EngineerEditDialogProps {
   email: string;
   team: string;
   status: string;
+  employeeId?: string;
   onUpdate: () => void;
   onDelete: (engineerId: string) => void;
 }
 
-export function EngineerEditDialog({ engineerId, name, email, team, status, onUpdate, onDelete }: EngineerEditDialogProps) {
+export function EngineerEditDialog({ engineerId, name, email, team, status, employeeId, onUpdate, onDelete }: EngineerEditDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editValues, setEditValues] = useState({
     name,
     email,
     team,
-    status
+    status,
+    employee_id: employeeId || ''
   });
   const { toast } = useToast();
 
@@ -86,6 +88,14 @@ export function EngineerEditDialog({ engineerId, name, email, team, status, onUp
               value={editValues.email}
               onChange={(e) => setEditValues({...editValues, email: e.target.value})}
               placeholder="請輸入電子郵件..."
+            />
+          </div>
+          <div>
+            <Label>工號</Label>
+            <Input
+              value={editValues.employee_id}
+              onChange={(e) => setEditValues({...editValues, employee_id: e.target.value})}
+              placeholder="請輸入工號..."
             />
           </div>
           <div>
