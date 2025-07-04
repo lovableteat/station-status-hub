@@ -214,6 +214,7 @@ export function useUnifiedData() {
           table: 'test_progress'
         },
         () => {
+          console.log('Test progress updated, reloading data...');
           loadAllData(); // Reload when progress changes
         }
       )
@@ -225,7 +226,32 @@ export function useUnifiedData() {
           table: 'test_systems'
         },
         () => {
+          console.log('Test systems updated, reloading data...');
           loadAllData(); // Reload when systems change
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'test_flow_items'
+        },
+        () => {
+          console.log('Test flow items updated, reloading data...');
+          loadAllData(); // Reload when test items change
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'test_flow_stations'
+        },
+        () => {
+          console.log('Test flow stations updated, reloading data...');
+          loadAllData(); // Reload when stations change
         }
       )
       .subscribe();
