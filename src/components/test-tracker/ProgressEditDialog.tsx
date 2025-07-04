@@ -137,17 +137,33 @@ export function ProgressEditDialog({
                       </Select>
                     </div>
                     <div>
-                      <Label>完成度 (%)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={editValues.progress_percent}
-                        onChange={(e) => setEditValues({
-                          ...editValues, 
-                          progress_percent: parseInt(e.target.value) || 0
-                        })}
-                      />
+                      <Label>完成度</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          type="button"
+                          variant={editValues.progress_percent === 0 ? "default" : "outline"}
+                          onClick={() => setEditValues({
+                            ...editValues, 
+                            progress_percent: 0,
+                            status: "Not Start"
+                          })}
+                          className="flex-1"
+                        >
+                          0%
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={editValues.progress_percent === 100 ? "default" : "outline"}
+                          onClick={() => setEditValues({
+                            ...editValues, 
+                            progress_percent: 100,
+                            status: "Done"
+                          })}
+                          className="flex-1"
+                        >
+                          100%
+                        </Button>
+                      </div>
                     </div>
                     <div>
                       <Label>備註</Label>
