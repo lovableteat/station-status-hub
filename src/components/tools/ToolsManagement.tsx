@@ -29,7 +29,7 @@ interface Tool {
 export function ToolsManagement() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all-categories");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -126,7 +126,7 @@ export function ToolsManagement() {
   const filteredTools = tools.filter(tool => {
     const matchesSearch = tool.tool_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          tool.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !filterCategory || tool.category === filterCategory;
+    const matchesCategory = !filterCategory || filterCategory === "all-categories" || tool.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -229,7 +229,7 @@ export function ToolsManagement() {
                 <SelectValue placeholder="選擇類別" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部類別</SelectItem>
+                <SelectItem value="all-categories">全部類別</SelectItem>
                 {categories.map(category => (
                   <SelectItem key={category} value={category}>
                     {getCategoryLabel(category)}

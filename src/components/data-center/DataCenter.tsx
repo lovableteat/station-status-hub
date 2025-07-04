@@ -30,8 +30,8 @@ interface TestRecord {
 export function DataCenter() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterEngineer, setFilterEngineer] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterEngineer, setFilterEngineer] = useState("all-engineers");
+  const [filterStatus, setFilterStatus] = useState("all-status");
   const [dateRange, setDateRange] = useState<{
     from: Date | undefined;
     to: Date | undefined;
@@ -109,8 +109,8 @@ export function DataCenter() {
     const matchesSearch = record.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          record.test_item.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          record.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesEngineer = !filterEngineer || record.assigned_engineer === filterEngineer;
-    const matchesStatus = !filterStatus || record.status === filterStatus;
+    const matchesEngineer = !filterEngineer || filterEngineer === "all-engineers" || record.assigned_engineer === filterEngineer;
+    const matchesStatus = !filterStatus || filterStatus === "all-status" || record.status === filterStatus;
     
     let matchesDate = true;
     if (dateRange.from && dateRange.to) {
@@ -200,7 +200,7 @@ export function DataCenter() {
                 <SelectValue placeholder="選擇工程師" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部工程師</SelectItem>
+                <SelectItem value="all-engineers">全部工程師</SelectItem>
                 {engineers.map(engineer => (
                   <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
                 ))}
@@ -212,7 +212,7 @@ export function DataCenter() {
                 <SelectValue placeholder="選擇狀態" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部狀態</SelectItem>
+                <SelectItem value="all-status">全部狀態</SelectItem>
                 <SelectItem value="Done">已完成</SelectItem>
                 <SelectItem value="On-going">進行中</SelectItem>
                 <SelectItem value="Not Start">未開始</SelectItem>
