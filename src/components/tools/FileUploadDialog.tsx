@@ -152,6 +152,7 @@ export function FileUploadDialog({ isOpen, onClose, onSuccess }: FileUploadDialo
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
+      case 'pdf': return 'PDF文件';
       case 'software': return '軟體';
       case 'driver': return '驅動程式';
       case 'config': return '配置檔案';
@@ -183,6 +184,7 @@ export function FileUploadDialog({ isOpen, onClose, onSuccess }: FileUploadDialo
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="pdf">PDF文件</SelectItem>
                 <SelectItem value="software">軟體</SelectItem>
                 <SelectItem value="driver">驅動程式</SelectItem>
                 <SelectItem value="config">配置檔案</SelectItem>
@@ -220,7 +222,7 @@ export function FileUploadDialog({ isOpen, onClose, onSuccess }: FileUploadDialo
                 >
                   <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">點擊選擇檔案或拖拽檔案到此處</p>
-                  <p className="text-xs text-muted-foreground mt-1">支援所有檔案格式</p>
+                  <p className="text-xs text-muted-foreground mt-1">支援所有檔案格式，包括PDF</p>
                 </div>
               ) : (
                 <div className="border rounded-lg p-3 bg-muted/50">
