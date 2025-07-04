@@ -57,8 +57,12 @@ export function DataCenter() {
           status: prog.status,
           progress: prog.progress_percent,
           assigned_engineer: system.assigned_engineer || 'Unassigned',
-          start_date: prog.started_at ? new Date(prog.started_at).toLocaleDateString() : '-',
-          completion_date: prog.completed_at ? new Date(prog.completed_at).toLocaleDateString() : undefined,
+          start_date: prog.started_at ? new Date(prog.started_at).toLocaleDateString('zh-TW', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+          }) : '-',
+          completion_date: prog.completed_at ? new Date(prog.completed_at).toLocaleDateString('zh-TW', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+          }) : undefined,
           notes: prog.notes
         });
       }

@@ -3,25 +3,34 @@ import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useState, useEffect } from 'react';
 
 export function StationTimeComparison() {
-  const { stations, stationStatuses } = useUnifiedData();
+  const { stations, stationStatuses, testItems } = useUnifiedData();
   const [timeData, setTimeData] = useState<any[]>([]);
 
   useEffect(() => {
-    // Use real data from station statuses with some actual vs estimated comparison
-    const chartData = stations.map((station) => {
-      const statusData = stationStatuses.find(s => s.id === station.id);
-      const estimatedHours = station.estimated_hours || 0;
-      const actualHours = estimatedHours * (0.7 + Math.random() * 0.6); // Simulate variance based on efficiency
-      
-      return {
-        station: station.station_name,
-        estimated: Number(estimatedHours.toFixed(1)),
-        actual: Number(actualHours.toFixed(1)),
-        efficiency: statusData?.efficiency || 0
-      };
-    });
+    // Calculate real station time data from test items
+    const chartData = stations
+      .filter(station => station.station_order >= 0 && station.station_order <= 3)
+      .map((station) => {
+        const statusData = stationStatuses.find(s => s.id === station.id);
+        
+        // Get actual test items for this station and sum their estimated minutes
+        const stationItems = testItems.filter(item => item.station_id === station.id);
+        const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 30), 0);
+        const estimatedHours = Number((totalMinutes / 60).toFixed(1));
+        
+        // Use efficiency data for actual hours calculation
+        const efficiency = statusData?.efficiency || 100;
+        const actualHours = Number((estimatedHours * (efficiency / 100)).toFixed(1));
+        
+        return {
+          station: station.station_name,
+          estimated: estimatedHours,
+          actual: actualHours,
+          efficiency: efficiency
+        };
+      });
     setTimeData(chartData);
-  }, [stations, stationStatuses]);
+  }, [stations, stationStatuses, testItems]);
 
   return (
     <div className="h-80">
