@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -125,7 +126,7 @@ export function ProjectGanttChart() {
         await supabase
           .from('project_tasks')
           .update(taskData)
-          .eq('id', editingTask.id);
+          .eq('task_name', editingTask.name);
         toast({ title: '更新成功', description: '任務已更新' });
       } else {
         await supabase
@@ -138,7 +139,23 @@ export function ProjectGanttChart() {
       setEditingTask(null);
       resetForm();
       
-      // Refresh data - would need to reload gantt data
+      // Refresh data
+      const loadSystemTimelines = async () => {
+        const { data: tasks } = await supabase
+          .from('project_tasks')
+          .select('task_name, start_date, end_date')
+          .in('task_name', systems.map(s => s.system_name));
+
+        const timelines: Record<string, { start: string; end: string }> = {};
+        tasks?.forEach(task => {
+          timelines[task.task_name] = {
+            start: task.start_date || '',
+            end: task.end_date || ''
+          };
+        });
+        setSystemTimelines(timelines);
+      };
+      loadSystemTimelines();
     } catch (error) {
       toast({
         title: '操作失敗',
@@ -146,6 +163,56 @@ export function ProjectGanttChart() {
         variant: 'destructive'
       });
     }
+  };
+
+  const handleDeleteTask = async (taskName: string) => {
+    try {
+      await supabase
+        .from('project_tasks')
+        .delete()
+        .eq('task_name', taskName);
+
+      toast({ 
+        title: '刪除成功', 
+        description: `任務 ${taskName} 已刪除` 
+      });
+
+      // Refresh data
+      const loadSystemTimelines = async () => {
+        const { data: tasks } = await supabase
+          .from('project_tasks')
+          .select('task_name, start_date, end_date')
+          .in('task_name', systems.map(s => s.system_name));
+
+        const timelines: Record<string, { start: string; end: string }> = {};
+        tasks?.forEach(task => {
+          timelines[task.task_name] = {
+            start: task.start_date || '',
+            end: task.end_date || ''
+          };
+        });
+        setSystemTimelines(timelines);
+      };
+      loadSystemTimelines();
+    } catch (error) {
+      toast({
+        title: '刪除失敗',
+        description: '無法刪除任務',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleEditTask = (task: GanttTask) => {
+    const timeline = systemTimelines[task.name];
+    setFormData({
+      name: task.name,
+      startDate: timeline?.start || task.startDate.toISOString().split('T')[0],
+      endDate: timeline?.end || task.endDate.toISOString().split('T')[0],
+      progress: task.progress
+    });
+    setEditingTask(task);
+    setIsDialogOpen(true);
   };
 
   const resetForm = () => {
@@ -189,31 +256,53 @@ export function ProjectGanttChart() {
             <div key={task.id} className="grid grid-cols-12 gap-2 items-center py-1">
               <div className="col-span-3 text-sm font-medium truncate flex items-center gap-2">
                 {task.name}
-                <SystemGanttEditor
-                  systemId={task.id}
-                  systemName={task.name}
-                  currentStartDate={systemTimelines[task.name]?.start}
-                  currentEndDate={systemTimelines[task.name]?.end}
-                  onUpdate={() => {
-                    // Refresh timeline data
-                    const loadSystemTimelines = async () => {
-                      const { data: tasks } = await supabase
-                        .from('project_tasks')
-                        .select('task_name, start_date, end_date')
-                        .in('task_name', systems.map(s => s.system_name));
+                <div className="flex items-center gap-1">
+                  <SystemGanttEditor
+                    systemId={task.id}
+                    systemName={task.name}
+                    currentStartDate={systemTimelines[task.name]?.start}
+                    currentEndDate={systemTimelines[task.name]?.end}
+                    onUpdate={() => {
+                      // Refresh timeline data
+                      const loadSystemTimelines = async () => {
+                        const { data: tasks } = await supabase
+                          .from('project_tasks')
+                          .select('task_name, start_date, end_date')
+                          .in('task_name', systems.map(s => s.system_name));
 
-                      const timelines: Record<string, { start: string; end: string }> = {};
-                      tasks?.forEach(task => {
-                        timelines[task.task_name] = {
-                          start: task.start_date || '',
-                          end: task.end_date || ''
-                        };
-                      });
-                      setSystemTimelines(timelines);
-                    };
-                    loadSystemTimelines();
-                  }}
-                />
+                        const timelines: Record<string, { start: string; end: string }> = {};
+                        tasks?.forEach(task => {
+                          timelines[task.task_name] = {
+                            start: task.start_date || '',
+                            end: task.end_date || ''
+                          };
+                        });
+                        setSystemTimelines(timelines);
+                      };
+                      loadSystemTimelines();
+                    }}
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <MoreHorizontal className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditTask(task)}>
+                        <Edit className="h-3 w-3 mr-2" />
+                        編輯任務
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleDeleteTask(task.name)}
+                        className="text-danger"
+                      >
+                        <Trash2 className="h-3 w-3 mr-2" />
+                        刪除任務
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <div className="col-span-9 relative h-6 bg-muted rounded">
                 <div

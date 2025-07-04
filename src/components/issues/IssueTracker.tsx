@@ -33,9 +33,46 @@ export function IssueTracker() {
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  
+  // Calculate issue statistics
+  const issueStats = {
+    total: issues.length,
+    open: issues.filter(i => i.status === 'open').length,
+    inProgress: issues.filter(i => i.status === 'in_progress').length,
+    resolved: issues.filter(i => i.status === 'resolved').length,
+    critical: issues.filter(i => i.priority === 'critical').length,
+    bySystem: issues.reduce((acc, issue) => {
+      const system = issue.system_id || 'Unknown';
+      acc[system] = (acc[system] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    byStation: issues.reduce((acc, issue) => {
+      const station = issue.station_id || 'Unknown';
+      acc[station] = (acc[station] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  };
 
   useEffect(() => {
     loadIssues();
+    
+    // Listen for navigation events from production monitor
+    const handleNavigation = (event: CustomEvent) => {
+      if (event.detail.module === 'issues' && event.detail.params) {
+        const { station, system } = event.detail.params;
+        if (station) {
+          setSearchTerm(station);
+        }
+        if (system) {
+          setSearchTerm(system);
+        }
+      }
+    };
+
+    window.addEventListener('navigate', handleNavigation as EventListener);
+    return () => {
+      window.removeEventListener('navigate', handleNavigation as EventListener);
+    };
   }, []);
 
   const loadIssues = async () => {
@@ -150,6 +187,24 @@ export function IssueTracker() {
         <div>
           <h1 className="text-3xl font-bold">問題追蹤</h1>
           <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
+          <div className="flex items-center gap-4 mt-2 text-sm">
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-danger"></div>
+              開啟: {issueStats.open}
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-warning"></div>
+              處理中: {issueStats.inProgress}
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-success"></div>
+              已解決: {issueStats.resolved}
+            </span>
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3 text-danger" />
+              緊急: {issueStats.critical}
+            </span>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportData}>
@@ -338,6 +393,65 @@ export function IssueTracker() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Statistics Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">系統問題統計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(issueStats.bySystem).slice(0, 5).map(([system, count]) => (
+                <div key={system} className="flex justify-between text-sm">
+                  <span className="truncate">{system}</span>
+                  <Badge variant="outline">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">站點問題統計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(issueStats.byStation).slice(0, 5).map(([station, count]) => (
+                <div key={station} className="flex justify-between text-sm">
+                  <span className="truncate">{station}</span>
+                  <Badge variant="outline">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">問題處理效率</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>解決率</span>
+                <span className="font-medium">
+                  {issues.length > 0 ? Math.round((issueStats.resolved / issues.length) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>處理中</span>
+                <span className="font-medium">{issueStats.inProgress}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>待處理</span>
+                <span className="font-medium text-danger">{issueStats.open}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Issues List */}
       <div className="space-y-4">
