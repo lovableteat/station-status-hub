@@ -7,6 +7,7 @@ import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
+import { UserManagement } from "@/components/user-management/UserManagement";
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
@@ -32,6 +33,8 @@ const Index = () => {
         return <DataCenter />;
       case "tools":
         return <ToolsManagement />;
+      case "users":
+        return <UserManagement />;
       default:
         return <Dashboard onNavigate={handleNavigation} />;
     }

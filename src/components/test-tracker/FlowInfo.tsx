@@ -51,14 +51,12 @@ export function FlowInfo() {
   };
 
   const getStationIcon = (stationName: string) => {
-    switch (stationName) {
-      case 'Station 0': return <Settings className="h-5 w-5" />;
-      case 'Station 1': return <Zap className="h-5 w-5" />;
-      case 'Station 2': return <HardDrive className="h-5 w-5" />;
-      case 'Station 3': return <Cpu className="h-5 w-5" />;
-      case 'Station 4': return <Monitor className="h-5 w-5" />;
-      default: return <Settings className="h-5 w-5" />;
-    }
+    if (stationName.includes('ME')) return <Settings className="h-5 w-5" />;
+    if (stationName.includes('BIOS')) return <Zap className="h-5 w-5" />;
+    if (stationName.includes('EE')) return <HardDrive className="h-5 w-5" />;
+    if (stationName.includes('SIT')) return <Cpu className="h-5 w-5" />;
+    if (stationName.includes('Station 4')) return <Monitor className="h-5 w-5" />;
+    return <Settings className="h-5 w-5" />;
   };
 
   const getStationColor = (stationOrder: number) => {
@@ -73,40 +71,42 @@ export function FlowInfo() {
   };
 
   const getDetailedDescription = (stationName: string) => {
-    switch (stationName) {
-      case 'Station 0':
-        return {
-          purpose: '機台初始化準備階段',
-          equipment: ['Monitor2', '鍵鼠組2', 'CR203220', 'MiniDP to VGA 轉接器2', 'RJ45 cable(10m)4', 'VGA cable1', 'CX-8 loopback3', 'BF-3 loopback2'],
-          notes: '需要 EE/BMC/BIOS 配合 NV 進行初次開機'
-        };
-      case 'Station 1':
-        return {
-          purpose: '正式上電階段',
-          equipment: ['Monitor2', '鍵鼠組2', 'USB hub2', 'MiniDP to VGA2', 'PSU*4'],
-          notes: '與 Station 0 幾乎相同流程，重複作業於大量系統'
-        };
-      case 'Station 2':
-        return {
-          purpose: '韌體更新階段',
-          equipment: ['Monitor1', 'USB hub1', 'linking board1', 'PSU2'],
-          notes: 'BIOS/BMC 為主，EE/ME/MI/Thermal 若需重新組裝。自動更新排除 BF3 & CX8'
-        };
-      case 'Station 3':
-        return {
-          purpose: '功能驗證階段',
-          equipment: ['Monitor1', 'RJ45 cable(10M)4', 'VGA1', 'loopback cable（CX-83, BF-3*2）'],
-          notes: '支援人員：Thermal / EE / MI / ME 如需重新裝配'
-        };
-      case 'Station 4':
-        return {
-          purpose: 'NV Diag 與 Bake 測試最終站',
-          equipment: ['Monitor4', '鍵鼠組4', 'MiniDP to VGA4', 'linking board4', 'PSU*8', 'CX8 loopback8', 'BF3 loopback8'],
-          notes: '與 Diag Team 協同測試 BF3 與 1G NIC 同網段。SIT / RAD 協助執行 NV Diag 測項'
-        };
-      default:
-        return { purpose: '', equipment: [], notes: '' };
+    if (stationName.includes('ME')) {
+      return {
+        purpose: 'ME TEAM 機台初始化準備階段',
+        equipment: ['Monitor2', '鍵鼠組2', 'CR203220', 'MiniDP to VGA 轉接器2', 'RJ45 cable(10m)4', 'VGA cable1', 'CX-8 loopback3', 'BF-3 loopback2'],
+        notes: '需要 EE/BMC/BIOS 配合 NV 進行初次開機'
+      };
     }
+    if (stationName.includes('BIOS')) {
+      return {
+        purpose: 'BIOS/BMC TEAM 正式上電階段',
+        equipment: ['Monitor2', '鍵鼠組2', 'USB hub2', 'MiniDP to VGA2', 'PSU*4'],
+        notes: '與 Station 0 幾乎相同流程，重複作業於大量系統'
+      };
+    }
+    if (stationName.includes('EE')) {
+      return {
+        purpose: 'EE TEAM 韌體更新階段',
+        equipment: ['Monitor1', 'USB hub1', 'linking board1', 'PSU2'],
+        notes: 'BIOS/BMC 為主，EE/ME/MI/Thermal 若需重新組裝。自動更新排除 BF3 & CX8'
+      };
+    }
+    if (stationName.includes('SIT')) {
+      return {
+        purpose: 'SIT/RAD TEAM 功能驗證階段',
+        equipment: ['Monitor1', 'RJ45 cable(10M)4', 'VGA1', 'loopback cable（CX-83, BF-3*2）'],
+        notes: '支援人員：Thermal / EE / MI / ME 如需重新裝配'
+      };
+    }
+    if (stationName.includes('Station 4')) {
+      return {
+        purpose: 'NV Diag 與 Bake 測試最終站',
+        equipment: ['Monitor4', '鍵鼠組4', 'MiniDP to VGA4', 'linking board4', 'PSU*8', 'CX8 loopback8', 'BF3 loopback8'],
+        notes: '與 Diag Team 協同測試 BF3 與 1G NIC 同網段。SIT / RAD 協助執行 NV Diag 測項'
+      };
+    }
+    return { purpose: '', equipment: [], notes: '' };
   };
 
   return (

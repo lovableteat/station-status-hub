@@ -30,6 +30,7 @@ export function IssueTracker() {
   const [filterPriority, setFilterPriority] = useState("all-priorities");
   const [filterStatus, setFilterStatus] = useState("all-status");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -215,6 +216,83 @@ export function IssueTracker() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Edit Issue Dialog */}
+          <Dialog open={!!editingIssue} onOpenChange={() => setEditingIssue(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>編輯問題</DialogTitle>
+              </DialogHeader>
+              {editingIssue && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>問題標題</Label>
+                    <Input 
+                      value={editingIssue.title}
+                      onChange={(e) => setEditingIssue({...editingIssue, title: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>問題描述</Label>
+                    <Textarea 
+                      value={editingIssue.description}
+                      onChange={(e) => setEditingIssue({...editingIssue, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>優先級</Label>
+                      <Select 
+                        value={editingIssue.priority} 
+                        onValueChange={(value) => setEditingIssue({...editingIssue, priority: value as any})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">低</SelectItem>
+                          <SelectItem value="medium">中</SelectItem>
+                          <SelectItem value="high">高</SelectItem>
+                          <SelectItem value="critical">緊急</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>狀態</Label>
+                      <Select 
+                        value={editingIssue.status} 
+                        onValueChange={(value) => setEditingIssue({...editingIssue, status: value as any})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">開啟</SelectItem>
+                          <SelectItem value="in_progress">處理中</SelectItem>
+                          <SelectItem value="resolved">已解決</SelectItem>
+                          <SelectItem value="closed">已關閉</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setEditingIssue(null)}>
+                      取消
+                    </Button>
+                    <Button onClick={() => {
+                      toast({
+                        title: "更新成功",
+                        description: "問題已成功更新"
+                      });
+                      setEditingIssue(null);
+                    }}>
+                      儲存
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -298,7 +376,11 @@ export function IssueTracker() {
                   </div>
                 </div>
                 
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setEditingIssue(issue)}
+                >
                   <Edit className="h-4 w-4 mr-1" />
                   編輯
                 </Button>
