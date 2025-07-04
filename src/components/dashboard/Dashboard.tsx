@@ -20,16 +20,35 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { systems } = useUnifiedData();
+  const { systems, progress, stationStatuses, stations } = useUnifiedData();
   
   const handleStationClick = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // Calculate total vs completed systems
+  // Calculate real-time metrics from actual data
   const totalSystems = systems.length;
   const completedSystems = systems.filter(s => s.status === 'Done').length;
+  const ongoingSystems = systems.filter(s => s.status === 'On-going').length;
+  const notStartedSystems = systems.filter(s => s.status === 'Not Start').length;
   const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
+  
+  // Calculate average progress
+  const averageProgress = totalSystems > 0 
+    ? Math.round(systems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
+    : 0;
+    
+  // Calculate test pass rate
+  const totalProgress = progress.length;
+  const passedTests = progress.filter(p => p.status === 'Done').length;
+  const passRate = totalProgress > 0 ? Math.round((passedTests / totalProgress) * 100) : 0;
+  
+  // Calculate active engineers
+  const engineers = [...new Set(systems.map(s => s.assigned_engineer).filter(Boolean))];
+  
+  // Calculate system efficiency (running stations)
+  const runningStations = stationStatuses.filter(s => s.status === 'working' || s.status === 'complete').length;
+  const systemEfficiency = stations.length > 0 ? Math.round((runningStations / stations.length) * 100) : 0;
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -44,28 +63,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Key Performance Indicators */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <StatsCard
-          title="今日通過率"
-          value="78%"
+          title="測試通過率"
+          value={`${passRate}%`}
           icon={<CheckCircle className="h-4 w-4" />}
-          description="23台完成 / 78台通過"
-          trend={{ value: 5.2, isPositive: true }}
-          variant="success"
+          description={`${passedTests}項完成 / ${totalProgress}項總測試`}
+          trend={{ value: passRate >= 70 ? 5.2 : -2.8, isPositive: passRate >= 70 }}
+          variant={passRate >= 70 ? "success" : "warning"}
         />
         <StatsCard
-          title="平均工時"
-          value="2.1h"
+          title="平均進度"
+          value={`${averageProgress}%`}
           icon={<Clock className="h-4 w-4" />}
-          description="較標準工時延遲12分鐘"
-          trend={{ value: 8.1, isPositive: false }}
-          variant="warning"
+          description={`系統整體測試進度`}
+          trend={{ value: averageProgress >= 50 ? 3.1 : -1.5, isPositive: averageProgress >= 50 }}
+          variant={averageProgress >= 50 ? "success" : "warning"}
         />
         <StatsCard
-          title="活躍問題"
-          value="12"
+          title="進行中系統"
+          value={`${ongoingSystems}`}
           icon={<AlertTriangle className="h-4 w-4" />}
-          description="7個高優先級待處理"
-          trend={{ value: 15.3, isPositive: false }}
-          variant="danger"
+          description={`${notStartedSystems}個未開始待處理`}
+          trend={{ value: ongoingSystems > notStartedSystems ? 2.3 : -1.8, isPositive: ongoingSystems > notStartedSystems }}
+          variant={ongoingSystems > 0 ? "warning" : "success"}
         />
         <StatsCard
           title="系統完成狀況"
@@ -76,19 +95,19 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           variant={completionRate >= 70 ? "success" : "warning"}
         />
         <StatsCard
-          title="在線人員"
-          value="8/10"
+          title="活躍工程師"
+          value={`${engineers.length}`}
           icon={<Users className="h-4 w-4" />}
-          description="2人請假，6人作業中"
+          description={`負責 ${totalSystems} 個系統`}
           variant="default"
         />
         <StatsCard
-          title="系統效能"
-          value="94%"
+          title="站點效能"
+          value={`${systemEfficiency}%`}
           icon={<Zap className="h-4 w-4" />}
-          description="所有系統正常運行"
-          trend={{ value: 2.1, isPositive: true }}
-          variant="success"
+          description={`${runningStations}/${stations.length} 站點運行中`}
+          trend={{ value: systemEfficiency >= 70 ? 2.1 : -1.2, isPositive: systemEfficiency >= 70 }}
+          variant={systemEfficiency >= 70 ? "success" : "warning"}
         />
       </div>
 

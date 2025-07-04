@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
@@ -14,6 +14,20 @@ import { useUser } from "@/components/auth/UserContext";
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
   const { user, login, isLoggedIn } = useUser();
+
+  useEffect(() => {
+    // Listen for navigation events from other components
+    const handleNavigationEvent = (event: CustomEvent) => {
+      const { module } = event.detail;
+      setActiveModule(module);
+    };
+
+    window.addEventListener('navigate', handleNavigationEvent as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigate', handleNavigationEvent as EventListener);
+    };
+  }, []);
 
   if (!isLoggedIn) {
     return <LoginPage onLogin={login} />;
