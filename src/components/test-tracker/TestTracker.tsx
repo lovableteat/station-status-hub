@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
-import { CollapsibleTestProgressTable } from "./CollapsibleTestProgressTable";
+import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 
 interface TestProgress {
@@ -108,7 +108,7 @@ export function TestTracker() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
-          <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態 (Station 0-3)</p>
+          <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態</p>
         </div>
         <ExportManager 
           systems={filteredSystems} 
@@ -129,7 +129,7 @@ export function TestTracker() {
       />
 
       {/* Test Progress Table */}
-      <CollapsibleTestProgressTable
+      <TestProgressTable
         filteredSystems={filteredSystems}
         stations={stations}
         items={items}

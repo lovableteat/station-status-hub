@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
 import { StationTimeComparison } from "./StationTimeComparison";
-import { StationOverview } from "./StationOverview";
 import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
@@ -113,9 +112,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           variant={systemEfficiency >= 70 ? "success" : "warning"}
         />
       </div>
-
-      {/* Station Overview */}
-      <StationOverview />
 
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">

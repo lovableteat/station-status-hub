@@ -364,7 +364,6 @@ export type Database = {
         Row: {
           created_at: string | null
           email: string | null
-          employee_id: string | null
           id: string
           name: string
           status: string | null
@@ -374,7 +373,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email?: string | null
-          employee_id?: string | null
           id?: string
           name: string
           status?: string | null
@@ -384,7 +382,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string | null
-          employee_id?: string | null
           id?: string
           name?: string
           status?: string | null
@@ -1151,54 +1148,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      test_progress_audit: {
-        Row: {
-          change_type: string
-          changed_at: string
-          changed_by: string | null
-          id: string
-          item_id: string
-          new_notes: string | null
-          new_progress_percent: number | null
-          new_status: string | null
-          old_notes: string | null
-          old_progress_percent: number | null
-          old_status: string | null
-          station_id: string
-          system_id: string
-        }
-        Insert: {
-          change_type: string
-          changed_at?: string
-          changed_by?: string | null
-          id?: string
-          item_id: string
-          new_notes?: string | null
-          new_progress_percent?: number | null
-          new_status?: string | null
-          old_notes?: string | null
-          old_progress_percent?: number | null
-          old_status?: string | null
-          station_id: string
-          system_id: string
-        }
-        Update: {
-          change_type?: string
-          changed_at?: string
-          changed_by?: string | null
-          id?: string
-          item_id?: string
-          new_notes?: string | null
-          new_progress_percent?: number | null
-          new_status?: string | null
-          old_notes?: string | null
-          old_progress_percent?: number | null
-          old_status?: string | null
-          station_id?: string
-          system_id?: string
-        }
-        Relationships: []
       }
       test_stations: {
         Row: {
