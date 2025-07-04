@@ -9,6 +9,36 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          is_active: boolean
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bug_attachments: {
         Row: {
           bug_id: string | null
@@ -144,6 +174,156 @@ export type Database = {
         }
         Relationships: []
       }
+      component_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      component_specs: {
+        Row: {
+          category_id: string
+          color: string | null
+          created_at: string
+          datasheet_url: string | null
+          dimensions: Json
+          electrical_specs: Json | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          keep_out_zone: number | null
+          manufacturer_id: string
+          mounting_type: string | null
+          name: string
+          package_type: string | null
+          physical_specs: Json | null
+          pin_configuration: Json | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          color?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          dimensions?: Json
+          electrical_specs?: Json | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          keep_out_zone?: number | null
+          manufacturer_id: string
+          mounting_type?: string | null
+          name: string
+          package_type?: string | null
+          physical_specs?: Json | null
+          pin_configuration?: Json | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          color?: string | null
+          created_at?: string
+          datasheet_url?: string | null
+          dimensions?: Json
+          electrical_specs?: Json | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          keep_out_zone?: number | null
+          manufacturer_id?: string
+          mounting_type?: string | null
+          name?: string
+          package_type?: string | null
+          physical_specs?: Json | null
+          pin_configuration?: Json | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "component_specs_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "component_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "component_specs_manufacturer_id_fkey"
+            columns: ["manufacturer_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_components: {
+        Row: {
+          category: string | null
+          color: string | null
+          created_at: string
+          height: number
+          id: string
+          keep_out_zone: number | null
+          manufacturer: string | null
+          max_height: number
+          name: string
+          type: string
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          category?: string | null
+          color?: string | null
+          created_at?: string
+          height: number
+          id?: string
+          keep_out_zone?: number | null
+          manufacturer?: string | null
+          max_height: number
+          name: string
+          type: string
+          updated_at?: string
+          width: number
+        }
+        Update: {
+          category?: string | null
+          color?: string | null
+          created_at?: string
+          height?: number
+          id?: string
+          keep_out_zone?: number | null
+          manufacturer?: string | null
+          max_height?: number
+          name?: string
+          type?: string
+          updated_at?: string
+          width?: number
+        }
+        Relationships: []
+      }
       drivers_and_tools: {
         Row: {
           comment: string | null
@@ -272,6 +452,33 @@ export type Database = {
         }
         Relationships: []
       }
+      manufacturers: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       production_metrics: {
         Row: {
           completed_today: number | null
@@ -374,6 +581,72 @@ export type Database = {
           start_date?: string | null
           task_name?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_templates: {
+        Row: {
+          board_height: number | null
+          board_width: number | null
+          components: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          board_height?: number | null
+          board_width?: number | null
+          components?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          board_height?: number | null
+          board_width?: number | null
+          components?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          board_height: number | null
+          board_width: number | null
+          components: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          board_height?: number | null
+          board_width?: number | null
+          components?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          board_height?: number | null
+          board_width?: number | null
+          components?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
