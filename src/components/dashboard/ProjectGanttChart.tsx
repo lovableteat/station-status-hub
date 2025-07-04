@@ -8,6 +8,7 @@ import { Plus, Edit, Trash2, Save, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
+import { useSystemTimeline } from '@/hooks/useSystemTimeline';
 import { supabase } from '@/integrations/supabase/client';
 import { SystemGanttEditor } from './SystemGanttEditor';
 
@@ -29,6 +30,7 @@ interface GanttProject {
 
 export function ProjectGanttChart() {
   const { systems, progress } = useUnifiedData();
+  const { calculateSystemTimeline, isLoading: timelineLoading } = useSystemTimeline();
   const [projects, setProjects] = useState<GanttProject[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<GanttTask | null>(null);
@@ -63,17 +65,19 @@ export function ProjectGanttChart() {
   }, [systems]);
 
   useEffect(() => {
+    if (timelineLoading || !systems.length) return;
+    
     // Convert systems data to gantt format
     const ganttProjects: GanttProject[] = [{
       id: 'main-project',
       name: '測試專案管理',
-      tasks: systems.map((system, index) => {
+      tasks: systems.map((system) => {
         const systemProgress = progress.filter(p => p.system_id === system.id);
         const avgProgress = systemProgress.length > 0 
           ? systemProgress.reduce((sum, p) => sum + (p.progress_percent || 0), 0) / systemProgress.length 
           : 0;
 
-        // Use custom timeline if available, otherwise use default
+        // Use custom timeline if available, otherwise use calculated timeline
         const timeline = systemTimelines[system.system_name];
         let startDate, endDate;
         
@@ -81,10 +85,10 @@ export function ProjectGanttChart() {
           startDate = new Date(timeline.start);
           endDate = new Date(timeline.end);
         } else {
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() + (index * 7)); // Stagger start dates
-          endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + 28); // 4 weeks duration
+          // Use system timeline calculation based on work schedule
+          const calculatedTimeline = calculateSystemTimeline(system.system_name, systems);
+          startDate = calculatedTimeline.startDate;
+          endDate = calculatedTimeline.endDate;
         }
 
         return {
@@ -99,7 +103,7 @@ export function ProjectGanttChart() {
     }];
     
     setProjects(ganttProjects);
-  }, [systems, progress, systemTimelines]);
+  }, [systems, progress, systemTimelines, timelineLoading, calculateSystemTimeline]);
 
   const getTaskColor = (status: string) => {
     switch (status) {

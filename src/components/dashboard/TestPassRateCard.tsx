@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { TrendingUp, Target, BarChart3, Calendar } from "lucide-react";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { useSystemTimeline } from "@/hooks/useSystemTimeline";
 import { supabase } from "@/integrations/supabase/client";
 
 interface PassRateMetrics {
@@ -17,6 +18,7 @@ interface PassRateMetrics {
 
 export function TestPassRateCard() {
   const { systems, progress, isLoading } = useUnifiedData();
+  const { config: timelineConfig, isLoading: timelineLoading } = useSystemTimeline();
   const [metrics, setMetrics] = useState<PassRateMetrics>({
     totalUnits: 0,
     completedUnits: 0,
@@ -28,11 +30,11 @@ export function TestPassRateCard() {
   const [workTimeConfig, setWorkTimeConfig] = useState<any>(null);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !timelineLoading) {
       loadWorkTimeConfig();
       calculateMetrics();
     }
-  }, [systems, progress, isLoading]);
+  }, [systems, progress, isLoading, timelineLoading]);
 
   const loadWorkTimeConfig = async () => {
     try {
@@ -79,24 +81,28 @@ export function TestPassRateCard() {
   const calculateDailyAverage = (): number => {
     if (!systems.length) return 0;
 
-    // 計算最近7天的完成數量
+    // Use timeline config work days
+    const workDays = timelineConfig.workDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    
+    // Calculate recent completions based on progress completion dates
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const recentCompletions = progress.filter(p => {
-      if (p.status !== 'Done' || !p.completed_at) return false;
-      const completedDate = new Date(p.completed_at);
-      return completedDate >= sevenDaysAgo;
+    // Find completed systems by checking their progress
+    const completedSystemIds = new Set<string>();
+    progress.forEach(p => {
+      if (p.status === 'Done' && p.completed_at) {
+        const completedDate = new Date(p.completed_at);
+        if (completedDate >= sevenDaysAgo && completedDate <= now) {
+          completedSystemIds.add(p.system_id);
+        }
+      }
     });
 
-    // 按系統分組，每個系統只計算一次
-    const completedSystems = new Set(recentCompletions.map(p => p.system_id));
-    
-    // 計算工作日數量
-    const workDays = workTimeConfig?.work_days || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    // Calculate actual work days in the period
     const workDaysInPeriod = calculateWorkDaysInPeriod(sevenDaysAgo, now, workDays);
     
-    return workDaysInPeriod > 0 ? Math.round((completedSystems.size / workDaysInPeriod) * 100) / 100 : 0;
+    return workDaysInPeriod > 0 ? Math.round((completedSystemIds.size / workDaysInPeriod) * 100) / 100 : 0;
   };
 
   const calculateWeeklyTrend = (): number => {
@@ -106,22 +112,24 @@ export function TestPassRateCard() {
     const thisWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const lastWeekStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-    // 計算本週完成數
-    const thisWeekCompletions = progress.filter(p => {
-      if (p.status !== 'Done' || !p.completed_at) return false;
-      const completedDate = new Date(p.completed_at);
-      return completedDate >= thisWeekStart;
+    // Count completed systems for this week
+    const thisWeekCompletedSystems = new Set<string>();
+    const lastWeekCompletedSystems = new Set<string>();
+
+    progress.forEach(p => {
+      if (p.status === 'Done' && p.completed_at) {
+        const completedDate = new Date(p.completed_at);
+        
+        if (completedDate >= thisWeekStart && completedDate <= now) {
+          thisWeekCompletedSystems.add(p.system_id);
+        } else if (completedDate >= lastWeekStart && completedDate < thisWeekStart) {
+          lastWeekCompletedSystems.add(p.system_id);
+        }
+      }
     });
 
-    // 計算上週完成數
-    const lastWeekCompletions = progress.filter(p => {
-      if (p.status !== 'Done' || !p.completed_at) return false;
-      const completedDate = new Date(p.completed_at);
-      return completedDate >= lastWeekStart && completedDate < thisWeekStart;
-    });
-
-    const thisWeekCount = new Set(thisWeekCompletions.map(p => p.system_id)).size;
-    const lastWeekCount = new Set(lastWeekCompletions.map(p => p.system_id)).size;
+    const thisWeekCount = thisWeekCompletedSystems.size;
+    const lastWeekCount = lastWeekCompletedSystems.size;
 
     if (lastWeekCount === 0) return thisWeekCount > 0 ? 100 : 0;
     
