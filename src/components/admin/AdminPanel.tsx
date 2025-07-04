@@ -50,6 +50,7 @@ export function AdminPanel() {
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {} });
   const [newTarget, setNewTarget] = useState({ daily_target: 10, weekly_target: 50 });
+  const [editingTarget, setEditingTarget] = useState<string | null>(null);
   const { toast } = useToast();
   const { logout, user } = useUser();
 
@@ -186,6 +187,8 @@ export function AdminPanel() {
       });
 
       setIsTargetDialogOpen(false);
+      setEditingTarget(null);
+      setNewTarget({ daily_target: 10, weekly_target: 50 });
       loadProductionTargets();
     } catch (error) {
       toast({
@@ -194,6 +197,15 @@ export function AdminPanel() {
         variant: "destructive"
       });
     }
+  };
+
+  const handleEditTarget = (target: ProductionTarget) => {
+    setEditingTarget(target.id);
+    setNewTarget({
+      daily_target: target.daily_target,
+      weekly_target: target.weekly_target
+    });
+    setIsTargetDialogOpen(true);
   };
 
   const handleToggleEngineerStatus = async (id: string, currentStatus: string) => {
@@ -545,7 +557,7 @@ export function AdminPanel() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>設定生產目標</DialogTitle>
+                  <DialogTitle>{editingTarget ? "編輯生產目標" : "設定生產目標"}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -567,11 +579,15 @@ export function AdminPanel() {
                     />
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsTargetDialogOpen(false)}>
+                    <Button variant="outline" onClick={() => {
+                      setIsTargetDialogOpen(false);
+                      setEditingTarget(null);
+                      setNewTarget({ daily_target: 10, weekly_target: 50 });
+                    }}>
                       取消
                     </Button>
                     <Button onClick={handleUpdateTarget}>
-                      更新
+                      {editingTarget ? "更新" : "新增"}
                     </Button>
                   </div>
                 </div>
@@ -595,7 +611,7 @@ export function AdminPanel() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => handleEditTarget(target)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                   </div>
