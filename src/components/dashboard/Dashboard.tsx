@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
 import { StationTimeComparison } from "./StationTimeComparison";
-import { ProductionTrendChart } from "./ProductionTrendChart";
+import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -94,16 +94,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Test Pass Rate */}
-        <Card>
-          <CardHeader>
-            <CardTitle>機台通過率分布</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TestPassChart />
-          </CardContent>
-        </Card>
-
         {/* Station Time Comparison */}
         <Card>
           <CardHeader>
@@ -113,17 +103,17 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <StationTimeComparison />
           </CardContent>
         </Card>
-      </div>
 
-      {/* Production Trend */}
-      <Card>
-        <CardHeader>
-          <CardTitle>測試產能趨勢</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProductionTrendChart />
-        </CardContent>
-      </Card>
+        {/* Daily Completion */}
+        <Card>
+          <CardHeader>
+            <CardTitle>每日完成與預計完成狀況</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DailyCompletion />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Station Heatmap */}
       <Card>

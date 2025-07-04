@@ -11,42 +11,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 
-interface Machine {
-  sn: string;
-  model: string;
-  station: string;
-  status: 'pending' | 'testing' | 'completed' | 'failed' | 'rework';
-  startTime: string;
-  estimatedComplete: string;
-  operator: string;
-}
-
-const machines: Machine[] = [
-  { sn: 'GB300-20250703-001', model: 'GB300', station: 'Station 2', status: 'testing', startTime: '09:15', estimatedComplete: '10:45', operator: 'Ben' },
-  { sn: 'GB300-20250703-002', model: 'GB300', station: 'Station 3', status: 'testing', startTime: '09:12', estimatedComplete: '12:30', operator: 'Sean' },
-  { sn: 'GB200-20250703-008', model: 'GB200', station: 'Station 1', status: 'completed', startTime: '08:30', estimatedComplete: '10:00', operator: 'Martina' },
-  { sn: 'GB300-20250703-003', model: 'GB300', station: 'Station 4', status: 'failed', startTime: '07:45', estimatedComplete: '11:30', operator: 'Johnny' },
-  { sn: 'GB200-20250703-009', model: 'GB200', station: 'Station 0', status: 'pending', startTime: '-', estimatedComplete: '14:00', operator: '-' },
-];
-
-const getStatusBadge = (status: Machine['status']) => {
+const getStatusBadge = (status: string) => {
   const variants = {
-    pending: { label: '待測試', variant: 'secondary' as const },
-    testing: { label: '測試中', variant: 'default' as const },
-    completed: { label: '完成', variant: 'default' as const },
-    failed: { label: '失敗', variant: 'destructive' as const },
-    rework: { label: '返工', variant: 'outline' as const },
+    'Not Start': { label: '待測試', variant: 'secondary' as const },
+    'On-going': { label: '測試中', variant: 'default' as const },
+    'Done': { label: '完成', variant: 'default' as const },
+    'Failed': { label: '失敗', variant: 'destructive' as const },
+    'Rework': { label: '返工', variant: 'outline' as const },
   };
   
-  const config = variants[status];
+  const config = variants[status as keyof typeof variants] || variants['Not Start'];
   return (
     <Badge 
       variant={config.variant}
       className={cn(
-        status === 'completed' && 'bg-success text-success-foreground',
-        status === 'testing' && 'bg-info text-info-foreground',
-        status === 'rework' && 'bg-warning text-warning-foreground'
+        status === 'Done' && 'bg-success text-success-foreground',
+        status === 'On-going' && 'bg-info text-info-foreground',
+        status === 'Rework' && 'bg-warning text-warning-foreground'
       )}
     >
       {config.label}
@@ -55,13 +38,14 @@ const getStatusBadge = (status: Machine['status']) => {
 };
 
 export function MachineTable() {
+  const { systems } = useUnifiedData();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredMachines = machines.filter(machine => {
-    const matchesFilter = filter === 'all' || machine.status === filter;
-    const matchesSearch = machine.sn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         machine.model.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredSystems = systems.filter(system => {
+    const matchesFilter = filter === 'all' || system.status === filter;
+    const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (system.model || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
@@ -71,7 +55,7 @@ export function MachineTable() {
         <h3 className="text-lg font-semibold">機台清單檢視</h3>
         <div className="flex items-center space-x-2">
           <Input
-            placeholder="搜尋 SN 或機種..."
+            placeholder="搜尋系統名稱或機種..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-60"
@@ -85,28 +69,28 @@ export function MachineTable() {
           size="sm"
           onClick={() => setFilter('all')}
         >
-          全部 ({machines.length})
+          全部 ({systems.length})
         </Button>
         <Button
-          variant={filter === 'testing' ? 'default' : 'outline'}
+          variant={filter === 'On-going' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('testing')}
+          onClick={() => setFilter('On-going')}
         >
-          測試中 ({machines.filter(m => m.status === 'testing').length})
+          測試中 ({systems.filter(s => s.status === 'On-going').length})
         </Button>
         <Button
-          variant={filter === 'completed' ? 'default' : 'outline'}
+          variant={filter === 'Done' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('completed')}
+          onClick={() => setFilter('Done')}
         >
-          已完成 ({machines.filter(m => m.status === 'completed').length})
+          已完成 ({systems.filter(s => s.status === 'Done').length})
         </Button>
         <Button
-          variant={filter === 'failed' ? 'default' : 'outline'}
+          variant={filter === 'Not Start' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('failed')}
+          onClick={() => setFilter('Not Start')}
         >
-          失敗 ({machines.filter(m => m.status === 'failed').length})
+          未開始 ({systems.filter(s => s.status === 'Not Start').length})
         </Button>
       </div>
 
@@ -114,25 +98,25 @@ export function MachineTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>序列號</TableHead>
+              <TableHead>系統名稱</TableHead>
               <TableHead>機種</TableHead>
               <TableHead>當前站點</TableHead>
               <TableHead>狀態</TableHead>
-              <TableHead>開始時間</TableHead>
-              <TableHead>預計完成</TableHead>
-              <TableHead>操作員</TableHead>
+              <TableHead>進度</TableHead>
+              <TableHead>負責工程師</TableHead>
+              <TableHead>序列號</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMachines.map((machine) => (
-              <TableRow key={machine.sn} className="hover:bg-muted/50">
-                <TableCell className="font-mono text-sm">{machine.sn}</TableCell>
-                <TableCell>{machine.model}</TableCell>
-                <TableCell>{machine.station}</TableCell>
-                <TableCell>{getStatusBadge(machine.status)}</TableCell>
-                <TableCell>{machine.startTime}</TableCell>
-                <TableCell>{machine.estimatedComplete}</TableCell>
-                <TableCell>{machine.operator}</TableCell>
+            {filteredSystems.map((system) => (
+              <TableRow key={system.id} className="hover:bg-muted/50">
+                <TableCell className="font-mono text-sm">{system.system_name}</TableCell>
+                <TableCell>{system.model || 'GB300'}</TableCell>
+                <TableCell>{system.current_station}</TableCell>
+                <TableCell>{getStatusBadge(system.status)}</TableCell>
+                <TableCell>{system.overall_progress || 0}%</TableCell>
+                <TableCell>{system.assigned_engineer}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{system.serial_number || '-'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

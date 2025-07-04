@@ -10,13 +10,10 @@ import {
   Wrench,
   Menu,
   Home,
-  Moon,
-  Sun,
   ListChecks,
   FileText,
   Users
 } from "lucide-react";
-import { useTheme } from "next-themes";
 
 interface SidebarProps {
   activeModule: string;
@@ -36,7 +33,6 @@ const navigationItems = [
 
 export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const { theme, setTheme } = useTheme();
 
   return (
     <div
@@ -96,23 +92,6 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
         </div>
       </nav>
 
-      {/* Theme Toggle */}
-      <div className="p-4 border-t border-border">
-        <div className="flex justify-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="h-8 w-8 p-0"
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

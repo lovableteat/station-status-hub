@@ -1,34 +1,18 @@
 import { cn } from "@/lib/utils";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 
-interface Station {
-  id: string;
-  name: string;
-  status: 'idle' | 'working' | 'warning' | 'error' | 'complete';
-  progress: number;
-  machineCount: number;
-  avgTime: number;
-}
-
-const stations: Station[] = [
-  { id: 'S0', name: 'Station 0', status: 'working', progress: 85, machineCount: 3, avgTime: 1.5 },
-  { id: 'S1', name: 'Station 1', status: 'complete', progress: 100, machineCount: 2, avgTime: 1.3 },
-  { id: 'S2', name: 'Station 2', status: 'warning', progress: 65, machineCount: 5, avgTime: 1.8 },
-  { id: 'S3', name: 'Station 3', status: 'error', progress: 30, machineCount: 7, avgTime: 2.8 },
-  { id: 'S4', name: 'Station 4', status: 'working', progress: 90, machineCount: 4, avgTime: 3.2 },
-];
-
-const getStatusColor = (status: Station['status']) => {
+const getStatusColor = (status: string) => {
   switch (status) {
-    case 'idle': return 'bg-station-idle border-station-idle';
-    case 'working': return 'bg-station-working border-station-working';
-    case 'warning': return 'bg-station-warning border-station-warning';
-    case 'error': return 'bg-station-error border-station-error';
-    case 'complete': return 'bg-station-complete border-station-complete';
-    default: return 'bg-muted border-border';
+    case 'idle': return 'bg-station-idle border-station-idle text-foreground';
+    case 'working': return 'bg-station-working border-station-working text-primary-foreground';
+    case 'warning': return 'bg-station-warning border-station-warning text-warning-foreground';
+    case 'error': return 'bg-station-error border-station-error text-danger-foreground';
+    case 'complete': return 'bg-station-complete border-station-complete text-success-foreground';
+    default: return 'bg-muted border-border text-muted-foreground';
   }
 };
 
-const getStatusText = (status: Station['status']) => {
+const getStatusText = (status: string) => {
   switch (status) {
     case 'idle': return '待機中';
     case 'working': return '作業中';
@@ -44,6 +28,8 @@ interface StationHeatmapProps {
 }
 
 export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
+  const { stationStatuses } = useUnifiedData();
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -69,7 +55,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {stations.map((station) => (
+        {stationStatuses.map((station) => (
           <div
             key={station.id}
             onClick={() => onStationClick?.(station.id)}
@@ -85,22 +71,22 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
             <div className="w-full bg-black/20 rounded-full h-2 mb-3">
               <div
                 className="bg-white/80 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${station.progress}%` }}
+                style={{ width: `${station.efficiency}%` }}
               ></div>
             </div>
             
             <div className="space-y-1 text-xs opacity-90">
               <div className="flex justify-between">
-                <span>機台數:</span>
-                <span>{station.machineCount}</span>
+                <span>完成系統:</span>
+                <span>{station.completed_systems}</span>
               </div>
               <div className="flex justify-between">
-                <span>平均工時:</span>
-                <span>{station.avgTime}h</span>
+                <span>進行中:</span>
+                <span>{station.ongoing_systems}</span>
               </div>
               <div className="flex justify-between">
-                <span>進度:</span>
-                <span>{station.progress}%</span>
+                <span>效率:</span>
+                <span>{station.efficiency}%</span>
               </div>
             </div>
           </div>
