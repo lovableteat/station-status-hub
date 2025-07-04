@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Monitor, Activity, AlertTriangle, CheckCircle, Clock, Download, ArrowLeft, Play } from "lucide-react";
+import { Monitor, Activity, AlertTriangle, CheckCircle, Clock, Download, ArrowLeft, Play, Bug, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { TestProgressAuditLog } from "./TestProgressAuditLog";
@@ -128,24 +128,47 @@ export function ProductionMonitor() {
                     isActive ? 'border-primary bg-primary/10 shadow-lg' : 
                     isCompleted ? 'border-success bg-success/10' : 'border-muted bg-muted/50'
                   }`}>
-                    <div className="text-center space-y-2">
-                      <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
-                        isActive ? 'bg-primary text-primary-foreground animate-pulse' :
-                        isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
-                      </div>
-                      <h3 className="font-medium text-sm">{station.name}</h3>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">進度: {station.efficiency}%</div>
-                        <Progress value={station.efficiency} className="h-1" />
-                      </div>
-                      {isActive && (
-                        <div className="absolute -top-2 -right-2">
-                          <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                        </div>
-                      )}
-                    </div>
+              <div className="text-center space-y-2">
+                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
+                  isActive ? 'bg-primary text-primary-foreground animate-pulse' :
+                  isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
+                }`}>
+                  {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
+                </div>
+                <h3 className="font-medium text-sm">{station.name}</h3>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">進度: {station.efficiency}%</div>
+                  <Progress value={station.efficiency} className="h-1" />
+                </div>
+                <div className="flex items-center justify-center gap-1 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      // Navigate to issue tracker with station filter
+                      const event = new CustomEvent('navigate', { 
+                        detail: { 
+                          module: 'issues', 
+                          params: { 
+                            station: station.name, 
+                            system: system.system_name 
+                          } 
+                        } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <Bug className="h-3 w-3 mr-1" />
+                    問題
+                  </Button>
+                </div>
+                {isActive && (
+                  <div className="absolute -top-2 -right-2">
+                    <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
+                  </div>
+                )}
+              </div>
                   </div>
                 );
               })}
@@ -246,6 +269,29 @@ export function ProductionMonitor() {
               
               <div className="text-xs text-muted-foreground">
                 最後更新: {new Date(station.last_update).toLocaleTimeString('zh-TW')}
+              </div>
+              
+              <div className="flex items-center justify-end mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => {
+                    // Navigate to issue tracker with station filter
+                    const event = new CustomEvent('navigate', { 
+                      detail: { 
+                        module: 'issues', 
+                        params: { 
+                          station: station.name
+                        } 
+                      } 
+                    });
+                    window.dispatchEvent(event);
+                  }}
+                >
+                  <Bug className="h-3 w-3 mr-1" />
+                  問題追蹤
+                </Button>
               </div>
             </CardContent>
           </Card>
