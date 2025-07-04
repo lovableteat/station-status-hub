@@ -43,7 +43,7 @@ export function FilterControls({
               <SelectValue placeholder="選擇工程師" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">全部工程師</SelectItem>
+              <SelectItem value="all-engineers">全部工程師</SelectItem>
               {engineers.map(engineer => (
                 <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
               ))}
@@ -54,7 +54,7 @@ export function FilterControls({
               <SelectValue placeholder="選擇狀態" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">全部狀態</SelectItem>
+              <SelectItem value="all-status">全部狀態</SelectItem>
               <SelectItem value="Not Start">未開始</SelectItem>
               <SelectItem value="On-going">進行中</SelectItem>
               <SelectItem value="Done">已完成</SelectItem>
