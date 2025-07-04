@@ -40,6 +40,7 @@ interface UnifiedProgress {
   notes: string;
   started_at?: string;
   completed_at?: string;
+  actual_hours?: number;
 }
 
 interface StationStatus {
