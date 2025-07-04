@@ -31,9 +31,7 @@ export function StationTimeComparison() {
           <XAxis 
             dataKey="station" 
             tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-            angle={-45}
-            textAnchor="end"
-            height={80}
+            height={60}
           />
           <YAxis 
             tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}

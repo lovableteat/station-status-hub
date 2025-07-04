@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LoginPageProps {
   onLogin: (username: string, role: string) => void;
@@ -19,23 +20,33 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simple authentication logic
-    if (username === "liu52417" && password === "liu52417") {
-      onLogin(username, "super_admin");
-      toast({
-        title: "登入成功",
-        description: "歡迎回來，超級管理員"
-      });
-    } else if (username === "engineer" && password === "engineer123") {
-      onLogin(username, "engineer");
-      toast({
-        title: "登入成功",
-        description: "歡迎回來，工程師"
-      });
-    } else {
+    try {
+      // Check against database users
+      const { data, error } = await supabase
+        .from('system_users')
+        .select('*')
+        .eq('username', username)
+        .eq('password_hash', password)
+        .eq('status', 'active')
+        .single();
+
+      if (error || !data) {
+        toast({
+          title: "登入失敗",
+          description: "帳號或密碼錯誤",
+          variant: "destructive"
+        });
+      } else {
+        onLogin(username, data.role);
+        toast({
+          title: "登入成功",
+          description: `歡迎回來，${data.role === 'super_admin' ? '超級管理員' : data.role === 'admin' ? '管理員' : '工程師'}`
+        });
+      }
+    } catch (error) {
       toast({
         title: "登入失敗",
-        description: "帳號或密碼錯誤",
+        description: "系統錯誤，請稍後再試",
         variant: "destructive"
       });
     }

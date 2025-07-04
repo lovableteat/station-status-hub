@@ -80,12 +80,12 @@ export function TestProgressTable({
         <div className="overflow-x-auto">
           <div className="min-w-[1400px]">
             {/* Header Row */}
-            <div className="grid grid-cols-12 gap-2 p-4 bg-muted/50 rounded-t-lg border-b">
-              <div className="col-span-2 font-semibold">機台編號</div>
-              <div className="col-span-1 font-semibold">負責人</div>
-              <div className="col-span-1 font-semibold">當前站點</div>
+            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
+              <div className="font-semibold">機台編號</div>
+              <div className="font-semibold">負責人</div>
+              <div className="font-semibold">當前站點</div>
               {stations.map(station => (
-                <div key={station.id} className="col-span-2 font-semibold text-center">
+                <div key={station.id} className="font-semibold text-center">
                   {station.station_name}
                 </div>
               ))}
@@ -93,12 +93,12 @@ export function TestProgressTable({
 
             {/* Data Rows */}
             {filteredSystems.map(system => (
-              <div key={system.id} className="grid grid-cols-12 gap-2 p-4 border-b hover:bg-muted/25">
-                <div className="col-span-2 font-medium">{system.system_name}</div>
-                <div className="col-span-1">
+              <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
+                <div className="font-medium">{system.system_name}</div>
+                <div>
                   <Badge variant="outline">{system.assigned_engineer}</Badge>
                 </div>
-                <div className="col-span-1">
+                <div>
                   <Badge className={getStatusColor(system.status)}>
                     {system.current_station}
                   </Badge>
@@ -115,7 +115,7 @@ export function TestProgressTable({
                     : 0;
 
                   return (
-                    <div key={station.id} className="col-span-2">
+                    <div key={station.id}>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
                           <span>進度: {overallPercent}%</span>
