@@ -8,6 +8,7 @@ import { MachineTable } from "./MachineTable";
 import { ProjectGanttChart } from "./ProjectGanttChart";
 import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
+import { TestPassRateCard } from "./TestPassRateCard";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
@@ -66,24 +67,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Station Overview */}
       <StationOverview />
 
+      {/* Test Pass Rate Metrics */}
+      <TestPassRateCard />
+
       {/* Key Performance Indicators */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-        <StatsCard
-          title="測試通過率"
-          value={`${passRate}%`}
-          icon={<CheckCircle className="h-4 w-4" />}
-          description={`${passedTests}項完成 / ${totalProgress}項總測試`}
-          trend={{ value: passRate >= 70 ? 5.2 : -2.8, isPositive: passRate >= 70 }}
-          variant={passRate >= 70 ? "success" : "warning"}
-        />
-        <StatsCard
-          title="平均進度"
-          value={`${averageProgress}%`}
-          icon={<Clock className="h-4 w-4" />}
-          description={`系統整體測試進度`}
-          trend={{ value: averageProgress >= 50 ? 3.1 : -1.5, isPositive: averageProgress >= 50 }}
-          variant={averageProgress >= 50 ? "success" : "warning"}
-        />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="進行中系統"
           value={`${ongoingSystems}`}
