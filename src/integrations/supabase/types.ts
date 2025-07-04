@@ -538,6 +538,33 @@ export type Database = {
           },
         ]
       }
+      test_export_logs: {
+        Row: {
+          created_at: string | null
+          export_params: Json | null
+          export_type: string
+          exported_by: string | null
+          file_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          export_params?: Json | null
+          export_type: string
+          exported_by?: string | null
+          file_name?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          export_params?: Json | null
+          export_type?: string
+          exported_by?: string | null
+          file_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       test_flow_items: {
         Row: {
           created_at: string
@@ -799,6 +826,9 @@ export type Database = {
           is_required: boolean | null
           tool_name: string
           updated_at: string | null
+          upload_status: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
           version: string | null
         }
         Insert: {
@@ -813,6 +843,9 @@ export type Database = {
           is_required?: boolean | null
           tool_name: string
           updated_at?: string | null
+          upload_status?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
           version?: string | null
         }
         Update: {
@@ -827,6 +860,9 @@ export type Database = {
           is_required?: boolean | null
           tool_name?: string
           updated_at?: string | null
+          upload_status?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
           version?: string | null
         }
         Relationships: []

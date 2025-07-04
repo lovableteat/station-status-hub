@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { useUnifiedData } from "./useUnifiedData";
 
 interface TestSystem {
   id: string;
@@ -38,43 +36,21 @@ interface TestProgress {
 }
 
 export function useTestTrackerData() {
-  const [systems, setSystems] = useState<TestSystem[]>([]);
-  const [stations, setStations] = useState<TestStation[]>([]);
-  const [items, setItems] = useState<TestItem[]>([]);
-  const [progress, setProgress] = useState<TestProgress[]>([]);
-  const { toast } = useToast();
-
-  const loadData = async () => {
-    try {
-      const [systemsRes, stationsRes, itemsRes, progressRes] = await Promise.all([
-        supabase.from('test_systems').select('*').order('system_name'),
-        supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('test_progress').select('*')
-      ]);
-
-      if (systemsRes.data) setSystems(systemsRes.data);
-      if (stationsRes.data) setStations(stationsRes.data);
-      if (itemsRes.data) setItems(itemsRes.data);
-      if (progressRes.data) setProgress(progressRes.data);
-    } catch (error) {
-      toast({
-        title: "載入失敗",
-        description: "無法載入測試資料",
-        variant: "destructive"
-      });
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { 
+    systems, 
+    stations, 
+    testItems: items, 
+    progress, 
+    loadAllData: loadData,
+    updateProgress
+  } = useUnifiedData();
 
   return {
     systems,
     stations,
     items,
     progress,
-    loadData
+    loadData,
+    updateProgress
   };
 }

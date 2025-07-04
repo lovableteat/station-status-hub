@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
+import { ExportManager } from "./ExportManager";
 
 interface TestProgress {
   id: string;
@@ -20,7 +21,7 @@ interface TestProgress {
 }
 
 export function TestTracker() {
-  const { systems, stations, items, progress, loadData } = useTestTrackerData();
+  const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -54,41 +55,25 @@ export function TestTracker() {
 
   const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
     try {
-      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-      
-      if (existingProgress) {
-        await supabase
-          .from('test_progress')
-          .update({
-            status: editValues.status,
-            progress_percent: editValues.progress_percent,
-            notes: editValues.notes,
-            started_at: editValues.status === 'On-going' && !existingProgress.started_at ? new Date().toISOString() : existingProgress.started_at,
-            completed_at: editValues.status === 'Done' ? new Date().toISOString() : null
-          })
-          .eq('id', existingProgress.id);
-      } else {
-        await supabase
-          .from('test_progress')
-          .insert({
-            system_id: systemId,
-            station_id: stationId,
-            item_id: itemId,
-            status: editValues.status,
-            progress_percent: editValues.progress_percent,
-            notes: editValues.notes,
-            started_at: editValues.status === 'On-going' ? new Date().toISOString() : null,
-            completed_at: editValues.status === 'Done' ? new Date().toISOString() : null
-          });
-      }
+      const updates = {
+        status: editValues.status,
+        progress_percent: editValues.progress_percent,
+        notes: editValues.notes,
+        started_at: editValues.status === 'On-going' ? new Date().toISOString() : undefined,
+        completed_at: editValues.status === 'Done' ? new Date().toISOString() : null
+      };
 
-      setEditingProgress(null);
-      loadData();
+      const success = await updateProgress(systemId, stationId, itemId, updates);
       
-      toast({
-        title: "儲存成功",
-        description: "測試進度已更新"
-      });
+      if (success) {
+        setEditingProgress(null);
+        toast({
+          title: "儲存成功",
+          description: "測試進度已更新，系統狀態已自動更新"
+        });
+      } else {
+        throw new Error('Update failed');
+      }
     } catch (error) {
       toast({
         title: "儲存失敗",
@@ -125,10 +110,11 @@ export function TestTracker() {
           <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
           <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態</p>
         </div>
-        <Button variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          匯出報表
-        </Button>
+        <ExportManager 
+          systems={filteredSystems} 
+          stations={stations} 
+          progress={progress} 
+        />
       </div>
 
       {/* Filters */}

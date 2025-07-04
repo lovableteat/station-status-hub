@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Plus, Download, Wrench, Upload, FileText, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { FileUploadDialog } from "./FileUploadDialog";
 
 interface Tool {
   id: string;
@@ -19,6 +20,7 @@ interface Tool {
   version?: string;
   description?: string;
   file_name?: string;
+  file_path?: string;
   file_size?: number;
   is_required: boolean;
   download_count: number;
@@ -132,6 +134,68 @@ export function ToolsManagement() {
 
   const categories = [...new Set(tools.map(t => t.category))];
 
+  const handleDownload = async (tool: Tool) => {
+    try {
+      if (tool.file_path) {
+        // Create a temporary link to download the file
+        const link = document.createElement('a');
+        link.href = tool.file_path;
+        link.download = tool.file_name || tool.tool_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Update download count
+        await supabase
+          .from('tools_management')
+          .update({ download_count: tool.download_count + 1 })
+          .eq('id', tool.id);
+        
+        toast({
+          title: "開始下載",
+          description: `正在下載 ${tool.tool_name}`
+        });
+        
+        loadTools(); // Refresh the list
+      } else {
+        toast({
+          title: "下載失敗",
+          description: "檔案路徑不存在",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "下載失敗",
+        description: "無法下載檔案",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDelete = async (toolId: string) => {
+    try {
+      await supabase
+        .from('tools_management')
+        .delete()
+        .eq('id', toolId);
+      
+      toast({
+        title: "刪除成功",
+        description: "工具已刪除"
+      });
+      
+      loadTools();
+    } catch (error) {
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除工具",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -151,62 +215,16 @@ export function ToolsManagement() {
           <h1 className="text-3xl font-bold">工具管理</h1>
           <p className="text-muted-foreground">設備資源與工具檔案管理系統</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              新增工具
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>新增工具</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>工具名稱</Label>
-                <Input placeholder="請輸入工具名稱..." />
-              </div>
-              <div>
-                <Label>類別</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="選擇類別" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="software">軟體</SelectItem>
-                    <SelectItem value="driver">驅動程式</SelectItem>
-                    <SelectItem value="config">配置檔案</SelectItem>
-                    <SelectItem value="document">文件</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>版本</Label>
-                <Input placeholder="例如: 1.0.0" />
-              </div>
-              <div>
-                <Label>描述</Label>
-                <Textarea placeholder="請輸入工具描述..." />
-              </div>
-              <div>
-                <Label>檔案上傳</Label>
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-                  <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">點擊或拖拽檔案到此處</p>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button onClick={() => setIsDialogOpen(false)}>
-                  新增工具
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => setIsDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          新增工具
+        </Button>
+        
+        <FileUploadDialog
+          isOpen={isDialogOpen}
+          onClose={() => setIsDialogOpen(false)}
+          onSuccess={loadTools}
+        />
       </div>
 
       {/* Filters */}
@@ -288,13 +306,21 @@ export function ToolsManagement() {
                   <TableCell>{tool.download_count}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDownload(tool)}
+                      >
                         <Download className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDelete(tool.id)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

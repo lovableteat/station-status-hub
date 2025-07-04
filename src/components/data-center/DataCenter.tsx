@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ interface TestRecord {
 }
 
 export function DataCenter() {
-  const [records, setRecords] = useState<TestRecord[]>([]);
+  const { systems, stations, testItems, progress, isLoading } = useUnifiedData();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("all-engineers");
   const [filterStatus, setFilterStatus] = useState("all-status");
@@ -36,65 +36,37 @@ export function DataCenter() {
     from: Date | undefined;
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadTestRecords();
-  }, []);
-
-  const loadTestRecords = async () => {
-    try {
-      // Mock data for demonstration
-      const mockRecords: TestRecord[] = [
-        {
-          id: "1",
-          system_name: "System15",
-          station_name: "Station 0 - 系統準備",
-          test_item: "硬體檢查",
-          status: "Done",
-          progress: 100,
-          assigned_engineer: "Wilson",
-          start_date: "2024-01-15",
-          completion_date: "2024-01-16",
-          notes: "順利完成，無異常"
-        },
-        {
-          id: "2",
-          system_name: "System23",
-          station_name: "Station 2 - 功能驗證",
-          test_item: "通訊測試",
-          status: "On-going",
-          progress: 75,
-          assigned_engineer: "Alice",
-          start_date: "2024-01-16",
-          notes: "發現小問題，正在處理"
-        },
-        {
-          id: "3",
-          system_name: "System08",
-          station_name: "Station 1 - 初始測試",
-          test_item: "軟體安裝",
-          status: "Done",
-          progress: 100,
-          assigned_engineer: "Bob",
-          start_date: "2024-01-14",
-          completion_date: "2024-01-15",
-          notes: "安裝完成，版本驗證通過"
-        }
-      ];
+  // Convert unified data to test records format
+  const generateRecords = (): TestRecord[] => {
+    const records: TestRecord[] = [];
+    
+    progress.forEach(prog => {
+      const system = systems.find(s => s.id === prog.system_id);
+      const station = stations.find(s => s.id === prog.station_id);
+      const item = testItems.find(i => i.id === prog.item_id);
       
-      setRecords(mockRecords);
-      setIsLoading(false);
-    } catch (error) {
-      toast({
-        title: "載入失敗",
-        description: "無法載入測試記錄",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-    }
+      if (system && station && item) {
+        records.push({
+          id: prog.id,
+          system_name: system.system_name,
+          station_name: station.station_name,
+          test_item: item.item_name,
+          status: prog.status,
+          progress: prog.progress_percent,
+          assigned_engineer: system.assigned_engineer || 'Unassigned',
+          start_date: prog.started_at ? new Date(prog.started_at).toLocaleDateString() : '-',
+          completion_date: prog.completed_at ? new Date(prog.completed_at).toLocaleDateString() : undefined,
+          notes: prog.notes
+        });
+      }
+    });
+    
+    return records;
   };
+
+  const records = generateRecords();
 
   const getStatusColor = (status: string) => {
     switch (status) {
