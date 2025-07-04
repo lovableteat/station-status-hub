@@ -142,16 +142,30 @@ export function AdminPanel() {
   };
 
   const handleAddUser = async () => {
+    if (!newUser.username || !newUser.password) {
+      toast({
+        title: "新增失敗",
+        description: "請填寫完整的用戶名和密碼",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('system_users')
         .insert([{
-          ...newUser,
+          username: newUser.username,
           password_hash: newUser.password,
-          created_by: user?.username
+          role: newUser.role,
+          permissions: newUser.permissions,
+          created_by: user?.username || 'admin'
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
 
       toast({
         title: "新增成功",
@@ -161,10 +175,11 @@ export function AdminPanel() {
       setIsUserDialogOpen(false);
       setNewUser({ username: "", password: "", role: "engineer", permissions: {} });
       loadSystemUsers();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error adding user:', error);
       toast({
         title: "新增失敗",
-        description: "無法新增系統用戶",
+        description: error.message || "無法新增系統用戶",
         variant: "destructive"
       });
     }
