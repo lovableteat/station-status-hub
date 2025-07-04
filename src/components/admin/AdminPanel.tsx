@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Plus, Edit, UserPlus, Shield, LogOut, Users, Settings, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
+import { UserEditDialog } from "./UserEditDialog";
+import { EngineerEditDialog } from "./EngineerEditDialog";
 
 interface Engineer {
   id: string;
@@ -187,24 +189,37 @@ export function AdminPanel() {
 
   const handleUpdateTarget = async () => {
     try {
-      const { error } = await supabase
-        .from('production_targets')
-        .upsert([{
-          ...newTarget,
-          target_date: new Date().toISOString().split('T')[0]
-        }]);
+      let targetData = {
+        ...newTarget,
+        target_date: new Date().toISOString().split('T')[0]
+      };
 
-      if (error) throw error;
+      if (editingTarget) {
+        const { error } = await supabase
+          .from('production_targets')
+          .update(targetData)
+          .eq('id', editingTarget);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('production_targets')
+          .insert([targetData]);
+        if (error) throw error;
+      }
 
       toast({
         title: "更新成功",
-        description: "生產目標已成功更新"
+        description: "生產目標已成功更新，儀表板將自動同步"
       });
 
       setIsTargetDialogOpen(false);
       setEditingTarget(null);
       setNewTarget({ daily_target: 10, weekly_target: 50 });
       loadProductionTargets();
+      
+      // Trigger dashboard refresh by dispatching custom event
+      const event = new CustomEvent('dataUpdate', { detail: { type: 'production_targets' } });
+      window.dispatchEvent(event);
     } catch (error) {
       toast({
         title: "更新失敗",
@@ -268,6 +283,54 @@ export function AdminPanel() {
       toast({
         title: "更新失敗",
         description: "無法更新用戶狀態",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('system_users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: "刪除成功",
+        description: "用戶已成功刪除"
+      });
+
+      loadSystemUsers();
+    } catch (error) {
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除用戶",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteEngineer = async (engineerId: string) => {
+    try {
+      const { error } = await supabase
+        .from('engineers')
+        .delete()
+        .eq('id', engineerId);
+
+      if (error) throw error;
+
+      toast({
+        title: "刪除成功",
+        description: "工程師已成功刪除"
+      });
+
+      loadEngineers();
+    } catch (error) {
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除工程師",
         variant: "destructive"
       });
     }
@@ -410,17 +473,22 @@ export function AdminPanel() {
                     </div>
                     <div className="flex gap-2">
                       {user.username !== 'liu52417' && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleToggleUserStatus(user.id, user.status)}
-                        >
-                          {user.status === 'active' ? '停用' : '啟用'}
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4" />
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleToggleUserStatus(user.id, user.status)}
+                      >
+                        {user.status === 'active' ? '停用' : '啟用'}
                       </Button>
+                    )}
+                    <UserEditDialog
+                      userId={user.id}
+                      username={user.username}
+                      role={user.role}
+                      status={user.status}
+                      onUpdate={loadSystemUsers}
+                      onDelete={handleDeleteUser}
+                    />
                     </div>
                   </div>
                 ))}
@@ -548,9 +616,15 @@ export function AdminPanel() {
                       >
                         {engineer.status === 'active' ? '停用' : '啟用'}
                       </Button>
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <EngineerEditDialog
+                        engineerId={engineer.id}
+                        name={engineer.name}
+                        email={engineer.email}
+                        team={engineer.team}
+                        status={engineer.status}
+                        onUpdate={loadEngineers}
+                        onDelete={handleDeleteEngineer}
+                      />
                     </div>
                   </div>
                 ))}
