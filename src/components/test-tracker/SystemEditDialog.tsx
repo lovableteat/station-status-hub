@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +22,20 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
     system_name: systemName,
     assigned_engineer: assignedEngineer
   });
+  const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const loadEngineers = async () => {
+      const { data } = await supabase
+        .from('engineers')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      if (data) setEngineers(data);
+    };
+    loadEngineers();
+  }, []);
 
   const handleSave = async () => {
     try {
@@ -79,11 +93,21 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
           </div>
           <div>
             <Label>負責工程師</Label>
-            <Input
-              value={editValues.assigned_engineer}
-              onChange={(e) => setEditValues({...editValues, assigned_engineer: e.target.value})}
-              placeholder="請輸入負責工程師..."
-            />
+            <Select 
+              value={editValues.assigned_engineer} 
+              onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="請選擇負責工程師..." />
+              </SelectTrigger>
+              <SelectContent>
+                {engineers.map(engineer => (
+                  <SelectItem key={engineer.id} value={engineer.name}>
+                    {engineer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsOpen(false)}>
