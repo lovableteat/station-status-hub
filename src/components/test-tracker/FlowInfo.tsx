@@ -3,7 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Monitor, Cpu, HardDrive, Zap, Settings } from "lucide-react";
+import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus } from "lucide-react";
+import { TestItemManager } from "./TestItemManager";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface TestStation {
   id: string;
@@ -25,6 +29,8 @@ interface TestItem {
 export function FlowInfo() {
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
+  const [activeTab, setActiveTab] = useState("overview");
+  const { toast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -106,10 +112,27 @@ export function FlowInfo() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">GB300 L10 測試流程說明</h1>
-        <p className="text-muted-foreground">各測試站點詳細流程說明與所需設備清單</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">GB300 L10 測試流程說明</h1>
+          <p className="text-muted-foreground">各測試站點詳細流程說明與所需設備清單</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => setActiveTab("manage")}
+        >
+          <Edit className="h-4 w-4 mr-2" />
+          管理流程
+        </Button>
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">流程總覽</TabsTrigger>
+          <TabsTrigger value="manage">管理測試項目</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
 
       {/* Overview Timeline */}
       <Card>
@@ -285,6 +308,16 @@ export function FlowInfo() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="manage">
+          <TestItemManager 
+            stations={stations} 
+            items={items} 
+            onDataChange={loadData}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

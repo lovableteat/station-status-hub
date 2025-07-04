@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,64 +16,8 @@ interface Station {
 }
 
 export function ProductionMonitor() {
-  const [stations, setStations] = useState<Station[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { stationStatuses: stations, systems, isLoading } = useUnifiedData();
   const { toast } = useToast();
-
-  useEffect(() => {
-    loadStations();
-    const interval = setInterval(loadStations, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStations = async () => {
-    try {
-      // Mock data for demonstration - replace with actual Supabase queries
-      const mockStations: Station[] = [
-        {
-          id: "1",
-          name: "Station 0 - 系統準備",
-          status: "working",
-          current_system: "System15",
-          efficiency: 85,
-          last_update: new Date().toISOString()
-        },
-        {
-          id: "2", 
-          name: "Station 1 - 初始測試",
-          status: "complete",
-          current_system: "System08",
-          efficiency: 92,
-          last_update: new Date().toISOString()
-        },
-        {
-          id: "3",
-          name: "Station 2 - 功能驗證", 
-          status: "warning",
-          current_system: "System23",
-          efficiency: 67,
-          last_update: new Date().toISOString()
-        },
-        {
-          id: "4",
-          name: "Station 3 - 最終檢查",
-          status: "idle",
-          efficiency: 0,
-          last_update: new Date().toISOString()
-        }
-      ];
-      
-      setStations(mockStations);
-      setIsLoading(false);
-    } catch (error) {
-      toast({
-        title: "載入失敗",
-        description: "無法載入站點狀態",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -217,13 +160,42 @@ export function ProductionMonitor() {
           <CardContent className="p-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-primary">
-                {Math.round(stations.reduce((sum, s) => sum + s.efficiency, 0) / stations.length)}%
+                {stations.length > 0 ? Math.round(stations.reduce((sum, s) => sum + s.efficiency, 0) / stations.length) : 0}%
               </div>
               <div className="text-sm text-muted-foreground">平均效率</div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Systems Status Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle>系統測試總覽</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-success/10 rounded-lg border border-success/20">
+              <div className="text-2xl font-bold text-success">
+                {systems.filter(s => s.status === 'Done').length}
+              </div>
+              <div className="text-sm text-muted-foreground">已完成系統</div>
+            </div>
+            <div className="text-center p-4 bg-warning/10 rounded-lg border border-warning/20">
+              <div className="text-2xl font-bold text-warning">
+                {systems.filter(s => s.status === 'On-going').length}
+              </div>
+              <div className="text-sm text-muted-foreground">進行中系統</div>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg border">
+              <div className="text-2xl font-bold text-muted-foreground">
+                {systems.filter(s => s.status === 'Not Start').length}
+              </div>
+              <div className="text-sm text-muted-foreground">未開始系統</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

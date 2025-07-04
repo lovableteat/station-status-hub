@@ -1,0 +1,271 @@
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Edit, Trash2, Save, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface TestStation {
+  id: string;
+  station_name: string;
+  station_order: number;
+}
+
+interface TestItem {
+  id: string;
+  station_id: string;
+  item_name: string;
+  item_order: number;
+  description: string;
+  estimated_minutes?: number;
+}
+
+interface TestItemManagerProps {
+  stations: TestStation[];
+  items: TestItem[];
+  onDataChange: () => void;
+}
+
+export function TestItemManager({ stations, items, onDataChange }: TestItemManagerProps) {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<TestItem | null>(null);
+  const [formData, setFormData] = useState({
+    item_name: '',
+    station_id: '',
+    description: '',
+    estimated_minutes: 30,
+    item_order: 1
+  });
+  const { toast } = useToast();
+
+  const handleSave = async () => {
+    try {
+      if (editingItem) {
+        // Update existing item
+        await supabase
+          .from('test_flow_items')
+          .update({
+            item_name: formData.item_name,
+            station_id: formData.station_id,
+            description: formData.description,
+            estimated_minutes: formData.estimated_minutes,
+            item_order: formData.item_order
+          })
+          .eq('id', editingItem.id);
+        
+        toast({ title: "更新成功", description: "測試項目已更新" });
+      } else {
+        // Create new item
+        await supabase
+          .from('test_flow_items')
+          .insert({
+            item_name: formData.item_name,
+            station_id: formData.station_id,
+            description: formData.description,
+            estimated_minutes: formData.estimated_minutes,
+            item_order: formData.item_order
+          });
+        
+        toast({ title: "新增成功", description: "測試項目已新增" });
+      }
+      
+      setIsDialogOpen(false);
+      setEditingItem(null);
+      resetForm();
+      onDataChange();
+    } catch (error) {
+      toast({
+        title: "操作失敗",
+        description: "無法儲存測試項目",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDelete = async (itemId: string) => {
+    try {
+      await supabase
+        .from('test_flow_items')
+        .delete()
+        .eq('id', itemId);
+      
+      toast({ title: "刪除成功", description: "測試項目已刪除" });
+      onDataChange();
+    } catch (error) {
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除測試項目",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      item_name: '',
+      station_id: '',
+      description: '',
+      estimated_minutes: 30,
+      item_order: 1
+    });
+  };
+
+  const openAddDialog = () => {
+    resetForm();
+    setEditingItem(null);
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (item: TestItem) => {
+    setFormData({
+      item_name: item.item_name,
+      station_id: item.station_id,
+      description: item.description || '',
+      estimated_minutes: item.estimated_minutes || 30,
+      item_order: item.item_order
+    });
+    setEditingItem(item);
+    setIsDialogOpen(true);
+  };
+
+  const getStationName = (stationId: string) => {
+    return stations.find(s => s.id === stationId)?.station_name || '未知站點';
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">測試項目管理</h3>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={openAddDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              新增測試項目
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingItem ? '編輯測試項目' : '新增測試項目'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>項目名稱</Label>
+                <Input
+                  value={formData.item_name}
+                  onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                  placeholder="請輸入測試項目名稱"
+                />
+              </div>
+              
+              <div>
+                <Label>所屬站點</Label>
+                <Select value={formData.station_id} onValueChange={(value) => setFormData({ ...formData, station_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇站點" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stations.map(station => (
+                      <SelectItem key={station.id} value={station.id}>
+                        {station.station_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>描述</Label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="請輸入測試項目描述"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>預估時間 (分鐘)</Label>
+                  <Input
+                    type="number"
+                    value={formData.estimated_minutes}
+                    onChange={(e) => setFormData({ ...formData, estimated_minutes: parseInt(e.target.value) || 30 })}
+                  />
+                </div>
+                <div>
+                  <Label>執行順序</Label>
+                  <Input
+                    type="number"
+                    value={formData.item_order}
+                    onChange={(e) => setFormData({ ...formData, item_order: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  取消
+                </Button>
+                <Button onClick={handleSave}>
+                  <Save className="h-4 w-4 mr-2" />
+                  儲存
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>項目名稱</TableHead>
+            <TableHead>所屬站點</TableHead>
+            <TableHead>描述</TableHead>
+            <TableHead>預估時間</TableHead>
+            <TableHead>執行順序</TableHead>
+            <TableHead>操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map(item => (
+            <TableRow key={item.id}>
+              <TableCell className="font-medium">{item.item_name}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{getStationName(item.station_id)}</Badge>
+              </TableCell>
+              <TableCell className="max-w-48 truncate">{item.description}</TableCell>
+              <TableCell>{item.estimated_minutes || 30} 分鐘</TableCell>
+              <TableCell>{item.item_order}</TableCell>
+              <TableCell>
+                <div className="flex gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => openEditDialog(item)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleDelete(item.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
