@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -24,12 +24,43 @@ export function EngineerEditDialog({ engineerId, name, email, team, status, onUp
     name,
     email,
     team,
-    status
+    status,
+    employee_id: ''
   });
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (isOpen) {
+      loadEmployeeId();
+    }
+  }, [isOpen]);
+
+  const loadEmployeeId = async () => {
+    try {
+      const { data } = await supabase
+        .from('engineers')
+        .select('employee_id')
+        .eq('id', engineerId)
+        .single();
+      
+      setEditValues(prev => ({
+        ...prev,
+        employee_id: data?.employee_id || ''
+      }));
+    } catch (error) {
+      console.error('Error loading employee ID:', error);
+    }
+  };
+
   const handleSave = async () => {
     try {
+      // First get the current employee_id if it exists
+      const { data: currentData } = await supabase
+        .from('engineers')
+        .select('employee_id')
+        .eq('id', engineerId)
+        .single();
+
       const { error } = await supabase
         .from('engineers')
         .update(editValues)
@@ -113,6 +144,14 @@ export function EngineerEditDialog({ engineerId, name, email, team, status, onUp
                 <SelectItem value="inactive">停用</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>工號</Label>
+            <Input
+              value={editValues.employee_id}
+              onChange={(e) => setEditValues({...editValues, employee_id: e.target.value})}
+              placeholder="請輸入工號..."
+            />
           </div>
           <div className="flex justify-between">
             <Button variant="destructive" onClick={handleDelete}>
