@@ -141,7 +141,7 @@ export function TestProgressTable({
                     variant="secondary" 
                     className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium"
                   >
-                    {system.current_station}
+                    {system.current_station?.split(' - ')[0] || system.current_station}
                   </Badge>
                 </div>
                 
