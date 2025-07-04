@@ -324,6 +324,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_production_stats: {
+        Row: {
+          completed_systems: number
+          created_at: string
+          date: string
+          id: string
+          target_systems: number
+          updated_at: string
+          work_day: boolean
+        }
+        Insert: {
+          completed_systems?: number
+          created_at?: string
+          date?: string
+          id?: string
+          target_systems?: number
+          updated_at?: string
+          work_day?: boolean
+        }
+        Update: {
+          completed_systems?: number
+          created_at?: string
+          date?: string
+          id?: string
+          target_systems?: number
+          updated_at?: string
+          work_day?: boolean
+        }
+        Relationships: []
+      }
       drivers_and_tools: {
         Row: {
           comment: string | null
@@ -1424,7 +1454,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_daily_production_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
