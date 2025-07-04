@@ -26,10 +26,10 @@ export function StatsCard({
 }: StatsCardProps) {
   const variantStyles = {
     default: "border-border",
-    success: "border-success bg-gradient-success text-success-foreground",
-    warning: "border-warning bg-gradient-warning text-warning-foreground", 
-    danger: "border-danger bg-gradient-danger text-danger-foreground",
-    info: "border-info bg-gradient-primary text-info-foreground"
+    success: "border-success bg-gradient-to-br from-success/10 to-success/5 text-foreground",
+    warning: "border-warning bg-gradient-to-br from-warning/10 to-warning/5 text-foreground", 
+    danger: "border-danger bg-gradient-to-br from-danger/10 to-danger/5 text-foreground",
+    info: "border-info bg-gradient-to-br from-info/10 to-info/5 text-foreground"
   };
 
   return (

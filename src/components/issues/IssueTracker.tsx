@@ -27,8 +27,8 @@ interface Issue {
 export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterPriority, setFilterPriority] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterPriority, setFilterPriority] = useState("all-priorities");
+  const [filterStatus, setFilterStatus] = useState("all-status");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -115,8 +115,8 @@ export function IssueTracker() {
     const matchesSearch = issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          issue.assigned_to?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPriority = !filterPriority || issue.priority === filterPriority;
-    const matchesStatus = !filterStatus || issue.status === filterStatus;
+    const matchesPriority = !filterPriority || filterPriority === "all-priorities" || issue.priority === filterPriority;
+    const matchesStatus = !filterStatus || filterStatus === "all-status" || issue.status === filterStatus;
     return matchesSearch && matchesPriority && matchesStatus;
   });
 
@@ -238,7 +238,7 @@ export function IssueTracker() {
                 <SelectValue placeholder="選擇優先級" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部優先級</SelectItem>
+                <SelectItem value="all-priorities">全部優先級</SelectItem>
                 <SelectItem value="critical">緊急</SelectItem>
                 <SelectItem value="high">高</SelectItem>
                 <SelectItem value="medium">中</SelectItem>
@@ -250,7 +250,7 @@ export function IssueTracker() {
                 <SelectValue placeholder="選擇狀態" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部狀態</SelectItem>
+                <SelectItem value="all-status">全部狀態</SelectItem>
                 <SelectItem value="open">開啟</SelectItem>
                 <SelectItem value="in_progress">處理中</SelectItem>
                 <SelectItem value="resolved">已解決</SelectItem>
