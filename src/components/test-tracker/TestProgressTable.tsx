@@ -94,9 +94,21 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => (
               <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
-                <div className="font-medium">{system.system_name}</div>
+                <button 
+                  className="font-medium text-primary hover:underline cursor-pointer text-left"
+                  onClick={() => window.location.href = `/production-monitor?system=${system.system_name}`}
+                >
+                  {system.system_name}
+                </button>
                 <div>
-                  <Badge variant="outline">{system.assigned_engineer}</Badge>
+                  <button 
+                    className="text-sm px-2 py-1 bg-muted hover:bg-accent rounded border cursor-pointer"
+                    onClick={() => {
+                      // TODO: Open edit engineer dialog
+                    }}
+                  >
+                    {system.assigned_engineer}
+                  </button>
                 </div>
                 <div>
                   <Badge className={getStatusColor(system.status)}>
