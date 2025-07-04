@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressEditDialog } from "./ProgressEditDialog";
+import { SystemEditDialog } from "./SystemEditDialog";
 
 interface TestSystem {
   id: string;
@@ -55,6 +56,7 @@ interface TestProgressTableProps {
   handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
   handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
   getStatusColor: (status: string) => string;
+  onSystemUpdate: () => void;
 }
 
 export function TestProgressTable({
@@ -70,6 +72,7 @@ export function TestProgressTable({
   handleEditProgress,
   handleSaveProgress,
   getStatusColor,
+  onSystemUpdate,
 }: TestProgressTableProps) {
   return (
     <Card>
@@ -94,21 +97,39 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => (
               <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${stations.length}, 2fr)` }}>
-                <button 
-                  className="font-medium text-primary hover:underline cursor-pointer text-left"
-                  onClick={() => window.location.href = `/production-monitor?system=${system.system_name}`}
-                >
-                  {system.system_name}
-                </button>
-                <div>
+                <div className="flex items-center gap-2">
                   <button 
-                    className="text-sm px-2 py-1 bg-muted hover:bg-accent rounded border cursor-pointer"
+                    className="font-medium text-primary hover:underline cursor-pointer text-left"
                     onClick={() => {
-                      // TODO: Open edit engineer dialog
+                      // Navigate to production monitor with focus on specific system
+                      const currentUrl = new URL(window.location.href);
+                      currentUrl.searchParams.set('system', system.system_name);
+                      window.history.pushState({}, '', currentUrl.toString());
+                      
+                      // Dispatch custom event to trigger navigation
+                      const event = new CustomEvent('navigate', { 
+                        detail: { module: 'monitor', params: { system: system.system_name } } 
+                      });
+                      window.dispatchEvent(event);
                     }}
                   >
-                    {system.assigned_engineer}
+                    {system.system_name}
                   </button>
+                  <SystemEditDialog
+                    systemId={system.id}
+                    systemName={system.system_name}
+                    assignedEngineer={system.assigned_engineer}
+                    onUpdate={onSystemUpdate}
+                  />
+                </div>
+                <div>
+                  <SystemEditDialog
+                    systemId={system.id}
+                    systemName={system.system_name}
+                    assignedEngineer={system.assigned_engineer}
+                    onUpdate={onSystemUpdate}
+                    variant="button"
+                  />
                 </div>
                 <div>
                   <Badge className={getStatusColor(system.status)}>

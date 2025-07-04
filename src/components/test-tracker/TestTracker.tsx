@@ -142,6 +142,7 @@ export function TestTracker() {
         handleEditProgress={handleEditProgress}
         handleSaveProgress={handleSaveProgress}
         getStatusColor={getStatusColor}
+        onSystemUpdate={loadData}
       />
     </div>
   );

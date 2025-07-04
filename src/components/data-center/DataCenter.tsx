@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
+import { PDFExportManager } from "./PDFExportManager";
 
 interface TestRecord {
   id: string;
@@ -136,10 +137,7 @@ export function DataCenter() {
           <p className="text-muted-foreground">測試記錄與報告查詢系統</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToPDF}>
-            <FileText className="h-4 w-4 mr-2" />
-            匯出 PDF
-          </Button>
+          <PDFExportManager records={filteredRecords} />
           <Button variant="outline" onClick={exportToExcel}>
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             匯出 Excel
