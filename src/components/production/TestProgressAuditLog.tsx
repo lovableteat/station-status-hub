@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, User, Clock, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { AuditRecordEditDialog } from "./AuditRecordEditDialog";
 
 interface AuditEntry {
   id: string;
@@ -41,11 +42,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
       setIsLoading(true);
       const { data, error } = await supabase
         .from('test_progress_audit')
-        .select(`
-          *,
-          test_flow_stations(station_name),
-          test_flow_items(item_name)
-        `)
+        .select('*')
         .eq('system_id', systemId)
         .order('changed_at', { ascending: false })
         .limit(50);
@@ -134,15 +131,18 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
               {auditLogs.map((entry) => (
                 <div key={entry.id} className="border rounded-lg p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <Badge className={getChangeTypeColor(entry.change_type)}>
-                      {entry.change_type === 'insert' && '新增'}
-                      {entry.change_type === 'update' && '更新'}
-                      {entry.change_type === 'delete' && '刪除'}
-                    </Badge>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      {new Date(entry.changed_at).toLocaleString('zh-TW')}
+                    <div className="flex items-center gap-2">
+                      <Badge className={getChangeTypeColor(entry.change_type)}>
+                        {entry.change_type === 'insert' && '新增'}
+                        {entry.change_type === 'update' && '更新'}
+                        {entry.change_type === 'delete' && '刪除'}
+                      </Badge>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        {new Date(entry.changed_at).toLocaleString('zh-TW')}
+                      </div>
                     </div>
+                    <AuditRecordEditDialog record={entry} onUpdate={loadAuditLogs} />
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm">
