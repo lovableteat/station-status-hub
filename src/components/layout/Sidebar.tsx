@@ -13,7 +13,8 @@ import {
   Moon,
   Sun,
   ListChecks,
-  FileText
+  FileText,
+  Users
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -30,6 +31,7 @@ const navigationItems = [
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
   { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
+  { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
 ];
 
 export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {

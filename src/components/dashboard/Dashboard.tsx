@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
-import { StationTimeChart } from "./StationTimeChart";
+import { StationTimeComparison } from "./StationTimeComparison";
 import { ProductionTrendChart } from "./ProductionTrendChart";
 import { StationHeatmap } from "./StationHeatmap";
-import { IssueTypeChart } from "./IssueTypeChart";
 import { MachineTable } from "./MachineTable";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
   Clock,
@@ -20,9 +20,16 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
+  const { systems } = useUnifiedData();
+  
   const handleStationClick = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
   };
+
+  // Calculate total vs completed systems
+  const totalSystems = systems.length;
+  const completedSystems = systems.filter(s => s.status === 'Done').length;
+  const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -61,12 +68,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           variant="danger"
         />
         <StatsCard
-          title="今日產能"
-          value="23"
+          title="系統完成狀況"
+          value={`${completedSystems}/${totalSystems}`}
           icon={<TrendingUp className="h-4 w-4" />}
-          description="目標35台，完成率66%"
-          trend={{ value: 12.5, isPositive: false }}
-          variant="info"
+          description={`完成率 ${completionRate}%`}
+          trend={{ value: completionRate >= 70 ? 5.2 : -2.8, isPositive: completionRate >= 70 }}
+          variant={completionRate >= 70 ? "success" : "warning"}
         />
         <StatsCard
           title="在線人員"
@@ -86,7 +93,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Test Pass Rate */}
         <Card>
           <CardHeader>
@@ -97,23 +104,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* Station Time Distribution */}
+        {/* Station Time Comparison */}
         <Card>
           <CardHeader>
-            <CardTitle>各站測試工時分布</CardTitle>
+            <CardTitle>各站測試工時比較</CardTitle>
           </CardHeader>
           <CardContent>
-            <StationTimeChart />
-          </CardContent>
-        </Card>
-
-        {/* Issue Types */}
-        <Card>
-          <CardHeader>
-            <CardTitle>問題類型統計 Top 5</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <IssueTypeChart />
+            <StationTimeComparison />
           </CardContent>
         </Card>
       </div>

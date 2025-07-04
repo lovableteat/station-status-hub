@@ -180,6 +180,36 @@ export type Database = {
         }
         Relationships: []
       }
+      engineers: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          status: string | null
+          team: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          team: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          team?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       export_logs: {
         Row: {
           export_date: string | null
@@ -319,6 +349,51 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      station_time_analytics: {
+        Row: {
+          actual_hours: number
+          created_at: string | null
+          efficiency_ratio: number | null
+          estimated_hours: number
+          id: string
+          station_id: string
+          system_id: string
+        }
+        Insert: {
+          actual_hours: number
+          created_at?: string | null
+          efficiency_ratio?: number | null
+          estimated_hours: number
+          id?: string
+          station_id: string
+          system_id: string
+        }
+        Update: {
+          actual_hours?: number
+          created_at?: string | null
+          efficiency_ratio?: number | null
+          estimated_hours?: number
+          id?: string
+          station_id?: string
+          system_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_time_analytics_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "station_time_analytics_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stations: {
         Row: {
@@ -670,6 +745,7 @@ export type Database = {
       }
       test_progress: {
         Row: {
+          actual_hours: number | null
           assigned_to: string | null
           completed_at: string | null
           created_at: string
@@ -684,6 +760,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          actual_hours?: number | null
           assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
@@ -698,6 +775,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          actual_hours?: number | null
           assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
@@ -864,6 +942,33 @@ export type Database = {
           uploaded_at?: string | null
           uploaded_by?: string | null
           version?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          permissions: Json | null
+          role: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          permissions?: Json | null
+          role: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
