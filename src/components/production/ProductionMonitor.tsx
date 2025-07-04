@@ -136,7 +136,7 @@ export function ProductionMonitor() {
                       </div>
                       <h3 className="font-medium text-sm">{station.name}</h3>
                       <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">進度: {station.efficiency}%</div>
+                        <div className="text-xs text-muted-foreground">效率: {station.efficiency}%</div>
                         <Progress value={station.efficiency} className="h-1" />
                       </div>
                       {isActive && (
@@ -231,7 +231,7 @@ export function ProductionMonitor() {
               
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">進度</span>
+                  <span className="text-muted-foreground">效率</span>
                   <span className="font-medium">{station.efficiency}%</span>
                 </div>
                 <Progress value={station.efficiency} className="h-2" />
@@ -286,7 +286,7 @@ export function ProductionMonitor() {
               <div className="text-2xl font-bold text-primary">
                 {stations.length > 0 ? Math.round(stations.reduce((sum, s) => sum + s.efficiency, 0) / stations.length) : 0}%
               </div>
-              <div className="text-sm text-muted-foreground">平均進度</div>
+              <div className="text-sm text-muted-foreground">平均效率</div>
             </div>
           </CardContent>
         </Card>
