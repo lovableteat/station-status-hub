@@ -3,7 +3,7 @@ import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useState, useEffect } from 'react';
 
 export function StationTimeComparison() {
-  const { stations, testItems, progress } = useUnifiedData();
+  const { stations, stationStatuses, testItems } = useUnifiedData();
   const [timeData, setTimeData] = useState<any[]>([]);
 
   useEffect(() => {
@@ -11,24 +11,26 @@ export function StationTimeComparison() {
     const chartData = stations
       .filter(station => station.station_order >= 0 && station.station_order <= 3)
       .map((station) => {
+        const statusData = stationStatuses.find(s => s.id === station.id);
+        
         // Get actual test items for this station and sum their estimated minutes
         const stationItems = testItems.filter(item => item.station_id === station.id);
         const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 30), 0);
         const estimatedHours = Number((totalMinutes / 60).toFixed(1));
         
-        // Calculate actual hours from test progress records
-        const stationProgress = progress.filter(p => p.station_id === station.id);
-        const totalActualHours = stationProgress.reduce((sum, p) => sum + (p.actual_hours || 0), 0);
-        const actualHours = Number(totalActualHours.toFixed(1));
+        // Use efficiency data for actual hours calculation
+        const efficiency = statusData?.efficiency || 100;
+        const actualHours = Number((estimatedHours * (efficiency / 100)).toFixed(1));
         
         return {
           station: station.station_name,
           estimated: estimatedHours,
-          actual: actualHours > 0 ? actualHours : estimatedHours // Use actual if available, otherwise use estimated
+          actual: actualHours,
+          efficiency: efficiency
         };
       });
     setTimeData(chartData);
-  }, [stations, testItems, progress]);
+  }, [stations, stationStatuses, testItems]);
 
   return (
     <div className="h-80">
