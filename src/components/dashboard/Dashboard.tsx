@@ -17,8 +17,11 @@ import {
   AlertTriangle,
   TrendingUp,
   Users,
-  Zap
+  Zap,
+  Download
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 interface DashboardProps {
   onNavigate?: (module: string, params?: any) => void;
@@ -26,6 +29,7 @@ interface DashboardProps {
 
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { systems, progress, stationStatuses, stations } = useUnifiedData();
+  const { toast } = useToast();
   
   const handleStationClick = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
@@ -57,12 +61,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">系統儀表板</h1>
-        <p className="text-muted-foreground">
-          測試管理系統總覽 - 實時監控測試進度與系統狀態
-        </p>
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">系統儀表板</h1>
+          <p className="text-muted-foreground">
+            測試管理系統總覽 - 實時監控測試進度與系統狀態
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => toast({ title: "匯出功能", description: "報表匯出功能開發中..." })}>
+          <Download className="h-4 w-4 mr-2" />
+          匯出報表
+        </Button>
       </div>
 
       {/* Station Overview */}
@@ -107,33 +117,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Station Time Comparison */}
-        <Card>
-          <CardHeader>
-            <CardTitle>各站測試工時比較</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <StationTimeComparison />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>每日完成與預計完成狀況</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DailyCompletion />
+        </CardContent>
+      </Card>
 
-        {/* Daily Completion */}
-        <Card>
-          <CardHeader>
-            <CardTitle>每日完成與預計完成狀況</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DailyCompletion />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Gantt Chart Link */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <h3 className="text-lg font-semibold">專案甘特圖</h3>
+            <p className="text-muted-foreground">查看詳細的項目時程與進度規劃</p>
+            <Button onClick={() => window.open('/gantt', '_blank')}>
+              查看完整甘特圖
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Gantt Chart */}
-      <ProjectGanttChart />
-
-      {/* Work Hour Analytics */}
-      <WorkHourAnalytics />
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />

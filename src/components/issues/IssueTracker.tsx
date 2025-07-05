@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ExportDialog } from "../production/ExportDialog";
 
 interface Issue {
   id: string;
@@ -32,6 +33,7 @@ export function IssueTracker() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
   
   // Calculate issue statistics
@@ -159,10 +161,7 @@ export function IssueTracker() {
   });
 
   const exportData = () => {
-    toast({
-      title: "匯出功能",
-      description: "匯出功能開發中...",
-    });
+    setShowExportDialog(true);
   };
 
   if (isLoading) {
