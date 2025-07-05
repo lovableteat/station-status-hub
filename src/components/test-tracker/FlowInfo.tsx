@@ -3,10 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus } from "lucide-react";
+import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X } from "lucide-react";
 import { TestItemManager } from "./TestItemManager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
 interface TestStation {
@@ -30,6 +34,13 @@ export function FlowInfo() {
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
+  const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
+  const [editingStation, setEditingStation] = useState<TestStation | null>(null);
+  const [stationFormData, setStationFormData] = useState({
+    station_name: '',
+    description: '',
+    estimated_hours: 0
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -220,6 +231,42 @@ export function FlowInfo() {
     return { purpose: '', procedures: [], equipment: [], notes: '' };
   };
 
+  const handleSaveStation = async () => {
+    if (!editingStation) return;
+    
+    try {
+      await supabase
+        .from('test_flow_stations')
+        .update({
+          station_name: stationFormData.station_name,
+          description: stationFormData.description,
+          estimated_hours: stationFormData.estimated_hours
+        })
+        .eq('id', editingStation.id);
+
+      toast({ title: "更新成功", description: "站點資訊已更新" });
+      setIsStationDialogOpen(false);
+      setEditingStation(null);
+      loadData();
+    } catch (error) {
+      toast({
+        title: "更新失敗",
+        description: "無法更新站點資訊",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const openEditStationDialog = (station: TestStation) => {
+    setStationFormData({
+      station_name: station.station_name,
+      description: station.description || '',
+      estimated_hours: station.estimated_hours || 0
+    });
+    setEditingStation(station);
+    setIsStationDialogOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -310,6 +357,14 @@ export function FlowInfo() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditStationDialog(station)}
+                      className="opacity-70 hover:opacity-100"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                     <Badge variant="outline" className="bg-white/80">
                       <Clock className="h-3 w-3 mr-1" />
                       {getCalculatedStationHours(station.id)}h
@@ -446,6 +501,48 @@ export function FlowInfo() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Station Edit Dialog */}
+      <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>編輯站點資訊</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>站點名稱</Label>
+              <Input
+                value={stationFormData.station_name}
+                onChange={(e) => setStationFormData({ ...stationFormData, station_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>描述</Label>
+              <Textarea
+                value={stationFormData.description}
+                onChange={(e) => setStationFormData({ ...stationFormData, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>預估時間 (小時)</Label>
+              <Input
+                type="number"
+                value={stationFormData.estimated_hours}
+                onChange={(e) => setStationFormData({ ...stationFormData, estimated_hours: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleSaveStation}>
+                <Save className="h-4 w-4 mr-2" />
+                儲存
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
