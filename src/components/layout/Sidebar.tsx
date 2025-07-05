@@ -18,6 +18,9 @@ import {
 interface SidebarProps {
   activeModule: string;
   onModuleChange: (module: string) => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  isMobile?: boolean;
 }
 
 const navigationItems = [
@@ -31,67 +34,109 @@ const navigationItems = [
   { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
 ];
 
-export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
+export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
+  // On mobile, use isOpen prop; on desktop, use collapsed state
+  const isVisible = isMobile ? isOpen : true;
+  const isCompact = isMobile ? false : collapsed;
+
+  const handleToggle = () => {
+    if (isMobile && onToggle) {
+      onToggle();
+    } else {
+      setCollapsed(!collapsed);
+    }
+  };
+
   return (
-    <div
-      className={cn(
-        "h-screen bg-card border-r border-border transition-all duration-300 flex flex-col",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          {!collapsed && (
-            <div>
-              <h1 className="text-lg font-bold text-foreground">測試管理系統</h1>
-              <p className="text-xs text-muted-foreground">Station Status Hub</p>
-            </div>
-          )}
+    <>
+      {/* Mobile Header with Menu Button */}
+      {isMobile && (
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border h-14 flex items-center px-4">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={handleToggle}
             className="h-8 w-8 p-0"
           >
             <Menu className="h-4 w-4" />
           </Button>
+          <div className="ml-3">
+            <h1 className="text-sm font-bold text-foreground">測試管理系統</h1>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Navigation */}
-      <nav className="flex-1 p-2">
-        <div className="space-y-1">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeModule === item.id;
-            
-            return (
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "h-screen bg-card border-r border-border transition-all duration-300 flex flex-col",
+          // Mobile styles
+          isMobile && [
+            "fixed top-0 left-0 z-40 lg:relative",
+            isVisible ? "translate-x-0" : "-translate-x-full",
+            "w-64"
+          ],
+          // Desktop styles
+          !isMobile && (isCompact ? "w-16" : "w-64"),
+          // Add top margin on mobile to account for header
+          isMobile && "mt-14 lg:mt-0"
+        )}
+      >
+        {/* Header - Hidden on mobile as we have separate mobile header */}
+        {!isMobile && (
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              {!isCompact && (
+                <div>
+                  <h1 className="text-lg font-bold text-foreground">測試管理系統</h1>
+                  <p className="text-xs text-muted-foreground">Station Status Hub</p>
+                </div>
+              )}
               <Button
-                key={item.id}
-                variant={isActive ? "default" : "ghost"}
-                className={cn(
-                  "w-full justify-start h-10 transition-all",
-                  collapsed ? "px-2" : "px-3",
-                  isActive && "bg-primary text-primary-foreground shadow-station"
-                )}
-                onClick={() => onModuleChange(item.id)}
+                variant="ghost"
+                size="sm"
+                onClick={handleToggle}
+                className="h-8 w-8 p-0"
               >
-                <Icon className={cn("h-4 w-4 flex-shrink-0", collapsed ? "mr-0" : "mr-3")} />
-                {!collapsed && (
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium">{item.label}</div>
-                    <div className="text-xs opacity-70">{item.description}</div>
-                  </div>
-                )}
+                <Menu className="h-4 w-4" />
               </Button>
-            );
-          })}
-        </div>
-      </nav>
+            </div>
+          </div>
+        )}
 
-    </div>
+        {/* Navigation */}
+        <nav className="flex-1 p-2">
+          <div className="space-y-1">
+            {navigationItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeModule === item.id;
+              
+              return (
+                <Button
+                  key={item.id}
+                  variant={isActive ? "default" : "ghost"}
+                  className={cn(
+                    "w-full justify-start h-10 transition-all",
+                    (isCompact && !isMobile) ? "px-2" : "px-3",
+                    isActive && "bg-primary text-primary-foreground shadow-station"
+                  )}
+                  onClick={() => onModuleChange(item.id)}
+                >
+                  <Icon className={cn("h-4 w-4 flex-shrink-0", (isCompact && !isMobile) ? "mr-0" : "mr-3")} />
+                  {(!isCompact || isMobile) && (
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-medium">{item.label}</div>
+                      <div className="text-xs opacity-70">{item.description}</div>
+                    </div>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+    </>
   );
 }
