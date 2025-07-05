@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface SystemEditDialogProps {
   systemId: string;
@@ -24,6 +26,7 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const loadEngineers = async () => {
@@ -66,61 +69,85 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
+    <MobileDialog open={isOpen} onOpenChange={setIsOpen}>
+      <MobileDialogTrigger asChild>
         {variant === 'button' ? (
-          <Button variant="outline" size="sm" className="text-sm px-2 py-1 bg-muted hover:bg-accent rounded border cursor-pointer">
+          <Button 
+            variant="outline" 
+            size={isMobile ? "default" : "sm"} 
+            className={cn(
+              "text-sm px-2 py-1 bg-muted hover:bg-accent rounded border cursor-pointer",
+              isMobile && "h-10 px-4 text-base"
+            )}
+          >
             {assignedEngineer}
           </Button>
         ) : (
-          <Button variant="ghost" size="sm">
-            <Edit className="h-3 w-3" />
+          <Button 
+            variant="ghost" 
+            size={isMobile ? "default" : "sm"}
+            className={isMobile ? "h-10 px-4" : ""}
+          >
+            <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
+            {isMobile && "編輯"}
           </Button>
         )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>編輯系統資料</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
+      </MobileDialogTrigger>
+      <MobileDialogContent>
+        <MobileDialogHeader>
+          <MobileDialogTitle>編輯系統資料</MobileDialogTitle>
+        </MobileDialogHeader>
+        <div className={cn("space-y-4", isMobile && "space-y-6")}>
           <div>
-            <Label>機台編號</Label>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機台編號</Label>
             <Input
               value={editValues.system_name}
               onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
               placeholder="請輸入機台編號..."
+              className={isMobile ? "h-12 text-base" : ""}
             />
           </div>
           <div>
-            <Label>負責工程師</Label>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
             <Select 
               value={editValues.assigned_engineer} 
               onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
             >
-              <SelectTrigger>
+              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
                 <SelectValue placeholder="請選擇負責工程師..." />
               </SelectTrigger>
               <SelectContent>
                 {engineers.map(engineer => (
-                  <SelectItem key={engineer.id} value={engineer.name}>
+                  <SelectItem 
+                    key={engineer.id} 
+                    value={engineer.name}
+                    className={isMobile ? "h-12 text-base" : ""}
+                  >
                     {engineer.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsOpen(false)}>
-              <X className="h-3 w-3 mr-2" />
-              取消
-            </Button>
-            <Button onClick={handleSave}>
-              <Save className="h-3 w-3 mr-2" />
-              儲存
-            </Button>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+        <MobileDialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsOpen(false)}
+            className={isMobile ? "h-12 text-base font-medium" : ""}
+          >
+            <X className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
+            取消
+          </Button>
+          <Button 
+            onClick={handleSave}
+            className={isMobile ? "h-12 text-base font-medium" : ""}
+          >
+            <Save className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
+            儲存
+          </Button>
+        </MobileDialogFooter>
+      </MobileDialogContent>
+    </MobileDialog>
   );
 }
