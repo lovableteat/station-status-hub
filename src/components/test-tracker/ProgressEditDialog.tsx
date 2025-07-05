@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Edit, Save, X } from "lucide-react";
+import { Edit, Save, X, Trash2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +47,7 @@ interface ProgressEditDialogProps {
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
   handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
   handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
+  handleDeleteProgress: (systemId: string, stationId: string, itemId: string) => void;
   getStatusColor: (status: string) => string;
   systemId: string;
   stationId: string;
@@ -64,6 +65,7 @@ export function ProgressEditDialog({
   getProgressForSystemItem,
   handleEditProgress,
   handleSaveProgress,
+  handleDeleteProgress,
   getStatusColor,
   systemId,
   stationId,
@@ -124,17 +126,50 @@ export function ProgressEditDialog({
                           <X className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
                           {isMobile && "取消"}
                         </Button>
+                        {itemProgress && (
+                          <Button 
+                            size={isMobile ? "default" : "sm"}
+                            variant="destructive"
+                            className={isMobile ? "h-10 px-4" : ""}
+                            onClick={() => {
+                              if (confirm("確定要刪除這筆測試進度記錄嗎？")) {
+                                handleDeleteProgress(systemId, stationId, item.id);
+                                setEditingProgress(null);
+                              }
+                            }}
+                          >
+                            <Trash2 className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
+                            {isMobile && "刪除"}
+                          </Button>
+                        )}
                       </>
                     ) : (
-                      <Button 
-                        size={isMobile ? "default" : "sm"}
-                        variant="outline"
-                        className={isMobile ? "h-10 px-4" : ""}
-                        onClick={() => handleEditProgress(systemId, stationId, item.id)}
-                      >
-                        <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                        {isMobile && "編輯"}
-                      </Button>
+                      <>
+                        <Button 
+                          size={isMobile ? "default" : "sm"}
+                          variant="outline"
+                          className={isMobile ? "h-10 px-4" : ""}
+                          onClick={() => handleEditProgress(systemId, stationId, item.id)}
+                        >
+                          <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
+                          {isMobile && "編輯"}
+                        </Button>
+                        {itemProgress && (
+                          <Button 
+                            size={isMobile ? "default" : "sm"}
+                            variant="destructive"
+                            className={isMobile ? "h-10 px-4" : ""}
+                            onClick={() => {
+                              if (confirm("確定要刪除這筆測試進度記錄嗎？")) {
+                                handleDeleteProgress(systemId, stationId, item.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
+                            {isMobile && "刪除"}
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

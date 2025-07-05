@@ -83,6 +83,39 @@ export function TestTracker() {
     }
   };
 
+  const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
+    if (!confirm('DELETE the progress for this test item?')) {
+      return;
+    }
+
+    try {
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+      
+      if (existingProgress) {
+        const { error } = await supabase
+          .from('test_progress')
+          .delete()
+          .eq('id', existingProgress.id);
+
+        if (error) throw error;
+
+        await loadData();
+        
+        toast({
+          title: "Deleted",
+          description: "Test progress record deleted successfully"
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting progress:', error);
+      toast({
+        title: "Delete Error",
+        description: "Failed to delete test progress record",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Done': return 'bg-success text-success-foreground';
@@ -141,6 +174,7 @@ export function TestTracker() {
         getProgressForSystemItem={getProgressForSystemItem}
         handleEditProgress={handleEditProgress}
         handleSaveProgress={handleSaveProgress}
+        handleDeleteProgress={handleDeleteProgress}
         getStatusColor={getStatusColor}
         onSystemUpdate={loadData}
       />
