@@ -13,7 +13,7 @@ interface StationContent {
   id: string;
   title: string;
   content: string;
-  order: number;
+  order_num: number;
   station_id: string;
 }
 
@@ -30,7 +30,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    order: 1
+    order_num: 1
   });
   const { toast } = useToast();
 
@@ -43,7 +43,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
           .update({
             title: formData.title,
             content: formData.content,
-            order: formData.order
+            order_num: formData.order_num
           })
           .eq('id', editingContent.id);
         
@@ -55,7 +55,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
           .insert({
             title: formData.title,
             content: formData.content,
-            order: formData.order,
+            order_num: formData.order_num,
             station_id: stationId
           });
         
@@ -97,7 +97,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
     setFormData({
       title: '',
       content: '',
-      order: 1
+      order_num: 1
     });
   };
 
@@ -111,7 +111,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
     setFormData({
       title: content.title,
       content: content.content,
-      order: content.order
+      order_num: content.order_num
     });
     setEditingContent(content);
     setIsDialogOpen(true);
@@ -158,8 +158,8 @@ export function StationContentManager({ stationId, stationName, contents, onData
                 <Label>排序</Label>
                 <Input
                   type="number"
-                  value={formData.order}
-                  onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 1 })}
+                  value={formData.order_num}
+                  onChange={(e) => setFormData({ ...formData, order_num: parseInt(e.target.value) || 1 })}
                 />
               </div>
               
@@ -179,7 +179,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
 
       <div className="space-y-3">
         {contents
-          .sort((a, b) => a.order - b.order)
+          .sort((a, b) => a.order_num - b.order_num)
           .map(content => (
             <Card key={content.id}>
               <CardContent className="p-4">
