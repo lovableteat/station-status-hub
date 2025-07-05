@@ -9,6 +9,7 @@ import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
 import { ExportDialog } from "@/components/production/ExportDialog";
+import { BackButton } from "@/components/common/BackButton";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
@@ -63,11 +64,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     <div className="p-6 space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">系統儀表板</h1>
-          <p className="text-muted-foreground">
-            測試管理系統總覽 - 實時監控測試進度與系統狀態
-          </p>
+        <div className="flex items-center gap-4">
+          <BackButton />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">系統儀表板</h1>
+            <p className="text-muted-foreground">
+              測試管理系統總覽 - 實時監控測試進度與系統狀態
+            </p>
+          </div>
         </div>
         <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
           <Download className="h-4 w-4 mr-2" />

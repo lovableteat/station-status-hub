@@ -4,6 +4,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
+import { MachineGanttChart } from "@/components/production/MachineGanttChart";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
@@ -54,6 +55,8 @@ const Index = () => {
         return <TestTracker />;
       case "flow-info":
         return <FlowInfo />;
+      case "gantt":
+        return <MachineGanttChart />;
       case "monitor":
         return <ProductionMonitor />;
       case "issues":

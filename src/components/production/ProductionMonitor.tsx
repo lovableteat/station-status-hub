@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { TestProgressAuditLog } from "./TestProgressAuditLog";
 import { ExportDialog } from "./ExportDialog";
 import { ProductionHistory } from "./ProductionHistory";
+import { BackButton } from "@/components/common/BackButton";
 
 interface Station {
   id: string;
@@ -249,9 +250,12 @@ export function ProductionMonitor() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">生產監控牆</h1>
-          <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽</p>
+        <div className="flex items-center gap-4">
+          <BackButton />
+          <div>
+            <h1 className="text-3xl font-bold">生產監控牆</h1>
+            <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShowProductionHistory(true)}>
@@ -297,7 +301,12 @@ export function ProductionMonitor() {
               </div>
               
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => setFocusedSystem(station.current_system || '')}
+                >
                   查看詳情
                 </Button>
                 <Button 
