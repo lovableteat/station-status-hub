@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Save, X } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X, ArrowUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TestStation {
@@ -35,6 +35,7 @@ interface TestItemManagerProps {
 export function TestItemManager({ stations, items, onDataChange }: TestItemManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TestItem | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [formData, setFormData] = useState({
     item_name: '',
     station_id: '',
@@ -138,6 +139,25 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
     return stations.find(s => s.id === stationId)?.station_name || '未知站點';
   };
 
+  const getStationOrder = (stationId: string) => {
+    return stations.find(s => s.id === stationId)?.station_order || 999;
+  };
+
+  const handleSortByStation = () => {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  };
+
+  const sortedItems = [...items].sort((a, b) => {
+    const orderA = getStationOrder(a.station_id);
+    const orderB = getStationOrder(b.station_id);
+    
+    if (sortOrder === 'asc') {
+      return orderA - orderB || a.item_order - b.item_order;
+    } else {
+      return orderB - orderA || b.item_order - a.item_order;
+    }
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -227,7 +247,16 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
         <TableHeader>
           <TableRow>
             <TableHead>項目名稱</TableHead>
-            <TableHead>所屬站點</TableHead>
+            <TableHead>
+              <Button 
+                variant="ghost" 
+                className="h-auto p-0 font-semibold hover:bg-transparent"
+                onClick={handleSortByStation}
+              >
+                所屬站點
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
             <TableHead>描述</TableHead>
             <TableHead>預估時間</TableHead>
             <TableHead>執行順序</TableHead>
@@ -235,7 +264,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map(item => (
+          {sortedItems.map(item => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.item_name}</TableCell>
               <TableCell>
