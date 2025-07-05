@@ -57,6 +57,7 @@ interface TestProgressTableProps {
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
   handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
   handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
+  handleDeleteProgress: (systemId: string, stationId: string, itemId: string) => void;
   getStatusColor: (status: string) => string;
   onSystemUpdate: () => void;
 }
@@ -73,6 +74,7 @@ export function TestProgressTable({
   getProgressForSystemItem,
   handleEditProgress,
   handleSaveProgress,
+  handleDeleteProgress,
   getStatusColor,
   onSystemUpdate,
 }: TestProgressTableProps) {
@@ -165,6 +167,7 @@ export function TestProgressTable({
                           getProgressForSystemItem={getProgressForSystemItem}
                           handleEditProgress={handleEditProgress}
                           handleSaveProgress={handleSaveProgress}
+                          handleDeleteProgress={handleDeleteProgress}
                           getStatusColor={getStatusColor}
                           systemId={system.id}
                           stationId={station.id}
@@ -282,6 +285,7 @@ export function TestProgressTable({
                             getProgressForSystemItem={getProgressForSystemItem}
                             handleEditProgress={handleEditProgress}
                             handleSaveProgress={handleSaveProgress}
+                            handleDeleteProgress={handleDeleteProgress}
                             getStatusColor={getStatusColor}
                             systemId={system.id}
                             stationId={station.id}
