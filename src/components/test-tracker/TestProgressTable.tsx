@@ -3,6 +3,8 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface TestSystem {
   id: string;
@@ -74,11 +76,119 @@ export function TestProgressTable({
   getStatusColor,
   onSystemUpdate,
 }: TestProgressTableProps) {
+  const isMobile = useIsMobile();
+  
   // Filter stations to only show Station 0-3
   const filteredStations = stations.filter(station => 
     station.station_order >= 0 && station.station_order <= 3
   );
 
+  // Mobile card view
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {filteredSystems.map(system => (
+          <Card key={system.id} className="border-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-bold">
+                  <button 
+                    className="text-primary hover:underline cursor-pointer text-left"
+                    onClick={() => {
+                      const currentUrl = new URL(window.location.href);
+                      currentUrl.searchParams.set('system', system.system_name);
+                      window.history.pushState({}, '', currentUrl.toString());
+                      
+                      const event = new CustomEvent('navigate', { 
+                        detail: { module: 'monitor', params: { system: system.system_name } } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    {system.system_name}
+                  </button>
+                </CardTitle>
+                <SystemEditDialog
+                  systemId={system.id}
+                  systemName={system.system_name}
+                  assignedEngineer={system.assigned_engineer}
+                  onUpdate={onSystemUpdate}
+                />
+              </div>
+              <div className="flex flex-col gap-2 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">負責人:</span>
+                  <SystemEditDialog
+                    systemId={system.id}
+                    systemName={system.system_name}
+                    assignedEngineer={system.assigned_engineer}
+                    onUpdate={onSystemUpdate}
+                    variant="button"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">當前站點:</span>
+                  <Badge 
+                    variant="secondary" 
+                    className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium text-sm"
+                  >
+                    {system.current_station?.split(' - ')[0] || system.current_station}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-4">
+                {filteredStations.map(station => {
+                  const stationItems = items.filter(item => item.station_id === station.id);
+                  const completedItems = stationItems.filter(item => {
+                    const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                    return prog?.status === 'Done';
+                  });
+                  const overallPercent = stationItems.length > 0 
+                    ? Math.round((completedItems.length / stationItems.length) * 100) 
+                    : 0;
+
+                  return (
+                    <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-base">{station.station_name}</h4>
+                        <ProgressEditDialog
+                          systemName={system.system_name}
+                          stationName={station.station_name}
+                          stationItems={stationItems}
+                          progress={progress}
+                          editingProgress={editingProgress}
+                          setEditingProgress={setEditingProgress}
+                          editValues={editValues}
+                          setEditValues={setEditValues}
+                          getProgressForSystemItem={getProgressForSystemItem}
+                          handleEditProgress={handleEditProgress}
+                          handleSaveProgress={handleSaveProgress}
+                          getStatusColor={getStatusColor}
+                          systemId={system.id}
+                          stationId={station.id}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">進度: {overallPercent}%</span>
+                          <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
+                        </div>
+                        <Progress value={overallPercent} className="h-3" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  // Desktop table view
   return (
     <Card>
       <CardHeader>
