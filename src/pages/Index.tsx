@@ -10,10 +10,14 @@ import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, login, isLoggedIn } = useUser();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     // Listen for navigation events from other components
@@ -35,6 +39,10 @@ const Index = () => {
 
   const handleNavigation = (module: string, params?: any) => {
     setActiveModule(module);
+    // Close sidebar on mobile after navigation
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
     // Here you could handle routing params in the future
   };
 
@@ -62,14 +70,33 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar 
-        activeModule={activeModule} 
-        onModuleChange={setActiveModule} 
-      />
-      <main className="flex-1 overflow-auto">
-        {renderModule()}
-      </main>
+    <div className="min-h-screen bg-background">
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      <div className="flex min-h-screen">
+        <Sidebar 
+          activeModule={activeModule} 
+          onModuleChange={(module) => {
+            setActiveModule(module);
+            if (isMobile) setSidebarOpen(false);
+          }}
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          isMobile={isMobile}
+        />
+        <main className={cn(
+          "flex-1 overflow-auto",
+          isMobile && "pt-14" // Add top padding on mobile for fixed header
+        )}>
+          {renderModule()}
+        </main>
+      </div>
     </div>
   );
 };
