@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { FileText, FileSpreadsheet, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { generatePDF, generateExcel, downloadFile } from "@/utils/exportUtils";
 
 interface ExportDialogProps {
   open: boolean;
@@ -30,10 +31,16 @@ export function ExportDialog({ open, onOpenChange, title, data = [] }: ExportDia
     setIsExporting(true);
     
     try {
-      // Simulate export process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       const fileName = `${title}_${new Date().toISOString().split('T')[0]}.${exportFormat}`;
+      let blob: Blob;
+      
+      if (exportFormat === 'pdf') {
+        blob = await generatePDF(title, data);
+      } else {
+        blob = await generateExcel(title, data);
+      }
+      
+      downloadFile(blob, fileName);
       
       toast({
         title: "匯出成功",
@@ -42,6 +49,7 @@ export function ExportDialog({ open, onOpenChange, title, data = [] }: ExportDia
       
       onOpenChange(false);
     } catch (error) {
+      console.error('Export error:', error);
       toast({
         title: "匯出失敗",
         description: "請稍後再試",
