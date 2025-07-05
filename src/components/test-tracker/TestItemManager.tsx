@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Save, X, ArrowUpDown } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TestStation {
@@ -35,7 +36,7 @@ interface TestItemManagerProps {
 export function TestItemManager({ stations, items, onDataChange }: TestItemManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TestItem | null>(null);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     item_name: '',
     station_id: '',
@@ -139,24 +140,29 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
     return stations.find(s => s.id === stationId)?.station_name || '未知站點';
   };
 
-  const getStationOrder = (stationId: string) => {
-    return stations.find(s => s.id === stationId)?.station_order || 999;
-  };
-
-  const handleSortByStation = () => {
-    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-  };
-
-  const sortedItems = [...items].sort((a, b) => {
-    const orderA = getStationOrder(a.station_id);
-    const orderB = getStationOrder(b.station_id);
-    
-    if (sortOrder === 'asc') {
-      return orderA - orderB || a.item_order - b.item_order;
+  const toggleStationExpanded = (stationId: string) => {
+    const newExpanded = new Set(expandedStations);
+    if (newExpanded.has(stationId)) {
+      newExpanded.delete(stationId);
     } else {
-      return orderB - orderA || b.item_order - a.item_order;
+      newExpanded.add(stationId);
     }
-  });
+    setExpandedStations(newExpanded);
+  };
+
+  const getStationItems = (stationId: string) => {
+    return items.filter(item => item.station_id === stationId).sort((a, b) => a.item_order - b.item_order);
+  };
+
+  const getStationItemsCount = (stationId: string) => {
+    return items.filter(item => item.station_id === stationId).length;
+  };
+
+  const getTotalMinutes = (stationId: string) => {
+    return items
+      .filter(item => item.station_id === stationId)
+      .reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
+  };
 
   return (
     <div className="space-y-4">
@@ -243,58 +249,98 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
         </Dialog>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>項目名稱</TableHead>
-            <TableHead>
-              <Button 
-                variant="ghost" 
-                className="h-auto p-0 font-semibold hover:bg-transparent"
-                onClick={handleSortByStation}
-              >
-                所屬站點
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </TableHead>
-            <TableHead>描述</TableHead>
-            <TableHead>預估時間</TableHead>
-            <TableHead>執行順序</TableHead>
-            <TableHead>操作</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedItems.map(item => (
-            <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.item_name}</TableCell>
-              <TableCell>
-                <Badge variant="outline">{getStationName(item.station_id)}</Badge>
-              </TableCell>
-              <TableCell className="max-w-48 truncate">{item.description}</TableCell>
-              <TableCell>{item.estimated_minutes || 30} 分鐘</TableCell>
-              <TableCell>{item.item_order}</TableCell>
-              <TableCell>
-                <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => openEditDialog(item)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="space-y-4">
+        {stations
+          .sort((a, b) => a.station_order - b.station_order)
+          .map(station => {
+            const stationItems = getStationItems(station.id);
+            const itemsCount = getStationItemsCount(station.id);
+            const totalMinutes = getTotalMinutes(station.id);
+            const isExpanded = expandedStations.has(station.id);
+            
+            return (
+              <Card key={station.id} className="overflow-hidden">
+                <Collapsible 
+                  open={isExpanded} 
+                  onOpenChange={() => toggleStationExpanded(station.id)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                          <CardTitle className="text-lg">{station.station_name}</CardTitle>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Badge variant="secondary" className="text-sm">
+                            {itemsCount} 個項目
+                          </Badge>
+                          <Badge variant="outline" className="text-sm">
+                            {Math.round(totalMinutes / 60 * 10) / 10}小時
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        {stationItems.length === 0 ? (
+                          <p className="text-muted-foreground text-center py-8">
+                            此站點尚無測試項目
+                          </p>
+                        ) : (
+                          stationItems.map(item => (
+                            <div key={item.id} className="border rounded-lg p-4 bg-muted/20">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h4 className="font-medium">{item.item_name}</h4>
+                                    <Badge variant="outline" className="text-xs">
+                                      順序 {item.item_order}
+                                    </Badge>
+                                    <Badge variant="secondary" className="text-xs">
+                                      {item.estimated_minutes || 30} 分鐘
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {item.description || '無描述'}
+                                  </p>
+                                </div>
+                                <div className="flex gap-1 ml-4">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => openEditDialog(item)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => handleDelete(item.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            );
+          })
+        }
+      </div>
     </div>
   );
 }
