@@ -83,91 +83,138 @@ export function FlowInfo() {
         purpose: 'Assembly & Tim Curing (ME TEAM)',
         procedures: [
           'Power on with NV',
-          'Chassis Assembly（機殼組裝）',
-          'ME Assembly（機構組裝）',
-          'Cable Routing（線束佈線）',
-          'Tim Curing（加熱至 65 °C 並保持 60 分鐘）',
-          'EE/BMC/BIOS 結合 NV 模組進行開機',
-          'SIT 釋放 M.2 上 OS，協助 EE 複製至 20 台系統',
-          'CDU 熱管理設定支援',
-          '系統編號標示',
-          '開路／短路檢查，並同時拆下 M.2 複製 OS',
-          'UEFI Shell 開機驗證',
-          'PCIe 裝置顯示測試'
+          'Chassis assembly（機殼組裝）',
+          'ME assembly（機構組裝）',
+          'Cable routing（線束佈線）',
+          'Tim Curing for 60 minutes（加熱至 65°C 並保持 60 分鐘）',
+          'Boot EGC / BMC network with NV to power on GB300',
+          'SIT will help to release OS on M.2 then EE will copy the OS for 20 systems',
+          'CDU setup needs thermal team help',
+          'PCIe label to identify the System No.',
+          'Check Open/short before power on, and take note that M.2 to copy OS at same time',
+          'Make sure can boot up to uefi shell',
+          'pci to display PCIe device',
+          'EE: Power on, Copy M.2 OS ME/MI support if need to re-assembly'
         ],
-        equipment: ['Monitor2', '鍵鼠組2', 'CR203220', 'MiniDP to VGA 轉接器2', 'RJ45 cable(10m)4', 'VGA cable1', 'CX-8 loopback3', 'BF-3 loopback2'],
-        notes: '機構組裝與加熱固化階段，結合 NV 模組進行初次開機驗證'
+        equipment: [
+          'Monitor*2', 'Keyboard & mouse: *2', 'CR2032*20', 'MiniDP to VGA dongle*2', 
+          'USB hub w/RJ45*2', 'linking board*2', 'PSU *4', 'multi-meter *2',
+          'RJ45 cable as long as possible(10M)*4', 'VGA cable *1', 'CX-8 loopback cable*3',
+          'BF-3 loopback cable*2'
+        ],
+        notes: '3.5 hr per system, 140 hr total, MFG one day / 6 system'
       };
     }
     if (stationName.includes('BIOS') || stationName.includes('Station 1')) {
       return {
         purpose: 'Power on (BIOS/BMC TEAM)',
         procedures: [
-          '同 Station 0 的開機流程：',
-          '釋放並複製 OS',
-          'CDU 熱管理',
-          '編號標示',
-          '開短路檢查 + M.2 操作',
-          'UEFI Shell 驗證',
-          'PCIe 顯示（Monitor Display）'
+          'Power on',
+          'SIT will help to release OS on M.2 then EE will copy the OS for 20 systems',
+          'CDU setup needs thermal team help',
+          'PCIe label to identify the System No.',
+          'Check Open/short before power on, and take note that M.2 to copy OS at same time',
+          'Make sure can boot up to uefi shell',
+          'pci to display PCIe device',
+          'BIOS / BMC : Update FW',
+          'EE/ME/MI/Thermal: support if need to re-assembly or debug'
         ],
-        equipment: ['Monitor2', '鍵鼠組2', 'USB hub2', 'MiniDP to VGA2', 'PSU*4'],
-        notes: '與 Station 0 幾乎相同流程，重複作業於大量系統'
+        equipment: [
+          'Monitor*2', 'Keyboard & mouse: *2', 'MiniDP to VGA dongle*2',
+          'USB hub w/RJ45*2', 'linking board*2', 'PSU *4', 'multi-meter *2',
+          'VGA cable *2'
+        ],
+        notes: '1 / 1.5 hr per system + 5 hr setup CDU'
       };
     }
     if (stationName.includes('EE') || stationName.includes('Station 2')) {
       return {
         purpose: 'FW Update (EE TEAM)',
         procedures: [
-          'HMC／BMC／EROT／GPU／CX8／BF3 韌體更新',
-          'Diag auto-update（排除 BF3、CX8）',
-          '手動更新不支援韌體',
-          '安裝 BF3/E1.5 更新腳本',
-          'FRU 更新',
-          'BMC/MAC 更新'
+          'HMC/BMC/EROT/GPU/CX8 BF3 FW update',
+          'Diag auto update exclude BF3& CX8',
+          'BF3 & CX8 FW update',
+          'Manual update all FW if diag not support',
+          'Install script for BF3/E1.5',
+          'FRU update',
+          'MAC update BMC/I210',
+          'EE: Check all function ready',
+          'Thermal/ME/MI support if need to re-assembly'
         ],
-        equipment: ['Monitor1', 'USB hub1', 'linking board1', 'PSU2'],
-        notes: 'BIOS/BMC 為主，EE/ME/MI/Thermal 若需重新組裝。自動更新排除 BF3 & CX8'
+        equipment: [
+          'Monitor*1', 'Keyboard & mouse: *1', 'MiniDP to VGA dongle*1',
+          'USB hub w/RJ45*1', 'linking board*1', 'PSU *2'
+        ],
+        notes: 'GB200 ready (exclude CX8, BF3), GB200 1hrs for BIOS/BMC update (no BF3, CX7), 1 / 1.0 hr'
       };
     }
     if (stationName.includes('SIT') || stationName.includes('Station 3')) {
       return {
         purpose: 'Function Check (SIT/RAD TEAM)',
         procedures: [
-          'lspci：列舉所有 PCIe 裝置',
-          'nvidia-smi：驗證 GPU 狀態',
-          '插拔檢測：BF3/CX8 狀態',
-          'ibstat：檢查 IB 連線',
-          'TPM 功能測試',
-          'Intel I210 MAC 設定及功能驗證',
-          'Diagnostic SFT Test：',
-          '影像與 LED 手動檢查',
-          'FRU 程式燒錄與驗證',
-          'MAC Address 程式燒錄與驗證',
-          '韌體版本確認',
-          'CPU／DIMM／Disk／PCIe（含 CX7/BF3）／USB／Sensor 驗證',
-          '風扇控制與 GPU 狀態檢測',
-          'CPU、DIMM、Disk 壓力測試',
-          'UUT 資料蒐集（SEL、FRU、Sensor、OS 日誌、CFG 特定項目）',
-          '恢復 BIOS 及 BMC 為預設值'
+          'lspci check PCIe devices',
+          'nvidia-smi check GPU device status',
+          'Insert and unplug detect for CX7/CX8',
+          'Use ibstat and ibstat -l/more for IB connection',
+          'TPM check',
+          'Check Intel I210 MAC and function',
+          'Run Diag SFT test',
+          'QR to check Video, LED, button manually',
+          'Program and check FRU',
+          'Program and check MAC address',
+          'Check FW',
+          'Check CPU, DIMM, Disk, PCIe(include CX7/BF3), USB, sensor',
+          'Check Fan control, GPU device status',
+          'Perform stress test on CPU, DIMM, Disk',
+          'Collect UUT data, include SEL, FRU, Sensor, OS message and other specific items in CFG',
+          'Set BIOS and BMC to default'
         ],
-        equipment: ['Monitor1', 'RJ45 cable(10M)4', 'VGA1', 'loopback cable（CX-83, BF-3*2）'],
-        notes: '支援人員：Thermal / EE / MI / ME 如需重新裝配'
+        equipment: [
+          'Monitor*1', 'Keyboard & mouse: *1', 'MiniDP to VGA dongle*1',
+          'USB hub w/RJ45*1', 'linking board*1', 'PSU *2',
+          'RJ45 cable as long as possible(10M)*4', 'VGA cable *1',
+          'CX-8 loopback cable*2', 'BF-3 loopback cable*2'
+        ],
+        notes: 'GB200 ready, 1.5 hr'
       };
     }
     if (stationName.includes('Station 4')) {
       return {
-        purpose: 'Partner Diagnostics + Tim Baking',
+        purpose: 'Partner Diagnostics for GB200 NVL T2 Compute Tray (L10) & Tim Baking',
         procedures: [
-          'Tim Baking 流程載入與監控',
-          'Partner Diagnostics 腳本執行，包括：',
-          'Inventory 檢查',
-          'ThermalMgmt、PowerMgmt 等命令',
-          '...（其他廠商指定指令集）',
-          '測試完成／失敗後 Log Dump'
+          'Run Tim Baking tool',
+          '20 Items:',
+          '3 items will confirm with NV',
+          'Inventory',
+          'SXBPerfProperties',
+          'ThermalMgmt',
+          'ENVironmentProperties',
+          'TejaCpu',
+          'TejaOdm',
+          'TegaDomainSweep',
+          'TejaCpp',
+          'TejaDrs',
+          'Queuetx',
+          'Sriram',
+          'Bus',
+          'NetworkHw NVlink',
+          'PowerTest',
+          'StressGables',
+          'SXBPerfInterfaceTraffic',
+          'WarRock',
+          'SyslogErrorCheck',
+          'CheckLogErrorFiles',
+          'SyslogXIDCheck',
+          'JournalApiCheck',
+          'UbuntuWifiCheck',
+          'check if log mode is on RMA user',
+          'Dump log when test finished'
         ],
-        equipment: ['Monitor4', '鍵鼠組4', 'MiniDP to VGA4', 'linking board4', 'PSU*8', 'CX8 loopback8', 'BF3 loopback8'],
-        notes: '與 Diag Team 協同測試 BF3 與 1G NIC 同網段。SIT / RAD 協助執行 NV Diag 測項'
+        equipment: [
+          'Monitor*4', 'Keyboard & mouse: *4', 'MiniDP to VGA dongle*4',
+          'linking board*4', 'PSU *8', 'CX-8 loopback cable*8', 'BF-3 loopback cable*8'
+        ],
+        notes: 'Hope ready on 7/14 for GB300, GB200 4hrs at least, 3 / 4 hr'
       };
     }
     return { purpose: '', procedures: [], equipment: [], notes: '' };
