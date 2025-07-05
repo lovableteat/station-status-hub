@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X } from "lucide-react";
 import { TestItemManager } from "./TestItemManager";
+import { StationContentManager } from "./StationContentManager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -30,9 +31,18 @@ interface TestItem {
   estimated_minutes: number;
 }
 
+interface StationContent {
+  id: string;
+  title: string;
+  content: string;
+  order_num: number;
+  station_id: string;
+}
+
 export function FlowInfo() {
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
+  const [stationContents, setStationContents] = useState<StationContent[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<TestStation | null>(null);
@@ -49,13 +59,15 @@ export function FlowInfo() {
 
   const loadData = async () => {
     try {
-      const [stationsRes, itemsRes] = await Promise.all([
+      const [stationsRes, itemsRes, contentsRes] = await Promise.all([
         supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order')
+        supabase.from('test_flow_items').select('*').order('item_order'),
+        supabase.from('station_contents').select('*').order('order_num')
       ]);
 
       if (stationsRes.data) setStations(stationsRes.data);
       if (itemsRes.data) setItems(itemsRes.data);
+      if (contentsRes.data) setStationContents(contentsRes.data);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -396,14 +408,33 @@ export function FlowInfo() {
                     </div>
                   </div>
 
-                  {/* Right Column - Station Details */}
-                  <div>
-                    <h4 className="font-semibold mb-4">站點詳細資訊</h4>
-                    <div className="space-y-4">
-                      <div>
-                        <h5 className="text-sm font-medium text-muted-foreground mb-2">目的</h5>
-                        <p className="text-sm">{stationDetail.purpose}</p>
-                      </div>
+                   {/* Right Column - Station Details */}
+                   <div>
+                     <h4 className="font-semibold mb-4 flex items-center justify-between">
+                       站點詳細資訊
+                       <Button 
+                         variant="ghost" 
+                         size="sm"
+                         onClick={() => setActiveTab("content")}
+                       >
+                         <Plus className="h-4 w-4 mr-1" />
+                         管理內容
+                       </Button>
+                     </h4>
+                     
+                     {/* Station Content Manager */}
+                     <StationContentManager
+                       stationId={station.id}
+                       stationName={station.station_name}
+                       contents={stationContents.filter(c => c.station_id === station.id)}
+                       onDataChange={loadData}
+                     />
+                     
+                     <div className="space-y-4 mt-4">
+                       <div>
+                         <h5 className="text-sm font-medium text-muted-foreground mb-2">目的</h5>
+                         <p className="text-sm">{stationDetail.purpose}</p>
+                       </div>
                       
                       {stationDetail.procedures && stationDetail.procedures.length > 0 && (
                         <div>
@@ -436,16 +467,16 @@ export function FlowInfo() {
                         <div>
                           <h5 className="text-sm font-medium text-muted-foreground mb-2">備註</h5>
                           <p className="text-sm bg-muted/50 p-3 rounded">{stationDetail.notes}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 </div>
+               </CardContent>
+             </Card>
+           );
+         })}
+       </div>
 
       {/* Summary */}
       <Card>
