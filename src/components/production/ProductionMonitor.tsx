@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { TestProgressAuditLog } from "./TestProgressAuditLog";
 import { ExportDialog } from "./ExportDialog";
+import { ProductionHistory } from "./ProductionHistory";
 
 interface Station {
   id: string;
@@ -214,49 +215,8 @@ export function ProductionMonitor() {
           systemName={system.system_name}
         />
 
-        {/* Production History Dialog */}
-        {showProductionHistory && (
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>機台生產履歷 - {system.system_name}</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => setShowProductionHistory(false)}>
-                  關閉
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">返工紀錄</h4>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>• Station 1 → Station 0 (2024-07-03 14:30) - 功能測試失敗，需重新檢查</p>
-                      <p>• Station 2 → Station 1 (2024-07-02 09:15) - 軟體版本問題，需更新</p>
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">瓶頸分析</h4>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>• Station 1 平均停留時間: 2.5天 (標準: 1.5天)</p>
-                      <p>• 主要問題: 軟體相容性測試</p>
-                      <p>• 建議: 增加預檢程序</p>
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">生產軌跡</h4>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>• 2024-07-01 10:00 - 開始 Station 0</p>
-                      <p>• 2024-07-02 15:30 - 轉入 Station 1</p>
-                      <p>• 2024-07-03 11:45 - 轉入 Station 2</p>
-                      <p>• 2024-07-04 16:20 - 目前 Station 2 (進行中)</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Production History */}
+        {showProductionHistory && <ProductionHistory />}
 
         {/* Export Dialog */}
         <ExportDialog
@@ -289,7 +249,64 @@ export function ProductionMonitor() {
         </div>
       </div>
 
-      {/* ... keep existing code for stations grid and other components ... */}
+      {/* Stations Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stations.map((station) => (
+          <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-full ${getStatusColor(station.status)}`}>
+                  {getStatusIcon(station.status)}
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  效率: {station.efficiency}%
+                </Badge>
+              </div>
+              
+              <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {station.current_system ? `處理中: ${station.current_system}` : '待機中'}
+              </p>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>狀態</span>
+                  <span className="capitalize">{station.status}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>最後更新</span>
+                  <span>{station.last_update}</span>
+                </div>
+                <Progress value={station.efficiency} className="h-2" />
+              </div>
+              
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" size="sm" className="flex-1">
+                  查看詳情
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const event = new CustomEvent('navigate', { 
+                      detail: { 
+                        module: 'issues', 
+                        params: { station: station.name } 
+                      } 
+                    });
+                    window.dispatchEvent(event);
+                  }}
+                >
+                  <Bug className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Production History Component */}
+      {showProductionHistory && <ProductionHistory />}
 
       {/* Export Dialog */}
       <ExportDialog
