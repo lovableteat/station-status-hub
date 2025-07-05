@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportDialog } from "../production/ExportDialog";
+import { BackButton } from "../common/BackButton";
 
 interface Issue {
   id: string;
@@ -183,26 +184,29 @@ export function IssueTracker() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">問題追蹤</h1>
-          <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
-          <div className="flex items-center gap-4 mt-2 text-sm">
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-danger"></div>
-              開啟: {issueStats.open}
-            </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-warning"></div>
-              處理中: {issueStats.inProgress}
-            </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-success"></div>
-              已解決: {issueStats.resolved}
-            </span>
-            <span className="flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3 text-danger" />
-              緊急: {issueStats.critical}
-            </span>
+        <div className="flex items-center gap-4">
+          <BackButton />
+          <div>
+            <h1 className="text-3xl font-bold">問題追蹤</h1>
+            <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
+            <div className="flex items-center gap-4 mt-2 text-sm">
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-danger"></div>
+                開啟: {issueStats.open}
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-warning"></div>
+                處理中: {issueStats.inProgress}
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-success"></div>
+                已解決: {issueStats.resolved}
+              </span>
+              <span className="flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-danger" />
+                緊急: {issueStats.critical}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
