@@ -1,15 +1,14 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
-import { StationTimeComparison } from "./StationTimeComparison";
 import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
-import { ProjectGanttChart } from "./ProjectGanttChart";
-import { WorkHourAnalytics } from "./WorkHourAnalytics";
 import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
+import { ExportDialog } from "@/components/production/ExportDialog";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   CheckCircle,
@@ -30,6 +29,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { systems, progress, stationStatuses, stations } = useUnifiedData();
   const { toast } = useToast();
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
   const handleStationClick = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
@@ -69,7 +69,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             測試管理系統總覽 - 實時監控測試進度與系統狀態
           </p>
         </div>
-        <Button variant="outline" onClick={() => toast({ title: "匯出功能", description: "報表匯出功能開發中..." })}>
+        <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
           <Download className="h-4 w-4 mr-2" />
           匯出報表
         </Button>
@@ -156,6 +156,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <MachineTable />
         </CardContent>
       </Card>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        title="系統儀表板"
+        data={systems}
+      />
     </div>
   );
 }
