@@ -50,6 +50,13 @@ export function FlowInfo() {
     }
   };
 
+  // Calculate total estimated hours for each station based on test items
+  const getCalculatedStationHours = (stationId: string) => {
+    const stationItems = items.filter(item => item.station_id === stationId);
+    const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
+    return (totalMinutes / 60).toFixed(1); // Convert to hours with 1 decimal place
+  };
+
   const getStationIcon = (stationName: string) => {
     if (stationName.includes('ME')) return <Settings className="h-5 w-5" />;
     if (stationName.includes('BIOS')) return <Zap className="h-5 w-5" />;
@@ -147,7 +154,7 @@ export function FlowInfo() {
                   {getStationIcon(station.station_name)}
                 </div>
                 <div className="text-sm font-medium mt-2">{station.station_name}</div>
-                <div className="text-xs text-muted-foreground">{station.estimated_hours}h</div>
+                <div className="text-xs text-muted-foreground">{getCalculatedStationHours(station.id)}h</div>
                 {index < stations.length - 1 && (
                   <div className="absolute h-0.5 bg-border" style={{
                     left: `${(index + 1) * (100 / stations.length)}%`,
@@ -166,7 +173,10 @@ export function FlowInfo() {
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <div className="text-2xl font-bold text-primary">
-                {stations.reduce((total, station) => total + station.estimated_hours, 0).toFixed(1)}h
+                {stations.reduce((total, station) => {
+                  const calculatedHours = parseFloat(getCalculatedStationHours(station.id));
+                  return total + calculatedHours;
+                }, 0).toFixed(1)}h
               </div>
               <div className="text-sm text-muted-foreground">單機總測試時間</div>
             </div>
@@ -198,7 +208,7 @@ export function FlowInfo() {
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="bg-white/80">
                       <Clock className="h-3 w-3 mr-1" />
-                      {station.estimated_hours}h
+                      {getCalculatedStationHours(station.id)}h
                     </Badge>
                   </div>
                 </div>
