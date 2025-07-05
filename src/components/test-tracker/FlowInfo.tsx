@@ -78,42 +78,99 @@ export function FlowInfo() {
   };
 
   const getDetailedDescription = (stationName: string) => {
-    if (stationName.includes('ME')) {
+    if (stationName.includes('ME') || stationName.includes('Station 0')) {
       return {
-        purpose: 'ME TEAM 機台初始化準備階段',
+        purpose: 'Assembly & Tim Curing (ME TEAM)',
+        procedures: [
+          'Power on with NV',
+          'Chassis Assembly（機殼組裝）',
+          'ME Assembly（機構組裝）',
+          'Cable Routing（線束佈線）',
+          'Tim Curing（加熱至 65 °C 並保持 60 分鐘）',
+          'EE/BMC/BIOS 結合 NV 模組進行開機',
+          'SIT 釋放 M.2 上 OS，協助 EE 複製至 20 台系統',
+          'CDU 熱管理設定支援',
+          '系統編號標示',
+          '開路／短路檢查，並同時拆下 M.2 複製 OS',
+          'UEFI Shell 開機驗證',
+          'PCIe 裝置顯示測試'
+        ],
         equipment: ['Monitor2', '鍵鼠組2', 'CR203220', 'MiniDP to VGA 轉接器2', 'RJ45 cable(10m)4', 'VGA cable1', 'CX-8 loopback3', 'BF-3 loopback2'],
-        notes: '需要 EE/BMC/BIOS 配合 NV 進行初次開機'
+        notes: '機構組裝與加熱固化階段，結合 NV 模組進行初次開機驗證'
       };
     }
-    if (stationName.includes('BIOS')) {
+    if (stationName.includes('BIOS') || stationName.includes('Station 1')) {
       return {
-        purpose: 'BIOS/BMC TEAM 正式上電階段',
+        purpose: 'Power on (BIOS/BMC TEAM)',
+        procedures: [
+          '同 Station 0 的開機流程：',
+          '釋放並複製 OS',
+          'CDU 熱管理',
+          '編號標示',
+          '開短路檢查 + M.2 操作',
+          'UEFI Shell 驗證',
+          'PCIe 顯示（Monitor Display）'
+        ],
         equipment: ['Monitor2', '鍵鼠組2', 'USB hub2', 'MiniDP to VGA2', 'PSU*4'],
         notes: '與 Station 0 幾乎相同流程，重複作業於大量系統'
       };
     }
-    if (stationName.includes('EE')) {
+    if (stationName.includes('EE') || stationName.includes('Station 2')) {
       return {
-        purpose: 'EE TEAM 韌體更新階段',
+        purpose: 'FW Update (EE TEAM)',
+        procedures: [
+          'HMC／BMC／EROT／GPU／CX8／BF3 韌體更新',
+          'Diag auto-update（排除 BF3、CX8）',
+          '手動更新不支援韌體',
+          '安裝 BF3/E1.5 更新腳本',
+          'FRU 更新',
+          'BMC/MAC 更新'
+        ],
         equipment: ['Monitor1', 'USB hub1', 'linking board1', 'PSU2'],
         notes: 'BIOS/BMC 為主，EE/ME/MI/Thermal 若需重新組裝。自動更新排除 BF3 & CX8'
       };
     }
-    if (stationName.includes('SIT')) {
+    if (stationName.includes('SIT') || stationName.includes('Station 3')) {
       return {
-        purpose: 'SIT/RAD TEAM 功能驗證階段',
+        purpose: 'Function Check (SIT/RAD TEAM)',
+        procedures: [
+          'lspci：列舉所有 PCIe 裝置',
+          'nvidia-smi：驗證 GPU 狀態',
+          '插拔檢測：BF3/CX8 狀態',
+          'ibstat：檢查 IB 連線',
+          'TPM 功能測試',
+          'Intel I210 MAC 設定及功能驗證',
+          'Diagnostic SFT Test：',
+          '影像與 LED 手動檢查',
+          'FRU 程式燒錄與驗證',
+          'MAC Address 程式燒錄與驗證',
+          '韌體版本確認',
+          'CPU／DIMM／Disk／PCIe（含 CX7/BF3）／USB／Sensor 驗證',
+          '風扇控制與 GPU 狀態檢測',
+          'CPU、DIMM、Disk 壓力測試',
+          'UUT 資料蒐集（SEL、FRU、Sensor、OS 日誌、CFG 特定項目）',
+          '恢復 BIOS 及 BMC 為預設值'
+        ],
         equipment: ['Monitor1', 'RJ45 cable(10M)4', 'VGA1', 'loopback cable（CX-83, BF-3*2）'],
         notes: '支援人員：Thermal / EE / MI / ME 如需重新裝配'
       };
     }
     if (stationName.includes('Station 4')) {
       return {
-        purpose: 'NV Diag 與 Bake 測試最終站',
+        purpose: 'Partner Diagnostics + Tim Baking',
+        procedures: [
+          'Tim Baking 流程載入與監控',
+          'Partner Diagnostics 腳本執行，包括：',
+          'Inventory 檢查',
+          'ThermalMgmt、PowerMgmt 等命令',
+          '...（其他廠商指定指令集）',
+          '測試完成／失敗後 Log Dump'
+        ],
         equipment: ['Monitor4', '鍵鼠組4', 'MiniDP to VGA4', 'linking board4', 'PSU*8', 'CX8 loopback8', 'BF3 loopback8'],
         notes: '與 Diag Team 協同測試 BF3 與 1G NIC 同網段。SIT / RAD 協助執行 NV Diag 測項'
       };
     }
-    return { purpose: '', equipment: [], notes: '' };
+    return { purpose: '', procedures: [], equipment: [], notes: '' };
   };
 
   return (
@@ -245,6 +302,20 @@ export function FlowInfo() {
                         <h5 className="text-sm font-medium text-muted-foreground mb-2">目的</h5>
                         <p className="text-sm">{stationDetail.purpose}</p>
                       </div>
+                      
+                      {stationDetail.procedures && stationDetail.procedures.length > 0 && (
+                        <div>
+                          <h5 className="text-sm font-medium text-muted-foreground mb-2">測試程序</h5>
+                          <div className="space-y-1">
+                            {stationDetail.procedures.map((procedure, index) => (
+                              <div key={index} className="text-sm bg-muted/30 p-2 rounded flex items-start gap-2">
+                                <span className="text-xs text-muted-foreground mt-0.5 flex-shrink-0">{index + 1}.</span>
+                                <span>{procedure}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       
                       {stationDetail.equipment.length > 0 && (
                         <div>
