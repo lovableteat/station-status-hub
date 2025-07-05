@@ -683,6 +683,44 @@ export type Database = {
         }
         Relationships: []
       }
+      station_contents: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          order_num: number
+          station_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          order_num?: number
+          station_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          order_num?: number
+          station_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_contents_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       station_time_analytics: {
         Row: {
           actual_hours: number
