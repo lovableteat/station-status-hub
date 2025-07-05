@@ -60,6 +60,9 @@ export function ProductionMonitor() {
     setShowExportDialog(true);
   };
 
+  // Debug: Log data to see what's available
+  console.log('Production Monitor Data:', { stations, systems, isLoading });
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -70,6 +73,19 @@ export function ProductionMonitor() {
               <div key={i} className="h-48 bg-muted rounded"></div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if no data
+  if (!stations.length && !systems.length) {
+    return (
+      <div className="p-6">
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold">生產監控牆</h2>
+          <p className="text-muted-foreground">目前沒有站點或系統資料</p>
+          <p className="text-sm text-muted-foreground">請確認資料庫中有測試系統和站點資料</p>
         </div>
       </div>
     );
