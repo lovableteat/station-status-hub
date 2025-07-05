@@ -240,89 +240,155 @@ export function ProjectGanttChart() {
     const projectEnd = new Date(Math.max(...project.tasks.map(t => t.endDate.getTime())));
     const totalDays = Math.ceil((projectEnd.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24));
 
+    // Generate week markers
+    const weekMarkers = [];
+    let currentDate = new Date(projectStart);
+    while (currentDate <= projectEnd) {
+      const dayFromStart = Math.ceil((currentDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24));
+      const percent = (dayFromStart / totalDays) * 100;
+      weekMarkers.push({
+        date: new Date(currentDate),
+        percent
+      });
+      currentDate.setDate(currentDate.getDate() + 7);
+    }
+
+    // Today marker
+    const todayPercent = totalDays > 0 ? Math.max(0, Math.min(100, 
+      ((today.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24) / totalDays) * 100
+    )) : 0;
+
     return (
-      <div className="space-y-2">
-        <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground mb-2">
-          <div className="col-span-3">任務名稱</div>
-          <div className="col-span-9 flex justify-between">
-            <span>{projectStart.toLocaleDateString()}</span>
-            <span>{projectEnd.toLocaleDateString()}</span>
+      <div className="space-y-4">
+        {/* Timeline Header */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-12 gap-2 text-xs font-medium">
+            <div className="col-span-3 text-muted-foreground">任務名稱</div>
+            <div className="col-span-2 text-muted-foreground">開始日期</div>
+            <div className="col-span-2 text-muted-foreground">結束日期</div>
+            <div className="col-span-5 text-muted-foreground">進度時程表</div>
+          </div>
+          
+          {/* Week markers */}
+          <div className="grid grid-cols-12 gap-2">
+            <div className="col-span-7"></div>
+            <div className="col-span-5 relative h-8 bg-muted/30 rounded border">
+              {weekMarkers.map((marker, idx) => (
+                <div
+                  key={idx}
+                  className="absolute top-0 bottom-0 w-px bg-border"
+                  style={{ left: `${marker.percent}%` }}
+                >
+                  <div className="absolute -top-6 -left-6 text-xs text-muted-foreground whitespace-nowrap">
+                    {marker.date.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
+                  </div>
+                </div>
+              ))}
+              {/* Today marker */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
+                style={{ left: `${todayPercent}%` }}
+              >
+                <div className="absolute -top-6 -left-4 text-xs text-primary font-medium">今日</div>
+              </div>
+            </div>
           </div>
         </div>
         
-        {project.tasks.map(task => {
-          const taskStart = Math.ceil((task.startDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24));
-          const taskDuration = Math.ceil((task.endDate.getTime() - task.startDate.getTime()) / (1000 * 60 * 60 * 24));
-          const startPercent = (taskStart / totalDays) * 100;
-          const widthPercent = (taskDuration / totalDays) * 100;
+        {/* Tasks */}
+        <div className="space-y-1">
+          {project.tasks.map(task => {
+            const taskStart = Math.ceil((task.startDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24));
+            const taskDuration = Math.ceil((task.endDate.getTime() - task.startDate.getTime()) / (1000 * 60 * 60 * 24));
+            const startPercent = totalDays > 0 ? (taskStart / totalDays) * 100 : 0;
+            const widthPercent = totalDays > 0 ? (taskDuration / totalDays) * 100 : 0;
 
-          return (
-            <div key={task.id} className="grid grid-cols-12 gap-2 items-center py-1">
-              <div className="col-span-3 text-sm font-medium truncate flex items-center gap-2">
-                {task.name}
-                <div className="flex items-center gap-1">
-                  <SystemGanttEditor
-                    systemId={task.id}
-                    systemName={task.name}
-                    currentStartDate={systemTimelines[task.name]?.start}
-                    currentEndDate={systemTimelines[task.name]?.end}
-                    onUpdate={() => {
-                      // Refresh timeline data
-                      const loadSystemTimelines = async () => {
-                        const { data: tasks } = await supabase
-                          .from('project_tasks')
-                          .select('task_name, start_date, end_date')
-                          .in('task_name', systems.map(s => s.system_name));
+            const isDelayed = task.endDate < today && task.progress < 100;
+            const isCritical = task.progress < 50 && task.endDate.getTime() - today.getTime() < 7 * 24 * 60 * 60 * 1000;
 
-                        const timelines: Record<string, { start: string; end: string }> = {};
-                        tasks?.forEach(task => {
-                          timelines[task.task_name] = {
-                            start: task.start_date || '',
-                            end: task.end_date || ''
-                          };
-                        });
-                        setSystemTimelines(timelines);
-                      };
-                      loadSystemTimelines();
-                    }}
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <MoreHorizontal className="h-3 w-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditTask(task)}>
-                        <Edit className="h-3 w-3 mr-2" />
-                        編輯任務
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteTask(task.name)}
-                        className="text-danger"
-                      >
-                        <Trash2 className="h-3 w-3 mr-2" />
-                        刪除任務
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            return (
+              <div key={task.id} className="grid grid-cols-12 gap-2 items-center py-2 hover:bg-muted/50 rounded-lg px-2 transition-colors">
+                <div className="col-span-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium truncate">{task.name}</span>
+                      <span className={`text-xs ${isDelayed ? 'text-destructive' : isCritical ? 'text-warning' : 'text-muted-foreground'}`}>
+                        {isDelayed ? '已延遲' : isCritical ? '需關注' : '正常'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-2 text-xs text-muted-foreground">
+                  {task.startDate.toLocaleDateString('zh-TW')}
+                </div>
+                <div className="col-span-2 text-xs text-muted-foreground">
+                  {task.endDate.toLocaleDateString('zh-TW')}
+                </div>
+                <div className="col-span-5 relative">
+                  <div className="h-8 bg-muted rounded-lg relative overflow-hidden border">
+                    <div
+                      className="absolute h-full rounded-lg transition-all duration-300 flex items-center justify-center text-xs text-white font-medium shadow-sm"
+                      style={{
+                        left: `${Math.max(0, startPercent)}%`,
+                        width: `${Math.min(100 - Math.max(0, startPercent), widthPercent)}%`,
+                        backgroundColor: isDelayed ? 'hsl(var(--destructive))' : isCritical ? 'hsl(var(--warning))' : task.color
+                      }}
+                    >
+                      {task.progress}%
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <SystemGanttEditor
+                      systemId={task.id}
+                      systemName={task.name}
+                      currentStartDate={systemTimelines[task.name]?.start}
+                      currentEndDate={systemTimelines[task.name]?.end}
+                      onUpdate={() => {
+                        // Refresh timeline data
+                        const loadSystemTimelines = async () => {
+                          const { data: tasks } = await supabase
+                            .from('project_tasks')
+                            .select('task_name, start_date, end_date')
+                            .in('task_name', systems.map(s => s.system_name));
+
+                          const timelines: Record<string, { start: string; end: string }> = {};
+                          tasks?.forEach(task => {
+                            timelines[task.task_name] = {
+                              start: task.start_date || '',
+                              end: task.end_date || ''
+                            };
+                          });
+                          setSystemTimelines(timelines);
+                        };
+                        loadSystemTimelines();
+                      }}
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <MoreHorizontal className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditTask(task)}>
+                          <Edit className="h-3 w-3 mr-2" />
+                          編輯任務
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteTask(task.name)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3 mr-2" />
+                          刪除任務
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </div>
-              <div className="col-span-9 relative h-6 bg-muted rounded">
-                <div
-                  className="absolute h-full rounded transition-all duration-300 flex items-center justify-center text-xs text-white font-medium"
-                  style={{
-                    left: `${startPercent}%`,
-                    width: `${widthPercent}%`,
-                    backgroundColor: task.color
-                  }}
-                >
-                  {task.progress}%
-                </div>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   };
