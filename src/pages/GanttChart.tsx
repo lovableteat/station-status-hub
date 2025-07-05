@@ -190,10 +190,10 @@ export default function GanttChart() {
               </div>
               
               {/* Date labels */}
-              <div className="absolute -bottom-6 left-0 text-xs text-muted-foreground">
+              <div className="absolute -bottom-8 left-0 text-xs text-muted-foreground bg-background px-1 rounded border">
                 {task.startDate.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
               </div>
-              <div className="absolute -bottom-6 right-0 text-xs text-muted-foreground">
+              <div className="absolute -bottom-8 right-0 text-xs text-muted-foreground bg-background px-1 rounded border">
                 {task.endDate.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
               </div>
             </div>
@@ -323,7 +323,7 @@ export default function GanttChart() {
                 </div>
                 
                 {/* Task Bar Container */}
-                <div className="relative h-12 mb-4">
+                <div className="relative h-16 mb-8">
                   {renderTaskBar(task)}
                 </div>
                 
