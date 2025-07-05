@@ -50,7 +50,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   };
 
   const handleSystemClick = (systemName: string) => {
-    onNavigate?.('tracker', { system: systemName });
+    onNavigate?.('test-tracker', { system: systemName });
   };
 
   const handleMonitorClick = (systemName: string) => {

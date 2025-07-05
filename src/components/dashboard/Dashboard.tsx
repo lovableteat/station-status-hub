@@ -6,6 +6,7 @@ import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
 import { ProjectGanttChart } from "./ProjectGanttChart";
+import { WorkHourAnalytics } from "./WorkHourAnalytics";
 import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
@@ -130,6 +131,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Gantt Chart */}
       <ProjectGanttChart />
+
+      {/* Work Hour Analytics */}
+      <WorkHourAnalytics />
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />
