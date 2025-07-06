@@ -87,6 +87,17 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
+  // Handle validation errors
+  const handleValidationError = (error: string | null) => {
+    if (error) {
+      toast({
+        title: "時間設定錯誤",
+        description: error,
+        variant: "destructive"
+      });
+    }
+  };
+  
   // Filter stations to only show Station 0-3
   const filteredStations = stations.filter(station => 
     station.station_order >= 0 && station.station_order <= 3
@@ -233,6 +244,17 @@ export function TestProgressTable({
                       onChange={async (newStartTime) => {
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
+                      maxDate={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                      })()}
+                      onValidationError={handleValidationError}
                       placeholder="設定開始時間"
                       className="w-44"
                     />
@@ -266,6 +288,7 @@ export function TestProgressTable({
                       onChange={async (newEndTime) => {
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
+                      onValidationError={handleValidationError}
                       placeholder="設定完成時間"
                       disabled={(() => {
                         const allProgressRecords = filteredStations.flatMap(station => {
@@ -496,6 +519,8 @@ export function TestProgressTable({
                       onChange={async (newStartTime) => {
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
+                      maxDate={systemEndTime}
+                      onValidationError={handleValidationError}
                       placeholder="設定開始時間"
                       className="w-full"
                     />
@@ -510,6 +535,7 @@ export function TestProgressTable({
                       onChange={async (newEndTime) => {
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
+                      onValidationError={handleValidationError}
                       placeholder="設定完成時間"
                       disabled={!systemStartTime}
                       className="w-full"
