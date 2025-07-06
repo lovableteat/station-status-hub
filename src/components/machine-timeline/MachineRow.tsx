@@ -32,7 +32,7 @@ export function MachineRow({
     const startPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
     const actualStartPosition = Math.max(0, Math.min(startPosition, 98));
     
-    // Calculate estimated bar (background)
+    // Calculate estimated bar (background) - full planned duration
     let estimatedBar = null;
     if (machine.estimated_end_time) {
       const estimatedEndTime = new Date(machine.estimated_end_time);
@@ -45,27 +45,15 @@ export function MachineRow({
       };
     }
 
-    // Calculate actual bar (foreground)
+    // Calculate actual progress bar (foreground) - based on progress percentage
     let actualBar = null;
-    if (machine.status === 'Done' && machine.end_time) {
-      // Completed: show from start to actual end time
-      const endTime = new Date(machine.end_time);
-      const actualDuration = endTime.getTime() - startTime.getTime();
-      const actualWidth = Math.max((actualDuration / totalDuration) * 100, 1);
+    if (estimatedBar && machine.overall_progress > 0) {
+      // Progress bar width = estimated bar width × progress percentage
+      const progressWidth = parseFloat(estimatedBar.width) * (machine.overall_progress / 100);
       
       actualBar = {
         left: `${actualStartPosition}%`,
-        width: `${actualWidth}%`
-      };
-    } else if (machine.status === 'On-going') {
-      // In progress: show from start to current time
-      const currentTime = new Date();
-      const actualDuration = currentTime.getTime() - startTime.getTime();
-      const actualWidth = Math.max((actualDuration / totalDuration) * 100, 1);
-      
-      actualBar = {
-        left: `${actualStartPosition}%`,
-        width: `${actualWidth}%`
+        width: `${Math.max(progressWidth, 1)}%`
       };
     }
     
