@@ -102,19 +102,19 @@ export function MachineRow({
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-sm">
-                <div className="space-y-1">
-                  <div className="font-medium">{machine.system_name}</div>
-                  <div className="text-sm">
-                    <div>負責人: {machine.assigned_engineer || '未分配'}</div>
-                    <div>狀態: {machine.status}</div>
-                    <div>進度: {machine.overall_progress}%</div>
-                    <div>開始: {formatDateTime(machine.start_time)}</div>
-                    <div>完成: {formatDateTime(machine.end_time)}</div>
-                    {machine.duration_hours && (
-                      <div>時長: {machine.duration_hours.toFixed(1)} 小時</div>
-                    )}
+                  <div className="space-y-1 max-w-xs">
+                    <div className="font-medium">{machine.system_name}</div>
+                    <div className="text-sm">
+                      <div>負責人: {machine.assigned_engineer || '未分配'}</div>
+                      <div>狀態: {machine.status}</div>
+                      <div>進度: {machine.overall_progress}%</div>
+                      <div>開始: {formatDateTime(machine.start_time)}</div>
+                      <div>完成: {formatDateTime(machine.end_time)}</div>
+                      {machine.duration_hours && (
+                        <div>時長: {machine.duration_hours.toFixed(1)} 小時</div>
+                      )}
+                    </div>
                   </div>
-                </div>
               </TooltipContent>
             </Tooltip>
           </div>
