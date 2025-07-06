@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -71,59 +71,10 @@ export function useUnifiedData() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const loadAllData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load all data in parallel
-      const [systemsRes, stationsRes, itemsRes, progressRes, settingsRes, dailyStatsRes, timeAnalyticsRes] = await Promise.all([
-        supabase.from('test_systems').select('*').order('system_name'),
-        supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('test_progress').select('*'),
-        supabase.from('system_settings').select('*').eq('category', 'work_time').maybeSingle(),
-        supabase.from('daily_production_stats').select('*').order('date', { ascending: false }).limit(7),
-        supabase.from('station_time_analytics').select('*').order('created_at', { ascending: false }).limit(100)
-      ]);
-
-      if (systemsRes.data) setSystems(systemsRes.data);
-      if (stationsRes.data) setStations(stationsRes.data);
-      if (itemsRes.data) setTestItems(itemsRes.data);
-      if (progressRes.data) setProgress(progressRes.data);
-
-      // Calculate station statuses based on real data
-      if (systemsRes.data && stationsRes.data && progressRes.data) {
-        const calculatedStatuses = calculateStationStatuses(
-          systemsRes.data,
-          stationsRes.data,
-          progressRes.data,
-          settingsRes.data?.settings,
-          dailyStatsRes.data || [],
-          timeAnalyticsRes.data || []
-        );
-        setStationStatuses(calculatedStatuses);
-      }
-
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error loading unified data:', error);
-      toast({
-        title: "載入失敗",
-        description: "無法載入系統資料",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-    }
-  };
-
-  const calculateStationStatuses = (
-    systems: UnifiedSystem[],
-    stations: UnifiedStation[],
-    progress: UnifiedProgress[],
-    settings?: any,
-    dailyStats?: any[],
-    timeAnalytics?: any[]
-  ): StationStatus[] => {
+  // Memoize the expensive station status calculation
+  const memoizedStationStatuses = useMemo(() => {
+    if (systems.length === 0 || stations.length === 0) return [];
+    
     return stations.map(station => {
       // Find systems currently at this station
       const systemsAtStation = systems.filter(s => s.current_station === station.station_name);
@@ -163,54 +114,7 @@ export function useUnifiedData() {
       }).length;
 
       const ongoingSystems = systemsAtStation.length;
-
-      // Calculate efficiency based on selected method
-      let efficiency = Math.round(averageProgress); // Default: completion efficiency
-      
-      const efficiencyMethod = settings?.efficiency_calculation_method || 'completion';
-      
-      switch (efficiencyMethod) {
-        case 'time':
-          // Time efficiency: estimated vs actual time
-          const stationTimeData = timeAnalytics?.filter(t => t.station_id === station.id) || [];
-          if (stationTimeData.length > 0) {
-            const avgTimeEfficiency = stationTimeData.reduce((sum, t) => {
-              const timeEff = t.estimated_hours > 0 ? Math.min((t.estimated_hours / t.actual_hours) * 100, 100) : 0;
-              return sum + timeEff;
-            }, 0) / stationTimeData.length;
-            efficiency = Math.round(avgTimeEfficiency);
-          }
-          break;
-          
-        case 'capacity':
-          // Capacity efficiency: daily completed vs target
-          const latestStats = dailyStats?.[0];
-          if (latestStats && latestStats.target_systems > 0) {
-            efficiency = Math.round((latestStats.completed_systems / latestStats.target_systems) * 100);
-          }
-          break;
-          
-        case 'runtime':
-          // Runtime efficiency: working time vs total time
-          const now = new Date();
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
-          const currentTime = now.getTime() - todayStart.getTime();
-          const workingHours = settings?.daily_work_hours || 8;
-          const totalWorkTime = workingHours * 60 * 60 * 1000; // in milliseconds
-          
-          if (systemsAtStation.length > 0 && currentTime > 0) {
-            // Assume station is "working" if it has active systems
-            const runtimeEfficiency = Math.min((currentTime / totalWorkTime) * 100, 100);
-            efficiency = Math.round(runtimeEfficiency);
-          } else {
-            efficiency = 0; // Idle stations have 0% runtime efficiency
-          }
-          break;
-          
-        default:
-          // Completion efficiency (default)
-          efficiency = Math.round(averageProgress);
-      }
+      const efficiency = Math.round(averageProgress);
 
       // Calculate detailed progress for each system at this station
       const systemProgress = systemsAtStation.map(system => {
@@ -235,9 +139,9 @@ export function useUnifiedData() {
         id: station.id,
         name: station.station_name,
         status,
-        current_system: systemsAtStation[0]?.system_name, // 保留向後兼容性
-        current_systems: systemsAtStation, // 所有在該站點的系統
-        efficiency: Math.max(0, Math.min(100, efficiency)), // Ensure 0-100 range
+        current_system: systemsAtStation[0]?.system_name,
+        current_systems: systemsAtStation,
+        efficiency: Math.max(0, Math.min(100, efficiency)),
         last_update: new Date().toISOString(),
         total_systems: systems.length,
         completed_systems: completedSystems,
@@ -245,9 +149,57 @@ export function useUnifiedData() {
         system_progress: systemProgress
       };
     });
-  };
+  }, [systems, stations, progress]);
 
-  const updateProgress = async (
+  // Debounced reload function to prevent excessive API calls
+  const debouncedReload = useCallback(
+    (() => {
+      let timeoutId: NodeJS.Timeout;
+      return () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          loadAllData();
+        }, 500); // 500ms debounce
+      };
+    })(),
+    []
+  );
+
+  const loadAllData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load all data in parallel
+      const [systemsRes, stationsRes, itemsRes, progressRes] = await Promise.all([
+        supabase.from('test_systems').select('*').order('system_name'),
+        supabase.from('test_flow_stations').select('*').order('station_order'),
+        supabase.from('test_flow_items').select('*').order('item_order'),
+        supabase.from('test_progress').select('*')
+      ]);
+
+      if (systemsRes.data) setSystems(systemsRes.data);
+      if (stationsRes.data) setStations(stationsRes.data);
+      if (itemsRes.data) setTestItems(itemsRes.data);
+      if (progressRes.data) setProgress(progressRes.data);
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error loading unified data:', error);
+      toast({
+        title: "載入失敗",
+        description: "無法載入系統資料",
+        variant: "destructive"
+      });
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  // Set stationStatuses to use memoized version
+  useEffect(() => {
+    setStationStatuses(memoizedStationStatuses);
+  }, [memoizedStationStatuses]);
+
+  const updateProgress = useCallback(async (
     systemId: string,
     stationId: string,
     itemId: string,
@@ -276,20 +228,20 @@ export function useUnifiedData() {
           });
       }
 
-      // Reload data to get fresh calculations
-      await loadAllData();
+      // Use debounced reload to prevent excessive API calls
+      debouncedReload();
       
       return true;
     } catch (error) {
       console.error('Error updating progress:', error);
       return false;
     }
-  };
+  }, [progress, debouncedReload]);
 
   useEffect(() => {
     loadAllData();
     
-    // Set up real-time updates
+    // Set up real-time updates with debouncing
     const channel = supabase
       .channel('unified-data-changes')
       .on(
@@ -301,7 +253,7 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test progress updated, reloading data...');
-          loadAllData(); // Reload when progress changes
+          debouncedReload(); // Use debounced reload
         }
       )
       .on(
@@ -313,31 +265,7 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test systems updated, reloading data...');
-          loadAllData(); // Reload when systems change
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_flow_items'
-        },
-        () => {
-          console.log('Test flow items updated, reloading data...');
-          loadAllData(); // Reload when test items change
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_flow_stations'
-        },
-        () => {
-          console.log('Test flow stations updated, reloading data...');
-          loadAllData(); // Reload when stations change
+          debouncedReload(); // Use debounced reload
         }
       )
       .subscribe();
@@ -345,7 +273,7 @@ export function useUnifiedData() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadAllData, debouncedReload]);
 
   return {
     systems,
