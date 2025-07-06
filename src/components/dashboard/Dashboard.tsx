@@ -130,18 +130,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </CardContent>
       </Card>
 
-      {/* Gantt Chart Link */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center space-y-4">
-            <h3 className="text-lg font-semibold">專案甘特圖</h3>
-            <p className="text-muted-foreground">查看詳細的項目時程與進度規劃</p>
-            <Button onClick={() => window.open('/gantt', '_blank')}>
-              查看完整甘特圖
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
 
       {/* System Status List */}
