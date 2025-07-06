@@ -79,8 +79,8 @@ export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
               style={{ left: `${markerPosition}%` }}
             >
               <div className={`h-full border-l ${marker.isMain ? 'border-border' : 'border-border/50'}`} />
-              <div className="absolute top-2 -translate-x-1/2 left-0">
-                <span className={`text-xs ${marker.isMain ? 'font-medium' : 'text-muted-foreground'}`}>
+              <div className="absolute top-2 -translate-x-1/2 left-0 min-w-max px-1">
+                <span className={`text-sm ${marker.isMain ? 'font-medium' : 'text-muted-foreground'}`}>
                   {marker.label}
                 </span>
               </div>

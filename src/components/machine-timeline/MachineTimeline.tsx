@@ -115,7 +115,7 @@ export function MachineTimeline() {
             <div className="relative">
               <div className="flex">
                 {/* Left side: Machine list */}
-                <div className="w-64 border-r bg-muted/20">
+                <div className="w-80 border-r bg-muted/20">
                   <div className="p-4 border-b bg-muted/50">
                     <h3 className="font-semibold">機台編號</h3>
                   </div>
@@ -131,8 +131,10 @@ export function MachineTimeline() {
                           selectedMachine === machine.id ? null : machine.id
                         )}
                       >
-                        <div className="font-medium">{machine.system_name}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-medium truncate" title={machine.system_name}>
+                          {machine.system_name}
+                        </div>
+                        <div className="text-sm text-muted-foreground truncate" title={machine.assigned_engineer || '未分配'}>
                           {machine.assigned_engineer || '未分配'}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -154,7 +156,7 @@ export function MachineTimeline() {
 
                 {/* Right side: Timeline area */}
                 <div className="flex-1 overflow-x-auto">
-                  <div className="min-w-[800px]">
+                  <div className="min-w-[1200px]">
                     <TimelineGrid 
                       viewType={viewType}
                       bounds={timelineBounds}
