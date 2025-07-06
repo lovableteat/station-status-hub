@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
-  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, Clock, User, Gauge
+  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, Clock, User, Gauge, Calendar
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
@@ -15,6 +16,7 @@ import React from 'react';
 
 interface MachineWorkOrder {
   id: string;
+  systemId: string;
   systemName: string;
   assignedEngineer: string;
   startTime: Date;
@@ -22,19 +24,27 @@ interface MachineWorkOrder {
   status: 'not_started' | 'in_progress' | 'completed' | 'delayed';
   progress: number;
   priority: 'low' | 'medium' | 'high';
+  stationId: string;
+  itemsCompleted: number;
+  itemsTotal: number;
+  actualHours?: number;
+  estimatedHours: number;
   notes?: string;
 }
 
 interface MachineSchedule {
   machineId: string;
   machineName: string;
+  stationOrder: number;
   utilization: number;
   workOrders: MachineWorkOrder[];
-  productionLine: string;
+  totalSystems: number;
+  completedSystems: number;
+  ongoingSystems: number;
 }
 
 export const MachineGanttChart = React.memo(function MachineGanttChart() {
-  const { systems, stationStatuses, stations } = useUnifiedData();
+  const { systems, stations, progress, stationStatuses } = useUnifiedData();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<MachineWorkOrder | null>(null);
@@ -42,82 +52,148 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
 
-  // Convert station data to machine schedules - 使用 stations 數據來確保機台名稱正確顯示
+  // Convert real data to machine schedules with proper work order calculation
   const machineSchedules = useMemo(() => {
     const schedules: MachineSchedule[] = stations.map((station) => {
-      // Find systems assigned to this station
-      const assignedSystems = systems.filter(s => s.current_station === station.station_name);
-      
-      const workOrders: MachineWorkOrder[] = assignedSystems.map((system, index) => {
-        const startTime = new Date();
-        startTime.setHours(8 + index * 2); // Stagger start times
+      // Find all systems and their progress for this station
+      const systemsForStation = systems.map(system => {
+        const systemProgress = progress.filter(p => 
+          p.system_id === system.id && p.station_id === station.id
+        );
         
-        const endTime = new Date(startTime);
-        endTime.setHours(startTime.getHours() + 8); // 8-hour work orders
+        // Calculate station-specific progress
+        const completedItems = systemProgress.filter(p => p.status === 'Done').length;
+        const totalItems = systemProgress.length;
+        const stationProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
         
+        // Determine if this system has work at this station
+        if (totalItems === 0) return null;
+        
+        // Calculate timeline based on actual data
+        let startTime = new Date();
+        let endTime = new Date();
+        let actualHours: number | undefined;
+        
+        // Get earliest started_at and latest completed_at for this station
+        const startedItems = systemProgress.filter(p => p.started_at);
+        const completedItems_withTime = systemProgress.filter(p => p.completed_at);
+        
+        if (startedItems.length > 0) {
+          const startTimes = startedItems.map(p => new Date(p.started_at!));
+          startTime = new Date(Math.min(...startTimes.map(d => d.getTime())));
+        } else {
+          // Use current time + estimated offset based on station order
+          startTime = new Date();
+          startTime.setHours(startTime.getHours() + (station.station_order * 8));
+        }
+        
+        if (completedItems_withTime.length === totalItems && completedItems_withTime.length > 0) {
+          // All items completed - use actual completion time
+          const endTimes = completedItems_withTime.map(p => new Date(p.completed_at!));
+          endTime = new Date(Math.max(...endTimes.map(d => d.getTime())));
+          actualHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        } else {
+          // Use estimated hours
+          const estimatedHours = station.estimated_hours || 8;
+          endTime = new Date(startTime.getTime() + (estimatedHours * 60 * 60 * 1000));
+        }
+        
+        // Determine status
         let status: MachineWorkOrder['status'] = 'not_started';
-        if (system.status === 'On-going') status = 'in_progress';
-        else if (system.status === 'Done') status = 'completed';
-        else if (system.overall_progress > 0) status = 'delayed';
+        if (stationProgress === 100) {
+          status = 'completed';
+        } else if (stationProgress > 0) {
+          status = new Date() > endTime ? 'delayed' : 'in_progress';
+        } else if (startTime <= new Date()) {
+          status = 'delayed';
+        }
+        
+        // Determine priority
+        const priority: MachineWorkOrder['priority'] = 
+          status === 'delayed' ? 'high' : 
+          stationProgress < 50 && new Date() > new Date(endTime.getTime() - 24 * 60 * 60 * 1000) ? 'medium' : 
+          'low';
         
         return {
-          id: system.id,
+          id: `${system.id}-${station.id}`,
+          systemId: system.id,
           systemName: system.system_name,
           assignedEngineer: system.assigned_engineer || 'Unassigned',
           startTime,
           endTime,
           status,
-          progress: system.overall_progress || 0,
-          priority: system.overall_progress < 50 ? 'high' : 'medium',
-          notes: `Model: ${system.model}`
+          progress: stationProgress,
+          priority,
+          stationId: station.id,
+          itemsCompleted: completedItems,
+          itemsTotal: totalItems,
+          actualHours,
+          estimatedHours: station.estimated_hours || 8,
+          notes: `Model: ${system.model || 'N/A'} | Serial: ${system.serial_number || 'N/A'}`
         };
-      });
-
-      // 從 stationStatuses 獲取效率數據
+      }).filter(Boolean) as MachineWorkOrder[];
+      
+      // Get station efficiency data
       const stationStatus = stationStatuses.find(s => s.name === station.station_name);
-
+      const totalSystemsAtStation = systemsForStation.length;
+      const completedSystemsAtStation = systemsForStation.filter(wo => wo.status === 'completed').length;
+      const ongoingSystemsAtStation = systemsForStation.filter(wo => wo.status === 'in_progress').length;
+      
       return {
         machineId: station.id,
-        machineName: station.station_name, // 直接使用 station_name
+        machineName: station.station_name,
+        stationOrder: station.station_order,
         utilization: stationStatus?.efficiency || 0,
-        workOrders,
-        productionLine: station.station_name.includes('TEAM') ? station.station_name.split(' - ')[1] : 'DEFAULT'
+        workOrders: systemsForStation,
+        totalSystems: totalSystemsAtStation,
+        completedSystems: completedSystemsAtStation,
+        ongoingSystems: ongoingSystemsAtStation
       };
     });
+    
+    // Sort by station order
+    return schedules.sort((a, b) => a.stationOrder - b.stationOrder);
+  }, [stations, systems, progress, stationStatuses]);
 
-    return schedules;
-  }, [stations, systems, stationStatuses]);
-
-  // Group machines by production line
-  const groupedMachines = useMemo(() => {
-    const groups: Record<string, MachineSchedule[]> = {};
-    machineSchedules.forEach(machine => {
-      if (!groups[machine.productionLine]) {
-        groups[machine.productionLine] = [];
-      }
-      groups[machine.productionLine].push(machine);
-    });
-    return groups;
+  // Calculate optimal view range based on actual work orders
+  useEffect(() => {
+    const allWorkOrders = machineSchedules.flatMap(m => m.workOrders);
+    if (allWorkOrders.length === 0) {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 3);
+      const end = new Date(now);
+      end.setDate(end.getDate() + 7);
+      setViewRange({ start, end });
+      return;
+    }
+    
+    const startTimes = allWorkOrders.map(wo => wo.startTime.getTime());
+    const endTimes = allWorkOrders.map(wo => wo.endTime.getTime());
+    
+    const minStart = new Date(Math.min(...startTimes));
+    const maxEnd = new Date(Math.max(...endTimes));
+    
+    // Add some padding
+    minStart.setDate(minStart.getDate() - 1);
+    maxEnd.setDate(maxEnd.getDate() + 1);
+    
+    setViewRange({ start: minStart, end: maxEnd });
   }, [machineSchedules]);
 
-  useEffect(() => {
-    // Set initial view range
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(start.getDate() - 3);
-    const end = new Date(now);
-    end.setDate(end.getDate() + 7);
-    setViewRange({ start, end });
-  }, []);
-
-  // Generate time markers
+  // Generate time markers with better spacing
   const timeMarkers = useMemo(() => {
     const markers = [];
     const { start, end } = viewRange;
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     
-    const increment = 1; // Daily markers
-    const format: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    // Adjust increment based on zoom level and total days
+    let increment = Math.max(1, Math.floor(totalDays / (15 * zoomLevel))); // Target ~15 markers
+    const format: Intl.DateTimeFormatOptions = { 
+      month: 'short', 
+      day: 'numeric',
+      ...(totalDays > 30 ? {} : { weekday: 'short' })
+    };
     
     let currentDate = new Date(start);
     while (currentDate <= end) {
@@ -134,7 +210,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
     }
     
     return markers;
-  }, [viewRange]);
+  }, [viewRange, zoomLevel]);
 
   const handleZoom = useCallback((direction: 'in' | 'out') => {
     const newZoom = direction === 'in' ? Math.min(zoomLevel * 1.5, 5) : Math.max(zoomLevel / 1.5, 0.5);
@@ -144,7 +220,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const handleTimeNavigation = useCallback((direction: 'prev' | 'next') => {
     const { start, end } = viewRange;
     const duration = end.getTime() - start.getTime();
-    const shift = direction === 'next' ? duration * 0.5 : -duration * 0.5;
+    const shift = direction === 'next' ? duration * 0.3 : -duration * 0.3;
     
     setViewRange({
       start: new Date(start.getTime() + shift),
@@ -167,39 +243,82 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
     if (orderDuration <= 0) return null;
     
     const leftPercent = (orderStart / totalDuration) * 100;
-    const widthPercent = Math.max((orderDuration / totalDuration) * 100 * zoomLevel, 60);
+    const widthPercent = Math.max((orderDuration / totalDuration) * 100, 0.5); // Minimum 0.5% width
     
     return (
-      <div
-        className="relative h-8 rounded cursor-pointer transition-all duration-200 hover:h-9 shadow-sm animate-fade-in"
-        style={{
-          left: `${leftPercent}%`,
-          width: `${widthPercent}px`,
-          backgroundColor: getStatusColor(workOrder.status),
-          minWidth: '60px'
-        }}
-        onClick={() => handleWorkOrderClick(workOrder)}
-      >
-        {/* Progress fill */}
-        <div 
-          className="h-full bg-white/30 rounded transition-all duration-500"
-          style={{ width: `${workOrder.progress}%` }}
-        />
-        
-        {/* Progress percentage only */}
-        <div className="absolute inset-0 flex items-center justify-center text-white text-xs font-medium">
-          {workOrder.progress}%
-        </div>
-      </div>
+      <TooltipProvider key={workOrder.id}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="absolute h-7 rounded cursor-pointer transition-all duration-200 hover:h-8 hover:-translate-y-0.5 shadow-sm animate-fade-in flex items-center justify-center overflow-hidden"
+              style={{
+                left: `${leftPercent}%`,
+                width: `${widthPercent}%`,
+                backgroundColor: getStatusColor(workOrder.status),
+                minWidth: '60px'
+              }}
+              onClick={() => handleWorkOrderClick(workOrder)}
+            >
+              {/* Progress fill */}
+              <div 
+                className="absolute inset-0 bg-white/20 rounded transition-all duration-500"
+                style={{ width: `${workOrder.progress}%` }}
+              />
+              
+              {/* System name and progress */}
+              <div className="relative z-10 flex items-center gap-1 px-2 text-white text-xs font-medium">
+                <span className="truncate">{workOrder.systemName}</span>
+                <span className="text-white/80">({workOrder.progress}%)</span>
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <div className="space-y-2">
+              <div className="font-medium">{workOrder.systemName}</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>進度: {workOrder.progress}%</div>
+                <div>狀態: {getStatusLabel(workOrder.status)}</div>
+                <div>負責人: {workOrder.assignedEngineer}</div>
+                <div>優先度: {getPriorityLabel(workOrder.priority)}</div>
+              </div>
+              <div className="text-xs text-muted-foreground border-t pt-2">
+                <div>開始: {workOrder.startTime.toLocaleDateString('zh-TW')}</div>
+                <div>結束: {workOrder.endTime.toLocaleDateString('zh-TW')}</div>
+                <div>項目: {workOrder.itemsCompleted}/{workOrder.itemsTotal}</div>
+                {workOrder.actualHours && (
+                  <div>實際時數: {workOrder.actualHours.toFixed(1)}h</div>
+                )}
+              </div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
-  }, [viewRange, zoomLevel, handleWorkOrderClick]);
+  }, [viewRange, handleWorkOrderClick]);
 
   const getStatusColor = useCallback((status: MachineWorkOrder['status']) => {
     switch (status) {
       case 'completed': return 'hsl(var(--success))';
       case 'in_progress': return 'hsl(var(--primary))';
       case 'delayed': return 'hsl(var(--destructive))';
-      default: return 'hsl(var(--muted))';
+      default: return 'hsl(var(--muted-foreground))';
+    }
+  }, []);
+
+  const getStatusLabel = useCallback((status: MachineWorkOrder['status']) => {
+    switch (status) {
+      case 'completed': return '已完成';
+      case 'in_progress': return '進行中';
+      case 'delayed': return '延遲';
+      default: return '未開始';
+    }
+  }, []);
+
+  const getPriorityLabel = useCallback((priority: MachineWorkOrder['priority']) => {
+    switch (priority) {
+      case 'high': return '高';
+      case 'medium': return '中';
+      default: return '低';
     }
   }, []);
 
