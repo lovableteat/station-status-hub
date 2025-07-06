@@ -35,38 +35,45 @@ const GanttHeader = memo(({
   onTimeNavigation: (direction: 'prev' | 'next') => void;
   taskCount: number;
 }) => (
-  <CardHeader>
+  <CardHeader className="bg-gradient-to-r from-card via-card/80 to-card backdrop-blur-sm">
     <div className="flex justify-between items-center">
       <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} className="shadow-md hover:shadow-lg transition-shadow duration-200">
           <ArrowLeft className="h-4 w-4 mr-2" />
           返回
         </Button>
-        <Button variant="outline" onClick={onNavigateToTracker}>
+        <Button variant="outline" onClick={onNavigateToTracker} className="shadow-md hover:shadow-lg transition-shadow duration-200">
           測試進度表
         </Button>
         <div>
-          <CardTitle className="text-2xl">機台排程甘特圖</CardTitle>
-          <p className="text-muted-foreground mt-1">基於測試進度的機台排程時間軸</p>
+          <CardTitle className="text-2xl bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            機台排程甘特圖
+          </CardTitle>
+          <p className="text-muted-foreground mt-1 flex items-center gap-2">
+            基於測試進度的機台排程時間軸
+            <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-xs font-medium">
+              {taskCount} 台機器
+            </span>
+          </p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         {/* Zoom Controls */}
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => onZoom('out')}>
+        <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg backdrop-blur-sm">
+          <Button variant="ghost" size="sm" onClick={() => onZoom('out')} className="hover:bg-muted/50">
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onZoom('in')}>
+          <Button variant="ghost" size="sm" onClick={() => onZoom('in')} className="hover:bg-muted/50">
             <ZoomIn className="h-4 w-4" />
           </Button>
         </div>
         
         {/* Navigation Controls */}
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => onTimeNavigation('prev')}>
+        <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg backdrop-blur-sm">
+          <Button variant="ghost" size="sm" onClick={() => onTimeNavigation('prev')} className="hover:bg-muted/50">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onTimeNavigation('next')}>
+          <Button variant="ghost" size="sm" onClick={() => onTimeNavigation('next')} className="hover:bg-muted/50">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -83,17 +90,19 @@ const GanttTableHeader = memo(({
   taskCount: number; 
   viewRange: { start: Date; end: Date };
 }) => (
-  <div className="flex bg-muted/10 border-b">
+  <div className="flex bg-gradient-to-r from-muted/20 via-muted/30 to-muted/20 border-b border-border/50 backdrop-blur-sm">
     {/* Machine Name Header */}
-    <div className="w-48 flex-shrink-0 px-4 py-3 bg-muted/20 border-r border-border/30">
-      <h3 className="font-semibold text-sm">機台名稱</h3>
-      <p className="text-xs text-muted-foreground">共 {taskCount} 台</p>
+    <div className="w-48 flex-shrink-0 px-4 py-4 bg-gradient-to-r from-card/80 to-card/40 border-r border-border/30 rounded-tl-lg backdrop-blur-sm">
+      <h3 className="font-bold text-sm text-foreground mb-1">機台名稱</h3>
+      <p className="text-xs text-muted-foreground flex items-center gap-2">
+        <span className="bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">共 {taskCount} 台</span>
+      </p>
     </div>
     
     {/* Timeline Header */}
-    <div className="flex-1">
-      <div className="px-4 py-3">
-        <h3 className="font-semibold text-sm">時間軸圖表</h3>
+    <div className="flex-1 bg-gradient-to-r from-card/40 to-transparent">
+      <div className="px-4 py-4">
+        <h3 className="font-bold text-sm text-foreground mb-1">時間軸圖表</h3>
         <p className="text-xs text-muted-foreground">機台排程與進度視覺化</p>
       </div>
       <GanttTimeline viewRange={viewRange} />
@@ -106,6 +115,7 @@ export default function OptimizedGanttChart() {
   const ganttTasks = useGanttTasks(systems, progress);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
 
   // Memoize sorted tasks with better performance
   const sortedTasks = useMemo(() => {
@@ -161,20 +171,27 @@ export default function OptimizedGanttChart() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <Card className="w-full">
-          <CardHeader>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
+        <Card className="w-full shadow-lg border-0 bg-card/50 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-card via-card/80 to-card backdrop-blur-sm">
             <div className="flex items-center gap-4">
-              <Skeleton className="w-16 h-10" />
-              <Skeleton className="w-24 h-10" />
+              <Skeleton className="w-16 h-10 rounded-lg" />
+              <Skeleton className="w-24 h-10 rounded-lg" />
               <div>
-                <Skeleton className="w-48 h-8 mb-2" />
-                <Skeleton className="w-64 h-4" />
+                <Skeleton className="w-48 h-8 mb-2 rounded-lg" />
+                <Skeleton className="w-64 h-4 rounded-lg" />
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-4">
-            <GanttSkeleton />
+            <div className="space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex gap-4 animate-fade-in" style={{ animationDelay: `${i * 100}ms` }}>
+                  <Skeleton className="w-48 h-16 rounded-lg" />
+                  <Skeleton className="flex-1 h-16 rounded-lg" />
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -182,8 +199,8 @@ export default function OptimizedGanttChart() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <Card className="w-full">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
+      <Card className="w-full shadow-lg border-0 bg-card/50 backdrop-blur-sm">
         <GanttHeader
           onBack={handleBack}
           onNavigateToTracker={handleNavigateToTracker}
@@ -196,19 +213,29 @@ export default function OptimizedGanttChart() {
           <div className="flex flex-col">
             <GanttTableHeader taskCount={sortedTasks.length} viewRange={viewRange} />
             
-            {/* Gantt Chart Body with Virtual Scrolling */}
-            <ScrollArea className="h-[600px]">
-              <div className="min-w-full">
-                {sortedTasks.map(task => (
-                  <GanttMachineRow 
-                    key={task.id} 
-                    task={task} 
-                    viewRange={viewRange} 
-                  />
+            {/* Gantt Chart Body with Enhanced Visual Design */}
+            <ScrollArea className="h-[calc(100vh-300px)] min-h-[500px]">
+              <div className="min-w-full space-y-1 p-2">
+                {sortedTasks.map((task, index) => (
+                  <div 
+                    key={task.id}
+                    className="animate-fade-in"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <GanttMachineRow 
+                      task={task} 
+                      viewRange={viewRange}
+                      isHovered={hoveredTask === task.id}
+                      onHover={setHoveredTask}
+                    />
+                  </div>
                 ))}
                 {sortedTasks.length === 0 && (
                   <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    暫無機台資料
+                    <div className="text-center space-y-2">
+                      <div className="text-lg">暫無機台資料</div>
+                      <div className="text-sm opacity-70">等待系統資料載入中...</div>
+                    </div>
                   </div>
                 )}
               </div>
