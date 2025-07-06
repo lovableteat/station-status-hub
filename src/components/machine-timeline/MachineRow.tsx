@@ -78,7 +78,7 @@ export function MachineRow({
       >
         {/* Progress bar */}
         {progressBar && (
-          <div className="relative h-full p-2">
+          <div className="relative h-full">
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
