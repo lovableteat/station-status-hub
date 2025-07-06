@@ -65,29 +65,35 @@ export function EnhancedGanttChart() {
       let realEndDate: Date;
       
       if (progressWithDates.length > 0) {
-        // Use actual database timestamps
+        // Use actual database timestamps - convert UTC to local time properly
         const startDates = progressWithDates
           .filter(p => p.started_at)
-          .map(p => new Date(p.started_at!));
+          .map(p => new Date(p.started_at! + 'Z')); // Add Z to ensure UTC parsing
         const endDates = progressWithDates
           .filter(p => p.completed_at)
-          .map(p => new Date(p.completed_at!));
+          .map(p => new Date(p.completed_at! + 'Z')); // Add Z to ensure UTC parsing
         
-        realStartDate = startDates.length > 0 
-          ? new Date(Math.min(...startDates.map(d => d.getTime())))
-          : new Date('2025-07-01'); // Default start date
+        if (startDates.length > 0) {
+          realStartDate = new Date(Math.min(...startDates.map(d => d.getTime())));
+        } else {
+          // If no started_at, use creation date or default
+          realStartDate = new Date('2025-07-01T00:00:00Z');
+        }
         
         if (endDates.length > 0) {
           realEndDate = new Date(Math.max(...endDates.map(d => d.getTime())));
         } else {
-          // Estimate end date based on start date and progress
-          const estimatedDurationDays = avgProgress > 0 ? (100 / avgProgress) * 5 : 10; // 5 days per 100% progress
-          realEndDate = new Date(realStartDate.getTime() + estimatedDurationDays * 24 * 60 * 60 * 1000);
+          // For incomplete systems, estimate end date
+          const now = new Date();
+          const daysSinceStart = Math.max(1, (now.getTime() - realStartDate.getTime()) / (1000 * 60 * 60 * 24));
+          const estimatedTotalDays = avgProgress > 0 ? (daysSinceStart / avgProgress) * 100 : daysSinceStart + 10;
+          realEndDate = new Date(realStartDate.getTime() + estimatedTotalDays * 24 * 60 * 60 * 1000);
         }
       } else {
-        // Fallback if no test progress data
-        realStartDate = new Date('2025-07-01'); // Default start date
-        realEndDate = new Date(realStartDate.getTime() + 10 * 24 * 60 * 60 * 1000); // 10 days default
+        // Systems without progress data - use reasonable defaults
+        const today = new Date();
+        realStartDate = new Date('2025-07-01T00:00:00Z');
+        realEndDate = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000); // 2 weeks from now
       }
       
       // Determine status based on progress and dates
@@ -118,18 +124,22 @@ export function EnhancedGanttChart() {
     
     setTasks(ganttTasks);
     
-    // Set initial view range based on real data
+    // Set view range to cover all actual data with proper padding
     if (ganttTasks.length > 0) {
-      const minDate = new Date(Math.min(...ganttTasks.map(t => t.startDate.getTime())));
-      const maxDate = new Date(Math.max(...ganttTasks.map(t => t.endDate.getTime())));
-      minDate.setDate(minDate.getDate() - 7); // Add some padding
-      maxDate.setDate(maxDate.getDate() + 14); // More padding for future planning
-      setViewRange({ start: minDate, end: maxDate });
+      const allDates = ganttTasks.flatMap(t => [t.startDate, t.endDate]);
+      const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+      const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+      
+      // Add padding - 3 days before, 7 days after
+      const paddedStart = new Date(minDate.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const paddedEnd = new Date(maxDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      setViewRange({ start: paddedStart, end: paddedEnd });
     } else {
-      // Fallback view range if no tasks
+      // Fallback view range
       const today = new Date();
-      const start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
-      const end = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);   // 60 days forward
+      const start = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+      const end = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
       setViewRange({ start, end });
     }
   }, [systems, progress]);
@@ -146,96 +156,84 @@ export function EnhancedGanttChart() {
     return groups;
   }, [tasks]);
 
-  // Generate time markers based on scale and zoom - with improved spacing for Chinese text
+  // Generate time markers based on scale and zoom - simplified and accurate
   const timeMarkers = useMemo(() => {
     const markers = [];
     const { start, end } = viewRange;
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const totalMs = end.getTime() - start.getTime();
+    const totalDays = Math.ceil(totalMs / (1000 * 60 * 60 * 24));
     
-    let increment: number;
+    // Determine increment and format based on time scale and span
+    let increment: number; // in days
     let format: Intl.DateTimeFormatOptions;
     let secondaryFormat: Intl.DateTimeFormatOptions;
-    let minSpacing: number; // Minimum spacing percentage to avoid overlap
     
-    switch (timeScale) {
-      case 'day':
-        increment = 1;
-        format = { month: 'short', day: 'numeric' };
-        secondaryFormat = { weekday: 'short' };
-        minSpacing = 12; // Increase spacing for Chinese text
-        break;
-      case 'week':
-        increment = 3; // Show every 3 days to reduce crowding
-        format = { month: 'short', day: 'numeric' };
-        secondaryFormat = { weekday: 'short' };
-        minSpacing = 10;
-        break;
-      case 'month':
-        increment = 7;
-        format = { month: 'short', day: 'numeric' };
-        secondaryFormat = { month: 'short', year: 'numeric' };
-        minSpacing = 8;
-        break;
-      case 'year':
-        increment = 30;
-        format = { year: 'numeric', month: 'short' };
-        secondaryFormat = { year: 'numeric' };
-        minSpacing = 6;
-        break;
+    if (totalDays <= 14) {
+      // Short span: show every day or every other day
+      increment = totalDays <= 7 ? 1 : 2;
+      format = { month: 'numeric', day: 'numeric' };
+      secondaryFormat = { weekday: 'short' };
+    } else if (totalDays <= 60) {
+      // Medium span: show every 3-7 days
+      increment = Math.ceil(totalDays / 8);
+      format = { month: 'numeric', day: 'numeric' };
+      secondaryFormat = { weekday: 'short' };
+    } else {
+      // Long span: show weekly or more
+      increment = Math.ceil(totalDays / 10);
+      format = { month: 'numeric', day: 'numeric' };
+      secondaryFormat = { month: 'short', year: 'numeric' };
     }
     
-    // Adjust increment based on total time span to prevent overcrowding
-    if (totalDays > 180) { // More than 6 months
-      increment = Math.max(increment, 7);
-      minSpacing = Math.max(minSpacing, 5);
-    } else if (totalDays > 90) { // More than 3 months
-      increment = Math.max(increment, 3);
-      minSpacing = Math.max(minSpacing, 8);
-    }
-    
+    // Generate markers at regular intervals
     let currentDate = new Date(start);
-    let lastLabelPosition = -minSpacing; // Track last label position to avoid overlap
+    // Start from the beginning of the day
+    currentDate.setHours(0, 0, 0, 0);
     
     while (currentDate <= end) {
-      const dayFromStart = Math.ceil((currentDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const percent = totalDays > 0 ? (dayFromStart / totalDays) * 100 : 0;
+      const timeFromStart = currentDate.getTime() - start.getTime();
+      const percent = (timeFromStart / totalMs) * 100;
       
-      // Only add marker if it's far enough from the last one
-      if (percent - lastLabelPosition >= minSpacing) {
+      // Only add markers that are within our view range
+      if (percent >= 0 && percent <= 100) {
         markers.push({
           date: new Date(currentDate),
-          percent,
+          percent: Math.max(0, Math.min(100, percent)),
           label: currentDate.toLocaleDateString('zh-TW', format),
           secondaryLabel: currentDate.toLocaleDateString('zh-TW', secondaryFormat)
         });
-        lastLabelPosition = percent;
       }
       
+      // Move to next marker date
       currentDate.setDate(currentDate.getDate() + increment);
     }
     
-    // Ensure we have at least a few markers, but not too many
-    if (markers.length < 3 && totalDays > 7) {
-      // If we have too few markers, create some basic ones
-      const markersToAdd = Math.min(5, Math.floor(totalDays / 7));
-      const additionalMarkers = [];
-      for (let i = 1; i <= markersToAdd; i++) {
-        const dayOffset = Math.floor((totalDays / (markersToAdd + 1)) * i);
-        const markerDate = new Date(start.getTime() + dayOffset * 24 * 60 * 60 * 1000);
-        const percent = (dayOffset / totalDays) * 100;
-        
-        additionalMarkers.push({
-          date: markerDate,
-          percent,
-          label: markerDate.toLocaleDateString('zh-TW', format),
-          secondaryLabel: markerDate.toLocaleDateString('zh-TW', secondaryFormat)
+    // Ensure we have reasonable coverage
+    if (markers.length < 2) {
+      // Add at least start and end markers
+      markers.length = 0;
+      const startMarker = new Date(start);
+      const endMarker = new Date(end);
+      
+      markers.push({
+        date: startMarker,
+        percent: 0,
+        label: startMarker.toLocaleDateString('zh-TW', format),
+        secondaryLabel: startMarker.toLocaleDateString('zh-TW', secondaryFormat)
+      });
+      
+      if (totalDays > 1) {
+        markers.push({
+          date: endMarker,
+          percent: 100,
+          label: endMarker.toLocaleDateString('zh-TW', format),
+          secondaryLabel: endMarker.toLocaleDateString('zh-TW', secondaryFormat)
         });
       }
-      return [...markers, ...additionalMarkers].sort((a, b) => a.percent - b.percent);
     }
     
-    return markers;
-  }, [viewRange, timeScale, zoomLevel]);
+    return markers.sort((a, b) => a.percent - b.percent);
+  }, [viewRange, timeScale]);
 
   const getStatusColor = (status: GanttTask['status']) => {
     switch (status) {
