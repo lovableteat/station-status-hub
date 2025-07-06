@@ -68,11 +68,14 @@ export function useUnifiedData() {
       setIsLoading(true);
       
       // Load all data in parallel
-      const [systemsRes, stationsRes, itemsRes, progressRes] = await Promise.all([
+      const [systemsRes, stationsRes, itemsRes, progressRes, settingsRes, dailyStatsRes, timeAnalyticsRes] = await Promise.all([
         supabase.from('test_systems').select('*').order('system_name'),
         supabase.from('test_flow_stations').select('*').order('station_order'),
         supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('test_progress').select('*')
+        supabase.from('test_progress').select('*'),
+        supabase.from('system_settings').select('*').eq('category', 'work_time').maybeSingle(),
+        supabase.from('daily_production_stats').select('*').order('date', { ascending: false }).limit(7),
+        supabase.from('station_time_analytics').select('*').order('created_at', { ascending: false }).limit(100)
       ]);
 
       if (systemsRes.data) setSystems(systemsRes.data);
@@ -85,7 +88,10 @@ export function useUnifiedData() {
         const calculatedStatuses = calculateStationStatuses(
           systemsRes.data,
           stationsRes.data,
-          progressRes.data
+          progressRes.data,
+          settingsRes.data?.settings,
+          dailyStatsRes.data || [],
+          timeAnalyticsRes.data || []
         );
         setStationStatuses(calculatedStatuses);
       }
@@ -105,7 +111,10 @@ export function useUnifiedData() {
   const calculateStationStatuses = (
     systems: UnifiedSystem[],
     stations: UnifiedStation[],
-    progress: UnifiedProgress[]
+    progress: UnifiedProgress[],
+    settings?: any,
+    dailyStats?: any[],
+    timeAnalytics?: any[]
   ): StationStatus[] => {
     return stations.map(station => {
       // Find systems currently at this station
@@ -147,12 +156,60 @@ export function useUnifiedData() {
 
       const ongoingSystems = systemsAtStation.length;
 
+      // Calculate efficiency based on selected method
+      let efficiency = Math.round(averageProgress); // Default: completion efficiency
+      
+      const efficiencyMethod = settings?.efficiency_calculation_method || 'completion';
+      
+      switch (efficiencyMethod) {
+        case 'time':
+          // Time efficiency: estimated vs actual time
+          const stationTimeData = timeAnalytics?.filter(t => t.station_id === station.id) || [];
+          if (stationTimeData.length > 0) {
+            const avgTimeEfficiency = stationTimeData.reduce((sum, t) => {
+              const timeEff = t.estimated_hours > 0 ? Math.min((t.estimated_hours / t.actual_hours) * 100, 100) : 0;
+              return sum + timeEff;
+            }, 0) / stationTimeData.length;
+            efficiency = Math.round(avgTimeEfficiency);
+          }
+          break;
+          
+        case 'capacity':
+          // Capacity efficiency: daily completed vs target
+          const latestStats = dailyStats?.[0];
+          if (latestStats && latestStats.target_systems > 0) {
+            efficiency = Math.round((latestStats.completed_systems / latestStats.target_systems) * 100);
+          }
+          break;
+          
+        case 'runtime':
+          // Runtime efficiency: working time vs total time
+          const now = new Date();
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+          const currentTime = now.getTime() - todayStart.getTime();
+          const workingHours = settings?.daily_work_hours || 8;
+          const totalWorkTime = workingHours * 60 * 60 * 1000; // in milliseconds
+          
+          if (systemsAtStation.length > 0 && currentTime > 0) {
+            // Assume station is "working" if it has active systems
+            const runtimeEfficiency = Math.min((currentTime / totalWorkTime) * 100, 100);
+            efficiency = Math.round(runtimeEfficiency);
+          } else {
+            efficiency = 0; // Idle stations have 0% runtime efficiency
+          }
+          break;
+          
+        default:
+          // Completion efficiency (default)
+          efficiency = Math.round(averageProgress);
+      }
+
       return {
         id: station.id,
         name: station.station_name,
         status,
         current_system: systemsAtStation[0]?.system_name,
-        efficiency: Math.round(averageProgress),
+        efficiency: Math.max(0, Math.min(100, efficiency)), // Ensure 0-100 range
         last_update: new Date().toISOString(),
         total_systems: systems.length,
         completed_systems: completedSystems,

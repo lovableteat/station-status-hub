@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Settings, Calendar, Save } from "lucide-react";
+import { Clock, Settings, Calendar, Save, Gauge } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,6 +18,8 @@ interface WorkTimeConfig {
   start_time: string;
   end_time: string;
   break_duration: number;
+  daily_production_target: number;
+  efficiency_calculation_method: 'completion' | 'time' | 'capacity' | 'runtime';
 }
 
 const DEFAULT_CONFIG: WorkTimeConfig = {
@@ -25,7 +28,9 @@ const DEFAULT_CONFIG: WorkTimeConfig = {
   overtime_rate: 1.5,
   start_time: '09:00',
   end_time: '18:00',
-  break_duration: 60
+  break_duration: 60,
+  daily_production_target: 5,
+  efficiency_calculation_method: 'completion'
 };
 
 const WEEK_DAYS = [
@@ -198,17 +203,30 @@ export function WorkTimeSettings() {
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="overtime-rate">加班費率倍數</Label>
-              <Input
-                id="overtime-rate"
-                type="number"
-                min="1"
-                max="3"
-                step="0.1"
-                value={config.overtime_rate}
-                onChange={(e) => setConfig(prev => ({ ...prev, overtime_rate: parseFloat(e.target.value) || 1.5 }))}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="overtime-rate">加班費率倍數</Label>
+                <Input
+                  id="overtime-rate"
+                  type="number"
+                  min="1"
+                  max="3"
+                  step="0.1"
+                  value={config.overtime_rate}
+                  onChange={(e) => setConfig(prev => ({ ...prev, overtime_rate: parseFloat(e.target.value) || 1.5 }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="daily-target">每日生產目標</Label>
+                <Input
+                  id="daily-target"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={config.daily_production_target}
+                  onChange={(e) => setConfig(prev => ({ ...prev, daily_production_target: parseInt(e.target.value) || 5 }))}
+                />
+              </div>
             </div>
 
             <Separator />
@@ -219,6 +237,55 @@ export function WorkTimeSettings() {
                 <p>實際工作時間: {calculateOvertimeThreshold()} 小時</p>
                 <p>加班門檻: 超過 {config.daily_work_hours} 小時</p>
                 <p>加班費率: {config.overtime_rate}x</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 效率計算設定 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gauge className="h-5 w-5" />
+              效率計算方式
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="efficiency-method">選擇效率計算方式</Label>
+              <Select
+                value={config.efficiency_calculation_method}
+                onValueChange={(value: 'completion' | 'time' | 'capacity' | 'runtime') => 
+                  setConfig(prev => ({ ...prev, efficiency_calculation_method: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇計算方式" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completion">完成率效率</SelectItem>
+                  <SelectItem value="time">時間效率</SelectItem>
+                  <SelectItem value="capacity">產能效率</SelectItem>
+                  <SelectItem value="runtime">運行時間效率</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="bg-muted/20 p-4 rounded-lg">
+              <h4 className="font-medium mb-2">效率計算說明</h4>
+              <div className="space-y-2 text-sm">
+                {config.efficiency_calculation_method === 'completion' && (
+                  <p>基於測試項目完成率計算，完成項目數 ÷ 總項目數</p>
+                )}
+                {config.efficiency_calculation_method === 'time' && (
+                  <p>基於預估時間與實際時間比較，預估時間 ÷ 實際時間</p>
+                )}
+                {config.efficiency_calculation_method === 'capacity' && (
+                  <p>基於每日產能目標達成率，完成系統數 ÷ 目標系統數</p>
+                )}
+                {config.efficiency_calculation_method === 'runtime' && (
+                  <p>基於機台實際運行時間，工作時間 ÷ 總時間</p>
+                )}
               </div>
             </div>
           </CardContent>
