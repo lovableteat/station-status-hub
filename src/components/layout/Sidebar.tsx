@@ -123,7 +123,15 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
                     (isCompact && !isMobile) ? "px-2" : "px-3",
                     isActive && "bg-primary text-primary-foreground shadow-station"
                   )}
-                  onClick={() => onModuleChange(item.id)}
+                  onClick={() => {
+                    if (item.id === 'gantt') {
+                      // Navigate to the unified gantt chart page
+                      window.history.pushState({}, '', '/gantt');
+                      window.location.reload();
+                    } else {
+                      onModuleChange(item.id);
+                    }
+                  }}
                 >
                   <Icon className={cn("h-4 w-4 flex-shrink-0", (isCompact && !isMobile) ? "mr-0" : "mr-3")} />
                   {(!isCompact || isMobile) && (
