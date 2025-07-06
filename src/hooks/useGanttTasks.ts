@@ -60,10 +60,29 @@ export function useGanttTasks(
         ? new Date(Math.max(...allEndTimes.map(d => d.getTime())))
         : null;
       
-      // Calculate progress percentage
-      const completedItems = systemProgress.filter(p => p.status === 'Done').length;
-      const totalItems = systemProgress.length;
-      const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+      // Calculate progress percentage based on completed stations (25% per station)
+      const stationProgress = new Map();
+      systemProgress.forEach(p => {
+        if (!stationProgress.has(p.station_id)) {
+          stationProgress.set(p.station_id, { total: 0, completed: 0 });
+        }
+        const station = stationProgress.get(p.station_id);
+        station.total += 1;
+        if (p.status === 'Done') {
+          station.completed += 1;
+        }
+      });
+      
+      // Count completed stations (25% each)
+      let completedStations = 0;
+      const totalStations = 4; // Station 0, 1, 2, 3
+      stationProgress.forEach(station => {
+        if (station.total > 0 && station.completed === station.total) {
+          completedStations += 1;
+        }
+      });
+      
+      const progressPercent = Math.round((completedStations / totalStations) * 100);
       
       // Determine status
       let status: GanttTask['status'] = 'not_started';
