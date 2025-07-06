@@ -131,6 +131,10 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
                 <span>{station.ongoing_systems}</span>
               </div>
               <div className="flex justify-between">
+                <span>總計:</span>
+                <span>{station.total_systems}</span>
+              </div>
+              <div className="flex justify-between">
                 <span>效率:</span>
                 <span>{station.efficiency}%</span>
               </div>
