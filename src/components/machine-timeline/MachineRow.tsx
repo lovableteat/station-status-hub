@@ -22,33 +22,59 @@ export function MachineRow({
   onSelect,
   onDetail
 }: MachineRowProps) {
-  const progressBar = useMemo(() => {
+  const timelineBars = useMemo(() => {
     if (!machine.start_time) {
       return null;
     }
 
     const totalDuration = bounds.end.getTime() - bounds.start.getTime();
     const startTime = new Date(machine.start_time);
+    const startPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+    const actualStartPosition = Math.max(0, Math.min(startPosition, 98));
     
-    // Calculate estimated time bar (orange/yellow background)
+    // Calculate estimated bar (background)
+    let estimatedBar = null;
     if (machine.estimated_end_time) {
       const estimatedEndTime = new Date(machine.estimated_end_time);
-      const estimatedStartPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
       const estimatedDuration = estimatedEndTime.getTime() - startTime.getTime();
-      const estimatedWidth = (estimatedDuration / totalDuration) * 100;
+      const estimatedWidth = Math.max((estimatedDuration / totalDuration) * 100, 2);
       
-      const actualEstimatedWidth = Math.max(estimatedWidth, 2);
-      const actualEstimatedStartPosition = Math.max(0, Math.min(estimatedStartPosition, 98));
+      estimatedBar = {
+        left: `${actualStartPosition}%`,
+        width: `${estimatedWidth}%`
+      };
+    }
+
+    // Calculate actual bar (foreground)
+    let actualBar = null;
+    if (machine.status === 'Done' && machine.end_time) {
+      // Completed: show from start to actual end time
+      const endTime = new Date(machine.end_time);
+      const actualDuration = endTime.getTime() - startTime.getTime();
+      const actualWidth = Math.max((actualDuration / totalDuration) * 100, 1);
       
-      return {
-        left: `${actualEstimatedStartPosition}%`,
-        width: `${actualEstimatedWidth}%`,
-        progress: machine.overall_progress,
-        status: machine.status
+      actualBar = {
+        left: `${actualStartPosition}%`,
+        width: `${actualWidth}%`
+      };
+    } else if (machine.status === 'On-going') {
+      // In progress: show from start to current time
+      const currentTime = new Date();
+      const actualDuration = currentTime.getTime() - startTime.getTime();
+      const actualWidth = Math.max((actualDuration / totalDuration) * 100, 1);
+      
+      actualBar = {
+        left: `${actualStartPosition}%`,
+        width: `${actualWidth}%`
       };
     }
     
-    return null;
+    return {
+      estimated: estimatedBar,
+      actual: actualBar,
+      progress: machine.overall_progress,
+      status: machine.status
+    };
   }, [machine, bounds]);
 
   const getStatusColor = (status: string) => {
@@ -83,40 +109,62 @@ export function MachineRow({
         )}
         onClick={onSelect}
       >
-        {/* Dual-layer progress bar */}
-        {progressBar && (
+        {/* Dual-layer Gantt chart */}
+        {timelineBars && (
           <div className="relative h-full">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "relative h-6 bg-amber-100 border border-amber-200 transition-all cursor-pointer hover:bg-amber-50 overflow-hidden",
-                    isSelected && "ring-1 ring-amber-400"
+                <div className="relative">
+                  {/* Estimated time bar (background layer) */}
+                  {timelineBars.estimated && (
+                    <div
+                      className={cn(
+                        "absolute h-6 bg-amber-100 border border-amber-200 transition-all",
+                        isSelected && "ring-1 ring-amber-400"
+                      )}
+                      style={{
+                        left: timelineBars.estimated.left,
+                        width: timelineBars.estimated.width,
+                        top: '20px',
+                        zIndex: 5
+                      }}
+                    />
                   )}
-                  style={{
-                    position: 'absolute',
-                    left: progressBar.left,
-                    width: progressBar.width,
-                    top: '20px',
-                    zIndex: 10
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDetail?.();
-                  }}
-                >
-                  {/* Progress fill */}
-                  <div 
-                    className="h-full bg-amber-600 transition-all duration-300"
-                    style={{ width: `${progressBar.progress}%` }}
-                  />
                   
-                  {/* Progress text */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-medium text-amber-800">
-                      {progressBar.progress}%
-                    </span>
-                  </div>
+                  {/* Actual time bar (foreground layer) */}
+                  {timelineBars.actual && (
+                    <div
+                      className="absolute h-6 bg-amber-600 cursor-pointer hover:bg-amber-700 transition-all"
+                      style={{
+                        left: timelineBars.actual.left,
+                        width: timelineBars.actual.width,
+                        top: '20px',
+                        zIndex: 10
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDetail?.();
+                      }}
+                    />
+                  )}
+                  
+                  {/* Progress text - positioned over the longest bar */}
+                  {(timelineBars.estimated || timelineBars.actual) && (
+                    <div 
+                      className="absolute flex items-center justify-center pointer-events-none"
+                      style={{
+                        left: timelineBars.estimated?.left || timelineBars.actual?.left,
+                        width: timelineBars.estimated?.width || timelineBars.actual?.width,
+                        height: '24px',
+                        top: '20px',
+                        zIndex: 15
+                      }}
+                    >
+                      <span className="text-xs font-medium text-amber-800 drop-shadow-sm">
+                        {timelineBars.progress}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-sm">
@@ -144,7 +192,7 @@ export function MachineRow({
         )}
 
         {/* No data indicator */}
-        {!progressBar && (
+        {!timelineBars && (
           <div className="flex items-center justify-center h-full">
             <Badge variant="outline" className="text-xs">
               尚未開始
