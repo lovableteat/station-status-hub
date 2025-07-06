@@ -6,6 +6,8 @@ import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface TestSystem {
   id: string;
@@ -82,6 +84,7 @@ export function TestProgressTable({
   onSystemUpdate,
 }: TestProgressTableProps) {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   
   // Filter stations to only show Station 0-3
   const filteredStations = stations.filter(station => 
@@ -102,6 +105,67 @@ export function TestProgressTable({
       });
     } catch {
       return '-';
+    }
+  };
+
+  // Helper function to format datetime for input field
+  const formatDateTimeLocal = (timeStr?: string) => {
+    if (!timeStr) return '';
+    try {
+      const date = new Date(timeStr);
+      // Format as YYYY-MM-DDTHH:MM for datetime-local input
+      return date.toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
+
+  // Function to update system start/end times
+  const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
+    try {
+      // Get all progress records for this system
+      const systemProgressRecords = progress.filter(p => p.system_id === systemId);
+      
+      if (systemProgressRecords.length === 0) {
+        toast({
+          title: "無法更新",
+          description: "該系統尚未有任何測試進度記錄",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Update all progress records for this system
+      const updates = systemProgressRecords.map(async (record) => {
+        const updateData: any = {};
+        if (timeType === 'start') {
+          updateData.started_at = newTime;
+        } else {
+          updateData.completed_at = newTime;
+        }
+
+        const { error } = await supabase
+          .from('test_progress')
+          .update(updateData)
+          .eq('id', record.id);
+
+        if (error) throw error;
+      });
+
+      await Promise.all(updates);
+      await onSystemUpdate(); // Reload data
+
+      toast({
+        title: "更新成功",
+        description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新`,
+      });
+    } catch (error) {
+      console.error('Error updating system time:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新系統時間",
+        variant: "destructive"
+      });
     }
   };
 
@@ -177,80 +241,61 @@ export function TestProgressTable({
                 {/* System-wide Start and End Time for Mobile */}
                 <div className="flex items-center justify-between border-t pt-2 mt-2">
                   <span className="text-sm text-muted-foreground">系統開始時間:</span>
-                  <div 
-                    className="cursor-pointer hover:bg-muted/50 p-1 rounded text-sm font-medium"
-                    onClick={() => {
+                  <input
+                    type="datetime-local"
+                    value={(() => {
                       const allProgressRecords = filteredStations.flatMap(station => {
                         const stationItems = items.filter(item => item.station_id === station.id);
                         return stationItems.map(item => 
                           getProgressForSystemItem(system.id, station.id, item.id)
                         ).filter(Boolean);
                       });
-                      
                       const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
                       const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      
-                      const newStartTime = prompt('設定系統開始時間 (YYYY-MM-DD HH:MM)', 
-                        systemStartTime ? formatTime(systemStartTime).replace(/\//g, '-') : '');
-                      if (newStartTime) {
-                        console.log('Update system start time for', system.system_name, newStartTime);
-                      }
-                    }}
-                    title="點擊編輯系統開始時間"
-                  >
-                    {(() => {
-                      const allProgressRecords = filteredStations.flatMap(station => {
-                        const stationItems = items.filter(item => item.station_id === station.id);
-                        return stationItems.map(item => 
-                          getProgressForSystemItem(system.id, station.id, item.id)
-                        ).filter(Boolean);
-                      });
-                      
-                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      
-                      return systemStartTime ? formatTime(systemStartTime) : '點擊設定';
+                      return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
                     })()}
-                  </div>
+                    onChange={async (e) => {
+                      const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                      await updateSystemTime(system.id, 'start', newStartTime);
+                    }}
+                    className="text-sm p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                    title="設定系統開始時間"
+                  />
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">系統完成時間:</span>
-                  <div 
-                    className="cursor-pointer hover:bg-muted/50 p-1 rounded text-sm font-medium"
-                    onClick={() => {
+                  <input
+                    type="datetime-local"
+                    value={(() => {
                       const allProgressRecords = filteredStations.flatMap(station => {
                         const stationItems = items.filter(item => item.station_id === station.id);
                         return stationItems.map(item => 
                           getProgressForSystemItem(system.id, station.id, item.id)
                         ).filter(Boolean);
                       });
-                      
                       const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
                       const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                      
-                      const newEndTime = prompt('設定系統完成時間 (YYYY-MM-DD HH:MM)', 
-                        systemEndTime ? formatTime(systemEndTime).replace(/\//g, '-') : '');
-                      if (newEndTime) {
-                        console.log('Update system end time for', system.system_name, newEndTime);
-                      }
-                    }}
-                    title="點擊編輯系統完成時間"
-                  >
-                    {(() => {
-                      const allProgressRecords = filteredStations.flatMap(station => {
-                        const stationItems = items.filter(item => item.station_id === station.id);
-                        return stationItems.map(item => 
-                          getProgressForSystemItem(system.id, station.id, item.id)
-                        ).filter(Boolean);
-                      });
-                      
-                      const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-                      const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                      
-                      return systemEndTime ? formatTime(systemEndTime) : '點擊設定';
+                      return systemEndTime ? formatDateTimeLocal(systemEndTime) : '';
                     })()}
-                  </div>
+                    min={(() => {
+                      const allProgressRecords = filteredStations.flatMap(station => {
+                        const stationItems = items.filter(item => item.station_id === station.id);
+                        return stationItems.map(item => 
+                          getProgressForSystemItem(system.id, station.id, item.id)
+                        ).filter(Boolean);
+                      });
+                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                      return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
+                    })()}
+                    onChange={async (e) => {
+                      const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                      await updateSystemTime(system.id, 'end', newEndTime);
+                    }}
+                    className="text-sm p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                    title="設定系統完成時間"
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -475,38 +520,32 @@ export function TestProgressTable({
                   
                   {/* System Start Time Column - Editable */}
                   <div className="text-xs text-center py-2">
-                    <div 
-                      className="cursor-pointer hover:bg-muted/50 p-1 rounded text-center"
-                      onClick={() => {
-                        const newStartTime = prompt('設定開始時間 (YYYY-MM-DD HH:MM)', 
-                          systemStartTime ? formatTime(systemStartTime).replace(/\//g, '-') : '');
-                        if (newStartTime) {
-                          // Here you would implement the logic to update the start time
-                          console.log('Update start time for', system.system_name, newStartTime);
-                        }
+                    <input
+                      type="datetime-local"
+                      value={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
+                      onChange={async (e) => {
+                        const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                        await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      title="點擊編輯開始時間"
-                    >
-                      {systemStartTime ? formatTime(systemStartTime) : '點擊設定'}
-                    </div>
+                      className="w-full text-xs p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                      title="設定系統開始時間"
+                    />
                   </div>
                   
                   {/* System End Time Column - Editable */}
                   <div className="text-xs text-center py-2">
-                    <div 
-                      className="cursor-pointer hover:bg-muted/50 p-1 rounded text-center"
-                      onClick={() => {
-                        const newEndTime = prompt('設定完成時間 (YYYY-MM-DD HH:MM)', 
-                          systemEndTime ? formatTime(systemEndTime).replace(/\//g, '-') : '');
-                        if (newEndTime) {
-                          // Here you would implement the logic to update the end time
-                          console.log('Update end time for', system.system_name, newEndTime);
-                        }
+                    <input
+                      type="datetime-local"
+                      value={systemEndTime ? formatDateTimeLocal(systemEndTime) : ''}
+                      min={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
+                      onChange={async (e) => {
+                        const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                        await updateSystemTime(system.id, 'end', newEndTime);
                       }}
-                      title="點擊編輯完成時間"
-                    >
-                      {systemEndTime ? formatTime(systemEndTime) : '點擊設定'}
-                    </div>
+                      className="w-full text-xs p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                      title="設定系統完成時間"
+                      disabled={!systemStartTime}
+                    />
                   </div>
                 </div>
               );
