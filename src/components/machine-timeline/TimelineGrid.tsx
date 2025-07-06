@@ -23,8 +23,8 @@ export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
         case 'day':
           markers.push({
             date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'short', 
+            label: current.toLocaleDateString('en-US', { 
+              month: 'numeric', 
               day: 'numeric' 
             }),
             isMain: current.getHours() === 0
@@ -35,8 +35,8 @@ export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
         case 'week':
           markers.push({
             date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'short', 
+            label: current.toLocaleDateString('en-US', { 
+              month: 'numeric', 
               day: 'numeric' 
             }),
             isMain: current.getDay() === 1 // Monday
@@ -47,8 +47,8 @@ export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
         case 'month':
           markers.push({
             date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'short', 
+            label: current.toLocaleDateString('en-US', { 
+              month: 'numeric', 
               day: 'numeric' 
             }),
             isMain: current.getDate() === 1
