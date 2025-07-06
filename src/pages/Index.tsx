@@ -67,7 +67,7 @@ const Index = () => {
       case "tools":
         return <ToolsManagement />;
       case "users":
-        return <UserManagement />;
+        return <AdminPanel />;
       default:
         return <Dashboard onNavigate={handleNavigation} />;
     }
