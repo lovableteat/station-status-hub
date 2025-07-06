@@ -1492,9 +1492,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      authenticate_user: {
+        Args: { username_input: string; password_input: string }
+        Returns: {
+          user_id: string
+          username: string
+          role: string
+          success: boolean
+        }[]
+      }
       calculate_daily_production_stats: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      hash_password: {
+        Args: { password: string }
+        Returns: string
+      }
+      verify_password: {
+        Args: { password: string; hash: string }
+        Returns: boolean
       }
     }
     Enums: {
