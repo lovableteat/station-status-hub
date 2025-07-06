@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,16 +7,47 @@ import { useMachineTimelineData } from "@/hooks/useMachineTimelineData";
 import { TimelineGrid } from "./TimelineGrid";
 import { TimelineControls } from "./TimelineControls";
 import { MachineRow } from "./MachineRow";
+import { MachineDetailDialog } from "./MachineDetailDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 export type TimelineViewType = 'day' | 'week' | 'month';
 
 export function MachineTimeline() {
-  const { timelineData, timelineBounds, isLoading } = useMachineTimelineData();
   const [viewType, setViewType] = useState<TimelineViewType>('week');
   const [selectedMachine, setSelectedMachine] = useState<string | null>(null);
+  const [detailMachine, setDetailMachine] = useState<string | null>(null);
+  const [currentTimeRange, setCurrentTimeRange] = useState<{ start: Date; end: Date } | undefined>();
   const isMobile = useIsMobile();
+
+  const { timelineData, timelineBounds, isLoading } = useMachineTimelineData(currentTimeRange);
+
+  const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
+    const now = new Date();
+    
+    if (direction === 'today') {
+      setCurrentTimeRange(undefined);
+      return;
+    }
+
+    const currentBounds = currentTimeRange || timelineBounds;
+    const duration = currentBounds.end.getTime() - currentBounds.start.getTime();
+    
+    let newStart: Date;
+    let newEnd: Date;
+
+    if (direction === 'prev') {
+      newStart = new Date(currentBounds.start.getTime() - duration);
+      newEnd = new Date(currentBounds.end.getTime() - duration);
+    } else {
+      newStart = new Date(currentBounds.start.getTime() + duration);
+      newEnd = new Date(currentBounds.end.getTime() + duration);
+    }
+
+    setCurrentTimeRange({ start: newStart, end: newEnd });
+  };
+
+  const selectedMachineData = timelineData.find(m => m.id === detailMachine);
 
   if (isLoading) {
     return (
@@ -56,6 +87,7 @@ export function MachineTimeline() {
           viewType={viewType} 
           onViewTypeChange={setViewType}
           timelineBounds={timelineBounds}
+          onNavigate={handleNavigate}
         />
       </div>
 
@@ -158,6 +190,7 @@ export function MachineTimeline() {
                           onSelect={() => setSelectedMachine(
                             selectedMachine === machine.id ? null : machine.id
                           )}
+                          onDetail={() => setDetailMachine(machine.id)}
                         />
                       ))}
                     </div>
@@ -168,6 +201,12 @@ export function MachineTimeline() {
           )}
         </CardContent>
       </Card>
+
+      <MachineDetailDialog
+        machine={selectedMachineData}
+        open={!!detailMachine}
+        onOpenChange={(open) => !open && setDetailMachine(null)}
+      />
     </div>
   );
 }

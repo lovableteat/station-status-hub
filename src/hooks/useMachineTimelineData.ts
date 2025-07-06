@@ -20,7 +20,7 @@ export interface MachineTimelineData {
   }>;
 }
 
-export function useMachineTimelineData() {
+export function useMachineTimelineData(customTimeRange?: { start: Date; end: Date }) {
   const { systems, stations, testItems, progress, isLoading } = useUnifiedData();
 
   const timelineData = useMemo(() => {
@@ -89,13 +89,22 @@ export function useMachineTimelineData() {
 
   // Calculate timeline bounds
   const timelineBounds = useMemo(() => {
+    if (customTimeRange) {
+      return customTimeRange;
+    }
+
     const allTimes = timelineData.flatMap(machine => [
       machine.start_time,
       machine.end_time
     ]).filter(Boolean);
 
     if (allTimes.length === 0) {
-      return { start: new Date(), end: new Date() };
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      const end = new Date(now);
+      end.setDate(now.getDate() + 7);
+      return { start, end };
     }
 
     const sortedTimes = allTimes.sort();
@@ -103,7 +112,7 @@ export function useMachineTimelineData() {
       start: new Date(sortedTimes[0]),
       end: new Date(sortedTimes[sortedTimes.length - 1])
     };
-  }, [timelineData]);
+  }, [timelineData, customTimeRange]);
 
   return {
     timelineData,

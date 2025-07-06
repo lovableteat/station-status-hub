@@ -11,6 +11,7 @@ interface MachineRowProps {
   bounds: { start: Date; end: Date };
   isSelected: boolean;
   onSelect: () => void;
+  onDetail?: () => void;
 }
 
 export function MachineRow({ 
@@ -18,7 +19,8 @@ export function MachineRow({
   viewType, 
   bounds, 
   isSelected, 
-  onSelect 
+  onSelect,
+  onDetail
 }: MachineRowProps) {
   const progressBar = useMemo(() => {
     if (!machine.start_time) {
@@ -83,7 +85,7 @@ export function MachineRow({
               <TooltipTrigger asChild>
                 <div
                   className={cn(
-                    "h-8 rounded-md border-2 border-background shadow-sm transition-all",
+                    "h-8 rounded-md border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105",
                     getStatusColor(progressBar.status),
                     isSelected && "ring-2 ring-primary ring-offset-2"
                   )}
@@ -92,6 +94,10 @@ export function MachineRow({
                     left: progressBar.left,
                     width: progressBar.width,
                     top: '16px'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDetail?.();
                   }}
                 >
                   <div className="flex items-center justify-center h-full px-2">
