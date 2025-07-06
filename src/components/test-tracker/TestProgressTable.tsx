@@ -185,20 +185,6 @@ export function TestProgressTable({
                     </button>
                   </CardTitle>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.pathname = '/gantt';
-                        currentUrl.searchParams.set('system', system.system_name);
-                        window.history.pushState({}, '', currentUrl.toString());
-                        window.location.reload();
-                      }}
-                      className="h-8 px-3 text-xs"
-                    >
-                      查看排程
-                    </Button>
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
@@ -228,64 +214,90 @@ export function TestProgressTable({
                   </Badge>
                 </div>
                 
-                {/* System-wide Start and End Time for Mobile */}
+                {/* System-wide Start and End Time for Mobile - Enhanced UX */}
                 <div className="flex items-center justify-between border-t pt-2 mt-2">
-                  <span className="text-sm text-muted-foreground">系統開始時間:</span>
-                  <input
-                    type="datetime-local"
-                    value={(() => {
-                      const allProgressRecords = filteredStations.flatMap(station => {
-                        const stationItems = items.filter(item => item.station_id === station.id);
-                        return stationItems.map(item => 
-                          getProgressForSystemItem(system.id, station.id, item.id)
-                        ).filter(Boolean);
-                      });
-                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
-                    })()}
-                    onChange={async (e) => {
-                      const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
-                      await updateSystemTime(system.id, 'start', newStartTime);
-                    }}
-                    className="text-sm p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
-                    title="設定系統開始時間"
-                  />
+                  <span className="text-sm text-muted-foreground font-medium">系統開始時間:</span>
+                  <div className="flex flex-col items-end">
+                    <input
+                      type="datetime-local"
+                      value={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                        return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
+                      })()}
+                      onChange={async (e) => {
+                        const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                        await updateSystemTime(system.id, 'start', newStartTime);
+                      }}
+                      className="text-sm p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors w-44"
+                      placeholder="點擊設定時間"
+                      title="點擊編輯系統開始時間"
+                    />
+                  </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">系統完成時間:</span>
-                  <input
-                    type="datetime-local"
-                    value={(() => {
-                      const allProgressRecords = filteredStations.flatMap(station => {
-                        const stationItems = items.filter(item => item.station_id === station.id);
-                        return stationItems.map(item => 
-                          getProgressForSystemItem(system.id, station.id, item.id)
-                        ).filter(Boolean);
-                      });
-                      const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-                      const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                      return systemEndTime ? formatDateTimeLocal(systemEndTime) : '';
-                    })()}
-                    min={(() => {
-                      const allProgressRecords = filteredStations.flatMap(station => {
-                        const stationItems = items.filter(item => item.station_id === station.id);
-                        return stationItems.map(item => 
-                          getProgressForSystemItem(system.id, station.id, item.id)
-                        ).filter(Boolean);
-                      });
-                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
-                    })()}
-                    onChange={async (e) => {
-                      const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
-                      await updateSystemTime(system.id, 'end', newEndTime);
-                    }}
-                    className="text-sm p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
-                    title="設定系統完成時間"
-                  />
+                  <span className="text-sm text-muted-foreground font-medium">系統完成時間:</span>
+                  <div className="flex flex-col items-end">
+                    <input
+                      type="datetime-local"
+                      value={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                        const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                        return systemEndTime ? formatDateTimeLocal(systemEndTime) : '';
+                      })()}
+                      min={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                        return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
+                      })()}
+                      onChange={async (e) => {
+                        const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                        await updateSystemTime(system.id, 'end', newEndTime);
+                      }}
+                      className="text-sm p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-44"
+                      placeholder="點擊設定時間"
+                      title={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        const hasStartTime = allStartTimes.length > 0;
+                        return hasStartTime ? "點擊編輯系統完成時間" : "請先設定開始時間";
+                      })()}
+                      disabled={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        return allStartTimes.length === 0;
+                      })()}
+                    />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -430,20 +442,6 @@ export function TestProgressTable({
                     >
                       {system.system_name}
                     </button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.pathname = '/gantt';
-                        currentUrl.searchParams.set('system', system.system_name);
-                        window.history.pushState({}, '', currentUrl.toString());
-                        window.location.reload();
-                      }}
-                      className="h-6 px-2 text-xs"
-                    >
-                      排程
-                    </Button>
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
@@ -508,8 +506,9 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  {/* System Start Time Column - Editable */}
+                  {/* System Start Time Column - Editable with better UX */}
                   <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">開始時間</label>
                     <input
                       type="datetime-local"
                       value={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
@@ -517,13 +516,15 @@ export function TestProgressTable({
                         const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20"
-                      title="設定系統開始時間"
+                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors cursor-pointer"
+                      placeholder="設定開始時間"
+                      title="點擊編輯系統開始時間"
                     />
                   </div>
                   
-                  {/* System End Time Column - Editable */}
+                  {/* System End Time Column - Editable with better UX */}
                   <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">完成時間</label>
                     <input
                       type="datetime-local"
                       value={systemEndTime ? formatDateTimeLocal(systemEndTime) : ''}
@@ -532,8 +533,9 @@ export function TestProgressTable({
                         const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
-                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
-                      title="設定系統完成時間"
+                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      placeholder="設定完成時間"
+                      title={!systemStartTime ? "請先設定開始時間" : "點擊編輯系統完成時間"}
                       disabled={!systemStartTime}
                     />
                   </div>

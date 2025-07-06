@@ -27,7 +27,6 @@ const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
   { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
   { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
-  { id: "gantt", label: "機台排程甘特圖", icon: Workflow, description: "機台工單排程" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
@@ -124,13 +123,7 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
                     isActive && "bg-primary text-primary-foreground shadow-station"
                   )}
                   onClick={() => {
-                    if (item.id === 'gantt') {
-                      // Navigate to the unified gantt chart page
-                      window.history.pushState({}, '', '/gantt');
-                      window.location.reload();
-                    } else {
-                      onModuleChange(item.id);
-                    }
+                    onModuleChange(item.id);
                   }}
                 >
                   <Icon className={cn("h-4 w-4 flex-shrink-0", (isCompact && !isMobile) ? "mr-0" : "mr-3")} />
