@@ -42,11 +42,11 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
 
-  // Convert station data to machine schedules
+  // Convert station data to machine schedules - 使用 stations 數據來確保機台名稱正確顯示
   const machineSchedules = useMemo(() => {
-    const schedules: MachineSchedule[] = stationStatuses.map((station) => {
+    const schedules: MachineSchedule[] = stations.map((station) => {
       // Find systems assigned to this station
-      const assignedSystems = systems.filter(s => s.current_station === station.name);
+      const assignedSystems = systems.filter(s => s.current_station === station.station_name);
       
       const workOrders: MachineWorkOrder[] = assignedSystems.map((system, index) => {
         const startTime = new Date();
@@ -73,17 +73,20 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
         };
       });
 
+      // 從 stationStatuses 獲取效率數據
+      const stationStatus = stationStatuses.find(s => s.name === station.station_name);
+
       return {
         machineId: station.id,
-        machineName: station.name,
-        utilization: station.efficiency,
+        machineName: station.station_name, // 直接使用 station_name
+        utilization: stationStatus?.efficiency || 0,
         workOrders,
-        productionLine: station.name.includes('TEAM') ? station.name.split(' - ')[1] : 'DEFAULT'
+        productionLine: station.station_name.includes('TEAM') ? station.station_name.split(' - ')[1] : 'DEFAULT'
       };
     });
 
     return schedules;
-  }, [stationStatuses, systems]);
+  }, [stations, systems, stationStatuses]);
 
   // Group machines by production line
   const groupedMachines = useMemo(() => {
