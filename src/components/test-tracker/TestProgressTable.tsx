@@ -52,6 +52,8 @@ interface TestProgressTableProps {
     status: string;
     progress_percent: number;
     notes: string;
+    started_at?: string;
+    completed_at?: string;
   };
   setEditValues: (values: any) => void;
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
@@ -84,6 +86,23 @@ export function TestProgressTable({
   const filteredStations = stations.filter(station => 
     station.station_order >= 0 && station.station_order <= 3
   );
+
+  // Helper function to format time
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '-';
+    }
+  };
 
   // Mobile card view
   if (isMobile) {
@@ -173,12 +192,39 @@ export function TestProgressTable({
                           stationId={station.id}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium">進度: {overallPercent}%</span>
-                          <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
+                       <div className="space-y-2">
+                         <div className="flex items-center justify-between text-sm">
+                           <span className="font-medium">進度: {overallPercent}%</span>
+                           <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
                         </div>
                         <Progress value={overallPercent} className="h-3" />
+                        
+                        {/* Show time info for Station 3 in mobile view */}
+                        {station.station_order === 3 && (() => {
+                          const station3Items = items.filter(item => item.station_id === station.id);
+                          const station3ProgressRecords = station3Items.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                          
+                          const startTimes = station3ProgressRecords.map(p => p?.started_at).filter(Boolean);
+                          const completionTimes = station3ProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                          
+                          const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                          const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+                          
+                          return (
+                            <div className="mt-3 pt-3 border-t space-y-2">
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">開始時間:</span>
+                                <span className="font-medium">{formatTime(startTime)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">完成時間:</span>
+                                <span className="font-medium">{formatTime(completionTime)}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -191,6 +237,14 @@ export function TestProgressTable({
     );
   }
 
+  // Check if Station 3 exists
+  const station3 = filteredStations.find(station => station.station_order === 3);
+  const hasStation3 = !!station3;
+
+  // Calculate grid columns - add 2 extra columns for Station 3 times
+  const baseColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)`;
+  const gridColumns = hasStation3 ? `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr) 1.5fr 1.5fr` : baseColumns;
+
   // Desktop table view
   return (
     <Card>
@@ -199,9 +253,9 @@ export function TestProgressTable({
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <div className="min-w-[1400px]">
+          <div className="min-w-[1600px]">
             {/* Header Row */}
-            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)` }}>
+            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">負責人</div>
               <div className="font-semibold">當前站點</div>
@@ -210,94 +264,135 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
+              {hasStation3 && (
+                <>
+                  <div className="font-semibold text-center text-sm">開始時間</div>
+                  <div className="font-semibold text-center text-sm">完成時間</div>
+                </>
+              )}
             </div>
 
             {/* Data Rows */}
-            {filteredSystems.map(system => (
-              <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)` }}>
-                <div className="flex items-center gap-2">
-                  <button 
-                    className="font-medium text-primary hover:underline cursor-pointer text-left"
-                    onClick={() => {
-                      // Navigate to production monitor with focus on specific system
-                      const currentUrl = new URL(window.location.href);
-                      currentUrl.searchParams.set('system', system.system_name);
-                      window.history.pushState({}, '', currentUrl.toString());
-                      
-                      // Dispatch custom event to trigger navigation
-                      const event = new CustomEvent('navigate', { 
-                        detail: { module: 'monitor', params: { system: system.system_name } } 
-                      });
-                      window.dispatchEvent(event);
-                    }}
-                  >
-                    {system.system_name}
-                  </button>
-                  <SystemEditDialog
-                    systemId={system.id}
-                    systemName={system.system_name}
-                    assignedEngineer={system.assigned_engineer}
-                    onUpdate={onSystemUpdate}
-                  />
-                </div>
-                <div>
-                  <SystemEditDialog
-                    systemId={system.id}
-                    systemName={system.system_name}
-                    assignedEngineer={system.assigned_engineer}
-                    onUpdate={onSystemUpdate}
-                    variant="button"
-                  />
-                </div>
-                <div>
-                  <Badge 
-                    variant="secondary" 
-                    className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium"
-                  >
-                    {system.current_station?.split(' - ')[0] || system.current_station}
-                  </Badge>
-                </div>
+            {filteredSystems.map(system => {
+              // Get Station 3 progress data for time display
+              const station3Progress = hasStation3 ? (() => {
+                const station3Items = items.filter(item => item.station_id === station3!.id);
+                const station3ProgressRecords = station3Items.map(item => 
+                  getProgressForSystemItem(system.id, station3!.id, item.id)
+                ).filter(Boolean);
                 
-                {filteredStations.map(station => {
-                  const stationItems = items.filter(item => item.station_id === station.id);
-                  const completedItems = stationItems.filter(item => {
-                    const prog = getProgressForSystemItem(system.id, station.id, item.id);
-                    return prog?.status === 'Done';
-                  });
-                  const overallPercent = stationItems.length > 0 
-                    ? Math.round((completedItems.length / stationItems.length) * 100) 
-                    : 0;
+                // Find earliest start time and latest completion time
+                const startTimes = station3ProgressRecords.map(p => p?.started_at).filter(Boolean);
+                const completionTimes = station3ProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                
+                return {
+                  startTime: startTimes.length > 0 ? startTimes.sort()[0] : undefined,
+                  completionTime: completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined
+                };
+              })() : null;
 
-                  return (
-                    <div key={station.id}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span>進度: {overallPercent}%</span>
-                          <ProgressEditDialog
-                            systemName={system.system_name}
-                            stationName={station.station_name}
-                            stationItems={stationItems}
-                            progress={progress}
-                            editingProgress={editingProgress}
-                            setEditingProgress={setEditingProgress}
-                            editValues={editValues}
-                            setEditValues={setEditValues}
-                            getProgressForSystemItem={getProgressForSystemItem}
-                            handleEditProgress={handleEditProgress}
-                            handleSaveProgress={handleSaveProgress}
-                            handleDeleteProgress={handleDeleteProgress}
-                            getStatusColor={getStatusColor}
-                            systemId={system.id}
-                            stationId={station.id}
-                          />
+              return (
+                <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      className="font-medium text-primary hover:underline cursor-pointer text-left"
+                      onClick={() => {
+                        // Navigate to production monitor with focus on specific system
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        
+                        // Dispatch custom event to trigger navigation
+                        const event = new CustomEvent('navigate', { 
+                          detail: { module: 'monitor', params: { system: system.system_name } } 
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {system.system_name}
+                    </button>
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                  </div>
+                  <div>
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                      variant="button"
+                    />
+                  </div>
+                  <div>
+                    <Badge 
+                      variant="secondary" 
+                      className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium"
+                    >
+                      {system.current_station?.split(' - ')[0] || system.current_station}
+                    </Badge>
+                  </div>
+                  
+                  {filteredStations.map(station => {
+                    const stationItems = items.filter(item => item.station_id === station.id);
+                    const completedItems = stationItems.filter(item => {
+                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                      return prog?.status === 'Done';
+                    });
+                    const overallPercent = stationItems.length > 0 
+                      ? Math.round((completedItems.length / stationItems.length) * 100) 
+                      : 0;
+
+                    return (
+                      <div key={station.id}>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>進度: {overallPercent}%</span>
+                            <ProgressEditDialog
+                              systemName={system.system_name}
+                              stationName={station.station_name}
+                              stationItems={stationItems}
+                              progress={progress}
+                              editingProgress={editingProgress}
+                              setEditingProgress={setEditingProgress}
+                              editValues={editValues}
+                              setEditValues={setEditValues}
+                              getProgressForSystemItem={getProgressForSystemItem}
+                              handleEditProgress={handleEditProgress}
+                              handleSaveProgress={handleSaveProgress}
+                              handleDeleteProgress={handleDeleteProgress}
+                              getStatusColor={getStatusColor}
+                              systemId={system.id}
+                              stationId={station.id}
+                            />
+                          </div>
+                          <Progress value={overallPercent} className="h-2" />
                         </div>
-                        <Progress value={overallPercent} className="h-2" />
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                    );
+                  })}
+                  
+                  {/* Station 3 Time Columns */}
+                  {hasStation3 && (
+                    <>
+                      <div className="text-xs text-center py-2">
+                        <div className="truncate" title={formatTime(station3Progress?.startTime)}>
+                          {formatTime(station3Progress?.startTime)}
+                        </div>
+                      </div>
+                      <div className="text-xs text-center py-2">
+                        <div className="truncate" title={formatTime(station3Progress?.completionTime)}>
+                          {formatTime(station3Progress?.completionTime)}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </CardContent>
