@@ -90,14 +90,14 @@ export function MachineRow({
               <TooltipTrigger asChild>
                 <div
                   className={cn(
-                    "relative h-8 rounded-md bg-orange-200 border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105 overflow-hidden",
-                    isSelected && "ring-2 ring-primary ring-offset-2"
+                    "relative h-6 bg-amber-100 border border-amber-200 transition-all cursor-pointer hover:bg-amber-50 overflow-hidden",
+                    isSelected && "ring-1 ring-amber-400"
                   )}
                   style={{
                     position: 'absolute',
                     left: progressBar.left,
                     width: progressBar.width,
-                    top: '16px',
+                    top: '20px',
                     zIndex: 10
                   }}
                   onClick={(e) => {
@@ -107,13 +107,13 @@ export function MachineRow({
                 >
                   {/* Progress fill */}
                   <div 
-                    className="h-full bg-orange-400 transition-all duration-300"
+                    className="h-full bg-amber-600 transition-all duration-300"
                     style={{ width: `${progressBar.progress}%` }}
                   />
                   
                   {/* Progress text */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-medium text-orange-900 drop-shadow-sm">
+                    <span className="text-xs font-medium text-amber-800">
                       {progressBar.progress}%
                     </span>
                   </div>
