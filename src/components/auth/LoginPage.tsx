@@ -21,29 +21,36 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
 
     try {
-      // Check against database users
-      const { data, error } = await supabase
-        .from('system_users')
-        .select('*')
-        .eq('username', username)
-        .eq('password_hash', password)
-        .eq('status', 'active')
-        .single();
+      // Use secure authentication function with password hashing
+      const { data, error } = await (supabase as any)
+        .rpc('authenticate_user', {
+          username_input: username,
+          password_input: password
+        });
 
-      if (error || !data) {
+      if (error) {
+        console.error('Authentication error:', error);
+        toast({
+          title: "登入失敗",
+          description: "系統錯誤，請稍後再試",
+          variant: "destructive"
+        });
+      } else if (data && Array.isArray(data) && data.length > 0 && data[0].success) {
+        const user = data[0];
+        onLogin(user.username, user.role);
+        toast({
+          title: "登入成功",
+          description: `歡迎回來，${user.role === 'super_admin' ? '超級管理員' : user.role === 'admin' ? '管理員' : '工程師'}`
+        });
+      } else {
         toast({
           title: "登入失敗",
           description: "帳號或密碼錯誤",
           variant: "destructive"
         });
-      } else {
-        onLogin(username, data.role);
-        toast({
-          title: "登入成功",
-          description: `歡迎回來，${data.role === 'super_admin' ? '超級管理員' : data.role === 'admin' ? '管理員' : '工程師'}`
-        });
       }
     } catch (error) {
+      console.error('Login error:', error);
       toast({
         title: "登入失敗",
         description: "系統錯誤，請稍後再試",
