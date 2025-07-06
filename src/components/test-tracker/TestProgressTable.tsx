@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -218,8 +219,7 @@ export function TestProgressTable({
                 <div className="flex items-center justify-between border-t pt-2 mt-2">
                   <span className="text-sm text-muted-foreground font-medium">系統開始時間:</span>
                   <div className="flex flex-col items-end">
-                    <input
-                      type="datetime-local"
+                    <DateTimePicker
                       value={(() => {
                         const allProgressRecords = filteredStations.flatMap(station => {
                           const stationItems = items.filter(item => item.station_id === station.id);
@@ -228,16 +228,13 @@ export function TestProgressTable({
                           ).filter(Boolean);
                         });
                         const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                        return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
+                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
                       })()}
-                      onChange={async (e) => {
-                        const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                      onChange={async (newStartTime) => {
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      className="text-sm p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors w-44"
-                      placeholder="點擊設定時間"
-                      title="點擊編輯系統開始時間"
+                      placeholder="設定開始時間"
+                      className="w-44"
                     />
                   </div>
                 </div>
@@ -245,8 +242,7 @@ export function TestProgressTable({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground font-medium">系統完成時間:</span>
                   <div className="flex flex-col items-end">
-                    <input
-                      type="datetime-local"
+                    <DateTimePicker
                       value={(() => {
                         const allProgressRecords = filteredStations.flatMap(station => {
                           const stationItems = items.filter(item => item.station_id === station.id);
@@ -255,10 +251,9 @@ export function TestProgressTable({
                           ).filter(Boolean);
                         });
                         const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-                        const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                        return systemEndTime ? formatDateTimeLocal(systemEndTime) : '';
+                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
                       })()}
-                      min={(() => {
+                      minDate={(() => {
                         const allProgressRecords = filteredStations.flatMap(station => {
                           const stationItems = items.filter(item => item.station_id === station.id);
                           return stationItems.map(item => 
@@ -266,26 +261,12 @@ export function TestProgressTable({
                           ).filter(Boolean);
                         });
                         const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                        return systemStartTime ? formatDateTimeLocal(systemStartTime) : '';
+                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
                       })()}
-                      onChange={async (e) => {
-                        const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                      onChange={async (newEndTime) => {
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
-                      className="text-sm p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-44"
-                      placeholder="點擊設定時間"
-                      title={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        const hasStartTime = allStartTimes.length > 0;
-                        return hasStartTime ? "點擊編輯系統完成時間" : "請先設定開始時間";
-                      })()}
+                      placeholder="設定完成時間"
                       disabled={(() => {
                         const allProgressRecords = filteredStations.flatMap(station => {
                           const stationItems = items.filter(item => item.station_id === station.id);
@@ -296,6 +277,7 @@ export function TestProgressTable({
                         const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
                         return allStartTimes.length === 0;
                       })()}
+                      className="w-44"
                     />
                   </div>
                 </div>
@@ -509,34 +491,28 @@ export function TestProgressTable({
                   {/* System Start Time Column - Editable with better UX */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">開始時間</label>
-                    <input
-                      type="datetime-local"
-                      value={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
-                      onChange={async (e) => {
-                        const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                    <DateTimePicker
+                      value={systemStartTime}
+                      onChange={async (newStartTime) => {
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors cursor-pointer"
                       placeholder="設定開始時間"
-                      title="點擊編輯系統開始時間"
+                      className="w-full"
                     />
                   </div>
                   
                   {/* System End Time Column - Editable with better UX */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">完成時間</label>
-                    <input
-                      type="datetime-local"
-                      value={systemEndTime ? formatDateTimeLocal(systemEndTime) : ''}
-                      min={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
-                      onChange={async (e) => {
-                        const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
+                    <DateTimePicker
+                      value={systemEndTime}
+                      minDate={systemStartTime}
+                      onChange={async (newEndTime) => {
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
-                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="設定完成時間"
-                      title={!systemStartTime ? "請先設定開始時間" : "點擊編輯系統完成時間"}
                       disabled={!systemStartTime}
+                      className="w-full"
                     />
                   </div>
                 </div>
