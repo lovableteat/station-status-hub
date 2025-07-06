@@ -107,8 +107,8 @@ export function MachineRow({
                   {timelineBars.estimated && (
                     <div
                       className={cn(
-                        "absolute h-6 bg-amber-100 border border-amber-200 transition-all",
-                        isSelected && "ring-1 ring-amber-400"
+                        "absolute h-6 bg-yellow-100 border border-yellow-200 transition-all",
+                        isSelected && "ring-1 ring-yellow-400"
                       )}
                       style={{
                         left: timelineBars.estimated.left,
@@ -122,7 +122,7 @@ export function MachineRow({
                   {/* Actual time bar (foreground layer) */}
                   {timelineBars.actual && (
                     <div
-                      className="absolute h-6 bg-amber-600 cursor-pointer hover:bg-amber-700 transition-all"
+                      className="absolute h-6 bg-yellow-600 cursor-pointer hover:bg-yellow-700 transition-all"
                       style={{
                         left: timelineBars.actual.left,
                         width: timelineBars.actual.width,
@@ -148,7 +148,7 @@ export function MachineRow({
                         zIndex: 15
                       }}
                     >
-                      <span className="text-xs font-medium text-amber-800 drop-shadow-sm">
+                      <span className="text-xs font-medium text-yellow-800 drop-shadow-sm">
                         {timelineBars.progress}%
                       </span>
                     </div>
