@@ -35,9 +35,15 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
         status: editValues.status
       };
 
-      // Only update password if provided
+      // Only update password if provided - use secure hashing
       if (editValues.password) {
-        updateData.password_hash = editValues.password;
+        const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
+          password: editValues.password
+        });
+        if (hashError) {
+          throw new Error('Failed to hash password');
+        }
+        updateData.password_hash = hashedPassword;
       }
 
       const { error } = await supabase
