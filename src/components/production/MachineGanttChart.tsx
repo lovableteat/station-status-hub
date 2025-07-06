@@ -92,26 +92,36 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const machineSchedules = useMemo(() => {
     if (!stations.length || !systems.length) return [];
 
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
     const schedules: MachineSchedule[] = stations.map((station) => {
       // 獲取該機台的所有工單
-      const systemsForStation = systems.map(system => {
+      const systemsForStation = systems.map((system, systemIndex) => {
         const systemProgress = progress.filter(p => 
           p.system_id === system.id && p.station_id === station.id
         );
         
-        // 如果沒有工作項目，跳過
-        if (systemProgress.length === 0) return null;
+        // 即使沒有進度記錄，也要為每個系統創建工單
+        const totalItems = Math.max(systemProgress.length, 1); // 至少1個項目
         
         // 計算進度統計
         const completedItems = systemProgress.filter(p => p.status === 'Done').length;
         const inProgressItems = systemProgress.filter(p => p.status === 'In Progress').length;
-        const totalItems = systemProgress.length;
         const stationProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
         
-        // 計算實際時間
+        // 改進時間計算邏輯 - 為每個系統分配不同的時間段
         let actualStartTime: Date | undefined;
         let actualEndTime: Date | undefined;
-        let estimatedStartTime = new Date();
+        
+        // 計算預估時間 - 基於機台順序和系統索引
+        const baseStartTime = new Date(today);
+        const stationDelayHours = station.station_order * 24; // 每個機台延遲1天
+        const systemDelayHours = systemIndex * (station.estimated_hours || 8); // 每個系統按預估時間間隔
+        
+        baseStartTime.setHours(baseStartTime.getHours() + stationDelayHours + systemDelayHours);
+        let estimatedStartTime = new Date(baseStartTime);
         let estimatedEndTime = new Date(estimatedStartTime.getTime() + (station.estimated_hours || 8) * 60 * 60 * 1000);
         
         // 獲取實際開始和結束時間
@@ -138,16 +148,21 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
           ? (actualEndTime.getTime() - actualStartTime.getTime()) / (1000 * 60 * 60)
           : undefined;
         
-        // 判斷狀態
+        // 改進狀態判斷邏輯
         let status: WorkOrderStatus = 'not_started';
-        const now = new Date();
         
         if (stationProgress === 100) {
           status = 'completed';
         } else if (stationProgress > 0) {
+          // 有部分進度 - 判斷是否延遲
           status = now > estimatedEndTime ? 'delayed' : 'in_progress';
-        } else if (estimatedStartTime <= now) {
-          status = 'delayed';
+        } else {
+          // 沒有進度 - 判斷是否應該開始
+          if (now >= estimatedStartTime) {
+            status = now > estimatedEndTime ? 'delayed' : 'not_started';
+          } else {
+            status = 'not_started';
+          }
         }
         
         // 判斷優先度
@@ -180,7 +195,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
           notes: `型號: ${system.model || 'N/A'} | 序號: ${system.serial_number || 'N/A'}`,
           isOverdue
         };
-      }).filter(Boolean) as MachineWorkOrder[];
+      }) as MachineWorkOrder[];
       
       // 計算機台統計資料
       const stationStatus = stationStatuses.find(s => s.name === station.station_name);
@@ -336,7 +351,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
     if (orderDuration <= 0) return null;
     
     const leftPercent = (orderStart / totalDuration) * 100;
-    const widthPercent = Math.max((orderDuration / totalDuration) * 100, 1); // 最小寬度 1%
+    const widthPercent = Math.max((orderDuration / totalDuration) * 100, 2); // 最小寬度 2%
     
     return (
       <TooltipProvider key={workOrder.id}>
