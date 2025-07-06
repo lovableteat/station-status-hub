@@ -4,9 +4,10 @@ import { MachineTimelineData } from "@/hooks/useMachineTimelineData";
 interface MachineRowProps {
   machine: MachineTimelineData;
   bounds: { start: Date; end: Date };
+  onClick: () => void;
 }
 
-export function MachineRow({ machine, bounds }: MachineRowProps) {
+export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
   const progressBar = useMemo(() => {
     if (!machine.start_time) {
       return null;
@@ -31,12 +32,15 @@ export function MachineRow({ machine, bounds }: MachineRowProps) {
   }, [machine, bounds]);
 
   return (
-    <div className="relative h-16 border-b">
+    <div 
+      className="relative h-16 border-b cursor-pointer hover:bg-muted/10 transition-colors"
+      onClick={onClick}
+    >
       {progressBar ? (
         <div className="relative h-full flex items-center">
           {/* Background bar (total time range) */}
           <div
-            className="absolute h-8 bg-muted/40 rounded"
+            className="absolute h-8 bg-muted/40 rounded hover:bg-muted/60 transition-colors"
             style={{
               left: progressBar.left,
               width: progressBar.width,

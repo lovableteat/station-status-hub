@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useUnifiedData } from "./useUnifiedData";
 
 export interface MachineTimelineData {
@@ -8,10 +8,12 @@ export interface MachineTimelineData {
   start_time?: string;
   end_time?: string;
   status: string;
+  current_station?: string;
 }
 
 export function useMachineTimelineData() {
   const { systems, progress, isLoading } = useUnifiedData();
+  const [timeOffset, setTimeOffset] = useState(0);
 
   const timelineData = useMemo(() => {
     if (!systems.length || !progress.length) {
@@ -35,12 +37,13 @@ export function useMachineTimelineData() {
         overall_progress: system.overall_progress,
         start_time: systemStartTime,
         end_time: systemEndTime,
-        status: system.status
+        status: system.status,
+        current_station: system.current_station
       };
     });
   }, [systems, progress]);
 
-  // Calculate timeline bounds
+  // Calculate timeline bounds with navigation offset
   const timelineBounds = useMemo(() => {
     const allTimes = timelineData.flatMap(machine => [
       machine.start_time,
@@ -50,26 +53,33 @@ export function useMachineTimelineData() {
     if (allTimes.length === 0) {
       const now = new Date();
       const start = new Date(now);
-      start.setDate(now.getDate() - 7);
+      start.setDate(now.getDate() - 7 + (timeOffset * 7));
       const end = new Date(now);
-      end.setDate(now.getDate() + 7);
+      end.setDate(now.getDate() + 7 + (timeOffset * 7));
       return { start, end };
     }
 
     const sortedTimes = allTimes.sort();
-    const startDate = new Date(sortedTimes[0]);
-    const endDate = new Date(sortedTimes[sortedTimes.length - 1]);
+    const baseStartDate = new Date(sortedTimes[0]);
+    const baseEndDate = new Date(sortedTimes[sortedTimes.length - 1]);
     
-    // Add padding
-    startDate.setDate(startDate.getDate() - 1);
-    endDate.setDate(endDate.getDate() + 1);
+    // Apply time offset (weeks)
+    const startDate = new Date(baseStartDate);
+    startDate.setDate(baseStartDate.getDate() - 1 + (timeOffset * 7));
+    const endDate = new Date(baseEndDate);
+    endDate.setDate(baseEndDate.getDate() + 1 + (timeOffset * 7));
     
     return { start: startDate, end: endDate };
-  }, [timelineData]);
+  }, [timelineData, timeOffset]);
+
+  const navigateTimeline = (direction: 'prev' | 'next') => {
+    setTimeOffset(prev => direction === 'next' ? prev + 1 : prev - 1);
+  };
 
   return {
     timelineData,
     timelineBounds,
-    isLoading
+    isLoading,
+    navigateTimeline
   };
 }

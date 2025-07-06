@@ -1,9 +1,25 @@
+import { useState } from "react";
 import { useMachineTimelineData } from "@/hooks/useMachineTimelineData";
 import { TimelineGrid } from "./TimelineGrid";
 import { MachineRow } from "./MachineRow";
+import { MachineDetailDialog } from "./MachineDetailDialog";
+import { TimelineNavigation } from "./TimelineNavigation";
+import { MachineTimelineData } from "@/hooks/useMachineTimelineData";
 
 export function MachineTimeline() {
-  const { timelineData, timelineBounds, isLoading } = useMachineTimelineData();
+  const { timelineData, timelineBounds, isLoading, navigateTimeline } = useMachineTimelineData();
+  const [selectedMachine, setSelectedMachine] = useState<MachineTimelineData | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  const handleMachineClick = (machine: MachineTimelineData) => {
+    setSelectedMachine(machine);
+    setIsDetailOpen(true);
+  };
+
+  const handleDetailClose = () => {
+    setIsDetailOpen(false);
+    setSelectedMachine(null);
+  };
 
   if (isLoading) {
     return (
@@ -33,6 +49,11 @@ export function MachineTimeline() {
         <h1 className="text-3xl font-bold">機台時間軸</h1>
         <p className="text-muted-foreground">GB300 L10 測試進度時間軸視圖</p>
       </div>
+
+      <TimelineNavigation 
+        bounds={timelineBounds} 
+        onNavigate={navigateTimeline}
+      />
 
       <div className="bg-background border rounded-lg">
         <div className="flex">
@@ -66,6 +87,7 @@ export function MachineTimeline() {
                     key={machine.id}
                     machine={machine}
                     bounds={timelineBounds}
+                    onClick={() => handleMachineClick(machine)}
                   />
                 ))}
               </div>
@@ -73,6 +95,12 @@ export function MachineTimeline() {
           </div>
         </div>
       </div>
+
+      <MachineDetailDialog 
+        machine={selectedMachine}
+        isOpen={isDetailOpen}
+        onClose={handleDetailClose}
+      />
     </div>
   );
 }
