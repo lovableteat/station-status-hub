@@ -60,7 +60,7 @@ export function EnhancedGanttChart() {
         ? systemProgress.reduce((sum, p) => sum + (p.progress_percent || 0), 0) / systemProgress.length 
         : 0;
 
-      const calculatedTimeline = calculateSystemTimeline(system.system_name, systems);
+      const calculatedTimeline = calculateSystemTimeline(system.system_name, systems, avgProgress);
       
       // Determine status based on progress and dates
       let status: GanttTask['status'] = 'not_started';
@@ -90,13 +90,19 @@ export function EnhancedGanttChart() {
     
     setTasks(ganttTasks);
     
-    // Set initial view range
+    // Set initial view range with better defaults
     if (ganttTasks.length > 0) {
       const minDate = new Date(Math.min(...ganttTasks.map(t => t.startDate.getTime())));
       const maxDate = new Date(Math.max(...ganttTasks.map(t => t.endDate.getTime())));
       minDate.setDate(minDate.getDate() - 7); // Add some padding
-      maxDate.setDate(maxDate.getDate() + 7);
+      maxDate.setDate(maxDate.getDate() + 14); // More padding for future planning
       setViewRange({ start: minDate, end: maxDate });
+    } else {
+      // Fallback view range if no tasks
+      const today = new Date();
+      const start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const end = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);   // 60 days forward
+      setViewRange({ start, end });
     }
   }, [systems, progress, timelineLoading, calculateSystemTimeline]);
 
@@ -112,7 +118,7 @@ export function EnhancedGanttChart() {
     return groups;
   }, [tasks]);
 
-  // Generate time markers based on scale and zoom - with improved spacing
+  // Generate time markers based on scale and zoom - with improved spacing for Chinese text
   const timeMarkers = useMemo(() => {
     const markers = [];
     const { start, end } = viewRange;
@@ -121,39 +127,53 @@ export function EnhancedGanttChart() {
     let increment: number;
     let format: Intl.DateTimeFormatOptions;
     let secondaryFormat: Intl.DateTimeFormatOptions;
+    let minSpacing: number; // Minimum spacing percentage to avoid overlap
     
     switch (timeScale) {
       case 'day':
         increment = 1;
         format = { month: 'short', day: 'numeric' };
         secondaryFormat = { weekday: 'short' };
+        minSpacing = 12; // Increase spacing for Chinese text
         break;
       case 'week':
         increment = 3; // Show every 3 days to reduce crowding
         format = { month: 'short', day: 'numeric' };
         secondaryFormat = { weekday: 'short' };
+        minSpacing = 10;
         break;
       case 'month':
         increment = 7;
         format = { month: 'short', day: 'numeric' };
         secondaryFormat = { month: 'short', year: 'numeric' };
+        minSpacing = 8;
         break;
       case 'year':
         increment = 30;
         format = { year: 'numeric', month: 'short' };
         secondaryFormat = { year: 'numeric' };
+        minSpacing = 6;
         break;
     }
     
+    // Adjust increment based on total time span to prevent overcrowding
+    if (totalDays > 180) { // More than 6 months
+      increment = Math.max(increment, 7);
+      minSpacing = Math.max(minSpacing, 5);
+    } else if (totalDays > 90) { // More than 3 months
+      increment = Math.max(increment, 3);
+      minSpacing = Math.max(minSpacing, 8);
+    }
+    
     let currentDate = new Date(start);
-    let lastLabelPosition = -100; // Track last label position to avoid overlap
+    let lastLabelPosition = -minSpacing; // Track last label position to avoid overlap
     
     while (currentDate <= end) {
       const dayFromStart = Math.ceil((currentDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
       const percent = totalDays > 0 ? (dayFromStart / totalDays) * 100 : 0;
       
       // Only add marker if it's far enough from the last one
-      if (percent - lastLabelPosition > 8) { // Minimum 8% spacing
+      if (percent - lastLabelPosition >= minSpacing) {
         markers.push({
           date: new Date(currentDate),
           percent,
@@ -164,6 +184,26 @@ export function EnhancedGanttChart() {
       }
       
       currentDate.setDate(currentDate.getDate() + increment);
+    }
+    
+    // Ensure we have at least a few markers, but not too many
+    if (markers.length < 3 && totalDays > 7) {
+      // If we have too few markers, create some basic ones
+      const markersToAdd = Math.min(5, Math.floor(totalDays / 7));
+      const additionalMarkers = [];
+      for (let i = 1; i <= markersToAdd; i++) {
+        const dayOffset = Math.floor((totalDays / (markersToAdd + 1)) * i);
+        const markerDate = new Date(start.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+        const percent = (dayOffset / totalDays) * 100;
+        
+        additionalMarkers.push({
+          date: markerDate,
+          percent,
+          label: markerDate.toLocaleDateString('zh-TW', format),
+          secondaryLabel: markerDate.toLocaleDateString('zh-TW', secondaryFormat)
+        });
+      }
+      return [...markers, ...additionalMarkers].sort((a, b) => a.percent - b.percent);
     }
     
     return markers;
