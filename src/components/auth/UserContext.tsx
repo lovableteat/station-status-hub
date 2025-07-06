@@ -15,14 +15,23 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    // 從 localStorage 恢復用戶狀態
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   const login = (username: string, role: string) => {
-    setUser({ username, role });
+    const userData = { username, role };
+    setUser(userData);
+    // 持久化用戶狀態
+    localStorage.setItem('user', JSON.stringify(userData));
   };
 
   const logout = () => {
     setUser(null);
+    // 清除持久化狀態
+    localStorage.removeItem('user');
   };
 
   const isLoggedIn = user !== null;
