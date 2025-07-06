@@ -11,6 +11,7 @@ import { Edit, Save, X, Trash2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { TimeInputControls } from "./TimeInputControls";
 
 interface TestItem {
   id: string;
@@ -310,50 +311,40 @@ export function ProgressEditDialog({
                       />
                     </div>
                     
-                    {/* Time fields for all stations */}
+                    {/* Time fields with improved UX */}
                     {canEditTimes && (
                       <>
-                        <div>
-                          <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>開始時間</Label>
-                          <Input
-                            type="datetime-local"
-                            value={formatDateTimeLocal(editValues.started_at)}
-                            onChange={(e) => {
-                              const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : undefined;
-                              const newValues = { ...editValues, started_at: newStartTime };
-                              
-                              // Validation: if completed_at exists and is earlier than new start time, clear it
-                              if (newStartTime && editValues.completed_at && new Date(newStartTime) > new Date(editValues.completed_at)) {
-                                newValues.completed_at = undefined;
-                              }
-                              
-                              setEditValues(newValues);
-                            }}
-                            className={isMobile ? "h-12 text-base" : ""}
-                            placeholder="選擇開始時間"
-                          />
-                        </div>
-                        <div>
-                          <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>完成時間</Label>
-                          <Input
-                            type="datetime-local"
-                            value={formatDateTimeLocal(editValues.completed_at)}
-                            min={formatDateTimeLocal(editValues.started_at)}
-                            onChange={(e) => {
-                              const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : undefined;
-                              setEditValues({
-                                ...editValues, 
-                                completed_at: newEndTime
-                              });
-                            }}
-                            className={isMobile ? "h-12 text-base" : ""}
-                            placeholder="選擇完成時間"
-                            disabled={!editValues.started_at}
-                          />
-                          {!editValues.started_at && (
-                            <p className="text-xs text-muted-foreground mt-1">請先設定開始時間</p>
-                          )}
-                        </div>
+                        <TimeInputControls
+                          label="開始時間"
+                          value={editValues.started_at}
+                          onChange={(value) => {
+                            const newValues = { ...editValues, started_at: value };
+                            
+                            // Validation: if completed_at exists and is earlier than new start time, clear it
+                            if (value && editValues.completed_at && new Date(value) > new Date(editValues.completed_at)) {
+                              newValues.completed_at = undefined;
+                            }
+                            
+                            setEditValues(newValues);
+                          }}
+                          isMobile={isMobile}
+                        />
+                        <TimeInputControls
+                          label="完成時間"
+                          value={editValues.completed_at}
+                          minValue={editValues.started_at}
+                          onChange={(value) => {
+                            setEditValues({
+                              ...editValues, 
+                              completed_at: value
+                            });
+                          }}
+                          disabled={!editValues.started_at}
+                          isMobile={isMobile}
+                        />
+                        {!editValues.started_at && (
+                          <p className="text-xs text-muted-foreground">請先設定開始時間</p>
+                        )}
                       </>
                     )}
                   </div>
