@@ -30,7 +30,7 @@ export function MachineRow({
     const totalDuration = bounds.end.getTime() - bounds.start.getTime();
     const startTime = new Date(machine.start_time);
     
-    // Calculate estimated bar
+    // Calculate estimated bar (yellow - full planned duration)
     let estimatedBar = null;
     if (machine.estimated_end_time) {
       const estimatedEndTime = new Date(machine.estimated_end_time);
@@ -47,23 +47,26 @@ export function MachineRow({
       };
     }
     
-    // Calculate actual bar
-    const endTime = machine.end_time ? new Date(machine.end_time) : new Date();
-    const actualStartPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
-    const actualDuration = endTime.getTime() - startTime.getTime();
-    const actualWidth = (actualDuration / totalDuration) * 100;
+    // Calculate progress bar (green - actual progress based on completion percentage)
+    let progressBar = null;
+    if (machine.overall_progress > 0 && machine.estimated_end_time) {
+      const progressStartPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+      const estimatedEndTime = new Date(machine.estimated_end_time);
+      const totalEstimatedDuration = estimatedEndTime.getTime() - startTime.getTime();
+      const progressDuration = totalEstimatedDuration * (machine.overall_progress / 100);
+      const progressWidth = (progressDuration / totalDuration) * 100;
 
-    // Ensure minimum visibility
-    const finalActualWidth = Math.max(actualWidth, 2);
-    const finalActualStartPosition = Math.max(0, Math.min(actualStartPosition, 98));
+      const finalProgressWidth = Math.max(progressWidth, 1);
+      const finalProgressStartPosition = Math.max(0, Math.min(progressStartPosition, 99));
 
-    const actualBar = {
-      left: `${finalActualStartPosition}%`,
-      width: `${finalActualWidth}%`,
-      status: machine.status
-    };
+      progressBar = {
+        left: `${finalProgressStartPosition}%`,
+        width: `${finalProgressWidth}%`,
+        progress: machine.overall_progress
+      };
+    }
 
-    return { estimatedBar, actualBar };
+    return { estimatedBar, progressBar };
   }, [machine, bounds]);
 
   const getStatusColor = (status: string) => {
@@ -101,68 +104,69 @@ export function MachineRow({
         {/* Progress bars */}
         {progressBars && (
           <div className="relative h-full">
-            {/* Estimated time bar (background) */}
+            {/* Estimated time bar (yellow background) */}
             {progressBars.estimatedBar && (
               <div
-                className="h-6 rounded-md bg-muted/40 border border-muted-foreground/20"
+                className="h-4 rounded-sm bg-yellow-200 border border-yellow-300/30"
                 style={{
                   position: 'absolute',
                   left: progressBars.estimatedBar.left,
                   width: progressBars.estimatedBar.width,
-                  top: '20px'
+                  top: '22px'
                 }}
               />
             )}
             
-            {/* Actual time bar (foreground) */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "h-8 rounded-md border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105",
-                    getStatusColor(progressBars.actualBar.status),
-                    isSelected && "ring-2 ring-primary ring-offset-2"
-                  )}
-                  style={{
-                    position: 'absolute',
-                    left: progressBars.actualBar.left,
-                    width: progressBars.actualBar.width,
-                    top: '16px',
-                    zIndex: 10
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDetail?.();
-                  }}
-                >
-                  <div className="flex items-center justify-center h-full px-2">
-                    <span className="text-xs font-medium text-background">
-                      {machine.overall_progress}%
-                    </span>
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-sm">
-                  <div className="space-y-1 max-w-xs">
-                    <div className="font-medium">{machine.system_name}</div>
-                    <div className="text-sm space-y-1">
-                      <div>狀態: {machine.status}</div>
-                      <div>進度: {machine.overall_progress}%</div>
-                      <div>開始: {formatDateTime(machine.start_time)}</div>
-                      <div>完成: {formatDateTime(machine.end_time)}</div>
-                      {machine.duration_hours && (
-                        <div>實際時長: {machine.duration_hours.toFixed(1)} 小時</div>
-                      )}
-                      {machine.estimated_duration_hours && (
-                        <div>預估時長: {machine.estimated_duration_hours.toFixed(1)} 小時</div>
-                      )}
-                      {machine.estimated_end_time && (
-                        <div>預計完成: {formatDateTime(machine.estimated_end_time)}</div>
-                      )}
+            {/* Progress bar (green foreground) */}
+            {progressBars.progressBar && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      "h-6 rounded-sm bg-green-500 border border-green-600/20 shadow-sm transition-all cursor-pointer hover:scale-105",
+                      isSelected && "ring-2 ring-primary ring-offset-2"
+                    )}
+                    style={{
+                      position: 'absolute',
+                      left: progressBars.progressBar.left,
+                      width: progressBars.progressBar.width,
+                      top: '20px',
+                      zIndex: 10
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDetail?.();
+                    }}
+                  >
+                    <div className="flex items-center justify-center h-full px-2">
+                      <span className="text-xs font-medium text-white">
+                        {machine.overall_progress}%
+                      </span>
                     </div>
                   </div>
-              </TooltipContent>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-sm">
+                    <div className="space-y-1 max-w-xs">
+                      <div className="font-medium">{machine.system_name}</div>
+                      <div className="text-sm space-y-1">
+                        <div>狀態: {machine.status}</div>
+                        <div>進度: {machine.overall_progress}%</div>
+                        <div>開始: {formatDateTime(machine.start_time)}</div>
+                        <div>完成: {formatDateTime(machine.end_time)}</div>
+                        {machine.duration_hours && (
+                          <div>實際時長: {machine.duration_hours.toFixed(1)} 小時</div>
+                        )}
+                        {machine.estimated_duration_hours && (
+                          <div>預估時長: {machine.estimated_duration_hours.toFixed(1)} 小時</div>
+                        )}
+                        {machine.estimated_end_time && (
+                          <div>預計完成: {formatDateTime(machine.estimated_end_time)}</div>
+                        )}
+                      </div>
+                    </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         )}
 
