@@ -55,40 +55,63 @@ export default function GanttChart() {
     
     const ganttTasks: GanttTask[] = systems.map((system) => {
       const systemProgress = progress.filter(p => p.system_id === system.id);
+      
+      // Calculate actual timeline based on progress data
+      const allStartTimes = systemProgress
+        .map(p => p.started_at)
+        .filter(Boolean)
+        .map(t => new Date(t!));
+      
+      const allEndTimes = systemProgress
+        .map(p => p.completed_at)
+        .filter(Boolean)
+        .map(t => new Date(t!));
+      
+      // Determine actual start and end dates
+      const actualStartDate = allStartTimes.length > 0 
+        ? new Date(Math.min(...allStartTimes.map(d => d.getTime())))
+        : new Date(); // Default to today if no start times
+        
+      const actualEndDate = allEndTimes.length > 0
+        ? new Date(Math.max(...allEndTimes.map(d => d.getTime())))
+        : new Date(actualStartDate.getTime() + 7 * 24 * 60 * 60 * 1000); // Default to 7 days from start
+      
+      // Calculate progress based on completed vs total items
+      const completedProgress = systemProgress.filter(p => p.status === 'Done');
       const avgProgress = systemProgress.length > 0 
-        ? systemProgress.reduce((sum, p) => sum + (p.progress_percent || 0), 0) / systemProgress.length 
+        ? (completedProgress.length / systemProgress.length) * 100 
         : 0;
-
-      const calculatedTimeline = calculateSystemTimeline(system.system_name, systems);
       
       // Calculate duration in days
-      const duration = Math.ceil((calculatedTimeline.endDate.getTime() - calculatedTimeline.startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const duration = Math.max(1, Math.ceil((actualEndDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24)));
       
-      // Determine status based on progress and dates
+      // Determine status based on actual progress and timeline
       let status: GanttTask['status'] = 'not_started';
       const today = new Date();
       
       if (avgProgress === 100) {
         status = 'completed';
       } else if (avgProgress > 0) {
-        status = calculatedTimeline.endDate < today ? 'delayed' : 'in_progress';
-      } else if (calculatedTimeline.startDate <= today) {
-        status = 'delayed';
+        // Check if we're past expected end date
+        const expectedEndDate = new Date(actualStartDate.getTime() + 5 * 24 * 60 * 60 * 1000); // Expected 5 days
+        status = actualEndDate > expectedEndDate && avgProgress < 100 ? 'delayed' : 'in_progress';
+      } else if (actualStartDate <= today) {
+        status = today > new Date(actualStartDate.getTime() + 1 * 24 * 60 * 60 * 1000) ? 'delayed' : 'not_started';
       }
 
-      // Calculate estimated hours based on stations
+      // Calculate estimated hours from stations
       const estimatedHours = stations.reduce((sum, station) => sum + (station.estimated_hours || 0), 0);
 
       return {
         id: system.id,
         name: system.system_name,
         description: `${system.model || 'GB300'} 系統測試流程`,
-        startDate: calculatedTimeline.startDate,
-        endDate: calculatedTimeline.endDate,
+        startDate: actualStartDate,
+        endDate: actualEndDate,
         duration,
         progress: Math.round(avgProgress),
         assignee: system.assigned_engineer || 'Unassigned',
-        priority: avgProgress < 50 && calculatedTimeline.endDate.getTime() - today.getTime() < 7 * 24 * 60 * 60 * 1000 ? 'high' : 'medium',
+        priority: avgProgress < 50 && duration > 5 ? 'high' : avgProgress < 80 ? 'medium' : 'low',
         status,
         group: `${system.assigned_engineer || 'Unassigned'} Team`,
         dependencies: [], // Can be enhanced later
@@ -98,15 +121,21 @@ export default function GanttChart() {
     
     setTasks(ganttTasks);
     
-    // Set initial view range
+    // Set view range based on actual project timeline
     if (ganttTasks.length > 0) {
-      const minDate = new Date(Math.min(...ganttTasks.map(t => t.startDate.getTime())));
-      const maxDate = new Date(Math.max(...ganttTasks.map(t => t.endDate.getTime())));
-      minDate.setDate(minDate.getDate() - 7);
-      maxDate.setDate(maxDate.getDate() + 7);
+      const allStartDates = ganttTasks.map(t => t.startDate.getTime());
+      const allEndDates = ganttTasks.map(t => t.endDate.getTime());
+      
+      const minDate = new Date(Math.min(...allStartDates));
+      const maxDate = new Date(Math.max(...allEndDates));
+      
+      // Add buffer for better visualization
+      minDate.setDate(minDate.getDate() - 3);
+      maxDate.setDate(maxDate.getDate() + 3);
+      
       setViewRange({ start: minDate, end: maxDate });
     }
-  }, [systems, progress, timelineLoading, calculateSystemTimeline, stations]);
+  }, [systems, progress, timelineLoading, stations]);
 
   // Generate time markers based on scale and zoom
   const timeMarkers = useMemo(() => {
@@ -250,9 +279,18 @@ export default function GanttChart() {
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 返回
               </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  window.history.pushState({}, '', '/test-tracker');
+                  window.location.reload();
+                }}
+              >
+                查看測試進度
+              </Button>
               <div>
                 <CardTitle className="text-2xl">專案甘特圖</CardTitle>
-                <p className="text-muted-foreground mt-1">視覺化項目時程與進度管理 - 任務規劃與依賴關係</p>
+                <p className="text-muted-foreground mt-1">基於實際測試進度的機台排程管理</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -303,7 +341,7 @@ export default function GanttChart() {
             <div className="w-1/3 border-r bg-muted/30">
               <div className="p-4 border-b bg-background">
                 <h3 className="font-semibold">任務清單與活動列表</h3>
-                <p className="text-sm text-muted-foreground">專案中所有任務活動及其詳細資訊</p>
+                <p className="text-sm text-muted-foreground">基於實際測試進度的機台排程狀況</p>
               </div>
               <ScrollArea className="h-96">
                 {Object.entries(groupedTasks).map(([group, groupTasks]) => (
@@ -364,8 +402,8 @@ export default function GanttChart() {
             {/* Right Panel - Timeline */}
             <div className="flex-1">
               <div className="p-4 border-b bg-background">
-                <h3 className="font-semibold">專案時間軸</h3>
-                <p className="text-sm text-muted-foreground">時程規劃與依賴關係視覺化</p>
+                <h3 className="font-semibold">機台排程時間軸</h3>
+                <p className="text-sm text-muted-foreground">實際測試時程與進度狀況視覺化</p>
               </div>
               
               {/* Timeline Header */}
