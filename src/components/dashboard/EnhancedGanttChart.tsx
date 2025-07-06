@@ -260,14 +260,23 @@ export function EnhancedGanttChart() {
   const renderTaskBar = (task: GanttTask) => {
     const { start, end } = viewRange;
     const totalDuration = end.getTime() - start.getTime();
-    const taskStart = Math.max(0, task.startDate.getTime() - start.getTime());
-    const taskEnd = Math.min(totalDuration, task.endDate.getTime() - start.getTime());
-    const taskDuration = taskEnd - taskStart;
     
-    if (taskDuration <= 0) return null;
+    // Calculate task position relative to view range
+    const taskStartOffset = task.startDate.getTime() - start.getTime();
+    const taskEndOffset = task.endDate.getTime() - start.getTime();
     
-    const leftPercent = (taskStart / totalDuration) * 100;
-    const widthPercent = (taskDuration / totalDuration) * 100;
+    // Skip tasks completely outside view range
+    if (taskEndOffset < 0 || taskStartOffset > totalDuration) return null;
+    
+    // Calculate visible portion of the task
+    const visibleStart = Math.max(0, taskStartOffset);
+    const visibleEnd = Math.min(totalDuration, taskEndOffset);
+    const visibleDuration = visibleEnd - visibleStart;
+    
+    if (visibleDuration <= 0) return null;
+    
+    const leftPercent = (visibleStart / totalDuration) * 100;
+    const widthPercent = (visibleDuration / totalDuration) * 100;
     
     // Get detailed station progress for this system
     const systemProgress = progress.filter(p => p.system_id === task.id);
