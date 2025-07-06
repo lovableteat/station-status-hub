@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -111,31 +112,47 @@ export function TestProgressTable({
         {filteredSystems.map(system => (
           <Card key={system.id} className="border-2">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold">
-                  <button 
-                    className="text-primary hover:underline cursor-pointer text-left"
-                    onClick={() => {
-                      const currentUrl = new URL(window.location.href);
-                      currentUrl.searchParams.set('system', system.system_name);
-                      window.history.pushState({}, '', currentUrl.toString());
-                      
-                      const event = new CustomEvent('navigate', { 
-                        detail: { module: 'monitor', params: { system: system.system_name } } 
-                      });
-                      window.dispatchEvent(event);
-                    }}
-                  >
-                    {system.system_name}
-                  </button>
-                </CardTitle>
-                <SystemEditDialog
-                  systemId={system.id}
-                  systemName={system.system_name}
-                  assignedEngineer={system.assigned_engineer}
-                  onUpdate={onSystemUpdate}
-                />
-              </div>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-bold">
+                    <button 
+                      className="text-primary hover:underline cursor-pointer text-left"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        
+                        const event = new CustomEvent('navigate', { 
+                          detail: { module: 'monitor', params: { system: system.system_name } } 
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {system.system_name}
+                    </button>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.pathname = '/gantt';
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        window.location.reload();
+                      }}
+                      className="h-8 px-3 text-xs"
+                    >
+                      查看排程
+                    </Button>
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                  </div>
+                </div>
               <div className="flex flex-col gap-2 mt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">負責人:</span>
@@ -311,6 +328,20 @@ export function TestProgressTable({
                     >
                       {system.system_name}
                     </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.pathname = '/gantt';
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        window.location.reload();
+                      }}
+                      className="h-6 px-2 text-xs"
+                    >
+                      排程
+                    </Button>
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
