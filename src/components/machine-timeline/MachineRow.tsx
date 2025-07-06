@@ -71,7 +71,7 @@ export function MachineRow({
     <TooltipProvider>
       <div
         className={cn(
-          "relative h-16 border-b cursor-pointer transition-colors",
+          "relative h-16 border-b cursor-pointer transition-colors flex items-center",
           isSelected ? "bg-muted/70" : "hover:bg-muted/30"
         )}
         onClick={onSelect}
