@@ -124,14 +124,14 @@ export function MachineTimeline() {
                       <div
                         key={machine.id}
                         className={cn(
-                          "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                          "h-16 border-b cursor-pointer hover:bg-muted/50 transition-colors flex items-center justify-center",
                           selectedMachine === machine.id && "bg-muted"
                         )}
                         onClick={() => setSelectedMachine(
                           selectedMachine === machine.id ? null : machine.id
                         )}
                       >
-                        <div className="font-medium text-center">
+                        <div className="font-medium">
                           {machine.system_name}
                         </div>
                       </div>
