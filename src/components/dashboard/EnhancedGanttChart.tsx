@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useSystemTimeline } from '@/hooks/useSystemTimeline';
 import { supabase } from '@/integrations/supabase/client';
+import { ExportDialog } from '@/components/production/ExportDialog';
 
 interface GanttTask {
   id: string;
@@ -35,7 +36,7 @@ interface GanttTask {
 type TimeScale = 'day' | 'week' | 'month' | 'year';
 
 export function EnhancedGanttChart() {
-  const { systems, progress } = useUnifiedData();
+  const { systems, progress, stations } = useUnifiedData();
   const { calculateSystemTimeline, isLoading: timelineLoading } = useSystemTimeline();
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [timeScale, setTimeScale] = useState<TimeScale>('week');
@@ -46,6 +47,7 @@ export function EnhancedGanttChart() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
 
   // Initialize tasks from systems data
@@ -110,7 +112,7 @@ export function EnhancedGanttChart() {
     return groups;
   }, [tasks]);
 
-  // Generate time markers based on scale and zoom
+  // Generate time markers based on scale and zoom - with improved spacing
   const timeMarkers = useMemo(() => {
     const markers = [];
     const { start, end } = viewRange;
@@ -118,42 +120,54 @@ export function EnhancedGanttChart() {
     
     let increment: number;
     let format: Intl.DateTimeFormatOptions;
+    let secondaryFormat: Intl.DateTimeFormatOptions;
     
     switch (timeScale) {
       case 'day':
         increment = 1;
         format = { month: 'short', day: 'numeric' };
+        secondaryFormat = { weekday: 'short' };
         break;
       case 'week':
-        increment = 7;
+        increment = 3; // Show every 3 days to reduce crowding
         format = { month: 'short', day: 'numeric' };
+        secondaryFormat = { weekday: 'short' };
         break;
       case 'month':
-        increment = 30;
-        format = { month: 'short', year: 'numeric' };
+        increment = 7;
+        format = { month: 'short', day: 'numeric' };
+        secondaryFormat = { month: 'short', year: 'numeric' };
         break;
       case 'year':
-        increment = 365;
-        format = { year: 'numeric' };
+        increment = 30;
+        format = { year: 'numeric', month: 'short' };
+        secondaryFormat = { year: 'numeric' };
         break;
     }
     
     let currentDate = new Date(start);
+    let lastLabelPosition = -100; // Track last label position to avoid overlap
+    
     while (currentDate <= end) {
       const dayFromStart = Math.ceil((currentDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
       const percent = totalDays > 0 ? (dayFromStart / totalDays) * 100 : 0;
       
-      markers.push({
-        date: new Date(currentDate),
-        percent,
-        label: currentDate.toLocaleDateString('zh-TW', format)
-      });
+      // Only add marker if it's far enough from the last one
+      if (percent - lastLabelPosition > 8) { // Minimum 8% spacing
+        markers.push({
+          date: new Date(currentDate),
+          percent,
+          label: currentDate.toLocaleDateString('zh-TW', format),
+          secondaryLabel: currentDate.toLocaleDateString('zh-TW', secondaryFormat)
+        });
+        lastLabelPosition = percent;
+      }
       
       currentDate.setDate(currentDate.getDate() + increment);
     }
     
     return markers;
-  }, [viewRange, timeScale]);
+  }, [viewRange, timeScale, zoomLevel]);
 
   const getStatusColor = (status: GanttTask['status']) => {
     switch (status) {
@@ -215,38 +229,109 @@ export function EnhancedGanttChart() {
     const leftPercent = (taskStart / totalDuration) * 100;
     const widthPercent = (taskDuration / totalDuration) * 100;
     
+    // Get detailed station progress for this system
+    const systemProgress = progress.filter(p => p.system_id === task.id);
+    const stageProgress = stations.map(station => {
+      const stationProgress = systemProgress.filter(p => p.station_id === station.id);
+      const completedItems = stationProgress.filter(p => p.status === 'Done').length;
+      const totalItems = stationProgress.length;
+      const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+      
+      return {
+        stationName: station.station_name,
+        stationOrder: station.station_order,
+        progress: progressPercent,
+        status: progressPercent === 100 ? 'completed' : 
+                progressPercent > 0 ? 'in_progress' : 'not_started',
+        completedItems,
+        totalItems
+      };
+    }).sort((a, b) => a.stationOrder - b.stationOrder);
+    
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className="absolute h-6 rounded cursor-pointer transition-all duration-200 hover:h-7 hover:-translate-y-0.5 shadow-sm flex items-center justify-between px-2 text-xs font-medium text-white"
+              className="absolute h-6 rounded cursor-pointer transition-all duration-200 hover:h-7 hover:-translate-y-0.5 shadow-sm flex overflow-hidden"
               style={{
                 left: `${leftPercent}%`,
                 width: `${widthPercent}%`,
-                backgroundColor: getStatusColor(task.status),
-                minWidth: '60px'
+                minWidth: '80px'
               }}
               onClick={() => handleTaskClick(task)}
               onMouseEnter={() => setHoveredTask(task.id)}
               onMouseLeave={() => setHoveredTask(null)}
             >
-              <span className="truncate">{task.progress}%</span>
-              <span className="text-xs opacity-75">
-                {task.startDate.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
-                -
-                {task.endDate.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
-              </span>
+              {/* Multi-stage progress bars */}
+              {stageProgress.map((stage, index) => (
+                <div
+                  key={stage.stationName}
+                  className="flex-1 relative flex items-center justify-center text-xs font-medium text-white border-r border-white/20 last:border-r-0"
+                  style={{
+                    backgroundColor: stage.status === 'completed' ? 'hsl(var(--success))' :
+                                   stage.status === 'in_progress' ? 'hsl(var(--primary))' :
+                                   'hsl(var(--muted))',
+                    minWidth: '20px'
+                  }}
+                >
+                  {/* Progress fill within each stage */}
+                  <div 
+                    className="absolute inset-0 bg-white/20 transition-all duration-500"
+                    style={{ width: `${stage.progress}%` }}
+                  />
+                  <span className="relative z-10 text-xs">
+                    {stage.stationName.replace('Station ', 'S')}
+                  </span>
+                </div>
+              ))}
+              
+              {/* Overall progress indicator */}
+              <div className="absolute -top-1 -right-1 bg-background border border-border rounded-full px-1 text-xs font-medium">
+                {task.progress}%
+              </div>
             </div>
           </TooltipTrigger>
-          <TooltipContent>
-            <div className="space-y-2">
-              <div className="font-medium">{task.name}</div>
-              <div className="text-sm">
-                <div>Progress: {task.progress}%</div>
-                <div>Assignee: {task.assignee}</div>
-                <div>Status: {task.status}</div>
-                {task.notes && <div>Notes: {task.notes}</div>}
+          <TooltipContent className="max-w-xs">
+            <div className="space-y-3">
+              <div className="font-medium text-base">{task.name}</div>
+              
+              {/* Overall info */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>總進度: {task.progress}%</div>
+                <div>負責人: {task.assignee}</div>
+                <div>狀態: {task.status}</div>
+                <div>優先度: {task.priority}</div>
+              </div>
+              
+              {/* Stage details */}
+              <div className="space-y-2">
+                <div className="font-medium text-sm border-b pb-1">測試站點進度:</div>
+                {stageProgress.map((stage) => (
+                  <div key={stage.stationName} className="flex justify-between items-center text-sm">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ 
+                          backgroundColor: stage.status === 'completed' ? 'hsl(var(--success))' :
+                                         stage.status === 'in_progress' ? 'hsl(var(--primary))' :
+                                         'hsl(var(--muted))' 
+                        }}
+                      />
+                      <span>{stage.stationName}</span>
+                    </div>
+                    <div className="text-xs">
+                      {stage.completedItems}/{stage.totalItems} ({Math.round(stage.progress)}%)
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Time info */}
+              <div className="text-xs text-muted-foreground border-t pt-2">
+                <div>開始: {task.startDate.toLocaleDateString('zh-TW')}</div>
+                <div>結束: {task.endDate.toLocaleDateString('zh-TW')}</div>
+                {task.notes && <div>備註: {task.notes}</div>}
               </div>
             </div>
           </TooltipContent>
@@ -295,7 +380,7 @@ export function EnhancedGanttChart() {
             </div>
             
             {/* Export Button */}
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
               <Download className="h-4 w-4 mr-2" />
               匯出
             </Button>
@@ -367,17 +452,23 @@ export function EnhancedGanttChart() {
           
           {/* Right Panel - Gantt Chart */}
           <div className="flex-1">
-            {/* Timeline Header */}
+            {/* Timeline Header - Double layer design */}
             <div className="sticky top-0 bg-background z-10 pb-4">
-              <div className="relative h-12 bg-muted/30 rounded border overflow-hidden">
+              <div className="relative h-20 bg-muted/30 rounded border overflow-hidden">
+                {/* Primary time markers */}
                 {timeMarkers.map((marker, idx) => (
                   <div
                     key={idx}
-                    className="absolute top-0 bottom-0 border-l border-border/50"
+                    className="absolute top-0 bottom-0 border-l border-border/30"
                     style={{ left: `${marker.percent}%` }}
                   >
-                    <div className="absolute -top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
+                    {/* Primary label */}
+                    <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap bg-background/80 px-1 rounded">
                       {marker.label}
+                    </div>
+                    {/* Secondary label */}
+                    <div className="absolute top-8 left-1 text-xs text-muted-foreground/70 whitespace-nowrap bg-background/60 px-1 rounded">
+                      {marker.secondaryLabel}
                     </div>
                   </div>
                 ))}
@@ -389,7 +480,7 @@ export function EnhancedGanttChart() {
                     left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
                   }}
                 >
-                  <div className="absolute -top-4 -left-4 text-xs text-primary font-medium bg-background px-1 rounded">
+                  <div className="absolute -top-2 -left-6 text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full border border-primary/20">
                     今日
                   </div>
                 </div>
@@ -491,6 +582,24 @@ export function EnhancedGanttChart() {
           </DialogContent>
         </Dialog>
       </CardContent>
+      
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        title="專案甘特圖"
+        data={tasks.map(task => ({
+          任務名稱: task.name,
+          負責人: task.assignee,
+          開始日期: task.startDate.toLocaleDateString('zh-TW'),
+          結束日期: task.endDate.toLocaleDateString('zh-TW'),
+          進度: `${task.progress}%`,
+          狀態: task.status,
+          優先度: task.priority,
+          團隊: task.group,
+          備註: task.notes || ''
+        }))}
+      />
     </Card>
   );
 }
