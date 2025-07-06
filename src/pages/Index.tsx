@@ -9,6 +9,7 @@ import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
+import { UserManagement } from "@/components/user-management/UserManagement";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -66,7 +67,7 @@ const Index = () => {
       case "tools":
         return <ToolsManagement />;
       case "users":
-        return user?.role === "super_admin" ? <AdminPanel /> : <Dashboard onNavigate={handleNavigation} />;
+        return <UserManagement />;
       default:
         return <Dashboard onNavigate={handleNavigation} />;
     }
