@@ -1,13 +1,11 @@
 import { useMemo } from "react";
-import { TimelineViewType } from "./MachineTimeline";
 import { cn } from "@/lib/utils";
 
 interface TimelineGridProps {
-  viewType: TimelineViewType;
   bounds: { start: Date; end: Date };
 }
 
-export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
+export function TimelineGrid({ bounds }: TimelineGridProps) {
   const calendarData = useMemo(() => {
     const days: Array<{
       date: Date;
