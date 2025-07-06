@@ -1,76 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Calendar, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
-
-interface GanttTask {
-  id: string;
-  name: string;
-  startDate: Date | null;
-  endDate: Date | null;
-  progress: number;
-  assignee: string;
-  status: 'not_started' | 'in_progress' | 'completed' | 'delayed';
-}
+import { useGanttTasks } from '@/hooks/useGanttTasks';
+import { GanttTimeline } from '@/components/gantt/GanttTimeline';
+import { GanttTaskBar } from '@/components/gantt/GanttTaskBar';
+import { GanttTaskList } from '@/components/gantt/GanttTaskList';
 
 export default function GanttChart() {
-  const { systems, progress, stations } = useUnifiedData();
+  const { systems, progress, isLoading } = useUnifiedData();
+  const ganttTasks = useGanttTasks(systems, progress);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
   const [zoomLevel, setZoomLevel] = useState(1);
-
-  // Create Gantt tasks from test progress data
-  const ganttTasks: GanttTask[] = useMemo(() => {
-    if (!systems.length) return [];
-
-    return systems.map((system) => {
-      const systemProgress = progress.filter(p => p.system_id === system.id);
-      
-      // Calculate actual start and end dates from progress data
-      const allStartTimes = systemProgress
-        .map(p => p.started_at)
-        .filter(Boolean)
-        .map(t => new Date(t!));
-      
-      const allEndTimes = systemProgress
-        .map(p => p.completed_at)
-        .filter(Boolean)
-        .map(t => new Date(t!));
-      
-      const startDate = allStartTimes.length > 0 
-        ? new Date(Math.min(...allStartTimes.map(d => d.getTime())))
-        : null;
-        
-      const endDate = allEndTimes.length > 0
-        ? new Date(Math.max(...allEndTimes.map(d => d.getTime())))
-        : null;
-      
-      // Calculate progress percentage
-      const completedItems = systemProgress.filter(p => p.status === 'Done').length;
-      const totalItems = systemProgress.length;
-      const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-      
-      // Determine status
-      let status: GanttTask['status'] = 'not_started';
-      if (progressPercent === 100) {
-        status = 'completed';
-      } else if (progressPercent > 0) {
-        status = 'in_progress';
-      }
-
-      return {
-        id: system.id,
-        name: system.system_name,
-        startDate,
-        endDate,
-        progress: progressPercent,
-        assignee: system.assigned_engineer || 'Unassigned',
-        status
-      };
-    });
-  }, [systems, progress]);
 
   // Set view range based on actual data
   useEffect(() => {
@@ -90,38 +33,6 @@ export default function GanttChart() {
     }
   }, [ganttTasks]);
 
-  // Generate time markers
-  const timeMarkers = useMemo(() => {
-    const markers = [];
-    const { start, end } = viewRange;
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    
-    let currentDate = new Date(start);
-    while (currentDate <= end) {
-      const dayFromStart = Math.ceil((currentDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const percent = totalDays > 0 ? (dayFromStart / totalDays) * 100 : 0;
-      
-      markers.push({
-        date: new Date(currentDate),
-        percent,
-        label: currentDate.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
-      });
-      
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return markers;
-  }, [viewRange]);
-
-  const getStatusColor = (status: GanttTask['status']) => {
-    switch (status) {
-      case 'completed': return 'hsl(var(--success))';
-      case 'in_progress': return 'hsl(var(--primary))';
-      case 'delayed': return 'hsl(var(--destructive))';
-      default: return 'hsl(var(--muted))';
-    }
-  };
-
   const handleZoom = (direction: 'in' | 'out') => {
     const newZoom = direction === 'in' ? Math.min(zoomLevel * 1.5, 3) : Math.max(zoomLevel / 1.5, 0.5);
     setZoomLevel(newZoom);
@@ -138,52 +49,16 @@ export default function GanttChart() {
     });
   };
 
-  const renderTaskBar = (task: GanttTask) => {
-    if (!task.startDate) return null;
-    
-    const { start, end } = viewRange;
-    const totalDuration = end.getTime() - start.getTime();
-    const taskStart = Math.max(0, task.startDate.getTime() - start.getTime());
-    const taskEnd = task.endDate 
-      ? Math.min(totalDuration, task.endDate.getTime() - start.getTime())
-      : taskStart + (24 * 60 * 60 * 1000); // Default 1 day if no end date
-    
-    const taskDuration = taskEnd - taskStart;
-    
-    if (taskDuration <= 0) return null;
-    
-    const leftPercent = (taskStart / totalDuration) * 100;
-    const widthPercent = Math.max((taskDuration / totalDuration) * 100, 5);
-    
+  if (isLoading) {
     return (
-      <div
-        className="relative h-8 rounded-md cursor-pointer transition-all duration-200 hover:h-9 shadow-sm border"
-        style={{
-          left: `${leftPercent}%`,
-          width: `${widthPercent}%`,
-          backgroundColor: getStatusColor(task.status),
-          minWidth: '80px'
-        }}
-        title={`${task.name} - ${task.progress}%`}
-      >
-        {/* Progress fill */}
-        <div 
-          className="h-full bg-white/30 rounded-md transition-all duration-500"
-          style={{ width: `${task.progress}%` }}
-        />
-        
-        {/* Task content */}
-        <div className="absolute inset-0 flex items-center justify-between px-3 text-white text-sm font-medium">
-          <span className="truncate max-w-[60%]">
-            {task.name}
-          </span>
-          <span className="text-xs bg-black/20 px-2 py-1 rounded">
-            {task.progress}%
-          </span>
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-semibold mb-2">載入中...</div>
+          <div className="text-muted-foreground">正在載入甘特圖資料</div>
         </div>
       </div>
     );
-  };
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -236,47 +111,7 @@ export default function GanttChart() {
         <CardContent className="p-0">
           <div className="flex">
             {/* Left Panel - Task List */}
-            <div className="w-80 border-r bg-muted/30">
-              <div className="p-4 border-b bg-background">
-                <h3 className="font-semibold">機台列表</h3>
-                <p className="text-sm text-muted-foreground">共 {ganttTasks.length} 台機器</p>
-              </div>
-              <ScrollArea className="h-[600px]">
-                <div className="p-2 space-y-2">
-                  {ganttTasks.map(task => (
-                    <div 
-                      key={task.id} 
-                      className="p-3 bg-background rounded border hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-sm">{task.name}</span>
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: getStatusColor(task.status) }}
-                          title={task.status}
-                        />
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-2">
-                        負責人: {task.assignee}
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span>進度</span>
-                          <span className="font-medium">{task.progress}%</span>
-                        </div>
-                        <Progress value={task.progress} className="h-1" />
-                      </div>
-                      {task.startDate && (
-                        <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                          <span>{task.startDate.toLocaleDateString('zh-TW')}</span>
-                          {task.endDate && <span>{task.endDate.toLocaleDateString('zh-TW')}</span>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
+            <GanttTaskList tasks={ganttTasks} />
             
             {/* Right Panel - Gantt Chart */}
             <div className="flex-1">
@@ -286,38 +121,14 @@ export default function GanttChart() {
               </div>
               
               {/* Timeline Header */}
-              <div className="relative h-12 bg-muted/20 border-b overflow-hidden">
-                {timeMarkers.map((marker, idx) => (
-                  <div
-                    key={idx}
-                    className="absolute top-0 bottom-0 border-l border-border/30"
-                    style={{ left: `${marker.percent}%` }}
-                  >
-                    <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
-                      {marker.label}
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Today Line */}
-                <div 
-                  className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
-                  style={{ 
-                    left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
-                  }}
-                >
-                  <div className="absolute -top-1 -left-6 text-xs text-primary font-medium bg-background px-1 rounded">
-                    今日
-                  </div>
-                </div>
-              </div>
+              <GanttTimeline viewRange={viewRange} />
               
               {/* Gantt Bars */}
               <ScrollArea className="h-[600px]">
                 <div className="p-4 space-y-4">
                   {ganttTasks.map(task => (
                     <div key={task.id} className="relative h-12 hover:bg-muted/20 rounded p-2">
-                      {renderTaskBar(task)}
+                      <GanttTaskBar task={task} viewRange={viewRange} />
                     </div>
                   ))}
                 </div>

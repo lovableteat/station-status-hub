@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useStationStatus } from "./useStationStatus";
 
 interface UnifiedSystem {
   id: string;
@@ -67,89 +68,11 @@ export function useUnifiedData() {
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
   const [progress, setProgress] = useState<UnifiedProgress[]>([]);
-  const [stationStatuses, setStationStatuses] = useState<StationStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Memoize the expensive station status calculation
-  const memoizedStationStatuses = useMemo(() => {
-    if (systems.length === 0 || stations.length === 0) return [];
-    
-    return stations.map(station => {
-      // Find systems currently at this station
-      const systemsAtStation = systems.filter(s => s.current_station === station.station_name);
-      
-      // Calculate completion rate for this station across all systems
-      const stationProgress = systems.map(system => {
-        const systemStationProgress = progress.filter(p => 
-          p.system_id === system.id && p.station_id === station.id
-        );
-        
-        if (systemStationProgress.length === 0) return 0;
-        
-        const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
-        return (completedItems / systemStationProgress.length) * 100;
-      });
-
-      const averageProgress = stationProgress.length > 0 
-        ? stationProgress.reduce((sum, prog) => sum + prog, 0) / stationProgress.length 
-        : 0;
-
-      // Determine station status
-      let status: "idle" | "working" | "warning" | "error" | "complete" = "idle";
-      if (systemsAtStation.length > 0) {
-        if (averageProgress < 50) status = "warning";
-        else if (averageProgress < 100) status = "working";
-        else status = "complete";
-      }
-
-      const completedSystems = systems.filter(s => {
-        const systemProgress = progress.filter(p => 
-          p.system_id === s.id && p.station_id === station.id && p.status === 'Done'
-        );
-        const totalItems = progress.filter(p => 
-          p.system_id === s.id && p.station_id === station.id
-        ).length;
-        return totalItems > 0 && systemProgress.length === totalItems;
-      }).length;
-
-      const ongoingSystems = systemsAtStation.length;
-      const efficiency = Math.round(averageProgress);
-
-      // Calculate detailed progress for each system at this station
-      const systemProgress = systemsAtStation.map(system => {
-        const systemStationProgress = progress.filter(p => 
-          p.system_id === system.id && p.station_id === station.id
-        );
-        
-        const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
-        const totalItems = systemStationProgress.length;
-        const systemProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-        
-        return {
-          system,
-          progress: Math.round(systemProgress),
-          status: system.status,
-          test_items_completed: completedItems,
-          test_items_total: totalItems
-        };
-      });
-
-      return {
-        id: station.id,
-        name: station.station_name,
-        status,
-        current_system: systemsAtStation[0]?.system_name,
-        current_systems: systemsAtStation,
-        efficiency: Math.max(0, Math.min(100, efficiency)),
-        last_update: new Date().toISOString(),
-        total_systems: systems.length,
-        completed_systems: completedSystems,
-        ongoing_systems: ongoingSystems,
-        system_progress: systemProgress
-      };
-    });
-  }, [systems, stations, progress]);
+  // Use the optimized station status hook
+  const stationStatuses = useStationStatus(systems, stations, progress);
 
   // Debounced reload function to prevent excessive API calls
   const debouncedReload = useCallback(
@@ -194,10 +117,6 @@ export function useUnifiedData() {
     }
   }, [toast]);
 
-  // Set stationStatuses to use memoized version
-  useEffect(() => {
-    setStationStatuses(memoizedStationStatuses);
-  }, [memoizedStationStatuses]);
 
   const updateProgress = useCallback(async (
     systemId: string,
