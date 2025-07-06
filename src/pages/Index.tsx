@@ -57,7 +57,8 @@ const Index = () => {
       case "flow-info":
         return <FlowInfo />;
       case "gantt":
-        return <MachineGanttChart />;
+        // This case is handled by navigation to /gantt route
+        return <Dashboard onNavigate={handleNavigation} />;
       case "monitor":
         return <ProductionMonitor />;
       case "issues":
