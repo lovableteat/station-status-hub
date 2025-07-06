@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { ExportDialog } from './ExportDialog';
+import React from 'react';
 
 interface MachineWorkOrder {
   id: string;
@@ -32,7 +33,7 @@ interface MachineSchedule {
   productionLine: string;
 }
 
-export function MachineGanttChart() {
+export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const { systems, stationStatuses, stations } = useUnifiedData();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
@@ -132,21 +133,12 @@ export function MachineGanttChart() {
     return markers;
   }, [viewRange]);
 
-  const getStatusColor = (status: MachineWorkOrder['status']) => {
-    switch (status) {
-      case 'completed': return 'hsl(var(--success))';
-      case 'in_progress': return 'hsl(var(--primary))';
-      case 'delayed': return 'hsl(var(--destructive))';
-      default: return 'hsl(var(--muted))';
-    }
-  };
-
-  const handleZoom = (direction: 'in' | 'out') => {
+  const handleZoom = useCallback((direction: 'in' | 'out') => {
     const newZoom = direction === 'in' ? Math.min(zoomLevel * 1.5, 5) : Math.max(zoomLevel / 1.5, 0.5);
     setZoomLevel(newZoom);
-  };
+  }, [zoomLevel]);
 
-  const handleTimeNavigation = (direction: 'prev' | 'next') => {
+  const handleTimeNavigation = useCallback((direction: 'prev' | 'next') => {
     const { start, end } = viewRange;
     const duration = end.getTime() - start.getTime();
     const shift = direction === 'next' ? duration * 0.5 : -duration * 0.5;
@@ -155,14 +147,14 @@ export function MachineGanttChart() {
       start: new Date(start.getTime() + shift),
       end: new Date(end.getTime() + shift)
     });
-  };
+  }, [viewRange]);
 
-  const handleWorkOrderClick = (workOrder: MachineWorkOrder) => {
+  const handleWorkOrderClick = useCallback((workOrder: MachineWorkOrder) => {
     setSelectedWorkOrder(workOrder);
     setIsWorkOrderDialogOpen(true);
-  };
+  }, []);
 
-  const renderWorkOrderBar = (workOrder: MachineWorkOrder) => {
+  const renderWorkOrderBar = useCallback((workOrder: MachineWorkOrder) => {
     const { start, end } = viewRange;
     const totalDuration = end.getTime() - start.getTime();
     const orderStart = Math.max(0, workOrder.startTime.getTime() - start.getTime());
@@ -197,7 +189,16 @@ export function MachineGanttChart() {
         </div>
       </div>
     );
-  };
+  }, [viewRange, zoomLevel, handleWorkOrderClick]);
+
+  const getStatusColor = useCallback((status: MachineWorkOrder['status']) => {
+    switch (status) {
+      case 'completed': return 'hsl(var(--success))';
+      case 'in_progress': return 'hsl(var(--primary))';
+      case 'delayed': return 'hsl(var(--destructive))';
+      default: return 'hsl(var(--muted))';
+    }
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -417,4 +418,4 @@ export function MachineGanttChart() {
       />
     </div>
   );
-}
+});
