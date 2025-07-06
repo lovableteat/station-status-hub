@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, ArrowLeft, Clock, User, Gauge
+  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, Clock, User, Gauge
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
@@ -33,17 +32,13 @@ interface MachineSchedule {
   productionLine: string;
 }
 
-type TimeScale = 'day' | 'week' | 'month';
-
 export function MachineGanttChart() {
   const { systems, stationStatuses, stations } = useUnifiedData();
-  const [timeScale, setTimeScale] = useState<TimeScale>('week');
   const [zoomLevel, setZoomLevel] = useState(1);
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<MachineWorkOrder | null>(null);
   const [isWorkOrderDialogOpen, setIsWorkOrderDialogOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Convert station data to machine schedules
@@ -117,23 +112,8 @@ export function MachineGanttChart() {
     const { start, end } = viewRange;
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     
-    let increment: number;
-    let format: Intl.DateTimeFormatOptions;
-    
-    switch (timeScale) {
-      case 'day':
-        increment = 1;
-        format = { month: 'short', day: 'numeric' };
-        break;
-      case 'week':
-        increment = 1;
-        format = { month: 'short', day: 'numeric' };
-        break;
-      case 'month':
-        increment = 7;
-        format = { month: 'short', day: 'numeric' };
-        break;
-    }
+    const increment = 1; // Daily markers
+    const format: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     
     let currentDate = new Date(start);
     while (currentDate <= end) {
@@ -150,7 +130,7 @@ export function MachineGanttChart() {
     }
     
     return markers;
-  }, [viewRange, timeScale]);
+  }, [viewRange]);
 
   const getStatusColor = (status: MachineWorkOrder['status']) => {
     switch (status) {
@@ -182,16 +162,6 @@ export function MachineGanttChart() {
     setIsWorkOrderDialogOpen(true);
   };
 
-  const toggleLineExpansion = (line: string) => {
-    const newExpanded = new Set(expandedLines);
-    if (newExpanded.has(line)) {
-      newExpanded.delete(line);
-    } else {
-      newExpanded.add(line);
-    }
-    setExpandedLines(newExpanded);
-  };
-
   const renderWorkOrderBar = (workOrder: MachineWorkOrder) => {
     const { start, end } = viewRange;
     const totalDuration = end.getTime() - start.getTime();
@@ -211,7 +181,7 @@ export function MachineGanttChart() {
           left: `${leftPercent}%`,
           width: `${widthPercent}px`,
           backgroundColor: getStatusColor(workOrder.status),
-          minWidth: '80px'
+          minWidth: '60px'
         }}
         onClick={() => handleWorkOrderClick(workOrder)}
       >
@@ -221,14 +191,9 @@ export function MachineGanttChart() {
           style={{ width: `${workOrder.progress}%` }}
         />
         
-        {/* Work order content */}
-        <div className="absolute inset-0 flex items-center px-2 text-white text-xs font-medium">
-          <span className="truncate mr-1" style={{ maxWidth: '60%' }}>
-            {workOrder.systemName}
-          </span>
-          <span className="text-xs opacity-90 ml-auto">
-            {workOrder.progress}%
-          </span>
+        {/* Progress percentage only */}
+        <div className="absolute inset-0 flex items-center justify-center text-white text-xs font-medium">
+          {workOrder.progress}%
         </div>
       </div>
     );
@@ -244,18 +209,6 @@ export function MachineGanttChart() {
               <p className="text-muted-foreground text-sm">機台生產排程與工單狀態一覽</p>
             </div>
             <div className="flex items-center gap-2">
-              {/* Time Scale Selector */}
-              <Select value={timeScale} onValueChange={(value: TimeScale) => setTimeScale(value)}>
-                <SelectTrigger className="w-16">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">日</SelectItem>
-                  <SelectItem value="week">週</SelectItem>
-                  <SelectItem value="month">月</SelectItem>
-                </SelectContent>
-              </Select>
-              
               {/* Zoom Controls */}
               <div className="flex items-center gap-1">
                 <Button variant="outline" size="sm" onClick={() => handleZoom('out')}>
