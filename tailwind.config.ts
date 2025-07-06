@@ -146,7 +146,9 @@ export default {
 			},
 			boxShadow: {
 				'glow': 'var(--shadow-glow)',
-				'station': '0 4px 12px hsl(var(--primary) / 0.15)'
+				'station': '0 4px 12px hsl(var(--primary) / 0.15)',
+				'gantt': 'var(--shadow-gantt)',
+				'today': 'var(--today-glow)'
 			}
 		}
 	},
