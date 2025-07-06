@@ -1,54 +1,81 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 // Export utility functions for generating actual PDF and Excel files
 
-export const generatePDF = async (title: string, data: any[]): Promise<Blob> => {
+export const generatePDF = async (title: string, data: any[]): Promise<void> => {
   try {
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-    
-    // Add generation time
-    doc.setFontSize(10);
-    doc.text(`生成時間: ${new Date().toLocaleString('zh-TW')}`, 14, 32);
-    
-    if (data && data.length > 0) {
-      // Get headers from the first object
-      const headers = Object.keys(data[0]);
-      const tableData = data.map(item => 
-        headers.map(header => {
-          const value = item[header];
-          // Convert objects to strings
-          if (typeof value === 'object' && value !== null) {
-            return JSON.stringify(value);
-          }
-          return value || '';
-        })
-      );
+    // Create HTML content similar to data center approach
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .summary { background: #f5f5f5; padding: 15px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${title}</h1>
+          <p>生成時間: ${new Date().toLocaleString('zh-TW')}</p>
+        </div>
+        
+        <div class="summary">
+          <h2>統計摘要</h2>
+          <p>總資料筆數: ${data.length}</p>
+        </div>
+        
+        ${data.length > 0 ? `
+        <table>
+          <thead>
+            <tr>
+              ${Object.keys(data[0]).map(header => `<th>${header}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(item => `
+              <tr>
+                ${Object.keys(data[0]).map(header => {
+                  const value = item[header];
+                  if (typeof value === 'object' && value !== null) {
+                    return `<td>${JSON.stringify(value)}</td>`;
+                  }
+                  return `<td>${value || '-'}</td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ` : '<p>無資料可匯出</p>'}
+        
+        <div class="footer">
+          <p>此報告由測試管理系統自動生成</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Create a new window and write the HTML content
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
       
-      // Add table
-      autoTable(doc, {
-        head: [headers],
-        body: tableData,
-        startY: 40,
-        styles: { 
-          fontSize: 8,
-          cellPadding: 2
-        },
-        headStyles: {
-          fillColor: [66, 139, 202],
-          textColor: 255
-        }
-      });
+      // Wait for content to load then print
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
     } else {
-      doc.text('無資料可匯出', 14, 45);
+      throw new Error("無法開啟新視窗");
     }
-    
-    return new Blob([doc.output('blob')], { type: 'application/pdf' });
   } catch (error) {
     console.error('PDF generation error:', error);
     throw new Error('PDF 生成失敗');

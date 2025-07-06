@@ -32,15 +32,14 @@ export function ExportDialog({ open, onOpenChange, title, data = [] }: ExportDia
     
     try {
       const fileName = `${title}_${new Date().toISOString().split('T')[0]}.${exportFormat}`;
-      let blob: Blob;
       
       if (exportFormat === 'pdf') {
-        blob = await generatePDF(title, data);
+        await generatePDF(title, data);
+        // PDF generation now handles the download directly
       } else {
-        blob = await generateExcel(title, data);
+        const excelBlob = await generateExcel(title, data);
+        downloadFile(excelBlob, fileName);
       }
-      
-      downloadFile(blob, fileName);
       
       toast({
         title: "匯出成功",
