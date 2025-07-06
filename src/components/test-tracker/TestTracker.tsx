@@ -30,7 +30,9 @@ export function TestTracker() {
     status: string;
     progress_percent: number;
     notes: string;
-  }>({ status: "", progress_percent: 0, notes: "" });
+    started_at?: string;
+    completed_at?: string;
+  }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
   const { toast } = useToast();
 
   const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
@@ -49,7 +51,9 @@ export function TestTracker() {
     setEditValues({
       status: existingProgress?.status || "Not Start",
       progress_percent: existingProgress?.progress_percent || 0,
-      notes: existingProgress?.notes || ""
+      notes: existingProgress?.notes || "",
+      started_at: existingProgress?.started_at,
+      completed_at: existingProgress?.completed_at
     });
   };
 
@@ -59,8 +63,8 @@ export function TestTracker() {
         status: editValues.status,
         progress_percent: editValues.progress_percent,
         notes: editValues.notes,
-        started_at: editValues.status === 'On-going' ? new Date().toISOString() : undefined,
-        completed_at: editValues.status === 'Done' ? new Date().toISOString() : null
+        started_at: editValues.started_at || (editValues.status === 'On-going' ? new Date().toISOString() : undefined),
+        completed_at: editValues.completed_at || (editValues.status === 'Done' ? new Date().toISOString() : null)
       };
 
       const success = await updateProgress(systemId, stationId, itemId, updates);
