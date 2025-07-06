@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Edit, Save, X, Trash2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface TestItem {
   id: string;
@@ -73,6 +74,8 @@ export function ProgressEditDialog({
   stationId,
 }: ProgressEditDialogProps) {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Helper function to format time for display
   const formatTime = (timeStr?: string) => {
@@ -146,10 +149,28 @@ export function ProgressEditDialog({
                         <Button 
                           size={isMobile ? "default" : "sm"}
                           className={isMobile ? "h-10 px-4" : ""}
-                          onClick={() => handleSaveProgress(systemId, stationId, item.id)}
+                          disabled={isSaving}
+                          onClick={async () => {
+                            setIsSaving(true);
+                            try {
+                              await handleSaveProgress(systemId, stationId, item.id);
+                              toast({
+                                title: "儲存成功",
+                                description: `${item.item_name} 的測試進度已更新`,
+                              });
+                            } catch (error) {
+                              toast({
+                                title: "儲存失敗",
+                                description: "請稍後再試",
+                                variant: "destructive",
+                              });
+                            } finally {
+                              setIsSaving(false);
+                            }
+                          }}
                         >
                           <Save className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                          {isMobile && "儲存"}
+                          {isMobile && (isSaving ? "儲存中..." : "儲存")}
                         </Button>
                         <Button 
                           size={isMobile ? "default" : "sm"}
@@ -214,7 +235,31 @@ export function ProgressEditDialog({
                       <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>狀態</Label>
                       <Select 
                         value={editValues.status} 
-                        onValueChange={(value) => setEditValues({...editValues, status: value})}
+                        onValueChange={(value) => {
+                          const now = new Date().toISOString();
+                          const newValues = { ...editValues, status: value };
+                          
+                          // Auto-set times based on status
+                          if (value === "On-going" && !editValues.started_at) {
+                            newValues.started_at = now;
+                          }
+                          if (value === "Done") {
+                            if (!editValues.started_at) {
+                              newValues.started_at = now;
+                            }
+                            if (!editValues.completed_at) {
+                              newValues.completed_at = now;
+                            }
+                            newValues.progress_percent = 100;
+                          }
+                          if (value === "Not Start") {
+                            newValues.started_at = undefined;
+                            newValues.completed_at = undefined;
+                            newValues.progress_percent = 0;
+                          }
+                          
+                          setEditValues(newValues);
+                        }}
                       >
                         <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
                           <SelectValue />
@@ -273,10 +318,17 @@ export function ProgressEditDialog({
                           <Input
                             type="datetime-local"
                             value={formatDateTimeLocal(editValues.started_at)}
-                            onChange={(e) => setEditValues({
-                              ...editValues, 
-                              started_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
-                            })}
+                            onChange={(e) => {
+                              const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : undefined;
+                              const newValues = { ...editValues, started_at: newStartTime };
+                              
+                              // Validation: if completed_at exists and is earlier than new start time, clear it
+                              if (newStartTime && editValues.completed_at && new Date(newStartTime) > new Date(editValues.completed_at)) {
+                                newValues.completed_at = undefined;
+                              }
+                              
+                              setEditValues(newValues);
+                            }}
                             className={isMobile ? "h-12 text-base" : ""}
                             placeholder="選擇開始時間"
                           />
@@ -286,13 +338,21 @@ export function ProgressEditDialog({
                           <Input
                             type="datetime-local"
                             value={formatDateTimeLocal(editValues.completed_at)}
-                            onChange={(e) => setEditValues({
-                              ...editValues, 
-                              completed_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
-                            })}
+                            min={formatDateTimeLocal(editValues.started_at)}
+                            onChange={(e) => {
+                              const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : undefined;
+                              setEditValues({
+                                ...editValues, 
+                                completed_at: newEndTime
+                              });
+                            }}
                             className={isMobile ? "h-12 text-base" : ""}
                             placeholder="選擇完成時間"
+                            disabled={!editValues.started_at}
                           />
+                          {!editValues.started_at && (
+                            <p className="text-xs text-muted-foreground mt-1">請先設定開始時間</p>
+                          )}
                         </div>
                       </>
                     )}
