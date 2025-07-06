@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { TimelineViewType } from "./MachineTimeline";
+import { cn } from "@/lib/utils";
 
 interface TimelineGridProps {
   viewType: TimelineViewType;
@@ -7,103 +8,130 @@ interface TimelineGridProps {
 }
 
 export function TimelineGrid({ viewType, bounds }: TimelineGridProps) {
-  const timeMarkers = useMemo(() => {
-    const markers: Array<{ date: Date; label: string; isMain: boolean }> = [];
+  const calendarData = useMemo(() => {
+    const days: Array<{
+      date: Date;
+      day: number;
+      month: number;
+      year: number;
+      isWeekend: boolean;
+      isToday: boolean;
+      isNewMonth: boolean;
+      monthLabel?: string;
+    }> = [];
+
     const start = new Date(bounds.start);
     const end = new Date(bounds.end);
-    
-    // Add some padding to the timeline
-    start.setDate(start.getDate() - 1);
-    end.setDate(end.getDate() + 1);
-    
     const current = new Date(start);
+    const today = new Date();
+    
+    let lastMonth = -1;
     
     while (current <= end) {
-      switch (viewType) {
-        case 'day':
-          markers.push({
-            date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'numeric', 
-              day: 'numeric',
-              hour: 'numeric'
-            }),
-            isMain: current.getHours() === 0
-          });
-          current.setHours(current.getHours() + 4);
-          break;
-          
-        case 'week':
-          markers.push({
-            date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'numeric', 
-              day: 'numeric' 
-            }),
-            isMain: current.getDay() === 1 // Monday
-          });
-          current.setDate(current.getDate() + 1);
-          break;
-          
-        case 'month':
-          markers.push({
-            date: new Date(current),
-            label: current.toLocaleDateString('zh-TW', { 
-              month: 'numeric', 
-              day: 'numeric' 
-            }),
-            isMain: current.getDate() === 1
-          });
-          current.setDate(current.getDate() + 3);
-          break;
-      }
+      const currentMonth = current.getMonth();
+      const isNewMonth = currentMonth !== lastMonth;
+      
+      days.push({
+        date: new Date(current),
+        day: current.getDate(),
+        month: currentMonth,
+        year: current.getFullYear(),
+        isWeekend: current.getDay() === 0 || current.getDay() === 6,
+        isToday: current.toDateString() === today.toDateString(),
+        isNewMonth,
+        monthLabel: isNewMonth ? current.toLocaleDateString('zh-TW', { month: 'long' }) : undefined
+      });
+      
+      lastMonth = currentMonth;
+      current.setDate(current.getDate() + 1);
     }
     
-    return markers;
-  }, [viewType, bounds]);
+    return days;
+  }, [bounds]);
 
+  const getDayWidth = () => {
+    const totalDays = calendarData.length;
+    if (totalDays === 0) return 0;
+    return 100 / totalDays;
+  };
+
+  const dayWidth = getDayWidth();
   const now = new Date();
   const isInBounds = now >= bounds.start && now <= bounds.end;
 
   return (
-    <div className="relative h-16 border-b bg-muted/10">
-      {/* Grid lines and labels */}
-      <div className="relative h-full">
-        {timeMarkers.map((marker, index) => {
-          const totalDuration = bounds.end.getTime() - bounds.start.getTime();
-          const markerPosition = ((marker.date.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+    <div className="relative h-20 border-b bg-background">
+      {/* Month headers */}
+      <div className="h-6 border-b bg-muted/30 flex">
+        {calendarData.map((day, index) => {
+          if (!day.isNewMonth) return null;
+          
+          // Calculate month span
+          let monthDays = 1;
+          for (let i = index + 1; i < calendarData.length; i++) {
+            if (calendarData[i].month === day.month) {
+              monthDays++;
+            } else {
+              break;
+            }
+          }
           
           return (
             <div
-              key={index}
-              className="absolute top-0 h-full"
-              style={{ left: `${markerPosition}%` }}
+              key={`month-${day.year}-${day.month}`}
+              className="flex items-center justify-center border-r text-xs font-semibold text-muted-foreground bg-muted/50"
+              style={{ 
+                width: `${dayWidth * monthDays}%`,
+                minWidth: '60px'
+              }}
             >
-              <div className={`h-full border-l ${marker.isMain ? 'border-border' : 'border-border/50'}`} />
-              <div className="absolute top-2 -translate-x-1/2 left-0 min-w-max px-1">
-                <span className={`text-sm ${marker.isMain ? 'font-medium' : 'text-muted-foreground'}`}>
-                  {marker.label}
-                </span>
-              </div>
+              {day.monthLabel}
             </div>
           );
         })}
-        
-        {/* Current time indicator */}
-        {isInBounds && (
-          <div
-            className="absolute top-0 h-full z-10"
-            style={{ 
-              left: `${((now.getTime() - bounds.start.getTime()) / (bounds.end.getTime() - bounds.start.getTime())) * 100}%` 
-            }}
-          >
-            <div className="h-full border-l-2 border-destructive" />
-            <div className="absolute top-1 -translate-x-1/2 left-0">
-              <div className="w-2 h-2 bg-destructive rounded-full" />
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Date grid */}
+      <div className="h-14 flex">
+        {calendarData.map((day, index) => {
+          const todayPosition = isInBounds && day.isToday ? 
+            (index / calendarData.length) * 100 : null;
+          
+          return (
+            <div
+              key={day.date.toISOString()}
+              className={cn(
+                "relative flex items-center justify-center border-r text-sm font-medium transition-colors",
+                day.isWeekend ? "bg-muted/20 text-muted-foreground" : "bg-background",
+                day.isToday && "bg-primary/10 text-primary font-bold ring-1 ring-primary/30"
+              )}
+              style={{ width: `${dayWidth}%`, minWidth: '30px' }}
+            >
+              <span className="select-none">{day.day}</span>
+              
+              {/* Today indicator line */}
+              {day.isToday && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-full bg-primary/60 z-10" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Current time indicator (for precise time within day) */}
+      {isInBounds && (
+        <div
+          className="absolute top-6 h-14 z-20 pointer-events-none"
+          style={{ 
+            left: `${((now.getTime() - bounds.start.getTime()) / (bounds.end.getTime() - bounds.start.getTime())) * 100}%` 
+          }}
+        >
+          <div className="h-full border-l-2 border-destructive shadow-sm" />
+          <div className="absolute top-1 -translate-x-1/2 left-0">
+            <div className="w-2 h-2 bg-destructive rounded-full shadow-sm" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
