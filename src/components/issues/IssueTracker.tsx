@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ExportDialog } from "../production/ExportDialog";
+import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { BackButton } from "../common/BackButton";
 
 interface Issue {
@@ -34,7 +34,7 @@ export function IssueTracker() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showExportDialog, setShowExportDialog] = useState(false);
+  
   const { toast } = useToast();
   
   // Calculate issue statistics
@@ -161,9 +161,6 @@ export function IssueTracker() {
     return matchesSearch && matchesPriority && matchesStatus;
   });
 
-  const exportData = () => {
-    setShowExportDialog(true);
-  };
 
   if (isLoading) {
     return (
@@ -210,10 +207,7 @@ export function IssueTracker() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportData}>
-            <Download className="h-4 w-4 mr-2" />
-            匯出報表
-          </Button>
+          <IssuePDFExportManager issues={filteredIssues} />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>

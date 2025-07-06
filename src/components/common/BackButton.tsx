@@ -12,7 +12,11 @@ export function BackButton({ onClick, label = "返回上一頁", variant = "outl
     if (onClick) {
       onClick();
     } else {
-      window.history.back();
+      // 使用 navigation event 而不是 window.history.back() 避免路由問題
+      const navigationEvent = new CustomEvent('navigate', {
+        detail: { module: 'dashboard' }
+      });
+      window.dispatchEvent(navigationEvent);
     }
   };
 
