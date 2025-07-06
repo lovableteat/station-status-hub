@@ -4,29 +4,17 @@ import { useUnifiedData } from "./useUnifiedData";
 export interface MachineTimelineData {
   id: string;
   system_name: string;
-  assigned_engineer: string;
-  status: string;
   overall_progress: number;
   start_time?: string;
   end_time?: string;
-  duration_hours?: number;
-  estimated_end_time?: string;
-  estimated_duration_hours?: number;
-  stations: Array<{
-    id: string;
-    name: string;
-    start_time?: string;
-    end_time?: string;
-    progress: number;
-    status: string;
-  }>;
+  status: string;
 }
 
-export function useMachineTimelineData(customTimeRange?: { start: Date; end: Date }) {
-  const { systems, stations, testItems, progress, isLoading } = useUnifiedData();
+export function useMachineTimelineData() {
+  const { systems, progress, isLoading } = useUnifiedData();
 
   const timelineData = useMemo(() => {
-    if (!systems.length || !stations.length || !progress.length) {
+    if (!systems.length || !progress.length) {
       return [];
     }
 
@@ -34,82 +22,26 @@ export function useMachineTimelineData(customTimeRange?: { start: Date; end: Dat
       // Get all progress records for this system
       const systemProgress = progress.filter(p => p.system_id === system.id);
       
-      // Calculate system-level start and end times
+      // Calculate system-level start and end times from real data
       const allStartTimes = systemProgress.map(p => p.started_at).filter(Boolean);
       const allEndTimes = systemProgress.map(p => p.completed_at).filter(Boolean);
       
       const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
       const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-      
-      // Calculate actual duration in hours
-      let actualDurationHours: number | undefined;
-      if (systemStartTime && systemEndTime) {
-        const start = new Date(systemStartTime);
-        const end = new Date(systemEndTime);
-        actualDurationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      }
-
-      // Calculate estimated duration from stations
-      const totalEstimatedHours = stations
-        .filter(station => station.station_order >= 0 && station.station_order <= 3)
-        .reduce((total, station) => total + (station.estimated_hours || 0), 0);
-
-      // Calculate estimated end time based on start time and estimated hours
-      let estimatedEndTime: string | undefined;
-      if (systemStartTime && totalEstimatedHours > 0) {
-        const estimatedEnd = new Date(systemStartTime);
-        estimatedEnd.setHours(estimatedEnd.getHours() + totalEstimatedHours);
-        estimatedEndTime = estimatedEnd.toISOString();
-      }
-
-      // Get station data with their progress
-      const stationData = stations
-        .filter(station => station.station_order >= 0 && station.station_order <= 3)
-        .map(station => {
-          const stationItems = testItems.filter(item => item.station_id === station.id);
-          const stationProgress = stationItems.map(item =>
-            systemProgress.find(p => p.station_id === station.id && p.item_id === item.id)
-          ).filter(Boolean);
-
-          const stationStartTimes = stationProgress.map(p => p?.started_at).filter(Boolean);
-          const stationEndTimes = stationProgress.map(p => p?.completed_at).filter(Boolean);
-          
-          const completedItems = stationProgress.filter(p => p?.status === 'Done').length;
-          const totalItems = stationItems.length;
-          const stationProgressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-
-          return {
-            id: station.id,
-            name: station.station_name,
-            start_time: stationStartTimes.length > 0 ? stationStartTimes.sort()[0] : undefined,
-            end_time: stationEndTimes.length > 0 ? stationEndTimes.sort().reverse()[0] : undefined,
-            progress: stationProgressPercent,
-            status: stationProgressPercent === 100 ? 'Done' : stationProgressPercent > 0 ? 'On-going' : 'Not Start'
-          };
-        });
 
       return {
         id: system.id,
         system_name: system.system_name,
-        assigned_engineer: system.assigned_engineer,
-        status: system.status,
         overall_progress: system.overall_progress,
         start_time: systemStartTime,
         end_time: systemEndTime,
-        duration_hours: actualDurationHours,
-        estimated_end_time: estimatedEndTime,
-        estimated_duration_hours: totalEstimatedHours,
-        stations: stationData
+        status: system.status
       };
     });
-  }, [systems, stations, testItems, progress]);
+  }, [systems, progress]);
 
   // Calculate timeline bounds
   const timelineBounds = useMemo(() => {
-    if (customTimeRange) {
-      return customTimeRange;
-    }
-
     const allTimes = timelineData.flatMap(machine => [
       machine.start_time,
       machine.end_time
@@ -125,11 +57,15 @@ export function useMachineTimelineData(customTimeRange?: { start: Date; end: Dat
     }
 
     const sortedTimes = allTimes.sort();
-    return {
-      start: new Date(sortedTimes[0]),
-      end: new Date(sortedTimes[sortedTimes.length - 1])
-    };
-  }, [timelineData, customTimeRange]);
+    const startDate = new Date(sortedTimes[0]);
+    const endDate = new Date(sortedTimes[sortedTimes.length - 1]);
+    
+    // Add padding
+    startDate.setDate(startDate.getDate() - 1);
+    endDate.setDate(endDate.getDate() + 1);
+    
+    return { start: startDate, end: endDate };
+  }, [timelineData]);
 
   return {
     timelineData,
