@@ -82,6 +82,12 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
 
+  // 提取機台編號的函數
+  const getStationNumber = useCallback((stationName: string) => {
+    const match = stationName.match(/Station\s*(\d+)/i);
+    return match ? match[1] : stationName;
+  }, []);
+
   // 計算機台工單資料的核心邏輯
   const machineSchedules = useMemo(() => {
     if (!stations.length || !systems.length) return [];
@@ -166,7 +172,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
           progress: stationProgress,
           priority,
           stationId: station.id,
-          stationName: station.station_name,
+          stationName: getStationNumber(station.station_name),
           itemsCompleted: completedItems,
           itemsTotal: totalItems,
           actualHours,
@@ -196,7 +202,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
       
       return {
         machineId: station.id,
-        machineName: station.station_name,
+        machineName: getStationNumber(station.station_name),
         stationOrder: station.station_order,
         utilization: Math.min(100, Math.round((ongoingSystemsAtStation + completedSystemsAtStation) / Math.max(1, totalSystemsAtStation) * 100)),
         efficiency,
@@ -211,7 +217,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
     
     // 按機台順序排序
     return schedules.sort((a, b) => a.stationOrder - b.stationOrder);
-  }, [stations, systems, progress, stationStatuses]);
+  }, [stations, systems, progress, stationStatuses, getStationNumber]);
 
   // 計算最佳視圖時間範圍
   useEffect(() => {
@@ -605,73 +611,21 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
         <CardContent className="p-0 flex-1 flex flex-col">
           {/* 甘特圖主體 */}
           <div className="flex flex-1 min-h-0">
-            {/* 左側機台列表 */}
-            <div className="w-64 border-r bg-muted/20 flex flex-col">
-              <div className="p-3 border-b bg-background">
-                <h3 className="font-semibold text-sm">機台列表</h3>
-                <p className="text-xs text-muted-foreground">點擊機台名稱查看詳情</p>
+            {/* 左側機台標籤列 */}
+            <div className="w-16 flex-shrink-0 bg-muted/20 border-r">
+              <div className="h-12 border-b bg-background flex items-center justify-center">
+                <span className="text-xs font-medium text-muted-foreground">機台</span>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="space-y-0">
-                  {machineSchedules.map((machine) => (
-                    <div key={machine.machineId} className="border-b border-border/20">
-                      <div className="p-3 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm truncate">{machine.machineName}</h4>
-                          <Badge 
-                            variant={machine.utilization > 80 ? 'default' : machine.utilization > 50 ? 'secondary' : 'outline'}
-                            className="text-xs"
-                          >
-                            {machine.utilization}%
-                          </Badge>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>工單總數</span>
-                            <span>{machine.totalSystems}</span>
-                          </div>
-                          
-                          <Progress value={machine.utilization} className="h-1.5" />
-                          
-                          <div className="grid grid-cols-3 gap-1 text-xs">
-                            <div className="text-center">
-                              <div className="text-chart-2 font-medium">{machine.completedSystems}</div>
-                              <div className="text-muted-foreground">完成</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-chart-1 font-medium">{machine.ongoingSystems}</div>
-                              <div className="text-muted-foreground">進行</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-chart-5 font-medium">{machine.delayedSystems}</div>
-                              <div className="text-muted-foreground">延遲</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">效率</span>
-                            <span className={`font-medium ${
-                              machine.efficiency >= 100 ? 'text-chart-2' : 
-                              machine.efficiency >= 80 ? 'text-chart-1' : 'text-chart-5'
-                            }`}>
-                              {machine.efficiency}%
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">平均完成時間</span>
-                            <span>{machine.avgCompletionTime.toFixed(1)}h</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+              <div className="space-y-0">
+                {machineSchedules.map((machine) => (
+                  <div key={machine.machineId} className="h-16 border-b border-border/10 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{machine.machineName}</span>
+                  </div>
+                ))}
+              </div>
             </div>
             
-            {/* 右側時間軸與甘特圖 */}
+            {/* 時間軸與甘特圖區域 */}
             <div className="flex-1 flex flex-col min-w-0">
               {/* 時間軸標題 */}
               <div className="relative h-12 bg-muted/20 border-b overflow-hidden">
@@ -725,6 +679,68 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
                 </div>
               </ScrollArea>
             </div>
+          </div>
+          
+          {/* 機台統計列表 - 移到甘特圖下方 */}
+          <div className="border-t bg-muted/10">
+            <div className="p-3 border-b bg-background">
+              <h3 className="font-semibold text-sm">機台狀態統計</h3>
+              <p className="text-xs text-muted-foreground">各機台當日工單執行情況</p>
+            </div>
+            <ScrollArea className="max-h-32">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 p-3">
+                {machineSchedules.map((machine) => (
+                  <Card key={machine.machineId} className="p-3 hover:shadow-md transition-shadow">
+                    <div className="space-y-2">
+                      {/* 機台編號和利用率 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-bold text-primary">{machine.machineName}</span>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">機台</div>
+                            <div className="text-sm font-medium">{machine.machineName}</div>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={machine.utilization > 80 ? 'default' : machine.utilization > 50 ? 'secondary' : 'outline'}
+                          className="text-xs"
+                        >
+                          {machine.utilization}%
+                        </Badge>
+                      </div>
+                      
+                      {/* 工單統計 */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">當日工單</span>
+                          <span className="font-medium">{machine.totalSystems}</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-1 text-xs">
+                          <div className="text-center p-1 rounded bg-chart-2/10">
+                            <div className="text-chart-2 font-medium">{machine.completedSystems}</div>
+                            <div className="text-muted-foreground text-xs">完成</div>
+                          </div>
+                          <div className="text-center p-1 rounded bg-chart-1/10">
+                            <div className="text-chart-1 font-medium">{machine.ongoingSystems}</div>
+                            <div className="text-muted-foreground text-xs">進行</div>
+                          </div>
+                          <div className="text-center p-1 rounded bg-chart-5/10">
+                            <div className="text-chart-5 font-medium">{machine.delayedSystems}</div>
+                            <div className="text-muted-foreground text-xs">延遲</div>
+                          </div>
+                        </div>
+                        
+                        {/* 進度條 */}
+                        <Progress value={machine.utilization} className="h-1" />
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
         </CardContent>
       </Card>
