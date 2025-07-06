@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -6,8 +6,7 @@ import { ArrowLeft, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-re
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useGanttTasks } from '@/hooks/useGanttTasks';
 import { GanttTimeline } from '@/components/gantt/GanttTimeline';
-import { GanttTaskBar } from '@/components/gantt/GanttTaskBar';
-import { GanttTaskList } from '@/components/gantt/GanttTaskList';
+import { GanttMachineRow } from '@/components/gantt/GanttMachineRow';
 
 export default function GanttChart() {
   const { systems, progress, isLoading } = useUnifiedData();
@@ -15,10 +14,15 @@ export default function GanttChart() {
   const [viewRange, setViewRange] = useState({ start: new Date(), end: new Date() });
   const [zoomLevel, setZoomLevel] = useState(1);
 
+  // Memoize sorted tasks for better performance
+  const sortedTasks = useMemo(() => {
+    return [...ganttTasks].sort((a, b) => a.name.localeCompare(b.name));
+  }, [ganttTasks]);
+
   // Set view range based on actual data
   useEffect(() => {
-    if (ganttTasks.length > 0) {
-      const allDates = ganttTasks.flatMap(task => [task.startDate, task.endDate]).filter(Boolean) as Date[];
+    if (sortedTasks.length > 0) {
+      const allDates = sortedTasks.flatMap(task => [task.startDate, task.endDate]).filter(Boolean) as Date[];
       
       if (allDates.length > 0) {
         const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
@@ -31,23 +35,23 @@ export default function GanttChart() {
         setViewRange({ start: minDate, end: maxDate });
       }
     }
-  }, [ganttTasks]);
+  }, [sortedTasks]);
 
-  const handleZoom = (direction: 'in' | 'out') => {
-    const newZoom = direction === 'in' ? Math.min(zoomLevel * 1.5, 3) : Math.max(zoomLevel / 1.5, 0.5);
-    setZoomLevel(newZoom);
-  };
+  const handleZoom = useCallback((direction: 'in' | 'out') => {
+    setZoomLevel(prev => direction === 'in' ? Math.min(prev * 1.5, 3) : Math.max(prev / 1.5, 0.5));
+  }, []);
 
-  const handleTimeNavigation = (direction: 'prev' | 'next') => {
-    const { start, end } = viewRange;
-    const duration = end.getTime() - start.getTime();
-    const shift = direction === 'next' ? duration * 0.3 : -duration * 0.3;
-    
-    setViewRange({
-      start: new Date(start.getTime() + shift),
-      end: new Date(end.getTime() + shift)
+  const handleTimeNavigation = useCallback((direction: 'prev' | 'next') => {
+    setViewRange(prev => {
+      const duration = prev.end.getTime() - prev.start.getTime();
+      const shift = direction === 'next' ? duration * 0.3 : -duration * 0.3;
+      
+      return {
+        start: new Date(prev.start.getTime() + shift),
+        end: new Date(prev.end.getTime() + shift)
+      };
     });
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -109,31 +113,37 @@ export default function GanttChart() {
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="flex">
-            {/* Left Panel - Task List */}
-            <GanttTaskList tasks={ganttTasks} />
-            
-            {/* Right Panel - Gantt Chart */}
-            <div className="flex-1">
-              <div className="p-4 border-b bg-background">
-                <h3 className="font-semibold">時間軸圖表</h3>
-                <p className="text-sm text-muted-foreground">機台排程與進度視覺化</p>
+          <div className="flex flex-col">
+            {/* Header Section */}
+            <div className="flex bg-muted/10 border-b">
+              {/* Machine Name Header */}
+              <div className="w-48 flex-shrink-0 px-4 py-3 bg-muted/20 border-r border-border/30">
+                <h3 className="font-semibold text-sm">機台名稱</h3>
+                <p className="text-xs text-muted-foreground">共 {sortedTasks.length} 台</p>
               </div>
               
               {/* Timeline Header */}
-              <GanttTimeline viewRange={viewRange} />
-              
-              {/* Gantt Bars */}
-              <ScrollArea className="h-[600px]">
-                <div className="p-4 space-y-4">
-                  {ganttTasks.map(task => (
-                    <div key={task.id} className="relative h-12 hover:bg-muted/20 rounded p-2">
-                      <GanttTaskBar task={task} viewRange={viewRange} />
-                    </div>
-                  ))}
+              <div className="flex-1">
+                <div className="px-4 py-3">
+                  <h3 className="font-semibold text-sm">時間軸圖表</h3>
+                  <p className="text-xs text-muted-foreground">機台排程與進度視覺化</p>
                 </div>
-              </ScrollArea>
+                <GanttTimeline viewRange={viewRange} />
+              </div>
             </div>
+            
+            {/* Gantt Chart Body */}
+            <ScrollArea className="h-[600px]">
+              <div className="min-w-full">
+                {sortedTasks.map(task => (
+                  <GanttMachineRow 
+                    key={task.id} 
+                    task={task} 
+                    viewRange={viewRange} 
+                  />
+                ))}
+              </div>
+            </ScrollArea>
           </div>
         </CardContent>
       </Card>
