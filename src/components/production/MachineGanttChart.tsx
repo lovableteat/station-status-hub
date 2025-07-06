@@ -286,115 +286,92 @@ export function MachineGanttChart() {
         </CardHeader>
         
         <CardContent className="p-0 flex-1 flex flex-col">
-          <div className="flex flex-1">
-            {/* Left Panel - Machine List */}
-            <div className="w-80 border-r bg-muted/30 flex flex-col">
-              <div className="p-3 border-b bg-background">
-                <h3 className="font-semibold text-sm">機台列表</h3>
-                <p className="text-xs text-muted-foreground">按產線分組顯示</p>
-              </div>
-              <ScrollArea className="flex-1">
-                {Object.entries(groupedMachines).map(([line, machines]) => (
-                  <div key={line} className="p-2">
-                    <div 
-                      className="font-medium text-sm mb-2 px-2 py-1 bg-muted rounded cursor-pointer flex items-center justify-between hover:bg-muted/80 transition-colors"
-                      onClick={() => toggleLineExpansion(line)}
-                    >
-                      <span>{line} ({machines.length})</span>
-                      <div className="text-xs text-muted-foreground">
-                        平均利用率: {Math.round(machines.reduce((sum, m) => sum + m.utilization, 0) / machines.length)}%
-                      </div>
-                    </div>
-                    {(expandedLines.has(line) || expandedLines.size === 0) && machines.map(machine => (
-                      <div key={machine.machineId} className="p-2 mb-2 bg-background rounded border">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-sm truncate">{machine.machineName}</span>
-                          <Badge variant="outline" className="text-xs">
-                            <Gauge className="h-3 w-3 mr-1" />
-                            {machine.utilization}%
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground mb-2">
-                          工單數量: {machine.workOrders.length}
-                        </div>
-                        <Progress value={machine.utilization} className="h-1" />
-                        <div className="text-xs text-muted-foreground mt-1">
-                          即時利用率
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </ScrollArea>
+          {/* Top Section - Timeline */}
+          <div className="flex-1 flex flex-col">
+            <div className="p-3 border-b bg-background">
+              <h3 className="font-semibold text-sm">時間軸排程</h3>
+              <p className="text-xs text-muted-foreground">工單時段與狀態視覺化</p>
             </div>
             
-            {/* Right Panel - Timeline */}
-            <div className="flex-1 flex flex-col">
-              <div className="p-3 border-b bg-background">
-                <h3 className="font-semibold text-sm">時間軸排程</h3>
-                <p className="text-xs text-muted-foreground">工單時段與狀態視覺化</p>
-              </div>
+            {/* Timeline Header */}
+            <div className="relative h-10 bg-muted/20 border-b overflow-hidden">
+              {timeMarkers.map((marker, idx) => (
+                <div
+                  key={idx}
+                  className="absolute top-0 bottom-0 border-l border-border/30"
+                  style={{ left: `${marker.percent}%` }}
+                >
+                  <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
+                    {marker.label}
+                  </div>
+                </div>
+              ))}
               
-              {/* Timeline Header */}
-              <div className="relative h-10 bg-muted/20 border-b overflow-hidden">
-                {timeMarkers.map((marker, idx) => (
-                  <div
-                    key={idx}
-                    className="absolute top-0 bottom-0 border-l border-border/30"
-                    style={{ left: `${marker.percent}%` }}
-                  >
-                    <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
-                      {marker.label}
+              {/* Today Line */}
+              <div 
+                className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
+                style={{ 
+                  left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
+                }}
+              >
+                <div className="absolute -top-1 -left-4 text-xs text-primary font-medium bg-background px-1 rounded">
+                  今日
+                </div>
+              </div>
+            </div>
+            
+            {/* Timeline Content - Work Orders */}
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-2">
+                {machineSchedules.map(machine => (
+                  <div key={machine.machineId} className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground px-2">
+                      {machine.machineName}
+                    </div>
+                    {machine.workOrders.map(workOrder => (
+                      <div key={workOrder.id} className="relative h-10 hover:bg-muted/20 rounded p-1">
+                        {renderWorkOrderBar(workOrder)}
+                      </div>
+                    ))}
+                    {machine.workOrders.length === 0 && (
+                      <div className="h-10 flex items-center justify-center text-xs text-muted-foreground border-2 border-dashed border-muted rounded">
+                        無排程工單
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          
+          {/* Bottom Section - Machine List */}
+          <div className="border-t bg-muted/30">
+            <div className="p-3 border-b bg-background">
+              <h3 className="font-semibold text-sm">機台列表</h3>
+              <p className="text-xs text-muted-foreground">機台狀態與利用率</p>
+            </div>
+            <ScrollArea className="h-48">
+              <div className="p-2 grid grid-cols-2 gap-2">
+                {machineSchedules.map(machine => (
+                  <div key={machine.machineId} className="p-2 bg-background rounded border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm truncate">{machine.machineName}</span>
+                      <Badge variant="outline" className="text-xs">
+                        <Gauge className="h-3 w-3 mr-1" />
+                        {machine.utilization}%
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      工單數量: {machine.workOrders.length}
+                    </div>
+                    <Progress value={machine.utilization} className="h-1" />
+                    <div className="text-xs text-muted-foreground mt-1">
+                      即時利用率
                     </div>
                   </div>
                 ))}
-                
-                {/* Today Line */}
-                <div 
-                  className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
-                  style={{ 
-                    left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
-                  }}
-                >
-                  <div className="absolute -top-1 -left-4 text-xs text-primary font-medium bg-background px-1 rounded">
-                    今日
-                  </div>
-                </div>
               </div>
-              
-              {/* Machine Schedules */}
-              <ScrollArea className="flex-1">
-                <div className="p-4 space-y-4">
-                  {Object.entries(groupedMachines).map(([line, machines]) => (
-                    <div key={line}>
-                      <div className="text-sm font-medium mb-2 p-2 bg-muted/50 rounded flex items-center justify-between">
-                        <span>{line}</span>
-                        <Badge variant="outline">
-                          {machines.reduce((sum, m) => sum + m.workOrders.length, 0)} 工單
-                        </Badge>
-                      </div>
-                      {(expandedLines.has(line) || expandedLines.size === 0) && machines.map(machine => (
-                        <div key={machine.machineId} className="space-y-2 mb-4">
-                          <div className="text-xs font-medium text-muted-foreground px-2">
-                            {machine.machineName}
-                          </div>
-                          {machine.workOrders.map(workOrder => (
-                            <div key={workOrder.id} className="relative h-10 hover:bg-muted/20 rounded p-1">
-                              {renderWorkOrderBar(workOrder)}
-                            </div>
-                          ))}
-                          {machine.workOrders.length === 0 && (
-                            <div className="h-10 flex items-center justify-center text-xs text-muted-foreground border-2 border-dashed border-muted rounded">
-                              無排程工單
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
+            </ScrollArea>
           </div>
         </CardContent>
       </Card>
