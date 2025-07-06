@@ -106,8 +106,8 @@ export function ProgressEditDialog({
     }
   };
 
-  // Check if this is Station 3 - SIT/RAD TEAM
-  const isStation3 = stationName.includes('Station 3') || stationName.includes('SIT/RAD TEAM');
+  // All stations can now edit start/end times
+  const canEditTimes = true;
 
   return (
     <MobileDialog>
@@ -310,8 +310,8 @@ export function ProgressEditDialog({
                       />
                     </div>
                     
-                    {/* Time fields for Station 3 */}
-                    {isStation3 && (
+                    {/* Time fields for all stations */}
+                    {canEditTimes && (
                       <>
                         <div>
                           <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>開始時間</Label>
@@ -386,8 +386,8 @@ export function ProgressEditDialog({
                       </p>
                     )}
                     
-                    {/* Show time info for Station 3 */}
-                    {isStation3 && (itemProgress?.started_at || itemProgress?.completed_at) && (
+                    {/* Show time info for all stations */}
+                    {canEditTimes && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="mt-2 pt-2 border-t space-y-1">
                         {itemProgress?.started_at && (
                           <p className={cn(
