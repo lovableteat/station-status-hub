@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
-import { useSystemTimeline } from '@/hooks/useSystemTimeline';
 import { supabase } from '@/integrations/supabase/client';
 import { ExportDialog } from '@/components/production/ExportDialog';
 
@@ -37,7 +36,6 @@ type TimeScale = 'day' | 'week' | 'month' | 'year';
 
 export function EnhancedGanttChart() {
   const { systems, progress, stations } = useUnifiedData();
-  const { calculateSystemTimeline, isLoading: timelineLoading } = useSystemTimeline();
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [timeScale, setTimeScale] = useState<TimeScale>('week');
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -50,9 +48,9 @@ export function EnhancedGanttChart() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const { toast } = useToast();
 
-  // Initialize tasks from systems data
+  // Initialize tasks from systems data using real database timestamps
   useEffect(() => {
-    if (timelineLoading || !systems.length) return;
+    if (!systems.length) return;
     
     const ganttTasks: GanttTask[] = systems.map((system) => {
       const systemProgress = progress.filter(p => p.system_id === system.id);
@@ -60,7 +58,37 @@ export function EnhancedGanttChart() {
         ? systemProgress.reduce((sum, p) => sum + (p.progress_percent || 0), 0) / systemProgress.length 
         : 0;
 
-      const calculatedTimeline = calculateSystemTimeline(system.system_name, systems, avgProgress);
+      // Calculate real start and end dates from test_progress data
+      const progressWithDates = systemProgress.filter(p => p.started_at || p.completed_at);
+      
+      let realStartDate: Date;
+      let realEndDate: Date;
+      
+      if (progressWithDates.length > 0) {
+        // Use actual database timestamps
+        const startDates = progressWithDates
+          .filter(p => p.started_at)
+          .map(p => new Date(p.started_at!));
+        const endDates = progressWithDates
+          .filter(p => p.completed_at)
+          .map(p => new Date(p.completed_at!));
+        
+        realStartDate = startDates.length > 0 
+          ? new Date(Math.min(...startDates.map(d => d.getTime())))
+          : new Date('2025-07-01'); // Default start date
+        
+        if (endDates.length > 0) {
+          realEndDate = new Date(Math.max(...endDates.map(d => d.getTime())));
+        } else {
+          // Estimate end date based on start date and progress
+          const estimatedDurationDays = avgProgress > 0 ? (100 / avgProgress) * 5 : 10; // 5 days per 100% progress
+          realEndDate = new Date(realStartDate.getTime() + estimatedDurationDays * 24 * 60 * 60 * 1000);
+        }
+      } else {
+        // Fallback if no test progress data
+        realStartDate = new Date('2025-07-01'); // Default start date
+        realEndDate = new Date(realStartDate.getTime() + 10 * 24 * 60 * 60 * 1000); // 10 days default
+      }
       
       // Determine status based on progress and dates
       let status: GanttTask['status'] = 'not_started';
@@ -69,19 +97,19 @@ export function EnhancedGanttChart() {
       if (avgProgress === 100) {
         status = 'completed';
       } else if (avgProgress > 0) {
-        status = calculatedTimeline.endDate < today ? 'delayed' : 'in_progress';
-      } else if (calculatedTimeline.startDate <= today) {
+        status = realEndDate < today ? 'delayed' : 'in_progress';
+      } else if (realStartDate <= today) {
         status = 'delayed';
       }
 
       return {
         id: system.id,
         name: system.system_name,
-        startDate: calculatedTimeline.startDate,
-        endDate: calculatedTimeline.endDate,
+        startDate: realStartDate,
+        endDate: realEndDate,
         progress: Math.round(avgProgress),
         assignee: system.assigned_engineer || 'Unassigned',
-        priority: avgProgress < 50 && calculatedTimeline.endDate.getTime() - today.getTime() < 7 * 24 * 60 * 60 * 1000 ? 'high' : 'medium',
+        priority: avgProgress < 50 && realEndDate.getTime() - today.getTime() < 7 * 24 * 60 * 60 * 1000 ? 'high' : 'medium',
         status,
         group: `${system.assigned_engineer || 'Unassigned'} Team`,
         notes: `Current station: ${system.current_station}`
@@ -90,7 +118,7 @@ export function EnhancedGanttChart() {
     
     setTasks(ganttTasks);
     
-    // Set initial view range with better defaults
+    // Set initial view range based on real data
     if (ganttTasks.length > 0) {
       const minDate = new Date(Math.min(...ganttTasks.map(t => t.startDate.getTime())));
       const maxDate = new Date(Math.max(...ganttTasks.map(t => t.endDate.getTime())));
@@ -104,7 +132,7 @@ export function EnhancedGanttChart() {
       const end = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);   // 60 days forward
       setViewRange({ start, end });
     }
-  }, [systems, progress, timelineLoading, calculateSystemTimeline]);
+  }, [systems, progress]);
 
   // Group tasks by team/assignee
   const groupedTasks = useMemo(() => {
