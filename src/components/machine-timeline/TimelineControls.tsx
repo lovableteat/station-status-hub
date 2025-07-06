@@ -14,8 +14,8 @@ export function TimelineControls({
   timelineBounds 
 }: TimelineControlsProps) {
   const formatDateRange = () => {
-    const start = timelineBounds.start.toLocaleDateString('zh-TW');
-    const end = timelineBounds.end.toLocaleDateString('zh-TW');
+    const start = timelineBounds.start.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+    const end = timelineBounds.end.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
     return `${start} - ${end}`;
   };
 
