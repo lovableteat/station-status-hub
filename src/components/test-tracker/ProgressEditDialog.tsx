@@ -42,6 +42,8 @@ interface ProgressEditDialogProps {
     status: string;
     progress_percent: number;
     notes: string;
+    started_at?: string;
+    completed_at?: string;
   };
   setEditValues: (values: any) => void;
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
@@ -71,6 +73,38 @@ export function ProgressEditDialog({
   stationId,
 }: ProgressEditDialogProps) {
   const isMobile = useIsMobile();
+
+  // Helper function to format time for display
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  // Helper function to format datetime for input field
+  const formatDateTimeLocal = (timeStr?: string) => {
+    if (!timeStr) return '';
+    try {
+      const date = new Date(timeStr);
+      // Format as YYYY-MM-DDTHH:MM for datetime-local input
+      return date.toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
+
+  // Check if this is Station 3 - SIT/RAD TEAM
+  const isStation3 = stationName.includes('Station 3') || stationName.includes('SIT/RAD TEAM');
 
   return (
     <MobileDialog>
@@ -230,6 +264,36 @@ export function ProgressEditDialog({
                         className={isMobile ? "min-h-[100px] text-base resize-none" : ""}
                       />
                     </div>
+                    
+                    {/* Time fields for Station 3 */}
+                    {isStation3 && (
+                      <>
+                        <div>
+                          <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>開始時間</Label>
+                          <Input
+                            type="datetime-local"
+                            value={formatDateTimeLocal(editValues.started_at)}
+                            onChange={(e) => setEditValues({
+                              ...editValues, 
+                              started_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
+                            })}
+                            className={isMobile ? "h-12 text-base" : ""}
+                          />
+                        </div>
+                        <div>
+                          <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>完成時間</Label>
+                          <Input
+                            type="datetime-local"
+                            value={formatDateTimeLocal(editValues.completed_at)}
+                            onChange={(e) => setEditValues({
+                              ...editValues, 
+                              completed_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
+                            })}
+                            className={isMobile ? "h-12 text-base" : ""}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className={cn("space-y-2", isMobile && "space-y-3")}>
@@ -258,6 +322,28 @@ export function ProgressEditDialog({
                       )}>
                         備註: {itemProgress.notes}
                       </p>
+                    )}
+                    
+                    {/* Show time info for Station 3 */}
+                    {isStation3 && (itemProgress?.started_at || itemProgress?.completed_at) && (
+                      <div className="mt-2 pt-2 border-t space-y-1">
+                        {itemProgress?.started_at && (
+                          <p className={cn(
+                            "text-xs text-muted-foreground",
+                            isMobile && "text-sm"
+                          )}>
+                            開始: {formatTime(itemProgress.started_at)}
+                          </p>
+                        )}
+                        {itemProgress?.completed_at && (
+                          <p className={cn(
+                            "text-xs text-muted-foreground",
+                            isMobile && "text-sm"
+                          )}>
+                            完成: {formatTime(itemProgress.completed_at)}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
