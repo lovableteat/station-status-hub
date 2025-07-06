@@ -116,7 +116,7 @@ export function MachineTimeline() {
               <div className="flex">
                 {/* Left side: Machine list */}
                 <div className="w-48 border-r bg-muted/20">
-                  <div className="p-4 border-b bg-muted/50">
+                  <div className="h-16 flex items-center justify-center border-b bg-muted/50">
                     <h3 className="font-semibold">機台編號</h3>
                   </div>
                   <div className="space-y-0">
@@ -124,7 +124,7 @@ export function MachineTimeline() {
                       <div
                         key={machine.id}
                         className={cn(
-                          "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                          "h-16 flex items-center justify-center border-b cursor-pointer hover:bg-muted/50 transition-colors",
                           selectedMachine === machine.id && "bg-muted"
                         )}
                         onClick={() => setSelectedMachine(
