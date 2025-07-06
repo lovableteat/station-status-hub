@@ -57,7 +57,7 @@ export function TestRecordDetailDialog({
         .from('project_tasks')
         .select('start_date, end_date')
         .eq('task_name', record.system_name)
-        .single();
+        .maybeSingle();
 
       if (ganttTask) {
         setGanttData(ganttTask);

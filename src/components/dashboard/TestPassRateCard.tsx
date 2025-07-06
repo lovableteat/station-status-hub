@@ -42,7 +42,7 @@ export function TestPassRateCard() {
         .from('system_settings')
         .select('settings')
         .eq('category', 'work_time')
-        .single();
+        .maybeSingle();
 
       if (data) {
         setWorkTimeConfig(data.settings);

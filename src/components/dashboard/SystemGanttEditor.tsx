@@ -36,7 +36,7 @@ export function SystemGanttEditor({
         .from('project_tasks')
         .select('id')
         .eq('task_name', systemName)
-        .single();
+        .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
         throw fetchError;
