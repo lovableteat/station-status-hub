@@ -10,6 +10,8 @@ export interface MachineTimelineData {
   start_time?: string;
   end_time?: string;
   duration_hours?: number;
+  estimated_end_time?: string;
+  estimated_duration_hours?: number;
   stations: Array<{
     id: string;
     name: string;
@@ -39,12 +41,25 @@ export function useMachineTimelineData(customTimeRange?: { start: Date; end: Dat
       const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
       const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
       
-      // Calculate duration in hours
-      let durationHours: number | undefined;
+      // Calculate actual duration in hours
+      let actualDurationHours: number | undefined;
       if (systemStartTime && systemEndTime) {
         const start = new Date(systemStartTime);
         const end = new Date(systemEndTime);
-        durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        actualDurationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      }
+
+      // Calculate estimated duration from stations
+      const totalEstimatedHours = stations
+        .filter(station => station.station_order >= 0 && station.station_order <= 3)
+        .reduce((total, station) => total + (station.estimated_hours || 0), 0);
+
+      // Calculate estimated end time based on start time and estimated hours
+      let estimatedEndTime: string | undefined;
+      if (systemStartTime && totalEstimatedHours > 0) {
+        const estimatedEnd = new Date(systemStartTime);
+        estimatedEnd.setHours(estimatedEnd.getHours() + totalEstimatedHours);
+        estimatedEndTime = estimatedEnd.toISOString();
       }
 
       // Get station data with their progress
@@ -81,7 +96,9 @@ export function useMachineTimelineData(customTimeRange?: { start: Date; end: Dat
         overall_progress: system.overall_progress,
         start_time: systemStartTime,
         end_time: systemEndTime,
-        duration_hours: durationHours,
+        duration_hours: actualDurationHours,
+        estimated_end_time: estimatedEndTime,
+        estimated_duration_hours: totalEstimatedHours,
         stations: stationData
       };
     });
