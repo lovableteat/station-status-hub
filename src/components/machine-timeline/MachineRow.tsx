@@ -141,7 +141,7 @@ export function MachineRow({
             left: `${((new Date().getTime() - bounds.start.getTime()) / (bounds.end.getTime() - bounds.start.getTime())) * 100}%` 
           }}
         >
-          <div className="h-full border-l-2 border-destructive opacity-30" />
+          <div className="h-full border-l-2 border-destructive/40" />
         </div>
       </div>
     </TooltipProvider>
