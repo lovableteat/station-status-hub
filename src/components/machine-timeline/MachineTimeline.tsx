@@ -115,7 +115,7 @@ export function MachineTimeline() {
             <div className="relative">
               <div className="flex">
                 {/* Left side: Machine list */}
-                <div className="w-80 border-r bg-muted/20">
+                <div className="w-48 border-r bg-muted/20">
                   <div className="p-4 border-b bg-muted/50">
                     <h3 className="font-semibold">機台編號</h3>
                   </div>
@@ -131,23 +131,8 @@ export function MachineTimeline() {
                           selectedMachine === machine.id ? null : machine.id
                         )}
                       >
-                        <div className="font-medium truncate" title={machine.system_name}>
+                        <div className="font-medium text-center">
                           {machine.system_name}
-                        </div>
-                        <div className="text-sm text-muted-foreground truncate" title={machine.assigned_engineer || '未分配'}>
-                          {machine.assigned_engineer || '未分配'}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge 
-                            variant={
-                              machine.status === 'Done' ? 'default' : 
-                              machine.status === 'On-going' ? 'secondary' : 
-                              'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {machine.overall_progress}%
-                          </Badge>
                         </div>
                       </div>
                     ))}
