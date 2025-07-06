@@ -173,6 +173,85 @@ export function TestProgressTable({
                     {system.current_station?.split(' - ')[0] || system.current_station}
                   </Badge>
                 </div>
+                
+                {/* System-wide Start and End Time for Mobile */}
+                <div className="flex items-center justify-between border-t pt-2 mt-2">
+                  <span className="text-sm text-muted-foreground">系統開始時間:</span>
+                  <div 
+                    className="cursor-pointer hover:bg-muted/50 p-1 rounded text-sm font-medium"
+                    onClick={() => {
+                      const allProgressRecords = filteredStations.flatMap(station => {
+                        const stationItems = items.filter(item => item.station_id === station.id);
+                        return stationItems.map(item => 
+                          getProgressForSystemItem(system.id, station.id, item.id)
+                        ).filter(Boolean);
+                      });
+                      
+                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                      
+                      const newStartTime = prompt('設定系統開始時間 (YYYY-MM-DD HH:MM)', 
+                        systemStartTime ? formatTime(systemStartTime).replace(/\//g, '-') : '');
+                      if (newStartTime) {
+                        console.log('Update system start time for', system.system_name, newStartTime);
+                      }
+                    }}
+                    title="點擊編輯系統開始時間"
+                  >
+                    {(() => {
+                      const allProgressRecords = filteredStations.flatMap(station => {
+                        const stationItems = items.filter(item => item.station_id === station.id);
+                        return stationItems.map(item => 
+                          getProgressForSystemItem(system.id, station.id, item.id)
+                        ).filter(Boolean);
+                      });
+                      
+                      const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                      
+                      return systemStartTime ? formatTime(systemStartTime) : '點擊設定';
+                    })()}
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">系統完成時間:</span>
+                  <div 
+                    className="cursor-pointer hover:bg-muted/50 p-1 rounded text-sm font-medium"
+                    onClick={() => {
+                      const allProgressRecords = filteredStations.flatMap(station => {
+                        const stationItems = items.filter(item => item.station_id === station.id);
+                        return stationItems.map(item => 
+                          getProgressForSystemItem(system.id, station.id, item.id)
+                        ).filter(Boolean);
+                      });
+                      
+                      const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                      const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                      
+                      const newEndTime = prompt('設定系統完成時間 (YYYY-MM-DD HH:MM)', 
+                        systemEndTime ? formatTime(systemEndTime).replace(/\//g, '-') : '');
+                      if (newEndTime) {
+                        console.log('Update system end time for', system.system_name, newEndTime);
+                      }
+                    }}
+                    title="點擊編輯系統完成時間"
+                  >
+                    {(() => {
+                      const allProgressRecords = filteredStations.flatMap(station => {
+                        const stationItems = items.filter(item => item.station_id === station.id);
+                        return stationItems.map(item => 
+                          getProgressForSystemItem(system.id, station.id, item.id)
+                        ).filter(Boolean);
+                      });
+                      
+                      const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                      const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                      
+                      return systemEndTime ? formatTime(systemEndTime) : '點擊設定';
+                    })()}
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -256,8 +335,8 @@ export function TestProgressTable({
     );
   }
 
-  // Calculate grid columns - keep original layout for consistency
-  const gridColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)`;
+  // Calculate grid columns - add 2 extra columns for start/end times
+  const gridColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr) 1.2fr 1.2fr`;
 
   // Desktop table view
   return (
@@ -278,22 +357,36 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
+              <div className="font-semibold text-center text-sm">開始時間</div>
+              <div className="font-semibold text-center text-sm">完成時間</div>
             </div>
 
             {/* Data Rows */}
             {filteredSystems.map(system => {
+              // Calculate overall start and end times for this system across all stations
+              const allProgressRecords = filteredStations.flatMap(station => {
+                const stationItems = items.filter(item => item.station_id === station.id);
+                return stationItems.map(item => 
+                  getProgressForSystemItem(system.id, station.id, item.id)
+                ).filter(Boolean);
+              });
+              
+              const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+              const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+              
+              const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+              const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
                     <button 
                       className="font-medium text-primary hover:underline cursor-pointer text-left"
                       onClick={() => {
-                        // Navigate to production monitor with focus on specific system
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
                         window.history.pushState({}, '', currentUrl.toString());
                         
-                        // Dispatch custom event to trigger navigation
                         const event = new CustomEvent('navigate', { 
                           detail: { module: 'monitor', params: { system: system.system_name } } 
                         });
@@ -351,17 +444,6 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // Get time info for this station
-                    const stationProgressRecords = stationItems.map(item => 
-                      getProgressForSystemItem(system.id, station.id, item.id)
-                    ).filter(Boolean);
-                    
-                    const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
-                    const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                    
-                    const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
-                    const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
-
                     return (
                       <div key={station.id}>
                         <div className="space-y-2">
@@ -386,28 +468,46 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          
-                          {/* Show time info for all stations */}
-                          {(startTime || completionTime) && (
-                            <div className="text-xs text-muted-foreground space-y-1 pt-1 border-t">
-                              {startTime && (
-                                <div className="flex justify-between">
-                                  <span>開始:</span>
-                                  <span>{formatTime(startTime)}</span>
-                                </div>
-                              )}
-                              {completionTime && (
-                                <div className="flex justify-between">
-                                  <span>完成:</span>
-                                  <span>{formatTime(completionTime)}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
                   })}
+                  
+                  {/* System Start Time Column - Editable */}
+                  <div className="text-xs text-center py-2">
+                    <div 
+                      className="cursor-pointer hover:bg-muted/50 p-1 rounded text-center"
+                      onClick={() => {
+                        const newStartTime = prompt('設定開始時間 (YYYY-MM-DD HH:MM)', 
+                          systemStartTime ? formatTime(systemStartTime).replace(/\//g, '-') : '');
+                        if (newStartTime) {
+                          // Here you would implement the logic to update the start time
+                          console.log('Update start time for', system.system_name, newStartTime);
+                        }
+                      }}
+                      title="點擊編輯開始時間"
+                    >
+                      {systemStartTime ? formatTime(systemStartTime) : '點擊設定'}
+                    </div>
+                  </div>
+                  
+                  {/* System End Time Column - Editable */}
+                  <div className="text-xs text-center py-2">
+                    <div 
+                      className="cursor-pointer hover:bg-muted/50 p-1 rounded text-center"
+                      onClick={() => {
+                        const newEndTime = prompt('設定完成時間 (YYYY-MM-DD HH:MM)', 
+                          systemEndTime ? formatTime(systemEndTime).replace(/\//g, '-') : '');
+                        if (newEndTime) {
+                          // Here you would implement the logic to update the end time
+                          console.log('Update end time for', system.system_name, newEndTime);
+                        }
+                      }}
+                      title="點擊編輯完成時間"
+                    >
+                      {systemEndTime ? formatTime(systemEndTime) : '點擊設定'}
+                    </div>
+                  </div>
                 </div>
               );
             })}
