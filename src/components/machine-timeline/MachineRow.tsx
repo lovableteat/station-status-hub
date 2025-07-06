@@ -22,28 +22,48 @@ export function MachineRow({
   onSelect,
   onDetail
 }: MachineRowProps) {
-  const progressBar = useMemo(() => {
+  const progressBars = useMemo(() => {
     if (!machine.start_time) {
       return null;
     }
 
     const totalDuration = bounds.end.getTime() - bounds.start.getTime();
     const startTime = new Date(machine.start_time);
-    const endTime = machine.end_time ? new Date(machine.end_time) : new Date();
     
-    const startPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
-    const duration = endTime.getTime() - startTime.getTime();
-    const width = (duration / totalDuration) * 100;
+    // Calculate estimated bar
+    let estimatedBar = null;
+    if (machine.estimated_end_time) {
+      const estimatedEndTime = new Date(machine.estimated_end_time);
+      const estimatedStartPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+      const estimatedDuration = estimatedEndTime.getTime() - startTime.getTime();
+      const estimatedWidth = (estimatedDuration / totalDuration) * 100;
+      
+      const actualEstimatedWidth = Math.max(estimatedWidth, 2);
+      const actualEstimatedStartPosition = Math.max(0, Math.min(estimatedStartPosition, 98));
+      
+      estimatedBar = {
+        left: `${actualEstimatedStartPosition}%`,
+        width: `${actualEstimatedWidth}%`
+      };
+    }
+    
+    // Calculate actual bar
+    const endTime = machine.end_time ? new Date(machine.end_time) : new Date();
+    const actualStartPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+    const actualDuration = endTime.getTime() - startTime.getTime();
+    const actualWidth = (actualDuration / totalDuration) * 100;
 
     // Ensure minimum visibility
-    const actualWidth = Math.max(width, 2);
-    const actualStartPosition = Math.max(0, Math.min(startPosition, 98));
+    const finalActualWidth = Math.max(actualWidth, 2);
+    const finalActualStartPosition = Math.max(0, Math.min(actualStartPosition, 98));
 
-    return {
-      left: `${actualStartPosition}%`,
-      width: `${actualWidth}%`,
+    const actualBar = {
+      left: `${finalActualStartPosition}%`,
+      width: `${finalActualWidth}%`,
       status: machine.status
     };
+
+    return { estimatedBar, actualBar };
   }, [machine, bounds]);
 
   const getStatusColor = (status: string) => {
@@ -78,22 +98,37 @@ export function MachineRow({
         )}
         onClick={onSelect}
       >
-        {/* Progress bar */}
-        {progressBar && (
+        {/* Progress bars */}
+        {progressBars && (
           <div className="relative h-full">
+            {/* Estimated time bar (background) */}
+            {progressBars.estimatedBar && (
+              <div
+                className="h-6 rounded-md bg-muted/40 border border-muted-foreground/20"
+                style={{
+                  position: 'absolute',
+                  left: progressBars.estimatedBar.left,
+                  width: progressBars.estimatedBar.width,
+                  top: '20px'
+                }}
+              />
+            )}
+            
+            {/* Actual time bar (foreground) */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
                   className={cn(
                     "h-8 rounded-md border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105",
-                    getStatusColor(progressBar.status),
+                    getStatusColor(progressBars.actualBar.status),
                     isSelected && "ring-2 ring-primary ring-offset-2"
                   )}
                   style={{
                     position: 'absolute',
-                    left: progressBar.left,
-                    width: progressBar.width,
-                    top: '16px'
+                    left: progressBars.actualBar.left,
+                    width: progressBars.actualBar.width,
+                    top: '16px',
+                    zIndex: 10
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -110,13 +145,19 @@ export function MachineRow({
               <TooltipContent side="top" className="max-w-sm">
                   <div className="space-y-1 max-w-xs">
                     <div className="font-medium">{machine.system_name}</div>
-                    <div className="text-sm">
+                    <div className="text-sm space-y-1">
                       <div>狀態: {machine.status}</div>
                       <div>進度: {machine.overall_progress}%</div>
                       <div>開始: {formatDateTime(machine.start_time)}</div>
                       <div>完成: {formatDateTime(machine.end_time)}</div>
                       {machine.duration_hours && (
-                        <div>時長: {machine.duration_hours.toFixed(1)} 小時</div>
+                        <div>實際時長: {machine.duration_hours.toFixed(1)} 小時</div>
+                      )}
+                      {machine.estimated_duration_hours && (
+                        <div>預估時長: {machine.estimated_duration_hours.toFixed(1)} 小時</div>
+                      )}
+                      {machine.estimated_end_time && (
+                        <div>預計完成: {formatDateTime(machine.estimated_end_time)}</div>
                       )}
                     </div>
                   </div>
@@ -126,7 +167,7 @@ export function MachineRow({
         )}
 
         {/* No data indicator */}
-        {!progressBar && (
+        {!progressBars && (
           <div className="flex items-center justify-center h-full">
             <Badge variant="outline" className="text-xs">
               尚未開始
