@@ -34,29 +34,38 @@ export function GanttTimeline({ viewRange }: GanttTimelineProps) {
   }, [viewRange]);
 
   return (
-    <div className="relative h-12 bg-muted/20 border-b overflow-hidden">
+    <div className="relative h-16 bg-gradient-to-r from-muted/10 via-muted/20 to-muted/10 border-b border-border/50 overflow-hidden backdrop-blur-sm">
+      {/* Background grid pattern */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent"></div>
+      </div>
+      
       {timeMarkers.map((marker, idx) => (
         <div
           key={idx}
-          className="absolute top-0 bottom-0 border-l border-border/30"
+          className="absolute top-0 bottom-0 border-l border-border/20 hover:border-primary/50 transition-colors duration-200"
           style={{ left: `${marker.percent}%` }}
         >
-          <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
+          <div className="absolute top-2 left-2 text-xs text-muted-foreground whitespace-nowrap bg-background/80 px-2 py-1 rounded-md shadow-sm border border-border/20 backdrop-blur-sm">
             {marker.label}
+          </div>
+          <div className="absolute bottom-2 left-2 text-xs text-muted-foreground/60 whitespace-nowrap">
+            {marker.date.toLocaleDateString('zh-TW', { weekday: 'short' })}
           </div>
         </div>
       ))}
       
-      {/* Today Line */}
+      {/* Today Line with enhanced styling */}
       <div 
-        className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
+        className="absolute top-0 bottom-0 w-1 bg-gradient-primary z-20 shadow-glow animate-pulse-slow"
         style={{ 
           left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
         }}
       >
-        <div className="absolute -top-1 -left-6 text-xs text-primary font-medium bg-background px-1 rounded">
+        <div className="absolute -top-2 -left-8 text-xs text-primary font-semibold bg-primary/10 px-3 py-1 rounded-full border border-primary/30 shadow-md backdrop-blur-sm">
           今日
         </div>
+        <div className="absolute top-4 -left-1 w-3 h-3 bg-primary rounded-full shadow-glow animate-pulse-slow"></div>
       </div>
     </div>
   );
