@@ -120,10 +120,9 @@ export function TestProgressTable({
     }
   };
 
-  // Function to update system start/end times
+  // Optimized function to update system start/end times
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
-      // Get all progress records for this system
       const systemProgressRecords = progress.filter(p => p.system_id === systemId);
       
       if (systemProgressRecords.length === 0) {
@@ -135,26 +134,17 @@ export function TestProgressTable({
         return;
       }
 
-      // Update all progress records for this system
-      const updates = systemProgressRecords.map(async (record) => {
-        const updateData: any = {};
-        if (timeType === 'start') {
-          updateData.started_at = newTime;
-        } else {
-          updateData.completed_at = newTime;
-        }
+      // Batch update - more efficient
+      const updateColumn = timeType === 'start' ? 'started_at' : 'completed_at';
+      const { error } = await supabase
+        .from('test_progress')
+        .update({ [updateColumn]: newTime })
+        .eq('system_id', systemId);
 
-        const { error } = await supabase
-          .from('test_progress')
-          .update(updateData)
-          .eq('id', record.id);
-
-        if (error) throw error;
-      });
-
-      await Promise.all(updates);
-      await onSystemUpdate(); // Reload data
-
+      if (error) throw error;
+      
+      await onSystemUpdate();
+      
       toast({
         title: "更新成功",
         description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新`,
@@ -380,8 +370,8 @@ export function TestProgressTable({
     );
   }
 
-  // Calculate grid columns - add 2 extra columns for start/end times
-  const gridColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr) 1.2fr 1.2fr`;
+  // Use fixed widths for better alignment
+  const gridColumns = `200px 120px 120px repeat(${filteredStations.length}, 150px) 160px 160px`;
 
   // Desktop table view
   return (
@@ -391,7 +381,7 @@ export function TestProgressTable({
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <div className="min-w-[1600px]">
+          <div className="min-w-[1200px]">
             {/* Header Row */}
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
@@ -519,7 +509,7 @@ export function TestProgressTable({
                   })}
                   
                   {/* System Start Time Column - Editable */}
-                  <div className="text-xs text-center py-2">
+                  <div className="flex flex-col items-center py-2 px-1">
                     <input
                       type="datetime-local"
                       value={systemStartTime ? formatDateTimeLocal(systemStartTime) : ''}
@@ -527,13 +517,13 @@ export function TestProgressTable({
                         const newStartTime = e.target.value ? new Date(e.target.value).toISOString() : null;
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      className="w-full text-xs p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20"
                       title="設定系統開始時間"
                     />
                   </div>
                   
                   {/* System End Time Column - Editable */}
-                  <div className="text-xs text-center py-2">
+                  <div className="flex flex-col items-center py-2 px-1">
                     <input
                       type="datetime-local"
                       value={systemEndTime ? formatDateTimeLocal(systemEndTime) : ''}
@@ -542,7 +532,7 @@ export function TestProgressTable({
                         const newEndTime = e.target.value ? new Date(e.target.value).toISOString() : null;
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
-                      className="w-full text-xs p-1 border rounded bg-transparent hover:bg-muted/20 focus:bg-background"
+                      className="w-full text-xs p-2 border rounded-md bg-background hover:bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
                       title="設定系統完成時間"
                       disabled={!systemStartTime}
                     />
