@@ -46,12 +46,20 @@ interface StationStatus {
   id: string;
   name: string;
   status: "idle" | "working" | "warning" | "error" | "complete";
-  current_system?: string;
+  current_system?: string; // 保留向後兼容性
+  current_systems: UnifiedSystem[]; // 新增：所有在該站點的系統
   efficiency: number;
   last_update: string;
   total_systems: number;
   completed_systems: number;
   ongoing_systems: number;
+  system_progress: Array<{
+    system: UnifiedSystem;
+    progress: number;
+    status: string;
+    test_items_completed: number;
+    test_items_total: number;
+  }>;
 }
 
 export function useUnifiedData() {
@@ -204,16 +212,37 @@ export function useUnifiedData() {
           efficiency = Math.round(averageProgress);
       }
 
+      // Calculate detailed progress for each system at this station
+      const systemProgress = systemsAtStation.map(system => {
+        const systemStationProgress = progress.filter(p => 
+          p.system_id === system.id && p.station_id === station.id
+        );
+        
+        const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
+        const totalItems = systemStationProgress.length;
+        const systemProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+        
+        return {
+          system,
+          progress: Math.round(systemProgress),
+          status: system.status,
+          test_items_completed: completedItems,
+          test_items_total: totalItems
+        };
+      });
+
       return {
         id: station.id,
         name: station.station_name,
         status,
-        current_system: systemsAtStation[0]?.system_name,
+        current_system: systemsAtStation[0]?.system_name, // 保留向後兼容性
+        current_systems: systemsAtStation, // 所有在該站點的系統
         efficiency: Math.max(0, Math.min(100, efficiency)), // Ensure 0-100 range
         last_update: new Date().toISOString(),
         total_systems: systems.length,
         completed_systems: completedSystems,
-        ongoing_systems: ongoingSystems
+        ongoing_systems: ongoingSystems,
+        system_progress: systemProgress
       };
     });
   };

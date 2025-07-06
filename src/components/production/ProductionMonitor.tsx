@@ -10,6 +10,7 @@ import { TestProgressAuditLog } from "./TestProgressAuditLog";
 import { ExportDialog } from "./ExportDialog";
 import { ProductionHistory } from "./ProductionHistory";
 import { BackButton } from "@/components/common/BackButton";
+import { SystemSelectionDialog } from "./SystemSelectionDialog";
 
 interface Station {
   id: string;
@@ -26,6 +27,8 @@ export function ProductionMonitor() {
   const [focusedSystem, setFocusedSystem] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showProductionHistory, setShowProductionHistory] = useState(false);
+  const [showSystemSelection, setShowSystemSelection] = useState(false);
+  const [selectedStation, setSelectedStation] = useState<any>(null);
   
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -284,9 +287,32 @@ export function ProductionMonitor() {
               </div>
               
               <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {station.current_system ? `處理中: ${station.current_system}` : '待機中'}
-              </p>
+              <div className="mb-4">
+                {station.current_systems.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      處理中 ({station.current_systems.length} 台系統)
+                    </p>
+                    <div className="space-y-1 max-h-16 overflow-y-auto">
+                      {station.current_systems.slice(0, 3).map((system, idx) => (
+                        <div key={system.id} className="text-xs bg-muted/50 rounded px-2 py-1">
+                          <span className="font-medium">{system.system_name}</span>
+                          <span className="text-muted-foreground ml-2">
+                            {station.system_progress.find(sp => sp.system.id === system.id)?.progress || 0}%
+                          </span>
+                        </div>
+                      ))}
+                      {station.current_systems.length > 3 && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          +{station.current_systems.length - 3} 更多...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">待機中</p>
+                )}
+              </div>
               
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -294,8 +320,12 @@ export function ProductionMonitor() {
                   <span className="capitalize">{station.status}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>最後更新</span>
-                  <span>{station.last_update}</span>
+                  <span>進行中系統</span>
+                  <span>{station.ongoing_systems}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>已完成系統</span>
+                  <span>{station.completed_systems}</span>
                 </div>
                 <Progress value={station.efficiency} className="h-2" />
               </div>
@@ -305,7 +335,15 @@ export function ProductionMonitor() {
                   variant="outline" 
                   size="sm" 
                   className="flex-1"
-                  onClick={() => setFocusedSystem(station.current_system || '')}
+                  onClick={() => {
+                    if (station.current_systems.length === 1) {
+                      setFocusedSystem(station.current_systems[0].system_name);
+                    } else if (station.current_systems.length > 1) {
+                      setSelectedStation(station);
+                      setShowSystemSelection(true);
+                    }
+                  }}
+                  disabled={station.current_systems.length === 0}
                 >
                   查看詳情
                 </Button>
@@ -339,6 +377,16 @@ export function ProductionMonitor() {
         onOpenChange={setShowExportDialog}
         title="生產監控報表"
         data={systems}
+      />
+
+      {/* System Selection Dialog */}
+      <SystemSelectionDialog
+        open={showSystemSelection}
+        onOpenChange={setShowSystemSelection}
+        stationName={selectedStation?.name || ''}
+        systems={selectedStation?.current_systems || []}
+        systemProgress={selectedStation?.system_progress || []}
+        onSystemSelect={setFocusedSystem}
       />
     </div>
   );
