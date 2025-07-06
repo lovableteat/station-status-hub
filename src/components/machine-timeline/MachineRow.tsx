@@ -83,14 +83,14 @@ export function MachineRow({
         )}
         onClick={onSelect}
       >
-        {/* Progress bar */}
+        {/* Dual-layer progress bar */}
         {progressBar && (
           <div className="relative h-full">
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
                   className={cn(
-                    "h-8 rounded-md bg-orange-300 border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105",
+                    "relative h-8 rounded-md bg-orange-200 border-2 border-background shadow-sm transition-all cursor-pointer hover:scale-105 overflow-hidden",
                     isSelected && "ring-2 ring-primary ring-offset-2"
                   )}
                   style={{
@@ -105,8 +105,15 @@ export function MachineRow({
                     onDetail?.();
                   }}
                 >
-                  <div className="flex items-center justify-center h-full px-2">
-                    <span className="text-xs font-medium text-orange-900">
+                  {/* Progress fill */}
+                  <div 
+                    className="h-full bg-orange-400 transition-all duration-300"
+                    style={{ width: `${progressBar.progress}%` }}
+                  />
+                  
+                  {/* Progress text */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-medium text-orange-900 drop-shadow-sm">
                       {progressBar.progress}%
                     </span>
                   </div>
