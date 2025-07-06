@@ -216,32 +216,34 @@ export function TestProgressTable({
                         </div>
                         <Progress value={overallPercent} className="h-3" />
                         
-                        {/* Show time info for Station 3 in mobile view */}
-                        {station.station_order === 3 && (() => {
-                          const station3Items = items.filter(item => item.station_id === station.id);
-                          const station3ProgressRecords = station3Items.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                          
-                          const startTimes = station3ProgressRecords.map(p => p?.started_at).filter(Boolean);
-                          const completionTimes = station3ProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                          
-                          const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
-                          const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
-                          
-                          return (
-                            <div className="mt-3 pt-3 border-t space-y-2">
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">開始時間:</span>
-                                <span className="font-medium">{formatTime(startTime)}</span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">完成時間:</span>
-                                <span className="font-medium">{formatTime(completionTime)}</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                         {/* Show time info for all stations in mobile view */}
+                         {(() => {
+                           const stationItems = items.filter(item => item.station_id === station.id);
+                           const stationProgressRecords = stationItems.map(item => 
+                             getProgressForSystemItem(system.id, station.id, item.id)
+                           ).filter(Boolean);
+                           
+                           const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+                           const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                           
+                           const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                           const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+                           
+                           if (!startTime && !completionTime) return null;
+                           
+                           return (
+                             <div className="mt-3 pt-3 border-t space-y-2">
+                               <div className="flex justify-between items-center text-sm">
+                                 <span className="text-muted-foreground">開始時間:</span>
+                                 <span className="font-medium">{formatTime(startTime)}</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm">
+                                 <span className="text-muted-foreground">完成時間:</span>
+                                 <span className="font-medium">{formatTime(completionTime)}</span>
+                               </div>
+                             </div>
+                           );
+                         })()}
                       </div>
                     </div>
                   );
@@ -254,13 +256,8 @@ export function TestProgressTable({
     );
   }
 
-  // Check if Station 3 exists
-  const station3 = filteredStations.find(station => station.station_order === 3);
-  const hasStation3 = !!station3;
-
-  // Calculate grid columns - add 2 extra columns for Station 3 times
-  const baseColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)`;
-  const gridColumns = hasStation3 ? `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr) 1.5fr 1.5fr` : baseColumns;
+  // Calculate grid columns - keep original layout for consistency
+  const gridColumns = `2fr 1fr 1fr repeat(${filteredStations.length}, 2fr)`;
 
   // Desktop table view
   return (
@@ -281,33 +278,10 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              {hasStation3 && (
-                <>
-                  <div className="font-semibold text-center text-sm">開始時間</div>
-                  <div className="font-semibold text-center text-sm">完成時間</div>
-                </>
-              )}
             </div>
 
             {/* Data Rows */}
             {filteredSystems.map(system => {
-              // Get Station 3 progress data for time display
-              const station3Progress = hasStation3 ? (() => {
-                const station3Items = items.filter(item => item.station_id === station3!.id);
-                const station3ProgressRecords = station3Items.map(item => 
-                  getProgressForSystemItem(system.id, station3!.id, item.id)
-                ).filter(Boolean);
-                
-                // Find earliest start time and latest completion time
-                const startTimes = station3ProgressRecords.map(p => p?.started_at).filter(Boolean);
-                const completionTimes = station3ProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                
-                return {
-                  startTime: startTimes.length > 0 ? startTimes.sort()[0] : undefined,
-                  completionTime: completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined
-                };
-              })() : null;
-
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
@@ -377,6 +351,17 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
+                    // Get time info for this station
+                    const stationProgressRecords = stationItems.map(item => 
+                      getProgressForSystemItem(system.id, station.id, item.id)
+                    ).filter(Boolean);
+                    
+                    const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+                    const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                    
+                    const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                    const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+
                     return (
                       <div key={station.id}>
                         <div className="space-y-2">
@@ -401,26 +386,28 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
+                          
+                          {/* Show time info for all stations */}
+                          {(startTime || completionTime) && (
+                            <div className="text-xs text-muted-foreground space-y-1 pt-1 border-t">
+                              {startTime && (
+                                <div className="flex justify-between">
+                                  <span>開始:</span>
+                                  <span>{formatTime(startTime)}</span>
+                                </div>
+                              )}
+                              {completionTime && (
+                                <div className="flex justify-between">
+                                  <span>完成:</span>
+                                  <span>{formatTime(completionTime)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
-                  
-                  {/* Station 3 Time Columns */}
-                  {hasStation3 && (
-                    <>
-                      <div className="text-xs text-center py-2">
-                        <div className="truncate" title={formatTime(station3Progress?.startTime)}>
-                          {formatTime(station3Progress?.startTime)}
-                        </div>
-                      </div>
-                      <div className="text-xs text-center py-2">
-                        <div className="truncate" title={formatTime(station3Progress?.completionTime)}>
-                          {formatTime(station3Progress?.completionTime)}
-                        </div>
-                      </div>
-                    </>
-                  )}
                 </div>
               );
             })}
