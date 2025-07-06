@@ -285,73 +285,15 @@ export function MachineGanttChart() {
           </div>
         </CardHeader>
         
-        <CardContent className="p-0 flex-1 flex flex-col">
-          {/* Top Section - Timeline */}
-          <div className="flex-1 flex flex-col">
-            <div className="p-3 border-b bg-background">
-              <h3 className="font-semibold text-sm">時間軸排程</h3>
-              <p className="text-xs text-muted-foreground">工單時段與狀態視覺化</p>
-            </div>
-            
-            {/* Timeline Header */}
-            <div className="relative h-10 bg-muted/20 border-b overflow-hidden">
-              {timeMarkers.map((marker, idx) => (
-                <div
-                  key={idx}
-                  className="absolute top-0 bottom-0 border-l border-border/30"
-                  style={{ left: `${marker.percent}%` }}
-                >
-                  <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
-                    {marker.label}
-                  </div>
-                </div>
-              ))}
-              
-              {/* Today Line */}
-              <div 
-                className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
-                style={{ 
-                  left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
-                }}
-              >
-                <div className="absolute -top-1 -left-4 text-xs text-primary font-medium bg-background px-1 rounded">
-                  今日
-                </div>
-              </div>
-            </div>
-            
-            {/* Timeline Content - Work Orders */}
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-2">
-                {machineSchedules.map(machine => (
-                  <div key={machine.machineId} className="space-y-1">
-                    <div className="text-xs font-medium text-muted-foreground px-2">
-                      {machine.machineName}
-                    </div>
-                    {machine.workOrders.map(workOrder => (
-                      <div key={workOrder.id} className="relative h-10 hover:bg-muted/20 rounded p-1">
-                        {renderWorkOrderBar(workOrder)}
-                      </div>
-                    ))}
-                    {machine.workOrders.length === 0 && (
-                      <div className="h-10 flex items-center justify-center text-xs text-muted-foreground border-2 border-dashed border-muted rounded">
-                        無排程工單
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-          
-          {/* Bottom Section - Machine List */}
-          <div className="border-t bg-muted/30">
+        <CardContent className="p-0 flex-1 flex flex-col space-y-4">
+          {/* Machine List Section */}
+          <div className="border-b bg-muted/30">
             <div className="p-3 border-b bg-background">
               <h3 className="font-semibold text-sm">機台列表</h3>
               <p className="text-xs text-muted-foreground">機台狀態與利用率</p>
             </div>
-            <ScrollArea className="h-48">
-              <div className="p-2 grid grid-cols-2 gap-2">
+            <div className="p-2">
+              <div className="grid grid-cols-3 gap-2">
                 {machineSchedules.map(machine => (
                   <div key={machine.machineId} className="p-2 bg-background rounded border">
                     <div className="flex items-center justify-between mb-1">
@@ -371,7 +313,83 @@ export function MachineGanttChart() {
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
+          </div>
+
+          {/* Gantt Chart Section */}
+          <div className="flex-1 flex flex-col">
+            <div className="p-3 border-b bg-background">
+              <h3 className="font-semibold text-sm">甘特圖排程</h3>
+              <p className="text-xs text-muted-foreground">機台工單時程與進度</p>
+            </div>
+            
+            <div className="flex flex-1 border-t">
+              {/* Left Panel - Machine Names */}
+              <div className="w-48 border-r bg-muted/20 flex flex-col">
+                <div className="p-2 border-b bg-background">
+                  <div className="text-xs font-semibold">機台名稱</div>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="space-y-1 p-1">
+                    {machineSchedules.map(machine => (
+                      <div key={machine.machineId} className="h-12 flex items-center px-2 text-xs font-medium border-b border-border/20">
+                        {machine.machineName}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+              
+              {/* Right Panel - Timeline and Progress Bars */}
+              <div className="flex-1 flex flex-col">
+                {/* Timeline Header */}
+                <div className="relative h-10 bg-muted/20 border-b overflow-hidden">
+                  {timeMarkers.map((marker, idx) => (
+                    <div
+                      key={idx}
+                      className="absolute top-0 bottom-0 border-l border-border/30"
+                      style={{ left: `${marker.percent}%` }}
+                    >
+                      <div className="absolute top-1 left-1 text-xs text-muted-foreground whitespace-nowrap">
+                        {marker.label}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Today Line */}
+                  <div 
+                    className="absolute top-0 bottom-0 w-0.5 bg-primary z-10"
+                    style={{ 
+                      left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
+                    }}
+                  >
+                    <div className="absolute -top-1 -left-4 text-xs text-primary font-medium bg-background px-1 rounded">
+                      今日
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Progress Bars Area */}
+                <ScrollArea className="flex-1">
+                  <div className="space-y-1 p-1">
+                    {machineSchedules.map(machine => (
+                      <div key={machine.machineId} className="h-12 relative border-b border-border/20">
+                        {machine.workOrders.map(workOrder => (
+                          <div key={workOrder.id} className="absolute top-1 bottom-1">
+                            {renderWorkOrderBar(workOrder)}
+                          </div>
+                        ))}
+                        {machine.workOrders.length === 0 && (
+                          <div className="h-full flex items-center justify-center text-xs text-muted-foreground opacity-50">
+                            無排程工單
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
