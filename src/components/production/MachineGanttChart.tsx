@@ -609,138 +609,187 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
         </CardHeader>
         
         <CardContent className="p-0 flex-1 flex flex-col">
-          {/* 甘特圖主體 */}
-          <div className="flex flex-1 min-h-0">
-            {/* 左側機台標籤列 */}
-            <div className="w-16 flex-shrink-0 bg-muted/20 border-r">
-              <div className="h-12 border-b bg-background flex items-center justify-center">
-                <span className="text-xs font-medium text-muted-foreground">機台</span>
-              </div>
-              <div className="space-y-0">
-                {machineSchedules.map((machine) => (
-                  <div key={machine.machineId} className="h-16 border-b border-border/10 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">{machine.machineName}</span>
+          {/* 甘特圖主體 - 重新設計為上下布局 */}
+          <div className="flex-1 flex flex-col">
+            {/* 甘特圖區域 */}
+            <div className="flex-1 min-h-0">
+              <div className="flex h-full">
+                {/* 左側機台標籤列 - 更緊湊的設計 */}
+                <div className="w-12 flex-shrink-0 bg-muted/20 border-r">
+                  <div className="h-12 border-b bg-background flex items-center justify-center">
+                    <span className="text-xs font-medium text-muted-foreground rotate-90">機台</span>
                   </div>
-                ))}
+                  <div className="space-y-0">
+                    {machineSchedules.map((machine) => (
+                      <div key={machine.machineId} className="h-16 border-b border-border/10 flex items-center justify-center hover:bg-muted/30 transition-colors">
+                        <div className="text-center">
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-1">
+                            <span className="text-xs font-bold text-primary">{machine.machineName}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{machine.totalSystems}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 時間軸與甘特圖主區域 */}
+                <div className="flex-1 flex flex-col min-w-0">
+                  {/* 時間軸標題 */}
+                  <div className="relative h-12 bg-muted/20 border-b overflow-hidden">
+                    {timeMarkers.map((marker, idx) => (
+                      <div
+                        key={idx}
+                        className={`absolute top-0 bottom-0 ${marker.isToday ? 'border-l-2 border-primary' : 'border-l border-border/30'}`}
+                        style={{ left: `${marker.percent}%` }}
+                      >
+                        <div className={`absolute top-1 left-1 text-xs whitespace-nowrap ${
+                          marker.isToday ? 'text-primary font-medium' : 'text-muted-foreground'
+                        }`}>
+                          {marker.label}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* 今日時間線 */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 animate-pulse"
+                      style={{ 
+                        left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
+                      }}
+                    >
+                      <div className="absolute -top-2 -left-6 text-xs text-primary font-medium bg-background px-1.5 py-0.5 rounded-sm border shadow-sm">
+                        今日
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 甘特圖工單條區域 */}
+                  <ScrollArea className="flex-1">
+                    <div className="min-h-0">
+                      {machineSchedules.map((machine) => (
+                        <div key={machine.machineId} className="relative h-16 border-b border-border/10 hover:bg-muted/20 transition-colors group">
+                          {/* 背景格線 */}
+                          <div className="absolute inset-0 opacity-10">
+                            {timeMarkers.map((marker, idx) => (
+                              <div
+                                key={idx}
+                                className="absolute top-0 bottom-0 border-l border-border/20"
+                                style={{ left: `${marker.percent}%` }}
+                              />
+                            ))}
+                          </div>
+                          
+                          {/* 工單進度條 */}
+                          {machine.workOrders.map((workOrder) => (
+                            <div key={workOrder.id} className="absolute inset-y-2">
+                              {renderWorkOrderBar(workOrder)}
+                            </div>
+                          ))}
+                          
+                          {/* 無工單提示 */}
+                          {machine.workOrders.length === 0 && (
+                            <div className="h-full flex items-center justify-center text-sm text-muted-foreground/60 group-hover:text-muted-foreground/80 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                <span>無排程工單</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
             </div>
             
-            {/* 時間軸與甘特圖區域 */}
-            <div className="flex-1 flex flex-col min-w-0">
-              {/* 時間軸標題 */}
-              <div className="relative h-12 bg-muted/20 border-b overflow-hidden">
-                {timeMarkers.map((marker, idx) => (
-                  <div
-                    key={idx}
-                    className={`absolute top-0 bottom-0 ${marker.isToday ? 'border-l-2 border-primary' : 'border-l border-border/30'}`}
-                    style={{ left: `${marker.percent}%` }}
-                  >
-                    <div className={`absolute top-1 left-1 text-xs whitespace-nowrap ${
-                      marker.isToday ? 'text-primary font-medium' : 'text-muted-foreground'
-                    }`}>
-                      {marker.label}
-                    </div>
+            {/* 機台統計列表 - 移到甘特圖下方，更精簡的設計 */}
+            <div className="border-t bg-gradient-to-r from-muted/5 to-muted/10">
+              <div className="p-3 border-b bg-background/50 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-primary" />
+                      機台執行統計
+                    </h3>
+                    <p className="text-xs text-muted-foreground">點擊進度條查看詳細資訊</p>
                   </div>
-                ))}
-                
-                {/* 今日時間線 */}
-                <div 
-                  className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 animate-pulse"
-                  style={{ 
-                    left: `${((new Date().getTime() - viewRange.start.getTime()) / (viewRange.end.getTime() - viewRange.start.getTime())) * 100}%` 
-                  }}
-                >
-                  <div className="absolute -top-2 -left-6 text-xs text-primary font-medium bg-background px-1.5 py-0.5 rounded-sm border shadow-sm">
-                    今日
-                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {machineSchedules.length} 個機台
+                  </Badge>
                 </div>
               </div>
               
-              {/* 甘特圖工單條 */}
-              <ScrollArea className="flex-1">
-                <div className="min-h-0">
-                  {machineSchedules.map((machine) => (
-                    <div key={machine.machineId} className="relative h-16 border-b border-border/10 hover:bg-muted/20 transition-colors">
-                      {machine.workOrders.map((workOrder) => (
-                        <div key={workOrder.id} className="absolute inset-y-2">
-                          {renderWorkOrderBar(workOrder)}
-                        </div>
-                      ))}
-                      {machine.workOrders.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground/60">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>無排程工單</span>
+              <ScrollArea className="max-h-40">
+                <div className="p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+                    {machineSchedules.map((machine) => (
+                      <Card 
+                        key={machine.machineId} 
+                        className="p-3 hover:shadow-md transition-all duration-200 hover:scale-105 cursor-pointer bg-gradient-to-br from-background to-muted/20"
+                        onClick={() => {
+                          // 可以添加點擊機台卡片的處理邏輯
+                          toast({
+                            title: `機台 ${machine.machineName}`,
+                            description: `總工單: ${machine.totalSystems}, 完成: ${machine.completedSystems}, 進行: ${machine.ongoingSystems}, 延遲: ${machine.delayedSystems}`
+                          });
+                        }}
+                      >
+                        <div className="space-y-3">
+                          {/* 機台編號與狀態 */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center">
+                                <span className="text-sm font-bold text-primary">{machine.machineName}</span>
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">機台 {machine.machineName}</div>
+                                <div className="text-xs text-muted-foreground">當日 {machine.totalSystems} 單</div>
+                              </div>
+                            </div>
+                            <Badge 
+                              variant={machine.utilization > 80 ? 'default' : machine.utilization > 50 ? 'secondary' : 'outline'}
+                              className="text-xs"
+                            >
+                              {machine.utilization}%
+                            </Badge>
+                          </div>
+                          
+                          {/* 工單執行統計 */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="text-center p-2 rounded-md bg-chart-2/10 hover:bg-chart-2/20 transition-colors">
+                              <div className="text-chart-2 font-bold text-lg">{machine.completedSystems}</div>
+                              <div className="text-xs text-muted-foreground">完成</div>
+                            </div>
+                            <div className="text-center p-2 rounded-md bg-chart-1/10 hover:bg-chart-1/20 transition-colors">
+                              <div className="text-chart-1 font-bold text-lg">{machine.ongoingSystems}</div>
+                              <div className="text-xs text-muted-foreground">進行</div>
+                            </div>
+                            <div className="text-center p-2 rounded-md bg-chart-5/10 hover:bg-chart-5/20 transition-colors">
+                              <div className="text-chart-5 font-bold text-lg">{machine.delayedSystems}</div>
+                              <div className="text-xs text-muted-foreground">延遲</div>
+                            </div>
+                          </div>
+                          
+                          {/* 利用率進度條 */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">利用率</span>
+                              <span className="font-medium">{machine.utilization}%</span>
+                            </div>
+                            <Progress 
+                              value={machine.utilization} 
+                              className="h-2 bg-muted/50" 
+                            />
                           </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               </ScrollArea>
             </div>
-          </div>
-          
-          {/* 機台統計列表 - 移到甘特圖下方 */}
-          <div className="border-t bg-muted/10">
-            <div className="p-3 border-b bg-background">
-              <h3 className="font-semibold text-sm">機台狀態統計</h3>
-              <p className="text-xs text-muted-foreground">各機台當日工單執行情況</p>
-            </div>
-            <ScrollArea className="max-h-32">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 p-3">
-                {machineSchedules.map((machine) => (
-                  <Card key={machine.machineId} className="p-3 hover:shadow-md transition-shadow">
-                    <div className="space-y-2">
-                      {/* 機台編號和利用率 */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-bold text-primary">{machine.machineName}</span>
-                          </div>
-                          <div>
-                            <div className="text-xs text-muted-foreground">機台</div>
-                            <div className="text-sm font-medium">{machine.machineName}</div>
-                          </div>
-                        </div>
-                        <Badge 
-                          variant={machine.utilization > 80 ? 'default' : machine.utilization > 50 ? 'secondary' : 'outline'}
-                          className="text-xs"
-                        >
-                          {machine.utilization}%
-                        </Badge>
-                      </div>
-                      
-                      {/* 工單統計 */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">當日工單</span>
-                          <span className="font-medium">{machine.totalSystems}</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-1 text-xs">
-                          <div className="text-center p-1 rounded bg-chart-2/10">
-                            <div className="text-chart-2 font-medium">{machine.completedSystems}</div>
-                            <div className="text-muted-foreground text-xs">完成</div>
-                          </div>
-                          <div className="text-center p-1 rounded bg-chart-1/10">
-                            <div className="text-chart-1 font-medium">{machine.ongoingSystems}</div>
-                            <div className="text-muted-foreground text-xs">進行</div>
-                          </div>
-                          <div className="text-center p-1 rounded bg-chart-5/10">
-                            <div className="text-chart-5 font-medium">{machine.delayedSystems}</div>
-                            <div className="text-muted-foreground text-xs">延遲</div>
-                          </div>
-                        </div>
-                        
-                        {/* 進度條 */}
-                        <Progress value={machine.utilization} className="h-1" />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
           </div>
         </CardContent>
       </Card>
