@@ -65,6 +65,11 @@ All colors MUST be HSL for proper theming support.
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
     --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.3);
+    --shadow-gantt: 0 2px 8px hsl(0 0% 0% / 0.1);
+
+    /* Today marker */
+    --today-line: hsl(0 84% 60%);
+    --today-glow: 0 0 15px hsl(0 84% 60% / 0.4);
 
     --sidebar-background: 0 0% 98%;
 
@@ -130,6 +135,8 @@ All colors MUST be HSL for proper theming support.
     
     /* Dark mode shadows */
     --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.5);
+    --shadow-gantt: 0 2px 8px hsl(0 0% 0% / 0.2);
+    --today-glow: 0 0 15px hsl(0 84% 60% / 0.6);
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
