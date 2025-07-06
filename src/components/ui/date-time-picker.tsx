@@ -23,7 +23,9 @@ interface DateTimePickerProps {
   placeholder?: string
   disabled?: boolean
   minDate?: string
+  maxDate?: string
   className?: string
+  onValidationError?: (error: string | null) => void
 }
 
 // Generate time options (every 30 minutes from 00:00 to 23:30)
@@ -56,7 +58,9 @@ export function DateTimePicker({
   placeholder = "選擇日期時間",
   disabled = false,
   minDate,
-  className
+  maxDate,
+  className,
+  onValidationError
 }: DateTimePickerProps) {
   const [selectedDate, setSelectedDate] = React.useState<Date>()
   const [selectedTime, setSelectedTime] = React.useState<string>("")
@@ -80,6 +84,30 @@ export function DateTimePicker({
     }
   }, [value])
 
+  // Validation function
+  const validateDateTime = (dateTime: Date) => {
+    if (minDate) {
+      const minDateTime = new Date(minDate)
+      if (dateTime < minDateTime) {
+        const error = "所選時間不能早於最小時間限制"
+        onValidationError?.(error)
+        return false
+      }
+    }
+    
+    if (maxDate) {
+      const maxDateTime = new Date(maxDate)
+      if (dateTime > maxDateTime) {
+        const error = "所選時間不能晚於最大時間限制"
+        onValidationError?.(error)
+        return false
+      }
+    }
+    
+    onValidationError?.(null)
+    return true
+  }
+
   // Handle date change
   const handleDateChange = (date: Date | undefined) => {
     setSelectedDate(date)
@@ -89,7 +117,10 @@ export function DateTimePicker({
       const [hours, minutes] = selectedTime.split(':')
       const newDateTime = new Date(date)
       newDateTime.setHours(parseInt(hours), parseInt(minutes))
-      onChange(newDateTime.toISOString())
+      
+      if (validateDateTime(newDateTime)) {
+        onChange(newDateTime.toISOString())
+      }
     } else if (!date) {
       onChange(null)
     }
@@ -107,9 +138,11 @@ export function DateTimePicker({
 
     if (time === "now") {
       const now = new Date()
-      setSelectedDate(now)
-      setSelectedTime(format(now, "HH:mm"))
-      onChange(now.toISOString())
+      if (validateDateTime(now)) {
+        setSelectedDate(now)
+        setSelectedTime(format(now, "HH:mm"))
+        onChange(now.toISOString())
+      }
       setIsTimeOpen(false)
       return
     }
@@ -121,14 +154,20 @@ export function DateTimePicker({
       const [hours, minutes] = time.split(':')
       const newDateTime = new Date(selectedDate)
       newDateTime.setHours(parseInt(hours), parseInt(minutes))
-      onChange(newDateTime.toISOString())
+      
+      if (validateDateTime(newDateTime)) {
+        onChange(newDateTime.toISOString())
+      }
     } else {
       // If no date selected, use today
       const today = new Date()
       const [hours, minutes] = time.split(':')
       today.setHours(parseInt(hours), parseInt(minutes))
-      setSelectedDate(today)
-      onChange(today.toISOString())
+      
+      if (validateDateTime(today)) {
+        setSelectedDate(today)
+        onChange(today.toISOString())
+      }
     }
   }
 
@@ -137,6 +176,7 @@ export function DateTimePicker({
     : ""
 
   const minDateObj = minDate ? new Date(minDate) : undefined
+  const maxDateObj = maxDate ? new Date(maxDate) : undefined
 
   return (
     <div className={cn("flex gap-1", className)}>
@@ -161,7 +201,11 @@ export function DateTimePicker({
             mode="single"
             selected={selectedDate}
             onSelect={handleDateChange}
-            disabled={minDateObj ? (date) => date < minDateObj : undefined}
+            disabled={(date) => {
+              if (minDateObj && date < minDateObj) return true
+              if (maxDateObj && date > maxDateObj) return true
+              return false
+            }}
             initialFocus
             className="p-3 pointer-events-auto"
           />
