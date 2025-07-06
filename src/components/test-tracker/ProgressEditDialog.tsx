@@ -278,6 +278,7 @@ export function ProgressEditDialog({
                               started_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
                             })}
                             className={isMobile ? "h-12 text-base" : ""}
+                            placeholder="選擇開始時間"
                           />
                         </div>
                         <div>
@@ -290,6 +291,7 @@ export function ProgressEditDialog({
                               completed_at: e.target.value ? new Date(e.target.value).toISOString() : undefined
                             })}
                             className={isMobile ? "h-12 text-base" : ""}
+                            placeholder="選擇完成時間"
                           />
                         </div>
                       </>
