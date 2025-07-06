@@ -728,11 +728,24 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* 工單詳情對話框 */}
+      <WorkOrderDetailDialog
+        workOrder={selectedWorkOrder}
+        isOpen={isWorkOrderDialogOpen}
+        onOpenChange={setIsWorkOrderDialogOpen}
+      />
+      
+      {/* 匯出對話框 */}
+      <ExportDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        title="機台排程甘特圖"
+        data={machineSchedules}
+      />
     </div>
   );
 });
-
-// 工單詳情對話框和匯出對話框的部分保持不變，但需要更新以適應新的資料結構
 const WorkOrderDetailDialog = React.memo(({ 
   workOrder, 
   isOpen, 
@@ -926,23 +939,5 @@ const WorkOrderDetailDialog = React.memo(({
         </div>
       </DialogContent>
     </Dialog>
-  );
-});
-
-      {/* 工單詳情對話框 */}
-      <WorkOrderDetailDialog
-        workOrder={selectedWorkOrder}
-        isOpen={isWorkOrderDialogOpen}
-        onOpenChange={setIsWorkOrderDialogOpen}
-      />
-      
-      {/* 匯出對話框 */}
-      <ExportDialog
-        open={showExportDialog}
-        onOpenChange={setShowExportDialog}
-        title="機台排程甘特圖"
-        data={machineSchedules}
-      />
-    </div>
   );
 });
