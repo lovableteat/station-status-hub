@@ -154,11 +154,21 @@ export function AdminPanel() {
     }
 
     try {
+      // Use the database function to hash the password
+      const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
+        password: newUser.password
+      });
+      
+      if (hashError) {
+        console.error('Hash password error:', hashError);
+        throw new Error('密碼加密失敗');
+      }
+
       const { error } = await supabase
         .from('system_users')
         .insert([{
           username: newUser.username,
-          password_hash: newUser.password,
+          password_hash: hashedPassword,
           role: newUser.role,
           permissions: newUser.permissions,
           created_by: user?.username || 'admin'

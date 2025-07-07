@@ -40,20 +40,38 @@ export function MachineDetailDialog({ machine, isOpen, onClose }: MachineDetailD
             </div>
           </div>
           
-          {machine.start_time && (
+          {machine.planned_start_time && (
             <div>
-              <p className="text-sm text-muted-foreground">開始時間</p>
+              <p className="text-sm text-muted-foreground">預計開始時間</p>
               <p className="font-medium">
-                {new Date(machine.start_time).toLocaleString('zh-TW')}
+                {new Date(machine.planned_start_time).toLocaleString('zh-TW')}
               </p>
             </div>
           )}
           
-          {machine.end_time && (
+          {machine.planned_end_time && (
             <div>
-              <p className="text-sm text-muted-foreground">結束時間</p>
+              <p className="text-sm text-muted-foreground">預計結束時間</p>
               <p className="font-medium">
-                {new Date(machine.end_time).toLocaleString('zh-TW')}
+                {new Date(machine.planned_end_time).toLocaleString('zh-TW')}
+              </p>
+            </div>
+          )}
+          
+          {machine.actual_start_time && (
+            <div>
+              <p className="text-sm text-muted-foreground">實際開始時間</p>
+              <p className="font-medium">
+                {new Date(machine.actual_start_time).toLocaleString('zh-TW')}
+              </p>
+            </div>
+          )}
+          
+          {machine.actual_end_time && (
+            <div>
+              <p className="text-sm text-muted-foreground">實際完成時間</p>
+              <p className="font-medium">
+                {new Date(machine.actual_end_time).toLocaleString('zh-TW')}
               </p>
             </div>
           )}
