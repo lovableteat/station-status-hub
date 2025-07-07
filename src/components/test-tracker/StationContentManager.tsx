@@ -1,223 +1,292 @@
+
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Edit, Trash2, Save, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Edit, Save, X, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StationContent {
   id: string;
   title: string;
   content: string;
   order_num: number;
-  station_id: string;
 }
 
 interface StationContentManagerProps {
   stationId: string;
   stationName: string;
   contents: StationContent[];
-  onDataChange: () => void;
+  onUpdate: () => void;
 }
 
-export function StationContentManager({ stationId, stationName, contents, onDataChange }: StationContentManagerProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingContent, setEditingContent] = useState<StationContent | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    order_num: 1
-  });
+export function StationContentManager({ 
+  stationId, 
+  stationName, 
+  contents, 
+  onUpdate 
+}: StationContentManagerProps) {
   const { toast } = useToast();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newContent, setNewContent] = useState({ title: '', content: '' });
+  const [editValues, setEditValues] = useState({ title: '', content: '' });
+  const [showAddForm, setShowAddForm] = useState(false);
 
-  const handleSave = async () => {
-    try {
-      if (editingContent) {
-        // Update existing content
-        await supabase
-          .from('station_contents')
-          .update({
-            title: formData.title,
-            content: formData.content,
-            order_num: formData.order_num
-          })
-          .eq('id', editingContent.id);
-        
-        toast({ title: "更新成功", description: "內容已更新" });
-      } else {
-        // Create new content
-        await supabase
-          .from('station_contents')
-          .insert({
-            title: formData.title,
-            content: formData.content,
-            order_num: formData.order_num,
-            station_id: stationId
-          });
-        
-        toast({ title: "新增成功", description: "內容已新增" });
-      }
-      
-      setIsDialogOpen(false);
-      setEditingContent(null);
-      resetForm();
-      onDataChange();
-    } catch (error) {
+  const handleAdd = async () => {
+    if (!newContent.title.trim()) {
       toast({
-        title: "操作失敗",
-        description: "無法儲存內容",
+        title: "請填寫標題",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const maxOrder = contents.length > 0 ? Math.max(...contents.map(c => c.order_num)) : 0;
+      
+      const { error } = await supabase
+        .from('station_contents')
+        .insert({
+          station_id: stationId,
+          title: newContent.title.trim(),
+          content: newContent.content.trim(),
+          order_num: maxOrder + 1
+        });
+
+      if (error) throw error;
+
+      setNewContent({ title: '', content: '' });
+      setShowAddForm(false);
+      onUpdate();
+      
+      toast({
+        title: "新增成功",
+        description: "流程內容已新增"
+      });
+    } catch (error) {
+      console.error('Error adding content:', error);
+      toast({
+        title: "新增失敗",
+        description: "請稍後再試",
         variant: "destructive"
       });
     }
   };
 
-  const handleDelete = async (contentId: string) => {
+  const handleEdit = (content: StationContent) => {
+    setEditingId(content.id);
+    setEditValues({ title: content.title, content: content.content });
+  };
+
+  const handleSave = async (id: string) => {
+    if (!editValues.title.trim()) {
+      toast({
+        title: "請填寫標題",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      await supabase
+      const { error } = await supabase
+        .from('station_contents')
+        .update({
+          title: editValues.title.trim(),
+          content: editValues.content.trim()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEditingId(null);
+      onUpdate();
+      
+      toast({
+        title: "更新成功",
+        description: "流程內容已更新"
+      });
+    } catch (error) {
+      console.error('Error updating content:', error);
+      toast({
+        title: "更新失敗",
+        description: "請稍後再試",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('確定要刪除這個流程內容嗎？')) return;
+
+    try {
+      const { error } = await supabase
         .from('station_contents')
         .delete()
-        .eq('id', contentId);
+        .eq('id', id);
+
+      if (error) throw error;
+
+      onUpdate();
       
-      toast({ title: "刪除成功", description: "內容已刪除" });
-      onDataChange();
+      toast({
+        title: "刪除成功",
+        description: "流程內容已刪除"
+      });
     } catch (error) {
+      console.error('Error deleting content:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除內容",
+        description: "請稍後再試",
         variant: "destructive"
       });
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      content: '',
-      order_num: 1
-    });
-  };
-
-  const openAddDialog = () => {
-    resetForm();
-    setEditingContent(null);
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (content: StationContent) => {
-    setFormData({
-      title: content.title,
-      content: content.content,
-      order_num: content.order_num
-    });
-    setEditingContent(content);
-    setIsDialogOpen(true);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h4 className="font-medium">{stationName} - 詳細內容</h4>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" onClick={openAddDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              新增內容
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingContent ? '編輯內容' : '新增內容'}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>標題</Label>
-                <Input
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="請輸入內容標題"
-                />
-              </div>
-              
-              <div>
-                <Label>內容</Label>
-                <Textarea
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="請輸入詳細內容"
-                  rows={6}
-                />
-              </div>
-              
-              <div>
-                <Label>排序</Label>
-                <Input
-                  type="number"
-                  value={formData.order_num}
-                  onChange={(e) => setFormData({ ...formData, order_num: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-2" />
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            {stationName} - 流程內容管理
+          </CardTitle>
+          <Button
+            onClick={() => setShowAddForm(!showAddForm)}
+            size="sm"
+            className="text-sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            新增內容
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Add Form */}
+        {showAddForm && (
+          <Card className="border-dashed">
+            <CardContent className="p-4 space-y-3">
+              <Input
+                placeholder="標題"
+                value={newContent.title}
+                onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
+                className="text-sm"
+              />
+              <Textarea
+                placeholder="內容描述"
+                value={newContent.content}
+                onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
+                rows={3}
+                className="text-sm"
+              />
+              <div className="flex gap-2">
+                <Button onClick={handleAdd} size="sm" className="text-sm">
+                  <Save className="h-3 w-3 mr-1" />
                   儲存
                 </Button>
+                <Button 
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewContent({ title: '', content: '' });
+                  }} 
+                  variant="outline" 
+                  size="sm"
+                  className="text-sm"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  取消
+                </Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="space-y-3">
-        {contents
-          .sort((a, b) => a.order_num - b.order_num)
-          .map(content => (
-            <Card key={content.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h5 className="font-medium mb-2">{content.title}</h5>
-                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {content.content}
-                    </div>
-                  </div>
-                  <div className="flex gap-1 ml-4">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => openEditDialog(content)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleDelete(content.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        }
-        
-        {contents.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            此站點尚無詳細內容
-          </div>
+            </CardContent>
+          </Card>
         )}
-      </div>
-    </div>
+
+        {/* Content List */}
+        <div className="space-y-3">
+          {contents.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm">尚未新增任何流程內容</p>
+              <p className="text-xs mt-1">點擊上方「新增內容」開始建立</p>
+            </div>
+          ) : (
+            contents
+              .sort((a, b) => a.order_num - b.order_num)
+              .map((content, index) => (
+                <Card key={content.id} className="relative">
+                  <CardContent className="p-4">
+                    {editingId === content.id ? (
+                      <div className="space-y-3">
+                        <Input
+                          value={editValues.title}
+                          onChange={(e) => setEditValues({ ...editValues, title: e.target.value })}
+                          className="text-sm font-medium"
+                        />
+                        <Textarea
+                          value={editValues.content}
+                          onChange={(e) => setEditValues({ ...editValues, content: e.target.value })}
+                          rows={3}
+                          className="text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button onClick={() => handleSave(content.id)} size="sm" className="text-sm">
+                            <Save className="h-3 w-3 mr-1" />
+                            儲存
+                          </Button>
+                          <Button 
+                            onClick={() => setEditingId(null)} 
+                            variant="outline" 
+                            size="sm"
+                            className="text-sm"
+                          >
+                            <X className="h-3 w-3 mr-1" />
+                            取消
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {index + 1}
+                            </Badge>
+                            <h4 className="text-sm font-medium">{content.title}</h4>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              onClick={() => handleEdit(content)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDelete(content.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        {content.content && (
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                            {content.content}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
