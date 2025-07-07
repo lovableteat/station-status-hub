@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useCallback, useMemo } from "react";
+import { SystemStatusCalculator } from "./SystemStatusCalculator";
+import { SystemStatusUpdater } from "./SystemStatusUpdater";
 
 interface TestSystem {
   id: string;
@@ -88,7 +90,6 @@ export function TestProgressTable({
 }: TestProgressTableProps) {
   const isMobile = useIsMobile();
   const { toast } = useToast();
-  const updateInProgress = useRef(false);
   
   // Handle validation errors
   const handleValidationError = (error: string | null) => {
@@ -121,78 +122,23 @@ export function TestProgressTable({
     }
   };
 
-  // **完全重寫：即時計算系統當前狀態**
-  const calculateRealTimeSystemStatus = useCallback((systemId: string) => {
-    console.log(`=== 即時計算系統 ${systemId} 狀態 ===`);
-    
-    // 只考慮 Station 0-4
-    const targetStations = filteredStations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
-    
-    if (targetStations.length === 0) {
-      console.log('沒有找到 Station 0-4');
-      return '未開始';
-    }
-    
-    let totalItems = 0;
-    let completedItems = 0;
-    let hasAnyStarted = false;
-    
-    // 檢查每個站點的所有測項
-    for (const station of targetStations) {
-      const stationItems = items.filter(item => item.station_id === station.id);
-      
-      for (const item of stationItems) {
-        totalItems++;
-        const itemProgress = getProgressForSystemItem(systemId, station.id, item.id);
-        
-        if (itemProgress) {
-          // 任何非 'Not Start' 的狀態都算已開始
-          if (itemProgress.status !== 'Not Start') {
-            hasAnyStarted = true;
-          }
-          
-          // 只有 'Done' 狀態才算完成
-          if (itemProgress.status === 'Done') {
-            completedItems++;
-          }
-        }
-      }
-    }
-    
-    console.log(`系統 ${systemId} - 總項目: ${totalItems}, 完成項目: ${completedItems}, 有開始: ${hasAnyStarted}`);
-    
-    // **嚴格的狀態判斷**
-    let status: string;
-    if (totalItems === 0) {
-      status = '未開始';
-    } else if (completedItems === totalItems && totalItems > 0) {
-      // 只有當所有項目都完成時才是「已完成」
-      status = '已完成';
-    } else if (hasAnyStarted) {
-      // 有任何項目開始但未全部完成就是「進行中」
-      status = '進行中';
-    } else {
-      // 沒有任何項目開始就是「未開始」
-      status = '未開始';
-    }
-    
-    console.log(`系統 ${systemId} 最終狀態: ${status}`);
-    return status;
-  }, [filteredStations, items, getProgressForSystemItem]);
-
-  // 使用 useMemo 確保狀態即時計算
+  // 使用新的狀態計算邏輯
   const systemStatuses = useMemo(() => {
     const statuses: Record<string, string> = {};
     filteredSystems.forEach(system => {
-      statuses[system.id] = calculateRealTimeSystemStatus(system.id);
+      const statusResult = SystemStatusCalculator.calculateSystemStatus(
+        system.id,
+        stations,
+        items,
+        progress
+      );
+      statuses[system.id] = statusResult.currentStation;
     });
     return statuses;
-  }, [filteredSystems, calculateRealTimeSystemStatus, progress]); // 依賴 progress 確保即時更新
+  }, [filteredSystems, stations, items, progress]);
 
   // 獲取系統最晚完成時間
-  const getSystemLatestCompletionTime = useCallback((systemId: string) => {
+  const getSystemLatestCompletionTime = (systemId: string) => {
     const targetStations = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
     );
@@ -211,10 +157,10 @@ export function TestProgressTable({
     
     if (allCompletionTimes.length === 0) return undefined;
     return allCompletionTimes.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-  }, [filteredStations, items, getProgressForSystemItem]);
+  };
 
   // 獲取系統最早開始時間
-  const getSystemEarliestStartTime = useCallback((systemId: string) => {
+  const getSystemEarliestStartTime = (systemId: string) => {
     const targetStations = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
     );
@@ -233,103 +179,7 @@ export function TestProgressTable({
     
     if (allStartTimes.length === 0) return undefined;
     return allStartTimes.sort()[0];
-  }, [filteredStations, items, getProgressForSystemItem]);
-
-  // **系統狀態自動更新邏輯 - 確保即時同步**
-  useEffect(() => {
-    if (updateInProgress.current) {
-      return;
-    }
-
-    const updateSystemStatus = async () => {
-      updateInProgress.current = true;
-      console.log('=== 開始系統狀態自動更新 ===');
-
-      try {
-        const updates = [];
-        
-        for (const system of filteredSystems) {
-          const calculatedStatus = systemStatuses[system.id];
-          const isComplete = calculatedStatus === '已完成';
-          const latestCompletionTime = getSystemLatestCompletionTime(system.id);
-          
-          console.log(`系統 ${system.system_name}:`);
-          console.log(`- 資料庫狀態: "${system.current_station}"`);
-          console.log(`- 即時計算狀態: "${calculatedStatus}"`);
-          console.log(`- 是否完成: ${isComplete}`);
-          
-          let updatedFields: any = {};
-          let needsUpdate = false;
-          
-          // 當前站點狀態更新
-          if (system.current_station !== calculatedStatus) {
-            updatedFields.current_station = calculatedStatus;
-            needsUpdate = true;
-            console.log(`需要更新當前站點: "${system.current_station}" → "${calculatedStatus}"`);
-          }
-          
-          // 系統狀態更新
-          const newStatus = calculatedStatus === '已完成' ? 'Done' : 
-                           calculatedStatus === '未開始' ? 'Not Start' : 'On-going';
-          if (system.status !== newStatus) {
-            updatedFields.status = newStatus;
-            needsUpdate = true;
-            console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
-          }
-          
-          // 實際完成時間處理
-          if (isComplete && latestCompletionTime) {
-            if (!system.actual_completed_at) {
-              updatedFields.actual_completed_at = latestCompletionTime;
-              needsUpdate = true;
-              console.log(`設定實際完成時間: ${latestCompletionTime}`);
-            }
-          } else if (!isComplete && system.actual_completed_at) {
-            updatedFields.actual_completed_at = null;
-            needsUpdate = true;
-            console.log(`清除實際完成時間`);
-          }
-          
-          if (needsUpdate) {
-            updates.push({
-              id: system.id,
-              fields: updatedFields,
-              name: system.system_name
-            });
-          }
-        }
-        
-        // 執行批量更新
-        if (updates.length > 0) {
-          console.log(`執行 ${updates.length} 個系統更新...`);
-          
-          for (const update of updates) {
-            try {
-              const { error } = await supabase
-                .from('test_systems')
-                .update(update.fields)
-                .eq('id', update.id);
-
-              if (error) throw error;
-              console.log(`成功更新系統 ${update.name}`);
-            } catch (error) {
-              console.error(`更新系統 ${update.name} 失敗:`, error);
-            }
-          }
-          
-          // 觸發資料重新載入
-          onSystemUpdate();
-        }
-      } catch (error) {
-        console.error('系統狀態更新錯誤:', error);
-      } finally {
-        updateInProgress.current = false;
-      }
-    };
-
-    // 立即執行更新
-    updateSystemStatus();
-  }, [filteredSystems, systemStatuses, getSystemLatestCompletionTime, onSystemUpdate]);
+  };
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
@@ -378,6 +228,14 @@ export function TestProgressTable({
   if (isMobile) {
     return (
       <div className="space-y-4">
+        <SystemStatusUpdater
+          systems={filteredSystems}
+          stations={stations}
+          items={items}
+          progress={progress}
+          onSystemUpdate={onSystemUpdate}
+        />
+        
         {filteredSystems.map(system => {
           const currentStation = systemStatuses[system.id] || '未開始';
           
@@ -428,7 +286,6 @@ export function TestProgressTable({
                       {currentStation}
                     </Badge>
                   </div>
-                  
                   
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
@@ -499,7 +356,6 @@ export function TestProgressTable({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                
                 <div className="space-y-4">
                   {filteredStations.map(station => {
                     const stationItems = items.filter(item => item.station_id === station.id);
@@ -533,40 +389,40 @@ export function TestProgressTable({
                             stationId={station.id}
                           />
                         </div>
-                         <div className="space-y-2">
-                           <div className="flex items-center justify-between text-sm">
-                             <span className="font-medium">進度: {overallPercent}%</span>
-                             <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium">進度: {overallPercent}%</span>
+                            <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                           {(() => {
-                             const stationItems = items.filter(item => item.station_id === station.id);
-                             const stationProgressRecords = stationItems.map(item => 
-                               getProgressForSystemItem(system.id, station.id, item.id)
-                             ).filter(Boolean);
-                             
-                             const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
-                             const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                             
-                             const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
-                             const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
-                             
-                             if (!startTime && !completionTime) return null;
-                             
-                             return (
-                               <div className="mt-3 pt-3 border-t space-y-2">
-                                 <div className="flex justify-between items-center text-sm">
-                                   <span className="text-muted-foreground">開始時間:</span>
-                                   <span className="font-medium">{formatTime(startTime)}</span>
-                                 </div>
-                                 <div className="flex justify-between items-center text-sm">
-                                   <span className="text-muted-foreground">完成時間:</span>
-                                   <span className="font-medium">{formatTime(completionTime)}</span>
-                                 </div>
-                               </div>
-                             );
-                           })()}
+                          {(() => {
+                            const stationItems = items.filter(item => item.station_id === station.id);
+                            const stationProgressRecords = stationItems.map(item => 
+                              getProgressForSystemItem(system.id, station.id, item.id)
+                            ).filter(Boolean);
+                            
+                            const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+                            const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                            
+                            const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                            const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+                            
+                            if (!startTime && !completionTime) return null;
+                            
+                            return (
+                              <div className="mt-3 pt-3 border-t space-y-2">
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-muted-foreground">開始時間:</span>
+                                  <span className="font-medium">{formatTime(startTime)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-muted-foreground">完成時間:</span>
+                                  <span className="font-medium">{formatTime(completionTime)}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -589,6 +445,14 @@ export function TestProgressTable({
         <CardTitle>測試進度表</CardTitle>
       </CardHeader>
       <CardContent>
+        <SystemStatusUpdater
+          systems={filteredSystems}
+          stations={stations}
+          items={items}
+          progress={progress}
+          onSystemUpdate={onSystemUpdate}
+        />
+        
         <div className="overflow-x-auto">
           <div className="min-w-[1200px]">
             {/* Header Row */}
