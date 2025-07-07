@@ -112,13 +112,21 @@ export function TestProgressTable() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">測試進度表</h2>
-        <ExportManager />
+        <ExportManager 
+          systems={filteredSystems} 
+          stations={stations} 
+          progress={progress} 
+        />
       </div>
 
       <FilterControls 
-        systems={systems} 
-        stations={stations}
-        onFilter={setFilteredSystems}
+        searchTerm=""
+        setSearchTerm={() => {}}
+        filterEngineer=""
+        setFilterEngineer={() => {}}
+        filterStatus=""
+        setFilterStatus={() => {}}
+        engineers={[]}
       />
 
       <Card>
@@ -271,12 +279,11 @@ export function TestProgressTable() {
       {/* Progress Edit Dialog */}
       {isEditDialogOpen && selectedSystem && selectedStation && selectedItem && (
         <ProgressEditDialog
-          isOpen={isEditDialogOpen}
-          onClose={handleCloseEditDialog}
           systemId={selectedSystem}
           stationId={selectedStation}
           itemId={selectedItem}
           currentProgress={getProgressData(selectedSystem, selectedStation, selectedItem)}
+          onClose={handleCloseEditDialog}
         />
       )}
     </div>
