@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface TestSystem {
   id: string;
@@ -88,6 +88,7 @@ export function TestProgressTable({
 }: TestProgressTableProps) {
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const updateInProgress = useRef(false);
   
   // Handle validation errors
   const handleValidationError = (error: string | null) => {
@@ -207,81 +208,114 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   };
 
-  // Auto-update system status based on progress changes - Fixed version
+  // Auto-update system status based on progress changes - Improved version
   useEffect(() => {
+    if (updateInProgress.current) return;
+    
     const updateSystemStatus = async () => {
+      updateInProgress.current = true;
       console.log('Starting system status update...');
       
-      for (const system of filteredSystems) {
-        const currentStation = getCurrentStation(system.id);
-        const isComplete = areAllStationsComplete(system.id);
+      try {
+        const updates = [];
         
-        let updatedFields: any = {};
-        let needsUpdate = false;
-        
-        console.log(`System ${system.system_name}: DB current_station="${system.current_station}", calculated="${currentStation}"`);
-        
-        // 強制更新當前站點 - 主要修復點
-        if (system.current_station !== currentStation) {
-          updatedFields.current_station = currentStation;
-          needsUpdate = true;
-          console.log(`Will update system ${system.system_name} current_station from "${system.current_station}" to "${currentStation}"`);
-        }
-        
-        // 更新狀態
-        const newStatus = currentStation === '已完成' ? 'Done' : (currentStation === '未開始' ? 'Not Start' : 'On-going');
-        if (system.status !== newStatus) {
-          updatedFields.status = newStatus;
-          needsUpdate = true;
-          console.log(`Will update system ${system.system_name} status from "${system.status}" to "${newStatus}"`);
-        }
-        
-        // 如果系統完成，設定實際完成時間
-        if (isComplete) {
+        for (const system of filteredSystems) {
+          const currentStation = getCurrentStation(system.id);
+          const isComplete = areAllStationsComplete(system.id);
+          
+          console.log(`System ${system.system_name}: DB current_station="${system.current_station}", calculated="${currentStation}"`);
+          
+          // 檢查是否需要更新
+          const newStatus = currentStation === '已完成' ? 'Done' : (currentStation === '未開始' ? 'Not Start' : 'On-going');
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
-          if (latestCompletionTime && system.actual_completed_at !== latestCompletionTime) {
-            updatedFields.actual_completed_at = latestCompletionTime;
+          
+          let updatedFields: any = {};
+          let needsUpdate = false;
+          
+          // 檢查當前站點是否需要更新
+          if (system.current_station !== currentStation) {
+            updatedFields.current_station = currentStation;
             needsUpdate = true;
-            console.log(`Will set actual completion time for ${system.system_name}`);
+            console.log(`Will update system ${system.system_name} current_station from "${system.current_station}" to "${currentStation}"`);
           }
-        } else {
-          // 如果系統不再完成狀態，但手動設定的時間不清除
-          // 只有當實際完成時間等於自動計算的時間時才清除
-          const autoCompletionTime = getSystemLatestCompletionTime(system.id);
-          if (system.actual_completed_at && system.actual_completed_at === autoCompletionTime) {
-            updatedFields.actual_completed_at = null;
+          
+          // 檢查狀態是否需要更新
+          if (system.status !== newStatus) {
+            updatedFields.status = newStatus;
             needsUpdate = true;
-            console.log(`Will clear auto-set actual completion time for ${system.system_name}`);
+            console.log(`Will update system ${system.system_name} status from "${system.status}" to "${newStatus}"`);
+          }
+          
+          // 處理實際完成時間
+          if (isComplete && latestCompletionTime) {
+            // 如果系統完成且有最新完成時間，更新實際完成時間
+            if (system.actual_completed_at !== latestCompletionTime) {
+              updatedFields.actual_completed_at = latestCompletionTime;
+              needsUpdate = true;
+              console.log(`Will set actual completion time for ${system.system_name} to ${latestCompletionTime}`);
+            }
+          } else if (!isComplete && system.actual_completed_at) {
+            // 如果系統不再完成且有設定實際完成時間，檢查是否需要清除
+            if (system.actual_completed_at === latestCompletionTime) {
+              updatedFields.actual_completed_at = null;
+              needsUpdate = true;
+              console.log(`Will clear auto-set actual completion time for ${system.system_name}`);
+            }
+          }
+          
+          if (needsUpdate) {
+            updates.push({
+              id: system.id,
+              fields: updatedFields,
+              name: system.system_name
+            });
           }
         }
         
-        if (needsUpdate) {
-          try {
-            console.log(`Updating system ${system.system_name} with fields:`, updatedFields);
-            const { error } = await supabase
-              .from('test_systems')
-              .update(updatedFields)
-              .eq('id', system.id);
+        // 批量執行更新
+        if (updates.length > 0) {
+          for (const update of updates) {
+            try {
+              console.log(`Updating system ${update.name} with fields:`, update.fields);
+              const { error } = await supabase
+                .from('test_systems')
+                .update(update.fields)
+                .eq('id', update.id);
 
-            if (error) {
-              console.error(`Error updating system ${system.system_name}:`, error);
-              throw error;
+              if (error) {
+                console.error(`Error updating system ${update.name}:`, error);
+                throw error;
+              }
+              console.log(`Successfully updated system ${update.name}`);
+            } catch (error) {
+              console.error(`Failed to update system ${update.name}:`, error);
             }
-            console.log(`Successfully updated system ${system.system_name}`);
-          } catch (error) {
-            console.error('Error updating system status:', error);
           }
+          
+          // 確保更新後重新載入資料
+          console.log('Triggering data reload...');
+          setTimeout(() => {
+            onSystemUpdate();
+            updateInProgress.current = false;
+          }, 500);
+        } else {
+          updateInProgress.current = false;
         }
+      } catch (error) {
+        console.error('Error in system status update:', error);
+        updateInProgress.current = false;
       }
-      
-      // 確保更新後立即重新載入資料
-      console.log('Triggering data reload...');
-      await onSystemUpdate();
     };
 
-    // 立即執行更新
-    updateSystemStatus();
-  }, [filteredSystems, items, progress, onSystemUpdate, getProgressForSystemItem]);
+    // 延遲執行以確保資料穩定
+    const timeoutId = setTimeout(() => {
+      updateSystemStatus();
+    }, 200);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [progress, filteredSystems, items]); // 改為監聽 progress 變化
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
