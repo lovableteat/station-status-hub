@@ -421,8 +421,8 @@ export function TestProgressTable({
     );
   }
 
-  // Optimized column widths for better space utilization
-  const gridColumns = `160px 120px 110px repeat(${filteredStations.length}, 130px) 140px 140px 140px`;
+  // Adjusted column widths for better space utilization
+  const gridColumns = `120px 100px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
 
   // Desktop table view
   return (
@@ -468,7 +468,7 @@ export function TestProgressTable({
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
                     <button 
-                      className="font-medium text-primary hover:underline cursor-pointer text-left"
+                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
                       onClick={() => {
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
@@ -489,7 +489,7 @@ export function TestProgressTable({
                       onUpdate={onSystemUpdate}
                     />
                   </div>
-                  <div>
+                  <div className="text-sm">
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
@@ -501,7 +501,7 @@ export function TestProgressTable({
                   <div>
                     <Badge 
                       variant="secondary" 
-                      className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium"
+                      className="bg-warning text-warning-foreground px-2 py-1 rounded-full font-medium text-xs"
                     >
                       {system.current_station?.split(' - ')[0] || system.current_station}
                     </Badge>
@@ -546,9 +546,9 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  {/* System Start Time Column - Editable with better UX */}
+                  {/* System Start Time Column - Increased width */}
                   <div className="flex flex-col items-center py-2 px-1">
-                    <label className="text-xs text-muted-foreground mb-1 font-medium">開始時間</label>
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計開始</label>
                     <DateTimePicker
                       value={systemStartTime}
                       onChange={async (newStartTime) => {
@@ -557,13 +557,13 @@ export function TestProgressTable({
                       maxDate={systemEndTime}
                       onValidationError={handleValidationError}
                       placeholder="設定開始時間"
-                      className="w-full"
+                      className="w-full text-xs"
                     />
                   </div>
                   
-                  {/* System End Time Column - Editable with better UX */}
+                  {/* System End Time Column - Increased width */}
                   <div className="flex flex-col items-center py-2 px-1">
-                    <label className="text-xs text-muted-foreground mb-1 font-medium">完成時間</label>
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計完成</label>
                     <DateTimePicker
                       value={systemEndTime}
                       minDate={systemStartTime}
@@ -573,7 +573,42 @@ export function TestProgressTable({
                       onValidationError={handleValidationError}
                       placeholder="設定完成時間"
                       disabled={!systemStartTime}
-                      className="w-full"
+                      className="w-full text-xs"
+                    />
+                  </div>
+                  
+                  {/* Actual Completion Time Column */}
+                  <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
+                    <DateTimePicker
+                      value={system.actual_completed_at}
+                      onChange={async (newActualTime) => {
+                        try {
+                          const { error } = await supabase
+                            .from('test_systems')
+                            .update({ actual_completed_at: newActualTime })
+                            .eq('id', system.id);
+
+                          if (error) throw error;
+                          
+                          await onSystemUpdate();
+                          
+                          toast({
+                            title: "更新成功",
+                            description: "實際完成時間已更新",
+                          });
+                        } catch (error) {
+                          console.error('Error updating actual completion time:', error);
+                          toast({
+                            title: "更新失敗",
+                            description: "無法更新實際完成時間",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="實際完成時間"
+                      className="w-full text-xs"
                     />
                   </div>
                 </div>
