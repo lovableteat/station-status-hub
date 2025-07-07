@@ -74,22 +74,7 @@ export function ProgressEditDialog({
 }: ProgressEditDialogProps) {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  // 自動時間記錄函數
-  const recordEditTime = () => {
-    const currentTime = new Date().toISOString();
-    console.log('Recording edit time:', currentTime);
-    
-    // 立即更新編輯時間，不等待存檔
-    setEditValues(prev => ({
-      ...prev,
-      // 如果是Station 0-4，自動記錄時間
-      ...(isStation0To4() && {
-        started_at: prev.started_at || (prev.status !== 'Not Start' ? currentTime : prev.started_at),
-        completed_at: prev.status === 'Done' ? currentTime : prev.completed_at
-      })
-    }));
-  };
+  const [originalStatus, setOriginalStatus] = useState<string>('');
 
   // 檢查是否為Station 0-4
   const isStation0To4 = () => {
@@ -100,8 +85,40 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 處理狀態變更 - 自動設定進度百分比
+  // 只在狀態實際變化時記錄時間
+  const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
+    const currentTime = new Date().toISOString();
+    let timeUpdates = {};
+
+    // 如果是Station 0-4，根據狀態變化更新時間
+    if (isStation0To4()) {
+      // 從 Not Start 變成其他狀態時，記錄開始時間
+      if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
+        timeUpdates = { ...timeUpdates, started_at: currentTime };
+      }
+      
+      // 變成 Done 狀態時，記錄完成時間
+      if (newStatus === 'Done' && originalStatus !== 'Done') {
+        timeUpdates = { ...timeUpdates, completed_at: currentTime };
+      }
+      
+      // 從 Done 變成其他狀態時，清除完成時間
+      if (originalStatus === 'Done' && newStatus !== 'Done') {
+        timeUpdates = { ...timeUpdates, completed_at: undefined };
+      }
+    }
+
+    return timeUpdates;
+  };
+
+  // 處理狀態變更 - 自動設定進度百分比和時間
   const handleStatusChange = (newStatus: string) => {
+    const currentEditKey = editingProgress;
+    if (!currentEditKey) return;
+
+    const [systemId, stationId, itemId] = currentEditKey.split('-');
+    const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
+    
     let newProgressPercent = 0;
     
     // 根據狀態自動設定進度百分比：只有0%和100%
@@ -111,12 +128,15 @@ export function ProgressEditDialog({
       newProgressPercent = 0;
     }
     
+    // 獲取時間更新
+    const timeUpdates = updateTimeIfStatusChanged(newStatus, currentItem);
+    
     setEditValues(prev => ({ 
       ...prev, 
       status: newStatus,
-      progress_percent: newProgressPercent
+      progress_percent: newProgressPercent,
+      ...timeUpdates
     }));
-    recordEditTime();
   };
 
   // 處理進度變更 - 限制只能是0或100
@@ -137,14 +157,21 @@ export function ProgressEditDialog({
       progress_percent: validProgress,
       status: newStatus
     }));
-    recordEditTime();
   };
 
   // 處理備註變更
   const handleNotesChange = (newNotes: string) => {
     setEditValues(prev => ({ ...prev, notes: newNotes }));
-    recordEditTime();
   };
+
+  // 當開始編輯時，記錄原始狀態
+  useEffect(() => {
+    if (editingProgress) {
+      const [systemId, stationId, itemId] = editingProgress.split('-');
+      const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
+      setOriginalStatus(currentItem?.status || 'Not Start');
+    }
+  }, [editingProgress, getProgressForSystemItem]);
 
   const completedItems = stationItems.filter(item => {
     const prog = getProgressForSystemItem(systemId, stationId, item.id);
@@ -290,8 +317,8 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 */}
-                        {(editValues.started_at || editValues.completed_at) && (
+                        {/* 時間顯示 - 只在Station 0-4顯示 */}
+                        {isStation0To4() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
                             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -304,11 +331,9 @@ export function ProgressEditDialog({
                                 <span>{editValues.completed_at ? new Date(editValues.completed_at).toLocaleString('zh-TW') : '-'}</span>
                               </div>
                             </div>
-                            {isStation0To4() && (
-                              <div className="text-xs text-muted-foreground">
-                                * Station 0-4 的時間將自動記錄
-                              </div>
-                            )}
+                            <div className="text-xs text-muted-foreground">
+                              * 時間將根據狀態變化自動記錄（只記錄實際變化的時間點）
+                            </div>
                           </div>
                         )}
                       </div>
@@ -328,6 +353,22 @@ export function ProgressEditDialog({
                       <div className="text-sm text-muted-foreground">
                         <span className="font-medium">備註: </span>
                         {itemProgress.notes}
+                      </div>
+                    )}
+
+                    {/* 時間資訊顯示 - 只在Station 0-4且有時間記錄時顯示 */}
+                    {isStation0To4() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
+                      <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-medium">開始: </span>
+                            <span>{itemProgress.started_at ? new Date(itemProgress.started_at).toLocaleString('zh-TW') : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium">完成: </span>
+                            <span>{itemProgress.completed_at ? new Date(itemProgress.completed_at).toLocaleString('zh-TW') : '-'}</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
