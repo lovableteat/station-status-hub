@@ -39,10 +39,10 @@ export function useMachineTimelineData() {
         id: system.id,
         system_name: system.system_name,
         overall_progress: system.overall_progress,
-        // Planned times (from test_progress started_at/completed_at)
+        // Planned times (user-set expected completion times from test_progress)
         planned_start_time: plannedStartTime,
         planned_end_time: plannedEndTime,
-        // Actual times (from test_systems actual_started_at/actual_completed_at)
+        // Actual times (system-calculated actual start/completion from test_systems)
         actual_start_time: system.actual_started_at,
         actual_end_time: system.actual_completed_at,
         status: system.status,
