@@ -3,12 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X } from "lucide-react";
+import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X, Trash2 } from "lucide-react";
 import { TestItemManager } from "./TestItemManager";
 import { StationContentManager } from "./StationContentManager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +53,17 @@ export function FlowInfo() {
     description: '',
     estimated_hours: 0
   });
+
+  // Station Management State
+  const [newStationForm, setNewStationForm] = useState({
+    station_name: '',
+    station_order: 0,
+    description: '',
+    estimated_hours: 8
+  });
+  const [isNewStationDialogOpen, setIsNewStationDialogOpen] = useState(false);
+  const [editingNewStation, setEditingNewStation] = useState<TestStation | null>(null);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -277,6 +290,88 @@ export function FlowInfo() {
     });
     setEditingStation(station);
     setIsStationDialogOpen(true);
+  };
+
+  // Station Management Functions
+  const handleAddNewStation = () => {
+    setEditingNewStation(null);
+    setNewStationForm({ 
+      station_name: '', 
+      station_order: stations.length, 
+      description: '', 
+      estimated_hours: 8 
+    });
+    setIsNewStationDialogOpen(true);
+  };
+
+  const handleEditNewStation = (station: TestStation) => {
+    setEditingNewStation(station);
+    setNewStationForm({
+      station_name: station.station_name,
+      station_order: station.station_order,
+      description: station.description || '',
+      estimated_hours: station.estimated_hours || 8
+    });
+    setIsNewStationDialogOpen(true);
+  };
+
+  const handleSaveNewStation = async () => {
+    try {
+      if (editingNewStation) {
+        // Update existing station
+        await supabase
+          .from('test_flow_stations')
+          .update({
+            station_name: newStationForm.station_name,
+            station_order: newStationForm.station_order,
+            description: newStationForm.description,
+            estimated_hours: newStationForm.estimated_hours
+          })
+          .eq('id', editingNewStation.id);
+
+        toast({ title: "更新成功", description: "測試站點已更新" });
+      } else {
+        // Add new station
+        await supabase
+          .from('test_flow_stations')
+          .insert({
+            station_name: newStationForm.station_name,
+            station_order: newStationForm.station_order,
+            description: newStationForm.description,
+            estimated_hours: newStationForm.estimated_hours
+          });
+
+        toast({ title: "新增成功", description: "測試站點已新增" });
+      }
+
+      setIsNewStationDialogOpen(false);
+      setEditingNewStation(null);
+      loadData();
+    } catch (error) {
+      toast({
+        title: "操作失敗",
+        description: "無法儲存站點資料",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteNewStation = async (stationId: string) => {
+    try {
+      await supabase
+        .from('test_flow_stations')
+        .delete()
+        .eq('id', stationId);
+
+      toast({ title: "刪除成功", description: "測試站點已刪除" });
+      loadData();
+    } catch (error) {
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除站點",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -524,7 +619,75 @@ export function FlowInfo() {
       </Card>
         </TabsContent>
 
-        <TabsContent value="manage">
+        <TabsContent value="manage" className="space-y-6">
+          {/* Station Management Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  站點管理
+                </CardTitle>
+                <Button onClick={handleAddNewStation}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  新增站點
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>站點名稱</TableHead>
+                    <TableHead>順序</TableHead>
+                    <TableHead>描述</TableHead>
+                    <TableHead>預估時間</TableHead>
+                    <TableHead>操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stations.map((station) => (
+                    <TableRow key={station.id}>
+                      <TableCell className="font-medium">{station.station_name}</TableCell>
+                      <TableCell>{station.station_order}</TableCell>
+                      <TableCell>{station.description || '-'}</TableCell>
+                      <TableCell>{station.estimated_hours || 0} 小時</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditNewStation(station)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>確認刪除</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  確定要刪除站點 "{station.station_name}" 嗎？此操作無法復原。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>取消</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteNewStation(station.id)}>
+                                  刪除
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Test Items Management Section */}
           <TestItemManager 
             stations={stations} 
             items={items} 
@@ -567,6 +730,61 @@ export function FlowInfo() {
                 取消
               </Button>
               <Button onClick={handleSaveStation}>
+                <Save className="h-4 w-4 mr-2" />
+                儲存
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Station Add/Edit Dialog */}
+      <Dialog open={isNewStationDialogOpen} onOpenChange={setIsNewStationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingNewStation ? '編輯站點資訊' : '新增測試站點'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>站點名稱</Label>
+              <Input
+                value={newStationForm.station_name}
+                onChange={(e) => setNewStationForm({ ...newStationForm, station_name: e.target.value })}
+                placeholder="請輸入站點名稱"
+              />
+            </div>
+            <div>
+              <Label>順序</Label>
+              <Input
+                type="number"
+                value={newStationForm.station_order}
+                onChange={(e) => setNewStationForm({ ...newStationForm, station_order: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>描述</Label>
+              <Textarea
+                value={newStationForm.description}
+                onChange={(e) => setNewStationForm({ ...newStationForm, description: e.target.value })}
+                placeholder="請輸入站點描述"
+              />
+            </div>
+            <div>
+              <Label>預估時間 (小時)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={newStationForm.estimated_hours}
+                onChange={(e) => setNewStationForm({ ...newStationForm, estimated_hours: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsNewStationDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleSaveNewStation}>
                 <Save className="h-4 w-4 mr-2" />
                 儲存
               </Button>
