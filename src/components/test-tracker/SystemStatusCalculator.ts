@@ -1,4 +1,3 @@
-
 export interface TestSystem {
   id: string;
   system_name: string;
@@ -6,6 +5,7 @@ export interface TestSystem {
   current_station: string;
   overall_progress: number;
   status: string;
+  actual_completed_at?: string;
 }
 
 export interface TestStation {
