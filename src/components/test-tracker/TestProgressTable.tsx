@@ -1,9 +1,11 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
+import { StationStatusSelector } from "./StationStatusSelector";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -85,21 +87,6 @@ export function TestProgressTable({
       return '-';
     }
   };
-
-  // 使用新的狀態計算邏輯
-  const systemStatuses = useMemo(() => {
-    const statuses: Record<string, string> = {};
-    filteredSystems.forEach(system => {
-      const statusResult = SystemStatusCalculator.calculateSystemStatus(
-        system.id,
-        stations,
-        items,
-        progress
-      );
-      statuses[system.id] = statusResult.currentStation;
-    });
-    return statuses;
-  }, [filteredSystems, stations, items, progress]);
 
   // 獲取系統最晚完成時間
   const getSystemLatestCompletionTime = (systemId: string) => {
@@ -201,8 +188,6 @@ export function TestProgressTable({
         />
         
         {filteredSystems.map(system => {
-          const currentStation = systemStatuses[system.id] || '未開始';
-          
           return (
             <Card key={system.id} className="border-2">
               <CardHeader className="pb-3">
@@ -236,21 +221,12 @@ export function TestProgressTable({
                 <div className="flex flex-col gap-2 mt-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">當前站點:</span>
-                    <Badge 
-                      variant="secondary" 
-                      className={cn(
-                        "px-3 py-1 rounded-full font-medium text-sm",
-                        currentStation === '已完成' 
-                          ? "bg-green-500 text-white" 
-                          : currentStation === '進行中'
-                          ? "bg-warning text-warning-foreground"
-                          : "bg-gray-500 text-white"
-                      )}
-                    >
-                      {currentStation}
-                    </Badge>
+                    <StationStatusSelector
+                      systemId={system.id}
+                      currentStatus={system.current_station || '未開始'}
+                      onUpdate={onSystemUpdate}
+                    />
                   </div>
-                  
                   
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
@@ -429,7 +405,7 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              <div className="font-semibold text-center text-sm">預計開始</div>
+              <div className="font-semibold text-center text-sm">預计開始</div>
               <div className="font-semibold text-center text-sm">預計完成</div>
               <div className="font-semibold text-center text-sm">實際完成</div>
             </div>
@@ -438,7 +414,6 @@ export function TestProgressTable({
             {filteredSystems.map(system => {
               const systemStartTime = getSystemEarliestStartTime(system.id);
               const systemEndTime = getSystemLatestCompletionTime(system.id);
-              const currentStation = systemStatuses[system.id] || '未開始';
 
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
@@ -466,19 +441,11 @@ export function TestProgressTable({
                     />
                   </div>
                   <div>
-                    <Badge 
-                      variant="secondary" 
-                      className={cn(
-                        "px-2 py-1 rounded-full font-medium text-xs",
-                        currentStation === '已完成' 
-                          ? "bg-green-500 text-white" 
-                          : currentStation === '進行中'
-                          ? "bg-warning text-warning-foreground"
-                          : "bg-gray-500 text-white"
-                      )}
-                    >
-                      {currentStation}
-                    </Badge>
+                    <StationStatusSelector
+                      systemId={system.id}
+                      currentStatus={system.current_station || '未開始'}
+                      onUpdate={onSystemUpdate}
+                    />
                   </div>
                   
                   {filteredStations.map(station => {
