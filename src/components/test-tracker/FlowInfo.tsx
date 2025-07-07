@@ -522,7 +522,7 @@ export function FlowInfo() {
                        stationId={station.id}
                        stationName={station.station_name}
                        contents={stationContents.filter(c => c.station_id === station.id)}
-                       onDataChange={loadData}
+                       onUpdate={loadData}
                      />
                      
                      <div className="space-y-4 mt-4">

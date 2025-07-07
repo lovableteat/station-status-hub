@@ -79,10 +79,9 @@ export function TestManagementPanel() {
               {testFlowStations.slice(0, 4).map((station) => (
                 <TabsContent key={station.id} value={station.id} className="mt-4">
                   <TestItemManager
-                    stationId={station.id}
-                    stationName={station.station_name}
+                    stations={testFlowStations}
                     items={testItems.filter(item => item.station_id === station.id)}
-                    onUpdate={refetch}
+                    onDataChange={refetch}
                   />
                 </TabsContent>
               ))}
