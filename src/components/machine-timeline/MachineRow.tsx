@@ -9,17 +9,17 @@ interface MachineRowProps {
 
 export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
   const progressBar = useMemo(() => {
-    if (!machine.start_time) {
+    if (!machine.planned_start_time) {
       return null;
     }
 
     const totalDuration = bounds.end.getTime() - bounds.start.getTime();
-    const startTime = new Date(machine.start_time);
-    const endTime = machine.end_time ? new Date(machine.end_time) : new Date();
+    const plannedStartTime = new Date(machine.planned_start_time);
+    const plannedEndTime = machine.planned_end_time ? new Date(machine.planned_end_time) : new Date();
     
-    // Calculate position and width
-    const startPosition = ((startTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
-    const endPosition = ((endTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+    // Calculate planned time range position and width
+    const startPosition = ((plannedStartTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
+    const endPosition = ((plannedEndTime.getTime() - bounds.start.getTime()) / totalDuration) * 100;
     
     const left = Math.max(0, Math.min(startPosition, 100));
     const width = Math.max(1, Math.min(endPosition - startPosition, 100 - left));
@@ -27,7 +27,8 @@ export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
     return {
       left: `${left}%`,
       width: `${width}%`,
-      progress: machine.overall_progress
+      progress: machine.overall_progress,
+      hasActualTimes: machine.actual_start_time || machine.actual_end_time
     };
   }, [machine, bounds]);
 
@@ -38,9 +39,9 @@ export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
     >
       {progressBar ? (
         <div className="relative h-full flex items-center">
-          {/* Background bar (total time range) */}
+          {/* Background bar (planned time range) - light grey */}
           <div
-            className="absolute h-8 bg-muted/40 rounded hover:bg-muted/60 transition-colors"
+            className="absolute h-8 bg-muted/30 rounded border border-muted/50 hover:bg-muted/40 transition-colors"
             style={{
               left: progressBar.left,
               width: progressBar.width,
@@ -48,7 +49,7 @@ export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
             }}
           />
           
-          {/* Progress bar (completed portion) */}
+          {/* Progress bar (actual completion) - blue fill based on progress percentage */}
           <div
             className="absolute h-8 bg-primary rounded"
             style={{
@@ -70,6 +71,19 @@ export function MachineRow({ machine, bounds, onClick }: MachineRowProps) {
           >
             {progressBar.progress}%
           </div>
+          
+          {/* Actual completion indicator (if available) */}
+          {machine.actual_end_time && (
+            <div
+              className="absolute w-0.5 h-10 bg-success -top-1 shadow-sm"
+              style={{
+                left: `${progressBar.left}`,
+                marginLeft: `${(parseFloat(progressBar.width) * progressBar.progress) / 100}%`
+              }}
+            >
+              <div className="absolute -top-2 -left-1 w-3 h-3 bg-success rounded-full shadow-sm" />
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-center h-full text-xs text-muted-foreground">

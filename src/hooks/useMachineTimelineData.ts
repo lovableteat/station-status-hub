@@ -5,8 +5,12 @@ export interface MachineTimelineData {
   id: string;
   system_name: string;
   overall_progress: number;
-  start_time?: string;
-  end_time?: string;
+  // Planned times (for timeline background)
+  planned_start_time?: string;
+  planned_end_time?: string;
+  // Actual times (for progress calculation)
+  actual_start_time?: string;
+  actual_end_time?: string;
   status: string;
   current_station?: string;
 }
@@ -16,7 +20,7 @@ export function useMachineTimelineData() {
   const [timeOffset, setTimeOffset] = useState(0);
 
   const timelineData = useMemo(() => {
-    if (!systems.length || !progress.length) {
+    if (!systems.length) {
       return [];
     }
 
@@ -24,19 +28,23 @@ export function useMachineTimelineData() {
       // Get all progress records for this system
       const systemProgress = progress.filter(p => p.system_id === system.id);
       
-      // Calculate system-level start and end times from real data
+      // Calculate planned times from test_progress data (existing logic)
       const allStartTimes = systemProgress.map(p => p.started_at).filter(Boolean);
       const allEndTimes = systemProgress.map(p => p.completed_at).filter(Boolean);
       
-      const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-      const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+      const plannedStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+      const plannedEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
 
       return {
         id: system.id,
         system_name: system.system_name,
         overall_progress: system.overall_progress,
-        start_time: systemStartTime,
-        end_time: systemEndTime,
+        // Planned times (from test_progress started_at/completed_at)
+        planned_start_time: plannedStartTime,
+        planned_end_time: plannedEndTime,
+        // Actual times (from test_systems actual_started_at/actual_completed_at)
+        actual_start_time: system.actual_started_at,
+        actual_end_time: system.actual_completed_at,
         status: system.status,
         current_station: system.current_station
       };
@@ -46,8 +54,10 @@ export function useMachineTimelineData() {
   // Calculate timeline bounds with navigation offset
   const timelineBounds = useMemo(() => {
     const allTimes = timelineData.flatMap(machine => [
-      machine.start_time,
-      machine.end_time
+      machine.planned_start_time,
+      machine.planned_end_time,
+      machine.actual_start_time,
+      machine.actual_end_time
     ]).filter(Boolean);
 
     if (allTimes.length === 0) {

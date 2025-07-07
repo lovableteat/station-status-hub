@@ -1336,6 +1336,8 @@ export type Database = {
       }
       test_systems: {
         Row: {
+          actual_completed_at: string | null
+          actual_started_at: string | null
           assigned_engineer: string | null
           created_at: string
           current_station: string | null
@@ -1348,6 +1350,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          actual_completed_at?: string | null
+          actual_started_at?: string | null
           assigned_engineer?: string | null
           created_at?: string
           current_station?: string | null
@@ -1360,6 +1364,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          actual_completed_at?: string | null
+          actual_started_at?: string | null
           assigned_engineer?: string | null
           created_at?: string
           current_station?: string | null
