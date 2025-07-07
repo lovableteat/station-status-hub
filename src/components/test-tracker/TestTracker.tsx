@@ -63,17 +63,42 @@ export function TestTracker() {
       const station = stations.find(s => s.id === stationId);
       const isStation0To4 = station && station.station_order >= 0 && station.station_order <= 4;
       
-      // 自動記錄時間邏輯
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
       const currentTime = new Date().toISOString();
-      const updates = {
+      
+      // 準備更新數據
+      const updates: any = {
         status: editValues.status,
         progress_percent: editValues.progress_percent,
-        notes: editValues.notes,
-        // 如果是Station 0-4且狀態變為On-going，自動設定開始時間
-        started_at: editValues.started_at || (editValues.status === 'On-going' && isStation0To4 ? currentTime : undefined),
-        // 如果是Station 0-4且狀態變為Done，自動設定完成時間
-        completed_at: editValues.completed_at || (editValues.status === 'Done' && isStation0To4 ? currentTime : editValues.status === 'Done' ? currentTime : null)
+        notes: editValues.notes
       };
+
+      // 只對Station 0-4自動記錄時間
+      if (isStation0To4) {
+        // 如果狀態從 "Not Start" 變為 "On-going"，設定開始時間
+        if (existingProgress?.status === 'Not Start' && editValues.status === 'On-going') {
+          updates.started_at = currentTime;
+        }
+        // 如果狀態變為 "Done"，設定完成時間
+        if (editValues.status === 'Done' && existingProgress?.status !== 'Done') {
+          updates.completed_at = currentTime;
+          // 如果沒有開始時間，也設定開始時間
+          if (!existingProgress?.started_at) {
+            updates.started_at = currentTime;
+          }
+        }
+        // 保留現有時間（如果不是狀態變更觸發）
+        if (editValues.started_at) {
+          updates.started_at = editValues.started_at;
+        }
+        if (editValues.completed_at) {
+          updates.completed_at = editValues.completed_at;
+        }
+      } else {
+        // 非Station 0-4的站點，保持手動設定的時間
+        updates.started_at = editValues.started_at;
+        updates.completed_at = editValues.completed_at;
+      }
 
       const success = await updateProgress(systemId, stationId, itemId, updates);
       
@@ -88,6 +113,7 @@ export function TestTracker() {
         throw new Error('Update failed');
       }
     } catch (error) {
+      console.error('Error saving progress:', error);
       toast({
         title: "儲存失敗",
         description: "無法更新測試進度",
