@@ -241,16 +241,6 @@ export function TestProgressTable({
                 </div>
               <div className="flex flex-col gap-2 mt-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">負責人:</span>
-                  <SystemEditDialog
-                    systemId={system.id}
-                    systemName={system.system_name}
-                    assignedEngineer={system.assigned_engineer}
-                    onUpdate={onSystemUpdate}
-                    variant="button"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">當前站點:</span>
                   <Badge 
                     variant="secondary" 
@@ -456,8 +446,8 @@ export function TestProgressTable({
     );
   }
 
-  // Adjusted column widths for better space utilization
-  const gridColumns = `120px 100px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
+  // Desktop table view - Remove assigned engineer column
+  const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
 
   // Desktop table view
   return (
@@ -471,7 +461,6 @@ export function TestProgressTable({
             {/* Header Row */}
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
-              <div className="font-semibold">負責人</div>
               <div className="font-semibold">當前站點</div>
               {filteredStations.map(station => (
                 <div key={station.id} className="font-semibold text-center">
@@ -522,15 +511,6 @@ export function TestProgressTable({
                       systemName={system.system_name}
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
-                    />
-                  </div>
-                  <div className="text-sm">
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                      variant="button"
                     />
                   </div>
                   <div>
