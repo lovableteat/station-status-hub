@@ -39,9 +39,12 @@ export function StationAverageTimeChart() {
       const actualData = averageTimes.find(item => item.station_name === station.station_name);
       return {
         station: station.station_name,
-        estimated_hours: Number(station.estimated_hours || 0),
-        actual_hours: actualData ? Number(actualData.average_hours.toFixed(2)) : 0,
-        total_records: actualData?.total_records || 0
+        預計時間: Number(station.estimated_hours || 0),
+        實際時間: actualData ? Number(actualData.average_hours.toFixed(2)) : 0,
+        total_records: actualData?.total_records || 0,
+        efficiency: actualData && station.estimated_hours 
+          ? Number(((station.estimated_hours / actualData.average_hours) * 100).toFixed(1))
+          : 0
       };
     });
 
@@ -53,17 +56,17 @@ export function StationAverageTimeChart() {
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <p className="font-medium">{label}</p>
           <p className="text-blue-600">
-            預計時間: {data.estimated_hours} 小時
+            預計時間: {data.預計時間} 小時
           </p>
           <p className="text-green-600">
-            實際平均時間: {data.actual_hours} 小時
+            實際平均時間: {data.實際時間} 小時
           </p>
           <p className="text-muted-foreground text-sm">
             樣本數量: {data.total_records} 筆記錄
           </p>
-          {data.actual_hours > 0 && data.estimated_hours > 0 && (
+          {data.efficiency > 0 && (
             <p className="text-sm font-medium">
-              效率: {((data.estimated_hours / data.actual_hours) * 100).toFixed(1)}%
+              效率: {data.efficiency}%
             </p>
           )}
         </div>
@@ -163,14 +166,14 @@ export function StationAverageTimeChart() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
                 <Bar 
-                  dataKey="estimated_hours" 
-                  fill="hsl(var(--primary))" 
+                  dataKey="預計時間" 
+                  fill="#3b82f6" 
                   name="預計時間 (小時)"
                   radius={[0, 4, 4, 0]}
                 />
                 <Bar 
-                  dataKey="actual_hours" 
-                  fill="hsl(var(--chart-2))" 
+                  dataKey="實際時間" 
+                  fill="#10b981" 
                   name="實際平均時間 (小時)"
                   radius={[0, 4, 4, 0]}
                 />
@@ -194,13 +197,13 @@ export function StationAverageTimeChart() {
               <div key={index} className="text-center p-3 bg-muted/30 rounded space-y-1">
                 <p className="font-medium text-sm">{item.station}</p>
                 <div className="flex justify-between text-xs">
-                  <span className="text-primary">預計: {item.estimated_hours}h</span>
-                  <span className="text-chart-2">實際: {item.actual_hours}h</span>
+                  <span className="text-blue-600">預計: {item.預計時間}h</span>
+                  <span className="text-green-600">實際: {item.實際時間}h</span>
                 </div>
                 <p className="text-xs text-muted-foreground">{item.total_records} 筆樣本</p>
-                {item.actual_hours > 0 && item.estimated_hours > 0 && (
+                {item.efficiency > 0 && (
                   <p className="text-xs font-medium">
-                    效率: {((item.estimated_hours / item.actual_hours) * 100).toFixed(1)}%
+                    效率: {item.efficiency}%
                   </p>
                 )}
               </div>
