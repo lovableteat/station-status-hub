@@ -61,7 +61,7 @@ export function ProductionMonitor() {
     }
   };
 
-  // Calculate station progress based on test items completion
+  // 只計算 Station 0-4 的進度
   const calculateStationProgress = (stationId: string, systemId: string) => {
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
@@ -74,21 +74,31 @@ export function ProductionMonitor() {
     return Math.round((completedItems / stationTestItems.length) * 100);
   };
 
-  // Calculate overall system progress based on completed stations
+  // 基於 Station 0-4 計算整體進度
   const calculateOverallProgress = (systemId: string) => {
-    const totalStations = stations.length;
-    if (totalStations === 0) return 0;
+    // 只取 Station 0-4 (station_order 0-4)
+    const targetStations = stations.filter(station => 
+      station.id && typeof station.id === 'string' && 
+      // 透過 station name 判斷是否為 Station 0-4
+      (station.name.includes('Station 0') || station.name.includes('組裝') ||
+       station.name.includes('Station 1') || station.name.includes('開機') ||
+       station.name.includes('Station 2') || station.name.includes('FW') ||
+       station.name.includes('Station 3') || station.name.includes('EE') ||
+       station.name.includes('Station 4') || station.name.includes('NV TEST'))
+    );
     
-    let completedStations = 0;
+    if (targetStations.length === 0) return 0;
     
-    stations.forEach(station => {
+    let totalProgress = 0;
+    let validStations = 0;
+    
+    targetStations.forEach(station => {
       const stationProgress = calculateStationProgress(station.id, systemId);
-      if (stationProgress === 100) {
-        completedStations++;
-      }
+      totalProgress += stationProgress;
+      validStations++;
     });
     
-    return Math.round((completedStations / totalStations) * 100);
+    return validStations > 0 ? Math.round(totalProgress / validStations) : 0;
   };
 
   const exportData = () => {
@@ -141,7 +151,7 @@ export function ProductionMonitor() {
       );
     }
 
-    // Calculate updated progress for the focused system
+    // 基於 Station 0-4 計算系統進度
     const systemOverallProgress = calculateOverallProgress(system.id);
 
     return (
@@ -164,17 +174,23 @@ export function ProductionMonitor() {
           </Badge>
         </div>
 
-        {/* Video-style Station Flow - Changed to 5 columns */}
+        {/* Video-style Station Flow - 只顯示 Station 0-4 */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Monitor className="h-5 w-5" />
-              測試流程監控
+              測試流程監控 (Station 0-4)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-5 gap-4">
-              {stations.map((station, index) => {
+              {stations.filter(station => 
+                station.name.includes('Station 0') || station.name.includes('組裝') ||
+                station.name.includes('Station 1') || station.name.includes('開機') ||
+                station.name.includes('Station 2') || station.name.includes('FW') ||
+                station.name.includes('Station 3') || station.name.includes('EE') ||
+                station.name.includes('Station 4') || station.name.includes('NV TEST')
+              ).map((station, index) => {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
                 const isCompleted = stationProgress === 100;
@@ -233,7 +249,7 @@ export function ProductionMonitor() {
             {/* Progress Arrow */}
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度: {systemOverallProgress}%
+                整體進度 (Station 0-4): {systemOverallProgress}%
               </div>
               <Progress value={systemOverallProgress} className="mt-2 h-3" />
             </div>
@@ -264,16 +280,13 @@ export function ProductionMonitor() {
           </Card>
         </div>
 
-        {/* Test Progress Audit Log */}
         <TestProgressAuditLog 
           systemId={system.id}
           systemName={system.system_name}
         />
 
-        {/* Production History */}
         {showProductionHistory && <ProductionHistory />}
 
-        {/* Export Dialog */}
         <ExportDialog
           open={showExportDialog}
           onOpenChange={setShowExportDialog}
@@ -292,7 +305,7 @@ export function ProductionMonitor() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽</p>
+            <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -307,9 +320,15 @@ export function ProductionMonitor() {
         </div>
       </div>
 
-      {/* Stations Grid - Changed to 5 columns for Station 0-4 display */}
+      {/* 只顯示 Station 0-4 的網格 */}
       <div className="grid grid-cols-5 gap-6">
-        {stations.map((station) => (
+        {stations.filter(station => 
+          station.name.includes('Station 0') || station.name.includes('組裝') ||
+          station.name.includes('Station 1') || station.name.includes('開機') ||
+          station.name.includes('Station 2') || station.name.includes('FW') ||
+          station.name.includes('Station 3') || station.name.includes('EE') ||
+          station.name.includes('Station 4') || station.name.includes('NV TEST')
+        ).map((station) => (
           <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -403,10 +422,8 @@ export function ProductionMonitor() {
         ))}
       </div>
 
-      {/* Production History Component */}
       {showProductionHistory && <ProductionHistory />}
 
-      {/* Export Dialog */}
       <ExportDialog
         open={showExportDialog}
         onOpenChange={setShowExportDialog}
@@ -414,7 +431,6 @@ export function ProductionMonitor() {
         data={systems}
       />
 
-      {/* System Selection Dialog */}
       <SystemSelectionDialog
         open={showSystemSelection}
         onOpenChange={setShowSystemSelection}
