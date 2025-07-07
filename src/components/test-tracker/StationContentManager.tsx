@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Save, X, Target, Wrench, Settings, FileText } from "lucide-react";
+import { Plus, Edit, Trash2, Save, Target, Wrench, Settings, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface StationContent {
@@ -58,10 +58,11 @@ export function StationContentManager({ stationId, stationName, contents, onData
             station_id: stationId
           }));
 
-          await supabase
+          const { error } = await supabase
             .from('station_contents')
             .insert(defaultContents);
           
+          if (error) throw error;
           onDataChange();
         } catch (error) {
           console.error('Error initializing default content:', error);
@@ -78,7 +79,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
     try {
       if (editingContent) {
         // Update existing content
-        await supabase
+        const { error } = await supabase
           .from('station_contents')
           .update({
             title: formData.title,
@@ -87,10 +88,11 @@ export function StationContentManager({ stationId, stationName, contents, onData
           })
           .eq('id', editingContent.id);
         
+        if (error) throw error;
         toast({ title: "更新成功", description: "內容已更新" });
       } else {
         // Create new content
-        await supabase
+        const { error } = await supabase
           .from('station_contents')
           .insert({
             title: formData.title,
@@ -99,6 +101,7 @@ export function StationContentManager({ stationId, stationName, contents, onData
             station_id: stationId
           });
         
+        if (error) throw error;
         toast({ title: "新增成功", description: "內容已新增" });
       }
       
@@ -117,11 +120,12 @@ export function StationContentManager({ stationId, stationName, contents, onData
 
   const handleDelete = async (contentId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('station_contents')
         .delete()
         .eq('id', contentId);
       
+      if (error) throw error;
       toast({ title: "刪除成功", description: "內容已刪除" });
       onDataChange();
     } catch (error) {
@@ -155,24 +159,6 @@ export function StationContentManager({ stationId, stationName, contents, onData
     });
     setEditingContent(content);
     setIsDialogOpen(true);
-  };
-
-  const quickEdit = (content: StationContent, newContent: string) => {
-    supabase
-      .from('station_contents')
-      .update({ content: newContent })
-      .eq('id', content.id)
-      .then(() => {
-        toast({ title: "快速更新成功" });
-        onDataChange();
-      })
-      .catch(() => {
-        toast({
-          title: "更新失敗",
-          description: "無法更新內容",
-          variant: "destructive"
-        });
-      });
   };
 
   const getContentTypeIcon = (title: string) => {
