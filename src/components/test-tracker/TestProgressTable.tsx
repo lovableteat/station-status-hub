@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,17 +56,6 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
-  // Handle validation errors
-  const handleValidationError = (error: string | null) => {
-    if (error) {
-      toast({
-        title: "時間設定錯誤",
-        description: error,
-        variant: "destructive"
-      });
-    }
-  };
-  
   // Show all stations ordered by station_order
   const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
@@ -87,91 +76,29 @@ export function TestProgressTable({
     }
   };
 
-  // 獲取系統最晚完成時間 - 自動從Station 0-4取最晚時間
-  const getSystemLatestCompletionTime = (systemId: string) => {
-    const targetStations = filteredStations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
+  // 計算站點處理時間
+  const calculateStationProcessingTime = (systemId: string, stationId: string) => {
+    const stationItems = items.filter(item => item.station_id === stationId);
+    const stationProgressRecords = stationItems.map(item => 
+      getProgressForSystemItem(systemId, stationId, item.id)
+    ).filter(Boolean);
     
-    const allCompletionTimes: string[] = [];
+    const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+    const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
     
-    targetStations.forEach(station => {
-      const stationItems = items.filter(item => item.station_id === station.id);
-      stationItems.forEach(item => {
-        const prog = getProgressForSystemItem(systemId, station.id, item.id);
-        if (prog?.completed_at) {
-          allCompletionTimes.push(prog.completed_at);
-        }
-      });
-    });
+    if (startTimes.length === 0 || completionTimes.length === 0) return null;
     
-    if (allCompletionTimes.length === 0) return undefined;
-    return allCompletionTimes.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-  };
-
-  // 獲取系統最早開始時間
-  const getSystemEarliestStartTime = (systemId: string) => {
-    const targetStations = filteredStations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
+    const earliestStart = new Date(startTimes.sort()[0]);
+    const latestCompletion = new Date(completionTimes.sort().reverse()[0]);
     
-    const allStartTimes: string[] = [];
+    const diffMs = latestCompletion.getTime() - earliestStart.getTime();
+    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // 保留一位小數
     
-    targetStations.forEach(station => {
-      const stationItems = items.filter(item => item.station_id === station.id);
-      stationItems.forEach(item => {
-        const prog = getProgressForSystemItem(systemId, station.id, item.id);
-        if (prog?.started_at) {
-          allStartTimes.push(prog.started_at);
-        }
-      });
-    });
-    
-    if (allStartTimes.length === 0) return undefined;
-    return allStartTimes.sort()[0];
-  };
-
-  const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
-    try {
-      const systemProgressRecords = progress.filter(p => p.system_id === systemId);
-      
-      if (systemProgressRecords.length === 0) {
-        toast({
-          title: "無法更新",
-          description: "該系統尚未有任何測試進度記錄",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const updateColumn = timeType === 'start' ? 'started_at' : 'completed_at';
-      
-      const targetStationIds = filteredStations
-        .filter(station => station.station_order >= 0 && station.station_order <= 4)
-        .map(station => station.id);
-      
-      const { error } = await supabase
-        .from('test_progress')
-        .update({ [updateColumn]: newTime })
-        .eq('system_id', systemId)
-        .in('station_id', targetStationIds);
-
-      if (error) throw error;
-      
-      await onSystemUpdate();
-      
-      toast({
-        title: "更新成功",
-        description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新（僅影響Station 0-4）`,
-      });
-    } catch (error) {
-      console.error('Error updating system time:', error);
-      toast({
-        title: "更新失敗",
-        description: "無法更新系統時間",
-        variant: "destructive"
-      });
-    }
+    return {
+      startTime: earliestStart,
+      endTime: latestCompletion,
+      duration: diffHours
+    };
   };
 
   // Mobile card view
@@ -226,73 +153,6 @@ export function TestProgressTable({
                       onUpdate={onSystemUpdate}
                     />
                   </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
-                    <div className="flex flex-col items-end">
-                      <DateTimePicker
-                        value={getSystemEarliestStartTime(system.id)}
-                        onChange={async (newStartTime) => {
-                          await updateSystemTime(system.id, 'start', newStartTime);
-                        }}
-                        onValidationError={handleValidationError}
-                        placeholder="設定開始時間"
-                        className="w-44 text-sm"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
-                    <div className="flex flex-col items-end">
-                      <DateTimePicker
-                        value={getSystemLatestCompletionTime(system.id)}
-                        minDate={getSystemEarliestStartTime(system.id)}
-                        onChange={async (newEndTime) => {
-                          await updateSystemTime(system.id, 'end', newEndTime);
-                        }}
-                        onValidationError={handleValidationError}
-                        placeholder="設定完成時間"
-                        className="w-44 text-sm"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
-                    <div className="flex flex-col items-end">
-                      <DateTimePicker
-                        value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
-                        onChange={async (newActualTime) => {
-                          try {
-                            const { error } = await supabase
-                              .from('test_systems')
-                              .update({ actual_completed_at: newActualTime })
-                              .eq('id', system.id);
-
-                            if (error) throw error;
-                            
-                            await onSystemUpdate();
-                            
-                            toast({
-                              title: "更新成功",
-                              description: "實際完成時間已更新",
-                            });
-                          } catch (error) {
-                            console.error('Error updating actual completion time:', error);
-                            toast({
-                              title: "更新失敗",
-                              description: "無法更新實際完成時間",
-                              variant: "destructive"
-                            });
-                          }
-                        }}
-                        onValidationError={handleValidationError}
-                        placeholder="實際完成時間"
-                        className="w-44 text-sm"
-                      />
-                    </div>
-                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -307,6 +167,8 @@ export function TestProgressTable({
                     const overallPercent = stationItems.length > 0 
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
+
+                    const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
                       <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
@@ -337,33 +199,22 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                          {(() => {
-                            const stationItems = items.filter(item => item.station_id === station.id);
-                            const stationProgressRecords = stationItems.map(item => 
-                              getProgressForSystemItem(system.id, station.id, item.id)
-                            ).filter(Boolean);
-                            
-                            const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
-                            const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                            
-                            const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
-                            const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
-                            
-                            if (!startTime && !completionTime) return null;
-                            
-                            return (
-                              <div className="mt-3 pt-3 border-t space-y-2">
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-muted-foreground">開始時間:</span>
-                                  <span className="font-medium">{formatTime(startTime)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-muted-foreground">完成時間:</span>
-                                  <span className="font-medium">{formatTime(completionTime)}</span>
-                                </div>
+                          {processingTime && (
+                            <div className="mt-3 pt-3 border-t space-y-2">
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">開始時間:</span>
+                                <span className="font-medium">{formatTime(processingTime.startTime.toISOString())}</span>
                               </div>
-                            );
-                          })()}
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">完成時間:</span>
+                                <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">處理時長:</span>
+                                <span className="font-medium text-primary">{processingTime.duration} 小時</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -377,8 +228,8 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view
-  const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
+  // Desktop table view - 移除時間相關欄位
+  const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px)`;
 
   return (
     <Card>
@@ -395,8 +246,8 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[1200px]">
-            {/* Header Row */}
+          <div className="min-w-[800px]">
+            {/* Header Row - 移除時間欄位 */}
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>
@@ -405,16 +256,10 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              <div className="font-semibold text-center text-sm">預計開始</div>
-              <div className="font-semibold text-center text-sm">預計完成</div>
-              <div className="font-semibold text-center text-sm">實際完成</div>
             </div>
 
             {/* Data Rows */}
             {filteredSystems.map(system => {
-              const systemStartTime = getSystemEarliestStartTime(system.id);
-              const systemEndTime = getSystemLatestCompletionTime(system.id);
-
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
@@ -458,6 +303,8 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
+                    const processingTime = calculateStationProcessingTime(system.id, station.id);
+
                     return (
                       <div key={station.id}>
                         <div className="space-y-2">
@@ -482,72 +329,15 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
+                          {processingTime && (
+                            <div className="text-xs text-muted-foreground">
+                              處理時長: {processingTime.duration} 小時
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
-                  
-                  {/* System Start Time Column - 統一樣式 */}
-                  <div className="flex flex-col items-center py-2 px-1">
-                    <DateTimePicker
-                      value={systemStartTime}
-                      onChange={async (newStartTime) => {
-                        await updateSystemTime(system.id, 'start', newStartTime);
-                      }}
-                      maxDate={systemEndTime}
-                      onValidationError={handleValidationError}
-                      placeholder="設定開始時間"
-                      className="w-full text-xs"
-                    />
-                  </div>
-                  
-                  {/* System End Time Column - 統一樣式 */}
-                  <div className="flex flex-col items-center py-2 px-1">
-                    <DateTimePicker
-                      value={systemEndTime}
-                      minDate={systemStartTime}
-                      onChange={async (newEndTime) => {
-                        await updateSystemTime(system.id, 'end', newEndTime);
-                      }}
-                      onValidationError={handleValidationError}
-                      placeholder="設定完成時間"
-                      className="w-full text-xs"
-                    />
-                  </div>
-                  
-                  {/* Actual Completion Time Column - 統一樣式與其他欄位一致 */}
-                  <div className="flex flex-col items-center py-2 px-1">
-                    <DateTimePicker
-                      value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
-                      onChange={async (newActualTime) => {
-                        try {
-                          const { error } = await supabase
-                            .from('test_systems')
-                            .update({ actual_completed_at: newActualTime })
-                            .eq('id', system.id);
-
-                          if (error) throw error;
-                          
-                          await onSystemUpdate();
-                          
-                          toast({
-                            title: "更新成功",
-                            description: "實際完成時間已更新",
-                          });
-                        } catch (error) {
-                          console.error('Error updating actual completion time:', error);
-                          toast({
-                            title: "更新失敗",
-                            description: "無法更新實際完成時間",
-                            variant: "destructive"
-                          });
-                        }
-                      }}
-                      onValidationError={handleValidationError}
-                      placeholder="實際完成時間"
-                      className="w-full text-xs"
-                    />
-                  </div>
                 </div>
               );
             })}
