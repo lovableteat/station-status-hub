@@ -1,159 +1,200 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  Play,
-  Eye,
-  Zap
-} from "lucide-react";
+import { Clock, User, Calendar, CheckCircle, AlertTriangle, Play } from "lucide-react";
 
 interface SystemStatusListProps {
   onNavigate?: (module: string, params?: any) => void;
 }
 
 export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
-  const { systems, progress } = useUnifiedData();
+  const { systems, progress, stations, testItems } = useUnifiedData();
 
-  const getStatusIcon = (status: string, progress: number) => {
-    if (status === 'Done') return <CheckCircle className="h-4 w-4 text-success" />;
-    if (status === 'On-going') {
-      if (progress > 75) return <Activity className="h-4 w-4 text-success animate-pulse" />;
-      if (progress > 25) return <Zap className="h-4 w-4 text-warning animate-pulse" />;
-      return <AlertTriangle className="h-4 w-4 text-danger animate-bounce" />;
+  // Helper function to format time
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '未設定';
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleString('zh-TW', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '無效時間';
     }
-    return <Clock className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  // Get system start and end times from progress data
+  const getSystemTimes = (systemId: string) => {
+    const systemProgress = progress.filter(p => p.system_id === systemId);
+    
+    const startTimes = systemProgress.map(p => p.started_at).filter(Boolean);
+    const endTimes = systemProgress.map(p => p.completed_at).filter(Boolean);
+    
+    const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+    const endTime = endTimes.length > 0 ? endTimes.sort().reverse()[0] : undefined;
+    
+    return { startTime, endTime };
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'Done':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'On-going':
+        return <Play className="h-4 w-4 text-blue-500" />;
+      default:
+        return <AlertTriangle className="h-4 w-4 text-gray-400" />;
+    }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Done': return 'bg-success text-success-foreground';
-      case 'On-going': return 'bg-warning text-warning-foreground';
-      case 'Not Start': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'Done': return 'bg-green-100 text-green-800';
+      case 'On-going': return 'bg-blue-100 text-blue-800';
+      case 'Not Start': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getAnimationClass = (status: string, progress: number) => {
-    if (status === 'On-going') {
-      if (progress < 25) return 'animate-pulse border-danger/50 shadow-danger/20';
-      if (progress < 75) return 'animate-pulse border-warning/50 shadow-warning/20';
-      return 'animate-pulse border-success/50 shadow-success/20';
-    }
-    if (status === 'Done') return 'border-success/30 shadow-success/10';
-    return '';
-  };
-
-  const handleSystemClick = (systemName: string) => {
-    onNavigate?.('test-tracker', { system: systemName });
-  };
-
-  const handleMonitorClick = (systemName: string) => {
-    onNavigate?.('monitor', { system: systemName });
-  };
+  // Sort systems by status priority and then by progress
+  const sortedSystems = [...systems].sort((a, b) => {
+    const statusPriority = { 'On-going': 0, 'Not Start': 1, 'Done': 2 };
+    const aPriority = statusPriority[a.status as keyof typeof statusPriority] ?? 3;
+    const bPriority = statusPriority[b.status as keyof typeof statusPriority] ?? 3;
+    
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return (b.overall_progress || 0) - (a.overall_progress || 0);
+  });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Activity className="h-5 w-5" />
-          所有機台即時狀況
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {systems.map(system => {
-            // Calculate system progress
-            const systemProgress = progress.filter(p => p.system_id === system.id);
-            const completedItems = systemProgress.filter(p => p.status === 'Done').length;
-            const totalItems = systemProgress.length;
-            const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+            所有機台即時狀況
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 max-h-96 overflow-y-auto">
+          {sortedSystems.map((system) => {
+            const { startTime, endTime } = getSystemTimes(system.id);
+            const isCompleted = system.status === 'Done';
+            
             return (
-              <Card
+              <div
                 key={system.id}
-                className={`transition-all duration-300 hover:shadow-lg cursor-pointer ${getAnimationClass(system.status, progressPercent)}`}
+                className="flex items-center justify-between p-4 bg-gradient-to-r from-white to-gray-50 rounded-lg border hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => onNavigate?.('monitor', { system: system.system_name })}
               >
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(system.status, progressPercent)}
-                        <h4 className="font-semibold text-sm">{system.system_name}</h4>
-                      </div>
-                      <Badge className={getStatusColor(system.status)} variant="secondary">
-                        {system.status === 'Done' && '已完成'}
-                        {system.status === 'On-going' && '進行中'}
-                        {system.status === 'Not Start' && '未開始'}
+                <div className="flex items-center gap-4 flex-1">
+                  {getStatusIcon(system.status)}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900">{system.system_name}</h3>
+                      <Badge className={getStatusColor(system.status)}>
+                        {system.status === 'Done' ? '已完成' : 
+                         system.status === 'On-going' ? '進行中' : '未開始'}
                       </Badge>
                     </div>
-
-                    {/* Progress */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span>整體進度</span>
-                        <span>{progressPercent}%</span>
+                    
+                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {system.assigned_engineer || '未指派'}
                       </div>
-                      <Progress 
-                        value={progressPercent} 
-                        className="h-2"
-                      />
-                    </div>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">當前站點:</span>
-                        <p className="font-medium">{system.current_station}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">負責人:</span>
-                        <p className="font-medium">{system.assigned_engineer || '未分配'}</p>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs">當前:</span>
+                        {system.current_station || '未設定'}
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-2 pt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => handleSystemClick(system.system_name)}
-                      >
-                        <Play className="h-3 w-3 mr-1" />
-                        測試追蹤
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => handleMonitorClick(system.system_name)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        即時監控
-                      </Button>
+                    {/* 顯示開始時間和結束時間 */}
+                    <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>開始: {formatTime(startTime)}</span>
+                      </div>
+                      {isCompleted && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>完成: {formatTime(system.actual_completed_at || endTime)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Progress value={system.overall_progress || 0} className="h-2 flex-1" />
+                      <span className="text-sm font-medium text-gray-700 min-w-[3rem]">
+                        {system.overall_progress || 0}%
+                      </span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
-        </div>
+        </CardContent>
+      </Card>
 
-        {systems.length === 0 && (
-          <div className="text-center py-8">
-            <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">沒有系統資料</h3>
-            <p className="text-muted-foreground">請先在測試追蹤頁面新增系統</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            最近完成系統
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 max-h-96 overflow-y-auto">
+          {systems
+            .filter(s => s.status === 'Done')
+            .sort((a, b) => {
+              const aTime = a.actual_completed_at;
+              const bTime = b.actual_completed_at;
+              if (!aTime && !bTime) return 0;
+              if (!aTime) return 1;
+              if (!bTime) return -1;
+              return new Date(bTime).getTime() - new Date(aTime).getTime();
+            })
+            .slice(0, 5)
+            .map((system) => {
+              const { startTime } = getSystemTimes(system.id);
+              
+              return (
+                <div
+                  key={system.id}
+                  className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <div>
+                      <h4 className="font-medium text-gray-900">{system.system_name}</h4>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <User className="h-3 w-3" />
+                        {system.assigned_engineer || '未指派'}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                        <span>開始: {formatTime(startTime)}</span>
+                        <span>完成: {formatTime(system.actual_completed_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onNavigate?.('monitor', { system: system.system_name })}
+                  >
+                    查看詳情
+                  </Button>
+                </div>
+              );
+            })}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

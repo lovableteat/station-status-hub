@@ -1,428 +1,238 @@
 
-import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Monitor, Activity, AlertTriangle, CheckCircle, Clock, Download, ArrowLeft, Play, Bug, ExternalLink, History } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
-import { TestProgressAuditLog } from "./TestProgressAuditLog";
-import { ExportDialog } from "./ExportDialog";
-import { ProductionHistory } from "./ProductionHistory";
-import { BackButton } from "@/components/common/BackButton";
-import { SystemSelectionDialog } from "./SystemSelectionDialog";
-
-interface Station {
-  id: string;
-  name: string;
-  status: "idle" | "working" | "warning" | "error" | "complete";
-  current_system?: string;
-  efficiency: number;
-  last_update: string;
-}
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { Clock, CheckCircle, AlertTriangle, Zap, Target } from "lucide-react";
 
 export function ProductionMonitor() {
-  const { stationStatuses: stations, systems, testItems, progress, isLoading } = useUnifiedData();
-  const { toast } = useToast();
-  const [focusedSystem, setFocusedSystem] = useState<string | null>(null);
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  const [showProductionHistory, setShowProductionHistory] = useState(false);
-  const [showSystemSelection, setShowSystemSelection] = useState(false);
-  const [selectedStation, setSelectedStation] = useState<any>(null);
-  
+  const { systems, stations, testItems, progress } = useUnifiedData();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const systemParam = urlParams.get('system');
-    if (systemParam) {
-      setFocusedSystem(systemParam);
-    }
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'working': return 'bg-station-working text-primary-foreground';
-      case 'complete': return 'bg-success text-success-foreground';
-      case 'warning': return 'bg-warning text-warning-foreground';
-      case 'error': return 'bg-danger text-danger-foreground';
-      case 'idle': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
+  // Filter stations 0-4 for production monitoring
+  const productionStations = stations.filter(s => s.station_order >= 0 && s.station_order <= 4)
+    .sort((a, b) => a.station_order - b.station_order);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'working': return <Activity className="h-4 w-4" />;
-      case 'complete': return <CheckCircle className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4" />;
-      case 'error': return <AlertTriangle className="h-4 w-4" />;
-      case 'idle': return <Clock className="h-4 w-4" />;
-      default: return <Monitor className="h-4 w-4" />;
-    }
-  };
+  // Calculate production metrics from test progress data
+  const totalSystems = systems.length;
+  const completedSystems = systems.filter(s => s.status === 'Done').length;
+  const ongoingSystems = systems.filter(s => s.status === 'On-going').length;
+  const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
 
-  // Calculate station progress based on test items completion
-  const calculateStationProgress = (stationId: string, systemId: string) => {
-    const stationTestItems = testItems.filter(item => item.station_id === stationId);
-    const systemStationProgress = progress.filter(p => 
-      p.system_id === systemId && p.station_id === stationId
-    );
-    
-    if (stationTestItems.length === 0) return 0;
-    
-    const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
-    return Math.round((completedItems / stationTestItems.length) * 100);
-  };
+  // Calculate station efficiency from test progress
+  const getStationEfficiency = (stationId: string) => {
+    const stationItems = testItems.filter(item => item.station_id === stationId);
+    if (stationItems.length === 0) return 0;
 
-  // Calculate overall system progress based on completed stations
-  const calculateOverallProgress = (systemId: string) => {
-    const totalStations = stations.length;
-    if (totalStations === 0) return 0;
-    
-    let completedStations = 0;
-    
-    stations.forEach(station => {
-      const stationProgress = calculateStationProgress(station.id, systemId);
-      if (stationProgress === 100) {
-        completedStations++;
+    let totalProgress = 0;
+    let systemsWithProgress = 0;
+
+    systems.forEach(system => {
+      const systemProgress = stationItems.map(item => {
+        const progressRecord = progress.find(p => 
+          p.system_id === system.id && 
+          p.station_id === stationId && 
+          p.item_id === item.id
+        );
+        return progressRecord?.status === 'Done' ? 100 : (progressRecord?.progress_percent ?? 0);
+      });
+
+      if (systemProgress.length > 0) {
+        const avgProgress = systemProgress.reduce((sum, p) => sum + p, 0) / systemProgress.length;
+        totalProgress += avgProgress;
+        systemsWithProgress++;
       }
     });
-    
-    return Math.round((completedStations / totalStations) * 100);
+
+    return systemsWithProgress > 0 ? Math.round(totalProgress / systemsWithProgress) : 0;
   };
 
-  const exportData = () => {
-    setShowExportDialog(true);
-  };
+  // Calculate daily production target achievement
+  const todayCompletedSystems = systems.filter(s => {
+    if (s.status !== 'Done' || !s.actual_completed_at) return false;
+    const completedDate = new Date(s.actual_completed_at);
+    const today = new Date();
+    return completedDate.toDateString() === today.toDateString();
+  }).length;
 
-  // Debug: Log data to see what's available
-  console.log('Production Monitor Data:', { stations, systems, isLoading });
+  const dailyTarget = 10; // This could come from production_targets table
+  const targetAchievement = Math.round((todayCompletedSystems / dailyTarget) * 100);
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="grid grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-48 bg-muted rounded"></div>
-            ))}
-          </div>
-        </div>
+  return (
+    <div className="p-6 space-y-6 bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">GB300 L10 生產監控牆</h1>
+        <p className="text-xl text-gray-600">即時生產狀態 - {currentTime.toLocaleString('zh-TW')}</p>
       </div>
-    );
-  }
 
-  // Show message if no data
-  if (!stations.length && !systems.length) {
-    return (
-      <div className="p-6">
-        <div className="text-center space-y-4">
-          <h2 className="text-2xl font-bold">生產監控牆</h2>
-          <p className="text-muted-foreground">目前沒有站點或系統資料</p>
-          <p className="text-sm text-muted-foreground">請確認資料庫中有測試系統和站點資料</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If focused on specific system, show detailed view
-  if (focusedSystem) {
-    const system = systems.find(s => s.system_name === focusedSystem);
-    if (!system) {
-      return (
-        <div className="p-6 text-center">
-          <p className="text-muted-foreground">系統 {focusedSystem} 未找到</p>
-          <Button onClick={() => setFocusedSystem(null)} className="mt-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            返回總覽
-          </Button>
-        </div>
-      );
-    }
-
-    // Calculate updated progress for the focused system
-    const systemOverallProgress = calculateOverallProgress(system.id);
-
-    return (
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button onClick={() => setFocusedSystem(null)} variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              返回總覽
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold">{system.system_name} - 生產監控</h1>
-              <p className="text-muted-foreground">即時測試進度 - 當前站點: {system.current_station}</p>
-            </div>
-          </div>
-          <Badge className={getStatusColor(system.status)} variant="outline">
-            <Play className="h-3 w-3 mr-1" />
-            {system.status === 'Done' ? '已完成' : system.status === 'On-going' ? '進行中' : '未開始'}
-          </Badge>
-        </div>
-
-        {/* Video-style Station Flow - Changed to 5 columns */}
-        <Card className="bg-gradient-to-br from-background to-muted/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Monitor className="h-5 w-5" />
-              測試流程監控
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-5 gap-4">
-              {stations.map((station, index) => {
-                const isActive = system.current_station === station.name;
-                const stationProgress = calculateStationProgress(station.id, system.id);
-                const isCompleted = stationProgress === 100;
-                
-                return (
-                  <div key={station.id} className={`relative p-4 rounded-lg border-2 transition-all ${
-                    isActive ? 'border-primary bg-primary/10 shadow-lg' : 
-                    isCompleted ? 'border-success bg-success/10' : 'border-muted bg-muted/50'
-                  }`}>
-                    <div className="text-center space-y-2">
-                      <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
-                        isActive ? 'bg-primary text-primary-foreground animate-pulse' :
-                        isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
-                      </div>
-                      <h3 className="font-medium text-sm">{station.name}</h3>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">進度: {stationProgress}%</div>
-                        <Progress value={stationProgress} className="h-1" />
-                      </div>
-                      <div className="flex items-center justify-center gap-1 mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => {
-                            // Navigate to issue tracker with station filter
-                            const event = new CustomEvent('navigate', { 
-                              detail: { 
-                                module: 'issues', 
-                                params: { 
-                                  station: station.name, 
-                                  system: system.system_name 
-                                } 
-                              } 
-                            });
-                            window.dispatchEvent(event);
-                          }}
-                        >
-                          <Bug className="h-3 w-3 mr-1" />
-                          問題
-                        </Button>
-                      </div>
-                      {isActive && (
-                        <div className="absolute -top-2 -right-2">
-                          <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            {/* Progress Arrow */}
-            <div className="mt-6 text-center">
-              <div className="text-2xl font-bold text-primary">
-                整體進度: {systemOverallProgress}%
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-gradient-to-r from-green-400 to-green-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100 text-sm font-medium">完成系統</p>
+                <p className="text-3xl font-bold">{completedSystems}</p>
+                <p className="text-green-100 text-xs">總計 {totalSystems} 台</p>
               </div>
-              <Progress value={systemOverallProgress} className="mt-2 h-3" />
+              <CheckCircle className="h-12 w-12 text-green-200" />
             </div>
           </CardContent>
         </Card>
 
-        {/* System Details */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-primary">{system.assigned_engineer}</div>
-              <div className="text-sm text-muted-foreground">負責工程師</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-success">{systemOverallProgress}%</div>
-              <div className="text-sm text-muted-foreground">完成進度</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-warning">
-                {new Date().toLocaleDateString('zh-TW')}
+        <Card className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-yellow-100 text-sm font-medium">進行中</p>
+                <p className="text-3xl font-bold">{ongoingSystems}</p>
+                <p className="text-yellow-100 text-xs">執行率 {completionRate}%</p>
               </div>
-              <div className="text-sm text-muted-foreground">監控日期</div>
-            </CardContent>
-          </Card>
-        </div>
+              <Zap className="h-12 w-12 text-yellow-200" />
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Test Progress Audit Log */}
-        <TestProgressAuditLog 
-          systemId={system.id}
-          systemName={system.system_name}
-        />
+        <Card className="bg-gradient-to-r from-blue-400 to-blue-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-100 text-sm font-medium">今日完成</p>
+                <p className="text-3xl font-bold">{todayCompletedSystems}</p>
+                <p className="text-blue-100 text-xs">目標 {dailyTarget} 台</p>
+              </div>
+              <Target className="h-12 w-12 text-blue-200" />
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Production History */}
-        {showProductionHistory && <ProductionHistory />}
-
-        {/* Export Dialog */}
-        <ExportDialog
-          open={showExportDialog}
-          onOpenChange={setShowExportDialog}
-          title="生產監控報表"
-          data={systems}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <BackButton />
-          <div>
-            <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowProductionHistory(true)}>
-            <History className="h-4 w-4 mr-2" />
-            生產履歷
-          </Button>
-          <Button variant="outline" onClick={exportData}>
-            <Download className="h-4 w-4 mr-2" />
-            匯出報表
-          </Button>
-        </div>
+        <Card className="bg-gradient-to-r from-purple-400 to-purple-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-purple-100 text-sm font-medium">目標達成率</p>
+                <p className="text-3xl font-bold">{targetAchievement}%</p>
+                <p className="text-purple-100 text-xs">今日進度</p>
+              </div>
+              <AlertTriangle className="h-12 w-12 text-purple-200" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Stations Grid - Changed to 5 columns for Station 0-4 display */}
-      <div className="grid grid-cols-5 gap-6">
-        {stations.map((station) => (
-          <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-full ${getStatusColor(station.status)}`}>
-                  {getStatusIcon(station.status)}
+      {/* Station Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {productionStations.map((station) => {
+          const efficiency = getStationEfficiency(station.id);
+          const systemsAtStation = systems.filter(s => 
+            s.current_station === station.station_name || 
+            s.current_station?.includes(station.station_name)
+          );
+
+          return (
+            <Card key={station.id} className="overflow-hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold text-center">
+                  {station.station_name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Station Efficiency */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>站點效率</span>
+                    <span className="font-semibold">{efficiency}%</span>
+                  </div>
+                  <Progress value={efficiency} className="h-3" />
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  效率: {station.efficiency}%
-                </Badge>
-              </div>
-              
-              <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
-              <div className="mb-4">
-                {station.current_systems.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      處理中 ({station.current_systems.length} 台系統)
-                    </p>
-                    <div className="space-y-1 max-h-16 overflow-y-auto">
-                      {station.current_systems.slice(0, 3).map((system, idx) => (
-                        <div key={system.id} className="text-xs bg-muted/50 rounded px-2 py-1">
-                          <span className="font-medium">{system.system_name}</span>
-                          <span className="text-muted-foreground ml-2">
-                            {station.system_progress.find(sp => sp.system.id === system.id)?.progress || 0}%
-                          </span>
-                        </div>
-                      ))}
-                      {station.current_systems.length > 3 && (
-                        <div className="text-xs text-muted-foreground text-center">
-                          +{station.current_systems.length - 3} 更多...
-                        </div>
-                      )}
+
+                {/* Systems at Station */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-600">
+                    當前系統 ({systemsAtStation.length})
+                  </p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {systemsAtStation.slice(0, 3).map((system) => (
+                      <Badge 
+                        key={system.id}
+                        variant="secondary" 
+                        className="w-full justify-start text-xs py-1"
+                      >
+                        {system.system_name}
+                      </Badge>
+                    ))}
+                    {systemsAtStation.length > 3 && (
+                      <p className="text-xs text-gray-500 text-center">
+                        +{systemsAtStation.length - 3} 更多...
+                      </p>
+                    )}
+                    {systemsAtStation.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        目前無系統
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Station Status Indicator */}
+                <div className="flex justify-center">
+                  <div className={`w-4 h-4 rounded-full ${
+                    efficiency >= 80 ? 'bg-green-500' :
+                    efficiency >= 60 ? 'bg-yellow-500' :
+                    efficiency >= 30 ? 'bg-orange-500' : 'bg-red-500'
+                  }`} title={`效率: ${efficiency}%`} />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Recent Completions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            最近完成系統
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {systems
+              .filter(s => s.status === 'Done' && s.actual_completed_at)
+              .sort((a, b) => new Date(b.actual_completed_at!).getTime() - new Date(a.actual_completed_at!).getTime())
+              .slice(0, 5)
+              .map((system) => (
+                <div key={system.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <div>
+                      <p className="font-medium">{system.system_name}</p>
+                      <p className="text-sm text-gray-500">
+                        工程師: {system.assigned_engineer || '未指派'}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">待機中</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>狀態</span>
-                  <span className="capitalize">{station.status}</span>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">
+                      {new Date(system.actual_completed_at!).toLocaleString('zh-TW')}
+                    </p>
+                    <Badge variant="outline" className="bg-green-50 text-green-700">
+                      已完成
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>進行中系統</span>
-                  <span>{station.ongoing_systems}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>已完成系統</span>
-                  <span>{station.completed_systems}</span>
-                </div>
-                <Progress value={station.efficiency} className="h-2" />
-              </div>
-              
-              <div className="flex gap-2 mt-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => {
-                    if (station.current_systems.length === 1) {
-                      setFocusedSystem(station.current_systems[0].system_name);
-                    } else if (station.current_systems.length > 1) {
-                      setSelectedStation(station);
-                      setShowSystemSelection(true);
-                    }
-                  }}
-                  disabled={station.current_systems.length === 0}
-                >
-                  查看詳情
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    const event = new CustomEvent('navigate', { 
-                      detail: { 
-                        module: 'issues', 
-                        params: { station: station.name } 
-                      } 
-                    });
-                    window.dispatchEvent(event);
-                  }}
-                >
-                  <Bug className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Production History Component */}
-      {showProductionHistory && <ProductionHistory />}
-
-      {/* Export Dialog */}
-      <ExportDialog
-        open={showExportDialog}
-        onOpenChange={setShowExportDialog}
-        title="生產監控報表"
-        data={systems}
-      />
-
-      {/* System Selection Dialog */}
-      <SystemSelectionDialog
-        open={showSystemSelection}
-        onOpenChange={setShowSystemSelection}
-        stationName={selectedStation?.name || ''}
-        systems={selectedStation?.current_systems || []}
-        systemProgress={selectedStation?.system_progress || []}
-        onSystemSelect={setFocusedSystem}
-      />
+              ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
