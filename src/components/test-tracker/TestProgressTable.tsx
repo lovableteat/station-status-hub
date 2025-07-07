@@ -285,6 +285,13 @@ export function TestProgressTable({
             console.log(`需要清除實際完成時間`);
           }
           
+          // 修正：當系統剛完成時，若沒有手動設定的實際完成時間，使用最新完成時間
+          if (isComplete && !system.actual_completed_at && latestCompletionTime) {
+            updatedFields.actual_completed_at = latestCompletionTime;
+            needsUpdate = true;
+            console.log(`首次完成，設定實際完成時間: ${latestCompletionTime}`);
+          }
+          
           if (needsUpdate) {
             updates.push({
               id: system.id,
