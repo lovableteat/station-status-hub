@@ -120,18 +120,6 @@ export function TestProgressTable({
     }
   };
 
-  // Helper function to format datetime for input field
-  const formatDateTimeLocal = (timeStr?: string) => {
-    if (!timeStr) return '';
-    try {
-      const date = new Date(timeStr);
-      // Format as YYYY-MM-DDTHH:MM for datetime-local input
-      return date.toISOString().slice(0, 16);
-    } catch {
-      return '';
-    }
-  };
-
   // Check if all stations are 100% complete for a system
   const areAllStationsComplete = (systemId: string) => {
     return filteredStations.every(station => {
@@ -144,29 +132,52 @@ export function TestProgressTable({
     });
   };
 
+  // Get latest completion time across all stations for a system
+  const getSystemLatestCompletionTime = (systemId: string) => {
+    const allCompletionTimes: string[] = [];
+    
+    filteredStations.forEach(station => {
+      const stationItems = items.filter(item => item.station_id === station.id);
+      stationItems.forEach(item => {
+        const prog = getProgressForSystemItem(systemId, station.id, item.id);
+        if (prog?.completed_at) {
+          allCompletionTimes.push(prog.completed_at);
+        }
+      });
+    });
+    
+    if (allCompletionTimes.length === 0) return undefined;
+    
+    // Return the latest completion time
+    return allCompletionTimes.sort().reverse()[0];
+  };
+
   // Auto-set actual completion time when all stations reach 100%
   useEffect(() => {
     filteredSystems.forEach(system => {
-      if (!system.actual_completed_at && areAllStationsComplete(system.id)) {
-        const now = new Date().toISOString();
-        supabase
-          .from('test_systems')
-          .update({ actual_completed_at: now })
-          .eq('id', system.id)
-          .then(({ error }) => {
-            if (!error) {
-              onSystemUpdate();
-              toast({
-                title: "自動完成",
-                description: `${system.system_name} 所有站別已完成，已自動設定完成時間`,
-              });
-            }
-          });
+      if (areAllStationsComplete(system.id)) {
+        const latestCompletionTime = getSystemLatestCompletionTime(system.id);
+        
+        // Only update if we have a latest completion time and it's different from current actual_completed_at
+        if (latestCompletionTime && system.actual_completed_at !== latestCompletionTime) {
+          supabase
+            .from('test_systems')
+            .update({ actual_completed_at: latestCompletionTime })
+            .eq('id', system.id)
+            .then(({ error }) => {
+              if (!error) {
+                onSystemUpdate();
+                toast({
+                  title: "自動完成",
+                  description: `${system.system_name} 所有站別已完成，已自動設定完成時間為最晚完成時間`,
+                });
+              }
+            });
+        }
       }
     });
   }, [filteredSystems, items, progress]);
 
-  // Optimized function to update system start/end times
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
       const systemProgressRecords = progress.filter(p => p.system_id === systemId);
@@ -332,7 +343,7 @@ export function TestProgressTable({
                   <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
                   <div className="flex flex-col items-end">
                     <DateTimePicker
-                      value={system.actual_completed_at}
+                      value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
                       onChange={async (newActualTime) => {
                         try {
                           const { error } = await supabase
@@ -361,6 +372,11 @@ export function TestProgressTable({
                       placeholder="實際完成時間"
                       className="w-44"
                     />
+                    {areAllStationsComplete(system.id) && (
+                      <div className="text-xs text-success mt-1 text-center">
+                        自動設定為最晚完成時間
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -406,7 +422,6 @@ export function TestProgressTable({
                         </div>
                         <Progress value={overallPercent} className="h-3" />
                         
-                         {/* Show time info for all stations in mobile view */}
                          {(() => {
                            const stationItems = items.filter(item => item.station_id === station.id);
                            const stationProgressRecords = stationItems.map(item => 
@@ -561,7 +576,7 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  {/* System Start Time Column - Increased width */}
+                  {/* System Start Time Column */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">預計開始</label>
                     <DateTimePicker
@@ -576,7 +591,7 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* System End Time Column - Increased width */}
+                  {/* System End Time Column */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">預計完成</label>
                     <DateTimePicker
@@ -592,11 +607,11 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* Actual Completion Time Column - Enhanced with auto-set functionality */}
+                  {/* Actual Completion Time Column - 顯示最晚完成時間 */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
                     <DateTimePicker
-                      value={system.actual_completed_at}
+                      value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
                       onChange={async (newActualTime) => {
                         try {
                           const { error } = await supabase
@@ -625,9 +640,9 @@ export function TestProgressTable({
                       placeholder="實際完成時間"
                       className="w-full text-xs"
                     />
-                    {areAllStationsComplete(system.id) && !system.actual_completed_at && (
+                    {areAllStationsComplete(system.id) && (
                       <div className="text-xs text-success mt-1 text-center">
-                        自動完成可用
+                        自動設定最晚完成
                       </div>
                     )}
                   </div>

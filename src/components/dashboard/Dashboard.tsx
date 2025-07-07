@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
@@ -17,7 +18,6 @@ import {
   AlertTriangle,
   TrendingUp,
   Users,
-  Zap,
   Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,10 +55,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   
   // Calculate active engineers
   const engineers = [...new Set(systems.map(s => s.assigned_engineer).filter(Boolean))];
-  
-  // Calculate system efficiency (running stations)
-  const runningStations = stationStatuses.filter(s => s.status === 'working' || s.status === 'complete').length;
-  const systemEfficiency = stations.length > 0 ? Math.round((runningStations / stations.length) * 100) : 0;
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -85,8 +81,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Test Pass Rate Metrics */}
       <TestPassRateCard />
 
-      {/* Key Performance Indicators */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Key Performance Indicators - 移除站點效能 */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatsCard
           title="進行中系統"
           value={`${ongoingSystems}`}
@@ -110,14 +106,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           description={`負責 ${totalSystems} 個系統`}
           variant="default"
         />
-        <StatsCard
-          title="站點效能"
-          value={`${systemEfficiency}%`}
-          icon={<Zap className="h-4 w-4" />}
-          description={`${runningStations}/${stations.length} 站點運行中`}
-          trend={{ value: systemEfficiency >= 70 ? 2.1 : -1.2, isPositive: systemEfficiency >= 70 }}
-          variant={systemEfficiency >= 70 ? "success" : "warning"}
-        />
       </div>
 
       {/* Charts Section */}
@@ -129,8 +117,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <DailyCompletion />
         </CardContent>
       </Card>
-
-
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />
