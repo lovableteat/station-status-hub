@@ -59,8 +59,8 @@ export function useStationStatus(
       // Find systems currently at this station
       const systemsAtStation = systems.filter(s => s.current_station === station.station_name);
       
-      // Calculate completion rate for this station across all systems
-      const stationProgress = systems.map(system => {
+      // Calculate completion rate for this station - focus on systems currently at this station
+      const currentSystemsProgress = systemsAtStation.map(system => {
         const systemStationProgress = progress.filter(p => 
           p.system_id === system.id && p.station_id === station.id
         );
@@ -71,8 +71,9 @@ export function useStationStatus(
         return (completedItems / systemStationProgress.length) * 100;
       });
 
-      const averageProgress = stationProgress.length > 0 
-        ? stationProgress.reduce((sum, prog) => sum + prog, 0) / stationProgress.length 
+      // For station efficiency, use the progress of systems currently at this station
+      const averageProgress = currentSystemsProgress.length > 0 
+        ? currentSystemsProgress.reduce((sum, prog) => sum + prog, 0) / currentSystemsProgress.length 
         : 0;
 
       // Determine station status
@@ -104,11 +105,13 @@ export function useStationStatus(
         
         const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
         const totalItems = systemStationProgress.length;
-        const systemProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+        // If all items are done, show 100%, otherwise calculate percentage
+        const systemProgressPercent = totalItems > 0 ? 
+          (completedItems === totalItems ? 100 : Math.round((completedItems / totalItems) * 100)) : 0;
         
         return {
           system,
-          progress: Math.round(systemProgress),
+          progress: systemProgressPercent,
           status: system.status,
           test_items_completed: completedItems,
           test_items_total: totalItems
