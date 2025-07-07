@@ -29,6 +29,7 @@ export function TimeRecordManager({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [startedAt, setStartedAt] = useState('');
   const [completedAt, setCompletedAt] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
   // 當對話框打開時，重新初始化時間值
@@ -41,7 +42,10 @@ export function TimeRecordManager({
   };
 
   const handleTimeUpdate = async () => {
+    if (isUpdating) return;
+    
     try {
+      setIsUpdating(true);
       const updates: any = {};
       
       if (startedAt) {
@@ -58,27 +62,26 @@ export function TimeRecordManager({
 
       console.log('Updating time records:', { systemId, stationId, itemId, updates });
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('test_progress')
         .update(updates)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
-        .eq('item_id', itemId)
-        .select();
+        .eq('item_id', itemId);
 
       if (error) {
         console.error('Error updating time records:', error);
         throw error;
       }
 
-      console.log('Time records updated successfully:', data);
+      console.log('Time records updated successfully');
 
       toast({
         title: "時間記錄已更新",
         description: "手動時間記錄已成功更新",
       });
 
-      // 只調用 onTimeUpdate，不關閉對話框讓用戶可以繼續操作
+      // 使用回調函數僅更新必要的數據，避免整個頁面重新載入
       onTimeUpdate();
     } catch (error) {
       console.error('Error updating time records:', error);
@@ -87,11 +90,16 @@ export function TimeRecordManager({
         description: "無法更新時間記錄",
         variant: "destructive"
       });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleClearTimes = async () => {
+    if (isUpdating) return;
+    
     try {
+      setIsUpdating(true);
       const { error } = await supabase
         .from('test_progress')
         .update({
@@ -120,6 +128,8 @@ export function TimeRecordManager({
         description: "無法清空時間記錄",
         variant: "destructive"
       });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -139,7 +149,7 @@ export function TimeRecordManager({
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" disabled={isUpdating}>
           <Clock className="h-3 w-3 mr-1" />
           時間管理
         </Button>
@@ -157,6 +167,7 @@ export function TimeRecordManager({
               type="datetime-local"
               value={startedAt}
               onChange={(e) => setStartedAt(e.target.value)}
+              disabled={isUpdating}
             />
           </div>
           
@@ -167,18 +178,23 @@ export function TimeRecordManager({
               type="datetime-local"
               value={completedAt}
               onChange={(e) => setCompletedAt(e.target.value)}
+              disabled={isUpdating}
             />
           </div>
           
           <div className="flex gap-2 pt-4">
-            <Button onClick={handleTimeUpdate} className="flex-1">
+            <Button 
+              onClick={handleTimeUpdate} 
+              className="flex-1"
+              disabled={isUpdating}
+            >
               <RotateCcw className="h-3 w-3 mr-1" />
-              更新時間
+              {isUpdating ? "更新中..." : "更新時間"}
             </Button>
             
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
+                <Button variant="destructive" size="sm" disabled={isUpdating}>
                   <Trash2 className="h-3 w-3 mr-1" />
                   清空
                 </Button>
@@ -192,7 +208,7 @@ export function TimeRecordManager({
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearTimes}>
+                  <AlertDialogAction onClick={handleClearTimes} disabled={isUpdating}>
                     確認清空
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -201,7 +217,7 @@ export function TimeRecordManager({
           </div>
           
           <div className="flex justify-end pt-2">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isUpdating}>
               關閉
             </Button>
           </div>
