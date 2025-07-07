@@ -77,27 +77,38 @@ export function TestProgressTable({
     }
   };
 
-  // 計算站點處理時間
+  // 修正站點處理時間計算邏輯
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
       getProgressForSystemItem(systemId, stationId, item.id)
     ).filter(Boolean);
     
-    const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
-    const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+    // 找出所有測項的開始時間和結束時間
+    const allStartTimes = stationProgressRecords
+      .map(p => p?.started_at)
+      .filter(Boolean)
+      .map(time => new Date(time));
     
-    if (startTimes.length === 0 || completionTimes.length === 0) return null;
+    const allEndTimes = stationProgressRecords
+      .map(p => p?.completed_at)
+      .filter(Boolean)
+      .map(time => new Date(time));
     
-    const earliestStart = new Date(startTimes.sort()[0]);
-    const latestCompletion = new Date(completionTimes.sort().reverse()[0]);
+    if (allStartTimes.length === 0 || allEndTimes.length === 0) return null;
     
-    const diffMs = latestCompletion.getTime() - earliestStart.getTime();
+    // 站點開始時間 = 最早的測項開始時間
+    const stationStartTime = new Date(Math.min(...allStartTimes.map(t => t.getTime())));
+    // 站點結束時間 = 最晚的測項結束時間
+    const stationEndTime = new Date(Math.max(...allEndTimes.map(t => t.getTime())));
+    
+    // 計算站點總處理時長
+    const diffMs = stationEndTime.getTime() - stationStartTime.getTime();
     const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // 保留一位小數
     
     return {
-      startTime: earliestStart,
-      endTime: latestCompletion,
+      startTime: stationStartTime,
+      endTime: stationEndTime,
       duration: diffHours
     };
   };
@@ -208,15 +219,15 @@ export function TestProgressTable({
                           {processingTime && (
                             <div className="mt-3 pt-3 border-t space-y-2">
                               <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">開始時間:</span>
+                                <span className="text-muted-foreground">站點開始:</span>
                                 <span className="font-medium">{formatTime(processingTime.startTime.toISOString())}</span>
                               </div>
                               <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">完成時間:</span>
+                                <span className="text-muted-foreground">站點完成:</span>
                                 <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
                               </div>
                               <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">處理時長:</span>
+                                <span className="text-muted-foreground">站點處理時長:</span>
                                 <span className="font-medium text-primary">{processingTime.duration} 小時</span>
                               </div>
                             </div>
@@ -340,7 +351,7 @@ export function TestProgressTable({
                           <Progress value={overallPercent} className="h-2" />
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
-                              處理時長: {processingTime.duration} 小時
+                              站點處理時長: {processingTime.duration} 小時
                             </div>
                           )}
                         </div>
