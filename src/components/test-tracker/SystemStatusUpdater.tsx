@@ -2,8 +2,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { SystemStatusCalculator } from "./SystemStatusCalculator";
-import { TestSystem, TestStation, TestItem, TestProgress } from "../TestTracker";
+import { SystemStatusCalculator, TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 
 interface SystemStatusUpdaterProps {
   systems: TestSystem[];
