@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,109 +26,7 @@ export function TestTracker() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [editingProgress, setEditingProgress] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<{
-    status: string;
-    progress_percent: number;
-    notes: string;
-    started_at?: string;
-    completed_at?: string;
-  }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
   const { toast } = useToast();
-
-  const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
-    return progress.find(p => 
-      p.system_id === systemId && 
-      p.station_id === stationId && 
-      p.item_id === itemId
-    );
-  };
-
-  const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
-    const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-    const editKey = `${systemId}-${stationId}-${itemId}`;
-    
-    setEditingProgress(editKey);
-    setEditValues({
-      status: existingProgress?.status || "Not Start",
-      progress_percent: existingProgress?.progress_percent || 0,
-      notes: existingProgress?.notes || "",
-      started_at: existingProgress?.started_at,
-      completed_at: existingProgress?.completed_at
-    });
-  };
-
-  const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
-    try {
-      const updates = {
-        status: editValues.status,
-        progress_percent: editValues.progress_percent,
-        notes: editValues.notes,
-        started_at: editValues.started_at || (editValues.status === 'On-going' ? new Date().toISOString() : undefined),
-        completed_at: editValues.completed_at || (editValues.status === 'Done' ? new Date().toISOString() : null)
-      };
-
-      const success = await updateProgress(systemId, stationId, itemId, updates);
-      
-      if (success) {
-        setEditingProgress(null);
-        toast({
-          title: "儲存成功",
-          description: "測試進度已更新，系統狀態已自動更新"
-        });
-      } else {
-        throw new Error('Update failed');
-      }
-    } catch (error) {
-      toast({
-        title: "儲存失敗",
-        description: "無法更新測試進度",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
-    if (!confirm('DELETE the progress for this test item?')) {
-      return;
-    }
-
-    try {
-      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-      
-      if (existingProgress) {
-        const { error } = await supabase
-          .from('test_progress')
-          .delete()
-          .eq('id', existingProgress.id);
-
-        if (error) throw error;
-
-        await loadData();
-        
-        toast({
-          title: "Deleted",
-          description: "Test progress record deleted successfully"
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting progress:', error);
-      toast({
-        title: "Delete Error",
-        description: "Failed to delete test progress record",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Done': return 'bg-success text-success-foreground';
-      case 'On-going': return 'bg-warning text-warning-foreground';
-      case 'Not Start': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
 
   const filteredSystems = systems.filter(system => {
     const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -166,22 +65,7 @@ export function TestTracker() {
       />
 
       {/* Test Progress Table */}
-      <TestProgressTable
-        filteredSystems={filteredSystems}
-        stations={stations}
-        items={items}
-        progress={progress}
-        editingProgress={editingProgress}
-        setEditingProgress={setEditingProgress}
-        editValues={editValues}
-        setEditValues={setEditValues}
-        getProgressForSystemItem={getProgressForSystemItem}
-        handleEditProgress={handleEditProgress}
-        handleSaveProgress={handleSaveProgress}
-        handleDeleteProgress={handleDeleteProgress}
-        getStatusColor={getStatusColor}
-        onSystemUpdate={loadData}
-      />
+      <TestProgressTable />
     </div>
   );
 }
