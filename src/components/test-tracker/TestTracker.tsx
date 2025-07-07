@@ -59,21 +59,30 @@ export function TestTracker() {
 
   const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
     try {
+      // 找到對應的station，檢查是否為Station 0-4
+      const station = stations.find(s => s.id === stationId);
+      const isStation0To4 = station && station.station_order >= 0 && station.station_order <= 4;
+      
+      // 自動記錄時間邏輯
+      const currentTime = new Date().toISOString();
       const updates = {
         status: editValues.status,
         progress_percent: editValues.progress_percent,
         notes: editValues.notes,
-        started_at: editValues.started_at || (editValues.status === 'On-going' ? new Date().toISOString() : undefined),
-        completed_at: editValues.completed_at || (editValues.status === 'Done' ? new Date().toISOString() : null)
+        // 如果是Station 0-4且狀態變為On-going，自動設定開始時間
+        started_at: editValues.started_at || (editValues.status === 'On-going' && isStation0To4 ? currentTime : undefined),
+        // 如果是Station 0-4且狀態變為Done，自動設定完成時間
+        completed_at: editValues.completed_at || (editValues.status === 'Done' && isStation0To4 ? currentTime : editValues.status === 'Done' ? currentTime : null)
       };
 
       const success = await updateProgress(systemId, stationId, itemId, updates);
       
       if (success) {
         setEditingProgress(null);
+        const stationName = station?.station_name || `Station ${station?.station_order}`;
         toast({
           title: "儲存成功",
-          description: "測試進度已更新，系統狀態已自動更新"
+          description: `${stationName} 測試進度已更新${isStation0To4 ? '，時間已自動記錄' : ''}`,
         });
       } else {
         throw new Error('Update failed');
