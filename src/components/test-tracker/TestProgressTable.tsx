@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 interface TestSystem {
   id: string;
@@ -130,6 +131,40 @@ export function TestProgressTable({
       return '';
     }
   };
+
+  // Check if all stations are 100% complete for a system
+  const areAllStationsComplete = (systemId: string) => {
+    return filteredStations.every(station => {
+      const stationItems = items.filter(item => item.station_id === station.id);
+      const completedItems = stationItems.filter(item => {
+        const prog = getProgressForSystemItem(systemId, station.id, item.id);
+        return prog?.status === 'Done';
+      });
+      return stationItems.length > 0 && completedItems.length === stationItems.length;
+    });
+  };
+
+  // Auto-set actual completion time when all stations reach 100%
+  useEffect(() => {
+    filteredSystems.forEach(system => {
+      if (!system.actual_completed_at && areAllStationsComplete(system.id)) {
+        const now = new Date().toISOString();
+        supabase
+          .from('test_systems')
+          .update({ actual_completed_at: now })
+          .eq('id', system.id)
+          .then(({ error }) => {
+            if (!error) {
+              onSystemUpdate();
+              toast({
+                title: "自動完成",
+                description: `${system.system_name} 所有站別已完成，已自動設定完成時間`,
+              });
+            }
+          });
+      }
+    });
+  }, [filteredSystems, items, progress]);
 
   // Optimized function to update system start/end times
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
@@ -577,7 +612,7 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* Actual Completion Time Column */}
+                  {/* Actual Completion Time Column - Enhanced with auto-set functionality */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
                     <DateTimePicker
@@ -610,6 +645,11 @@ export function TestProgressTable({
                       placeholder="實際完成時間"
                       className="w-full text-xs"
                     />
+                    {areAllStationsComplete(system.id) && !system.actual_completed_at && (
+                      <div className="text-xs text-success mt-1 text-center">
+                        自動完成可用
+                      </div>
+                    )}
                   </div>
                 </div>
               );
