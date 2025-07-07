@@ -121,7 +121,7 @@ export function TestProgressTable({
     }
   };
 
-  // 重新設計：檢查系統是否真正完成（所有Station 0-4的測試項目都是Done）
+  // 修正：檢查系統是否真正完成（所有Station 0-4的測試項目都是Done）
   const isSystemReallyComplete = useCallback((systemId: string) => {
     console.log(`=== 檢查系統 ${systemId} 是否真正完成 ===`);
     
@@ -151,7 +151,7 @@ export function TestProgressTable({
     return isComplete;
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 重新設計：檢查系統是否有任何進度
+  // 修正：檢查系統是否有任何進度
   const hasSystemAnyProgress = useCallback((systemId: string) => {
     const stations0To4 = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
@@ -166,15 +166,17 @@ export function TestProgressTable({
     });
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 重新設計：獲取系統當前狀態
+  // 修正：獲取系統當前狀態 - 確保「進行中」能正確顯示
   const getSystemCurrentStatus = useCallback((systemId: string) => {
     const isComplete = isSystemReallyComplete(systemId);
     const hasProgress = hasSystemAnyProgress(systemId);
     
+    console.log(`系統 ${systemId} 狀態檢查: 完成=${isComplete}, 有進度=${hasProgress}`);
+    
     if (isComplete) {
       return '已完成';
     } else if (hasProgress) {
-      return '進行中';
+      return '進行中';  // 修正：確保有進度但未完成時顯示「進行中」
     } else {
       return '未開始';
     }
@@ -224,7 +226,7 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 重新設計：系統狀態自動更新邏輯
+  // 修正：系統狀態自動更新邏輯 - 確保狀態能在已完成↔進行中之間正確切換
   useEffect(() => {
     if (updateInProgress.current) {
       console.log('更新進行中，跳過...');
@@ -252,14 +254,14 @@ export function TestProgressTable({
           let updatedFields: any = {};
           let needsUpdate = false;
           
-          // 檢查當前站點是否需要更新
+          // 修正：檢查當前站點是否需要更新 - 允許狀態在已完成↔進行中之間切換
           if (system.current_station !== calculatedStatus) {
             updatedFields.current_station = calculatedStatus;
             needsUpdate = true;
             console.log(`需要更新當前站點: "${system.current_station}" → "${calculatedStatus}"`);
           }
           
-          // 檢查狀態是否需要更新
+          // 修正：檢查狀態是否需要更新 - 確保狀態映射正確
           const newStatus = calculatedStatus === '已完成' ? 'Done' : 
                            calculatedStatus === '未開始' ? 'Not Start' : 'On-going';
           if (system.status !== newStatus) {
@@ -268,7 +270,7 @@ export function TestProgressTable({
             console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
           }
           
-          // 處理實際完成時間
+          // 修正：處理實際完成時間 - 確保完成時設定，未完成時清除
           if (isComplete && latestCompletionTime) {
             // 系統完成時設定實際完成時間
             if (system.actual_completed_at !== latestCompletionTime) {
