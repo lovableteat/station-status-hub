@@ -10,9 +10,8 @@ interface PassRateMetrics {
   totalUnits: number;
   completedUnits: number;
   passRate: number;
-  dailyAverage: number;
-  weeklyTrend: number;
-  targetPassRate: number;
+  ongoingUnits: number;
+  notStartedUnits: number;
 }
 
 export function TestPassRateCard() {
@@ -21,32 +20,27 @@ export function TestPassRateCard() {
     totalUnits: 0,
     completedUnits: 0,
     passRate: 0,
-    targetPassRate: 100
+    ongoingUnits: 0,
+    notStartedUnits: 0
   });
 
-  // 檢查系統是否完成（Station 0-4 全部100%）
-  const isSystemCompleted = (systemId: string) => {
-    // 取得Station 0-4
-    const stations0To4 = stations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
+  // Helper function to get current station status for a system
+  const getCurrentStationStatus = (system: any) => {
+    // If current_station is already set correctly, use it
+    if (system.current_station === '已完成' || system.current_station === '未開始') {
+      return system.current_station;
+    }
     
-    return stations0To4.every(station => {
-      const stationItems = testItems.filter(item => item.station_id === station.id);
-      if (stationItems.length === 0) return true; // 如果沒有測試項目，視為完成
-      
-      const completedItems = stationItems.filter(item => {
-        const prog = progress.find(p => 
-          p.system_id === systemId && 
-          p.station_id === station.id && 
-          p.item_id === item.id &&
-          p.status === 'Done'
-        );
-        return prog;
-      });
-      
-      return completedItems.length === stationItems.length;
-    });
+    // Check if it's a Station 0-4 (these are considered "進行中")
+    const stations0To4Names = stations
+      .filter(station => station.station_order >= 0 && station.station_order <= 4)
+      .map(station => station.station_name);
+    
+    if (stations0To4Names.includes(system.current_station)) {
+      return '進行中';
+    }
+    
+    return system.current_station;
   };
 
   useEffect(() => {
@@ -58,18 +52,34 @@ export function TestPassRateCard() {
   const calculateMetrics = () => {
     if (!systems.length) return;
 
-    // 計算總台數和完成台數（基於Station 0-4全部100%的邏輯）
     const totalUnits = systems.length;
-    const completedUnits = systems.filter(system => isSystemCompleted(system.id)).length;
     
-    // 計算通過率 = 完成台數 / 總台數
+    // Count based on current_station field
+    let completedUnits = 0;
+    let ongoingUnits = 0;
+    let notStartedUnits = 0;
+    
+    systems.forEach(system => {
+      const status = getCurrentStationStatus(system);
+      
+      if (status === '已完成') {
+        completedUnits++;
+      } else if (status === '未開始') {
+        notStartedUnits++;
+      } else if (status === '進行中') {
+        ongoingUnits++;
+      }
+    });
+    
+    // Calculate pass rate = completed / total
     const passRate = totalUnits > 0 ? Math.round((completedUnits / totalUnits) * 100) : 0;
 
     setMetrics({
       totalUnits,
       completedUnits,
       passRate,
-      targetPassRate: 100
+      ongoingUnits,
+      notStartedUnits
     });
   };
 
@@ -110,15 +120,15 @@ export function TestPassRateCard() {
           <Progress value={metrics.passRate} className="mb-2" />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{metrics.completedUnits} / {metrics.totalUnits} 台</span>
-            <span>目標: {metrics.targetPassRate}%</span>
+            <span>目標: 100%</span>
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            * 基於Station 0-4全部完成的標準計算
+            * 基於當前站點欄位統計
           </div>
         </CardContent>
       </Card>
 
-      {/* 統計摘要 */}
+      {/* 統計摘要 - 基於當前站點欄位 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">統計摘要</CardTitle>
@@ -129,15 +139,13 @@ export function TestPassRateCard() {
             <div className="flex justify-between text-sm">
               <span>進行中:</span>
               <span className="font-medium text-warning">
-                {systems.filter(s => !isSystemCompleted(s.id) && 
-                  progress.some(p => p.system_id === s.id && p.status !== 'Not Start')).length} 台
+                {metrics.ongoingUnits} 台
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span>未開始:</span>
               <span className="font-medium text-muted-foreground">
-                {systems.filter(s => !isSystemCompleted(s.id) && 
-                  !progress.some(p => p.system_id === s.id && p.status !== 'Not Start')).length} 台
+                {metrics.notStartedUnits} 台
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -146,6 +154,9 @@ export function TestPassRateCard() {
                 {metrics.completedUnits} 台
               </span>
             </div>
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            * Station 0-4 顯示為進行中
           </div>
         </CardContent>
       </Card>
