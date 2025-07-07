@@ -1,3 +1,4 @@
+
 export interface TestSystem {
   id: string;
   system_name: string;
@@ -54,17 +55,19 @@ export class SystemStatusCalculator {
   ): SystemStatusResult {
     console.log(`=== 計算系統 ${systemId} 狀態 ===`);
     
-    // 只考慮 Station 0-4
+    // 確保包含 Station 0-4（共5個站點）
     const targetStations = stations
       .filter(station => station.station_order >= 0 && station.station_order <= 4)
       .sort((a, b) => a.station_order - b.station_order);
     
     console.log(`目標站點數量: ${targetStations.length}`);
+    console.log(`站點詳情:`, targetStations.map(s => `Station ${s.station_order} - ${s.station_name}`));
     
     const stationProgress = targetStations.map(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       
       if (stationItems.length === 0) {
+        console.log(`${station.station_name}: 無測試項目 = 0`);
         return {
           stationId: station.id,
           stationName: station.station_name,
@@ -79,10 +82,12 @@ export class SystemStatusCalculator {
           p.station_id === station.id && 
           p.item_id === item.id
         );
-        return itemProgress?.status === 'Done';
+        const isDone = itemProgress?.status === 'Done';
+        console.log(`  - ${item.item_name}: ${isDone ? 'Done' : itemProgress?.status || 'Not Start'}`);
+        return isDone;
       });
       
-      const isCompleted = completedItems.length === stationItems.length;
+      const isCompleted = completedItems.length === stationItems.length && stationItems.length > 0;
       const progressValue = isCompleted ? 1 : 0;
       
       console.log(`${station.station_name}: ${completedItems.length}/${stationItems.length} = ${progressValue}`);
@@ -95,27 +100,30 @@ export class SystemStatusCalculator {
       };
     });
     
-    // 計算總進度值（0-5）
+    // 計算總進度值（應該是0-5）
     const totalProgressValue = stationProgress.reduce((sum, station) => sum + station.progressValue, 0);
-    console.log(`總進度值: ${totalProgressValue}`);
+    const maxPossibleProgress = targetStations.length; // 應該是5
+    
+    console.log(`總進度值: ${totalProgressValue}/${maxPossibleProgress}`);
     
     // 根據總進度值判斷狀態
     let currentStation: string;
     if (totalProgressValue === 0) {
       currentStation = '未開始';
-    } else if (totalProgressValue >= 1 && totalProgressValue <= 4) {
+    } else if (totalProgressValue >= 1 && totalProgressValue < maxPossibleProgress) {
       currentStation = '進行中';
-    } else if (totalProgressValue === 5) {
+    } else if (totalProgressValue === maxPossibleProgress) {
       currentStation = '已完成';
     } else {
-      currentStation = '未開始'; // 預設值
+      console.warn(`異常的總進度值: ${totalProgressValue}, 最大值: ${maxPossibleProgress}`);
+      currentStation = '進行中'; // 預設值
     }
     
     console.log(`最終狀態: ${currentStation}`);
     
     return {
       currentStation,
-      overallProgress: Math.round((totalProgressValue / 5) * 100),
+      overallProgress: Math.round((totalProgressValue / maxPossibleProgress) * 100),
       stationProgress
     };
   }
