@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
-import { DailyCompletion } from "./DailyCompletion";
 import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
 import { SystemStatusList } from "./SystemStatusList";
@@ -52,10 +51,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     ? Math.round(systems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
     : 0;
     
-  // Calculate test pass rate
-  const totalProgress = progress.length;
-  const passedTests = progress.filter(p => p.status === 'Done').length;
-  const passRate = totalProgress > 0 ? Math.round((passedTests / totalProgress) * 100) : 0;
+  // 修改測試通過率計算：基於當前站點已完成的系統數量
+  const completedSystemsCount = systems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
+  const passRate = totalSystems > 0 ? Math.round((completedSystemsCount / totalSystems) * 100) : 0;
   
   // Calculate active engineers
   const engineers = [...new Set(systems.map(s => s.assigned_engineer).filter(Boolean))];
@@ -114,16 +112,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Station Average Time Chart */}
       <StationAverageTimeChart />
-
-      {/* Charts Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>每日完成與預計完成狀況</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DailyCompletion />
-        </CardContent>
-      </Card>
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />
