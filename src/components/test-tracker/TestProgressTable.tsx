@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,9 +121,10 @@ export function TestProgressTable({
     }
   };
 
-  // Check if all stations are 100% complete for a system
+  // Check if all stations 0-4 are 100% complete for a system
   const areAllStationsComplete = (systemId: string) => {
-    return filteredStations.every(station => {
+    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    return stations0To4.every(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       const completedItems = stationItems.filter(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
@@ -132,11 +134,14 @@ export function TestProgressTable({
     });
   };
 
-  // Get latest completion time across all stations for a system
+  // Get latest completion time across stations 0-4 for a system
   const getSystemLatestCompletionTime = (systemId: string) => {
     const allCompletionTimes: string[] = [];
     
-    filteredStations.forEach(station => {
+    // Only consider stations 0-4
+    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    
+    stations0To4.forEach(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       stationItems.forEach(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
@@ -152,7 +157,7 @@ export function TestProgressTable({
     return allCompletionTimes.sort().reverse()[0];
   };
 
-  // Auto-set actual completion time when all stations reach 100%
+  // Auto-set actual completion time when all stations 0-4 reach 100%
   useEffect(() => {
     filteredSystems.forEach(system => {
       if (areAllStationsComplete(system.id)) {
@@ -169,7 +174,7 @@ export function TestProgressTable({
                 onSystemUpdate();
                 toast({
                   title: "自動完成",
-                  description: `${system.system_name} 所有站別已完成，已自動設定完成時間為最晚完成時間`,
+                  description: `${system.system_name} Station 0-4 已完成，已自動設定完成時間為最晚完成時間`,
                 });
               }
             });
@@ -374,7 +379,7 @@ export function TestProgressTable({
                     />
                     {areAllStationsComplete(system.id) && (
                       <div className="text-xs text-success mt-1 text-center">
-                        自動設定為最晚完成時間
+                        自動設定為Station 0-4最晚完成時間
                       </div>
                     )}
                   </div>
@@ -607,7 +612,7 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* Actual Completion Time Column - 顯示最晚完成時間 */}
+                  {/* Actual Completion Time Column - 顯示 Station 0-4 最晚完成時間 */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
                     <DateTimePicker
@@ -642,7 +647,7 @@ export function TestProgressTable({
                     />
                     {areAllStationsComplete(system.id) && (
                       <div className="text-xs text-success mt-1 text-center">
-                        自動設定最晚完成
+                        自動設定Station 0-4最晚完成
                       </div>
                     )}
                   </div>
