@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,7 +70,7 @@ export function TestProgressTable({
   // Show all stations ordered by station_order
   const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
-  // Format time helper
+  // Format time helper - 統一時間格式顯示
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '-';
     try {
@@ -88,7 +87,7 @@ export function TestProgressTable({
     }
   };
 
-  // 獲取系統最晚完成時間
+  // 獲取系統最晚完成時間 - 自動從Station 0-4取最晚時間
   const getSystemLatestCompletionTime = (systemId: string) => {
     const targetStations = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
@@ -238,7 +237,7 @@ export function TestProgressTable({
                         }}
                         onValidationError={handleValidationError}
                         placeholder="設定開始時間"
-                        className="w-44"
+                        className="w-44 text-sm"
                       />
                     </div>
                   </div>
@@ -254,7 +253,7 @@ export function TestProgressTable({
                         }}
                         onValidationError={handleValidationError}
                         placeholder="設定完成時間"
-                        className="w-44"
+                        className="w-44 text-sm"
                       />
                     </div>
                   </div>
@@ -290,13 +289,14 @@ export function TestProgressTable({
                         }}
                         onValidationError={handleValidationError}
                         placeholder="實際完成時間"
-                        className="w-44"
+                        className="w-44 text-sm"
                       />
                     </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
+                
                 <div className="space-y-4">
                   {filteredStations.map(station => {
                     const stationItems = items.filter(item => item.station_id === station.id);
@@ -405,7 +405,7 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              <div className="font-semibold text-center text-sm">預计開始</div>
+              <div className="font-semibold text-center text-sm">預計開始</div>
               <div className="font-semibold text-center text-sm">預計完成</div>
               <div className="font-semibold text-center text-sm">實際完成</div>
             </div>
@@ -487,9 +487,8 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  {/* System Start Time Column */}
+                  {/* System Start Time Column - 統一樣式 */}
                   <div className="flex flex-col items-center py-2 px-1">
-                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計開始</label>
                     <DateTimePicker
                       value={systemStartTime}
                       onChange={async (newStartTime) => {
@@ -502,9 +501,8 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* System End Time Column */}
+                  {/* System End Time Column - 統一樣式 */}
                   <div className="flex flex-col items-center py-2 px-1">
-                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計完成</label>
                     <DateTimePicker
                       value={systemEndTime}
                       minDate={systemStartTime}
@@ -517,9 +515,8 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* Actual Completion Time Column */}
+                  {/* Actual Completion Time Column - 統一樣式與其他欄位一致 */}
                   <div className="flex flex-col items-center py-2 px-1">
-                    <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
                     <DateTimePicker
                       value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
                       onChange={async (newActualTime) => {

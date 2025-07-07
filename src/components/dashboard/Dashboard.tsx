@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
@@ -36,74 +35,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // Helper function to check if all stations 0-4 are 100% complete
-  const areAllStationsComplete = (systemId: string) => {
-    const stations0To4 = stations.filter(station => station.station_order >= 0 && station.station_order <= 4);
-    return stations0To4.every(station => {
-      const stationItems = testItems.filter(item => item.station_id === station.id);
-      if (stationItems.length === 0) return true;
-      
-      const completedItems = stationItems.filter(item => {
-        const prog = progress.find(p => 
-          p.system_id === systemId && 
-          p.station_id === station.id && 
-          p.item_id === item.id
-        );
-        return prog?.status === 'Done';
-      });
-      return completedItems.length === stationItems.length;
-    });
-  };
-
-  // Helper function to check if any progress exists for stations 0-4
-  const hasAnyProgress = (systemId: string) => {
-    const stations0To4 = stations.filter(station => station.station_order >= 0 && station.station_order <= 4);
-    return stations0To4.some(station => {
-      const stationItems = testItems.filter(item => item.station_id === station.id);
-      return stationItems.some(item => {
-        const prog = progress.find(p => 
-          p.system_id === systemId && 
-          p.station_id === station.id && 
-          p.item_id === item.id
-        );
-        return prog?.status === 'Done';
-      });
-    });
-  };
-
-  // Get current station status for a system (進行中、未開始、已完成)
-  const getCurrentStationStatus = (systemId: string) => {
-    const allStationsComplete = areAllStationsComplete(systemId);
-    const anyProgress = hasAnyProgress(systemId);
-    
-    if (allStationsComplete) {
-      return '已完成';
-    } else if (anyProgress) {
-      return '進行中';
-    } else {
-      return '未開始';
-    }
-  };
-
-  // Calculate real-time metrics based on current station status logic
+  // 直接使用系統的 current_station 欄位進行統計
   const totalSystems = systems.length;
   
-  // Count systems based on current station status logic
-  let completedSystems = 0;
-  let ongoingSystems = 0;
-  let notStartedSystems = 0;
-  
-  systems.forEach(system => {
-    const status = getCurrentStationStatus(system.id);
-    
-    if (status === '已完成') {
-      completedSystems++;
-    } else if (status === '未開始') {
-      notStartedSystems++;
-    } else if (status === '進行中') {
-      ongoingSystems++;
-    }
-  });
+  // 基於 current_station 欄位統計
+  const completedSystems = systems.filter(system => system.current_station === '已完成').length;
+  const ongoingSystems = systems.filter(system => system.current_station === '進行中').length;
+  const notStartedSystems = systems.filter(system => system.current_station === '未開始').length;
   
   const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
   
@@ -145,7 +83,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Test Pass Rate Metrics */}
       <TestPassRateCard />
 
-      {/* Key Performance Indicators - Updated with correct logic */}
+      {/* Key Performance Indicators - 基於當前站點統計 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatsCard
           title="進行中系統"
