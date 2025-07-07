@@ -17,6 +17,7 @@ interface TestSystem {
   current_station: string;
   overall_progress: number;
   status: string;
+  actual_completed_at?: string;
 }
 
 interface TestStation {
@@ -226,9 +227,8 @@ export function TestProgressTable({
                   </Badge>
                 </div>
                 
-                {/* System-wide Start and End Time for Mobile - Enhanced UX */}
-                <div className="flex items-center justify-between border-t pt-2 mt-2">
-                  <span className="text-sm text-muted-foreground font-medium">系統開始時間:</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
                   <div className="flex flex-col items-end">
                     <DateTimePicker
                       value={(() => {
@@ -262,7 +262,7 @@ export function TestProgressTable({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground font-medium">系統完成時間:</span>
+                  <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
                   <div className="flex flex-col items-end">
                     <DateTimePicker
                       value={(() => {
@@ -300,6 +300,42 @@ export function TestProgressTable({
                         const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
                         return allStartTimes.length === 0;
                       })()}
+                      className="w-44"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
+                  <div className="flex flex-col items-end">
+                    <DateTimePicker
+                      value={system.actual_completed_at}
+                      onChange={async (newActualTime) => {
+                        try {
+                          const { error } = await supabase
+                            .from('test_systems')
+                            .update({ actual_completed_at: newActualTime })
+                            .eq('id', system.id);
+
+                          if (error) throw error;
+                          
+                          await onSystemUpdate();
+                          
+                          toast({
+                            title: "更新成功",
+                            description: "實際完成時間已更新",
+                          });
+                        } catch (error) {
+                          console.error('Error updating actual completion time:', error);
+                          toast({
+                            title: "更新失敗",
+                            description: "無法更新實際完成時間",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="實際完成時間"
                       className="w-44"
                     />
                   </div>
@@ -387,8 +423,8 @@ export function TestProgressTable({
     );
   }
 
-  // Use fixed widths for better alignment
-  const gridColumns = `200px 120px 120px repeat(${filteredStations.length}, 150px) 160px 160px`;
+  // Use fixed widths for better alignment - add one more column for actual completion time
+  const gridColumns = `200px 120px 120px repeat(${filteredStations.length}, 150px) 160px 160px 160px`;
 
   // Desktop table view
   return (
@@ -409,8 +445,9 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              <div className="font-semibold text-center text-sm">開始時間</div>
-              <div className="font-semibold text-center text-sm">完成時間</div>
+              <div className="font-semibold text-center text-sm">預計開始</div>
+              <div className="font-semibold text-center text-sm">預計完成</div>
+              <div className="font-semibold text-center text-sm">實際完成</div>
             </div>
 
             {/* Data Rows */}
