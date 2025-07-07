@@ -1,291 +1,642 @@
-
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useTestTrackerData } from "@/hooks/useTestTrackerData";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Edit, ExternalLink, FileText, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
-import { ExportManager } from "./ExportManager";
-import { FilterControls } from "./FilterControls";
-import { format } from "date-fns";
+import { SystemEditDialog } from "./SystemEditDialog";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
-export function TestProgressTable() {
-  const { systems, stations, items, progress, loadData } = useTestTrackerData();
-  const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
-  const [selectedStation, setSelectedStation] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [filteredSystems, setFilteredSystems] = useState(systems);
+interface TestSystem {
+  id: string;
+  system_name: string;
+  assigned_engineer: string;
+  current_station: string;
+  overall_progress: number;
+  status: string;
+  actual_completed_at?: string;
+}
 
-  useEffect(() => {
-    setFilteredSystems(systems);
-  }, [systems]);
+interface TestStation {
+  id: string;
+  station_name: string;
+  station_order: number;
+}
 
-  const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
-    setSelectedSystem(systemId);
-    setSelectedStation(stationId);
-    setSelectedItem(itemId);
-    setIsEditDialogOpen(true);
+interface TestItem {
+  id: string;
+  station_id: string;
+  item_name: string;
+  item_order: number;
+  description: string;
+}
+
+interface TestProgress {
+  id: string;
+  system_id: string;
+  station_id: string;
+  item_id: string;
+  status: string;
+  progress_percent: number;
+  notes: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+interface TestProgressTableProps {
+  filteredSystems: TestSystem[];
+  stations: TestStation[];
+  items: TestItem[];
+  progress: TestProgress[];
+  editingProgress: string | null;
+  setEditingProgress: (key: string | null) => void;
+  editValues: {
+    status: string;
+    progress_percent: number;
+    notes: string;
+    started_at?: string;
+    completed_at?: string;
   };
+  setEditValues: (values: any) => void;
+  getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
+  handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
+  handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
+  handleDeleteProgress: (systemId: string, stationId: string, itemId: string) => void;
+  getStatusColor: (status: string) => string;
+  onSystemUpdate: () => void;
+}
 
-  const handleCloseEditDialog = () => {
-    setIsEditDialogOpen(false);
-    setSelectedSystem(null);
-    setSelectedStation(null);
-    setSelectedItem(null);
-    loadData();
+export function TestProgressTable({
+  filteredSystems,
+  stations,
+  items,
+  progress,
+  editingProgress,
+  setEditingProgress,
+  editValues,
+  setEditValues,
+  getProgressForSystemItem,
+  handleEditProgress,
+  handleSaveProgress,
+  handleDeleteProgress,
+  getStatusColor,
+  onSystemUpdate,
+}: TestProgressTableProps) {
+  const isMobile = useIsMobile();
+  const { toast } = useToast();
+  
+  // Handle validation errors
+  const handleValidationError = (error: string | null) => {
+    if (error) {
+      toast({
+        title: "時間設定錯誤",
+        description: error,
+        variant: "destructive"
+      });
+    }
   };
+  
+  // Show all stations ordered by station_order
+  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
-  const getProgressData = (systemId: string, stationId: string, itemId: string) => {
-    return progress.find(p => 
-      p.system_id === systemId && 
-      p.station_id === stationId && 
-      p.item_id === itemId
-    );
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Done':
-        return <Badge className="bg-green-100 text-green-800 border-green-300">完成</Badge>;
-      case 'On-going':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-300">進行中</Badge>;
-      case 'Issue':
-        return <Badge className="bg-red-100 text-red-800 border-red-300">問題</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800 border-gray-300">未開始</Badge>;
+  // Helper function to format time
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '-';
     }
   };
 
-  // Calculate system completion time (when all stations are 100% complete)
-  const getSystemCompletionTime = (systemId: string) => {
-    const system = systems.find(s => s.id === systemId);
-    if (!system || system.status !== 'Done') return null;
-    
-    // Find the latest completion time among all stations for this system
-    let latestCompletionTime = null;
-    
-    stations.forEach(station => {
+  // Helper function to format datetime for input field
+  const formatDateTimeLocal = (timeStr?: string) => {
+    if (!timeStr) return '';
+    try {
+      const date = new Date(timeStr);
+      // Format as YYYY-MM-DDTHH:MM for datetime-local input
+      return date.toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
+
+  // Check if all stations are 100% complete for a system
+  const areAllStationsComplete = (systemId: string) => {
+    return filteredStations.every(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
-      const stationProgress = progress.filter(p => 
-        p.system_id === systemId && p.station_id === station.id
-      );
-      
-      // Check if all items in this station are completed
-      const allItemsCompleted = stationItems.every(item => {
-        const itemProgress = stationProgress.find(p => p.item_id === item.id);
-        return itemProgress && itemProgress.status === 'Done';
+      const completedItems = stationItems.filter(item => {
+        const prog = getProgressForSystemItem(systemId, station.id, item.id);
+        return prog?.status === 'Done';
       });
-      
-      if (allItemsCompleted) {
-        // Find the latest completion time in this station
-        stationProgress.forEach(p => {
-          if (p.status === 'Done' && p.completed_at) {
-            const completionTime = new Date(p.completed_at);
-            if (!latestCompletionTime || completionTime > latestCompletionTime) {
-              latestCompletionTime = completionTime;
+      return stationItems.length > 0 && completedItems.length === stationItems.length;
+    });
+  };
+
+  // Auto-set actual completion time when all stations reach 100%
+  useEffect(() => {
+    filteredSystems.forEach(system => {
+      if (!system.actual_completed_at && areAllStationsComplete(system.id)) {
+        const now = new Date().toISOString();
+        supabase
+          .from('test_systems')
+          .update({ actual_completed_at: now })
+          .eq('id', system.id)
+          .then(({ error }) => {
+            if (!error) {
+              onSystemUpdate();
+              toast({
+                title: "自動完成",
+                description: `${system.system_name} 所有站別已完成，已自動設定完成時間`,
+              });
             }
-          }
-        });
+          });
       }
     });
-    
-    return latestCompletionTime;
+  }, [filteredSystems, items, progress]);
+
+  // Optimized function to update system start/end times
+  const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
+    try {
+      const systemProgressRecords = progress.filter(p => p.system_id === systemId);
+      
+      if (systemProgressRecords.length === 0) {
+        toast({
+          title: "無法更新",
+          description: "該系統尚未有任何測試進度記錄",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Batch update - more efficient
+      const updateColumn = timeType === 'start' ? 'started_at' : 'completed_at';
+      const { error } = await supabase
+        .from('test_progress')
+        .update({ [updateColumn]: newTime })
+        .eq('system_id', systemId);
+
+      if (error) throw error;
+      
+      await onSystemUpdate();
+      
+      toast({
+        title: "更新成功",
+        description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新`,
+      });
+    } catch (error) {
+      console.error('Error updating system time:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新系統時間",
+        variant: "destructive"
+      });
+    }
   };
 
-  const calculateSystemProgress = (systemId: string) => {
-    const totalItems = items.length;
-    if (totalItems === 0) return 0;
-    
-    const completedItems = progress.filter(p => 
-      p.system_id === systemId && p.status === 'Done'
-    ).length;
-    
-    return Math.round((completedItems / totalItems) * 100);
-  };
+  // Mobile card view
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {filteredSystems.map(system => (
+          <Card key={system.id} className="border-2">
+            <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-bold">
+                    <button 
+                      className="text-primary hover:underline cursor-pointer text-left"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        
+                        const event = new CustomEvent('navigate', { 
+                          detail: { module: 'monitor', params: { system: system.system_name } } 
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {system.system_name}
+                    </button>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                  </div>
+                </div>
+              <div className="flex flex-col gap-2 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">當前站點:</span>
+                  <Badge 
+                    variant="secondary" 
+                    className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium text-sm"
+                  >
+                    {system.current_station?.split(' - ')[0] || system.current_station}
+                  </Badge>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
+                  <div className="flex flex-col items-end">
+                    <DateTimePicker
+                      value={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                      })()}
+                      onChange={async (newStartTime) => {
+                        await updateSystemTime(system.id, 'start', newStartTime);
+                      }}
+                      maxDate={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                      })()}
+                      onValidationError={handleValidationError}
+                      placeholder="設定開始時間"
+                      className="w-44"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
+                  <div className="flex flex-col items-end">
+                    <DateTimePicker
+                      value={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+                      })()}
+                      minDate={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+                      })()}
+                      onChange={async (newEndTime) => {
+                        await updateSystemTime(system.id, 'end', newEndTime);
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="設定完成時間"
+                      disabled={(() => {
+                        const allProgressRecords = filteredStations.flatMap(station => {
+                          const stationItems = items.filter(item => item.station_id === station.id);
+                          return stationItems.map(item => 
+                            getProgressForSystemItem(system.id, station.id, item.id)
+                          ).filter(Boolean);
+                        });
+                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+                        return allStartTimes.length === 0;
+                      })()}
+                      className="w-44"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
+                  <div className="flex flex-col items-end">
+                    <DateTimePicker
+                      value={system.actual_completed_at}
+                      onChange={async (newActualTime) => {
+                        try {
+                          const { error } = await supabase
+                            .from('test_systems')
+                            .update({ actual_completed_at: newActualTime })
+                            .eq('id', system.id);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">測試進度表</h2>
-        <ExportManager 
-          systems={filteredSystems} 
-          stations={stations} 
-          progress={progress} 
-        />
-      </div>
+                          if (error) throw error;
+                          
+                          await onSystemUpdate();
+                          
+                          toast({
+                            title: "更新成功",
+                            description: "實際完成時間已更新",
+                          });
+                        } catch (error) {
+                          console.error('Error updating actual completion time:', error);
+                          toast({
+                            title: "更新失敗",
+                            description: "無法更新實際完成時間",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="實際完成時間"
+                      className="w-44"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-4">
+                {filteredStations.map(station => {
+                  const stationItems = items.filter(item => item.station_id === station.id);
+                  const completedItems = stationItems.filter(item => {
+                    const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                    return prog?.status === 'Done';
+                  });
+                  const overallPercent = stationItems.length > 0 
+                    ? Math.round((completedItems.length / stationItems.length) * 100) 
+                    : 0;
 
-      <FilterControls 
-        searchTerm=""
-        setSearchTerm={() => {}}
-        filterEngineer=""
-        setFilterEngineer={() => {}}
-        filterStatus=""
-        setFilterStatus={() => {}}
-        engineers={[]}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>系統測試進度總覽</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>系統名稱</TableHead>
-                  <TableHead>整體進度</TableHead>
-                  <TableHead>當前站點</TableHead>
-                  <TableHead>狀態</TableHead>
-                  <TableHead>實際完成</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSystems.map((system) => {
-                  const systemProgress = calculateSystemProgress(system.id);
-                  const completionTime = getSystemCompletionTime(system.id);
-                  
                   return (
-                    <TableRow key={system.id}>
-                      <TableCell className="font-medium">{system.system_name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Progress value={systemProgress} className="w-24" />
-                          <span className="text-sm">{systemProgress}%</span>
+                    <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-base">{station.station_name}</h4>
+                        <ProgressEditDialog
+                          systemName={system.system_name}
+                          stationName={station.station_name}
+                          stationItems={stationItems}
+                          progress={progress}
+                          editingProgress={editingProgress}
+                          setEditingProgress={setEditingProgress}
+                          editValues={editValues}
+                          setEditValues={setEditValues}
+                          getProgressForSystemItem={getProgressForSystemItem}
+                          handleEditProgress={handleEditProgress}
+                          handleSaveProgress={handleSaveProgress}
+                          handleDeleteProgress={handleDeleteProgress}
+                          getStatusColor={getStatusColor}
+                          systemId={system.id}
+                          stationId={station.id}
+                        />
+                      </div>
+                       <div className="space-y-2">
+                         <div className="flex items-center justify-between text-sm">
+                           <span className="font-medium">進度: {overallPercent}%</span>
+                           <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
                         </div>
-                      </TableCell>
-                      <TableCell>{system.current_station}</TableCell>
-                      <TableCell>{getStatusBadge(system.status)}</TableCell>
-                      <TableCell>
-                        {completionTime ? (
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {format(completionTime, 'yyyy-MM-dd HH:mm')}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            // Navigate to system detail or show more options
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                        <Progress value={overallPercent} className="h-3" />
+                        
+                         {/* Show time info for all stations in mobile view */}
+                         {(() => {
+                           const stationItems = items.filter(item => item.station_id === station.id);
+                           const stationProgressRecords = stationItems.map(item => 
+                             getProgressForSystemItem(system.id, station.id, item.id)
+                           ).filter(Boolean);
+                           
+                           const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+                           const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                           
+                           const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                           const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+                           
+                           if (!startTime && !completionTime) return null;
+                           
+                           return (
+                             <div className="mt-3 pt-3 border-t space-y-2">
+                               <div className="flex justify-between items-center text-sm">
+                                 <span className="text-muted-foreground">開始時間:</span>
+                                 <span className="font-medium">{formatTime(startTime)}</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm">
+                                 <span className="text-muted-foreground">完成時間:</span>
+                                 <span className="font-medium">{formatTime(completionTime)}</span>
+                               </div>
+                             </div>
+                           );
+                         })()}
+                      </div>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
-      {/* Detailed Progress Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>詳細測試項目進度</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>系統</TableHead>
-                  <TableHead>站點</TableHead>
-                  <TableHead>測試項目</TableHead>
-                  <TableHead>進度</TableHead>
-                  <TableHead>狀態</TableHead>
-                  <TableHead>開始時間</TableHead>
-                  <TableHead>完成時間</TableHead>
-                  <TableHead>備註</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSystems.map((system) =>
-                  stations.map((station) =>
-                    items.filter(item => item.station_id === station.id).map((item) => {
-                      const progressData = getProgressData(system.id, station.id, item.id);
-                      
-                      return (
-                        <TableRow key={`${system.id}-${station.id}-${item.id}`}>
-                          <TableCell className="font-medium">{system.system_name}</TableCell>
-                          <TableCell>{station.station_name}</TableCell>
-                          <TableCell>{item.item_name}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Progress value={progressData?.progress_percent || 0} className="w-16" />
-                              <span className="text-sm">{progressData?.progress_percent || 0}%</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{getStatusBadge(progressData?.status || 'Not Start')}</TableCell>
-                          <TableCell>
-                            {progressData?.started_at ? (
-                              <span className="text-sm">
-                                {format(new Date(progressData.started_at), 'MM-dd HH:mm')}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {progressData?.completed_at ? (
-                              <span className="text-sm">
-                                {format(new Date(progressData.completed_at), 'MM-dd HH:mm')}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {progressData?.notes || '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditProgress(system.id, station.id, item.id)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+  // Desktop table view - Remove assigned engineer column
+  const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
 
-      {/* Progress Edit Dialog */}
-      {isEditDialogOpen && selectedSystem && selectedStation && selectedItem && (
-        <ProgressEditDialog
-          systemId={selectedSystem}
-          stationId={selectedStation}
-          itemId={selectedItem}
-          currentProgress={getProgressData(selectedSystem, selectedStation, selectedItem)}
-          onClose={handleCloseEditDialog}
-        />
-      )}
-    </div>
+  // Desktop table view
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>測試進度表</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <div className="min-w-[1200px]">
+            {/* Header Row */}
+            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
+              <div className="font-semibold">機台編號</div>
+              <div className="font-semibold">當前站點</div>
+              {filteredStations.map(station => (
+                <div key={station.id} className="font-semibold text-center">
+                  {station.station_name}
+                </div>
+              ))}
+              <div className="font-semibold text-center text-sm">預計開始</div>
+              <div className="font-semibold text-center text-sm">預計完成</div>
+              <div className="font-semibold text-center text-sm">實際完成</div>
+            </div>
+
+            {/* Data Rows */}
+            {filteredSystems.map(system => {
+              // Calculate overall start and end times for this system across all stations
+              const allProgressRecords = filteredStations.flatMap(station => {
+                const stationItems = items.filter(item => item.station_id === station.id);
+                return stationItems.map(item => 
+                  getProgressForSystemItem(system.id, station.id, item.id)
+                ).filter(Boolean);
+              });
+              
+              const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
+              const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
+              
+              const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
+              const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+
+              return (
+                <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        
+                        const event = new CustomEvent('navigate', { 
+                          detail: { module: 'monitor', params: { system: system.system_name } } 
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {system.system_name}
+                    </button>
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                  </div>
+                  <div>
+                    <Badge 
+                      variant="secondary" 
+                      className="bg-warning text-warning-foreground px-2 py-1 rounded-full font-medium text-xs"
+                    >
+                      {system.current_station?.split(' - ')[0] || system.current_station}
+                    </Badge>
+                  </div>
+                  
+                  {filteredStations.map(station => {
+                    const stationItems = items.filter(item => item.station_id === station.id);
+                    const completedItems = stationItems.filter(item => {
+                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                      return prog?.status === 'Done';
+                    });
+                    const overallPercent = stationItems.length > 0 
+                      ? Math.round((completedItems.length / stationItems.length) * 100) 
+                      : 0;
+
+                    return (
+                      <div key={station.id}>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>進度: {overallPercent}%</span>
+                            <ProgressEditDialog
+                              systemName={system.system_name}
+                              stationName={station.station_name}
+                              stationItems={stationItems}
+                              progress={progress}
+                              editingProgress={editingProgress}
+                              setEditingProgress={setEditingProgress}
+                              editValues={editValues}
+                              setEditValues={setEditValues}
+                              getProgressForSystemItem={getProgressForSystemItem}
+                              handleEditProgress={handleEditProgress}
+                              handleSaveProgress={handleSaveProgress}
+                              handleDeleteProgress={handleDeleteProgress}
+                              getStatusColor={getStatusColor}
+                              systemId={system.id}
+                              stationId={station.id}
+                            />
+                          </div>
+                          <Progress value={overallPercent} className="h-2" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* System Start Time Column - Increased width */}
+                  <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計開始</label>
+                    <DateTimePicker
+                      value={systemStartTime}
+                      onChange={async (newStartTime) => {
+                        await updateSystemTime(system.id, 'start', newStartTime);
+                      }}
+                      maxDate={systemEndTime}
+                      onValidationError={handleValidationError}
+                      placeholder="設定開始時間"
+                      className="w-full text-xs"
+                    />
+                  </div>
+                  
+                  {/* System End Time Column - Increased width */}
+                  <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">預計完成</label>
+                    <DateTimePicker
+                      value={systemEndTime}
+                      minDate={systemStartTime}
+                      onChange={async (newEndTime) => {
+                        await updateSystemTime(system.id, 'end', newEndTime);
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="設定完成時間"
+                      disabled={!systemStartTime}
+                      className="w-full text-xs"
+                    />
+                  </div>
+                  
+                  {/* Actual Completion Time Column - Enhanced with auto-set functionality */}
+                  <div className="flex flex-col items-center py-2 px-1">
+                    <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
+                    <DateTimePicker
+                      value={system.actual_completed_at}
+                      onChange={async (newActualTime) => {
+                        try {
+                          const { error } = await supabase
+                            .from('test_systems')
+                            .update({ actual_completed_at: newActualTime })
+                            .eq('id', system.id);
+
+                          if (error) throw error;
+                          
+                          await onSystemUpdate();
+                          
+                          toast({
+                            title: "更新成功",
+                            description: "實際完成時間已更新",
+                          });
+                        } catch (error) {
+                          console.error('Error updating actual completion time:', error);
+                          toast({
+                            title: "更新失敗",
+                            description: "無法更新實際完成時間",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      onValidationError={handleValidationError}
+                      placeholder="實際完成時間"
+                      className="w-full text-xs"
+                    />
+                    {areAllStationsComplete(system.id) && !system.actual_completed_at && (
+                      <div className="text-xs text-success mt-1 text-center">
+                        自動完成可用
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
