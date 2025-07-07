@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +46,14 @@ interface UnifiedProgress {
   completed_at?: string;
 }
 
+interface StationContent {
+  id: string;
+  title: string;
+  content: string;
+  order_num: number;
+  station_id: string;
+}
+
 interface StationStatus {
   id: string;
   name: string;
@@ -70,6 +79,7 @@ export function useUnifiedData() {
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
   const [progress, setProgress] = useState<UnifiedProgress[]>([]);
+  const [stationContents, setStationContents] = useState<StationContent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -95,17 +105,19 @@ export function useUnifiedData() {
       setIsLoading(true);
       
       // Load all data in parallel
-      const [systemsRes, stationsRes, itemsRes, progressRes] = await Promise.all([
+      const [systemsRes, stationsRes, itemsRes, progressRes, contentsRes] = await Promise.all([
         supabase.from('test_systems').select('*').order('system_name'),
         supabase.from('test_flow_stations').select('*').order('station_order'),
         supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('test_progress').select('*')
+        supabase.from('test_progress').select('*'),
+        supabase.from('station_contents').select('*').order('order_num')
       ]);
 
       if (systemsRes.data) setSystems(systemsRes.data);
       if (stationsRes.data) setStations(stationsRes.data);
       if (itemsRes.data) setTestItems(itemsRes.data);
       if (progressRes.data) setProgress(progressRes.data);
+      if (contentsRes.data) setStationContents(contentsRes.data);
 
       setIsLoading(false);
     } catch (error) {
@@ -118,7 +130,6 @@ export function useUnifiedData() {
       setIsLoading(false);
     }
   }, [toast]);
-
 
   const updateProgress = useCallback(async (
     systemId: string,
@@ -213,6 +224,18 @@ export function useUnifiedData() {
           debouncedReload();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'station_contents'
+        },
+        () => {
+          console.log('Station contents updated, reloading data...');
+          debouncedReload();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -225,9 +248,10 @@ export function useUnifiedData() {
     stations,
     testItems,
     progress,
+    stationContents,
     stationStatuses,
     isLoading,
-    loadAllData,
+    refetch: loadAllData,
     updateProgress
   };
 }
