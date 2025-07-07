@@ -100,15 +100,43 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 處理狀態變更
+  // 處理狀態變更 - 自動設定進度百分比
   const handleStatusChange = (newStatus: string) => {
-    setEditValues(prev => ({ ...prev, status: newStatus }));
+    let newProgressPercent = 0;
+    
+    // 根據狀態自動設定進度百分比：只有0%和100%
+    if (newStatus === 'Done') {
+      newProgressPercent = 100;
+    } else {
+      newProgressPercent = 0;
+    }
+    
+    setEditValues(prev => ({ 
+      ...prev, 
+      status: newStatus,
+      progress_percent: newProgressPercent
+    }));
     recordEditTime();
   };
 
-  // 處理進度變更
+  // 處理進度變更 - 限制只能是0或100
   const handleProgressChange = (newProgress: number) => {
-    setEditValues(prev => ({ ...prev, progress_percent: newProgress }));
+    // 限制進度只能是0或100
+    const validProgress = newProgress >= 50 ? 100 : 0;
+    
+    // 根據進度自動調整狀態
+    let newStatus = editValues.status;
+    if (validProgress === 100) {
+      newStatus = 'Done';
+    } else if (validProgress === 0) {
+      newStatus = editValues.status === 'Done' ? 'On-going' : editValues.status;
+    }
+    
+    setEditValues(prev => ({ 
+      ...prev, 
+      progress_percent: validProgress,
+      status: newStatus
+    }));
     recordEditTime();
   };
 
@@ -237,14 +265,19 @@ export function ProgressEditDialog({
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium">進度 (%)</label>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={editValues.progress_percent}
-                            onChange={(e) => handleProgressChange(Number(e.target.value))}
-                          />
+                          <label className="text-sm font-medium">進度 (只能選0%或100%)</label>
+                          <Select 
+                            value={editValues.progress_percent.toString()} 
+                            onValueChange={(value) => handleProgressChange(Number(value))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0">0%</SelectItem>
+                              <SelectItem value="100">100%</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="md:col-span-2 space-y-2">
@@ -281,7 +314,7 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 進度條 */}
+                    {/* 進度條 - 顯示0%或100% */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>進度</span>

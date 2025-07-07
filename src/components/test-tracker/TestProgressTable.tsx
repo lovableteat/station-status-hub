@@ -125,15 +125,17 @@ export function TestProgressTable({
     const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
     return stations0To4.every(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
+      if (stationItems.length === 0) return true; // 如果沒有測試項目，視為完成
+      
       const completedItems = stationItems.filter(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
         return prog?.status === 'Done';
       });
-      return stationItems.length > 0 && completedItems.length === stationItems.length;
+      return completedItems.length === stationItems.length;
     });
   };
 
-  // Get latest completion time across stations 0-4 for a system - 修正邏輯
+  // Get latest completion time across stations 0-4 for a system
   const getSystemLatestCompletionTime = (systemId: string) => {
     const allCompletionTimes: string[] = [];
     
@@ -156,7 +158,7 @@ export function TestProgressTable({
     return allCompletionTimes.sort().reverse()[0];
   };
 
-  // Get earliest start time across stations 0-4 for a system - 新增
+  // Get earliest start time across stations 0-4 for a system
   const getSystemEarliestStartTime = (systemId: string) => {
     const allStartTimes: string[] = [];
     
@@ -480,9 +482,10 @@ export function TestProgressTable({
             {filteredSystems.map(system => {
               const systemStartTime = getSystemEarliestStartTime(system.id);
               const systemEndTime = getSystemLatestCompletionTime(system.id);
+              const isSystemComplete = areAllStationsComplete(system.id);
 
               return (
-                <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className={`grid gap-2 p-4 border-b hover:bg-muted/25 ${isSystemComplete ? 'bg-green-50' : ''}`} style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
                     <button 
                       className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
@@ -505,6 +508,11 @@ export function TestProgressTable({
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
                     />
+                    {isSystemComplete && (
+                      <Badge variant="default" className="bg-green-500 text-white text-xs">
+                        已完成
+                      </Badge>
+                    )}
                   </div>
                   <div>
                     <Badge 
@@ -554,7 +562,7 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  {/* System Start Time Column */}
+                  {/* System Start Time Column - 可自由設定不需跨日 */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">預計開始</label>
                     <DateTimePicker
@@ -569,7 +577,7 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* System End Time Column */}
+                  {/* System End Time Column - 可自由設定不需跨日 */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">預計完成</label>
                     <DateTimePicker
@@ -580,7 +588,6 @@ export function TestProgressTable({
                       }}
                       onValidationError={handleValidationError}
                       placeholder="設定完成時間"
-                      disabled={!systemStartTime}
                       className="w-full text-xs"
                     />
                   </div>
