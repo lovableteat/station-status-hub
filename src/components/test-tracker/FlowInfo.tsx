@@ -1,37 +1,12 @@
+
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X, Trash2 } from "lucide-react";
-import { TestItemManager } from "./TestItemManager";
-import { StationContentManager } from "./StationContentManager";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-
-interface TestStation {
-  id: string;
-  station_name: string;
-  station_order: number;
-  description: string;
-  estimated_hours: number;
-}
-
-interface TestItem {
-  id: string;
-  station_id: string;
-  item_name: string;
-  item_order: number;
-  description: string;
-  estimated_minutes: number;
-}
+import { Badge } from "@/components/ui/badge";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { StationContentManager } from "./StationContentManager";
+import { supabase } from "@/integrations/supabase/client";
+import { Clock, Users, Settings, Eye, Edit3, Target, Wrench, FileText } from "lucide-react";
 
 interface StationContent {
   id: string;
@@ -42,756 +17,257 @@ interface StationContent {
 }
 
 export function FlowInfo() {
-  const [stations, setStations] = useState<TestStation[]>([]);
-  const [items, setItems] = useState<TestItem[]>([]);
-  const [stationContents, setStationContents] = useState<StationContent[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
-  const [editingStation, setEditingStation] = useState<TestStation | null>(null);
-  const [stationFormData, setStationFormData] = useState({
-    station_name: '',
-    description: '',
-    estimated_hours: 0
-  });
-
-  // Station Management State
-  const [newStationForm, setNewStationForm] = useState({
-    station_name: '',
-    station_order: 0,
-    description: '',
-    estimated_hours: 8
-  });
-  const [isNewStationDialogOpen, setIsNewStationDialogOpen] = useState(false);
-  const [editingNewStation, setEditingNewStation] = useState<TestStation | null>(null);
-
-  const { toast } = useToast();
+  const { stations, testItems, isLoading } = useUnifiedData();
+  const [stationContents, setStationContents] = useState<{ [key: string]: StationContent[] }>({});
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadStationContents();
+  }, [stations]);
 
-  const loadData = async () => {
+  const loadStationContents = async () => {
     try {
-      const [stationsRes, itemsRes, contentsRes] = await Promise.all([
-        supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('station_contents').select('*').order('order_num')
-      ]);
+      const { data, error } = await supabase
+        .from('station_contents')
+        .select('*')
+        .order('order_num');
 
-      if (stationsRes.data) setStations(stationsRes.data);
-      if (itemsRes.data) setItems(itemsRes.data);
-      if (contentsRes.data) setStationContents(contentsRes.data);
+      if (error) throw error;
+
+      // Group contents by station_id
+      const groupedContents = (data || []).reduce((acc, content) => {
+        if (!acc[content.station_id]) {
+          acc[content.station_id] = [];
+        }
+        acc[content.station_id].push(content);
+        return acc;
+      }, {} as { [key: string]: StationContent[] });
+
+      setStationContents(groupedContents);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading station contents:', error);
     }
   };
 
-  // Calculate total estimated hours for each station based on test items
-  const getCalculatedStationHours = (stationId: string) => {
-    const stationItems = items.filter(item => item.station_id === stationId);
-    const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
-    return (totalMinutes / 60).toFixed(1); // Convert to hours with 1 decimal place
+  const getContentByType = (stationId: string, contentType: string) => {
+    const contents = stationContents[stationId] || [];
+    const content = contents.find(c => c.title === contentType);
+    return content?.content || `請設定${contentType}內容`;
   };
 
-  const getStationIcon = (stationName: string) => {
-    if (stationName.includes('ME')) return <Settings className="h-5 w-5" />;
-    if (stationName.includes('BIOS')) return <Zap className="h-5 w-5" />;
-    if (stationName.includes('EE')) return <HardDrive className="h-5 w-5" />;
-    if (stationName.includes('SIT')) return <Cpu className="h-5 w-5" />;
-    if (stationName.includes('Station 4')) return <Monitor className="h-5 w-5" />;
-    return <Settings className="h-5 w-5" />;
-  };
-
-  const getStationColor = (stationOrder: number) => {
-    const colors = [
-      'bg-blue-500/10 text-blue-700 border-blue-200',
-      'bg-green-500/10 text-green-700 border-green-200', 
-      'bg-orange-500/10 text-orange-700 border-orange-200',
-      'bg-purple-500/10 text-purple-700 border-purple-200',
-      'bg-red-500/10 text-red-700 border-red-200'
-    ];
-    return colors[stationOrder] || colors[0];
-  };
-
-  const getDetailedDescription = (stationName: string) => {
-    if (stationName.includes('ME') || stationName.includes('Station 0')) {
-      return {
-        purpose: 'Assembly & Tim Curing (ME TEAM)',
-        procedures: [
-          'Power on with NV',
-          'Chassis assembly（機殼組裝）',
-          'ME assembly（機構組裝）',
-          'Cable routing（線束佈線）',
-          'Tim Curing for 60 minutes（加熱至 65°C 並保持 60 分鐘）',
-          'Boot EGC / BMC network with NV to power on GB300',
-          'SIT will help to release OS on M.2 then EE will copy the OS for 20 systems',
-          'CDU setup needs thermal team help',
-          'PCIe label to identify the System No.',
-          'Check Open/short before power on, and take note that M.2 to copy OS at same time',
-          'Make sure can boot up to uefi shell',
-          'pci to display PCIe device',
-          'EE: Power on, Copy M.2 OS ME/MI support if need to re-assembly'
-        ],
-        equipment: [
-          'Monitor*2', 'Keyboard & mouse: *2', 'CR2032*20', 'MiniDP to VGA dongle*2', 
-          'USB hub w/RJ45*2', 'linking board*2', 'PSU *4', 'multi-meter *2',
-          'RJ45 cable as long as possible(10M)*4', 'VGA cable *1', 'CX-8 loopback cable*3',
-          'BF-3 loopback cable*2'
-        ],
-        notes: '3.5 hr per system, 140 hr total, MFG one day / 6 system'
-      };
-    }
-    if (stationName.includes('BIOS') || stationName.includes('Station 1')) {
-      return {
-        purpose: 'Power on (BIOS/BMC TEAM)',
-        procedures: [
-          'Power on',
-          'SIT will help to release OS on M.2 then EE will copy the OS for 20 systems',
-          'CDU setup needs thermal team help',
-          'PCIe label to identify the System No.',
-          'Check Open/short before power on, and take note that M.2 to copy OS at same time',
-          'Make sure can boot up to uefi shell',
-          'pci to display PCIe device',
-          'BIOS / BMC : Update FW',
-          'EE/ME/MI/Thermal: support if need to re-assembly or debug'
-        ],
-        equipment: [
-          'Monitor*2', 'Keyboard & mouse: *2', 'MiniDP to VGA dongle*2',
-          'USB hub w/RJ45*2', 'linking board*2', 'PSU *4', 'multi-meter *2',
-          'VGA cable *2'
-        ],
-        notes: '1 / 1.5 hr per system + 5 hr setup CDU'
-      };
-    }
-    if (stationName.includes('EE') || stationName.includes('Station 2')) {
-      return {
-        purpose: 'FW Update (EE TEAM)',
-        procedures: [
-          'HMC/BMC/EROT/GPU/CX8 BF3 FW update',
-          'Diag auto update exclude BF3& CX8',
-          'BF3 & CX8 FW update',
-          'Manual update all FW if diag not support',
-          'Install script for BF3/E1.5',
-          'FRU update',
-          'MAC update BMC/I210',
-          'EE: Check all function ready',
-          'Thermal/ME/MI support if need to re-assembly'
-        ],
-        equipment: [
-          'Monitor*1', 'Keyboard & mouse: *1', 'MiniDP to VGA dongle*1',
-          'USB hub w/RJ45*1', 'linking board*1', 'PSU *2'
-        ],
-        notes: 'GB200 ready (exclude CX8, BF3), GB200 1hrs for BIOS/BMC update (no BF3, CX7), 1 / 1.0 hr'
-      };
-    }
-    if (stationName.includes('SIT') || stationName.includes('Station 3')) {
-      return {
-        purpose: 'Function Check (SIT/RAD TEAM)',
-        procedures: [
-          'lspci check PCIe devices',
-          'nvidia-smi check GPU device status',
-          'Insert and unplug detect for CX7/CX8',
-          'Use ibstat and ibstat -l/more for IB connection',
-          'TPM check',
-          'Check Intel I210 MAC and function',
-          'Run Diag SFT test',
-          'QR to check Video, LED, button manually',
-          'Program and check FRU',
-          'Program and check MAC address',
-          'Check FW',
-          'Check CPU, DIMM, Disk, PCIe(include CX7/BF3), USB, sensor',
-          'Check Fan control, GPU device status',
-          'Perform stress test on CPU, DIMM, Disk',
-          'Collect UUT data, include SEL, FRU, Sensor, OS message and other specific items in CFG',
-          'Set BIOS and BMC to default'
-        ],
-        equipment: [
-          'Monitor*1', 'Keyboard & mouse: *1', 'MiniDP to VGA dongle*1',
-          'USB hub w/RJ45*1', 'linking board*1', 'PSU *2',
-          'RJ45 cable as long as possible(10M)*4', 'VGA cable *1',
-          'CX-8 loopback cable*2', 'BF-3 loopback cable*2'
-        ],
-        notes: 'GB200 ready, 1.5 hr'
-      };
-    }
-    if (stationName.includes('Station 4')) {
-      return {
-        purpose: 'Partner Diagnostics for GB200 NVL T2 Compute Tray (L10) & Tim Baking',
-        procedures: [
-          'Run Tim Baking tool',
-          '20 Items:',
-          '3 items will confirm with NV',
-          'Inventory',
-          'SXBPerfProperties',
-          'ThermalMgmt',
-          'ENVironmentProperties',
-          'TejaCpu',
-          'TejaOdm',
-          'TegaDomainSweep',
-          'TejaCpp',
-          'TejaDrs',
-          'Queuetx',
-          'Sriram',
-          'Bus',
-          'NetworkHw NVlink',
-          'PowerTest',
-          'StressGables',
-          'SXBPerfInterfaceTraffic',
-          'WarRock',
-          'SyslogErrorCheck',
-          'CheckLogErrorFiles',
-          'SyslogXIDCheck',
-          'JournalApiCheck',
-          'UbuntuWifiCheck',
-          'check if log mode is on RMA user',
-          'Dump log when test finished'
-        ],
-        equipment: [
-          'Monitor*4', 'Keyboard & mouse: *4', 'MiniDP to VGA dongle*4',
-          'linking board*4', 'PSU *8', 'CX-8 loopback cable*8', 'BF-3 loopback cable*8'
-        ],
-        notes: 'Hope ready on 7/14 for GB300, GB200 4hrs at least, 3 / 4 hr'
-      };
-    }
-    return { purpose: '', procedures: [], equipment: [], notes: '' };
-  };
-
-  const handleSaveStation = async () => {
-    if (!editingStation) return;
-    
-    try {
-      await supabase
-        .from('test_flow_stations')
-        .update({
-          station_name: stationFormData.station_name,
-          description: stationFormData.description,
-          estimated_hours: stationFormData.estimated_hours
-        })
-        .eq('id', editingStation.id);
-
-      toast({ title: "更新成功", description: "站點資訊已更新" });
-      setIsStationDialogOpen(false);
-      setEditingStation(null);
-      loadData();
-    } catch (error) {
-      toast({
-        title: "更新失敗",
-        description: "無法更新站點資訊",
-        variant: "destructive"
-      });
+  const getContentIcon = (type: string) => {
+    switch (type) {
+      case '各站目的': return <Target className="h-4 w-4" />;
+      case '測試程序': return <Settings className="h-4 w-4" />;
+      case '所需設備': return <Wrench className="h-4 w-4" />;
+      case '備註': return <FileText className="h-4 w-4" />;
+      default: return <FileText className="h-4 w-4" />;
     }
   };
 
-  const openEditStationDialog = (station: TestStation) => {
-    setStationFormData({
-      station_name: station.station_name,
-      description: station.description || '',
-      estimated_hours: station.estimated_hours || 0
-    });
-    setEditingStation(station);
-    setIsStationDialogOpen(true);
-  };
-
-  // Station Management Functions
-  const handleAddNewStation = () => {
-    setEditingNewStation(null);
-    setNewStationForm({ 
-      station_name: '', 
-      station_order: stations.length, 
-      description: '', 
-      estimated_hours: 8 
-    });
-    setIsNewStationDialogOpen(true);
-  };
-
-  const handleEditNewStation = (station: TestStation) => {
-    setEditingNewStation(station);
-    setNewStationForm({
-      station_name: station.station_name,
-      station_order: station.station_order,
-      description: station.description || '',
-      estimated_hours: station.estimated_hours || 8
-    });
-    setIsNewStationDialogOpen(true);
-  };
-
-  const handleSaveNewStation = async () => {
-    try {
-      if (editingNewStation) {
-        // Update existing station
-        await supabase
-          .from('test_flow_stations')
-          .update({
-            station_name: newStationForm.station_name,
-            station_order: newStationForm.station_order,
-            description: newStationForm.description,
-            estimated_hours: newStationForm.estimated_hours
-          })
-          .eq('id', editingNewStation.id);
-
-        toast({ title: "更新成功", description: "測試站點已更新，測試進度表將自動更新" });
-      } else {
-        // Add new station
-        await supabase
-          .from('test_flow_stations')
-          .insert({
-            station_name: newStationForm.station_name,
-            station_order: newStationForm.station_order,
-            description: newStationForm.description,
-            estimated_hours: newStationForm.estimated_hours
-          });
-
-        toast({ title: "新增成功", description: "測試站點已新增，測試進度表將自動更新" });
-      }
-
-      setIsNewStationDialogOpen(false);
-      setEditingNewStation(null);
-      loadData();
-    } catch (error) {
-      toast({
-        title: "操作失敗",
-        description: "無法儲存站點資料",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteNewStation = async (stationId: string) => {
-    try {
-      await supabase
-        .from('test_flow_stations')
-        .delete()
-        .eq('id', stationId);
-
-      toast({ title: "刪除成功", description: "測試站點已刪除" });
-      loadData();
-    } catch (error) {
-      toast({
-        title: "刪除失敗",
-        description: "無法刪除站點",
-        variant: "destructive"
-      });
-    }
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">GB300 L10 測試流程說明</h1>
-          <p className="text-muted-foreground">各測試站點詳細流程說明與所需設備清單</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => setActiveTab("manage")}
-        >
-          <Edit className="h-4 w-4 mr-2" />
-          管理流程
-        </Button>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">流程總覽</TabsTrigger>
-          <TabsTrigger value="manage">管理測試項目</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-
-      {/* Overview Timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>測試流程總覽</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-6">
-            {stations.map((station, index) => (
-              <div key={station.id} className="flex flex-col items-center flex-1">
-                <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${getStationColor(station.station_order)}`}>
-                  {getStationIcon(station.station_name)}
-                </div>
-                <div className="text-sm font-medium mt-2">{station.station_name}</div>
-                <div className="text-xs text-muted-foreground">{getCalculatedStationHours(station.id)}h</div>
-                {index < stations.length - 1 && (
-                  <div className="absolute h-0.5 bg-border" style={{
-                    left: `${(index + 1) * (100 / stations.length)}%`,
-                    width: `${100 / stations.length}%`,
-                    top: '24px'
-                  }} />
-                )}
-              </div>
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse">
+          <div className="h-8 bg-muted rounded w-1/3 mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-32 bg-muted rounded"></div>
             ))}
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">40</div>
-              <div className="text-sm text-muted-foreground">測試系統總數</div>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">
-                {stations.reduce((total, station) => {
-                  const calculatedHours = parseFloat(getCalculatedStationHours(station.id));
-                  return total + calculatedHours;
-                }, 0).toFixed(1)}h
-              </div>
-              <div className="text-sm text-muted-foreground">單機總測試時間</div>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">9-10</div>
-              <div className="text-sm text-muted-foreground">預計完成天數</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+    );
+  }
 
-      {/* Detailed Station Information */}
-      <div className="space-y-6">
-        {stations.map((station) => {
-          const stationItems = items.filter(item => item.station_id === station.id);
-          const stationDetail = getDetailedDescription(station.station_name);
-          
-          return (
-            <Card key={station.id} className="overflow-hidden">
-              <CardHeader className={`${getStationColor(station.station_order)} border-b`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {getStationIcon(station.station_name)}
-                    <div>
-                      <CardTitle className="text-xl">{station.station_name}</CardTitle>
-                      <p className="text-sm opacity-90">{station.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditStationDialog(station)}
-                      className="opacity-70 hover:opacity-100"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Badge variant="outline" className="bg-white/80">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {getCalculatedStationHours(station.id)}h
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
+  const sortedStations = [...stations].sort((a, b) => a.station_order - b.station_order);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">GB300 L10 測試流程說明</h2>
+          <p className="text-muted-foreground">測試站點流程與詳細資訊管理</p>
+        </div>
+        <Badge variant="outline" className="px-3 py-1">
+          <Users className="h-4 w-4 mr-1" />
+          {stations.length} 個測試站點
+        </Badge>
+        </div>
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid grid-cols-3 w-full max-w-md">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <Eye className="h-4 w-4" />
+            流程總覽
+          </TabsTrigger>
+          <TabsTrigger value="management" className="flex items-center gap-2">
+            <Edit3 className="h-4 w-4" />
+            內容管理
+          </TabsTrigger>
+          <TabsTrigger value="items" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            測試項目
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4 mt-6">
+          <div className="grid gap-6">
+            {sortedStations.map((station, index) => {
+              const stationTestItems = testItems.filter(item => item.station_id === station.id);
+              const stationContentsList = stationContents[station.id] || [];
               
-              <CardContent className="pt-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Left Column - Test Items */}
-                  <div>
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      測試項目
-                    </h4>
-                    <div className="space-y-3">
-                      {stationItems.map((item) => (
-                        <div key={item.id} className="border rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="font-medium">{item.item_name}</h5>
-                            <Badge variant="outline" className="text-xs">
-                              {item.estimated_minutes}min
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
+              return (
+                <Card key={station.id} className="overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                          {index + 1}
                         </div>
-                      ))}
+                        {station.station_name}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        預估 {station.estimated_hours || 0} 小時
+                      </div>
                     </div>
-                  </div>
+                    {station.description && (
+                      <p className="text-sm text-muted-foreground mt-2 ml-11">
+                        {station.description}
+                      </p>
+                    )}
+                  </CardHeader>
+                  
+                  <CardContent className="p-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* Station Content Display */}
+                      <div className="space-y-4">
+                        {['各站目的', '測試程序', '所需設備', '備註'].map((contentType) => {
+                          const content = getContentByType(station.id, contentType);
+                          const hasContent = content !== `請設定${contentType}內容`;
+                          
+                          return (
+                            <div key={contentType} className="space-y-2">
+                              <div className="flex items-center gap-2 font-medium text-sm">
+                                {getContentIcon(contentType)}
+                                {contentType}
+                              </div>
+                              <div className={`text-sm p-3 rounded-lg border ${
+                                hasContent 
+                                  ? 'bg-background border-border' 
+                                  : 'bg-muted/50 border-muted text-muted-foreground italic'
+                              }`}>
+                                {content}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
 
-                   {/* Right Column - Station Details */}
-                   <div>
-                     <h4 className="font-semibold mb-4 flex items-center justify-between">
-                       站點詳細資訊
-                       <Button 
-                         variant="ghost" 
-                         size="sm"
-                         onClick={() => setActiveTab("content")}
-                       >
-                         <Plus className="h-4 w-4 mr-1" />
-                         管理內容
-                       </Button>
-                     </h4>
-                     
-                     {/* Station Content Manager */}
-                     <StationContentManager
-                       stationId={station.id}
-                       stationName={station.station_name}
-                       contents={stationContents.filter(c => c.station_id === station.id)}
-                       onDataChange={loadData}
-                     />
-                     
-                     <div className="space-y-4 mt-4">
-                       <div>
-                         <h5 className="text-sm font-medium text-muted-foreground mb-2">目的</h5>
-                         <p className="text-sm">{stationDetail.purpose}</p>
-                       </div>
-                      
-                      {stationDetail.procedures && stationDetail.procedures.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-medium text-muted-foreground mb-2">測試程序</h5>
-                          <div className="space-y-1">
-                            {stationDetail.procedures.map((procedure, index) => (
-                              <div key={index} className="text-sm bg-muted/30 p-2 rounded flex items-start gap-2">
-                                <span className="text-xs text-muted-foreground mt-0.5 flex-shrink-0">{index + 1}.</span>
-                                <span>{procedure}</span>
+                      {/* Test Items */}
+                      <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          測試項目 ({stationTestItems.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {stationTestItems
+                            .sort((a, b) => a.item_order - b.item_order)
+                            .map((item) => (
+                              <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{item.item_name}</div>
+                                  {item.description && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {item.description}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {item.estimated_minutes || 30}分
+                                </div>
                               </div>
                             ))}
-                          </div>
+                          {stationTestItems.length === 0 && (
+                            <div className="text-center py-4 text-muted-foreground text-sm">
+                              此站點尚無測試項目
+                            </div>
+                          )}
                         </div>
-                      )}
-                      
-                      {stationDetail.equipment.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-medium text-muted-foreground mb-2">所需設備</h5>
-                          <div className="flex flex-wrap gap-1">
-                            {stationDetail.equipment.map((equipment, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                {equipment}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {stationDetail.notes && (
-                        <div>
-                          <h5 className="text-sm font-medium text-muted-foreground mb-2">備註</h5>
-                          <p className="text-sm bg-muted/50 p-3 rounded">{stationDetail.notes}</p>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                 </div>
-               </CardContent>
-             </Card>
-           );
-         })}
-       </div>
-
-      {/* Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>整體測試時程總結</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-lg font-bold">Station 0-1</div>
-                <div className="text-sm text-muted-foreground">組裝 + 上電</div>
-                <div className="text-xs text-muted-foreground mt-1">約 6 台/天</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-lg font-bold">Station 2-3</div>
-                <div className="text-sm text-muted-foreground">韌體 + 功能驗證</div>
-                <div className="text-xs text-muted-foreground mt-1">約 6 台/天</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-lg font-bold">Station 4</div>
-                <div className="text-sm text-muted-foreground">NV Diag 測試</div>
-                <div className="text-xs text-muted-foreground mt-1">約 4 台/天</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg bg-primary/5">
-                <div className="text-lg font-bold text-primary">總計</div>
-                <div className="text-sm text-muted-foreground">完整流程</div>
-                <div className="text-xs text-muted-foreground mt-1">9-10 天</div>
-              </div>
-            </div>
-            
-            <Separator />
-            
-            <div className="text-sm text-muted-foreground">
-              <p><strong>注意事項：</strong></p>
-              <ul className="list-disc list-inside space-y-1 mt-2">
-                <li>若含 Diag 驗證流程，整體需約 9 ~ 10 天完成全站流程</li>
-                <li>各站點需要相應的技術支援人員配合</li>
-                <li>設備數量可能影響實際產能，請確認設備充足性</li>
-                <li>Station 4 為瓶頸站點，建議增加設備或人力配置</li>
-              </ul>
-            </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-        </CardContent>
-      </Card>
         </TabsContent>
 
-        <TabsContent value="manage" className="space-y-6">
-          {/* Station Management Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  站點管理
-                </CardTitle>
-                <Button onClick={handleAddNewStation}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增站點
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>站點名稱</TableHead>
-                    <TableHead>順序</TableHead>
-                    <TableHead>描述</TableHead>
-                    <TableHead>預估時間</TableHead>
-                    <TableHead>操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stations.map((station) => (
-                    <TableRow key={station.id}>
-                      <TableCell className="font-medium">{station.station_name}</TableCell>
-                      <TableCell>{station.station_order}</TableCell>
-                      <TableCell>{station.description || '-'}</TableCell>
-                      <TableCell>{station.estimated_hours || 0} 小時</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditNewStation(station)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>確認刪除</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  確定要刪除站點 "{station.station_name}" 嗎？此操作無法復原。
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteNewStation(station.id)}>
-                                  刪除
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="management" className="space-y-6 mt-6">
+          {sortedStations.map((station) => (
+            <Card key={station.id}>
+              <CardContent className="p-6">
+                <StationContentManager
+                  stationId={station.id}
+                  stationName={station.station_name}
+                  contents={stationContents[station.id] || []}
+                  onDataChange={loadStationContents}
+                />
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
 
-          {/* Test Items Management Section */}
-          <TestItemManager 
-            stations={stations} 
-            items={items} 
-            onDataChange={loadData}
-          />
+        <TabsContent value="items" className="mt-6">
+          <div className="grid gap-4">
+            {sortedStations.map((station) => {
+              const stationTestItems = testItems.filter(item => item.station_id === station.id);
+              
+              return (
+                <Card key={station.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>{station.station_name}</span>
+                      <Badge variant="secondary">{stationTestItems.length} 項目</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3">
+                      {stationTestItems
+                        .sort((a, b) => a.item_order - b.item_order)
+                        .map((item, idx) => (
+                          <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg border bg-card/50">
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                              {idx + 1}
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium">{item.item_name}</div>
+                              {item.description && (
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              {item.estimated_minutes || 30} 分鐘
+                            </div>
+                          </div>
+                        ))}
+                      {stationTestItems.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          此站點尚無測試項目
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </TabsContent>
       </Tabs>
-
-      {/* Station Edit Dialog */}
-      <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>編輯站點資訊</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>站點名稱</Label>
-              <Input
-                value={stationFormData.station_name}
-                onChange={(e) => setStationFormData({ ...stationFormData, station_name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>描述</Label>
-              <Textarea
-                value={stationFormData.description}
-                onChange={(e) => setStationFormData({ ...stationFormData, description: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>預估時間 (小時)</Label>
-              <Input
-                type="number"
-                value={stationFormData.estimated_hours}
-                onChange={(e) => setStationFormData({ ...stationFormData, estimated_hours: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={handleSaveStation}>
-                <Save className="h-4 w-4 mr-2" />
-                儲存
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* New Station Add/Edit Dialog */}
-      <Dialog open={isNewStationDialogOpen} onOpenChange={setIsNewStationDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingNewStation ? '編輯站點資訊' : '新增測試站點'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>站點名稱</Label>
-              <Input
-                value={newStationForm.station_name}
-                onChange={(e) => setNewStationForm({ ...newStationForm, station_name: e.target.value })}
-                placeholder="請輸入站點名稱"
-              />
-            </div>
-            <div>
-              <Label>順序</Label>
-              <Input
-                type="number"
-                value={newStationForm.station_order}
-                onChange={(e) => setNewStationForm({ ...newStationForm, station_order: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>描述</Label>
-              <Textarea
-                value={newStationForm.description}
-                onChange={(e) => setNewStationForm({ ...newStationForm, description: e.target.value })}
-                placeholder="請輸入站點描述"
-              />
-            </div>
-            <div>
-              <Label>預估時間 (小時)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={newStationForm.estimated_hours}
-                onChange={(e) => setNewStationForm({ ...newStationForm, estimated_hours: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsNewStationDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={handleSaveNewStation}>
-                <Save className="h-4 w-4 mr-2" />
-                儲存
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
