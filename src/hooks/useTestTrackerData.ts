@@ -1,3 +1,4 @@
+
 import { useUnifiedData } from "./useUnifiedData";
 
 interface TestSystem {
@@ -41,7 +42,7 @@ export function useTestTrackerData() {
     stations, 
     testItems: items, 
     progress, 
-    loadAllData: loadData,
+    refetch: loadData,
     updateProgress
   } = useUnifiedData();
 
