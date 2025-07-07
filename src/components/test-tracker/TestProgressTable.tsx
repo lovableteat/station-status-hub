@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 interface TestSystem {
   id: string;
@@ -89,6 +90,7 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const updateInProgress = useRef(false);
+  const lastProgressUpdate = useRef<string>('');
   
   // Handle validation errors
   const handleValidationError = (error: string | null) => {
@@ -122,48 +124,63 @@ export function TestProgressTable({
   };
 
   // Check if all stations 0-4 are 100% complete for a system
-  const areAllStationsComplete = (systemId: string) => {
+  const areAllStationsComplete = useCallback((systemId: string) => {
     const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
-    return stations0To4.every(station => {
+    
+    // 檢查每個站點是否完成
+    const allComplete = stations0To4.every(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       if (stationItems.length === 0) return true;
       
+      // 每個項目都必須是 Done 狀態
       const completedItems = stationItems.filter(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
         return prog?.status === 'Done';
       });
+      
       return completedItems.length === stationItems.length;
     });
-  };
+    
+    console.log(`System ${systemId} - All stations complete: ${allComplete}`);
+    return allComplete;
+  }, [filteredStations, items, getProgressForSystemItem]);
 
   // Check if any progress exists for stations 0-4
-  const hasAnyProgress = (systemId: string) => {
+  const hasAnyProgress = useCallback((systemId: string) => {
     const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
-    return stations0To4.some(station => {
+    
+    const anyProgress = stations0To4.some(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       return stationItems.some(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
         return prog?.status === 'Done';
       });
     });
-  };
+    
+    console.log(`System ${systemId} - Has any progress: ${anyProgress}`);
+    return anyProgress;
+  }, [filteredStations, items, getProgressForSystemItem]);
 
   // Get current station for a system (只顯示進行中、未開始、已完成)
-  const getCurrentStation = (systemId: string) => {
+  const getCurrentStation = useCallback((systemId: string) => {
     const allStationsComplete = areAllStationsComplete(systemId);
     const anyProgress = hasAnyProgress(systemId);
     
+    let currentStation = '';
     if (allStationsComplete) {
-      return '已完成';
+      currentStation = '已完成';
     } else if (anyProgress) {
-      return '進行中';
+      currentStation = '進行中';
     } else {
-      return '未開始';
+      currentStation = '未開始';
     }
-  };
+    
+    console.log(`System ${systemId} - Current station: ${currentStation}`);
+    return currentStation;
+  }, [areAllStationsComplete, hasAnyProgress]);
 
   // Get latest completion time across stations 0-4 for a system
-  const getSystemLatestCompletionTime = (systemId: string) => {
+  const getSystemLatestCompletionTime = useCallback((systemId: string) => {
     const allCompletionTimes: string[] = [];
     
     // 只考慮 Station 0-4
@@ -182,11 +199,13 @@ export function TestProgressTable({
     if (allCompletionTimes.length === 0) return undefined;
     
     // 回傳最晚的完成時間
-    return allCompletionTimes.sort().reverse()[0];
-  };
+    const latestTime = allCompletionTimes.sort().reverse()[0];
+    console.log(`System ${systemId} - Latest completion time: ${latestTime}`);
+    return latestTime;
+  }, [filteredStations, items, getProgressForSystemItem]);
 
   // Get earliest start time across stations 0-4 for a system
-  const getSystemEarliestStartTime = (systemId: string) => {
+  const getSystemEarliestStartTime = useCallback((systemId: string) => {
     const allStartTimes: string[] = [];
     
     // 只考慮 Station 0-4
@@ -205,16 +224,34 @@ export function TestProgressTable({
     if (allStartTimes.length === 0) return undefined;
     
     // 回傳最早的開始時間
-    return allStartTimes.sort()[0];
-  };
+    const earliestTime = allStartTimes.sort()[0];
+    console.log(`System ${systemId} - Earliest start time: ${earliestTime}`);
+    return earliestTime;
+  }, [filteredStations, items, getProgressForSystemItem]);
 
-  // Auto-update system status based on progress changes - Improved version
+  // 創建進度變化的唯一標識符
+  const createProgressSignature = useCallback(() => {
+    return progress.map(p => `${p.id}-${p.status}-${p.completed_at || 'null'}`).sort().join('|');
+  }, [progress]);
+
+  // Auto-update system status based on progress changes - 改進版本
   useEffect(() => {
-    if (updateInProgress.current) return;
+    if (updateInProgress.current) {
+      console.log('Update already in progress, skipping...');
+      return;
+    }
+    
+    // 檢查進度是否真的有變化
+    const currentSignature = createProgressSignature();
+    if (currentSignature === lastProgressUpdate.current) {
+      console.log('No progress changes detected, skipping update...');
+      return;
+    }
     
     const updateSystemStatus = async () => {
       updateInProgress.current = true;
-      console.log('Starting system status update...');
+      lastProgressUpdate.current = currentSignature;
+      console.log('Starting system status update with signature:', currentSignature);
       
       try {
         const updates = [];
@@ -222,12 +259,13 @@ export function TestProgressTable({
         for (const system of filteredSystems) {
           const currentStation = getCurrentStation(system.id);
           const isComplete = areAllStationsComplete(system.id);
-          
-          console.log(`System ${system.system_name}: DB current_station="${system.current_station}", calculated="${currentStation}"`);
-          
-          // 檢查是否需要更新
-          const newStatus = currentStation === '已完成' ? 'Done' : (currentStation === '未開始' ? 'Not Start' : 'On-going');
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
+          
+          console.log(`Checking system ${system.system_name}:`);
+          console.log(`- DB current_station: "${system.current_station}"`);
+          console.log(`- Calculated current_station: "${currentStation}"`);
+          console.log(`- Is complete: ${isComplete}`);
+          console.log(`- Latest completion time: ${latestCompletionTime}`);
           
           let updatedFields: any = {};
           let needsUpdate = false;
@@ -236,31 +274,30 @@ export function TestProgressTable({
           if (system.current_station !== currentStation) {
             updatedFields.current_station = currentStation;
             needsUpdate = true;
-            console.log(`Will update system ${system.system_name} current_station from "${system.current_station}" to "${currentStation}"`);
+            console.log(`Will update current_station from "${system.current_station}" to "${currentStation}"`);
           }
           
           // 檢查狀態是否需要更新
+          const newStatus = currentStation === '已完成' ? 'Done' : (currentStation === '未開始' ? 'Not Start' : 'On-going');
           if (system.status !== newStatus) {
             updatedFields.status = newStatus;
             needsUpdate = true;
-            console.log(`Will update system ${system.system_name} status from "${system.status}" to "${newStatus}"`);
+            console.log(`Will update status from "${system.status}" to "${newStatus}"`);
           }
           
           // 處理實際完成時間
           if (isComplete && latestCompletionTime) {
-            // 如果系統完成且有最新完成時間，更新實際完成時間
+            // 系統完成時設定實際完成時間
             if (system.actual_completed_at !== latestCompletionTime) {
               updatedFields.actual_completed_at = latestCompletionTime;
               needsUpdate = true;
-              console.log(`Will set actual completion time for ${system.system_name} to ${latestCompletionTime}`);
+              console.log(`Will set actual_completed_at to ${latestCompletionTime}`);
             }
           } else if (!isComplete && system.actual_completed_at) {
-            // 如果系統不再完成且有設定實際完成時間，檢查是否需要清除
-            if (system.actual_completed_at === latestCompletionTime) {
-              updatedFields.actual_completed_at = null;
-              needsUpdate = true;
-              console.log(`Will clear auto-set actual completion time for ${system.system_name}`);
-            }
+            // 系統不再完成時清除實際完成時間（僅清除自動設定的時間）
+            updatedFields.actual_completed_at = null;
+            needsUpdate = true;
+            console.log(`Will clear actual_completed_at`);
           }
           
           if (needsUpdate) {
@@ -274,9 +311,11 @@ export function TestProgressTable({
         
         // 批量執行更新
         if (updates.length > 0) {
+          console.log(`Executing ${updates.length} system updates...`);
+          
           for (const update of updates) {
             try {
-              console.log(`Updating system ${update.name} with fields:`, update.fields);
+              console.log(`Updating system ${update.name} with:`, update.fields);
               const { error } = await supabase
                 .from('test_systems')
                 .update(update.fields)
@@ -292,18 +331,21 @@ export function TestProgressTable({
             }
           }
           
-          // 確保更新後重新載入資料
+          // 觸發資料重新載入
           console.log('Triggering data reload...');
           setTimeout(() => {
             onSystemUpdate();
-            updateInProgress.current = false;
-          }, 500);
+          }, 100);
         } else {
-          updateInProgress.current = false;
+          console.log('No updates needed');
         }
       } catch (error) {
         console.error('Error in system status update:', error);
-        updateInProgress.current = false;
+      } finally {
+        setTimeout(() => {
+          updateInProgress.current = false;
+          console.log('Update process completed');
+        }, 500);
       }
     };
 
@@ -315,7 +357,14 @@ export function TestProgressTable({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [progress, filteredSystems, items]); // 改為監聽 progress 變化
+  }, [
+    createProgressSignature,
+    filteredSystems,
+    getCurrentStation,
+    areAllStationsComplete,
+    getSystemLatestCompletionTime,
+    onSystemUpdate
+  ]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
