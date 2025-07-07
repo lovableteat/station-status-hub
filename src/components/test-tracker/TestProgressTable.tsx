@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 
 interface TestSystem {
   id: string;
@@ -121,11 +121,11 @@ export function TestProgressTable({
     }
   };
 
-  // 完全重寫：計算系統當前狀態
-  const getSystemCurrentStatus = useCallback((systemId: string) => {
-    console.log(`=== 計算系統 ${systemId} 狀態 ===`);
+  // **完全重寫：即時計算系統當前狀態**
+  const calculateRealTimeSystemStatus = useCallback((systemId: string) => {
+    console.log(`=== 即時計算系統 ${systemId} 狀態 ===`);
     
-    // 取得 Station 0-4
+    // 只考慮 Station 0-4
     const targetStations = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
     );
@@ -135,49 +135,61 @@ export function TestProgressTable({
       return '未開始';
     }
     
-    let totalItemsCount = 0;
-    let completedItemsCount = 0;
-    let hasAnyProgress = false;
+    let totalItems = 0;
+    let completedItems = 0;
+    let hasAnyStarted = false;
     
-    // 檢查每個站點的完成狀態
+    // 檢查每個站點的所有測項
     for (const station of targetStations) {
       const stationItems = items.filter(item => item.station_id === station.id);
-      totalItemsCount += stationItems.length;
       
       for (const item of stationItems) {
+        totalItems++;
         const itemProgress = getProgressForSystemItem(systemId, station.id, item.id);
         
         if (itemProgress) {
-          // 任何非初始狀態都算有進度
+          // 任何非 'Not Start' 的狀態都算已開始
           if (itemProgress.status !== 'Not Start') {
-            hasAnyProgress = true;
+            hasAnyStarted = true;
           }
           
-          // 只有 Done 狀態才算完成
+          // 只有 'Done' 狀態才算完成
           if (itemProgress.status === 'Done') {
-            completedItemsCount++;
+            completedItems++;
           }
         }
       }
     }
     
-    console.log(`總項目數: ${totalItemsCount}, 完成項目數: ${completedItemsCount}, 有任何進度: ${hasAnyProgress}`);
+    console.log(`系統 ${systemId} - 總項目: ${totalItems}, 完成項目: ${completedItems}, 有開始: ${hasAnyStarted}`);
     
-    // 狀態判斷邏輯
+    // **嚴格的狀態判斷**
     let status: string;
-    if (totalItemsCount === 0) {
+    if (totalItems === 0) {
       status = '未開始';
-    } else if (completedItemsCount === totalItemsCount) {
+    } else if (completedItems === totalItems && totalItems > 0) {
+      // 只有當所有項目都完成時才是「已完成」
       status = '已完成';
-    } else if (hasAnyProgress) {
+    } else if (hasAnyStarted) {
+      // 有任何項目開始但未全部完成就是「進行中」
       status = '進行中';
     } else {
+      // 沒有任何項目開始就是「未開始」
       status = '未開始';
     }
     
-    console.log(`系統狀態: ${status}`);
+    console.log(`系統 ${systemId} 最終狀態: ${status}`);
     return status;
   }, [filteredStations, items, getProgressForSystemItem]);
+
+  // 使用 useMemo 確保狀態即時計算
+  const systemStatuses = useMemo(() => {
+    const statuses: Record<string, string> = {};
+    filteredSystems.forEach(system => {
+      statuses[system.id] = calculateRealTimeSystemStatus(system.id);
+    });
+    return statuses;
+  }, [filteredSystems, calculateRealTimeSystemStatus, progress]); // 依賴 progress 確保即時更新
 
   // 獲取系統最晚完成時間
   const getSystemLatestCompletionTime = useCallback((systemId: string) => {
@@ -223,31 +235,28 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 系統狀態自動更新邏輯
+  // **系統狀態自動更新邏輯 - 確保即時同步**
   useEffect(() => {
     if (updateInProgress.current) {
-      console.log('更新進行中，跳過...');
       return;
     }
 
     const updateSystemStatus = async () => {
       updateInProgress.current = true;
-      console.log('=== 開始系統狀態更新 ===');
+      console.log('=== 開始系統狀態自動更新 ===');
 
       try {
         const updates = [];
         
         for (const system of filteredSystems) {
-          const calculatedStatus = getSystemCurrentStatus(system.id);
+          const calculatedStatus = systemStatuses[system.id];
           const isComplete = calculatedStatus === '已完成';
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
           
           console.log(`系統 ${system.system_name}:`);
-          console.log(`- 資料庫當前站點: "${system.current_station}"`);
-          console.log(`- 計算當前站點: "${calculatedStatus}"`);
+          console.log(`- 資料庫狀態: "${system.current_station}"`);
+          console.log(`- 即時計算狀態: "${calculatedStatus}"`);
           console.log(`- 是否完成: ${isComplete}`);
-          console.log(`- 最晚完成時間: ${latestCompletionTime}`);
-          console.log(`- 目前實際完成時間: ${system.actual_completed_at}`);
           
           let updatedFields: any = {};
           let needsUpdate = false;
@@ -273,12 +282,12 @@ export function TestProgressTable({
             if (!system.actual_completed_at) {
               updatedFields.actual_completed_at = latestCompletionTime;
               needsUpdate = true;
-              console.log(`系統首次完成，自動設定實際完成時間: ${latestCompletionTime}`);
+              console.log(`設定實際完成時間: ${latestCompletionTime}`);
             }
           } else if (!isComplete && system.actual_completed_at) {
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
-            console.log(`系統不再完成，清除實際完成時間`);
+            console.log(`清除實際完成時間`);
           }
           
           if (needsUpdate) {
@@ -296,53 +305,31 @@ export function TestProgressTable({
           
           for (const update of updates) {
             try {
-              console.log(`更新系統 ${update.name}:`, update.fields);
               const { error } = await supabase
                 .from('test_systems')
                 .update(update.fields)
                 .eq('id', update.id);
 
-              if (error) {
-                console.error(`更新系統 ${update.name} 失敗:`, error);
-                throw error;
-              }
+              if (error) throw error;
               console.log(`成功更新系統 ${update.name}`);
             } catch (error) {
-              console.error(`更新系統 ${update.name} 時發生錯誤:`, error);
+              console.error(`更新系統 ${update.name} 失敗:`, error);
             }
           }
           
-          console.log('觸發資料重新載入...');
-          setTimeout(() => {
-            onSystemUpdate();
-          }, 100);
-        } else {
-          console.log('無需更新');
+          // 觸發資料重新載入
+          onSystemUpdate();
         }
       } catch (error) {
         console.error('系統狀態更新錯誤:', error);
       } finally {
-        setTimeout(() => {
-          updateInProgress.current = false;
-          console.log('更新過程完成');
-        }, 500);
+        updateInProgress.current = false;
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      updateSystemStatus();
-    }, 300);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [
-    filteredSystems,
-    getSystemCurrentStatus,
-    getSystemLatestCompletionTime,
-    onSystemUpdate,
-    progress
-  ]);
+    // 立即執行更新
+    updateSystemStatus();
+  }, [filteredSystems, systemStatuses, getSystemLatestCompletionTime, onSystemUpdate]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
@@ -392,7 +379,7 @@ export function TestProgressTable({
     return (
       <div className="space-y-4">
         {filteredSystems.map(system => {
-          const currentStation = getSystemCurrentStatus(system.id);
+          const currentStation = systemStatuses[system.id] || '未開始';
           
           return (
             <Card key={system.id} className="border-2">
@@ -622,7 +609,7 @@ export function TestProgressTable({
             {filteredSystems.map(system => {
               const systemStartTime = getSystemEarliestStartTime(system.id);
               const systemEndTime = getSystemLatestCompletionTime(system.id);
-              const currentStation = getSystemCurrentStatus(system.id);
+              const currentStation = systemStatuses[system.id] || '未開始';
 
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
