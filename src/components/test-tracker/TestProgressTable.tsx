@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,11 +133,11 @@ export function TestProgressTable({
     });
   };
 
-  // Get latest completion time across stations 0-4 for a system
+  // Get latest completion time across stations 0-4 for a system - 修正邏輯
   const getSystemLatestCompletionTime = (systemId: string) => {
     const allCompletionTimes: string[] = [];
     
-    // Only consider stations 0-4
+    // 只考慮 Station 0-4
     const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
     
     stations0To4.forEach(station => {
@@ -153,8 +152,31 @@ export function TestProgressTable({
     
     if (allCompletionTimes.length === 0) return undefined;
     
-    // Return the latest completion time
+    // 回傳最晚的完成時間
     return allCompletionTimes.sort().reverse()[0];
+  };
+
+  // Get earliest start time across stations 0-4 for a system - 新增
+  const getSystemEarliestStartTime = (systemId: string) => {
+    const allStartTimes: string[] = [];
+    
+    // 只考慮 Station 0-4
+    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    
+    stations0To4.forEach(station => {
+      const stationItems = items.filter(item => item.station_id === station.id);
+      stationItems.forEach(item => {
+        const prog = getProgressForSystemItem(systemId, station.id, item.id);
+        if (prog?.started_at) {
+          allStartTimes.push(prog.started_at);
+        }
+      });
+    });
+    
+    if (allStartTimes.length === 0) return undefined;
+    
+    // 回傳最早的開始時間
+    return allStartTimes.sort()[0];
   };
 
   // Auto-set actual completion time when all stations 0-4 reach 100%
@@ -196,12 +218,19 @@ export function TestProgressTable({
         return;
       }
 
-      // Batch update - more efficient
+      // 批量更新 - 更高效率
       const updateColumn = timeType === 'start' ? 'started_at' : 'completed_at';
+      
+      // 只更新Station 0-4的記錄
+      const stations0To4Ids = filteredStations
+        .filter(station => station.station_order >= 0 && station.station_order <= 4)
+        .map(station => station.id);
+      
       const { error } = await supabase
         .from('test_progress')
         .update({ [updateColumn]: newTime })
-        .eq('system_id', systemId);
+        .eq('system_id', systemId)
+        .in('station_id', stations0To4Ids);
 
       if (error) throw error;
       
@@ -209,7 +238,7 @@ export function TestProgressTable({
       
       toast({
         title: "更新成功",
-        description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新`,
+        description: `系統${timeType === 'start' ? '開始' : '完成'}時間已更新（僅影響Station 0-4）`,
       });
     } catch (error) {
       console.error('Error updating system time:', error);
@@ -270,29 +299,11 @@ export function TestProgressTable({
                   <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
                   <div className="flex flex-col items-end">
                     <DateTimePicker
-                      value={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      })()}
+                      value={getSystemEarliestStartTime(system.id)}
                       onChange={async (newStartTime) => {
                         await updateSystemTime(system.id, 'start', newStartTime);
                       }}
-                      maxDate={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                      })()}
+                      maxDate={getSystemLatestCompletionTime(system.id)}
                       onValidationError={handleValidationError}
                       placeholder="設定開始時間"
                       className="w-44"
@@ -304,41 +315,14 @@ export function TestProgressTable({
                   <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
                   <div className="flex flex-col items-end">
                     <DateTimePicker
-                      value={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-                        return allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
-                      })()}
-                      minDate={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        return allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-                      })()}
+                      value={getSystemLatestCompletionTime(system.id)}
+                      minDate={getSystemEarliestStartTime(system.id)}
                       onChange={async (newEndTime) => {
                         await updateSystemTime(system.id, 'end', newEndTime);
                       }}
                       onValidationError={handleValidationError}
                       placeholder="設定完成時間"
-                      disabled={(() => {
-                        const allProgressRecords = filteredStations.flatMap(station => {
-                          const stationItems = items.filter(item => item.station_id === station.id);
-                          return stationItems.map(item => 
-                            getProgressForSystemItem(system.id, station.id, item.id)
-                          ).filter(Boolean);
-                        });
-                        const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-                        return allStartTimes.length === 0;
-                      })()}
+                      disabled={!getSystemEarliestStartTime(system.id)}
                       className="w-44"
                     />
                   </div>
@@ -494,19 +478,8 @@ export function TestProgressTable({
 
             {/* Data Rows */}
             {filteredSystems.map(system => {
-              // Calculate overall start and end times for this system across all stations
-              const allProgressRecords = filteredStations.flatMap(station => {
-                const stationItems = items.filter(item => item.station_id === station.id);
-                return stationItems.map(item => 
-                  getProgressForSystemItem(system.id, station.id, item.id)
-                ).filter(Boolean);
-              });
-              
-              const allStartTimes = allProgressRecords.map(p => p.started_at).filter(Boolean);
-              const allEndTimes = allProgressRecords.map(p => p.completed_at).filter(Boolean);
-              
-              const systemStartTime = allStartTimes.length > 0 ? allStartTimes.sort()[0] : undefined;
-              const systemEndTime = allEndTimes.length > 0 ? allEndTimes.sort().reverse()[0] : undefined;
+              const systemStartTime = getSystemEarliestStartTime(system.id);
+              const systemEndTime = getSystemLatestCompletionTime(system.id);
 
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
@@ -612,7 +585,7 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {/* Actual Completion Time Column - 顯示 Station 0-4 最晚完成時間 */}
+                  {/* Actual Completion Time Column - 自動從Station 0-4取最晚時間 */}
                   <div className="flex flex-col items-center py-2 px-1">
                     <label className="text-xs text-muted-foreground mb-1 font-medium">實際完成</label>
                     <DateTimePicker
