@@ -22,7 +22,7 @@ interface Station {
 }
 
 export function ProductionMonitor() {
-  const { stationStatuses: stations, systems, isLoading } = useUnifiedData();
+  const { stationStatuses: stations, systems, testItems, progress, isLoading } = useUnifiedData();
   const { toast } = useToast();
   const [focusedSystem, setFocusedSystem] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -58,6 +58,36 @@ export function ProductionMonitor() {
       case 'idle': return <Clock className="h-4 w-4" />;
       default: return <Monitor className="h-4 w-4" />;
     }
+  };
+
+  // Calculate station progress based on test items completion
+  const calculateStationProgress = (stationId: string, systemId: string) => {
+    const stationTestItems = testItems.filter(item => item.station_id === stationId);
+    const systemStationProgress = progress.filter(p => 
+      p.system_id === systemId && p.station_id === stationId
+    );
+    
+    if (stationTestItems.length === 0) return 0;
+    
+    const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
+    return Math.round((completedItems / stationTestItems.length) * 100);
+  };
+
+  // Calculate overall system progress based on completed stations
+  const calculateOverallProgress = (systemId: string) => {
+    const totalStations = stations.length;
+    if (totalStations === 0) return 0;
+    
+    let completedStations = 0;
+    
+    stations.forEach(station => {
+      const stationProgress = calculateStationProgress(station.id, systemId);
+      if (stationProgress === 100) {
+        completedStations++;
+      }
+    });
+    
+    return Math.round((completedStations / totalStations) * 100);
   };
 
   const exportData = () => {
@@ -110,6 +140,9 @@ export function ProductionMonitor() {
       );
     }
 
+    // Calculate updated progress for the focused system
+    const systemOverallProgress = calculateOverallProgress(system.id);
+
     return (
       <div className="p-6 space-y-6">
         {/* Header */}
@@ -142,54 +175,55 @@ export function ProductionMonitor() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {stations.map((station, index) => {
                 const isActive = system.current_station === station.name;
-                const isCompleted = stations.slice(0, index).every(s => s.efficiency === 100);
+                const stationProgress = calculateStationProgress(station.id, system.id);
+                const isCompleted = stationProgress === 100;
                 
                 return (
                   <div key={station.id} className={`relative p-4 rounded-lg border-2 transition-all ${
                     isActive ? 'border-primary bg-primary/10 shadow-lg' : 
                     isCompleted ? 'border-success bg-success/10' : 'border-muted bg-muted/50'
                   }`}>
-              <div className="text-center space-y-2">
-                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
-                  isActive ? 'bg-primary text-primary-foreground animate-pulse' :
-                  isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
-                </div>
-                <h3 className="font-medium text-sm">{station.name}</h3>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">進度: {station.efficiency}%</div>
-                  <Progress value={station.efficiency} className="h-1" />
-                </div>
-                <div className="flex items-center justify-center gap-1 mt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => {
-                      // Navigate to issue tracker with station filter
-                      const event = new CustomEvent('navigate', { 
-                        detail: { 
-                          module: 'issues', 
-                          params: { 
-                            station: station.name, 
-                            system: system.system_name 
-                          } 
-                        } 
-                      });
-                      window.dispatchEvent(event);
-                    }}
-                  >
-                    <Bug className="h-3 w-3 mr-1" />
-                    問題
-                  </Button>
-                </div>
-                {isActive && (
-                  <div className="absolute -top-2 -right-2">
-                    <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                  </div>
-                )}
-              </div>
+                    <div className="text-center space-y-2">
+                      <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
+                        isActive ? 'bg-primary text-primary-foreground animate-pulse' :
+                        isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
+                      </div>
+                      <h3 className="font-medium text-sm">{station.name}</h3>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">進度: {stationProgress}%</div>
+                        <Progress value={stationProgress} className="h-1" />
+                      </div>
+                      <div className="flex items-center justify-center gap-1 mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => {
+                            // Navigate to issue tracker with station filter
+                            const event = new CustomEvent('navigate', { 
+                              detail: { 
+                                module: 'issues', 
+                                params: { 
+                                  station: station.name, 
+                                  system: system.system_name 
+                                } 
+                              } 
+                            });
+                            window.dispatchEvent(event);
+                          }}
+                        >
+                          <Bug className="h-3 w-3 mr-1" />
+                          問題
+                        </Button>
+                      </div>
+                      {isActive && (
+                        <div className="absolute -top-2 -right-2">
+                          <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -198,9 +232,9 @@ export function ProductionMonitor() {
             {/* Progress Arrow */}
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度: {system.overall_progress}%
+                整體進度: {systemOverallProgress}%
               </div>
-              <Progress value={system.overall_progress} className="mt-2 h-3" />
+              <Progress value={systemOverallProgress} className="mt-2 h-3" />
             </div>
           </CardContent>
         </Card>
@@ -215,7 +249,7 @@ export function ProductionMonitor() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-success">{system.overall_progress}%</div>
+              <div className="text-2xl font-bold text-success">{systemOverallProgress}%</div>
               <div className="text-sm text-muted-foreground">完成進度</div>
             </CardContent>
           </Card>
