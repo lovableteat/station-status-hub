@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,9 +47,14 @@ export function ProductionMonitor({ selectedSystem }: ProductionMonitorProps) {
         <SystemSelectionDialog
           open={isSystemDialogOpen}
           onOpenChange={setIsSystemDialogOpen}
+          stationName="生產監控"
           systems={systems}
-          onSelectSystem={(systemId) => {
-            setCurrentSystemId(systemId);
+          systemProgress={[]}
+          onSystemSelect={(systemName) => {
+            const system = systems.find(s => s.system_name === systemName);
+            if (system) {
+              setCurrentSystemId(system.id);
+            }
             setIsSystemDialogOpen(false);
           }}
         />
@@ -266,9 +270,14 @@ export function ProductionMonitor({ selectedSystem }: ProductionMonitorProps) {
       <SystemSelectionDialog
         open={isSystemDialogOpen}
         onOpenChange={setIsSystemDialogOpen}
+        stationName="生產監控"
         systems={systems}
-        onSelectSystem={(systemId) => {
-          setCurrentSystemId(systemId);
+        systemProgress={[]}
+        onSystemSelect={(systemName) => {
+          const system = systems.find(s => s.system_name === systemName);
+          if (system) {
+            setCurrentSystemId(system.id);
+          }
           setIsSystemDialogOpen(false);
         }}
       />
