@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,26 +16,51 @@ interface PassRateMetrics {
 }
 
 export function TestPassRateCard() {
-  const { systems, progress, isLoading } = useUnifiedData();
+  const { systems, progress, stations, testItems, isLoading } = useUnifiedData();
   const [metrics, setMetrics] = useState({
     totalUnits: 0,
     completedUnits: 0,
     passRate: 0,
-      targetPassRate: 100
+    targetPassRate: 100
   });
+
+  // 檢查系統是否完成（Station 0-4 全部100%）
+  const isSystemCompleted = (systemId: string) => {
+    // 取得Station 0-4
+    const stations0To4 = stations.filter(station => 
+      station.station_order >= 0 && station.station_order <= 4
+    );
+    
+    return stations0To4.every(station => {
+      const stationItems = testItems.filter(item => item.station_id === station.id);
+      if (stationItems.length === 0) return true; // 如果沒有測試項目，視為完成
+      
+      const completedItems = stationItems.filter(item => {
+        const prog = progress.find(p => 
+          p.system_id === systemId && 
+          p.station_id === station.id && 
+          p.item_id === item.id &&
+          p.status === 'Done'
+        );
+        return prog;
+      });
+      
+      return completedItems.length === stationItems.length;
+    });
+  };
 
   useEffect(() => {
     if (!isLoading) {
       calculateMetrics();
     }
-  }, [systems, progress, isLoading]);
+  }, [systems, progress, stations, testItems, isLoading]);
 
   const calculateMetrics = () => {
     if (!systems.length) return;
 
-    // 計算總台數和完成台數
+    // 計算總台數和完成台數（基於Station 0-4全部100%的邏輯）
     const totalUnits = systems.length;
-    const completedUnits = systems.filter(system => system.status === 'Done').length;
+    const completedUnits = systems.filter(system => isSystemCompleted(system.id)).length;
     
     // 計算通過率 = 完成台數 / 總台數
     const passRate = totalUnits > 0 ? Math.round((completedUnits / totalUnits) * 100) : 0;
@@ -86,6 +112,9 @@ export function TestPassRateCard() {
             <span>{metrics.completedUnits} / {metrics.totalUnits} 台</span>
             <span>目標: {metrics.targetPassRate}%</span>
           </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            * 基於Station 0-4全部完成的標準計算
+          </div>
         </CardContent>
       </Card>
 
@@ -100,13 +129,15 @@ export function TestPassRateCard() {
             <div className="flex justify-between text-sm">
               <span>進行中:</span>
               <span className="font-medium text-warning">
-                {systems.filter(s => s.status === 'On-going').length} 台
+                {systems.filter(s => !isSystemCompleted(s.id) && 
+                  progress.some(p => p.system_id === s.id && p.status !== 'Not Start')).length} 台
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span>未開始:</span>
               <span className="font-medium text-muted-foreground">
-                {systems.filter(s => s.status === 'Not Start').length} 台
+                {systems.filter(s => !isSystemCompleted(s.id) && 
+                  !progress.some(p => p.system_id === s.id && p.status !== 'Not Start')).length} 台
               </span>
             </div>
             <div className="flex justify-between text-sm">
