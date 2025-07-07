@@ -42,7 +42,7 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
         .from('test_systems')
         .update({
           status: 'Not Start',
-          current_station: 'Station 0',
+          current_station: '未開始',
           overall_progress: 0,
           actual_started_at: null,
           actual_completed_at: null
@@ -75,7 +75,7 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" className="bg-red-50 hover:bg-red-100 border-red-200">
+        <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-white border-red-600">
           <RotateCcw className="h-4 w-4 mr-2" />
           重置所有進度
         </Button>
@@ -92,7 +92,7 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
                 <li>清空所有備註</li>
                 <li>清空所有時間記錄</li>
                 <li>重置所有系統狀態為「Not Start」</li>
-                <li>將所有系統當前站點設為「Station 0」</li>
+                <li>將所有系統當前站點設為「未開始」</li>
               </ul>
               <p className="text-red-600 font-medium mt-3">
                 ⚠️ 此操作無法復原！請確認您真的要執行此操作。

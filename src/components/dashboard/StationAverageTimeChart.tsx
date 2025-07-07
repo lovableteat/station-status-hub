@@ -119,7 +119,7 @@ export function StationAverageTimeChart() {
           </div>
         </div>
 
-        {/* 圖表區域 */}
+        {/* 圖表區域 - 修改為橫向顯示 */}
         <div className="h-96">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -127,18 +127,22 @@ export function StationAverageTimeChart() {
             </div>
           ) : chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart 
+                data={chartData} 
+                layout="horizontalBar"
+                margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="station" 
+                  type="number"
                   tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
+                  label={{ value: '平均時間 (小時)', position: 'insideBottom', offset: -5 }}
                 />
                 <YAxis 
+                  type="category"
+                  dataKey="station"
                   tick={{ fontSize: 12 }}
-                  label={{ value: '平均時間 (小時)', angle: -90, position: 'insideLeft' }}
+                  width={70}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
@@ -146,7 +150,7 @@ export function StationAverageTimeChart() {
                   dataKey="average_hours" 
                   fill="hsl(var(--primary))" 
                   name="平均處理時間 (小時)"
-                  radius={[4, 4, 0, 0]}
+                  radius={[0, 4, 4, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
