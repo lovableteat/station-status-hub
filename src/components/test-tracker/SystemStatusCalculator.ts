@@ -1,4 +1,5 @@
 
+
 export interface TestSystem {
   id: string;
   system_name: string;
@@ -66,6 +67,7 @@ export class SystemStatusCalculator {
     const stationProgress = targetStations.map(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       
+      // 如果站點沒有測試項目，視為未完成（進度值=0）
       if (stationItems.length === 0) {
         console.log(`${station.station_name}: 無測試項目 = 0`);
         return {
@@ -87,6 +89,7 @@ export class SystemStatusCalculator {
         return isDone;
       });
       
+      // 只有當所有項目都完成且至少有一個項目時，才算完成
       const isCompleted = completedItems.length === stationItems.length && stationItems.length > 0;
       const progressValue = isCompleted ? 1 : 0;
       
@@ -105,8 +108,9 @@ export class SystemStatusCalculator {
     const maxPossibleProgress = targetStations.length; // 應該是5
     
     console.log(`總進度值: ${totalProgressValue}/${maxPossibleProgress}`);
+    console.log(`各站點進度值:`, stationProgress.map(s => `${s.stationName}: ${s.progressValue}`));
     
-    // 根據總進度值判斷狀態
+    // 根據總進度值判斷狀態 - 嚴格按照需求執行
     let currentStation: string;
     if (totalProgressValue === 0) {
       currentStation = '未開始';
@@ -119,7 +123,7 @@ export class SystemStatusCalculator {
       currentStation = '進行中'; // 預設值
     }
     
-    console.log(`最終狀態: ${currentStation}`);
+    console.log(`最終狀態判斷: 總進度值=${totalProgressValue}, 最大值=${maxPossibleProgress}, 狀態=${currentStation}`);
     
     return {
       currentStation,
@@ -128,3 +132,4 @@ export class SystemStatusCalculator {
     };
   }
 }
+
