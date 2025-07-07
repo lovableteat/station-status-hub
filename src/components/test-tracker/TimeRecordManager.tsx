@@ -27,9 +27,18 @@ export function TimeRecordManager({
   onTimeUpdate,
 }: TimeRecordManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [startedAt, setStartedAt] = useState(currentStartedAt || '');
-  const [completedAt, setCompletedAt] = useState(currentCompletedAt || '');
+  const [startedAt, setStartedAt] = useState('');
+  const [completedAt, setCompletedAt] = useState('');
   const { toast } = useToast();
+
+  // 當對話框打開時，重新初始化時間值
+  const handleDialogOpen = (open: boolean) => {
+    setDialogOpen(open);
+    if (open) {
+      setStartedAt(formatDateTimeLocal(currentStartedAt) || '');
+      setCompletedAt(formatDateTimeLocal(currentCompletedAt) || '');
+    }
+  };
 
   const handleTimeUpdate = async () => {
     try {
@@ -37,10 +46,14 @@ export function TimeRecordManager({
       
       if (startedAt) {
         updates.started_at = new Date(startedAt).toISOString();
+      } else {
+        updates.started_at = null;
       }
       
       if (completedAt) {
         updates.completed_at = new Date(completedAt).toISOString();
+      } else {
+        updates.completed_at = null;
       }
 
       const { error } = await supabase
@@ -102,14 +115,19 @@ export function TimeRecordManager({
 
   const formatDateTimeLocal = (isoString?: string) => {
     if (!isoString) return '';
-    const date = new Date(isoString);
-    const offset = date.getTimezoneOffset();
-    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return adjustedDate.toISOString().slice(0, 16);
+    try {
+      const date = new Date(isoString);
+      const offset = date.getTimezoneOffset();
+      const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+      return adjustedDate.toISOString().slice(0, 16);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
   };
 
   return (
-    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+    <Dialog open={dialogOpen} onOpenChange={handleDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Clock className="h-3 w-3 mr-1" />
@@ -127,8 +145,8 @@ export function TimeRecordManager({
             <Input
               id="started-at"
               type="datetime-local"
-              value={formatDateTimeLocal(startedAt || currentStartedAt)}
-              onChange={(e) => setStartedAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+              value={startedAt}
+              onChange={(e) => setStartedAt(e.target.value)}
             />
           </div>
           
@@ -137,8 +155,8 @@ export function TimeRecordManager({
             <Input
               id="completed-at"
               type="datetime-local"
-              value={formatDateTimeLocal(completedAt || currentCompletedAt)}
-              onChange={(e) => setCompletedAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+              value={completedAt}
+              onChange={(e) => setCompletedAt(e.target.value)}
             />
           </div>
           
