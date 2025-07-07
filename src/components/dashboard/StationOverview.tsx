@@ -2,9 +2,33 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Clock, Users, Calendar, Target } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export function StationOverview() {
-  const { systems, stations, testItems, progress } = useUnifiedData();
+  const { systems, stations, testItems } = useUnifiedData();
+  const [dailyTarget, setDailyTarget] = useState<number>(0);
+
+  useEffect(() => {
+    const loadDailyTarget = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('production_targets')
+          .select('daily_target')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (data && !error) {
+          setDailyTarget(data.daily_target);
+        }
+      } catch (error) {
+        console.error('Error loading daily target:', error);
+      }
+    };
+
+    loadDailyTarget();
+  }, []);
 
   // Calculate metrics based on actual data
   const totalSystems = systems.length;
@@ -12,11 +36,6 @@ export function StationOverview() {
   // Calculate single machine test time (sum of all station estimated times)
   const totalEstimatedMinutes = testItems.reduce((sum, item) => sum + (item.estimated_minutes || 30), 0);
   const singleMachineTestHours = Number((totalEstimatedMinutes / 60).toFixed(1));
-  
-  // Calculate estimated completion days using actual stations length
-  const activeStations = stations.length; // Use actual stations count
-  const estimatedDaysPerSystem = Math.ceil(singleMachineTestHours / (8 * activeStations)); // 8 hours per day
-  const totalEstimatedDays = Math.ceil((totalSystems * estimatedDaysPerSystem) / activeStations);
   
   // Calculate actual completion status
   const completedSystems = systems.filter(s => s.status === 'Done').length;
@@ -41,15 +60,15 @@ export function StationOverview() {
       color: "text-warning"
     },
     {
-      title: "預計完成天數",
-      value: `${totalEstimatedDays}天`,
+      title: "每日目標",
+      value: `${dailyTarget}台`,
       icon: <Calendar className="h-5 w-5" />,
-      description: `基於${activeStations}個並行測試站點`,
+      description: `生產目標設定`,
       color: "text-success"
     },
     {
       title: "測試站點",
-      value: activeStations,
+      value: stations.length,
       icon: <Users className="h-5 w-5" />,
       description: stationNames || "並行測試",
       color: "text-info"
