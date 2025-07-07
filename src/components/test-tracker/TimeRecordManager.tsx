@@ -56,22 +56,30 @@ export function TimeRecordManager({
         updates.completed_at = null;
       }
 
-      const { error } = await supabase
+      console.log('Updating time records:', { systemId, stationId, itemId, updates });
+
+      const { data, error } = await supabase
         .from('test_progress')
         .update(updates)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
-        .eq('item_id', itemId);
+        .eq('item_id', itemId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating time records:', error);
+        throw error;
+      }
+
+      console.log('Time records updated successfully:', data);
 
       toast({
         title: "時間記錄已更新",
         description: "手動時間記錄已成功更新",
       });
 
+      // 只調用 onTimeUpdate，不關閉對話框讓用戶可以繼續操作
       onTimeUpdate();
-      setDialogOpen(false);
     } catch (error) {
       console.error('Error updating time records:', error);
       toast({
@@ -101,8 +109,10 @@ export function TimeRecordManager({
         description: "所有時間記錄已成功清空",
       });
 
+      // 清空後重新設置輸入框
+      setStartedAt('');
+      setCompletedAt('');
       onTimeUpdate();
-      setDialogOpen(false);
     } catch (error) {
       console.error('Error clearing time records:', error);
       toast({
@@ -188,6 +198,12 @@ export function TimeRecordManager({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+          
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              關閉
+            </Button>
           </div>
         </div>
       </DialogContent>

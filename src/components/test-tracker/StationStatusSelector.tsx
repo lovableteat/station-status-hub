@@ -44,10 +44,10 @@ export function StationStatusSelector({ systemId, currentStatus, onUpdate }: Sta
 
   return (
     <Select value={currentStatus} onValueChange={handleStatusChange} disabled={isUpdating}>
-      <SelectTrigger className="h-8 w-20">
+      <SelectTrigger className="h-8 w-24 z-50">
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="z-50 bg-background border shadow-lg">
         <SelectItem value="未開始">未開始</SelectItem>
         <SelectItem value="進行中">進行中</SelectItem>
         <SelectItem value="已完成">已完成</SelectItem>
