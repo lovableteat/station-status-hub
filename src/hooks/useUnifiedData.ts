@@ -12,6 +12,8 @@ interface UnifiedSystem {
   status: string;
   model?: string;
   serial_number?: string;
+  actual_started_at?: string;
+  actual_completed_at?: string;
 }
 
 interface UnifiedStation {
