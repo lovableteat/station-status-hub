@@ -421,8 +421,8 @@ export function TestProgressTable({
     );
   }
 
-  // Use fixed widths for better alignment - add one more column for actual completion time
-  const gridColumns = `200px 120px 120px repeat(${filteredStations.length}, 150px) 160px 160px 160px`;
+  // Optimized column widths for better space utilization
+  const gridColumns = `160px 120px 110px repeat(${filteredStations.length}, 130px) 140px 140px 140px`;
 
   // Desktop table view
   return (
