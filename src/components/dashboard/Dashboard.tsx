@@ -28,7 +28,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { systems, progress, stationStatuses, stations } = useUnifiedData();
+  const { systems, progress, stationStatuses, stations, testItems } = useUnifiedData();
   const { toast } = useToast();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
@@ -36,35 +36,65 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // Helper function to get current station status for a system
-  const getCurrentStationStatus = (system: any) => {
-    // If current_station is already set correctly, use it
-    if (system.current_station === '已完成' || system.current_station === '未開始') {
-      return system.current_station;
-    }
-    
-    // Check if it's a Station 0-4 (these are considered "進行中")
-    const stations0To4Names = stations
-      .filter(station => station.station_order >= 0 && station.station_order <= 4)
-      .map(station => station.station_name);
-    
-    if (stations0To4Names.includes(system.current_station)) {
-      return '進行中';
-    }
-    
-    return system.current_station;
+  // Helper function to check if all stations 0-4 are 100% complete
+  const areAllStationsComplete = (systemId: string) => {
+    const stations0To4 = stations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    return stations0To4.every(station => {
+      const stationItems = testItems.filter(item => item.station_id === station.id);
+      if (stationItems.length === 0) return true;
+      
+      const completedItems = stationItems.filter(item => {
+        const prog = progress.find(p => 
+          p.system_id === systemId && 
+          p.station_id === station.id && 
+          p.item_id === item.id
+        );
+        return prog?.status === 'Done';
+      });
+      return completedItems.length === stationItems.length;
+    });
   };
 
-  // Calculate real-time metrics based on current_station field
+  // Helper function to check if any progress exists for stations 0-4
+  const hasAnyProgress = (systemId: string) => {
+    const stations0To4 = stations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    return stations0To4.some(station => {
+      const stationItems = testItems.filter(item => item.station_id === station.id);
+      return stationItems.some(item => {
+        const prog = progress.find(p => 
+          p.system_id === systemId && 
+          p.station_id === station.id && 
+          p.item_id === item.id
+        );
+        return prog?.status === 'Done';
+      });
+    });
+  };
+
+  // Get current station status for a system (進行中、未開始、已完成)
+  const getCurrentStationStatus = (systemId: string) => {
+    const allStationsComplete = areAllStationsComplete(systemId);
+    const anyProgress = hasAnyProgress(systemId);
+    
+    if (allStationsComplete) {
+      return '已完成';
+    } else if (anyProgress) {
+      return '進行中';
+    } else {
+      return '未開始';
+    }
+  };
+
+  // Calculate real-time metrics based on current station status logic
   const totalSystems = systems.length;
   
-  // Count systems based on current_station field logic
+  // Count systems based on current station status logic
   let completedSystems = 0;
   let ongoingSystems = 0;
   let notStartedSystems = 0;
   
   systems.forEach(system => {
-    const status = getCurrentStationStatus(system);
+    const status = getCurrentStationStatus(system.id);
     
     if (status === '已完成') {
       completedSystems++;
