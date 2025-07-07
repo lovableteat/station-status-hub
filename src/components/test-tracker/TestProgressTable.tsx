@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,7 +89,6 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const updateInProgress = useRef(false);
-  const lastProgressUpdate = useRef<string>('');
   
   // Handle validation errors
   const handleValidationError = (error: string | null) => {
@@ -106,7 +104,7 @@ export function TestProgressTable({
   // Show all stations ordered by station_order
   const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
-  // Helper function to format time
+  // Format time helper
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '-';
     try {
@@ -123,68 +121,72 @@ export function TestProgressTable({
     }
   };
 
-  // Check if all stations 0-4 are 100% complete for a system
-  const areAllStationsComplete = useCallback((systemId: string) => {
-    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+  // 重新設計：檢查系統是否真正完成（所有Station 0-4的測試項目都是Done）
+  const isSystemReallyComplete = useCallback((systemId: string) => {
+    console.log(`=== 檢查系統 ${systemId} 是否真正完成 ===`);
     
-    // 檢查每個站點是否完成
-    const allComplete = stations0To4.every(station => {
+    const stations0To4 = filteredStations.filter(station => 
+      station.station_order >= 0 && station.station_order <= 4
+    );
+    
+    let totalItems = 0;
+    let completedItems = 0;
+    
+    for (const station of stations0To4) {
       const stationItems = items.filter(item => item.station_id === station.id);
-      if (stationItems.length === 0) return true;
+      totalItems += stationItems.length;
       
-      // 每個項目都必須是 Done 狀態
-      const completedItems = stationItems.filter(item => {
+      for (const item of stationItems) {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
-        return prog?.status === 'Done';
-      });
-      
-      return completedItems.length === stationItems.length;
-    });
+        if (prog?.status === 'Done') {
+          completedItems++;
+        }
+        console.log(`站點 ${station.station_name} - 項目 ${item.item_name}: ${prog?.status || 'None'}`);
+      }
+    }
     
-    console.log(`System ${systemId} - All stations complete: ${allComplete}`);
-    return allComplete;
+    const isComplete = totalItems > 0 && completedItems === totalItems;
+    console.log(`總項目: ${totalItems}, 完成項目: ${completedItems}, 是否完成: ${isComplete}`);
+    
+    return isComplete;
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // Check if any progress exists for stations 0-4
-  const hasAnyProgress = useCallback((systemId: string) => {
-    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+  // 重新設計：檢查系統是否有任何進度
+  const hasSystemAnyProgress = useCallback((systemId: string) => {
+    const stations0To4 = filteredStations.filter(station => 
+      station.station_order >= 0 && station.station_order <= 4
+    );
     
-    const anyProgress = stations0To4.some(station => {
+    return stations0To4.some(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
       return stationItems.some(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
         return prog?.status === 'Done';
       });
     });
-    
-    console.log(`System ${systemId} - Has any progress: ${anyProgress}`);
-    return anyProgress;
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // Get current station for a system (只顯示進行中、未開始、已完成)
-  const getCurrentStation = useCallback((systemId: string) => {
-    const allStationsComplete = areAllStationsComplete(systemId);
-    const anyProgress = hasAnyProgress(systemId);
+  // 重新設計：獲取系統當前狀態
+  const getSystemCurrentStatus = useCallback((systemId: string) => {
+    const isComplete = isSystemReallyComplete(systemId);
+    const hasProgress = hasSystemAnyProgress(systemId);
     
-    let currentStation = '';
-    if (allStationsComplete) {
-      currentStation = '已完成';
-    } else if (anyProgress) {
-      currentStation = '進行中';
+    if (isComplete) {
+      return '已完成';
+    } else if (hasProgress) {
+      return '進行中';
     } else {
-      currentStation = '未開始';
+      return '未開始';
     }
-    
-    console.log(`System ${systemId} - Current station: ${currentStation}`);
-    return currentStation;
-  }, [areAllStationsComplete, hasAnyProgress]);
+  }, [isSystemReallyComplete, hasSystemAnyProgress]);
 
-  // Get latest completion time across stations 0-4 for a system
+  // 重新設計：獲取系統最新完成時間
   const getSystemLatestCompletionTime = useCallback((systemId: string) => {
-    const allCompletionTimes: string[] = [];
+    const stations0To4 = filteredStations.filter(station => 
+      station.station_order >= 0 && station.station_order <= 4
+    );
     
-    // 只考慮 Station 0-4
-    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    const allCompletionTimes: string[] = [];
     
     stations0To4.forEach(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
@@ -197,19 +199,16 @@ export function TestProgressTable({
     });
     
     if (allCompletionTimes.length === 0) return undefined;
-    
-    // 回傳最晚的完成時間
-    const latestTime = allCompletionTimes.sort().reverse()[0];
-    console.log(`System ${systemId} - Latest completion time: ${latestTime}`);
-    return latestTime;
+    return allCompletionTimes.sort().reverse()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // Get earliest start time across stations 0-4 for a system
+  // 重新設計：獲取系統最早開始時間
   const getSystemEarliestStartTime = useCallback((systemId: string) => {
-    const allStartTimes: string[] = [];
+    const stations0To4 = filteredStations.filter(station => 
+      station.station_order >= 0 && station.station_order <= 4
+    );
     
-    // 只考慮 Station 0-4
-    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    const allStartTimes: string[] = [];
     
     stations0To4.forEach(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
@@ -222,67 +221,51 @@ export function TestProgressTable({
     });
     
     if (allStartTimes.length === 0) return undefined;
-    
-    // 回傳最早的開始時間
-    const earliestTime = allStartTimes.sort()[0];
-    console.log(`System ${systemId} - Earliest start time: ${earliestTime}`);
-    return earliestTime;
+    return allStartTimes.sort()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 創建進度變化的唯一標識符
-  const createProgressSignature = useCallback(() => {
-    return progress.map(p => `${p.id}-${p.status}-${p.completed_at || 'null'}`).sort().join('|');
-  }, [progress]);
-
-  // Auto-update system status based on progress changes - 改進版本
+  // 重新設計：系統狀態自動更新邏輯
   useEffect(() => {
     if (updateInProgress.current) {
-      console.log('Update already in progress, skipping...');
+      console.log('更新進行中，跳過...');
       return;
     }
-    
-    // 檢查進度是否真的有變化
-    const currentSignature = createProgressSignature();
-    if (currentSignature === lastProgressUpdate.current) {
-      console.log('No progress changes detected, skipping update...');
-      return;
-    }
-    
+
     const updateSystemStatus = async () => {
       updateInProgress.current = true;
-      lastProgressUpdate.current = currentSignature;
-      console.log('Starting system status update with signature:', currentSignature);
-      
+      console.log('=== 開始系統狀態更新 ===');
+
       try {
         const updates = [];
         
         for (const system of filteredSystems) {
-          const currentStation = getCurrentStation(system.id);
-          const isComplete = areAllStationsComplete(system.id);
+          const calculatedStatus = getSystemCurrentStatus(system.id);
+          const isComplete = isSystemReallyComplete(system.id);
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
           
-          console.log(`Checking system ${system.system_name}:`);
-          console.log(`- DB current_station: "${system.current_station}"`);
-          console.log(`- Calculated current_station: "${currentStation}"`);
-          console.log(`- Is complete: ${isComplete}`);
-          console.log(`- Latest completion time: ${latestCompletionTime}`);
+          console.log(`系統 ${system.system_name}:`);
+          console.log(`- 資料庫當前站點: "${system.current_station}"`);
+          console.log(`- 計算當前站點: "${calculatedStatus}"`);
+          console.log(`- 是否真正完成: ${isComplete}`);
+          console.log(`- 最新完成時間: ${latestCompletionTime}`);
           
           let updatedFields: any = {};
           let needsUpdate = false;
           
           // 檢查當前站點是否需要更新
-          if (system.current_station !== currentStation) {
-            updatedFields.current_station = currentStation;
+          if (system.current_station !== calculatedStatus) {
+            updatedFields.current_station = calculatedStatus;
             needsUpdate = true;
-            console.log(`Will update current_station from "${system.current_station}" to "${currentStation}"`);
+            console.log(`需要更新當前站點: "${system.current_station}" → "${calculatedStatus}"`);
           }
           
           // 檢查狀態是否需要更新
-          const newStatus = currentStation === '已完成' ? 'Done' : (currentStation === '未開始' ? 'Not Start' : 'On-going');
+          const newStatus = calculatedStatus === '已完成' ? 'Done' : 
+                           calculatedStatus === '未開始' ? 'Not Start' : 'On-going';
           if (system.status !== newStatus) {
             updatedFields.status = newStatus;
             needsUpdate = true;
-            console.log(`Will update status from "${system.status}" to "${newStatus}"`);
+            console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
           }
           
           // 處理實際完成時間
@@ -291,13 +274,13 @@ export function TestProgressTable({
             if (system.actual_completed_at !== latestCompletionTime) {
               updatedFields.actual_completed_at = latestCompletionTime;
               needsUpdate = true;
-              console.log(`Will set actual_completed_at to ${latestCompletionTime}`);
+              console.log(`需要設定實際完成時間: ${latestCompletionTime}`);
             }
           } else if (!isComplete && system.actual_completed_at) {
-            // 系統不再完成時清除實際完成時間（僅清除自動設定的時間）
+            // 系統不再完成時清除實際完成時間
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
-            console.log(`Will clear actual_completed_at`);
+            console.log(`需要清除實際完成時間`);
           }
           
           if (needsUpdate) {
@@ -309,42 +292,42 @@ export function TestProgressTable({
           }
         }
         
-        // 批量執行更新
+        // 執行批量更新
         if (updates.length > 0) {
-          console.log(`Executing ${updates.length} system updates...`);
+          console.log(`執行 ${updates.length} 個系統更新...`);
           
           for (const update of updates) {
             try {
-              console.log(`Updating system ${update.name} with:`, update.fields);
+              console.log(`更新系統 ${update.name}:`, update.fields);
               const { error } = await supabase
                 .from('test_systems')
                 .update(update.fields)
                 .eq('id', update.id);
 
               if (error) {
-                console.error(`Error updating system ${update.name}:`, error);
+                console.error(`更新系統 ${update.name} 失敗:`, error);
                 throw error;
               }
-              console.log(`Successfully updated system ${update.name}`);
+              console.log(`成功更新系統 ${update.name}`);
             } catch (error) {
-              console.error(`Failed to update system ${update.name}:`, error);
+              console.error(`更新系統 ${update.name} 時發生錯誤:`, error);
             }
           }
           
           // 觸發資料重新載入
-          console.log('Triggering data reload...');
+          console.log('觸發資料重新載入...');
           setTimeout(() => {
             onSystemUpdate();
           }, 100);
         } else {
-          console.log('No updates needed');
+          console.log('無需更新');
         }
       } catch (error) {
-        console.error('Error in system status update:', error);
+        console.error('系統狀態更新錯誤:', error);
       } finally {
         setTimeout(() => {
           updateInProgress.current = false;
-          console.log('Update process completed');
+          console.log('更新過程完成');
         }, 500);
       }
     };
@@ -352,18 +335,18 @@ export function TestProgressTable({
     // 延遲執行以確保資料穩定
     const timeoutId = setTimeout(() => {
       updateSystemStatus();
-    }, 200);
+    }, 300);
 
     return () => {
       clearTimeout(timeoutId);
     };
   }, [
-    createProgressSignature,
     filteredSystems,
-    getCurrentStation,
-    areAllStationsComplete,
+    getSystemCurrentStatus,
+    isSystemReallyComplete,
     getSystemLatestCompletionTime,
-    onSystemUpdate
+    onSystemUpdate,
+    progress // 確保進度變更時觸發更新
   ]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
@@ -416,39 +399,39 @@ export function TestProgressTable({
     return (
       <div className="space-y-4">
         {filteredSystems.map(system => {
-          const isSystemComplete = areAllStationsComplete(system.id);
-          const currentStation = getCurrentStation(system.id);
+          const isSystemComplete = isSystemReallyComplete(system.id);
+          const currentStation = getSystemCurrentStatus(system.id);
           
           return (
             <Card key={system.id} className="border-2">
               <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-bold">
-                      <button 
-                        className="text-primary hover:underline cursor-pointer text-left"
-                        onClick={() => {
-                          const currentUrl = new URL(window.location.href);
-                          currentUrl.searchParams.set('system', system.system_name);
-                          window.history.pushState({}, '', currentUrl.toString());
-                          
-                          const event = new CustomEvent('navigate', { 
-                            detail: { module: 'monitor', params: { system: system.system_name } } 
-                          });
-                          window.dispatchEvent(event);
-                        }}
-                      >
-                        {system.system_name}
-                      </button>
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <SystemEditDialog
-                        systemId={system.id}
-                        systemName={system.system_name}
-                        assignedEngineer={system.assigned_engineer}
-                        onUpdate={onSystemUpdate}
-                      />
-                    </div>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-bold">
+                    <button 
+                      className="text-primary hover:underline cursor-pointer text-left"
+                      onClick={() => {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('system', system.system_name);
+                        window.history.pushState({}, '', currentUrl.toString());
+                        
+                        const event = new CustomEvent('navigate', { 
+                          detail: { module: 'monitor', params: { system: system.system_name } } 
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {system.system_name}
+                    </button>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
                   </div>
+                </div>
                 <div className="flex flex-col gap-2 mt-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">當前站點:</span>
@@ -620,10 +603,9 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - Remove assigned engineer column
+  // Desktop table view
   const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px) 160px 160px 140px`;
 
-  // Desktop table view
   return (
     <Card>
       <CardHeader>
@@ -650,7 +632,7 @@ export function TestProgressTable({
             {filteredSystems.map(system => {
               const systemStartTime = getSystemEarliestStartTime(system.id);
               const systemEndTime = getSystemLatestCompletionTime(system.id);
-              const currentStation = getCurrentStation(system.id);
+              const currentStation = getSystemCurrentStatus(system.id);
 
               return (
                 <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
