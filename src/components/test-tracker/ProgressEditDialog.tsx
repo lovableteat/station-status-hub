@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Edit2, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TimeRecordManager } from "./TimeRecordManager";
 
 interface TestItem {
   id: string;
@@ -85,26 +85,26 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 只在狀態實際變化時記錄時間
+  // 改善的時間記錄邏輯 - 只在狀態實際變化時記錄時間
   const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
     const currentTime = new Date().toISOString();
     let timeUpdates = {};
 
     // 如果是Station 0-4，根據狀態變化更新時間
     if (isStation0To4()) {
-      // 從 Not Start 變成其他狀態時，記錄開始時間
+      // 從 Not Start 變成其他狀態時，只在沒有開始時間時記錄開始時間
       if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
         timeUpdates = { ...timeUpdates, started_at: currentTime };
       }
       
-      // 變成 Done 狀態時，記錄完成時間
-      if (newStatus === 'Done' && originalStatus !== 'Done') {
+      // 變成 Done 狀態時，只在沒有完成時間時記錄完成時間
+      if (newStatus === 'Done' && originalStatus !== 'Done' && !currentItem?.completed_at) {
         timeUpdates = { ...timeUpdates, completed_at: currentTime };
       }
       
-      // 從 Done 變成其他狀態時，清除完成時間
+      // 從 Done 變成其他狀態時，清除完成時間但保留開始時間
       if (originalStatus === 'Done' && newStatus !== 'Done') {
-        timeUpdates = { ...timeUpdates, completed_at: undefined };
+        timeUpdates = { ...timeUpdates, completed_at: null };
       }
     }
 
@@ -234,6 +234,18 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
+                        {/* 新增時間記錄管理按鈕 */}
+                        {isStation0To4() && itemProgress && (
+                          <TimeRecordManager
+                            systemId={systemId}
+                            stationId={stationId}
+                            itemId={item.id}
+                            currentStartedAt={itemProgress.started_at}
+                            currentCompletedAt={itemProgress.completed_at}
+                            onTimeUpdate={() => window.location.reload()}
+                          />
+                        )}
+                        
                         {!isEditing ? (
                           <Button
                             variant="outline"
@@ -332,7 +344,7 @@ export function ProgressEditDialog({
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              * 時間將根據狀態變化自動記錄（只記錄實際變化的時間點）
+                              * 時間記錄已改善，避免重複更新。如需調整時間請使用「時間管理」功能
                             </div>
                           </div>
                         )}

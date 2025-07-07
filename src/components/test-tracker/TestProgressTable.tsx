@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
+import { BulkResetDialog } from "./BulkResetDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,6 +113,11 @@ export function TestProgressTable({
           progress={progress}
           onSystemUpdate={onSystemUpdate}
         />
+        
+        {/* 新增批量重置按鈕 */}
+        <div className="flex justify-end">
+          <BulkResetDialog onReset={onSystemUpdate} />
+        </div>
         
         {filteredSystems.map(system => {
           return (
@@ -228,13 +234,16 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 移除時間相關欄位
+  // Desktop table view
   const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px)`;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>測試進度表</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>測試進度表</CardTitle>
+          <BulkResetDialog onReset={onSystemUpdate} />
+        </div>
       </CardHeader>
       <CardContent>
         <SystemStatusUpdater
@@ -247,7 +256,7 @@ export function TestProgressTable({
         
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
-            {/* Header Row - 移除時間欄位 */}
+            {/* Header Row */}
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>

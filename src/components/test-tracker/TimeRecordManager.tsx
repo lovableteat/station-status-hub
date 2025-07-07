@@ -1,0 +1,178 @@
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Clock, RotateCcw, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface TimeRecordManagerProps {
+  systemId: string;
+  stationId: string;
+  itemId: string;
+  currentStartedAt?: string;
+  currentCompletedAt?: string;
+  onTimeUpdate: () => void;
+}
+
+export function TimeRecordManager({
+  systemId,
+  stationId,
+  itemId,
+  currentStartedAt,
+  currentCompletedAt,
+  onTimeUpdate,
+}: TimeRecordManagerProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [startedAt, setStartedAt] = useState(currentStartedAt || '');
+  const [completedAt, setCompletedAt] = useState(currentCompletedAt || '');
+  const { toast } = useToast();
+
+  const handleTimeUpdate = async () => {
+    try {
+      const updates: any = {};
+      
+      if (startedAt) {
+        updates.started_at = new Date(startedAt).toISOString();
+      }
+      
+      if (completedAt) {
+        updates.completed_at = new Date(completedAt).toISOString();
+      }
+
+      const { error } = await supabase
+        .from('test_progress')
+        .update(updates)
+        .eq('system_id', systemId)
+        .eq('station_id', stationId)
+        .eq('item_id', itemId);
+
+      if (error) throw error;
+
+      toast({
+        title: "時間記錄已更新",
+        description: "手動時間記錄已成功更新",
+      });
+
+      onTimeUpdate();
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Error updating time records:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新時間記錄",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleClearTimes = async () => {
+    try {
+      const { error } = await supabase
+        .from('test_progress')
+        .update({
+          started_at: null,
+          completed_at: null
+        })
+        .eq('system_id', systemId)
+        .eq('station_id', stationId)
+        .eq('item_id', itemId);
+
+      if (error) throw error;
+
+      toast({
+        title: "時間記錄已清空",
+        description: "所有時間記錄已成功清空",
+      });
+
+      onTimeUpdate();
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Error clearing time records:', error);
+      toast({
+        title: "清空失敗",
+        description: "無法清空時間記錄",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const formatDateTimeLocal = (isoString?: string) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const offset = date.getTimezoneOffset();
+    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return adjustedDate.toISOString().slice(0, 16);
+  };
+
+  return (
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Clock className="h-3 w-3 mr-1" />
+          時間管理
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>時間記錄管理</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="started-at">開始時間</Label>
+            <Input
+              id="started-at"
+              type="datetime-local"
+              value={formatDateTimeLocal(startedAt || currentStartedAt)}
+              onChange={(e) => setStartedAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="completed-at">完成時間</Label>
+            <Input
+              id="completed-at"
+              type="datetime-local"
+              value={formatDateTimeLocal(completedAt || currentCompletedAt)}
+              onChange={(e) => setCompletedAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+            />
+          </div>
+          
+          <div className="flex gap-2 pt-4">
+            <Button onClick={handleTimeUpdate} className="flex-1">
+              <RotateCcw className="h-3 w-3 mr-1" />
+              更新時間
+            </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  清空
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>確認清空時間記錄</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    這將清空此測試項目的所有時間記錄。此操作無法復原。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearTimes}>
+                    確認清空
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
