@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Monitor, Activity, AlertTriangle, CheckCircle, Clock, Download, ArrowLeft, Play, Bug, ExternalLink, History } from "lucide-react";
+import { Monitor, Activity, AlertTriangle, CheckCircle, Clock, Download, ArrowLeft, Play, Bug, ExternalLink, History, Wifi, WifiOff, Pause, PlayCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 import { TestProgressAuditLog } from "./TestProgressAuditLog";
@@ -16,10 +16,25 @@ import { SystemSelectionDialog } from "./SystemSelectionDialog";
 interface Station {
   id: string;
   name: string;
-  status: "idle" | "working" | "warning" | "error" | "complete";
+  status: "idle" | "working" | "warning" | "error" | "complete" | "offline" | "running";
   current_system?: string;
   efficiency: number;
   last_update: string;
+}
+
+interface MachineStatus {
+  id: string;
+  name: string;
+  status: "running" | "idle" | "error" | "offline";
+  currentStation: string;
+  currentTestItem: string;
+  stationProgress: {
+    station0: number;
+    station1: number;
+    station2: number;
+    station3: number;
+    station4: number;
+  };
 }
 
 export function ProductionMonitor() {
@@ -39,29 +54,51 @@ export function ProductionMonitor() {
     }
   }, []);
 
+  // Enhanced status color mapping
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'working': return 'bg-station-working text-primary-foreground';
-      case 'complete': return 'bg-success text-success-foreground';
-      case 'warning': return 'bg-warning text-warning-foreground';
-      case 'error': return 'bg-danger text-danger-foreground';
-      case 'idle': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'running':
+      case 'working': return 'bg-green-500 text-white animate-pulse';
+      case 'complete': return 'bg-blue-500 text-white';
+      case 'idle': return 'bg-yellow-500 text-white';
+      case 'warning': return 'bg-orange-500 text-white';
+      case 'error': return 'bg-red-500 text-white';
+      case 'offline': return 'bg-gray-500 text-white';
+      default: return 'bg-gray-400 text-white';
     }
   };
 
+  // Enhanced status icon mapping
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'working': return <Activity className="h-4 w-4" />;
+      case 'running':
+      case 'working': return <PlayCircle className="h-4 w-4" />;
       case 'complete': return <CheckCircle className="h-4 w-4" />;
+      case 'idle': return <Pause className="h-4 w-4" />;
       case 'warning': return <AlertTriangle className="h-4 w-4" />;
       case 'error': return <AlertTriangle className="h-4 w-4" />;
-      case 'idle': return <Clock className="h-4 w-4" />;
+      case 'offline': return <WifiOff className="h-4 w-4" />;
       default: return <Monitor className="h-4 w-4" />;
     }
   };
 
-  // 只計算 Station 0-4 的進度
+  // Get current test item for a system at a station
+  const getCurrentTestItem = (systemId: string, stationId: string) => {
+    const stationItems = testItems.filter(item => item.station_id === stationId);
+    const ongoingItem = stationItems.find(item => {
+      const prog = progress.find(p => 
+        p.system_id === systemId && 
+        p.station_id === stationId && 
+        p.item_id === item.id &&
+        p.status === 'On-going'
+      );
+      return prog;
+    });
+    
+    return ongoingItem?.item_name || '待開始';
+  };
+
+  // Calculate station progress for Station 0-4
   const calculateStationProgress = (stationId: string, systemId: string) => {
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
@@ -74,12 +111,10 @@ export function ProductionMonitor() {
     return Math.round((completedItems / stationTestItems.length) * 100);
   };
 
-  // 基於 Station 0-4 計算整體進度
+  // Enhanced overall progress calculation
   const calculateOverallProgress = (systemId: string) => {
-    // 只取 Station 0-4 (station_order 0-4)
     const targetStations = stations.filter(station => 
       station.id && typeof station.id === 'string' && 
-      // 透過 station name 判斷是否為 Station 0-4
       (station.name.includes('Station 0') || station.name.includes('組裝') ||
        station.name.includes('Station 1') || station.name.includes('開機') ||
        station.name.includes('Station 2') || station.name.includes('FW') ||
@@ -101,12 +136,43 @@ export function ProductionMonitor() {
     return validStations > 0 ? Math.round(totalProgress / validStations) : 0;
   };
 
+  // Get machine status based on system progress
+  const getMachineStatus = (system: any): MachineStatus => {
+    const hasError = progress.some(p => p.system_id === system.id && p.status === 'Error');
+    const hasOngoing = progress.some(p => p.system_id === system.id && p.status === 'On-going');
+    const overallProgress = calculateOverallProgress(system.id);
+    
+    let status: "running" | "idle" | "error" | "offline" = "idle";
+    if (hasError) status = "error";
+    else if (hasOngoing) status = "running";
+    else if (overallProgress === 100) status = "idle"; // Complete but available
+    else status = "idle";
+
+    // Get current station info
+    const currentStationName = system.current_station || 'Station 0';
+    const currentStationData = stations.find(s => s.name.includes(currentStationName.split(' ')[1]));
+    const currentTestItem = currentStationData ? 
+      getCurrentTestItem(system.id, currentStationData.id) : '待開始';
+
+    return {
+      id: system.id,
+      name: system.system_name,
+      status,
+      currentStation: currentStationName,
+      currentTestItem,
+      stationProgress: {
+        station0: calculateStationProgress(stations.find(s => s.name.includes('Station 0') || s.name.includes('組裝'))?.id || '', system.id),
+        station1: calculateStationProgress(stations.find(s => s.name.includes('Station 1') || s.name.includes('開機'))?.id || '', system.id),
+        station2: calculateStationProgress(stations.find(s => s.name.includes('Station 2') || s.name.includes('FW'))?.id || '', system.id),
+        station3: calculateStationProgress(stations.find(s => s.name.includes('Station 3') || s.name.includes('EE'))?.id || '', system.id),
+        station4: calculateStationProgress(stations.find(s => s.name.includes('Station 4') || s.name.includes('NV TEST'))?.id || '', system.id),
+      }
+    };
+  };
+
   const exportData = () => {
     setShowExportDialog(true);
   };
-
-  // Debug: Log data to see what's available
-  console.log('Production Monitor Data:', { stations, systems, isLoading });
 
   if (isLoading) {
     return (
@@ -123,7 +189,6 @@ export function ProductionMonitor() {
     );
   }
 
-  // Show message if no data
   if (!stations.length && !systems.length) {
     return (
       <div className="p-6">
@@ -151,7 +216,6 @@ export function ProductionMonitor() {
       );
     }
 
-    // 基於 Station 0-4 計算系統進度
     const systemOverallProgress = calculateOverallProgress(system.id);
 
     return (
@@ -194,6 +258,7 @@ export function ProductionMonitor() {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
                 const isCompleted = stationProgress === 100;
+                const currentTestItem = getCurrentTestItem(system.id, station.id);
                 
                 return (
                   <div key={station.id} className={`relative p-4 rounded-lg border-2 transition-all ${
@@ -208,6 +273,13 @@ export function ProductionMonitor() {
                         {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
                       </div>
                       <h3 className="font-medium text-sm">{station.name}</h3>
+                      
+                      {/* Current Test Item */}
+                      <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+                        <span className="font-medium">測項: </span>
+                        <span>{currentTestItem}</span>
+                      </div>
+                      
                       <div className="space-y-1">
                         <div className="text-xs text-muted-foreground">進度: {stationProgress}%</div>
                         <Progress value={stationProgress} className="h-1" />
@@ -218,7 +290,6 @@ export function ProductionMonitor() {
                           size="sm"
                           className="h-6 px-2 text-xs"
                           onClick={() => {
-                            // Navigate to issue tracker with station filter
                             const event = new CustomEvent('navigate', { 
                               detail: { 
                                 module: 'issues', 
@@ -246,7 +317,6 @@ export function ProductionMonitor() {
               })}
             </div>
             
-            {/* Progress Arrow */}
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
                 整體進度 (Station 0-4): {systemOverallProgress}%
@@ -297,6 +367,9 @@ export function ProductionMonitor() {
     );
   }
 
+  // Enhanced machine status cards for overview
+  const machineStatuses = systems.map(getMachineStatus);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -305,7 +378,7 @@ export function ProductionMonitor() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">實時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
+            <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -320,84 +393,75 @@ export function ProductionMonitor() {
         </div>
       </div>
 
-      {/* 只顯示 Station 0-4 的網格 */}
-      <div className="grid grid-cols-5 gap-6">
-        {stations.filter(station => 
-          station.name.includes('Station 0') || station.name.includes('組裝') ||
-          station.name.includes('Station 1') || station.name.includes('開機') ||
-          station.name.includes('Station 2') || station.name.includes('FW') ||
-          station.name.includes('Station 3') || station.name.includes('EE') ||
-          station.name.includes('Station 4') || station.name.includes('NV TEST')
-        ).map((station) => (
-          <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
+      {/* Enhanced Machine Status Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {machineStatuses.map((machine) => (
+          <Card key={machine.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
             <CardContent className="p-6">
+              {/* Status Indicator */}
               <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-full ${getStatusColor(station.status)}`}>
-                  {getStatusIcon(station.status)}
+                <div className={`p-3 rounded-full ${getStatusColor(machine.status)}`}>
+                  {getStatusIcon(machine.status)}
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  效率: {station.efficiency}%
+                <Badge variant="outline" className={getStatusColor(machine.status)}>
+                  {machine.status === 'running' ? '運行中' : 
+                   machine.status === 'idle' ? '閒置' :
+                   machine.status === 'error' ? '異常' : '離線'}
                 </Badge>
               </div>
               
-              <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
-              <div className="mb-4">
-                {station.current_systems.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      處理中 ({station.current_systems.length} 台系統)
-                    </p>
-                    <div className="space-y-1 max-h-16 overflow-y-auto">
-                      {station.current_systems.slice(0, 3).map((system, idx) => (
-                        <div key={system.id} className="text-xs bg-muted/50 rounded px-2 py-1">
-                          <span className="font-medium">{system.system_name}</span>
-                          <span className="text-muted-foreground ml-2">
-                            {station.system_progress.find(sp => sp.system.id === system.id)?.progress || 0}%
-                          </span>
-                        </div>
-                      ))}
-                      {station.current_systems.length > 3 && (
-                        <div className="text-xs text-muted-foreground text-center">
-                          +{station.current_systems.length - 3} 更多...
-                        </div>
-                      )}
+              <h3 className="font-semibold text-lg mb-2">{machine.name}</h3>
+              
+              {/* Current Status Info */}
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">目前站別:</span>
+                  <span className="font-medium">{machine.currentStation}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">目前測項:</span>
+                  <span className="font-medium text-xs">{machine.currentTestItem}</span>
+                </div>
+              </div>
+
+              {/* Station Progress Overview */}
+              <div className="space-y-2 mb-4">
+                <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤</h4>
+                <div className="grid grid-cols-5 gap-1">
+                  {[
+                    { name: 'S0', progress: machine.stationProgress.station0 },
+                    { name: 'S1', progress: machine.stationProgress.station1 },
+                    { name: 'S2', progress: machine.stationProgress.station2 },
+                    { name: 'S3', progress: machine.stationProgress.station3 },
+                    { name: 'S4', progress: machine.stationProgress.station4 },
+                  ].map((station, index) => (
+                    <div key={index} className="text-center">
+                      <div className="text-xs text-muted-foreground mb-1">{station.name}</div>
+                      <div className={`h-2 rounded-full ${
+                        station.progress === 100 ? 'bg-success' :
+                        station.progress > 0 ? 'bg-warning' : 'bg-muted'
+                      }`} />
+                      <div className="text-xs mt-1">{station.progress}%</div>
                     </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">待機中</p>
-                )}
+                  ))}
+                </div>
               </div>
               
-              <div className="space-y-2">
+              {/* Overall Progress */}
+              <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-sm">
-                  <span>狀態</span>
-                  <span className="capitalize">{station.status}</span>
+                  <span className="text-muted-foreground">整體進度:</span>
+                  <span className="font-medium">{calculateOverallProgress(machine.id)}%</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>進行中系統</span>
-                  <span>{station.ongoing_systems}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>已完成系統</span>
-                  <span>{station.completed_systems}</span>
-                </div>
-                <Progress value={station.efficiency} className="h-2" />
+                <Progress value={calculateOverallProgress(machine.id)} className="h-2" />
               </div>
               
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
                   className="flex-1"
-                  onClick={() => {
-                    if (station.current_systems.length === 1) {
-                      setFocusedSystem(station.current_systems[0].system_name);
-                    } else if (station.current_systems.length > 1) {
-                      setSelectedStation(station);
-                      setShowSystemSelection(true);
-                    }
-                  }}
-                  disabled={station.current_systems.length === 0}
+                  onClick={() => setFocusedSystem(machine.name)}
                 >
                   查看詳情
                 </Button>
@@ -408,7 +472,7 @@ export function ProductionMonitor() {
                     const event = new CustomEvent('navigate', { 
                       detail: { 
                         module: 'issues', 
-                        params: { station: station.name } 
+                        params: { system: machine.name } 
                       } 
                     });
                     window.dispatchEvent(event);
@@ -417,6 +481,13 @@ export function ProductionMonitor() {
                   <Bug className="h-4 w-4" />
                 </Button>
               </div>
+
+              {/* Status indicator animation */}
+              {machine.status === 'running' && (
+                <div className="absolute top-2 right-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
