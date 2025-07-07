@@ -20,7 +20,7 @@ export function TestPassRateCard() {
     totalUnits: 0,
     completedUnits: 0,
     passRate: 0,
-    targetPassRate: 95
+      targetPassRate: 100
   });
 
   useEffect(() => {
@@ -43,12 +43,12 @@ export function TestPassRateCard() {
       totalUnits,
       completedUnits,
       passRate,
-      targetPassRate: 95
+      targetPassRate: 100
     });
   };
 
   const getPassRateColor = (rate: number) => {
-    if (rate >= 95) return 'text-success';
+    if (rate >= 100) return 'text-success';
     if (rate >= 80) return 'text-warning';
     return 'text-danger';
   };
