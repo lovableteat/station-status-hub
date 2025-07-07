@@ -121,9 +121,9 @@ export function TestProgressTable({
     }
   };
 
-  // **支持雙向變化的即時系統狀態計算**
+  // **完全重寫：即時計算系統當前狀態**
   const calculateRealTimeSystemStatus = useCallback((systemId: string) => {
-    console.log(`=== 即時計算系統 ${systemId} 狀態（支持雙向變化）===`);
+    console.log(`=== 即時計算系統 ${systemId} 狀態 ===`);
     
     // 只考慮 Station 0-4
     const targetStations = filteredStations.filter(station => 
@@ -137,10 +137,9 @@ export function TestProgressTable({
     
     let totalItems = 0;
     let completedItems = 0;
-    let ongoingItems = 0;
-    let notStartedItems = 0;
+    let hasAnyStarted = false;
     
-    // 統計每個站點的所有測項狀態
+    // 檢查每個站點的所有測項
     for (const station of targetStations) {
       const stationItems = items.filter(item => item.station_id === station.id);
       
@@ -149,59 +148,45 @@ export function TestProgressTable({
         const itemProgress = getProgressForSystemItem(systemId, station.id, item.id);
         
         if (itemProgress) {
-          switch (itemProgress.status) {
-            case 'Done':
-              completedItems++;
-              break;
-            case 'On-going':
-              ongoingItems++;
-              break;
-            case 'Not Start':
-            default:
-              notStartedItems++;
-              break;
+          // 任何非 'Not Start' 的狀態都算已開始
+          if (itemProgress.status !== 'Not Start') {
+            hasAnyStarted = true;
           }
-        } else {
-          // 沒有進度記錄的項目視為未開始
-          notStartedItems++;
+          
+          // 只有 'Done' 狀態才算完成
+          if (itemProgress.status === 'Done') {
+            completedItems++;
+          }
         }
       }
     }
     
-    console.log(`系統 ${systemId} 狀態統計:`);
-    console.log(`- 總項目: ${totalItems}`);
-    console.log(`- 已完成: ${completedItems}`);
-    console.log(`- 進行中: ${ongoingItems}`);
-    console.log(`- 未開始: ${notStartedItems}`);
+    console.log(`系統 ${systemId} - 總項目: ${totalItems}, 完成項目: ${completedItems}, 有開始: ${hasAnyStarted}`);
     
-    // **支持雙向變化的嚴格狀態判斷邏輯**
+    // **嚴格的狀態判斷**
     let status: string;
     if (totalItems === 0) {
       status = '未開始';
     } else if (completedItems === totalItems && totalItems > 0) {
-      // 所有項目都完成 → 已完成
+      // 只有當所有項目都完成時才是「已完成」
       status = '已完成';
-    } else if (ongoingItems > 0 || completedItems > 0) {
-      // 有任何項目在進行中或已完成，但不是全部完成 → 進行中
+    } else if (hasAnyStarted) {
+      // 有任何項目開始但未全部完成就是「進行中」
       status = '進行中';
     } else {
-      // 所有項目都是未開始狀態 → 未開始
+      // 沒有任何項目開始就是「未開始」
       status = '未開始';
     }
     
     console.log(`系統 ${systemId} 最終狀態: ${status}`);
-    console.log(`狀態判斷依據: 完成率 ${Math.round((completedItems / totalItems) * 100)}%`);
-    
     return status;
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 使用 useMemo 確保狀態即時計算，支持雙向變化
+  // 使用 useMemo 確保狀態即時計算
   const systemStatuses = useMemo(() => {
     const statuses: Record<string, string> = {};
     filteredSystems.forEach(system => {
-      const calculatedStatus = calculateRealTimeSystemStatus(system.id);
-      statuses[system.id] = calculatedStatus;
-      console.log(`系統 ${system.system_name} 狀態更新: ${calculatedStatus}`);
+      statuses[system.id] = calculateRealTimeSystemStatus(system.id);
     });
     return statuses;
   }, [filteredSystems, calculateRealTimeSystemStatus, progress]); // 依賴 progress 確保即時更新
@@ -250,7 +235,7 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // **支持雙向變化的系統狀態自動更新邏輯**
+  // **系統狀態自動更新邏輯 - 確保即時同步**
   useEffect(() => {
     if (updateInProgress.current) {
       return;
@@ -258,64 +243,51 @@ export function TestProgressTable({
 
     const updateSystemStatus = async () => {
       updateInProgress.current = true;
-      console.log('=== 開始系統狀態自動更新（支持雙向變化）===');
+      console.log('=== 開始系統狀態自動更新 ===');
 
       try {
         const updates = [];
         
         for (const system of filteredSystems) {
           const calculatedStatus = systemStatuses[system.id];
-          const currentDbStatus = system.current_station;
+          const isComplete = calculatedStatus === '已完成';
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
           
-          console.log(`系統 ${system.system_name} 狀態檢查:`);
-          console.log(`- 資料庫當前狀態: "${currentDbStatus}"`);
+          console.log(`系統 ${system.system_name}:`);
+          console.log(`- 資料庫狀態: "${system.current_station}"`);
           console.log(`- 即時計算狀態: "${calculatedStatus}"`);
+          console.log(`- 是否完成: ${isComplete}`);
           
           let updatedFields: any = {};
           let needsUpdate = false;
           
-          // **支持雙向變化的當前站點狀態更新**
-          if (currentDbStatus !== calculatedStatus) {
+          // 當前站點狀態更新
+          if (system.current_station !== calculatedStatus) {
             updatedFields.current_station = calculatedStatus;
             needsUpdate = true;
-            console.log(`✓ 狀態變化檢測: "${currentDbStatus}" → "${calculatedStatus}"`);
-            
-            // 記錄變化方向
-            const statusOrder = { '未開始': 0, '進行中': 1, '已完成': 2 };
-            const currentOrder = statusOrder[currentDbStatus as keyof typeof statusOrder] ?? 0;
-            const newOrder = statusOrder[calculatedStatus as keyof typeof statusOrder] ?? 0;
-            
-            if (newOrder > currentOrder) {
-              console.log(`  → 正向變化（前進）`);
-            } else if (newOrder < currentOrder) {
-              console.log(`  → 反向變化（後退）`);
-            }
+            console.log(`需要更新當前站點: "${system.current_station}" → "${calculatedStatus}"`);
           }
           
-          // 系統狀態欄位更新
+          // 系統狀態更新
           const newStatus = calculatedStatus === '已完成' ? 'Done' : 
                            calculatedStatus === '未開始' ? 'Not Start' : 'On-going';
           if (system.status !== newStatus) {
             updatedFields.status = newStatus;
             needsUpdate = true;
-            console.log(`✓ 系統狀態更新: "${system.status}" → "${newStatus}"`);
+            console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
           }
           
-          // **實際完成時間的雙向處理**
-          const isComplete = calculatedStatus === '已完成';
+          // 實際完成時間處理
           if (isComplete && latestCompletionTime) {
-            // 狀態變為已完成時，設定實際完成時間
             if (!system.actual_completed_at) {
               updatedFields.actual_completed_at = latestCompletionTime;
               needsUpdate = true;
-              console.log(`✓ 設定實際完成時間: ${latestCompletionTime}`);
+              console.log(`設定實際完成時間: ${latestCompletionTime}`);
             }
           } else if (!isComplete && system.actual_completed_at) {
-            // **反向變化：狀態不再是已完成時，清除實際完成時間**
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
-            console.log(`✓ 反向變化：清除實際完成時間（狀態回退到 ${calculatedStatus}）`);
+            console.log(`清除實際完成時間`);
           }
           
           if (needsUpdate) {
@@ -329,7 +301,7 @@ export function TestProgressTable({
         
         // 執行批量更新
         if (updates.length > 0) {
-          console.log(`執行 ${updates.length} 個系統狀態更新...`);
+          console.log(`執行 ${updates.length} 個系統更新...`);
           
           for (const update of updates) {
             try {
@@ -339,15 +311,14 @@ export function TestProgressTable({
                 .eq('id', update.id);
 
               if (error) throw error;
-              console.log(`✓ 成功更新系統 ${update.name}`);
+              console.log(`成功更新系統 ${update.name}`);
             } catch (error) {
-              console.error(`✗ 更新系統 ${update.name} 失敗:`, error);
+              console.error(`更新系統 ${update.name} 失敗:`, error);
             }
           }
           
           // 觸發資料重新載入
           onSystemUpdate();
-          console.log('✓ 系統狀態更新完成，支持雙向變化');
         }
       } catch (error) {
         console.error('系統狀態更新錯誤:', error);
