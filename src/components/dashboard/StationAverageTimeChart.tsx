@@ -129,7 +129,7 @@ export function StationAverageTimeChart() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={chartData} 
-                layout="horizontalBar"
+                layout="horizontal"
                 margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
