@@ -1,17 +1,15 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Edit, Save, X, Trash2 } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
+import { Trash2, Edit2, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { TimeInputControls } from "./TimeInputControls";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TestItem {
   id: string;
@@ -74,337 +72,238 @@ export function ProgressEditDialog({
   systemId,
   stationId,
 }: ProgressEditDialogProps) {
-  const isMobile = useIsMobile();
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Helper function to format time for display
-  const formatTime = (timeStr?: string) => {
-    if (!timeStr) return '-';
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return '-';
-    }
+  // 自動時間記錄函數
+  const recordEditTime = () => {
+    const currentTime = new Date().toISOString();
+    console.log('Recording edit time:', currentTime);
+    
+    // 立即更新編輯時間，不等待存檔
+    setEditValues(prev => ({
+      ...prev,
+      // 如果是Station 0-4，自動記錄時間
+      ...(isStation0To4() && {
+        started_at: prev.started_at || (prev.status !== 'Not Start' ? currentTime : prev.started_at),
+        completed_at: prev.status === 'Done' ? currentTime : prev.completed_at
+      })
+    }));
   };
 
-  // Helper function to format datetime for input field
-  const formatDateTimeLocal = (timeStr?: string) => {
-    if (!timeStr) return '';
-    try {
-      const date = new Date(timeStr);
-      // Format as YYYY-MM-DDTHH:MM for datetime-local input
-      return date.toISOString().slice(0, 16);
-    } catch {
-      return '';
-    }
+  // 檢查是否為Station 0-4
+  const isStation0To4 = () => {
+    return stationName.includes('Station 0') || 
+           stationName.includes('Station 1') || 
+           stationName.includes('Station 2') || 
+           stationName.includes('Station 3') || 
+           stationName.includes('Station 4');
   };
 
-  // All stations can now edit start/end times
-  const canEditTimes = true;
+  // 處理狀態變更
+  const handleStatusChange = (newStatus: string) => {
+    setEditValues(prev => ({ ...prev, status: newStatus }));
+    recordEditTime();
+  };
+
+  // 處理進度變更
+  const handleProgressChange = (newProgress: number) => {
+    setEditValues(prev => ({ ...prev, progress_percent: newProgress }));
+    recordEditTime();
+  };
+
+  // 處理備註變更
+  const handleNotesChange = (newNotes: string) => {
+    setEditValues(prev => ({ ...prev, notes: newNotes }));
+    recordEditTime();
+  };
+
+  const completedItems = stationItems.filter(item => {
+    const prog = getProgressForSystemItem(systemId, stationId, item.id);
+    return prog?.status === 'Done';
+  });
+  
+  const overallPercent = stationItems.length > 0 
+    ? Math.round((completedItems.length / stationItems.length) * 100) 
+    : 0;
 
   return (
-    <MobileDialog>
-      <MobileDialogTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size={isMobile ? "default" : "sm"}
-          className={isMobile ? "h-10 px-4" : ""}
-        >
-          <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-          {isMobile && "編輯"}
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 px-2">
+          <Edit2 className="h-3 w-3" />
         </Button>
-      </MobileDialogTrigger>
-      <MobileDialogContent className={isMobile ? "max-w-none" : "max-w-4xl"}>
-        <MobileDialogHeader>
-          <MobileDialogTitle>
-            {systemName} - {stationName} 詳細進度
-          </MobileDialogTitle>
-        </MobileDialogHeader>
-        <div className={cn("space-y-4", isMobile && "space-y-6")}>
-          {stationItems.map(item => {
-            const itemProgress = getProgressForSystemItem(systemId, stationId, item.id);
-            const editKey = `${systemId}-${stationId}-${item.id}`;
-            const isEditing = editingProgress === editKey;
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="text-lg">
+            {systemName} - {stationName} 測試項目編輯
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {/* 總體進度顯示 */}
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold">總體進度</h4>
+              <span className="text-sm text-muted-foreground">
+                {completedItems.length}/{stationItems.length} 項目完成
+              </span>
+            </div>
+            <Progress value={overallPercent} className="h-3" />
+            <div className="text-center mt-2 font-medium">{overallPercent}%</div>
+          </div>
 
-            return (
-              <div key={item.id} className={cn(
-                "border rounded-lg p-4",
-                isMobile && "border-2 p-6 rounded-xl"
-              )}>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className={cn(
-                    "font-medium",
-                    isMobile && "text-lg font-semibold"
-                  )}>{item.item_name}</h4>
-                  <div className="flex gap-2">
-                    {isEditing ? (
-                      <>
-                        <Button 
-                          size={isMobile ? "default" : "sm"}
-                          className={isMobile ? "h-10 px-4" : ""}
-                          disabled={isSaving}
-                          onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                              await handleSaveProgress(systemId, stationId, item.id);
-                              toast({
-                                title: "儲存成功",
-                                description: `${item.item_name} 的測試進度已更新`,
-                              });
-                            } catch (error) {
-                              toast({
-                                title: "儲存失敗",
-                                description: "請稍後再試",
-                                variant: "destructive",
-                              });
-                            } finally {
-                              setIsSaving(false);
-                            }
-                          }}
-                        >
-                          <Save className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                          {isMobile && (isSaving ? "儲存中..." : "儲存")}
-                        </Button>
-                        <Button 
-                          size={isMobile ? "default" : "sm"}
-                          variant="outline"
-                          className={isMobile ? "h-10 px-4" : ""}
-                          onClick={() => setEditingProgress(null)}
-                        >
-                          <X className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                          {isMobile && "取消"}
-                        </Button>
-                        {itemProgress && (
-                          <Button 
-                            size={isMobile ? "default" : "sm"}
-                            variant="destructive"
-                            className={isMobile ? "h-10 px-4" : ""}
-                            onClick={() => {
-                              if (confirm("確定要刪除這筆測試進度記錄嗎？")) {
-                                handleDeleteProgress(systemId, stationId, item.id);
-                                setEditingProgress(null);
-                              }
-                            }}
-                          >
-                            <Trash2 className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                            {isMobile && "刪除"}
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Button 
-                          size={isMobile ? "default" : "sm"}
-                          variant="outline"
-                          className={isMobile ? "h-10 px-4" : ""}
-                          onClick={() => handleEditProgress(systemId, stationId, item.id)}
-                        >
-                          <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                          {isMobile && "編輯"}
-                        </Button>
-                        {itemProgress && (
-                          <Button 
-                            size={isMobile ? "default" : "sm"}
-                            variant="destructive"
-                            className={isMobile ? "h-10 px-4" : ""}
-                            onClick={() => {
-                              if (confirm("確定要刪除這筆測試進度記錄嗎？")) {
-                                handleDeleteProgress(systemId, stationId, item.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-                            {isMobile && "刪除"}
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-                
-                {isEditing ? (
-                  <div className={cn("space-y-3", isMobile && "space-y-6")}>
-                    <div>
-                      <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>狀態</Label>
-                      <Select 
-                        value={editValues.status} 
-                        onValueChange={(value) => {
-                          const now = new Date().toISOString();
-                          const newValues = { ...editValues, status: value };
-                          
-                          // Auto-set times based on status
-                          if (value === "On-going" && !editValues.started_at) {
-                            newValues.started_at = now;
-                          }
-                          if (value === "Done") {
-                            if (!editValues.started_at) {
-                              newValues.started_at = now;
-                            }
-                            if (!editValues.completed_at) {
-                              newValues.completed_at = now;
-                            }
-                            newValues.progress_percent = 100;
-                          }
-                          if (value === "Not Start") {
-                            newValues.started_at = undefined;
-                            newValues.completed_at = undefined;
-                            newValues.progress_percent = 0;
-                          }
-                          
-                          setEditValues(newValues);
-                        }}
-                      >
-                        <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Not Start" className={isMobile ? "h-12 text-base" : ""}>未開始</SelectItem>
-                          <SelectItem value="On-going" className={isMobile ? "h-12 text-base" : ""}>進行中</SelectItem>
-                          <SelectItem value="Done" className={isMobile ? "h-12 text-base" : ""}>已完成</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className={isMobile ? "text-base font-medium mb-3 block" : ""}>完成度</Label>
-                      <div className={cn("flex gap-2 mt-2", isMobile && "gap-4")}>
-                        <Button
-                          type="button"
-                          variant={editValues.progress_percent === 0 ? "default" : "outline"}
-                          className={cn("flex-1", isMobile && "h-12 text-base font-semibold")}
-                          onClick={() => setEditValues({
-                            ...editValues, 
-                            progress_percent: 0,
-                            status: "Not Start"
-                          })}
-                        >
-                          0%
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={editValues.progress_percent === 100 ? "default" : "outline"}
-                          className={cn("flex-1", isMobile && "h-12 text-base font-semibold")}
-                          onClick={() => setEditValues({
-                            ...editValues, 
-                            progress_percent: 100,
-                            status: "Done"
-                          })}
-                        >
-                          100%
-                        </Button>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>備註</Label>
-                      <Textarea
-                        value={editValues.notes}
-                        onChange={(e) => setEditValues({...editValues, notes: e.target.value})}
-                        placeholder="測試備註..."
-                        className={isMobile ? "min-h-[100px] text-base resize-none" : ""}
-                      />
-                    </div>
-                    
-                    {/* Time fields with improved UX */}
-                    {canEditTimes && (
-                      <>
-                        <TimeInputControls
-                          label="開始時間"
-                          value={editValues.started_at}
-                          onChange={(value) => {
-                            const newValues = { ...editValues, started_at: value };
-                            
-                            // Validation: if completed_at exists and is earlier than new start time, clear it
-                            if (value && editValues.completed_at && new Date(value) > new Date(editValues.completed_at)) {
-                              newValues.completed_at = undefined;
-                            }
-                            
-                            setEditValues(newValues);
-                          }}
-                          isMobile={isMobile}
-                        />
-                        <TimeInputControls
-                          label="完成時間"
-                          value={editValues.completed_at}
-                          minValue={editValues.started_at}
-                          onChange={(value) => {
-                            setEditValues({
-                              ...editValues, 
-                              completed_at: value
-                            });
-                          }}
-                          disabled={!editValues.started_at}
-                          isMobile={isMobile}
-                        />
-                        {!editValues.started_at && (
-                          <p className="text-xs text-muted-foreground">請先設定開始時間</p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className={cn("space-y-2", isMobile && "space-y-3")}>
-                    <div className="flex items-center gap-2">
-                      <Badge className={cn(
-                        getStatusColor(itemProgress?.status || 'Not Start'),
-                        isMobile && "text-sm px-3 py-1"
-                      )}>
-                        {itemProgress?.status || 'Not Start'}
-                      </Badge>
-                      <span className={cn(
-                        "text-sm text-muted-foreground",
-                        isMobile && "text-base font-medium"
-                      )}>
-                        {itemProgress?.progress_percent || 0}%
-                      </span>
-                    </div>
-                    <Progress 
-                      value={itemProgress?.progress_percent || 0} 
-                      className={cn("h-2", isMobile && "h-3")} 
-                    />
-                    {itemProgress?.notes && (
-                      <p className={cn(
-                        "text-sm text-muted-foreground",
-                        isMobile && "text-base"
-                      )}>
-                        備註: {itemProgress.notes}
-                      </p>
-                    )}
-                    
-                    {/* Show time info for all stations */}
-                    {canEditTimes && (itemProgress?.started_at || itemProgress?.completed_at) && (
-                      <div className="mt-2 pt-2 border-t space-y-1">
-                        {itemProgress?.started_at && (
-                          <p className={cn(
-                            "text-xs text-muted-foreground",
-                            isMobile && "text-sm"
-                          )}>
-                            開始: {formatTime(itemProgress.started_at)}
-                          </p>
-                        )}
-                        {itemProgress?.completed_at && (
-                          <p className={cn(
-                            "text-xs text-muted-foreground",
-                            isMobile && "text-sm"
-                          )}>
-                            完成: {formatTime(itemProgress.completed_at)}
+          {/* 測試項目列表 - 使用ScrollArea改善顯示 */}
+          <ScrollArea className="h-[400px] w-full rounded-md border">
+            <div className="p-4 space-y-4">
+              {stationItems.map((item) => {
+                const itemProgress = getProgressForSystemItem(systemId, stationId, item.id);
+                const editKey = `${systemId}-${stationId}-${item.id}`;
+                const isEditing = editingProgress === editKey;
+
+                return (
+                  <div key={item.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium">{item.item_name}</h5>
+                        {item.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {item.description}
                           </p>
                         )}
                       </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusColor(itemProgress?.status || 'Not Start')}>
+                          {itemProgress?.status || 'Not Start'}
+                        </Badge>
+                        
+                        {!isEditing ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditProgress(systemId, stationId, item.id)}
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSaveProgress(systemId, stationId, item.id)}
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingProgress(null)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                            {itemProgress && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteProgress(systemId, stationId, item.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {isEditing && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-muted/50 rounded-lg">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">狀態</label>
+                          <Select 
+                            value={editValues.status} 
+                            onValueChange={handleStatusChange}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Not Start">Not Start</SelectItem>
+                              <SelectItem value="On-going">On-going</SelectItem>
+                              <SelectItem value="Done">Done</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">進度 (%)</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={editValues.progress_percent}
+                            onChange={(e) => handleProgressChange(Number(e.target.value))}
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 space-y-2">
+                          <label className="text-sm font-medium">備註</label>
+                          <Textarea
+                            value={editValues.notes}
+                            onChange={(e) => handleNotesChange(e.target.value)}
+                            placeholder="輸入測試備註..."
+                            rows={3}
+                          />
+                        </div>
+
+                        {/* 時間顯示 */}
+                        {(editValues.started_at || editValues.completed_at) && (
+                          <div className="md:col-span-2 space-y-2">
+                            <label className="text-sm font-medium">時間記錄</label>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">開始時間: </span>
+                                <span>{editValues.started_at ? new Date(editValues.started_at).toLocaleString('zh-TW') : '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">完成時間: </span>
+                                <span>{editValues.completed_at ? new Date(editValues.completed_at).toLocaleString('zh-TW') : '-'}</span>
+                              </div>
+                            </div>
+                            {isStation0To4() && (
+                              <div className="text-xs text-muted-foreground">
+                                * Station 0-4 的時間將自動記錄
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 進度條 */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>進度</span>
+                        <span>{itemProgress?.progress_percent || 0}%</span>
+                      </div>
+                      <Progress value={itemProgress?.progress_percent || 0} className="h-2" />
+                    </div>
+
+                    {/* 備註顯示 */}
+                    {itemProgress?.notes && !isEditing && (
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium">備註: </span>
+                        {itemProgress.notes}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </ScrollArea>
         </div>
-      </MobileDialogContent>
-    </MobileDialog>
+      </DialogContent>
+    </Dialog>
   );
 }
