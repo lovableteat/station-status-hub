@@ -10,44 +10,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useCallback, useMemo } from "react";
-import { SystemStatusCalculator } from "./SystemStatusCalculator";
+import { SystemStatusCalculator, TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 import { SystemStatusUpdater } from "./SystemStatusUpdater";
-
-interface TestSystem {
-  id: string;
-  system_name: string;
-  assigned_engineer: string;
-  current_station: string;
-  overall_progress: number;
-  status: string;
-  actual_completed_at?: string;
-}
-
-interface TestStation {
-  id: string;
-  station_name: string;
-  station_order: number;
-}
-
-interface TestItem {
-  id: string;
-  station_id: string;
-  item_name: string;
-  item_order: number;
-  description: string;
-}
-
-interface TestProgress {
-  id: string;
-  system_id: string;
-  station_id: string;
-  item_id: string;
-  status: string;
-  progress_percent: number;
-  notes: string;
-  started_at?: string;
-  completed_at?: string;
-}
 
 interface TestProgressTableProps {
   filteredSystems: TestSystem[];
@@ -286,6 +250,7 @@ export function TestProgressTable({
                       {currentStation}
                     </Badge>
                   </div>
+                  
                   
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>

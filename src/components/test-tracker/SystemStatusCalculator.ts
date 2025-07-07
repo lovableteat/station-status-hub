@@ -1,5 +1,38 @@
 
-import { TestSystem, TestStation, TestItem, TestProgress } from "../TestTracker";
+export interface TestSystem {
+  id: string;
+  system_name: string;
+  assigned_engineer: string;
+  current_station: string;
+  overall_progress: number;
+  status: string;
+}
+
+export interface TestStation {
+  id: string;
+  station_name: string;
+  station_order: number;
+}
+
+export interface TestItem {
+  id: string;
+  station_id: string;
+  item_name: string;
+  item_order: number;
+  description: string;
+}
+
+export interface TestProgress {
+  id: string;
+  system_id: string;
+  station_id: string;
+  item_id: string;
+  status: string;
+  progress_percent: number;
+  notes: string;
+  started_at?: string;
+  completed_at?: string;
+}
 
 export interface SystemStatusResult {
   currentStation: string;
