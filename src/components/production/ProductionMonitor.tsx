@@ -1,4 +1,3 @@
-
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,32 +53,28 @@ export function ProductionMonitor() {
     }
   }, []);
 
-  // Enhanced status color mapping
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-      case 'working': return 'bg-green-500 text-white animate-pulse';
-      case 'complete': return 'bg-blue-500 text-white';
-      case 'idle': return 'bg-yellow-500 text-white';
-      case 'warning': return 'bg-orange-500 text-white';
-      case 'error': return 'bg-red-500 text-white';
-      case 'offline': return 'bg-gray-500 text-white';
-      default: return 'bg-gray-400 text-white';
-    }
+  // Enhanced status color mapping based on progress
+  const getStatusColor = (overallProgress: number, hasError: boolean) => {
+    if (hasError) return 'bg-red-500 text-white';
+    if (overallProgress === 100) return 'bg-green-500 text-white';
+    if (overallProgress >= 1 && overallProgress <= 99) return 'bg-yellow-500 text-white';
+    return 'bg-gray-500 text-white'; // 未開始 (0%)
   };
 
-  // Enhanced status icon mapping
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'running':
-      case 'working': return <PlayCircle className="h-4 w-4" />;
-      case 'complete': return <CheckCircle className="h-4 w-4" />;
-      case 'idle': return <Pause className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4" />;
-      case 'error': return <AlertTriangle className="h-4 w-4" />;
-      case 'offline': return <WifiOff className="h-4 w-4" />;
-      default: return <Monitor className="h-4 w-4" />;
-    }
+  // Enhanced status icon mapping based on progress
+  const getStatusIcon = (overallProgress: number, hasError: boolean) => {
+    if (hasError) return <AlertTriangle className="h-4 w-4" />;
+    if (overallProgress === 100) return <CheckCircle className="h-4 w-4" />;
+    if (overallProgress >= 1 && overallProgress <= 99) return <PlayCircle className="h-4 w-4" />;
+    return <Pause className="h-4 w-4" />; // 未開始
+  };
+
+  // Get status text based on progress
+  const getStatusText = (overallProgress: number, hasError: boolean) => {
+    if (hasError) return '異常';
+    if (overallProgress === 100) return '已完成';
+    if (overallProgress >= 1 && overallProgress <= 99) return '進行中';
+    return '未開始';
   };
 
   // Get current test item for a system at a station
@@ -144,9 +139,9 @@ export function ProductionMonitor() {
     
     let status: "running" | "idle" | "error" | "offline" = "idle";
     if (hasError) status = "error";
-    else if (hasOngoing) status = "running";
-    else if (overallProgress === 100) status = "idle"; // Complete but available
-    else status = "idle";
+    else if (overallProgress >= 1 && overallProgress <= 99) status = "running"; // 進行中
+    else if (overallProgress === 100) status = "idle"; // 已完成但可用
+    else status = "offline"; // 未開始
 
     // Get current station info
     const currentStationName = system.current_station || 'Station 0';
@@ -217,6 +212,7 @@ export function ProductionMonitor() {
     }
 
     const systemOverallProgress = calculateOverallProgress(system.id);
+    const hasSystemError = progress.some(p => p.system_id === system.id && p.status === 'Error');
 
     return (
       <div className="p-6 space-y-6">
@@ -232,9 +228,9 @@ export function ProductionMonitor() {
               <p className="text-muted-foreground">即時測試進度 - 當前站點: {system.current_station}</p>
             </div>
           </div>
-          <Badge className={getStatusColor(system.status)} variant="outline">
-            <Play className="h-3 w-3 mr-1" />
-            {system.status === 'Done' ? '已完成' : system.status === 'On-going' ? '進行中' : '未開始'}
+          <Badge className={getStatusColor(systemOverallProgress, hasSystemError)} variant="outline">
+            {getStatusIcon(systemOverallProgress, hasSystemError)}
+            <span className="ml-1">{getStatusText(systemOverallProgress, hasSystemError)}</span>
           </Badge>
         </div>
 
@@ -270,7 +266,7 @@ export function ProductionMonitor() {
                         isActive ? 'bg-primary text-primary-foreground animate-pulse' :
                         isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
                       }`}>
-                        {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
+                        {getStatusIcon(stationProgress, false)}
                       </div>
                       <h3 className="font-medium text-sm">{station.name}</h3>
                       
@@ -395,102 +391,110 @@ export function ProductionMonitor() {
 
       {/* Enhanced Machine Status Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {machineStatuses.map((machine) => (
-          <Card key={machine.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
-            <CardContent className="p-6">
-              {/* Status Indicator */}
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-full ${getStatusColor(machine.status)}`}>
-                  {getStatusIcon(machine.status)}
+        {machineStatuses.map((machine) => {
+          const overallProgress = calculateOverallProgress(machine.id);
+          const hasError = progress.some(p => p.system_id === machine.id && p.status === 'Error');
+          
+          return (
+            <Card key={machine.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
+              <CardContent className="p-6">
+                {/* Status Indicator */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-3 rounded-full ${getStatusColor(overallProgress, hasError)}`}>
+                    {getStatusIcon(overallProgress, hasError)}
+                  </div>
+                  <Badge variant="outline" className={getStatusColor(overallProgress, hasError)}>
+                    {getStatusText(overallProgress, hasError)}
+                  </Badge>
                 </div>
-                <Badge variant="outline" className={getStatusColor(machine.status)}>
-                  {machine.status === 'running' ? '運行中' : 
-                   machine.status === 'idle' ? '閒置' :
-                   machine.status === 'error' ? '異常' : '離線'}
-                </Badge>
-              </div>
-              
-              <h3 className="font-semibold text-lg mb-2">{machine.name}</h3>
-              
-              {/* Current Status Info */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">目前站別:</span>
-                  <span className="font-medium">{machine.currentStation}</span>
+                
+                <h3 className="font-semibold text-lg mb-2">{machine.name}</h3>
+                
+                {/* Current Status Info */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">目前站別:</span>
+                    <span className="font-medium">{machine.currentStation}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">目前測項:</span>
+                    <span className="font-medium text-xs">{machine.currentTestItem}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">目前測項:</span>
-                  <span className="font-medium text-xs">{machine.currentTestItem}</span>
-                </div>
-              </div>
 
-              {/* Station Progress Overview */}
-              <div className="space-y-2 mb-4">
-                <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤</h4>
-                <div className="grid grid-cols-5 gap-1">
-                  {[
-                    { name: 'S0', progress: machine.stationProgress.station0 },
-                    { name: 'S1', progress: machine.stationProgress.station1 },
-                    { name: 'S2', progress: machine.stationProgress.station2 },
-                    { name: 'S3', progress: machine.stationProgress.station3 },
-                    { name: 'S4', progress: machine.stationProgress.station4 },
-                  ].map((station, index) => (
-                    <div key={index} className="text-center">
-                      <div className="text-xs text-muted-foreground mb-1">{station.name}</div>
-                      <div className={`h-2 rounded-full ${
-                        station.progress === 100 ? 'bg-success' :
-                        station.progress > 0 ? 'bg-warning' : 'bg-muted'
-                      }`} />
-                      <div className="text-xs mt-1">{station.progress}%</div>
-                    </div>
-                  ))}
+                {/* Station Progress Overview */}
+                <div className="space-y-2 mb-4">
+                  <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤</h4>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[
+                      { name: 'S0', progress: machine.stationProgress.station0 },
+                      { name: 'S1', progress: machine.stationProgress.station1 },
+                      { name: 'S2', progress: machine.stationProgress.station2 },
+                      { name: 'S3', progress: machine.stationProgress.station3 },
+                      { name: 'S4', progress: machine.stationProgress.station4 },
+                    ].map((station, index) => (
+                      <div key={index} className="text-center">
+                        <div className="text-xs text-muted-foreground mb-1">{station.name}</div>
+                        <div className={`h-2 rounded-full ${
+                          station.progress === 100 ? 'bg-green-500' :
+                          station.progress >= 1 ? 'bg-yellow-500' : 'bg-gray-500'
+                        }`} />
+                        <div className="text-xs mt-1">{station.progress}%</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              
-              {/* Overall Progress */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">整體進度:</span>
-                  <span className="font-medium">{calculateOverallProgress(machine.id)}%</span>
+                
+                {/* Overall Progress */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">整體進度:</span>
+                    <span className="font-medium">{overallProgress}%</span>
+                  </div>
+                  <Progress value={overallProgress} className="h-2" />
                 </div>
-                <Progress value={calculateOverallProgress(machine.id)} className="h-2" />
-              </div>
-              
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => setFocusedSystem(machine.name)}
-                >
-                  查看詳情
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    const event = new CustomEvent('navigate', { 
-                      detail: { 
-                        module: 'issues', 
-                        params: { system: machine.name } 
-                      } 
-                    });
-                    window.dispatchEvent(event);
-                  }}
-                >
-                  <Bug className="h-4 w-4" />
-                </Button>
-              </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => setFocusedSystem(machine.name)}
+                  >
+                    查看詳情
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const event = new CustomEvent('navigate', { 
+                        detail: { 
+                          module: 'issues', 
+                          params: { system: machine.name } 
+                        } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <Bug className="h-4 w-4" />
+                  </Button>
+                </div>
 
-              {/* Status indicator animation */}
-              {machine.status === 'running' && (
-                <div className="absolute top-2 right-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                {/* Status indicator animation */}
+                {overallProgress >= 1 && overallProgress <= 99 && !hasError && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                  </div>
+                )}
+                {overallProgress === 100 && !hasError && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {showProductionHistory && <ProductionHistory />}
