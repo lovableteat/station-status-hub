@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
@@ -8,6 +9,7 @@ import { MachineTable } from "./MachineTable";
 import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
+import { StationAverageTimeChart } from "./StationAverageTimeChart";
 import { ExportDialog } from "@/components/production/ExportDialog";
 import { BackButton } from "@/components/common/BackButton";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -109,6 +111,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           variant="default"
         />
       </div>
+
+      {/* Station Average Time Chart */}
+      <StationAverageTimeChart />
 
       {/* Charts Section */}
       <Card>
