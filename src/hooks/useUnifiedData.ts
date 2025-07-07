@@ -94,7 +94,7 @@ export function useUnifiedData() {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           loadAllData();
-        }, 500); // 500ms debounce
+        }, 300); // 減少延遲時間以更快響應
       };
     })(),
     []
@@ -160,20 +160,20 @@ export function useUnifiedData() {
           });
       }
 
-      // Use debounced reload to prevent excessive API calls
-      debouncedReload();
+      // 立即重新載入資料以確保UI更新
+      await loadAllData();
       
       return true;
     } catch (error) {
       console.error('Error updating progress:', error);
       return false;
     }
-  }, [progress, debouncedReload]);
+  }, [progress, loadAllData]);
 
   useEffect(() => {
     loadAllData();
     
-    // Set up real-time updates with debouncing
+    // Set up real-time updates with more responsive handling
     const channel = supabase
       .channel('unified-data-changes')
       .on(
@@ -185,7 +185,7 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test progress updated, reloading data...');
-          debouncedReload();
+          loadAllData(); // 直接調用以確保立即更新
         }
       )
       .on(
@@ -197,7 +197,7 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test systems updated, reloading data...');
-          debouncedReload();
+          loadAllData(); // 直接調用以確保立即更新
         }
       )
       .on(
