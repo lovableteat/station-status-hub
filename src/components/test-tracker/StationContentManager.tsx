@@ -1,14 +1,12 @@
-
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Save, Target, Wrench, Settings, FileText } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface StationContent {
@@ -26,13 +24,6 @@ interface StationContentManagerProps {
   onDataChange: () => void;
 }
 
-const CONTENT_TYPES = [
-  { value: "purpose", label: "各站目的", icon: Target },
-  { value: "procedure", label: "測試程序", icon: Settings },
-  { value: "equipment", label: "所需設備", icon: Wrench },
-  { value: "notes", label: "備註", icon: FileText }
-];
-
 export function StationContentManager({ stationId, stationName, contents, onDataChange }: StationContentManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<StationContent | null>(null);
@@ -43,43 +34,11 @@ export function StationContentManager({ stationId, stationName, contents, onData
   });
   const { toast } = useToast();
 
-  // Initialize default content types if they don't exist
-  useEffect(() => {
-    const initializeDefaultContent = async () => {
-      const existingTitles = contents.map(c => c.title);
-      const missingTypes = CONTENT_TYPES.filter(type => !existingTitles.includes(type.label));
-      
-      if (missingTypes.length > 0) {
-        try {
-          const defaultContents = missingTypes.map((type, index) => ({
-            title: type.label,
-            content: `請編輯 ${type.label} 內容...`,
-            order_num: CONTENT_TYPES.findIndex(t => t.value === type.value) + 1,
-            station_id: stationId
-          }));
-
-          const { error } = await supabase
-            .from('station_contents')
-            .insert(defaultContents);
-          
-          if (error) throw error;
-          onDataChange();
-        } catch (error) {
-          console.error('Error initializing default content:', error);
-        }
-      }
-    };
-
-    if (stationId && contents.length === 0) {
-      initializeDefaultContent();
-    }
-  }, [stationId, contents.length, onDataChange]);
-
   const handleSave = async () => {
     try {
       if (editingContent) {
         // Update existing content
-        const { error } = await supabase
+        await supabase
           .from('station_contents')
           .update({
             title: formData.title,
@@ -88,11 +47,10 @@ export function StationContentManager({ stationId, stationName, contents, onData
           })
           .eq('id', editingContent.id);
         
-        if (error) throw error;
         toast({ title: "更新成功", description: "內容已更新" });
       } else {
         // Create new content
-        const { error } = await supabase
+        await supabase
           .from('station_contents')
           .insert({
             title: formData.title,
@@ -101,7 +59,6 @@ export function StationContentManager({ stationId, stationName, contents, onData
             station_id: stationId
           });
         
-        if (error) throw error;
         toast({ title: "新增成功", description: "內容已新增" });
       }
       
@@ -120,12 +77,11 @@ export function StationContentManager({ stationId, stationName, contents, onData
 
   const handleDelete = async (contentId: string) => {
     try {
-      const { error } = await supabase
+      await supabase
         .from('station_contents')
         .delete()
         .eq('id', contentId);
       
-      if (error) throw error;
       toast({ title: "刪除成功", description: "內容已刪除" });
       onDataChange();
     } catch (error) {
@@ -161,57 +117,95 @@ export function StationContentManager({ stationId, stationName, contents, onData
     setIsDialogOpen(true);
   };
 
-  const getContentTypeIcon = (title: string) => {
-    const contentType = CONTENT_TYPES.find(type => type.label === title);
-    if (contentType) {
-      const IconComponent = contentType.icon;
-      return <IconComponent className="h-4 w-4" />;
-    }
-    return <FileText className="h-4 w-4" />;
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h4 className="font-medium">{stationName} - 詳細內容</h4>
-        <Button size="sm" onClick={openAddDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          新增內容
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" onClick={openAddDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              新增內容
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingContent ? '編輯內容' : '新增內容'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>標題</Label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="請輸入內容標題"
+                />
+              </div>
+              
+              <div>
+                <Label>內容</Label>
+                <Textarea
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  placeholder="請輸入詳細內容"
+                  rows={6}
+                />
+              </div>
+              
+              <div>
+                <Label>排序</Label>
+                <Input
+                  type="number"
+                  value={formData.order_num}
+                  onChange={(e) => setFormData({ ...formData, order_num: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  取消
+                </Button>
+                <Button onClick={handleSave}>
+                  <Save className="h-4 w-4 mr-2" />
+                  儲存
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-3">
         {contents
           .sort((a, b) => a.order_num - b.order_num)
           .map(content => (
-            <Card key={content.id} className="relative">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  {getContentTypeIcon(content.title)}
-                  {content.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-sm text-muted-foreground whitespace-pre-wrap mb-3">
-                  {content.content}
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => openEditDialog(content)}
-                    className="flex-1"
-                  >
-                    <Edit className="h-4 w-4 mr-1" />
-                    編輯
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDelete(content.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+            <Card key={content.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h5 className="font-medium mb-2">{content.title}</h5>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {content.content}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 ml-4">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => openEditDialog(content)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDelete(content.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -219,93 +213,11 @@ export function StationContentManager({ stationId, stationName, contents, onData
         }
         
         {contents.length === 0 && (
-          <div className="col-span-2 text-center py-8 text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>此站點尚無詳細內容</p>
-            <p className="text-sm">點擊「新增內容」開始建立站點資訊</p>
+          <div className="text-center py-8 text-muted-foreground">
+            此站點尚無詳細內容
           </div>
         )}
       </div>
-
-      {/* Content Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingContent ? '編輯內容' : '新增內容'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>內容類型</Label>
-              {editingContent ? (
-                <Input
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="請輸入內容標題"
-                />
-              ) : (
-                <Select 
-                  value={formData.title} 
-                  onValueChange={(value) => {
-                    const contentType = CONTENT_TYPES.find(type => type.label === value);
-                    setFormData({ 
-                      ...formData, 
-                      title: value,
-                      order_num: contentType ? CONTENT_TYPES.findIndex(t => t.label === value) + 1 : 1
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="選擇內容類型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONTENT_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.label}>
-                        <div className="flex items-center gap-2">
-                          <type.icon className="h-4 w-4" />
-                          {type.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            
-            <div>
-              <Label>內容</Label>
-              <Textarea
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="請輸入詳細內容"
-                rows={8}
-                className="resize-none"
-              />
-            </div>
-            
-            <div>
-              <Label>排序</Label>
-              <Input
-                type="number"
-                value={formData.order_num}
-                onChange={(e) => setFormData({ ...formData, order_num: parseInt(e.target.value) || 1 })}
-                min="1"
-              />
-            </div>
-            
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={handleSave}>
-                <Save className="h-4 w-4 mr-2" />
-                儲存
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
