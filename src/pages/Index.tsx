@@ -3,7 +3,6 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { FlowInfo } from "@/components/test-tracker/FlowInfo";
-import { MachineTimeline } from "@/components/machine-timeline/MachineTimeline";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
@@ -56,8 +55,6 @@ const Index = () => {
         return <TestTracker />;
       case "flow-info":
         return <FlowInfo />;
-      case "machine-timeline":
-        return <MachineTimeline />;
       case "monitor":
         return <ProductionMonitor />;
       case "issues":

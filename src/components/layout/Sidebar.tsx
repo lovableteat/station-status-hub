@@ -12,8 +12,7 @@ import {
   Home,
   ListChecks,
   FileText,
-  Users,
-  Clock
+  Users
 } from "lucide-react";
 
 interface SidebarProps {
@@ -28,7 +27,6 @@ const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
   { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
   { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
-  { id: "machine-timeline", label: "機台時間軸", icon: Clock, description: "時間軸視圖" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
