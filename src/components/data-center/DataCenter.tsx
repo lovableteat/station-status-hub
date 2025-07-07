@@ -30,7 +30,7 @@ interface TestRecord {
 }
 
 export function DataCenter() {
-  const { systems, stations, testItems, progress, isLoading } = useUnifiedData();
+  const { systems, stations, testItems, progress, isLoading, refetch } = useUnifiedData();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("all-engineers");
   const [filterStatus, setFilterStatus] = useState("all-status");
@@ -39,6 +39,20 @@ export function DataCenter() {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
   const { toast } = useToast();
+
+  // 監聽 systems 變化，當資料重置時自動重新載入
+  useEffect(() => {
+    const handleDataReset = () => {
+      refetch();
+    };
+
+    // 監聽自定義事件
+    window.addEventListener('dataReset', handleDataReset);
+    
+    return () => {
+      window.removeEventListener('dataReset', handleDataReset);
+    };
+  }, [refetch]);
 
   // Convert unified data to test records format
   const generateRecords = (): TestRecord[] => {
