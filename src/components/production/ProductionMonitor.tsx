@@ -1,3 +1,4 @@
+
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -102,8 +103,8 @@ export function ProductionMonitor() {
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
+          <div className="grid grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="h-48 bg-muted rounded"></div>
             ))}
           </div>
@@ -163,7 +164,7 @@ export function ProductionMonitor() {
           </Badge>
         </div>
 
-        {/* Video-style Station Flow */}
+        {/* Video-style Station Flow - Changed to 5 columns */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -172,7 +173,7 @@ export function ProductionMonitor() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               {stations.map((station, index) => {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
@@ -306,8 +307,8 @@ export function ProductionMonitor() {
         </div>
       </div>
 
-      {/* Stations Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stations Grid - Changed to 5 columns for Station 0-4 display */}
+      <div className="grid grid-cols-5 gap-6">
         {stations.map((station) => (
           <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
             <CardContent className="p-6">
