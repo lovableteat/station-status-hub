@@ -329,7 +329,7 @@ export function FlowInfo() {
           })
           .eq('id', editingNewStation.id);
 
-        toast({ title: "更新成功", description: "測試站點已更新" });
+        toast({ title: "更新成功", description: "測試站點已更新，測試進度表將自動更新" });
       } else {
         // Add new station
         await supabase
@@ -341,7 +341,7 @@ export function FlowInfo() {
             estimated_hours: newStationForm.estimated_hours
           });
 
-        toast({ title: "新增成功", description: "測試站點已新增" });
+        toast({ title: "新增成功", description: "測試站點已新增，測試進度表將自動更新" });
       }
 
       setIsNewStationDialogOpen(false);

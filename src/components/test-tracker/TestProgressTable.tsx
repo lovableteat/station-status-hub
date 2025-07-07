@@ -99,10 +99,8 @@ export function TestProgressTable({
     }
   };
   
-  // Filter stations to only show Station 0-3
-  const filteredStations = stations.filter(station => 
-    station.station_order >= 0 && station.station_order <= 3
-  );
+  // Show all stations ordered by station_order
+  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
   // Helper function to format time
   const formatTime = (timeStr?: string) => {

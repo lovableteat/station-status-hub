@@ -174,7 +174,7 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test progress updated, reloading data...');
-          debouncedReload(); // Use debounced reload
+          debouncedReload();
         }
       )
       .on(
@@ -186,7 +186,31 @@ export function useUnifiedData() {
         },
         () => {
           console.log('Test systems updated, reloading data...');
-          debouncedReload(); // Use debounced reload
+          debouncedReload();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'test_flow_stations'
+        },
+        () => {
+          console.log('Test flow stations updated, reloading data...');
+          debouncedReload();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'test_flow_items'
+        },
+        () => {
+          console.log('Test flow items updated, reloading data...');
+          debouncedReload();
         }
       )
       .subscribe();
