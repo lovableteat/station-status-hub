@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,6 +136,30 @@ export function TestProgressTable({
     });
   };
 
+  // Get current station for a system (修正邏輯：找到第一個未完成的站點，如果全部完成則顯示"已完成")
+  const getCurrentStation = (systemId: string) => {
+    const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
+    
+    // 找第一個未完成的站點
+    for (const station of stations0To4) {
+      const stationItems = items.filter(item => item.station_id === station.id);
+      if (stationItems.length === 0) continue; // 跳過沒有測試項目的站點
+      
+      const completedItems = stationItems.filter(item => {
+        const prog = getProgressForSystemItem(systemId, station.id, item.id);
+        return prog?.status === 'Done';
+      });
+      
+      // 如果這個站點還沒完成，就是當前站點
+      if (completedItems.length < stationItems.length) {
+        return station.station_name;
+      }
+    }
+    
+    // 如果所有站點都完成了，返回"已完成"
+    return '已完成';
+  };
+
   // Get latest completion time across stations 0-4 for a system
   const getSystemLatestCompletionTime = (systemId: string) => {
     const allCompletionTimes: string[] = [];
@@ -191,7 +216,11 @@ export function TestProgressTable({
         if (latestCompletionTime && system.actual_completed_at !== latestCompletionTime) {
           supabase
             .from('test_systems')
-            .update({ actual_completed_at: latestCompletionTime })
+            .update({ 
+              actual_completed_at: latestCompletionTime,
+              current_station: '已完成',
+              status: 'Done'
+            })
             .eq('id', system.id)
             .then(({ error }) => {
               if (!error) {
@@ -200,6 +229,23 @@ export function TestProgressTable({
                   title: "自動完成",
                   description: `${system.system_name} Station 0-4 已完成，已自動設定完成時間為最晚完成時間`,
                 });
+              }
+            });
+        }
+      } else {
+        // 如果系統不再是全部完成狀態，更新當前站點
+        const currentStation = getCurrentStation(system.id);
+        if (system.current_station !== currentStation) {
+          supabase
+            .from('test_systems')
+            .update({ 
+              current_station: currentStation,
+              status: currentStation === '已完成' ? 'Done' : 'On-going'
+            })
+            .eq('id', system.id)
+            .then(({ error }) => {
+              if (!error) {
+                onSystemUpdate();
               }
             });
         }
@@ -256,198 +302,208 @@ export function TestProgressTable({
   if (isMobile) {
     return (
       <div className="space-y-4">
-        {filteredSystems.map(system => (
-          <Card key={system.id} className="border-2">
-            <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-bold">
-                    <button 
-                      className="text-primary hover:underline cursor-pointer text-left"
-                      onClick={() => {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.searchParams.set('system', system.system_name);
-                        window.history.pushState({}, '', currentUrl.toString());
-                        
-                        const event = new CustomEvent('navigate', { 
-                          detail: { module: 'monitor', params: { system: system.system_name } } 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                    >
-                      {system.system_name}
-                    </button>
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                    />
-                  </div>
-                </div>
-              <div className="flex flex-col gap-2 mt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">當前站點:</span>
-                  <Badge 
-                    variant="secondary" 
-                    className="bg-warning text-warning-foreground px-3 py-1 rounded-full font-medium text-sm"
-                  >
-                    {system.current_station?.split(' - ')[0] || system.current_station}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
-                  <div className="flex flex-col items-end">
-                    <DateTimePicker
-                      value={getSystemEarliestStartTime(system.id)}
-                      onChange={async (newStartTime) => {
-                        await updateSystemTime(system.id, 'start', newStartTime);
-                      }}
-                      maxDate={getSystemLatestCompletionTime(system.id)}
-                      onValidationError={handleValidationError}
-                      placeholder="設定開始時間"
-                      className="w-44"
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
-                  <div className="flex flex-col items-end">
-                    <DateTimePicker
-                      value={getSystemLatestCompletionTime(system.id)}
-                      minDate={getSystemEarliestStartTime(system.id)}
-                      onChange={async (newEndTime) => {
-                        await updateSystemTime(system.id, 'end', newEndTime);
-                      }}
-                      onValidationError={handleValidationError}
-                      placeholder="設定完成時間"
-                      disabled={!getSystemEarliestStartTime(system.id)}
-                      className="w-44"
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
-                  <div className="flex flex-col items-end">
-                    <DateTimePicker
-                      value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
-                      onChange={async (newActualTime) => {
-                        try {
-                          const { error } = await supabase
-                            .from('test_systems')
-                            .update({ actual_completed_at: newActualTime })
-                            .eq('id', system.id);
-
-                          if (error) throw error;
+        {filteredSystems.map(system => {
+          const isSystemComplete = areAllStationsComplete(system.id);
+          const currentStation = getCurrentStation(system.id);
+          
+          return (
+            <Card key={system.id} className="border-2">
+              <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-bold">
+                      <button 
+                        className="text-primary hover:underline cursor-pointer text-left"
+                        onClick={() => {
+                          const currentUrl = new URL(window.location.href);
+                          currentUrl.searchParams.set('system', system.system_name);
+                          window.history.pushState({}, '', currentUrl.toString());
                           
-                          await onSystemUpdate();
-                          
-                          toast({
-                            title: "更新成功",
-                            description: "實際完成時間已更新",
+                          const event = new CustomEvent('navigate', { 
+                            detail: { module: 'monitor', params: { system: system.system_name } } 
                           });
-                        } catch (error) {
-                          console.error('Error updating actual completion time:', error);
-                          toast({
-                            title: "更新失敗",
-                            description: "無法更新實際完成時間",
-                            variant: "destructive"
-                          });
-                        }
-                      }}
-                      onValidationError={handleValidationError}
-                      placeholder="實際完成時間"
-                      className="w-44"
-                    />
-                    {areAllStationsComplete(system.id) && (
-                      <div className="text-xs text-success mt-1 text-center">
-                        自動設定為Station 0-4最晚完成時間
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-4">
-                {filteredStations.map(station => {
-                  const stationItems = items.filter(item => item.station_id === station.id);
-                  const completedItems = stationItems.filter(item => {
-                    const prog = getProgressForSystemItem(system.id, station.id, item.id);
-                    return prog?.status === 'Done';
-                  });
-                  const overallPercent = stationItems.length > 0 
-                    ? Math.round((completedItems.length / stationItems.length) * 100) 
-                    : 0;
-
-                  return (
-                    <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-base">{station.station_name}</h4>
-                        <ProgressEditDialog
-                          systemName={system.system_name}
-                          stationName={station.station_name}
-                          stationItems={stationItems}
-                          progress={progress}
-                          editingProgress={editingProgress}
-                          setEditingProgress={setEditingProgress}
-                          editValues={editValues}
-                          setEditValues={setEditValues}
-                          getProgressForSystemItem={getProgressForSystemItem}
-                          handleEditProgress={handleEditProgress}
-                          handleSaveProgress={handleSaveProgress}
-                          handleDeleteProgress={handleDeleteProgress}
-                          getStatusColor={getStatusColor}
-                          systemId={system.id}
-                          stationId={station.id}
-                        />
-                      </div>
-                       <div className="space-y-2">
-                         <div className="flex items-center justify-between text-sm">
-                           <span className="font-medium">進度: {overallPercent}%</span>
-                           <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
-                        </div>
-                        <Progress value={overallPercent} className="h-3" />
-                        
-                         {(() => {
-                           const stationItems = items.filter(item => item.station_id === station.id);
-                           const stationProgressRecords = stationItems.map(item => 
-                             getProgressForSystemItem(system.id, station.id, item.id)
-                           ).filter(Boolean);
-                           
-                           const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
-                           const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
-                           
-                           const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
-                           const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
-                           
-                           if (!startTime && !completionTime) return null;
-                           
-                           return (
-                             <div className="mt-3 pt-3 border-t space-y-2">
-                               <div className="flex justify-between items-center text-sm">
-                                 <span className="text-muted-foreground">開始時間:</span>
-                                 <span className="font-medium">{formatTime(startTime)}</span>
-                               </div>
-                               <div className="flex justify-between items-center text-sm">
-                                 <span className="text-muted-foreground">完成時間:</span>
-                                 <span className="font-medium">{formatTime(completionTime)}</span>
-                               </div>
-                             </div>
-                           );
-                         })()}
-                      </div>
+                          window.dispatchEvent(event);
+                        }}
+                      >
+                        {system.system_name}
+                      </button>
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <SystemEditDialog
+                        systemId={system.id}
+                        systemName={system.system_name}
+                        assignedEngineer={system.assigned_engineer}
+                        onUpdate={onSystemUpdate}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  </div>
+                <div className="flex flex-col gap-2 mt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">當前站點:</span>
+                    <Badge 
+                      variant="secondary" 
+                      className={cn(
+                        "px-3 py-1 rounded-full font-medium text-sm",
+                        isSystemComplete 
+                          ? "bg-green-500 text-white" 
+                          : "bg-warning text-warning-foreground"
+                      )}
+                    >
+                      {currentStation}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
+                    <div className="flex flex-col items-end">
+                      <DateTimePicker
+                        value={getSystemEarliestStartTime(system.id)}
+                        onChange={async (newStartTime) => {
+                          await updateSystemTime(system.id, 'start', newStartTime);
+                        }}
+                        maxDate={getSystemLatestCompletionTime(system.id)}
+                        onValidationError={handleValidationError}
+                        placeholder="設定開始時間"
+                        className="w-44"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground font-medium">預計完成時間:</span>
+                    <div className="flex flex-col items-end">
+                      <DateTimePicker
+                        value={getSystemLatestCompletionTime(system.id)}
+                        minDate={getSystemEarliestStartTime(system.id)}
+                        onChange={async (newEndTime) => {
+                          await updateSystemTime(system.id, 'end', newEndTime);
+                        }}
+                        onValidationError={handleValidationError}
+                        placeholder="設定完成時間"
+                        disabled={!getSystemEarliestStartTime(system.id)}
+                        className="w-44"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground font-medium">實際完成時間:</span>
+                    <div className="flex flex-col items-end">
+                      <DateTimePicker
+                        value={system.actual_completed_at || getSystemLatestCompletionTime(system.id)}
+                        onChange={async (newActualTime) => {
+                          try {
+                            const { error } = await supabase
+                              .from('test_systems')
+                              .update({ actual_completed_at: newActualTime })
+                              .eq('id', system.id);
+
+                            if (error) throw error;
+                            
+                            await onSystemUpdate();
+                            
+                            toast({
+                              title: "更新成功",
+                              description: "實際完成時間已更新",
+                            });
+                          } catch (error) {
+                            console.error('Error updating actual completion time:', error);
+                            toast({
+                              title: "更新失敗",
+                              description: "無法更新實際完成時間",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                        onValidationError={handleValidationError}
+                        placeholder="實際完成時間"
+                        className="w-44"
+                      />
+                      {areAllStationsComplete(system.id) && (
+                        <div className="text-xs text-success mt-1 text-center">
+                          自動設定為Station 0-4最晚完成時間
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-4">
+                  {filteredStations.map(station => {
+                    const stationItems = items.filter(item => item.station_id === station.id);
+                    const completedItems = stationItems.filter(item => {
+                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                      return prog?.status === 'Done';
+                    });
+                    const overallPercent = stationItems.length > 0 
+                      ? Math.round((completedItems.length / stationItems.length) * 100) 
+                      : 0;
+
+                    return (
+                      <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-base">{station.station_name}</h4>
+                          <ProgressEditDialog
+                            systemName={system.system_name}
+                            stationName={station.station_name}
+                            stationItems={stationItems}
+                            progress={progress}
+                            editingProgress={editingProgress}
+                            setEditingProgress={setEditingProgress}
+                            editValues={editValues}
+                            setEditValues={setEditValues}
+                            getProgressForSystemItem={getProgressForSystemItem}
+                            handleEditProgress={handleEditProgress}
+                            handleSaveProgress={handleSaveProgress}
+                            handleDeleteProgress={handleDeleteProgress}
+                            getStatusColor={getStatusColor}
+                            systemId={system.id}
+                            stationId={station.id}
+                          />
+                        </div>
+                         <div className="space-y-2">
+                           <div className="flex items-center justify-between text-sm">
+                             <span className="font-medium">進度: {overallPercent}%</span>
+                             <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
+                          </div>
+                          <Progress value={overallPercent} className="h-3" />
+                          
+                           {(() => {
+                             const stationItems = items.filter(item => item.station_id === station.id);
+                             const stationProgressRecords = stationItems.map(item => 
+                               getProgressForSystemItem(system.id, station.id, item.id)
+                             ).filter(Boolean);
+                             
+                             const startTimes = stationProgressRecords.map(p => p?.started_at).filter(Boolean);
+                             const completionTimes = stationProgressRecords.map(p => p?.completed_at).filter(Boolean);
+                             
+                             const startTime = startTimes.length > 0 ? startTimes.sort()[0] : undefined;
+                             const completionTime = completionTimes.length > 0 ? completionTimes.sort().reverse()[0] : undefined;
+                             
+                             if (!startTime && !completionTime) return null;
+                             
+                             return (
+                               <div className="mt-3 pt-3 border-t space-y-2">
+                                 <div className="flex justify-between items-center text-sm">
+                                   <span className="text-muted-foreground">開始時間:</span>
+                                   <span className="font-medium">{formatTime(startTime)}</span>
+                                 </div>
+                                 <div className="flex justify-between items-center text-sm">
+                                   <span className="text-muted-foreground">完成時間:</span>
+                                   <span className="font-medium">{formatTime(completionTime)}</span>
+                                 </div>
+                               </div>
+                             );
+                           })()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     );
   }
@@ -483,9 +539,10 @@ export function TestProgressTable({
               const systemStartTime = getSystemEarliestStartTime(system.id);
               const systemEndTime = getSystemLatestCompletionTime(system.id);
               const isSystemComplete = areAllStationsComplete(system.id);
+              const currentStation = getCurrentStation(system.id);
 
               return (
-                <div key={system.id} className={`grid gap-2 p-4 border-b hover:bg-muted/25 ${isSystemComplete ? 'bg-green-50' : ''}`} style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
                     <button 
                       className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
@@ -508,18 +565,18 @@ export function TestProgressTable({
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
                     />
-                    {isSystemComplete && (
-                      <Badge variant="default" className="bg-green-500 text-white text-xs">
-                        已完成
-                      </Badge>
-                    )}
                   </div>
                   <div>
                     <Badge 
                       variant="secondary" 
-                      className="bg-warning text-warning-foreground px-2 py-1 rounded-full font-medium text-xs"
+                      className={cn(
+                        "px-2 py-1 rounded-full font-medium text-xs",
+                        isSystemComplete 
+                          ? "bg-green-500 text-white" 
+                          : "bg-warning text-warning-foreground"
+                      )}
                     >
-                      {system.current_station?.split(' - ')[0] || system.current_station}
+                      {currentStation}
                     </Badge>
                   </div>
                   
