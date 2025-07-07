@@ -125,7 +125,7 @@ export function TestProgressTable({
     const stations0To4 = filteredStations.filter(station => station.station_order >= 0 && station.station_order <= 4);
     return stations0To4.every(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
-      if (stationItems.length === 0) return true; // 如果沒有測試項目，視為完成
+      if (stationItems.length === 0) return true;
       
       const completedItems = stationItems.filter(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
@@ -207,7 +207,7 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   };
 
-  // Auto-update system status based on progress changes
+  // Auto-update system status based on progress changes - Enhanced version
   useEffect(() => {
     const updateSystemStatus = async () => {
       for (const system of filteredSystems) {
@@ -217,10 +217,11 @@ export function TestProgressTable({
         let updatedFields: any = {};
         let needsUpdate = false;
         
-        // 更新當前站點
+        // 更新當前站點 - 這是主要修復
         if (system.current_station !== currentStation) {
           updatedFields.current_station = currentStation;
           needsUpdate = true;
+          console.log(`Updating system ${system.system_name} current_station from ${system.current_station} to ${currentStation}`);
         }
         
         // 更新狀態
@@ -228,6 +229,7 @@ export function TestProgressTable({
         if (system.status !== newStatus) {
           updatedFields.status = newStatus;
           needsUpdate = true;
+          console.log(`Updating system ${system.system_name} status from ${system.status} to ${newStatus}`);
         }
         
         // 如果系統完成，設定實際完成時間
@@ -236,17 +238,22 @@ export function TestProgressTable({
           if (latestCompletionTime && system.actual_completed_at !== latestCompletionTime) {
             updatedFields.actual_completed_at = latestCompletionTime;
             needsUpdate = true;
+            console.log(`Setting actual completion time for ${system.system_name}`);
           }
         } else {
-          // 如果系統不再完成狀態，清除實際完成時間（除非手動設定）
-          if (system.actual_completed_at && system.actual_completed_at === getSystemLatestCompletionTime(system.id)) {
+          // 如果系統不再完成狀態，但手動設定的時間不清除
+          // 只有當實際完成時間等於自動計算的時間時才清除
+          const autoCompletionTime = getSystemLatestCompletionTime(system.id);
+          if (system.actual_completed_at && system.actual_completed_at === autoCompletionTime) {
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
+            console.log(`Clearing auto-set actual completion time for ${system.system_name}`);
           }
         }
         
         if (needsUpdate) {
           try {
+            console.log(`Updating system ${system.system_name} with fields:`, updatedFields);
             const { error } = await supabase
               .from('test_systems')
               .update(updatedFields)
@@ -259,12 +266,17 @@ export function TestProgressTable({
         }
       }
       
-      // 觸發資料重新載入
-      onSystemUpdate();
+      // 立即觸發資料重新載入以確保UI更新
+      await onSystemUpdate();
     };
 
-    updateSystemStatus();
-  }, [filteredSystems, items, progress, onSystemUpdate]);
+    // 執行更新，並加入延遲確保資料穩定
+    const timeoutId = setTimeout(() => {
+      updateSystemStatus();
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [filteredSystems, items, progress, onSystemUpdate, getProgressForSystemItem]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
     try {
@@ -367,6 +379,7 @@ export function TestProgressTable({
                     </Badge>
                   </div>
                   
+                  
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground font-medium">預計開始時間:</span>
                     <div className="flex flex-col items-end">
@@ -438,6 +451,7 @@ export function TestProgressTable({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
+                
                 <div className="space-y-4">
                   {filteredStations.map(station => {
                     const stationItems = items.filter(item => item.station_id === station.id);
