@@ -48,7 +48,7 @@ export function SystemStatusUpdater({
     return allCompletionTimes.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
   }, [stations, items, progress]);
 
-  // 系統狀態自動更新
+  // 系統狀態自動更新（僅更新整體進度和系統狀態，不覆蓋手動設定的當前站點）
   useEffect(() => {
     if (updateInProgress.current) {
       return;
@@ -80,13 +80,6 @@ export function SystemStatusUpdater({
           let updatedFields: any = {};
           let needsUpdate = false;
           
-          // 當前站點狀態更新
-          if (system.current_station !== statusResult.currentStation) {
-            updatedFields.current_station = statusResult.currentStation;
-            needsUpdate = true;
-            console.log(`需要更新當前站點: "${system.current_station}" → "${statusResult.currentStation}"`);
-          }
-          
           // 整體進度更新
           if (system.overall_progress !== statusResult.overallProgress) {
             updatedFields.overall_progress = statusResult.overallProgress;
@@ -115,6 +108,8 @@ export function SystemStatusUpdater({
             needsUpdate = true;
             console.log(`清除實際完成時間`);
           }
+          
+          // 注意：不再自動更新 current_station，保留用戶手動設定的值
           
           if (needsUpdate) {
             updates.push({
