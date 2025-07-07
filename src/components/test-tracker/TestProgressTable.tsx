@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -122,92 +121,69 @@ export function TestProgressTable({
     }
   };
 
-  // 修正：基於Station 0-4的進度判斷系統是否完成
-  const isSystemReallyComplete = useCallback((systemId: string) => {
-    console.log(`=== 檢查系統 ${systemId} 是否真正完成 ===`);
+  // 完全重寫：獲取系統當前狀態的邏輯
+  const getSystemCurrentStatus = useCallback((systemId: string) => {
+    console.log(`=== 重新計算系統 ${systemId} 狀態 ===`);
     
+    // 只考慮 Station 0-4
     const stations0To4 = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
     );
     
     if (stations0To4.length === 0) {
-      console.log('沒有找到Station 0-4');
-      return false;
+      console.log('沒有找到 Station 0-4');
+      return '未開始';
     }
     
-    let totalItems = 0;
-    let completedItems = 0;
-    
-    for (const station of stations0To4) {
+    // 統計每個站點的進度
+    const stationProgressData = stations0To4.map(station => {
       const stationItems = items.filter(item => item.station_id === station.id);
-      totalItems += stationItems.length;
+      const totalItems = stationItems.length;
       
-      for (const item of stationItems) {
-        const prog = getProgressForSystemItem(systemId, station.id, item.id);
-        if (prog?.status === 'Done') {
-          completedItems++;
-        }
-        console.log(`站點 ${station.station_name} - 項目 ${item.item_name}: ${prog?.status || 'None'}`);
+      if (totalItems === 0) {
+        console.log(`站點 ${station.station_name} 沒有測試項目`);
+        return { station: station.station_name, progress: 0, totalItems: 0, completedItems: 0 };
       }
-    }
-    
-    const isComplete = totalItems > 0 && completedItems === totalItems;
-    console.log(`總項目: ${totalItems}, 完成項目: ${completedItems}, 是否完成: ${isComplete}`);
-    
-    return isComplete;
-  }, [filteredStations, items, getProgressForSystemItem]);
-
-  // 修正：檢查系統是否有任何進度
-  const hasSystemAnyProgress = useCallback((systemId: string) => {
-    const stations0To4 = filteredStations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
-    
-    return stations0To4.some(station => {
-      const stationItems = items.filter(item => item.station_id === station.id);
-      return stationItems.some(item => {
+      
+      const completedItems = stationItems.filter(item => {
         const prog = getProgressForSystemItem(systemId, station.id, item.id);
         return prog?.status === 'Done';
-      });
-    });
-  }, [filteredStations, items, getProgressForSystemItem]);
-
-  // 修正：基於Station 0-4進度狀態獲取系統當前狀態
-  const getSystemCurrentStatus = useCallback((systemId: string) => {
-    const stations0To4 = filteredStations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
-    );
-    
-    if (stations0To4.length === 0) return '未開始';
-    
-    let totalItems = 0;
-    let completedItems = 0;
-    let hasAnyProgress = false;
-    
-    // 統計Station 0-4的所有項目完成情況
-    for (const station of stations0To4) {
-      const stationItems = items.filter(item => item.station_id === station.id);
-      totalItems += stationItems.length;
+      }).length;
       
-      for (const item of stationItems) {
-        const prog = getProgressForSystemItem(systemId, station.id, item.id);
-        if (prog?.status === 'Done') {
-          completedItems++;
-          hasAnyProgress = true;
-        }
-      }
+      const progress = Math.round((completedItems / totalItems) * 100);
+      
+      console.log(`站點 ${station.station_name}: ${completedItems}/${totalItems} 項目完成 (${progress}%)`);
+      return { 
+        station: station.station_name, 
+        progress, 
+        totalItems, 
+        completedItems 
+      };
+    });
+    
+    // 計算整體狀態
+    const allProgresses = stationProgressData.map(s => s.progress);
+    const hasAnyProgress = allProgresses.some(p => p > 0);
+    const allComplete = allProgresses.every(p => p === 100);
+    
+    console.log(`所有站點進度: [${allProgresses.join(', ')}]`);
+    console.log(`有任何進度: ${hasAnyProgress}, 全部完成: ${allComplete}`);
+    
+    // 決定狀態
+    let status: string;
+    if (!hasAnyProgress) {
+      status = '未開始';
+    } else if (allComplete) {
+      status = '已完成';
+    } else {
+      status = '進行中';
     }
     
-    console.log(`系統 ${systemId} 狀態檢查: 總項目=${totalItems}, 完成項目=${completedItems}, 有進度=${hasAnyProgress}`);
-    
-    // 根據進度判斷狀態
-    if (totalItems === 0) return '未開始';
-    if (completedItems === 0) return '未開始';
-    if (completedItems === totalItems) return '已完成';
-    return '進行中';
+    console.log(`最終狀態: ${status}`);
+    return status;
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 修正：獲取系統Station 0-4中所有完成時間的最晚時間作為實際完成時間
+  // 獲取系統最晚完成時間
   const getSystemLatestCompletionTime = useCallback((systemId: string) => {
     const stations0To4 = filteredStations.filter(station => 
       station.station_order >= 0 && station.station_order <= 4
@@ -226,7 +202,6 @@ export function TestProgressTable({
     });
     
     if (allCompletionTimes.length === 0) return undefined;
-    // 返回最晚的完成時間
     return allCompletionTimes.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
@@ -252,7 +227,7 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   }, [filteredStations, items, getProgressForSystemItem]);
 
-  // 修正：系統狀態自動更新邏輯 - 每次Station測項更新時都要檢查並更新狀態
+  // 系統狀態自動更新邏輯
   useEffect(() => {
     if (updateInProgress.current) {
       console.log('更新進行中，跳過...');
@@ -275,20 +250,20 @@ export function TestProgressTable({
           console.log(`- 資料庫當前站點: "${system.current_station}"`);
           console.log(`- 計算當前站點: "${calculatedStatus}"`);
           console.log(`- 是否完成: ${isComplete}`);
-          console.log(`- Station 0-4最晚完成時間: ${latestCompletionTime}`);
+          console.log(`- 最晚完成時間: ${latestCompletionTime}`);
           console.log(`- 目前實際完成時間: ${system.actual_completed_at}`);
           
           let updatedFields: any = {};
           let needsUpdate = false;
           
-          // 修正：當前站點狀態更新 - 必須基於Station 0-4進度判斷
+          // 當前站點狀態更新
           if (system.current_station !== calculatedStatus) {
             updatedFields.current_station = calculatedStatus;
             needsUpdate = true;
             console.log(`需要更新當前站點: "${system.current_station}" → "${calculatedStatus}"`);
           }
           
-          // 修正：系統狀態更新 - 對應當前站點狀態
+          // 系統狀態更新
           const newStatus = calculatedStatus === '已完成' ? 'Done' : 
                            calculatedStatus === '未開始' ? 'Not Start' : 'On-going';
           if (system.status !== newStatus) {
@@ -297,17 +272,14 @@ export function TestProgressTable({
             console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
           }
           
-          // 修正：實際完成時間處理 - 自動取Station 0-4最晚完成時間，但保留手動調整彈性
+          // 實際完成時間處理
           if (isComplete && latestCompletionTime) {
-            // 如果系統完成且有完成時間，但沒有設定實際完成時間，則自動設定
             if (!system.actual_completed_at) {
               updatedFields.actual_completed_at = latestCompletionTime;
               needsUpdate = true;
               console.log(`系統首次完成，自動設定實際完成時間: ${latestCompletionTime}`);
             }
-            // 如果已有實際完成時間，保留手動調整的彈性，不自動覆蓋
           } else if (!isComplete && system.actual_completed_at) {
-            // 系統不再完成時清除實際完成時間
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
             console.log(`系統不再完成，清除實際完成時間`);
@@ -344,7 +316,6 @@ export function TestProgressTable({
             }
           }
           
-          // 觸發資料重新載入
           console.log('觸發資料重新載入...');
           setTimeout(() => {
             onSystemUpdate();
@@ -362,7 +333,6 @@ export function TestProgressTable({
       }
     };
 
-    // 延遲執行以確保資料穩定
     const timeoutId = setTimeout(() => {
       updateSystemStatus();
     }, 300);
@@ -375,7 +345,7 @@ export function TestProgressTable({
     getSystemCurrentStatus,
     getSystemLatestCompletionTime,
     onSystemUpdate,
-    progress // 確保進度變更時觸發更新
+    progress
   ]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
@@ -391,10 +361,8 @@ export function TestProgressTable({
         return;
       }
 
-      // 批量更新 - 更高效率
       const updateColumn = timeType === 'start' ? 'started_at' : 'completed_at';
       
-      // 只更新Station 0-4的記錄
       const stations0To4Ids = filteredStations
         .filter(station => station.station_order >= 0 && station.station_order <= 4)
         .map(station => station.id);
@@ -487,7 +455,6 @@ export function TestProgressTable({
                         onChange={async (newStartTime) => {
                           await updateSystemTime(system.id, 'start', newStartTime);
                         }}
-                        maxDate={getSystemLatestCompletionTime(system.id)}
                         onValidationError={handleValidationError}
                         placeholder="設定開始時間"
                         className="w-44"
