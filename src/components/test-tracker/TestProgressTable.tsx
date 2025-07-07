@@ -207,9 +207,11 @@ export function TestProgressTable({
     return allStartTimes.sort()[0];
   };
 
-  // Auto-update system status based on progress changes - Enhanced version
+  // Auto-update system status based on progress changes - Fixed version
   useEffect(() => {
     const updateSystemStatus = async () => {
+      console.log('Starting system status update...');
+      
       for (const system of filteredSystems) {
         const currentStation = getCurrentStation(system.id);
         const isComplete = areAllStationsComplete(system.id);
@@ -217,11 +219,13 @@ export function TestProgressTable({
         let updatedFields: any = {};
         let needsUpdate = false;
         
-        // 更新當前站點 - 這是主要修復
+        console.log(`System ${system.system_name}: DB current_station="${system.current_station}", calculated="${currentStation}"`);
+        
+        // 強制更新當前站點 - 主要修復點
         if (system.current_station !== currentStation) {
           updatedFields.current_station = currentStation;
           needsUpdate = true;
-          console.log(`Updating system ${system.system_name} current_station from ${system.current_station} to ${currentStation}`);
+          console.log(`Will update system ${system.system_name} current_station from "${system.current_station}" to "${currentStation}"`);
         }
         
         // 更新狀態
@@ -229,7 +233,7 @@ export function TestProgressTable({
         if (system.status !== newStatus) {
           updatedFields.status = newStatus;
           needsUpdate = true;
-          console.log(`Updating system ${system.system_name} status from ${system.status} to ${newStatus}`);
+          console.log(`Will update system ${system.system_name} status from "${system.status}" to "${newStatus}"`);
         }
         
         // 如果系統完成，設定實際完成時間
@@ -238,7 +242,7 @@ export function TestProgressTable({
           if (latestCompletionTime && system.actual_completed_at !== latestCompletionTime) {
             updatedFields.actual_completed_at = latestCompletionTime;
             needsUpdate = true;
-            console.log(`Setting actual completion time for ${system.system_name}`);
+            console.log(`Will set actual completion time for ${system.system_name}`);
           }
         } else {
           // 如果系統不再完成狀態，但手動設定的時間不清除
@@ -247,7 +251,7 @@ export function TestProgressTable({
           if (system.actual_completed_at && system.actual_completed_at === autoCompletionTime) {
             updatedFields.actual_completed_at = null;
             needsUpdate = true;
-            console.log(`Clearing auto-set actual completion time for ${system.system_name}`);
+            console.log(`Will clear auto-set actual completion time for ${system.system_name}`);
           }
         }
         
@@ -259,23 +263,24 @@ export function TestProgressTable({
               .update(updatedFields)
               .eq('id', system.id);
 
-            if (error) throw error;
+            if (error) {
+              console.error(`Error updating system ${system.system_name}:`, error);
+              throw error;
+            }
+            console.log(`Successfully updated system ${system.system_name}`);
           } catch (error) {
             console.error('Error updating system status:', error);
           }
         }
       }
       
-      // 立即觸發資料重新載入以確保UI更新
+      // 確保更新後立即重新載入資料
+      console.log('Triggering data reload...');
       await onSystemUpdate();
     };
 
-    // 執行更新，並加入延遲確保資料穩定
-    const timeoutId = setTimeout(() => {
-      updateSystemStatus();
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
+    // 立即執行更新
+    updateSystemStatus();
   }, [filteredSystems, items, progress, onSystemUpdate, getProgressForSystemItem]);
 
   const updateSystemTime = async (systemId: string, timeType: 'start' | 'end', newTime: string | null) => {
