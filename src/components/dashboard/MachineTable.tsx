@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import {
   Table,
@@ -13,28 +14,27 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 
-const getStatusBadge = (status: string) => {
-  const variants = {
-    'Not Start': { label: '待測試', variant: 'secondary' as const },
-    'On-going': { label: '測試中', variant: 'default' as const },
-    'Done': { label: '完成', variant: 'default' as const },
-    'Failed': { label: '失敗', variant: 'destructive' as const },
-    'Rework': { label: '返工', variant: 'outline' as const },
-  };
-  
-  const config = variants[status as keyof typeof variants] || variants['Not Start'];
-  return (
-    <Badge 
-      variant={config.variant}
-      className={cn(
-        status === 'Done' && 'bg-success text-success-foreground',
-        status === 'On-going' && 'bg-info text-info-foreground',
-        status === 'Rework' && 'bg-warning text-warning-foreground'
-      )}
-    >
-      {config.label}
-    </Badge>
-  );
+const getStatusBadge = (currentStation: string) => {
+  // 根據當前站點狀態顯示對應的Badge
+  if (currentStation === '已完成') {
+    return (
+      <Badge className="bg-success text-success-foreground">
+        已完成
+      </Badge>
+    );
+  } else if (currentStation === '未開始') {
+    return (
+      <Badge variant="secondary">
+        未開始
+      </Badge>
+    );
+  } else {
+    return (
+      <Badge className="bg-info text-info-foreground">
+        進行中
+      </Badge>
+    );
+  }
 };
 
 export function MachineTable() {
@@ -43,11 +43,19 @@ export function MachineTable() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredSystems = systems.filter(system => {
-    const matchesFilter = filter === 'all' || system.status === filter;
+    const matchesFilter = filter === 'all' || 
+      (filter === 'completed' && system.current_station === '已完成') ||
+      (filter === 'ongoing' && system.current_station !== '已完成' && system.current_station !== '未開始') ||
+      (filter === 'not-started' && system.current_station === '未開始');
+    
     const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (system.model || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  const completedCount = systems.filter(s => s.current_station === '已完成').length;
+  const ongoingCount = systems.filter(s => s.current_station !== '已完成' && s.current_station !== '未開始').length;
+  const notStartedCount = systems.filter(s => s.current_station === '未開始').length;
 
   return (
     <div className="space-y-4">
@@ -72,25 +80,25 @@ export function MachineTable() {
           全部 ({systems.length})
         </Button>
         <Button
-          variant={filter === 'On-going' ? 'default' : 'outline'}
+          variant={filter === 'ongoing' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('On-going')}
+          onClick={() => setFilter('ongoing')}
         >
-          測試中 ({systems.filter(s => s.status === 'On-going').length})
+          進行中 ({ongoingCount})
         </Button>
         <Button
-          variant={filter === 'Done' ? 'default' : 'outline'}
+          variant={filter === 'completed' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('Done')}
+          onClick={() => setFilter('completed')}
         >
-          已完成 ({systems.filter(s => s.status === 'Done').length})
+          已完成 ({completedCount})
         </Button>
         <Button
-          variant={filter === 'Not Start' ? 'default' : 'outline'}
+          variant={filter === 'not-started' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFilter('Not Start')}
+          onClick={() => setFilter('not-started')}
         >
-          未開始 ({systems.filter(s => s.status === 'Not Start').length})
+          未開始 ({notStartedCount})
         </Button>
       </div>
 
@@ -113,7 +121,7 @@ export function MachineTable() {
                 <TableCell className="font-mono text-sm">{system.system_name}</TableCell>
                 <TableCell>{system.model || 'GB300'}</TableCell>
                 <TableCell>{system.current_station}</TableCell>
-                <TableCell>{getStatusBadge(system.status)}</TableCell>
+                <TableCell>{getStatusBadge(system.current_station)}</TableCell>
                 <TableCell>{system.overall_progress || 0}%</TableCell>
                 <TableCell>{system.assigned_engineer}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{system.serial_number || '-'}</TableCell>

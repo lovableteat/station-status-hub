@@ -234,8 +234,8 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view
-  const gridColumns = `120px 90px repeat(${filteredStations.length}, 130px)`;
+  // Desktop table view - 增加欄位寬度
+  const gridColumns = `160px 120px repeat(${filteredStations.length}, 180px)`;
 
   return (
     <Card>
@@ -255,7 +255,7 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
+          <div className="min-w-[1000px]">
             {/* Header Row */}
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>

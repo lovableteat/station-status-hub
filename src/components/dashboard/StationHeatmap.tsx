@@ -31,18 +31,12 @@ interface StationHeatmapProps {
 export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
   const { systems, stations, testItems, progress } = useUnifiedData();
 
-  // Calculate actual station statuses based on real data
+  // 基於測試追蹤資料計算站點狀態
   const calculateStationStatus = (station: any) => {
-    // Find systems currently at this station
-    const systemsAtStation = systems.filter(s => 
-      s.current_station === station.station_name || 
-      s.current_station?.includes(station.station_name)
-    );
-    
-    // Get items for this station
+    // 取得該站點的所有測試項目
     const stationItems = testItems.filter(item => item.station_id === station.id);
     
-    if (systemsAtStation.length === 0) {
+    if (stationItems.length === 0) {
       return {
         status: 'idle' as const,
         efficiency: 0,
@@ -53,12 +47,8 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       };
     }
 
-    // Calculate progress for systems at this station
-    let totalProgress = 0;
-    let systemsWithProgress = 0;
-    let completedSystemsCount = 0;
-
-    systemsAtStation.forEach(system => {
+    // 計算每個系統在此站點的進度
+    const systemProgressData = systems.map(system => {
       const systemProgress = stationItems.map(item => {
         const progressRecord = progress.find(p => 
           p.system_id === system.id && 
@@ -68,25 +58,38 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
         return progressRecord?.status === 'Done' ? 100 : (progressRecord?.progress_percent ?? 0);
       });
 
-      if (systemProgress.length > 0) {
-        const avgProgress = systemProgress.reduce((sum, p) => sum + p, 0) / systemProgress.length;
-        totalProgress += avgProgress;
-        systemsWithProgress++;
-        
-        // Count as completed if all items are done
-        const allItemsDone = systemProgress.every(p => p === 100);
-        if (allItemsDone) {
-          completedSystemsCount++;
-        }
-      }
+      const avgProgress = systemProgress.length > 0 
+        ? systemProgress.reduce((sum, p) => sum + p, 0) / systemProgress.length 
+        : 0;
+      
+      const allItemsDone = systemProgress.every(p => p === 100);
+      const hasProgress = systemProgress.some(p => p > 0);
+
+      return {
+        system,
+        progress: avgProgress,
+        isCompleted: allItemsDone,
+        isActive: hasProgress
+      };
     });
 
-    const averageProgress = systemsWithProgress > 0 ? totalProgress / systemsWithProgress : 0;
+    // 統計
+    const completedSystemsCount = systemProgressData.filter(s => s.isCompleted).length;
+    const activeSystemsCount = systemProgressData.filter(s => s.isActive && !s.isCompleted).length;
+    const totalProgress = systemProgressData.reduce((sum, s) => sum + s.progress, 0);
+    const averageProgress = systems.length > 0 ? totalProgress / systems.length : 0;
     
-    // Determine status based on actual progress data
-    let status: 'idle' | 'working' | 'warning' | 'error' | 'complete' = 'working';
+    // 找出在此站點活躍的系統
+    const activeSystems = systemProgressData
+      .filter(s => s.isActive)
+      .map(s => s.system);
+
+    // 確定狀態
+    let status: 'idle' | 'working' | 'warning' | 'error' | 'complete' = 'idle';
     
-    if (averageProgress === 100) {
+    if (activeSystemsCount === 0 && completedSystemsCount === 0) {
+      status = 'idle';
+    } else if (averageProgress === 100) {
       status = 'complete';
     } else if (averageProgress >= 70) {
       status = 'working';
@@ -100,13 +103,13 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       status,
       efficiency: Math.round(averageProgress),
       completed_systems: completedSystemsCount,
-      ongoing_systems: systemsAtStation.length,
+      ongoing_systems: activeSystemsCount,
       total_systems: systems.length,
-      current_systems: systemsAtStation
+      current_systems: activeSystems
     };
   };
 
-  // Calculate status for each station
+  // 計算每個站點的狀態
   const stationStatuses = stations.map(station => ({
     ...station,
     ...calculateStationStatus(station)
@@ -142,7 +145,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       
       {/* Detailed Status Legend */}
       <div className="bg-muted/20 rounded-lg p-4 space-y-3">
-        <h4 className="font-medium text-sm">狀態詳細說明（基於實際資料計算）</h4>
+        <h4 className="font-medium text-sm">狀態詳細說明（基於GB300 L10測試追蹤資料）</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           <div className="flex items-start space-x-2">
             <div className="w-4 h-4 rounded bg-station-complete mt-0.5 flex-shrink-0"></div>
@@ -222,7 +225,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
               </div>
               {station.current_systems.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-white/20">
-                  <div className="text-xs font-medium mb-1">當前系統:</div>
+                  <div className="text-xs font-medium mb-1">活躍系統:</div>
                   {station.current_systems.slice(0, 2).map(system => (
                     <div key={system.id} className="text-xs opacity-80 truncate">
                       {system.system_name}
