@@ -12,8 +12,17 @@ import { ProductionHistory } from "./ProductionHistory";
 import { BackButton } from "@/components/common/BackButton";
 import { SystemSelectionDialog } from "./SystemSelectionDialog";
 
+interface Station {
+  id: string;
+  name: string;
+  status: "idle" | "working" | "warning" | "error" | "complete";
+  current_system?: string;
+  efficiency: number;
+  last_update: string;
+}
+
 export function ProductionMonitor() {
-  const { stationStatuses: stations, systems, testItems, progress, isLoading } = useUnifiedData();
+  const { stationStatuses: stations, systems, isLoading } = useUnifiedData();
   const { toast } = useToast();
   const [focusedSystem, setFocusedSystem] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -49,55 +58,6 @@ export function ProductionMonitor() {
       case 'idle': return <Clock className="h-4 w-4" />;
       default: return <Monitor className="h-4 w-4" />;
     }
-  };
-
-  // Calculate station progress based on test items completion
-  const calculateStationProgress = (stationId: string, systemId?: string) => {
-    // Get all test items for this station
-    const stationTestItems = testItems.filter(item => item.station_id === stationId);
-    if (stationTestItems.length === 0) return 0;
-
-    if (systemId) {
-      // Calculate progress for specific system at this station
-      const systemProgress = progress.filter(p => 
-        p.station_id === stationId && 
-        p.system_id === systemId
-      );
-      const completedItems = systemProgress.filter(p => p.status === 'Done').length;
-      return Math.round((completedItems / stationTestItems.length) * 100);
-    } else {
-      // Calculate average progress across all systems at this station
-      const systemsAtStation = systems.filter(s => s.current_station === stations.find(st => st.id === stationId)?.name);
-      if (systemsAtStation.length === 0) return 0;
-
-      const totalProgress = systemsAtStation.reduce((sum, system) => {
-        const systemProgress = progress.filter(p => 
-          p.station_id === stationId && 
-          p.system_id === system.id
-        );
-        const completedItems = systemProgress.filter(p => p.status === 'Done').length;
-        return sum + (completedItems / stationTestItems.length) * 100;
-      }, 0);
-
-      return Math.round(totalProgress / systemsAtStation.length);
-    }
-  };
-
-  // Calculate overall system progress based on completed stations
-  const calculateOverallProgress = (systemId: string) => {
-    const totalStations = stations.length;
-    if (totalStations === 0) return 0;
-
-    let completedStations = 0;
-    
-    stations.forEach(station => {
-      const stationProgress = calculateStationProgress(station.id, systemId);
-      if (stationProgress === 100) {
-        completedStations++;
-      }
-    });
-
-    return Math.round((completedStations / totalStations) * 100);
   };
 
   const exportData = () => {
@@ -150,8 +110,6 @@ export function ProductionMonitor() {
       );
     }
 
-    const systemOverallProgress = calculateOverallProgress(system.id);
-
     return (
       <div className="p-6 space-y-6">
         {/* Header */}
@@ -183,56 +141,55 @@ export function ProductionMonitor() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {stations.map((station, index) => {
-                const stationProgress = calculateStationProgress(station.id, system.id);
                 const isActive = system.current_station === station.name;
-                const isCompleted = stationProgress === 100;
+                const isCompleted = stations.slice(0, index).every(s => s.efficiency === 100);
                 
                 return (
                   <div key={station.id} className={`relative p-4 rounded-lg border-2 transition-all ${
                     isActive ? 'border-primary bg-primary/10 shadow-lg' : 
                     isCompleted ? 'border-success bg-success/10' : 'border-muted bg-muted/50'
                   }`}>
-                    <div className="text-center space-y-2">
-                      <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
-                        isActive ? 'bg-primary text-primary-foreground animate-pulse' :
-                        isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
-                      </div>
-                      <h3 className="font-medium text-sm">{station.name}</h3>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">進度: {stationProgress}%</div>
-                        <Progress value={stationProgress} className="h-1" />
-                      </div>
-                      <div className="flex items-center justify-center gap-1 mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => {
-                            // Navigate to issue tracker with station filter
-                            const event = new CustomEvent('navigate', { 
-                              detail: { 
-                                module: 'issues', 
-                                params: { 
-                                  station: station.name, 
-                                  system: system.system_name 
-                                } 
-                              } 
-                            });
-                            window.dispatchEvent(event);
-                          }}
-                        >
-                          <Bug className="h-3 w-3 mr-1" />
-                          問題
-                        </Button>
-                      </div>
-                      {isActive && (
-                        <div className="absolute -top-2 -right-2">
-                          <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                        </div>
-                      )}
-                    </div>
+              <div className="text-center space-y-2">
+                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${
+                  isActive ? 'bg-primary text-primary-foreground animate-pulse' :
+                  isCompleted ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
+                }`}>
+                  {getStatusIcon(isActive ? 'working' : isCompleted ? 'complete' : 'idle')}
+                </div>
+                <h3 className="font-medium text-sm">{station.name}</h3>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">進度: {station.efficiency}%</div>
+                  <Progress value={station.efficiency} className="h-1" />
+                </div>
+                <div className="flex items-center justify-center gap-1 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      // Navigate to issue tracker with station filter
+                      const event = new CustomEvent('navigate', { 
+                        detail: { 
+                          module: 'issues', 
+                          params: { 
+                            station: station.name, 
+                            system: system.system_name 
+                          } 
+                        } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <Bug className="h-3 w-3 mr-1" />
+                    問題
+                  </Button>
+                </div>
+                {isActive && (
+                  <div className="absolute -top-2 -right-2">
+                    <div className="w-4 h-4 bg-primary rounded-full animate-ping"></div>
+                  </div>
+                )}
+              </div>
                   </div>
                 );
               })}
@@ -241,9 +198,9 @@ export function ProductionMonitor() {
             {/* Progress Arrow */}
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度: {systemOverallProgress}%
+                整體進度: {system.overall_progress}%
               </div>
-              <Progress value={systemOverallProgress} className="mt-2 h-3" />
+              <Progress value={system.overall_progress} className="mt-2 h-3" />
             </div>
           </CardContent>
         </Card>
@@ -258,7 +215,7 @@ export function ProductionMonitor() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-success">{systemOverallProgress}%</div>
+              <div className="text-2xl font-bold text-success">{system.overall_progress}%</div>
               <div className="text-sm text-muted-foreground">完成進度</div>
             </CardContent>
           </Card>
@@ -317,105 +274,98 @@ export function ProductionMonitor() {
 
       {/* Stations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stations.map((station) => {
-          const stationProgress = calculateStationProgress(station.id);
-          
-          return (
-            <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 rounded-full ${getStatusColor(station.status)}`}>
-                    {getStatusIcon(station.status)}
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    效率: {stationProgress}%
-                  </Badge>
+        {stations.map((station) => (
+          <Card key={station.id} className="relative overflow-hidden transition-all duration-200 hover:shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-full ${getStatusColor(station.status)}`}>
+                  {getStatusIcon(station.status)}
                 </div>
-                
-                <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
-                <div className="mb-4">
-                  {station.current_systems && station.current_systems.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        處理中 ({station.current_systems.length} 台系統)
-                      </p>
-                      <div className="space-y-1 max-h-16 overflow-y-auto">
-                        {station.current_systems.slice(0, 3).map((system, idx) => {
-                          const systemProgress = calculateStationProgress(station.id, system.id);
-                          return (
-                            <div key={system.id} className="text-xs bg-muted/50 rounded px-2 py-1">
-                              <span className="font-medium">{system.system_name}</span>
-                              <span className="text-muted-foreground ml-2">
-                                {systemProgress}%
-                              </span>
-                            </div>
-                          );
-                        })}
-                        {station.current_systems.length > 3 && (
-                          <div className="text-xs text-muted-foreground text-center">
-                            +{station.current_systems.length - 3} 更多...
-                          </div>
-                        )}
-                      </div>
+                <Badge variant="outline" className="text-xs">
+                  效率: {station.efficiency}%
+                </Badge>
+              </div>
+              
+              <h3 className="font-semibold text-lg mb-2">{station.name}</h3>
+              <div className="mb-4">
+                {station.current_systems.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      處理中 ({station.current_systems.length} 台系統)
+                    </p>
+                    <div className="space-y-1 max-h-16 overflow-y-auto">
+                      {station.current_systems.slice(0, 3).map((system, idx) => (
+                        <div key={system.id} className="text-xs bg-muted/50 rounded px-2 py-1">
+                          <span className="font-medium">{system.system_name}</span>
+                          <span className="text-muted-foreground ml-2">
+                            {station.system_progress.find(sp => sp.system.id === system.id)?.progress || 0}%
+                          </span>
+                        </div>
+                      ))}
+                      {station.current_systems.length > 3 && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          +{station.current_systems.length - 3} 更多...
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">待機中</p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>狀態</span>
-                    <span className="capitalize">{station.status}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>進行中系統</span>
-                    <span>{station.ongoing_systems}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>已完成系統</span>
-                    <span>{station.completed_systems}</span>
-                  </div>
-                  <Progress value={stationProgress} className="h-2" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">待機中</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>狀態</span>
+                  <span className="capitalize">{station.status}</span>
                 </div>
-                
-                <div className="flex gap-2 mt-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => {
-                      if (station.current_systems && station.current_systems.length === 1) {
-                        setFocusedSystem(station.current_systems[0].system_name);
-                      } else if (station.current_systems && station.current_systems.length > 1) {
-                        setSelectedStation(station);
-                        setShowSystemSelection(true);
-                      }
-                    }}
-                    disabled={!station.current_systems || station.current_systems.length === 0}
-                  >
-                    查看詳情
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const event = new CustomEvent('navigate', { 
-                        detail: { 
-                          module: 'issues', 
-                          params: { station: station.name } 
-                        } 
-                      });
-                      window.dispatchEvent(event);
-                    }}
-                  >
-                    <Bug className="h-4 w-4" />
-                  </Button>
+                <div className="flex justify-between text-sm">
+                  <span>進行中系統</span>
+                  <span>{station.ongoing_systems}</span>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                <div className="flex justify-between text-sm">
+                  <span>已完成系統</span>
+                  <span>{station.completed_systems}</span>
+                </div>
+                <Progress value={station.efficiency} className="h-2" />
+              </div>
+              
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => {
+                    if (station.current_systems.length === 1) {
+                      setFocusedSystem(station.current_systems[0].system_name);
+                    } else if (station.current_systems.length > 1) {
+                      setSelectedStation(station);
+                      setShowSystemSelection(true);
+                    }
+                  }}
+                  disabled={station.current_systems.length === 0}
+                >
+                  查看詳情
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const event = new CustomEvent('navigate', { 
+                      detail: { 
+                        module: 'issues', 
+                        params: { station: station.name } 
+                      } 
+                    });
+                    window.dispatchEvent(event);
+                  }}
+                >
+                  <Bug className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Production History Component */}

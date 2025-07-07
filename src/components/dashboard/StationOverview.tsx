@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Clock, Users, Calendar, Target } from "lucide-react";
@@ -14,7 +13,7 @@ export function StationOverview() {
   const singleMachineTestHours = Number((totalEstimatedMinutes / 60).toFixed(1));
   
   // Calculate estimated completion days (assuming parallel testing)
-  const activeStations = stations.length; // Use actual station count from database
+  const activeStations = stations.filter(s => s.station_order >= 0 && s.station_order <= 3).length;
   const estimatedDaysPerSystem = Math.ceil(singleMachineTestHours / (8 * activeStations)); // 8 hours per day
   const totalEstimatedDays = Math.ceil((totalSystems * estimatedDaysPerSystem) / activeStations);
   
@@ -48,7 +47,7 @@ export function StationOverview() {
       title: "測試站點",
       value: activeStations,
       icon: <Users className="h-5 w-5" />,
-      description: `${stations.map(s => s.station_name).join('、')}`,
+      description: "Station 0-3 並行測試",
       color: "text-info"
     }
   ];
