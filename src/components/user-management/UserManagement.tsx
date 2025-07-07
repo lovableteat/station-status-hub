@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Edit, UserPlus, Shield } from "lucide-react";
+import { Search, Plus, Edit, UserPlus, Shield, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Engineer {
@@ -27,15 +28,27 @@ interface UserRole {
   created_at: string;
 }
 
+interface ProductionTarget {
+  id: string;
+  target_date: string;
+  daily_target: number;
+  weekly_target: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export function UserManagement() {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
+  const [productionTargets, setProductionTargets] = useState<ProductionTarget[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTeam, setFilterTeam] = useState("all-teams");
   const [isEngineerDialogOpen, setIsEngineerDialogOpen] = useState(false);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
   const [newUser, setNewUser] = useState({ role: "engineer", permissions: {} });
+  const [newTarget, setNewTarget] = useState({ target_date: new Date().toISOString().split('T')[0], daily_target: 10, weekly_target: 50 });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -44,13 +57,15 @@ export function UserManagement() {
 
   const loadData = async () => {
     try {
-      const [engineersRes, rolesRes] = await Promise.all([
+      const [engineersRes, rolesRes, targetsRes] = await Promise.all([
         supabase.from('engineers').select('*').order('created_at', { ascending: false }),
-        supabase.from('user_roles').select('*').order('created_at', { ascending: false })
+        supabase.from('user_roles').select('*').order('created_at', { ascending: false }),
+        supabase.from('production_targets').select('*').order('target_date', { ascending: false })
       ]);
 
       if (engineersRes.data) setEngineers(engineersRes.data);
       if (rolesRes.data) setUserRoles(rolesRes.data);
+      if (targetsRes.data) setProductionTargets(targetsRes.data);
     } catch (error) {
       toast({
         title: "載入失敗",
@@ -80,6 +95,31 @@ export function UserManagement() {
       toast({
         title: "新增失敗",
         description: "無法新增工程師",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddTarget = async () => {
+    try {
+      const { error } = await supabase
+        .from('production_targets')
+        .insert([newTarget]);
+
+      if (error) throw error;
+
+      toast({
+        title: "新增成功",
+        description: "生產目標已成功新增"
+      });
+
+      setIsTargetDialogOpen(false);
+      setNewTarget({ target_date: new Date().toISOString().split('T')[0], daily_target: 10, weekly_target: 50 });
+      loadData();
+    } catch (error) {
+      toast({
+        title: "新增失敗",
+        description: "無法新增生產目標",
         variant: "destructive"
       });
     }
@@ -146,6 +186,56 @@ export function UserManagement() {
           <p className="text-muted-foreground">管理系統使用者與工程師帳號</p>
         </div>
         <div className="flex gap-2">
+          <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Calendar className="h-4 w-4 mr-2" />
+                生產目標設定
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>新增生產目標設定</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>目標設定</Label>
+                  <Input 
+                    type="date"
+                    value={newTarget.target_date}
+                    onChange={(e) => setNewTarget({...newTarget, target_date: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label>每日目標</Label>
+                  <Input 
+                    type="number"
+                    value={newTarget.daily_target}
+                    onChange={(e) => setNewTarget({...newTarget, daily_target: parseInt(e.target.value)})}
+                    placeholder="每日生產目標數量"
+                  />
+                </div>
+                <div>
+                  <Label>每週目標</Label>
+                  <Input 
+                    type="number"
+                    value={newTarget.weekly_target}
+                    onChange={(e) => setNewTarget({...newTarget, weekly_target: parseInt(e.target.value)})}
+                    placeholder="每週生產目標數量"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsTargetDialogOpen(false)}>
+                    取消
+                  </Button>
+                  <Button onClick={handleAddTarget}>
+                    新增
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -267,6 +357,35 @@ export function UserManagement() {
                 <SelectItem value="SIT/RAD">SIT/RAD TEAM</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Production Targets List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>生產目標設定</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {productionTargets.map((target) => (
+              <div key={target.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">目標設定: {new Date(target.target_date).toLocaleDateString('zh-TW')}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      每日目標: {target.daily_target}台 | 每週目標: {target.weekly_target}台
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
