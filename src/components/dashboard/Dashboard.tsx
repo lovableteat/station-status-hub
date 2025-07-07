@@ -36,11 +36,45 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // Calculate real-time metrics from actual data
+  // Helper function to get current station status for a system
+  const getCurrentStationStatus = (system: any) => {
+    // If current_station is already set correctly, use it
+    if (system.current_station === '已完成' || system.current_station === '未開始') {
+      return system.current_station;
+    }
+    
+    // Check if it's a Station 0-4 (these are considered "進行中")
+    const stations0To4Names = stations
+      .filter(station => station.station_order >= 0 && station.station_order <= 4)
+      .map(station => station.station_name);
+    
+    if (stations0To4Names.includes(system.current_station)) {
+      return '進行中';
+    }
+    
+    return system.current_station;
+  };
+
+  // Calculate real-time metrics based on current_station field
   const totalSystems = systems.length;
-  const completedSystems = systems.filter(s => s.status === 'Done').length;
-  const ongoingSystems = systems.filter(s => s.status === 'On-going').length;
-  const notStartedSystems = systems.filter(s => s.status === 'Not Start').length;
+  
+  // Count systems based on current_station field logic
+  let completedSystems = 0;
+  let ongoingSystems = 0;
+  let notStartedSystems = 0;
+  
+  systems.forEach(system => {
+    const status = getCurrentStationStatus(system);
+    
+    if (status === '已完成') {
+      completedSystems++;
+    } else if (status === '未開始') {
+      notStartedSystems++;
+    } else if (status === '進行中') {
+      ongoingSystems++;
+    }
+  });
+  
   const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
   
   // Calculate average progress
@@ -81,7 +115,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Test Pass Rate Metrics */}
       <TestPassRateCard />
 
-      {/* Key Performance Indicators - 移除站點效能 */}
+      {/* Key Performance Indicators - Updated with correct logic */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatsCard
           title="進行中系統"
