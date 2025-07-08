@@ -59,10 +59,8 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
-  // Show all stations ordered by station_order (Station 0-4)
-  const filteredStations = stations
-    .filter(station => station.station_order >= 0 && station.station_order <= 4)
-    .sort((a, b) => a.station_order - b.station_order);
+  // Show all stations ordered by station_order
+  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
   // Format time helper - 統一時間格式顯示
   const formatTime = (timeStr?: string) => {
@@ -81,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 統一站點處理時間計算邏輯 - Station 0-4 都使用相同邏輯（包含Station 4）
+  // 統一站點處理時間計算邏輯 - Station 0-4 都使用相同邏輯
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -232,7 +230,7 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                          {/* Station 0-4 統一顯示處理時長（包含Station 4）*/}
+                          {/* Station 0-4 統一顯示處理時長 */}
                           {processingTime && (
                             <div className="mt-3 pt-3 border-t space-y-2">
                               <div className="flex justify-between items-center text-sm">
@@ -366,7 +364,7 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          {/* Station 0-4 統一顯示處理時長（包含Station 4）*/}
+                          {/* Station 0-4 統一顯示處理時長 */}
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
                               處理時長: {processingTime.duration} 小時
