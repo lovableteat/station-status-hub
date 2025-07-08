@@ -51,7 +51,8 @@ export function useStationTimeAnalytics() {
             station_name,
             station_order
           )
-        `);
+        `)
+        .eq('status', 'Done'); // Only get completed items
 
       // Apply date filters based on test_systems timestamps
       if (dateFilter?.start_date || dateFilter?.end_date) {
@@ -83,11 +84,14 @@ export function useStationTimeAnalytics() {
       }
 
       if (data) {
+        console.log('Test progress data:', data);
+        
         // Group by system and station to calculate start and end times
         const stationTimeMap = new Map<string, {
           system_id: string;
           station_id: string;
           station_name: string;
+          station_order: number;
           start_time: string | null;
           end_time: string | null;
           records: any[];
@@ -100,6 +104,7 @@ export function useStationTimeAnalytics() {
               system_id: record.system_id,
               station_id: record.station_id,
               station_name: record.test_flow_stations.station_name,
+              station_order: record.test_flow_stations.station_order,
               start_time: null,
               end_time: null,
               records: []
@@ -112,6 +117,8 @@ export function useStationTimeAnalytics() {
         const processedRecords: StationTimeRecord[] = [];
         stationTimeMap.forEach((stationData, key) => {
           const records = stationData.records;
+          
+          // For stations 0-4, use the progress record times
           const startTimes = records
             .filter(r => r.started_at)
             .map(r => new Date(r.started_at))
@@ -122,6 +129,7 @@ export function useStationTimeAnalytics() {
             .map(r => new Date(r.completed_at))
             .sort((a, b) => b.getTime() - a.getTime());
 
+          // Use earliest start time and latest end time for the station
           const startTime = startTimes.length > 0 ? startTimes[0].toISOString() : null;
           const endTime = endTimes.length > 0 ? endTimes[0].toISOString() : null;
           
@@ -132,17 +140,21 @@ export function useStationTimeAnalytics() {
             totalHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Convert to hours
           }
 
-          processedRecords.push({
-            id: key,
-            system_id: stationData.system_id,
-            station_id: stationData.station_id,
-            station_name: stationData.station_name,
-            start_time: startTime,
-            end_time: endTime,
-            total_hours: totalHours
-          });
+          // Only include stations with valid time data
+          if (totalHours && totalHours > 0) {
+            processedRecords.push({
+              id: key,
+              system_id: stationData.system_id,
+              station_id: stationData.station_id,
+              station_name: stationData.station_name,
+              start_time: startTime,
+              end_time: endTime,
+              total_hours: totalHours
+            });
+          }
         });
 
+        console.log('Processed station time records:', processedRecords);
         setStationTimeRecords(processedRecords);
         calculateAverageTimes(processedRecords);
       }
@@ -156,8 +168,10 @@ export function useStationTimeAnalytics() {
   const calculateAverageTimes = (records: StationTimeRecord[]) => {
     // Only process records with complete time data
     const validRecords = records.filter(record => 
-      record.start_time && record.end_time && record.total_hours !== null
+      record.start_time && record.end_time && record.total_hours !== null && record.total_hours > 0
     );
+
+    console.log('Valid records for calculation:', validRecords);
 
     // Group by station name and calculate average
     const stationGroups: { [key: string]: number[] } = {};
@@ -185,6 +199,7 @@ export function useStationTimeAnalytics() {
       return getStationOrder(a.station_name) - getStationOrder(b.station_name);
     });
 
+    console.log('Calculated average times:', averages);
     setAverageTimes(averages);
   };
 
