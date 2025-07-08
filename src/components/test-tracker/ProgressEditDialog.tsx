@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,33 +85,36 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 統一的時間記錄邏輯 - Station 0-4 都使用相同邏輯
+  // 統一的時間記錄邏輯 - Station 0-4 都使用相同邏輯，確保自動時間記錄
   const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
     const currentTime = new Date().toISOString();
     let timeUpdates = {};
 
-    // 對於 Station 0-4，統一處理時間記錄邏輯
+    // 對於 Station 0-4，統一處理時間記錄邏輯 - 確保自動記錄
     if (isStationWithTimeTracking()) {
-      // 從 Not Start 變成其他狀態時，只在沒有開始時間時記錄開始時間
+      // 從 Not Start 變成其他狀態時，自動記錄開始時間（如果還沒有開始時間）
       if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
         timeUpdates = { ...timeUpdates, started_at: currentTime };
+        console.log(`自動記錄開始時間 for ${stationName}:`, currentTime);
       }
       
-      // 變成 Done 狀態時，只在沒有完成時間時記錄完成時間
+      // 變成 Done 狀態時，自動記錄完成時間（如果還沒有完成時間）
       if (newStatus === 'Done' && originalStatus !== 'Done' && !currentItem?.completed_at) {
         timeUpdates = { ...timeUpdates, completed_at: currentTime };
+        console.log(`自動記錄完成時間 for ${stationName}:`, currentTime);
       }
       
       // 從 Done 變成其他狀態時，清除完成時間但保留開始時間
       if (originalStatus === 'Done' && newStatus !== 'Done') {
         timeUpdates = { ...timeUpdates, completed_at: null };
+        console.log(`清除完成時間 for ${stationName}`);
       }
     }
 
     return timeUpdates;
   };
 
-  // 處理狀態變更 - 自動設定進度百分比和時間
+  // 處理狀態變更 - 自動設定進度百分比和時間記錄
   const handleStatusChange = (newStatus: string) => {
     const currentEditKey = editingProgress;
     if (!currentEditKey) return;
@@ -129,7 +131,7 @@ export function ProgressEditDialog({
       newProgressPercent = 0;
     }
     
-    // 獲取時間更新
+    // 獲取時間更新 - 確保 Station 4 也能自動記錄時間
     const timeUpdates = updateTimeIfStatusChanged(newStatus, currentItem);
     
     setEditValues(prev => ({ 
@@ -235,7 +237,7 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 時間記錄管理按鈕 - Station 0-4 統一處理 */}
+                        {/* 時間記錄管理按鈕 - Station 0-4 統一處理（包含Station 4）*/}
                         {isStationWithTimeTracking() && itemProgress && (
                           <TimeRecordManager
                             systemId={systemId}
@@ -308,7 +310,24 @@ export function ProgressEditDialog({
                           <label className="text-sm font-medium">進度 (只能選0%或100%)</label>
                           <Select 
                             value={editValues.progress_percent.toString()} 
-                            onValueChange={(value) => handleProgressChange(Number(value))}
+                            onValueChange={(value) => {
+                              // 限制進度只能是0或100
+                              const validProgress = Number(value) >= 50 ? 100 : 0;
+                              
+                              // 根據進度自動調整狀態
+                              let newStatus = editValues.status;
+                              if (validProgress === 100) {
+                                newStatus = 'Done';
+                              } else if (validProgress === 0) {
+                                newStatus = editValues.status === 'Done' ? 'On-going' : editValues.status;
+                              }
+                              
+                              setEditValues(prev => ({ 
+                                ...prev, 
+                                progress_percent: validProgress,
+                                status: newStatus
+                              }));
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue />
@@ -324,13 +343,13 @@ export function ProgressEditDialog({
                           <label className="text-sm font-medium">備註</label>
                           <Textarea
                             value={editValues.notes}
-                            onChange={(e) => handleNotesChange(e.target.value)}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, notes: e.target.value }))}
                             placeholder="輸入測試備註..."
                             rows={3}
                           />
                         </div>
 
-                        {/* 時間顯示 - Station 0-4 統一處理 */}
+                        {/* 時間顯示 - Station 0-4 統一處理（包含Station 4 自動時間記錄）*/}
                         {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
@@ -345,7 +364,7 @@ export function ProgressEditDialog({
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              * Station 0-4 統一時間記錄邏輯，狀態變更時自動記錄時間
+                              * Station 0-4 統一自動時間記錄邏輯，狀態變更時自動記錄時間
                             </div>
                           </div>
                         )}
@@ -369,7 +388,7 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - Station 0-4 統一處理 */}
+                    {/* 時間資訊顯示 - Station 0-4 統一處理（包含Station 4）*/}
                     {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">
