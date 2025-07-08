@@ -1,193 +1,171 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Download, Wrench, Upload, FileText, Trash2, Edit } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { FileUploadDialog } from "./FileUploadDialog";
+import { CodeStorageManager } from "./CodeStorageManager";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { 
+  Wrench, 
+  Download, 
+  Upload, 
+  Edit2, 
+  Trash2, 
+  Plus,
+  Code2,
+  FileText,
+  Settings
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 
 interface Tool {
   id: string;
   tool_name: string;
-  category: string;
   version?: string;
+  category: string;
   description?: string;
   file_name?: string;
   file_path?: string;
   file_size?: number;
   is_required: boolean;
+  upload_status: string;
+  uploaded_by?: string;
+  uploaded_at?: string;
   download_count: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export function ToolsManagement() {
   const [tools, setTools] = useState<Tool[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategory, setFilterCategory] = useState("all-categories");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadTools();
-  }, []);
+  const [newTool, setNewTool] = useState({
+    tool_name: "",
+    version: "",
+    category: "driver",
+    description: "",
+    is_required: false
+  });
 
   const loadTools = async () => {
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('tools_management')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
-
-      // If no data from database, use mock data
-      if (!data || data.length === 0) {
-        const mockTools: Tool[] = [
-          {
-            id: "1",
-            tool_name: "測試軟體 v2.1",
-            category: "software",
-            version: "2.1.0",
-            description: "GB300 系統測試專用軟體",
-            file_name: "test_software_v2.1.exe",
-            file_size: 45600000,
-            is_required: true,
-            download_count: 25,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: "2",
-            tool_name: "硬體驅動程式",
-            category: "driver",
-            version: "1.5.3",
-            description: "通訊介面驅動程式",
-            file_name: "comm_driver_v1.5.3.zip",
-            file_size: 12800000,
-            is_required: true,
-            download_count: 18,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: "3",
-            tool_name: "配置檔案模板",
-            category: "config",
-            version: "1.0.0",
-            description: "標準配置檔案模板",
-            file_name: "config_template.json",
-            file_size: 2048,
-            is_required: false,
-            download_count: 12,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ];
-        setTools(mockTools);
-      } else {
-        setTools(data);
-      }
-      
-      setIsLoading(false);
+      setTools(data || []);
     } catch (error) {
+      console.error('Error loading tools:', error);
       toast({
         title: "載入失敗",
         description: "無法載入工具列表",
         variant: "destructive"
       });
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return '-';
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
-  };
+  useEffect(() => {
+    loadTools();
+  }, []);
 
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case 'software': return '軟體';
-      case 'driver': return '驅動程式';
-      case 'config': return '配置檔案';
-      case 'document': return '文件';
-      default: return category;
-    }
-  };
-
-  const filteredTools = tools.filter(tool => {
-    const matchesSearch = tool.tool_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         tool.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !filterCategory || filterCategory === "all-categories" || tool.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const categories = [...new Set(tools.map(t => t.category))];
-
-  const handleDownload = async (tool: Tool) => {
-    try {
-      if (tool.file_path) {
-        // Create a temporary link to download the file
-        const link = document.createElement('a');
-        link.href = tool.file_path;
-        link.download = tool.file_name || tool.tool_name;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Update download count
-        await supabase
-          .from('tools_management')
-          .update({ download_count: tool.download_count + 1 })
-          .eq('id', tool.id);
-        
-        toast({
-          title: "開始下載",
-          description: `正在下載 ${tool.tool_name}`
-        });
-        
-        loadTools(); // Refresh the list
-      } else {
-        toast({
-          title: "下載失敗",
-          description: "檔案路徑不存在",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
+  const handleAddTool = async () => {
+    if (!newTool.tool_name.trim()) {
       toast({
-        title: "下載失敗",
-        description: "無法下載檔案",
+        title: "驗證錯誤",
+        description: "請輸入工具名稱",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tools_management')
+        .insert([{
+          tool_name: newTool.tool_name,
+          version: newTool.version || null,
+          category: newTool.category,
+          description: newTool.description || null,
+          is_required: newTool.is_required,
+          upload_status: 'pending'
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "新增成功",
+        description: "工具已新增到列表中",
+      });
+
+      setNewTool({
+        tool_name: "",
+        version: "",
+        category: "driver",
+        description: "",
+        is_required: false
+      });
+
+      loadTools();
+    } catch (error) {
+      console.error('Error adding tool:', error);
+      toast({
+        title: "新增失敗",
+        description: "無法新增工具",
         variant: "destructive"
       });
     }
   };
 
-  const handleDelete = async (toolId: string) => {
+  const handleDeleteTool = async (id: string) => {
+    if (!confirm('確認要刪除這個工具嗎？')) return;
+
     try {
-      await supabase
+      const { error } = await supabase
         .from('tools_management')
         .delete()
-        .eq('id', toolId);
-      
+        .eq('id', id);
+
+      if (error) throw error;
+
       toast({
         title: "刪除成功",
-        description: "工具已刪除"
+        description: "工具已刪除",
       });
-      
+
       loadTools();
     } catch (error) {
+      console.error('Error deleting tool:', error);
       toast({
         title: "刪除失敗",
         description: "無法刪除工具",
@@ -196,149 +174,280 @@ export function ToolsManagement() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="h-64 bg-muted rounded"></div>
-        </div>
-      </div>
-    );
-  }
+  const handleDownload = async (tool: Tool) => {
+    if (!tool.file_path) {
+      toast({
+        title: "下載失敗",
+        description: "檔案路徑不存在",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // 增加下載次數
+      await supabase
+        .from('tools_management')
+        .update({ download_count: tool.download_count + 1 })
+        .eq('id', tool.id);
+
+      // 實際下載邏輯會依據檔案儲存方式實現
+      toast({
+        title: "下載開始",
+        description: `開始下載 ${tool.tool_name}`,
+      });
+
+      loadTools();
+    } catch (error) {
+      console.error('Error downloading tool:', error);
+      toast({
+        title: "下載失敗",
+        description: "無法下載檔案",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const filteredTools = tools.filter(tool => {
+    const matchesSearch = tool.tool_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         tool.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = categoryFilter === "all" || tool.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'uploaded': return 'bg-success text-success-foreground';
+      case 'pending': return 'bg-warning text-warning-foreground';
+      case 'failed': return 'bg-destructive text-destructive-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'uploaded': return '已上傳';
+      case 'pending': return '待上傳';
+      case 'failed': return '上傳失敗';
+      default: return '未知';
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">工具管理</h1>
-          <p className="text-muted-foreground">設備資源與工具檔案管理系統</p>
-        </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          新增工具
-        </Button>
-        
-        <FileUploadDialog
-          isOpen={isDialogOpen}
-          onClose={() => setIsDialogOpen(false)}
-          onSuccess={loadTools}
-        />
+      <div className="flex items-center gap-2">
+        <Wrench className="h-6 w-6" />
+        <h1 className="text-2xl font-bold">工具管理</h1>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜尋工具名稱或描述..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+      <Tabs defaultValue="tools" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="tools" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            工具列表
+          </TabsTrigger>
+          <TabsTrigger value="code" className="flex items-center gap-2">
+            <Code2 className="h-4 w-4" />
+            程式碼儲存
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="tools" className="space-y-6">
+          {/* 新增工具表單 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                新增工具
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tool_name">工具名稱 *</Label>
+                  <Input
+                    id="tool_name"
+                    value={newTool.tool_name}
+                    onChange={(e) => setNewTool({...newTool, tool_name: e.target.value})}
+                    placeholder="輸入工具名稱"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="version">版本</Label>
+                  <Input
+                    id="version"
+                    value={newTool.version}
+                    onChange={(e) => setNewTool({...newTool, version: e.target.value})}
+                    placeholder="v1.0.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">分類</Label>
+                  <Select value={newTool.category} onValueChange={(value) => setNewTool({...newTool, category: value})}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="driver">驅動程式</SelectItem>
+                      <SelectItem value="software">軟體工具</SelectItem>
+                      <SelectItem value="utility">公用程式</SelectItem>
+                      <SelectItem value="documentation">文件</SelectItem>
+                      <SelectItem value="other">其他</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="description">描述</Label>
+                  <Textarea
+                    id="description"
+                    value={newTool.description}
+                    onChange={(e) => setNewTool({...newTool, description: e.target.value})}
+                    placeholder="工具描述和使用說明"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="is_required"
+                    checked={newTool.is_required}
+                    onCheckedChange={(checked) => setNewTool({...newTool, is_required: checked})}
+                  />
+                  <Label htmlFor="is_required">必要工具</Label>
+                </div>
               </div>
-            </div>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="選擇類別" />
+              <div className="flex gap-2 mt-4">
+                <Button onClick={handleAddTool}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  新增工具
+                </Button>
+                <Button variant="outline" onClick={() => setIsUploadDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  上傳檔案
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 篩選器 */}
+          <div className="flex gap-4 items-center">
+            <Input
+              placeholder="搜尋工具..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="分類" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all-categories">全部類別</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {getCategoryLabel(category)}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">所有分類</SelectItem>
+                <SelectItem value="driver">驅動程式</SelectItem>
+                <SelectItem value="software">軟體工具</SelectItem>
+                <SelectItem value="utility">公用程式</SelectItem>
+                <SelectItem value="documentation">文件</SelectItem>
+                <SelectItem value="other">其他</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Tools Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            工具列表
-            <Badge variant="outline" className="ml-auto">
-              {filteredTools.length} 個工具
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>工具名稱</TableHead>
-                <TableHead>類別</TableHead>
-                <TableHead>版本</TableHead>
-                <TableHead>描述</TableHead>
-                <TableHead>檔案大小</TableHead>
-                <TableHead>必要性</TableHead>
-                <TableHead>下載次數</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTools.map((tool) => (
-                <TableRow key={tool.id}>
-                  <TableCell className="font-medium">{tool.tool_name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {getCategoryLabel(tool.category)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{tool.version || '-'}</TableCell>
-                  <TableCell className="max-w-48 truncate">
-                    {tool.description || '-'}
-                  </TableCell>
-                  <TableCell>{formatFileSize(tool.file_size)}</TableCell>
-                  <TableCell>
-                    <Badge className={tool.is_required ? 'bg-danger text-danger-foreground' : 'bg-muted text-muted-foreground'}>
-                      {tool.is_required ? '必要' : '選用'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{tool.download_count}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDownload(tool)}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDelete(tool.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {filteredTools.length === 0 && (
-            <div className="text-center py-8">
-              <Wrench className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">沒有找到相關工具</h3>
-              <p className="text-muted-foreground">請調整搜尋條件或新增新的工具</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* 工具列表 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>工具列表</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8">載入中...</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>工具名稱</TableHead>
+                      <TableHead>版本</TableHead>
+                      <TableHead>分類</TableHead>
+                      <TableHead>狀態</TableHead>
+                      <TableHead>必要</TableHead>
+                      <TableHead>下載次數</TableHead>
+                      <TableHead>上傳時間</TableHead>
+                      <TableHead>操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTools.map((tool) => (
+                      <TableRow key={tool.id}>
+                        <TableCell className="font-medium">
+                          <div>
+                            <div>{tool.tool_name}</div>
+                            {tool.description && (
+                              <div className="text-xs text-muted-foreground">
+                                {tool.description}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{tool.version || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{tool.category}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(tool.upload_status)}>
+                            {getStatusText(tool.upload_status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {tool.is_required ? (
+                            <Badge variant="destructive">必要</Badge>
+                          ) : (
+                            <Badge variant="secondary">選用</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{tool.download_count}</TableCell>
+                        <TableCell>
+                          {tool.uploaded_at ? 
+                            new Date(tool.uploaded_at).toLocaleDateString('zh-TW') : 
+                            '-'
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            {tool.upload_status === 'uploaded' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownload(tool)}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteTool(tool.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <FileUploadDialog
+            isOpen={isUploadDialogOpen}
+            onClose={() => setIsUploadDialogOpen(false)}
+            onUploadSuccess={loadTools}
+          />
+        </TabsContent>
+        
+        <TabsContent value="code">
+          <CodeStorageManager />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
