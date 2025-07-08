@@ -10,6 +10,7 @@ import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
 import { StationAverageTimeChart } from "./StationAverageTimeChart";
 import { ExportDialog } from "@/components/production/ExportDialog";
+import { DashboardScreenshotExporter } from "./DashboardScreenshotExporter";
 import { BackButton } from "@/components/common/BackButton";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
@@ -18,9 +19,16 @@ import {
   AlertTriangle,
   TrendingUp,
   Users,
-  Download
+  Download,
+  Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
 interface DashboardProps {
@@ -31,6 +39,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const { systems, progress, stationStatuses, stations, testItems } = useUnifiedData();
   const { toast } = useToast();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [screenshotDialogOpen, setScreenshotDialogOpen] = useState(false);
   
   const handleStationClick = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
@@ -59,7 +68,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const engineers = [...new Set(systems.map(s => s.assigned_engineer).filter(Boolean))];
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
+    <div className="p-6 space-y-6 animate-fade-in" data-dashboard-content>
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
@@ -71,10 +80,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
-          <Download className="h-4 w-4 mr-2" />
-          匯出報表
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                匯出選項
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
+                <Download className="h-4 w-4 mr-2" />
+                匯出資料報表
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setScreenshotDialogOpen(true)}>
+                <Camera className="h-4 w-4 mr-2" />
+                儀表板截圖
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Station Overview */}
@@ -130,12 +155,17 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </CardContent>
       </Card>
 
-      {/* Export Dialog */}
+      {/* Export Dialogs */}
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
         title="系統儀表板"
         data={systems}
+      />
+      
+      <DashboardScreenshotExporter
+        isOpen={screenshotDialogOpen}
+        onClose={() => setScreenshotDialogOpen(false)}
       />
     </div>
   );

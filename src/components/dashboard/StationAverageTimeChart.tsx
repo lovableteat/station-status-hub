@@ -32,8 +32,9 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 只顯示實際平均處理時間
+  // 準備圖表數據 - 只顯示Station 0-4的實際平均處理時間
   const chartData = stations
+    .filter(station => station.station_order >= 0 && station.station_order <= 4)
     .sort((a, b) => a.station_order - b.station_order)
     .map(station => {
       const actualData = averageTimes.find(item => item.station_name === station.station_name);
@@ -44,8 +45,7 @@ export function StationAverageTimeChart() {
         actualTime: actualTime,
         sampleCount: actualData?.total_records || 0
       };
-    })
-    .filter(item => item.actualTime > 0); // 只顯示有數據的站別
+    });
 
   // 自訂 Tooltip 格式化
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -172,16 +172,20 @@ export function StationAverageTimeChart() {
           )}
         </div>
 
-        {/* 統計摘要 */}
+        {/* 統計摘要 - 以Station 0-4的順序排列 */}
         {chartData.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {chartData.map((data, index) => (
-              <div key={index} className="text-center p-3 bg-muted/30 rounded space-y-1">
-                <p className="font-medium text-sm">{data.station}</p>
-                <p className="text-lg font-bold text-primary">{data.actualTime} 小時</p>
-                <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
-              </div>
-            ))}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">Station 0-4 處理時間統計</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {chartData.map((data, index) => (
+                <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
+                  <p className="font-medium text-sm">{data.station}</p>
+                  <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
+                  <p className="text-xs text-muted-foreground">小時</p>
+                  <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
