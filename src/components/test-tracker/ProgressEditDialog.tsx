@@ -77,7 +77,7 @@ export function ProgressEditDialog({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為Station 0-4（包含Station 4）
+  // 檢查是否為Station 0-4（包含Station 4）- 統一時間記錄邏輯
   const isStationWithTimeTracking = () => {
     return stationName.includes('Station 0') || 
            stationName.includes('Station 1') || 
@@ -86,12 +86,12 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 改善的時間記錄邏輯 - 只在狀態實際變化時記錄時間
+  // 統一的時間記錄邏輯 - Station 0-4 都使用相同邏輯
   const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
     const currentTime = new Date().toISOString();
     let timeUpdates = {};
 
-    // 如果是Station 0-4（包含Station 4），根據狀態變化更新時間
+    // 對於 Station 0-4，統一處理時間記錄邏輯
     if (isStationWithTimeTracking()) {
       // 從 Not Start 變成其他狀態時，只在沒有開始時間時記錄開始時間
       if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
@@ -235,7 +235,7 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 時間記錄管理按鈕 - 現在包含Station 4 */}
+                        {/* 時間記錄管理按鈕 - Station 0-4 統一處理 */}
                         {isStationWithTimeTracking() && itemProgress && (
                           <TimeRecordManager
                             systemId={systemId}
@@ -330,7 +330,7 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 - 現在包含Station 4 */}
+                        {/* 時間顯示 - Station 0-4 統一處理 */}
                         {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
@@ -345,7 +345,7 @@ export function ProgressEditDialog({
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              * 時間記錄已改善，避免重複更新。如需調整時間請使用「時間管理」功能
+                              * Station 0-4 統一時間記錄邏輯，狀態變更時自動記錄時間
                             </div>
                           </div>
                         )}
@@ -369,7 +369,7 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - 現在包含Station 4且有時間記錄時顯示 */}
+                    {/* 時間資訊顯示 - Station 0-4 統一處理 */}
                     {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">

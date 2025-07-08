@@ -79,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 修正站點處理時間計算邏輯 - 包含所有站點(0-4)
+  // 統一站點處理時間計算邏輯 - Station 0-4 都使用相同邏輯
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -198,6 +198,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
+                    // 使用統一的處理時間計算邏輯
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
@@ -335,6 +336,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
+                    // 使用統一的處理時間計算邏輯
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
