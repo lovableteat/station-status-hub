@@ -142,6 +142,37 @@ export function ProgressEditDialog({
     }));
   };
 
+  // 增強的儲存處理函數 - 確保 Station 4 在儲存時自動記錄時間
+  const handleEnhancedSaveProgress = (systemId: string, stationId: string, itemId: string) => {
+    if (!editingProgress) return;
+    
+    const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
+    const currentTime = new Date().toISOString();
+    
+    // 針對 Station 0-4 進行最終的時間記錄確認
+    if (isStationWithTimeTracking()) {
+      let finalTimeUpdates = { ...editValues };
+      
+      // 確保開始時間記錄：如果狀態不是 Not Start 但沒有開始時間，自動記錄
+      if (editValues.status !== 'Not Start' && !editValues.started_at && !currentItem?.started_at) {
+        finalTimeUpdates.started_at = currentTime;
+        console.log(`儲存時自動記錄開始時間 for ${stationName}:`, currentTime);
+      }
+      
+      // 確保完成時間記錄：如果狀態是 Done 但沒有完成時間，自動記錄
+      if (editValues.status === 'Done' && !editValues.completed_at && !currentItem?.completed_at) {
+        finalTimeUpdates.completed_at = currentTime;
+        console.log(`儲存時自動記錄完成時間 for ${stationName}:`, currentTime);
+      }
+      
+      // 更新 editValues 以包含最終的時間記錄
+      setEditValues(finalTimeUpdates);
+    }
+    
+    // 呼叫原始的儲存函數
+    handleSaveProgress(systemId, stationId, itemId);
+  };
+
   // 處理進度變更 - 限制只能是0或100
   const handleProgressChange = (newProgress: number) => {
     // 限制進度只能是0或100
@@ -262,7 +293,7 @@ export function ProgressEditDialog({
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleSaveProgress(systemId, stationId, item.id)}
+                              onClick={() => handleEnhancedSaveProgress(systemId, stationId, item.id)}
                             >
                               <Save className="h-3 w-3" />
                             </Button>
@@ -364,7 +395,7 @@ export function ProgressEditDialog({
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              * Station 0-4 統一自動時間記錄邏輯，狀態變更時自動記錄時間
+                              * Station 0-4 統一自動時間記錄邏輯，狀態變更並儲存時自動記錄時間
                             </div>
                           </div>
                         )}
