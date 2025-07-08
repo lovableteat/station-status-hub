@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +76,7 @@ export function ProgressEditDialog({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為Station 0-4（包含所有5個站點）- 統一時間記錄邏輯
+  // 檢查是否為Station 0-4（包含Station 4）- 統一時間記錄邏輯
   const isStationWithTimeTracking = () => {
     return stationName.includes('Station 0') || 
            stationName.includes('Station 1') || 
@@ -132,7 +131,7 @@ export function ProgressEditDialog({
       newProgressPercent = 0;
     }
     
-    // 獲取時間更新 - 確保 Station 0-4 都能自動記錄時間
+    // 獲取時間更新 - 確保 Station 4 也能自動記錄時間
     const timeUpdates = updateTimeIfStatusChanged(newStatus, currentItem);
     
     setEditValues(prev => ({ 
@@ -143,7 +142,7 @@ export function ProgressEditDialog({
     }));
   };
 
-  // 增強的儲存處理函數 - 確保 Station 0-4 在儲存時自動記錄時間
+  // 增強的儲存處理函數 - 確保 Station 4 在儲存時自動記錄時間
   const handleEnhancedSaveProgress = (systemId: string, stationId: string, itemId: string) => {
     if (!editingProgress) return;
     
@@ -172,6 +171,31 @@ export function ProgressEditDialog({
     
     // 呼叫原始的儲存函數
     handleSaveProgress(systemId, stationId, itemId);
+  };
+
+  // 處理進度變更 - 限制只能是0或100
+  const handleProgressChange = (newProgress: number) => {
+    // 限制進度只能是0或100
+    const validProgress = newProgress >= 50 ? 100 : 0;
+    
+    // 根據進度自動調整狀態
+    let newStatus = editValues.status;
+    if (validProgress === 100) {
+      newStatus = 'Done';
+    } else if (validProgress === 0) {
+      newStatus = editValues.status === 'Done' ? 'On-going' : editValues.status;
+    }
+    
+    setEditValues(prev => ({ 
+      ...prev, 
+      progress_percent: validProgress,
+      status: newStatus
+    }));
+  };
+
+  // 處理備註變更
+  const handleNotesChange = (newNotes: string) => {
+    setEditValues(prev => ({ ...prev, notes: newNotes }));
   };
 
   // 當開始編輯時，記錄原始狀態
