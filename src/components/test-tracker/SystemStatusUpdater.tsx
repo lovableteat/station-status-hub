@@ -63,13 +63,13 @@ export function SystemStatusUpdater({
         
         for (const system of systems) {
           const statusResult = SystemStatusCalculator.calculateSystemStatus(
-            system.id,
+            system,
             stations,
             items,
             progress
           );
           
-          const isComplete = statusResult.currentStation === '已完成';
+          const isComplete = statusResult.isComplete;
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
           
           console.log(`系統 ${system.system_name}:`);
@@ -88,8 +88,7 @@ export function SystemStatusUpdater({
           }
           
           // 系統狀態更新
-          const newStatus = statusResult.currentStation === '已完成' ? 'Done' : 
-                           statusResult.currentStation === '未開始' ? 'Not Start' : 'On-going';
+          const newStatus = statusResult.status;
           if (system.status !== newStatus) {
             updatedFields.status = newStatus;
             needsUpdate = true;
