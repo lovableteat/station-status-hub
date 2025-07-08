@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Calendar, Clock, Filter } from "lucide-react";
@@ -163,9 +163,12 @@ export function StationAverageTimeChart() {
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
                   dataKey="value" 
-                  fill={(entry: any) => entry.color}
                   radius={[0, 4, 4, 0]}
-                />
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
