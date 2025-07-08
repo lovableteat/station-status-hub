@@ -21,16 +21,12 @@ interface SystemStatusListProps {
 export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   const { systems, progress, stations, testItems } = useUnifiedData();
 
-  // 計算系統在 Station 0-4 的整體進度 - 根據完成幾站來計算
+  // 計算系統在 Station 0-4 的整體進度 - 根據完成幾站來計算（共5站）
   const calculateSystemOverallProgress = (systemId: string) => {
-    // 找出 Station 0-4 的站點
+    // 找出 Station 0-4 的站點（共5站）
     const targetStations = stations.filter(station => 
-      station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
-      station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
-      station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
-      station.station_name.includes('Station 3') || station.station_name.includes('EE') ||
-      station.station_name.includes('Station 4') || station.station_name.includes('NV TEST')
-    );
+      station.station_order >= 0 && station.station_order <= 4
+    ).sort((a, b) => a.station_order - b.station_order);
 
     if (targetStations.length === 0) return 0;
 
@@ -57,8 +53,8 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
       }
     });
 
-    // 整體進度 = (完成的站點數 / 總站點數) * 100
-    return Math.round((completedStations / targetStations.length) * 100);
+    // 整體進度 = (完成的站點數 / 總站點數) * 100 （共5站：Station 0-4）
+    return Math.round((completedStations / 5) * 100);
   };
 
   const getStatusIcon = (status: string, progress: number) => {
@@ -106,7 +102,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {systems.map(system => {
-            // 使用新的進度計算邏輯 - 根據 Station 0-4 完成幾站來計算
+            // 使用新的進度計算邏輯 - 根據 Station 0-4 完成幾站來計算（共5站）
             const progressPercent = calculateSystemOverallProgress(system.id);
 
             return (
