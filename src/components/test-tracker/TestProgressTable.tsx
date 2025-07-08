@@ -8,6 +8,7 @@ import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
+import { SystemResetDialog } from "./SystemResetDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,6 +162,11 @@ export function TestProgressTable({
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
                     />
+                    <SystemResetDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      onReset={onSystemUpdate}
+                    />
                     <SystemDeleteButton
                       systemId={system.id}
                       systemName={system.system_name}
@@ -253,7 +259,7 @@ export function TestProgressTable({
   }
 
   // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後
-  const gridColumns = `160px 120px repeat(${filteredStations.length}, 200px) 120px`;
+  const gridColumns = `140px 100px repeat(${filteredStations.length}, 180px) 140px`;
 
   return (
     <Card>
@@ -278,7 +284,7 @@ export function TestProgressTable({
         <div className="overflow-x-auto">
           <div className="min-w-[1200px]">
             {/* Header Row */}
-            <div className="grid gap-3 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>
               {filteredStations.map(station => (
@@ -292,7 +298,7 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => {
               return (
-                <div key={system.id} className="grid gap-3 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className="grid gap-2 p-3 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center">
                     <button 
                       className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
@@ -332,9 +338,9 @@ export function TestProgressTable({
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
-                      <div key={station.id} className="px-2">
+                      <div key={station.id} className="px-1">
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center justify-between text-xs">
                             <span>進度: {overallPercent}%</span>
                             <ProgressEditDialog
                               systemName={system.system_name}
@@ -371,6 +377,11 @@ export function TestProgressTable({
                       systemName={system.system_name}
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
+                    />
+                    <SystemResetDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      onReset={onSystemUpdate}
                     />
                     <SystemDeleteButton
                       systemId={system.id}

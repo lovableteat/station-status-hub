@@ -1,12 +1,20 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
+import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TestProgress {
   id: string;
@@ -26,6 +34,7 @@ export function TestTracker() {
   const [filterEngineer, setFilterEngineer] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
+  const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [editValues, setEditValues] = useState<{
     status: string;
     progress_percent: number;
@@ -182,11 +191,27 @@ export function TestTracker() {
           <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
           <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態</p>
         </div>
-        <ExportManager 
-          systems={filteredSystems} 
-          stations={stations} 
-          progress={progress} 
-        />
+        <div className="flex gap-2">
+          <ExportManager 
+            systems={filteredSystems} 
+            stations={stations} 
+            progress={progress} 
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                PDF 匯出
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
+                <FileText className="h-4 w-4 mr-2" />
+                完整測試追蹤 PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Filters */}
@@ -201,21 +226,33 @@ export function TestTracker() {
       />
 
       {/* Test Progress Table */}
-      <TestProgressTable
-        filteredSystems={filteredSystems}
+      <div data-testtracker-table>
+        <TestProgressTable
+          filteredSystems={filteredSystems}
+          stations={stations}
+          items={items}
+          progress={progress}
+          editingProgress={editingProgress}
+          setEditingProgress={setEditingProgress}
+          editValues={editValues}
+          setEditValues={setEditValues}
+          getProgressForSystemItem={getProgressForSystemItem}
+          handleEditProgress={handleEditProgress}
+          handleSaveProgress={handleSaveProgress}
+          handleDeleteProgress={handleDeleteProgress}
+          getStatusColor={getStatusColor}
+          onSystemUpdate={loadData}
+        />
+      </div>
+
+      {/* PDF Exporter Dialog */}
+      <TestTrackerPDFExporter
+        systems={filteredSystems}
         stations={stations}
         items={items}
         progress={progress}
-        editingProgress={editingProgress}
-        setEditingProgress={setEditingProgress}
-        editValues={editValues}
-        setEditValues={setEditValues}
-        getProgressForSystemItem={getProgressForSystemItem}
-        handleEditProgress={handleEditProgress}
-        handleSaveProgress={handleSaveProgress}
-        handleDeleteProgress={handleDeleteProgress}
-        getStatusColor={getStatusColor}
-        onSystemUpdate={loadData}
+        isOpen={pdfExporterOpen}
+        onClose={() => setPdfExporterOpen(false)}
       />
     </div>
   );
