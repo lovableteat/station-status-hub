@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
+import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -125,8 +125,9 @@ export function TestProgressTable({
           onSystemUpdate={onSystemUpdate}
         />
         
-        {/* 新增批量重置按鈕 */}
-        <div className="flex justify-end">
+        {/* 新增批量重置按鈕和機台管理 */}
+        <div className="flex justify-between items-center">
+          <SystemManager onSystemUpdate={onSystemUpdate} />
           <BulkResetDialog onReset={onSystemUpdate} />
         </div>
         
@@ -158,6 +159,11 @@ export function TestProgressTable({
                       systemName={system.system_name}
                       assignedEngineer={system.assigned_engineer}
                       onUpdate={onSystemUpdate}
+                    />
+                    <SystemDeleteButton
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      onSystemUpdate={onSystemUpdate}
                     />
                   </div>
                 </div>
@@ -246,14 +252,17 @@ export function TestProgressTable({
   }
 
   // Desktop table view - 增加欄位寬度
-  const gridColumns = `160px 120px repeat(${filteredStations.length}, 180px)`;
+  const gridColumns = `160px 120px 80px repeat(${filteredStations.length}, 180px)`;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>測試進度表</CardTitle>
-          <BulkResetDialog onReset={onSystemUpdate} />
+          <div className="flex gap-2">
+            <SystemManager onSystemUpdate={onSystemUpdate} />
+            <BulkResetDialog onReset={onSystemUpdate} />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -271,6 +280,7 @@ export function TestProgressTable({
             <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>
+              <div className="font-semibold">操作</div>
               {filteredStations.map(station => (
                 <div key={station.id} className="font-semibold text-center">
                   {station.station_name}
@@ -298,18 +308,25 @@ export function TestProgressTable({
                     >
                       {system.system_name}
                     </button>
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                    />
                   </div>
                   <div>
                     <StationStatusSelector
                       systemId={system.id}
                       currentStatus={system.current_station || '未開始'}
                       onUpdate={onSystemUpdate}
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                    <SystemDeleteButton
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      onSystemUpdate={onSystemUpdate}
                     />
                   </div>
                   
