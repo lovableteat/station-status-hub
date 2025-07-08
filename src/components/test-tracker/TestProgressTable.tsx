@@ -79,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 修正站點處理時間計算邏輯 - 包含所有站點(0-4)，Station 4也有完全一樣的功能
+  // 修正站點處理時間計算邏輯 - 包含所有站點(0-4)
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -240,7 +240,7 @@ export function TestProgressTable({
                                 <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
                               </div>
                               <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">處理時長:</span>
+                                <span className="text-muted-foreground">站點處理時長:</span>
                                 <span className="font-medium text-primary">{processingTime.duration} 小時</span>
                               </div>
                             </div>
@@ -361,7 +361,6 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          {/* Station 0-4 都顯示處理時長，包含Station 4 */}
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
                               處理時長: {processingTime.duration} 小時
