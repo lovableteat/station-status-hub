@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,31 +21,31 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   const { systems, progress } = useUnifiedData();
 
   const getStatusIcon = (status: string, progress: number) => {
-    if (status === 'Done') return <CheckCircle className="h-4 w-4 text-green-600 animate-pulse" />;
+    if (status === 'Done') return <CheckCircle className="h-4 w-4 text-success" />;
     if (status === 'On-going') {
-      if (progress > 75) return <Activity className="h-4 w-4 text-yellow-500 animate-spin" />;
-      if (progress > 25) return <Zap className="h-4 w-4 text-yellow-500 animate-pulse" />;
-      return <AlertTriangle className="h-4 w-4 text-yellow-500 animate-bounce" />;
+      if (progress > 75) return <Activity className="h-4 w-4 text-success animate-pulse" />;
+      if (progress > 25) return <Zap className="h-4 w-4 text-warning animate-pulse" />;
+      return <AlertTriangle className="h-4 w-4 text-danger animate-bounce" />;
     }
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Done': return 'bg-green-100 text-green-800 border-green-200';
-      case 'On-going': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Done': return 'bg-success text-success-foreground';
+      case 'On-going': return 'bg-warning text-warning-foreground';
       case 'Not Start': return 'bg-muted text-muted-foreground';
       default: return 'bg-muted text-muted-foreground';
     }
   };
 
   const getAnimationClass = (status: string, progress: number) => {
-    if (status === 'Done') return 'animate-pulse border-green-300 shadow-green-100 bg-green-50/30';
     if (status === 'On-going') {
-      if (progress < 25) return 'animate-pulse border-yellow-300 shadow-yellow-100 bg-yellow-50/30';
-      if (progress < 75) return 'animate-pulse border-yellow-300 shadow-yellow-100 bg-yellow-50/30';
-      return 'animate-pulse border-yellow-300 shadow-yellow-100 bg-yellow-50/30';
+      if (progress < 25) return 'animate-pulse border-danger/50 shadow-danger/20';
+      if (progress < 75) return 'animate-pulse border-warning/50 shadow-warning/20';
+      return 'animate-pulse border-success/50 shadow-success/20';
     }
+    if (status === 'Done') return 'border-success/30 shadow-success/10';
     return '';
   };
 
@@ -78,7 +77,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
             return (
               <Card
                 key={system.id}
-                className={`transition-all duration-500 hover:shadow-lg cursor-pointer border-2 ${getAnimationClass(system.status, progressPercent)}`}
+                className={`transition-all duration-300 hover:shadow-lg cursor-pointer ${getAnimationClass(system.status, progressPercent)}`}
               >
                 <CardContent className="p-4">
                   <div className="space-y-3">
@@ -88,7 +87,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                         {getStatusIcon(system.status, progressPercent)}
                         <h4 className="font-semibold text-sm">{system.system_name}</h4>
                       </div>
-                      <Badge className={`${getStatusColor(system.status)} font-medium`} variant="secondary">
+                      <Badge className={getStatusColor(system.status)} variant="secondary">
                         {system.status === 'Done' && '已完成'}
                         {system.status === 'On-going' && '進行中'}
                         {system.status === 'Not Start' && '未開始'}
@@ -99,14 +98,11 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
                         <span>整體進度</span>
-                        <span className="font-medium">{progressPercent}%</span>
+                        <span>{progressPercent}%</span>
                       </div>
                       <Progress 
                         value={progressPercent} 
-                        className={`h-3 transition-all duration-300 ${
-                          system.status === 'Done' ? 'bg-green-100' : 
-                          system.status === 'On-going' ? 'bg-yellow-100' : 'bg-gray-100'
-                        }`}
+                        className="h-2"
                       />
                     </div>
 
@@ -127,7 +123,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="flex-1 hover:scale-105 transition-transform duration-200"
+                        className="flex-1"
                         onClick={() => handleSystemClick(system.system_name)}
                       >
                         <Play className="h-3 w-3 mr-1" />
@@ -136,7 +132,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="flex-1 hover:scale-105 transition-transform duration-200"
+                        className="flex-1"
                         onClick={() => handleMonitorClick(system.system_name)}
                       >
                         <Eye className="h-3 w-3 mr-1" />

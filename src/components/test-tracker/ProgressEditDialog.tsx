@@ -77,7 +77,7 @@ export function ProgressEditDialog({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為Station 0-4（包含Station 4）- 完全一致的時間追蹤功能
+  // 檢查是否為Station 0-4（包含Station 4）
   const isStationWithTimeTracking = () => {
     return stationName.includes('Station 0') || 
            stationName.includes('Station 1') || 
@@ -235,7 +235,7 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 時間記錄管理按鈕 - Station 0-4 都有完全一樣的功能 */}
+                        {/* 時間記錄管理按鈕 - 現在包含Station 4 */}
                         {isStationWithTimeTracking() && itemProgress && (
                           <TimeRecordManager
                             systemId={systemId}
@@ -330,7 +330,7 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 - Station 0-4 都有完全一樣的功能 */}
+                        {/* 時間顯示 - 現在包含Station 4 */}
                         {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
@@ -369,7 +369,7 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - Station 0-4 都有完全一樣的功能且有時間記錄時顯示 */}
+                    {/* 時間資訊顯示 - 現在包含Station 4且有時間記錄時顯示 */}
                     {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">
