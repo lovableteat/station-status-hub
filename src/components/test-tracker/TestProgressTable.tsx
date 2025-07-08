@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,7 +78,7 @@ export function TestProgressTable({
     }
   };
 
-  // 修正站點處理時間計算邏輯
+  // 修正站點處理時間計算邏輯 - 包含所有站點(0-4)
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -251,8 +252,8 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 調整欄位寬度和間距
-  const gridColumns = `200px 150px 120px repeat(${filteredStations.length}, 220px)`;
+  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後
+  const gridColumns = `160px 120px repeat(${filteredStations.length}, 200px) 120px`;
 
   return (
     <Card>
@@ -277,24 +278,24 @@ export function TestProgressTable({
         <div className="overflow-x-auto">
           <div className="min-w-[1200px]">
             {/* Header Row */}
-            <div className="grid gap-4 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="grid gap-3 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>
-              <div className="font-semibold">操作</div>
               {filteredStations.map(station => (
                 <div key={station.id} className="font-semibold text-center">
                   {station.station_name}
                 </div>
               ))}
+              <div className="font-semibold">操作</div>
             </div>
 
             {/* Data Rows */}
             {filteredSystems.map(system => {
               return (
-                <div key={system.id} className="grid gap-4 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
-                  <div className="flex items-center gap-2">
+                <div key={system.id} className="grid gap-3 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                  <div className="flex items-center">
                     <button 
-                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm truncate"
+                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
                       onClick={() => {
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
@@ -315,19 +316,6 @@ export function TestProgressTable({
                       systemId={system.id}
                       currentStatus={system.current_station || '未開始'}
                       onUpdate={onSystemUpdate}
-                    />
-                  </div>
-                  <div className="flex gap-1">
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                    />
-                    <SystemDeleteButton
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      onSystemUpdate={onSystemUpdate}
                     />
                   </div>
                   
@@ -376,6 +364,20 @@ export function TestProgressTable({
                       </div>
                     );
                   })}
+                  
+                  <div className="flex gap-1">
+                    <SystemEditDialog
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      assignedEngineer={system.assigned_engineer}
+                      onUpdate={onSystemUpdate}
+                    />
+                    <SystemDeleteButton
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      onSystemUpdate={onSystemUpdate}
+                    />
+                  </div>
                 </div>
               );
             })}
