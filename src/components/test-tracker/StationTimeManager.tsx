@@ -61,7 +61,7 @@ export function StationTimeManager({
       setIsLoading(true);
       
       const { data, error } = await supabase
-        .from('station_time_settings')
+        .from('station_time_settings' as any)
         .select('*')
         .eq('system_id', systemId)
         .eq('station_id', stationId)
@@ -73,10 +73,11 @@ export function StationTimeManager({
       }
 
       if (data) {
-        setSettings(data);
-        setEstimatedStartTime(data.estimated_start_time || undefined);
-        setEstimatedEndTime(data.estimated_end_time || undefined);
-        setActualCompletionTime(data.actual_completion_time || undefined);
+        const timeSettings = data as StationTimeSettings;
+        setSettings(timeSettings);
+        setEstimatedStartTime(timeSettings.estimated_start_time || undefined);
+        setEstimatedEndTime(timeSettings.estimated_end_time || undefined);
+        setActualCompletionTime(timeSettings.actual_completion_time || undefined);
       } else {
         // 如果沒有設定，自動計算實際完成時間
         await calculateActualCompletionTime();
@@ -122,7 +123,7 @@ export function StationTimeManager({
     try {
       setIsSaving(true);
 
-      const settingsData: Partial<StationTimeSettings> = {
+      const settingsData = {
         system_id: systemId,
         station_id: stationId,
         estimated_start_time: estimatedStartTime,
@@ -134,7 +135,7 @@ export function StationTimeManager({
       if (settings?.id) {
         // 更新現有設定
         result = await supabase
-          .from('station_time_settings')
+          .from('station_time_settings' as any)
           .update(settingsData)
           .eq('id', settings.id)
           .select()
@@ -142,7 +143,7 @@ export function StationTimeManager({
       } else {
         // 創建新設定
         result = await supabase
-          .from('station_time_settings')
+          .from('station_time_settings' as any)
           .insert(settingsData)
           .select()
           .single();
@@ -152,7 +153,7 @@ export function StationTimeManager({
         throw result.error;
       }
 
-      setSettings(result.data);
+      setSettings(result.data as StationTimeSettings);
       toast({
         title: "設定已儲存",
         description: `${stationName} 時間設定已成功更新`
