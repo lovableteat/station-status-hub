@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,8 +77,8 @@ export function ProgressEditDialog({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為Station 0-4
-  const isStation0To4 = () => {
+  // 檢查是否為Station 0-4（包含Station 4）
+  const isStationWithTimeTracking = () => {
     return stationName.includes('Station 0') || 
            stationName.includes('Station 1') || 
            stationName.includes('Station 2') || 
@@ -90,8 +91,8 @@ export function ProgressEditDialog({
     const currentTime = new Date().toISOString();
     let timeUpdates = {};
 
-    // 如果是Station 0-4，根據狀態變化更新時間
-    if (isStation0To4()) {
+    // 如果是Station 0-4（包含Station 4），根據狀態變化更新時間
+    if (isStationWithTimeTracking()) {
       // 從 Not Start 變成其他狀態時，只在沒有開始時間時記錄開始時間
       if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
         timeUpdates = { ...timeUpdates, started_at: currentTime };
@@ -234,8 +235,8 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 新增時間記錄管理按鈕 */}
-                        {isStation0To4() && itemProgress && (
+                        {/* 時間記錄管理按鈕 - 現在包含Station 4 */}
+                        {isStationWithTimeTracking() && itemProgress && (
                           <TimeRecordManager
                             systemId={systemId}
                             stationId={stationId}
@@ -329,8 +330,8 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 - 只在Station 0-4顯示 */}
-                        {isStation0To4() && (editValues.started_at || editValues.completed_at) && (
+                        {/* 時間顯示 - 現在包含Station 4 */}
+                        {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
                             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -368,8 +369,8 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - 只在Station 0-4且有時間記錄時顯示 */}
-                    {isStation0To4() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
+                    {/* 時間資訊顯示 - 現在包含Station 4且有時間記錄時顯示 */}
+                    {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
