@@ -13,10 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 interface FileUploadDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onUploadSuccess: () => void;
 }
 
-export function FileUploadDialog({ isOpen, onClose, onSuccess }: FileUploadDialogProps) {
+export function FileUploadDialog({ isOpen, onClose, onUploadSuccess }: FileUploadDialogProps) {
   const [formData, setFormData] = useState({
     tool_name: '',
     category: 'driver',
@@ -117,7 +117,7 @@ export function FileUploadDialog({ isOpen, onClose, onSuccess }: FileUploadDialo
           title: "上傳成功",
           description: "工具檔案已成功上傳"
         });
-        onSuccess();
+        onUploadSuccess();
         handleClose();
       }, 500);
 

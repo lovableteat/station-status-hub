@@ -155,6 +155,42 @@ export type Database = {
           },
         ]
       }
+      code_snippets: {
+        Row: {
+          category: string
+          code_content: string
+          created_at: string
+          description: string | null
+          id: string
+          language: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          code_content: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          language?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          code_content?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          language?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       columns: {
         Row: {
           color: string | null
