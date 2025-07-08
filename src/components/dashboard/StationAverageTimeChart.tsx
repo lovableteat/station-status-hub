@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { Calendar, Clock, Filter, TrendingUp, Target } from "lucide-react";
+import { Calendar, Clock, Filter, TrendingUp, Target, Activity } from "lucide-react";
 
 export function StationAverageTimeChart() {
   const { averageTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
