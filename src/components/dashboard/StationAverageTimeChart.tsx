@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Calendar, Clock, Filter } from "lucide-react";
@@ -32,29 +32,20 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 改為平面結構
+  // 準備圖表數據 - 只顯示實際平均處理時間
   const chartData = stations
     .sort((a, b) => a.station_order - b.station_order)
-    .flatMap(station => {
+    .map(station => {
       const actualData = averageTimes.find(item => item.station_name === station.station_name);
-      const estimatedTime = Number(station.estimated_hours || 0);
       const actualTime = actualData ? Number(actualData.average_hours.toFixed(2)) : 0;
       
-      return [
-        {
-          station: station.station_name,
-          type: '預計時間',
-          value: estimatedTime,
-          color: '#3b82f6'
-        },
-        {
-          station: station.station_name,
-          type: '實際時間',
-          value: actualTime,
-          color: '#10b981'
-        }
-      ];
-    });
+      return {
+        station: station.station_name,
+        actualTime: actualTime,
+        sampleCount: actualData?.total_records || 0
+      };
+    })
+    .filter(item => item.actualTime > 0); // 只顯示有數據的站別
 
   // 自訂 Tooltip 格式化
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -63,8 +54,11 @@ export function StationAverageTimeChart() {
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <p className="font-medium">{data.station}</p>
-          <p style={{ color: data.color }}>
-            {data.type}: {data.value} 小時
+          <p className="text-primary">
+            平均處理時間: {data.actualTime} 小時
+          </p>
+          <p className="text-xs text-muted-foreground">
+            樣本數: {data.sampleCount} 筆
           </p>
         </div>
       );
@@ -77,7 +71,7 @@ export function StationAverageTimeChart() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          各站處理時間比較分析（預計 vs 實際）
+          各站平均處理時間分析
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -135,7 +129,7 @@ export function StationAverageTimeChart() {
           </div>
         </div>
 
-        {/* 圖表區域 - 平面橫條圖 */}
+        {/* 圖表區域 - 垂直長條圖 */}
         <div className="h-96">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -145,30 +139,26 @@ export function StationAverageTimeChart() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={chartData} 
-                layout="horizontal"
-                margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
+                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  type="number"
+                  dataKey="station"
                   tick={{ fontSize: 12 }}
-                  label={{ value: '時間 (小時)', position: 'insideBottom', offset: -5 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
                 />
                 <YAxis 
-                  type="category"
-                  dataKey="station"
-                  tick={{ fontSize: 11 }}
-                  width={80}
+                  tick={{ fontSize: 12 }}
+                  label={{ value: '時間 (小時)', angle: -90, position: 'insideLeft' }}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
-                  dataKey="value" 
-                  radius={[0, 4, 4, 0]}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
+                  dataKey="actualTime" 
+                  fill="#10b981"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -183,34 +173,15 @@ export function StationAverageTimeChart() {
         </div>
 
         {/* 統計摘要 */}
-        {stations.length > 0 && (
+        {chartData.length > 0 && (
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {stations
-              .sort((a, b) => a.station_order - b.station_order)
-              .map((station, index) => {
-                const actualData = averageTimes.find(item => item.station_name === station.station_name);
-                const estimatedTime = Number(station.estimated_hours || 0);
-                const actualTime = actualData ? Number(actualData.average_hours.toFixed(2)) : 0;
-                const efficiency = actualData && station.estimated_hours 
-                  ? Number(((station.estimated_hours / actualData.average_hours) * 100).toFixed(1))
-                  : 0;
-                
-                return (
-                  <div key={index} className="text-center p-3 bg-muted/30 rounded space-y-1">
-                    <p className="font-medium text-sm">{station.station_name}</p>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-blue-600">預計: {estimatedTime}h</span>
-                      <span className="text-green-600">實際: {actualTime}h</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{actualData?.total_records || 0} 筆樣本</p>
-                    {efficiency > 0 && (
-                      <p className="text-xs font-medium">
-                        效率: {efficiency}%
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+            {chartData.map((data, index) => (
+              <div key={index} className="text-center p-3 bg-muted/30 rounded space-y-1">
+                <p className="font-medium text-sm">{data.station}</p>
+                <p className="text-lg font-bold text-primary">{data.actualTime} 小時</p>
+                <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
