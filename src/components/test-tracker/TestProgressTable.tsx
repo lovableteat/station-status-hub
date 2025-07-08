@@ -251,8 +251,8 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 增加欄位寬度
-  const gridColumns = `160px 120px 80px repeat(${filteredStations.length}, 180px)`;
+  // Desktop table view - 調整欄位寬度和間距
+  const gridColumns = `200px 150px 120px repeat(${filteredStations.length}, 220px)`;
 
   return (
     <Card>
@@ -275,9 +275,9 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[1000px]">
+          <div className="min-w-[1200px]">
             {/* Header Row */}
-            <div className="grid gap-2 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="grid gap-4 p-4 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">當前站點</div>
               <div className="font-semibold">操作</div>
@@ -291,10 +291,10 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => {
               return (
-                <div key={system.id} className="grid gap-2 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className="grid gap-4 p-4 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center gap-2">
                     <button 
-                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
+                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm truncate"
                       onClick={() => {
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
@@ -305,6 +305,7 @@ export function TestProgressTable({
                         });
                         window.dispatchEvent(event);
                       }}
+                      title={system.system_name}
                     >
                       {system.system_name}
                     </button>
@@ -343,7 +344,7 @@ export function TestProgressTable({
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
-                      <div key={station.id}>
+                      <div key={station.id} className="px-2">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span>進度: {overallPercent}%</span>
@@ -368,7 +369,7 @@ export function TestProgressTable({
                           <Progress value={overallPercent} className="h-2" />
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
-                              站點處理時長: {processingTime.duration} 小時
+                              處理時長: {processingTime.duration} 小時
                             </div>
                           )}
                         </div>
