@@ -32,7 +32,7 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 只顯示Station 0-4的實際平均處理時間
+  // 準備圖表數據 - 顯示Station 0-4的實際平均處理時間（包含Station 4）
   const chartData = stations
     .filter(station => station.station_order >= 0 && station.station_order <= 4)
     .sort((a, b) => a.station_order - b.station_order)
@@ -71,7 +71,7 @@ export function StationAverageTimeChart() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          各站平均處理時間分析
+          各站平均處理時間分析 (Station 0-4)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -172,7 +172,7 @@ export function StationAverageTimeChart() {
           )}
         </div>
 
-        {/* 統計摘要 - 以Station 0-4的順序排列 */}
+        {/* 統計摘要 - 包含Station 4 */}
         {chartData.length > 0 && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">Station 0-4 處理時間統計</h3>
