@@ -9,7 +9,6 @@ import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
-import { StationTimeManager } from "./StationTimeManager";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 修正站點處理時間計算邏輯 - 包含所有站點
+  // 修正站點處理時間計算邏輯 - 包含所有站點(0-4)
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -205,32 +204,23 @@ export function TestProgressTable({
                       <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-semibold text-base">{station.station_name}</h4>
-                          <div className="flex gap-2">
-                            <ProgressEditDialog
-                              systemName={system.system_name}
-                              stationName={station.station_name}
-                              stationItems={stationItems}
-                              progress={progress}
-                              editingProgress={editingProgress}
-                              setEditingProgress={setEditingProgress}
-                              editValues={editValues}
-                              setEditValues={setEditValues}
-                              getProgressForSystemItem={getProgressForSystemItem}
-                              handleEditProgress={handleEditProgress}
-                              handleSaveProgress={handleSaveProgress}
-                              handleDeleteProgress={handleDeleteProgress}
-                              getStatusColor={getStatusColor}
-                              systemId={system.id}
-                              stationId={station.id}
-                            />
-                            <StationTimeManager
-                              systemId={system.id}
-                              stationId={station.id}
-                              stationName={station.station_name}
-                              systemName={system.system_name}
-                              onUpdate={onSystemUpdate}
-                            />
-                          </div>
+                          <ProgressEditDialog
+                            systemName={system.system_name}
+                            stationName={station.station_name}
+                            stationItems={stationItems}
+                            progress={progress}
+                            editingProgress={editingProgress}
+                            setEditingProgress={setEditingProgress}
+                            editValues={editValues}
+                            setEditValues={setEditValues}
+                            getProgressForSystemItem={getProgressForSystemItem}
+                            handleEditProgress={handleEditProgress}
+                            handleSaveProgress={handleSaveProgress}
+                            handleDeleteProgress={handleDeleteProgress}
+                            getStatusColor={getStatusColor}
+                            systemId={system.id}
+                            stationId={station.id}
+                          />
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
@@ -352,32 +342,23 @@ export function TestProgressTable({
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs">
                             <span>進度: {overallPercent}%</span>
-                            <div className="flex gap-1">
-                              <ProgressEditDialog
-                                systemName={system.system_name}
-                                stationName={station.station_name}
-                                stationItems={stationItems}
-                                progress={progress}
-                                editingProgress={editingProgress}
-                                setEditingProgress={setEditingProgress}
-                                editValues={editValues}
-                                setEditValues={setEditValues}
-                                getProgressForSystemItem={getProgressForSystemItem}
-                                handleEditProgress={handleEditProgress}
-                                handleSaveProgress={handleSaveProgress}
-                                handleDeleteProgress={handleDeleteProgress}
-                                getStatusColor={getStatusColor}
-                                systemId={system.id}
-                                stationId={station.id}
-                              />
-                              <StationTimeManager
-                                systemId={system.id}
-                                stationId={station.id}
-                                stationName={station.station_name}
-                                systemName={system.system_name}
-                                onUpdate={onSystemUpdate}
-                              />
-                            </div>
+                            <ProgressEditDialog
+                              systemName={system.system_name}
+                              stationName={station.station_name}
+                              stationItems={stationItems}
+                              progress={progress}
+                              editingProgress={editingProgress}
+                              setEditingProgress={setEditingProgress}
+                              editValues={editValues}
+                              setEditValues={setEditValues}
+                              getProgressForSystemItem={getProgressForSystemItem}
+                              handleEditProgress={handleEditProgress}
+                              handleSaveProgress={handleSaveProgress}
+                              handleDeleteProgress={handleDeleteProgress}
+                              getStatusColor={getStatusColor}
+                              systemId={system.id}
+                              stationId={station.id}
+                            />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
                           {processingTime && (
