@@ -68,7 +68,21 @@ export function CodeStorageManager() {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setCodeSnippets(data || []);
+      
+      // Type the data properly
+      const typedData: CodeSnippet[] = (data || []).map(item => ({
+        id: item.id,
+        title: item.title,
+        description: item.description || undefined,
+        code_content: item.code_content,
+        language: item.language,
+        category: item.category,
+        tags: item.tags || [],
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      }));
+      
+      setCodeSnippets(typedData);
     } catch (error) {
       console.error('Error loading code snippets:', error);
       toast({
