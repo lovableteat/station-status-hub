@@ -35,7 +35,7 @@ export function useStationTimeAnalytics() {
     try {
       setIsLoading(true);
       
-      // Get all test progress records with their station information
+      // Get all test progress records with their station information - including Station 4
       let query = supabase
         .from('test_progress')
         .select(`
@@ -176,7 +176,7 @@ export function useStationTimeAnalytics() {
       total_records: hours.length
     }));
 
-    // Sort by station order - 包含Station 4 的排序邏輯
+    // Sort by station order - 包含 Station 0-4 的排序邏輯
     averages.sort((a, b) => {
       const getStationOrder = (name: string) => {
         const match = name.match(/Station\s*(\d+)/i);
