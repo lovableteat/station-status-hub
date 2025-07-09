@@ -10,7 +10,11 @@ import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Calendar, Clock, Filter } from "lucide-react";
 
-export function StationAverageTimeChart() {
+interface StationAverageTimeChartProps {
+  maxStationOrder?: number; // 支援未來擴展更多站點
+}
+
+export function StationAverageTimeChart({ maxStationOrder = 4 }: StationAverageTimeChartProps) {
   const { averageTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
   const { stations } = useUnifiedData();
   const [startDate, setStartDate] = useState("");
@@ -32,9 +36,9 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 顯示Station 0-4的實際平均處理時間（包含Station 4）
+  // 準備圖表數據 - 動態顯示Station 0 到 maxStationOrder 的實際平均處理時間
   const chartData = stations
-    .filter(station => station.station_order >= 0 && station.station_order <= 4)
+    .filter(station => station.station_order >= 0 && station.station_order <= maxStationOrder)
     .sort((a, b) => a.station_order - b.station_order)
     .map(station => {
       const actualData = averageTimes.find(item => item.station_name === station.station_name);
@@ -66,12 +70,17 @@ export function StationAverageTimeChart() {
     return null;
   };
 
+  // 動態計算統計摘要的網格列數
+  const totalStations = maxStationOrder + 1; // Station 0 到 maxStationOrder
+  const gridCols = Math.min(totalStations, 6); // 最多6列
+  const gridColsClass = `grid-cols-1 md:grid-cols-${Math.min(gridCols, 3)} lg:grid-cols-${gridCols}`;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          各站平均處理時間分析 (Station 0-4)
+          各站平均處理時間分析 (Station 0-{maxStationOrder})
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -172,11 +181,11 @@ export function StationAverageTimeChart() {
           )}
         </div>
 
-        {/* 統計摘要 - 包含Station 4 */}
+        {/* 統計摘要 - 動態支援多站 */}
         {chartData.length > 0 && (
           <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-4">Station 0-4 處理時間統計</h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <h3 className="text-lg font-semibold mb-4">Station 0-{maxStationOrder} 處理時間統計</h3>
+            <div className={`grid ${gridColsClass} gap-4`}>
               {chartData.map((data, index) => (
                 <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
                   <p className="font-medium text-sm">{data.station}</p>
