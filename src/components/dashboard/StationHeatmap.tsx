@@ -26,15 +26,16 @@ const getStatusText = (status: string) => {
 
 interface StationHeatmapProps {
   onStationClick?: (stationId: string) => void;
+  maxStationOrder?: number; // 支援未來擴展更多站點
 }
 
-export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
+export function StationHeatmap({ onStationClick, maxStationOrder = 4 }: StationHeatmapProps) {
   const { systems, stations, testItems, progress } = useUnifiedData();
 
-  // 基於GB300 L10測試追蹤資料計算站點狀態 - 只針對Station 0-4
+  // 基於GB300 L10測試追蹤資料計算站點狀態 - 現在支援Station 0 到 maxStationOrder
   const calculateStationStatus = (station: any) => {
-    // 只處理Station 0-4
-    if (station.station_order < 0 || station.station_order > 4) {
+    // 檢查站點是否在指定範圍內
+    if (station.station_order < 0 || station.station_order > maxStationOrder) {
       return {
         status: 'idle' as const,
         efficiency: 0,
@@ -123,19 +124,23 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
     };
   };
 
-  // 只顯示Station 0-4的站點狀態
+  // 動態顯示Station 0 到 maxStationOrder 的站點狀態
   const stationStatuses = stations
-    .filter(station => station.station_order >= 0 && station.station_order <= 4)
+    .filter(station => station.station_order >= 0 && station.station_order <= maxStationOrder)
     .sort((a, b) => a.station_order - b.station_order)
     .map(station => ({
       ...station,
       ...calculateStationStatus(station)
     }));
 
+  // 動態計算網格列數
+  const gridCols = Math.min(stationStatuses.length, 6); // 最多6列，避免過於擁擠
+  const gridColsClass = `grid-cols-1 md:grid-cols-${Math.min(gridCols, 3)} lg:grid-cols-${gridCols}`;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">測試站點進度熱區圖 (Station 0-4)</h3>
+        <h3 className="text-lg font-semibold">測試站點進度熱區圖 (Station 0-{maxStationOrder})</h3>
         <div className="flex items-center space-x-4 text-xs text-muted-foreground">
           <div className="flex items-center space-x-2" title="測試完成：所有測試項目已完成">
             <div className="w-3 h-3 rounded bg-station-complete"></div>
@@ -162,7 +167,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       
       {/* Detailed Status Legend */}
       <div className="bg-muted/20 rounded-lg p-4 space-y-3">
-        <h4 className="font-medium text-sm">狀態詳細說明（基於GB300 L10測試追蹤資料 - Station 0-4）</h4>
+        <h4 className="font-medium text-sm">狀態詳細說明（基於GB300 L10測試追蹤資料 - Station 0-{maxStationOrder}）</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           <div className="flex items-start space-x-2">
             <div className="w-4 h-4 rounded bg-station-complete mt-0.5 flex-shrink-0"></div>
@@ -202,7 +207,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className={`grid ${gridColsClass} gap-4`}>
         {stationStatuses.map((station) => (
           <div
             key={station.id}
