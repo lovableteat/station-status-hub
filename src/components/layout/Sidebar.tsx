@@ -1,131 +1,144 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { 
-  BarChart3, 
-  Settings, 
-  FileText, 
-  Users, 
-  Database, 
-  Bug, 
-  Wrench,
-  ChevronDown,
-  ChevronRight,
-  Megaphone
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  BarChart3,
+  Database,
+  Monitor,
+  Workflow,
+  AlertTriangle,
+  Wrench,
+  Menu,
+  Home,
+  ListChecks,
+  FileText,
+  Users
+} from "lucide-react";
 
-const menuItems = [
-  { icon: BarChart3, label: "系統儀表板", path: "/" },
-  { icon: FileText, label: "測試進度追蹤", path: "/test-tracker" },
-  { icon: Megaphone, label: "公告管理", path: "/announcements" },
-  {
-    icon: Users,
-    label: "使用者管理",
-    path: "/users",
-    subItems: [
-      { label: "新增使用者", path: "/users/create" },
-      { label: "查詢使用者", path: "/users/search" },
-    ],
-  },
-  {
-    icon: Database,
-    label: "資料庫管理",
-    path: "/database",
-    subItems: [
-      { label: "備份資料庫", path: "/database/backup" },
-      { label: "還原資料庫", path: "/database/restore" },
-    ],
-  },
-  {
-    icon: Bug,
-    label: "問題追蹤",
-    path: "/issues",
-    subItems: [
-      { label: "提交錯誤報告", path: "/issues/report" },
-      { label: "查看錯誤報告", path: "/issues/view" },
-    ],
-  },
-  {
-    icon: Wrench,
-    label: "系統設定",
-    path: "/settings",
-    subItems: [
-      { label: "修改密碼", path: "/settings/password" },
-      { label: "更新個人資料", path: "/settings/profile" },
-    ],
-  },
-];
-
-interface MenuItem {
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  label: string;
-  path: string;
-  subItems?: { label: string; path: string }[];
+interface SidebarProps {
+  activeModule: string;
+  onModuleChange: (module: string) => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  isMobile?: boolean;
 }
 
-export function Sidebar() {
-  const location = useLocation();
-  const [open, setOpen] = useState(false);
+const navigationItems = [
+  { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
+  { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
+  { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
+  { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
+  { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
+  { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
+  { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
+  { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
+];
+
+export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  // On mobile, use isOpen prop; on desktop, use collapsed state
+  const isVisible = isMobile ? isOpen : true;
+  const isCompact = isMobile ? false : collapsed;
+
+  const handleToggle = () => {
+    if (isMobile && onToggle) {
+      onToggle();
+    } else {
+      setCollapsed(!collapsed);
+    }
+  };
 
   return (
-    <div className="w-64 border-r flex-none h-full dark:bg-gray-900 dark:border-gray-800">
-      <div className="p-4">
-        <Link to="/" className="flex items-center text-lg font-semibold">
-          <Settings className="mr-2 h-5 w-5" />
-          測試管理系統
-        </Link>
-      </div>
-      <div className="p-4 space-y-2">
-        {menuItems.map((item: MenuItem) => (
-          item.subItems ? (
-            <Collapsible key={item.label} className="w-full">
-              <CollapsibleTrigger asChild className="w-full">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start px-2 py-1.5 hover:bg-secondary/50 data-[state=open]:bg-secondary/50"
-                  onClick={() => setOpen(!open)}
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                  <ChevronDown
-                    className={cn("ml-auto h-4 w-4 transition-transform duration-200", open && "rotate-180")}
-                  />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pl-6 space-y-1">
-                {item.subItems.map((subItem) => (
-                  <Link key={subItem.label} to={subItem.path} className="block">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start px-2 py-1 text-sm hover:bg-secondary/50",
-                        location.pathname === subItem.path ? "text-blue-600" : ""
-                      )}
-                    >
-                      {subItem.label}
-                    </Button>
-                  </Link>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          ) : (
-            <Link key={item.label} to={item.path} className="block">
+    <>
+      {/* Mobile Header with Menu Button */}
+      {isMobile && (
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border h-14 flex items-center px-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleToggle}
+            className="h-8 w-8 p-0"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <div className="ml-3">
+            <h1 className="text-sm font-bold text-foreground">測試管理系統</h1>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "h-screen bg-card border-r border-border transition-all duration-300 flex flex-col",
+          // Mobile styles
+          isMobile && [
+            "fixed top-0 left-0 z-40 lg:relative",
+            isVisible ? "translate-x-0" : "-translate-x-full",
+            "w-64"
+          ],
+          // Desktop styles
+          !isMobile && (isCompact ? "w-16" : "w-64"),
+          // Add top margin on mobile to account for header
+          isMobile && "mt-14 lg:mt-0"
+        )}
+      >
+        {/* Header - Hidden on mobile as we have separate mobile header */}
+        {!isMobile && (
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              {!isCompact && (
+                <div>
+                  <h1 className="text-lg font-bold text-foreground">測試管理系統</h1>
+                  <p className="text-xs text-muted-foreground">Station Status Hub</p>
+                </div>
+              )}
               <Button
                 variant="ghost"
-                className={cn(
-                  "w-full justify-start px-2 py-1.5 hover:bg-secondary/50",
-                  location.pathname === item.path ? "text-blue-600" : ""
-                )}
+                size="sm"
+                onClick={handleToggle}
+                className="h-8 w-8 p-0"
               >
-                <item.icon className="mr-2 h-4 w-4" />
-                <span>{item.label}</span>
+                <Menu className="h-4 w-4" />
               </Button>
-            </Link>
-          )
-        ))}
+            </div>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className="flex-1 p-2">
+          <div className="space-y-1">
+            {navigationItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeModule === item.id;
+              
+              return (
+                <Button
+                  key={item.id}
+                  variant={isActive ? "default" : "ghost"}
+                  className={cn(
+                    "w-full justify-start h-10 transition-all",
+                    (isCompact && !isMobile) ? "px-2" : "px-3",
+                    isActive && "bg-primary text-primary-foreground shadow-station"
+                  )}
+                  onClick={() => {
+                    onModuleChange(item.id);
+                  }}
+                >
+                  <Icon className={cn("h-4 w-4 flex-shrink-0", (isCompact && !isMobile) ? "mr-0" : "mr-3")} />
+                  {(!isCompact || isMobile) && (
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-medium">{item.label}</div>
+                      <div className="text-xs opacity-70">{item.description}</div>
+                    </div>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        </nav>
       </div>
-    </div>
+    </>
   );
 }
