@@ -8,7 +8,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import TestTrackerPage from "./pages/TestTrackerPage";
 import { useEffect } from "react";
-import AnnouncementPage from "./pages/AnnouncementPage";
 
 const queryClient = new QueryClient();
 
@@ -28,7 +27,6 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/test-tracker" element={<TestTrackerPage />} />
-              <Route path="/announcements" element={<AnnouncementPage />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
