@@ -59,8 +59,10 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
-  // Show all stations ordered by station_order
-  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
+  // Show all stations ordered by station_order, including Station 4
+  const filteredStations = stations.filter(station => 
+    station.station_order >= 0 && station.station_order <= 4
+  ).sort((a, b) => a.station_order - b.station_order);
 
   // Format time helper - 統一時間格式顯示
   const formatTime = (timeStr?: string) => {
