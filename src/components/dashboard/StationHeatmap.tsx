@@ -1,269 +1,254 @@
 
-import { cn } from "@/lib/utils";
-import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Activity } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'idle': return 'bg-station-idle border-station-idle text-foreground';
-    case 'working': return 'bg-station-working border-station-working text-primary-foreground';
-    case 'warning': return 'bg-station-warning border-station-warning text-warning-foreground';
-    case 'error': return 'bg-station-error border-station-error text-danger-foreground';
-    case 'complete': return 'bg-station-complete border-station-complete text-success-foreground';
-    default: return 'bg-muted border-border text-muted-foreground';
-  }
-};
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'idle': return '待機中';
-    case 'working': return '作業中';
-    case 'warning': return '注意';
-    case 'error': return '異常';
-    case 'complete': return '完成';
-    default: return '未知';
-  }
-};
-
-interface StationHeatmapProps {
-  onStationClick?: (stationId: string) => void;
-  maxStationOrder?: number; // 支援未來擴展更多站點
+interface StationProgress {
+  stationName: string;
+  stationOrder: number;
+  systemCounts: {
+    [key: string]: number;
+  };
+  totalSystems: number;
 }
 
-export function StationHeatmap({ onStationClick, maxStationOrder = 4 }: StationHeatmapProps) {
-  const { systems, stations, testItems, progress } = useUnifiedData();
+export function StationHeatmap() {
+  const [stationProgress, setStationProgress] = useState<StationProgress[]>([]);
+  const [systems, setSystems] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 基於GB300 L10測試追蹤資料計算站點狀態 - 現在支援Station 0 到 maxStationOrder
-  const calculateStationStatus = (station: any) => {
-    // 檢查站點是否在指定範圍內
-    if (station.station_order < 0 || station.station_order > maxStationOrder) {
-      return {
-        status: 'idle' as const,
-        efficiency: 0,
-        completed_systems: 0,
-        ongoing_systems: 0,
-        total_systems: systems.length,
-        current_systems: []
-      };
-    }
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    // 取得該站點的所有測試項目
-    const stationItems = testItems.filter(item => item.station_id === station.id);
-    
-    if (stationItems.length === 0) {
-      return {
-        status: 'idle' as const,
-        efficiency: 0,
-        completed_systems: 0,
-        ongoing_systems: 0,
-        total_systems: systems.length,
-        current_systems: []
-      };
-    }
-
-    // 計算每個系統在此站點的進度
-    const systemProgressData = systems.map(system => {
-      const systemProgressRecords = stationItems.map(item => {
-        return progress.find(p => 
-          p.system_id === system.id && 
-          p.station_id === station.id && 
-          p.item_id === item.id
-        );
-      }).filter(Boolean);
-
-      // 計算該系統在此站點的完成項目數
-      const completedCount = systemProgressRecords.filter(p => p?.status === 'Done').length;
-      const totalCount = stationItems.length;
-      const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
       
-      const isCompleted = completedCount === totalCount && totalCount > 0;
-      const hasProgress = systemProgressRecords.some(p => p?.status !== 'Not Start');
+      // 載入站點、系統和進度數據
+      const [stationsRes, systemsRes, progressRes, itemsRes] = await Promise.all([
+        supabase.from('test_flow_stations').select('*').order('station_order'),
+        supabase.from('test_systems').select('*'),
+        supabase.from('test_progress').select('*'),
+        supabase.from('test_flow_items').select('*')
+      ]);
 
-      return {
-        system,
-        progress: progressPercent,
-        isCompleted,
-        isActive: hasProgress && !isCompleted,
-        completedCount,
-        totalCount
-      };
-    });
+      if (stationsRes.error || systemsRes.error || progressRes.error || itemsRes.error) {
+        console.error('Error loading data:', { stationsRes, systemsRes, progressRes, itemsRes });
+        return;
+      }
 
-    // 統計
-    const completedSystemsCount = systemProgressData.filter(s => s.isCompleted).length;
-    const activeSystemsCount = systemProgressData.filter(s => s.isActive).length;
-    const totalProgress = systemProgressData.reduce((sum, s) => sum + s.progress, 0);
-    const averageProgress = systems.length > 0 ? totalProgress / systems.length : 0;
-    
-    // 找出在此站點活躍的系統
-    const activeSystems = systemProgressData
-      .filter(s => s.isActive || s.isCompleted)
-      .map(s => s.system);
+      const stations = stationsRes.data || [];
+      const systemsData = systemsRes.data || [];
+      const progress = progressRes.data || [];
+      const items = itemsRes.data || [];
 
-    // 確定狀態 - 基於GB300 L10測試追蹤的實際數據
-    let status: 'idle' | 'working' | 'warning' | 'error' | 'complete' = 'idle';
-    
-    if (averageProgress === 100) {
-      status = 'complete';
-    } else if (averageProgress >= 70) {
-      status = 'working';
-    } else if (averageProgress >= 30) {
-      status = 'warning';
-    } else if (averageProgress > 0) {
-      status = 'error';
-    } else {
-      status = 'idle';
+      setSystems(systemsData);
+
+      // 為每個站點計算系統狀態統計
+      const stationProgressData = stations.map(station => {
+        const stationItems = items.filter(item => item.station_id === station.id);
+        const systemCounts = {
+          'Not Start': 0,
+          'On-going': 0,
+          'Done': 0
+        };
+
+        systemsData.forEach(system => {
+          if (stationItems.length === 0) {
+            systemCounts['Not Start']++;
+            return;
+          }
+
+          const systemProgress = progress.filter(p => 
+            p.system_id === system.id && p.station_id === station.id
+          );
+
+          const completedItems = systemProgress.filter(p => p.status === 'Done').length;
+          const ongoingItems = systemProgress.filter(p => 
+            p.status === 'On-going' || p.status === 'In Progress'
+          ).length;
+
+          if (completedItems === stationItems.length) {
+            systemCounts['Done']++;
+          } else if (completedItems > 0 || ongoingItems > 0) {
+            systemCounts['On-going']++;
+          } else {
+            systemCounts['Not Start']++;
+          }
+        });
+
+        return {
+          stationName: station.station_name,
+          stationOrder: station.station_order,
+          systemCounts,
+          totalSystems: systemsData.length
+        };
+      });
+
+      setStationProgress(stationProgressData);
+    } catch (error) {
+      console.error('Error loading station heatmap data:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    return {
-      status,
-      efficiency: Math.round(averageProgress),
-      completed_systems: completedSystemsCount,
-      ongoing_systems: activeSystemsCount,
-      total_systems: systems.length,
-      current_systems: activeSystems
-    };
   };
 
-  // 動態顯示Station 0 到 maxStationOrder 的站點狀態
-  const stationStatuses = stations
-    .filter(station => station.station_order >= 0 && station.station_order <= maxStationOrder)
-    .sort((a, b) => a.station_order - b.station_order)
-    .map(station => ({
-      ...station,
-      ...calculateStationStatus(station)
-    }));
+  const getIntensityColor = (count: number, total: number, status: string) => {
+    if (total === 0) return 'bg-gray-100';
+    
+    const ratio = count / total;
+    
+    switch (status) {
+      case 'Done':
+        if (ratio >= 0.8) return 'bg-green-500';
+        if (ratio >= 0.6) return 'bg-green-400';
+        if (ratio >= 0.4) return 'bg-green-300';
+        if (ratio >= 0.2) return 'bg-green-200';
+        return 'bg-green-100';
+      case 'On-going':
+        if (ratio >= 0.8) return 'bg-yellow-500';
+        if (ratio >= 0.6) return 'bg-yellow-400';
+        if (ratio >= 0.4) return 'bg-yellow-300';
+        if (ratio >= 0.2) return 'bg-yellow-200';
+        return 'bg-yellow-100';
+      case 'Not Start':
+        if (ratio >= 0.8) return 'bg-red-500';
+        if (ratio >= 0.6) return 'bg-red-400';
+        if (ratio >= 0.4) return 'bg-red-300';
+        if (ratio >= 0.2) return 'bg-red-200';
+        return 'bg-red-100';
+      default:
+        return 'bg-gray-100';
+    }
+  };
 
-  // 動態計算網格列數
-  const gridCols = Math.min(stationStatuses.length, 6); // 最多6列，避免過於擁擠
-  const gridColsClass = `grid-cols-1 md:grid-cols-${Math.min(gridCols, 3)} lg:grid-cols-${gridCols}`;
+  const getTextColor = (count: number, total: number) => {
+    if (total === 0) return 'text-gray-600';
+    const ratio = count / total;
+    return ratio >= 0.6 ? 'text-white' : 'text-gray-800';
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            測試站點進度熱區圖
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="text-muted-foreground">載入中...</div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">測試站點進度熱區圖 (Station 0-{maxStationOrder})</h3>
-        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-          <div className="flex items-center space-x-2" title="測試完成：所有測試項目已完成">
-            <div className="w-3 h-3 rounded bg-station-complete"></div>
-            <span>完成 (100%)</span>
-          </div>
-          <div className="flex items-center space-x-2" title="進行中：測試正在執行，進度70%以上">
-            <div className="w-3 h-3 rounded bg-station-working"></div>
-            <span>作業中 (70-99%)</span>
-          </div>
-          <div className="flex items-center space-x-2" title="警告：測試進度30-69%">
-            <div className="w-3 h-3 rounded bg-station-warning"></div>
-            <span>延遲 (30-69%)</span>
-          </div>
-          <div className="flex items-center space-x-2" title="異常：測試進度低於30%">
-            <div className="w-3 h-3 rounded bg-station-error"></div>
-            <span>異常 (&lt;30%)</span>
-          </div>
-          <div className="flex items-center space-x-2" title="待機：目前沒有系統在此站點測試">
-            <div className="w-3 h-3 rounded bg-station-idle"></div>
-            <span>待機 (閒置)</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Detailed Status Legend */}
-      <div className="bg-muted/20 rounded-lg p-4 space-y-3">
-        <h4 className="font-medium text-sm">狀態詳細說明（基於GB300 L10測試追蹤資料 - Station 0-{maxStationOrder}）</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-          <div className="flex items-start space-x-2">
-            <div className="w-4 h-4 rounded bg-station-complete mt-0.5 flex-shrink-0"></div>
-            <div>
-              <div className="font-medium text-success">完成</div>
-              <div className="text-muted-foreground">該站點所有系統測試項目均已100%完成</div>
-            </div>
-          </div>
-          <div className="flex items-start space-x-2">
-            <div className="w-4 h-4 rounded bg-station-working mt-0.5 flex-shrink-0"></div>
-            <div>
-              <div className="font-medium text-primary">作業中</div>
-              <div className="text-muted-foreground">測試進度良好（70-99%），按計劃進行</div>
-            </div>
-          </div>
-          <div className="flex items-start space-x-2">
-            <div className="w-4 h-4 rounded bg-station-warning mt-0.5 flex-shrink-0"></div>
-            <div>
-              <div className="font-medium text-warning">延遲警告</div>
-              <div className="text-muted-foreground">進度較慢（30-69%），需要關注</div>
-            </div>
-          </div>
-          <div className="flex items-start space-x-2">
-            <div className="w-4 h-4 rounded bg-station-error mt-0.5 flex-shrink-0"></div>
-            <div>
-              <div className="font-medium text-danger">異常錯誤</div>
-              <div className="text-muted-foreground">進度嚴重落後（&lt;30%），需要立即處理</div>
-            </div>
-          </div>
-          <div className="flex items-start space-x-2">
-            <div className="w-4 h-4 rounded bg-station-idle mt-0.5 flex-shrink-0"></div>
-            <div>
-              <div className="font-medium text-muted-foreground">待機狀態</div>
-              <div className="text-muted-foreground">目前沒有系統在此站點進行測試</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className={`grid ${gridColsClass} gap-4`}>
-        {stationStatuses.map((station) => (
-          <div
-            key={station.id}
-            onClick={() => onStationClick?.(station.id)}
-            className={cn(
-              "p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-station hover:scale-105",
-              getStatusColor(station.status)
-            )}
-          >
-            <div className="text-sm font-medium mb-2">{station.station_name}</div>
-            <div className="text-xs opacity-90 mb-3">{getStatusText(station.status)}</div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-black/20 rounded-full h-2 mb-3">
-              <div
-                className="bg-white/80 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${station.efficiency}%` }}
-              ></div>
-            </div>
-            
-            <div className="space-y-1 text-xs opacity-90">
-              <div className="flex justify-between">
-                <span>完成系統:</span>
-                <span>{station.completed_systems}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>進行中:</span>
-                <span>{station.ongoing_systems}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>總計:</span>
-                <span>{station.total_systems}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>效率:</span>
-                <span>{station.efficiency}%</span>
-              </div>
-              {station.current_systems.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-white/20">
-                  <div className="text-xs font-medium mb-1">活躍系統:</div>
-                  {station.current_systems.slice(0, 2).map(system => (
-                    <div key={system.id} className="text-xs opacity-80 truncate">
-                      {system.system_name}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          測試站點進度熱區圖
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* 熱區圖 */}
+          <div className="space-y-4">
+            {['Done', 'On-going', 'Not Start'].map(status => (
+              <div key={status} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant={status === 'Done' ? 'default' : status === 'On-going' ? 'secondary' : 'destructive'}>
+                    {status === 'Done' ? '完成' : status === 'On-going' ? '進行中' : '未開始'}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    ({systems.length} 個系統)
+                  </span>
+                </div>
+                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${stationProgress.length}, 1fr)` }}>
+                  {stationProgress.map((station) => (
+                    <div
+                      key={`${station.stationName}-${status}`}
+                      className={`
+                        p-3 rounded-lg text-center font-medium text-sm transition-all duration-200 hover:scale-105 cursor-pointer
+                        ${getIntensityColor(station.systemCounts[status], station.totalSystems, status)}
+                        ${getTextColor(station.systemCounts[status], station.totalSystems)}
+                      `}
+                      title={`${station.stationName} - ${status}: ${station.systemCounts[status]}/${station.totalSystems}`}
+                    >
+                      <div className="font-semibold text-xs mb-1">{station.stationName}</div>
+                      <div className="text-lg font-bold">{station.systemCounts[status]}</div>
+                      <div className="text-xs opacity-90">
+                        {station.totalSystems > 0 
+                          ? Math.round((station.systemCounts[status] / station.totalSystems) * 100)
+                          : 0}%
+                      </div>
                     </div>
                   ))}
-                  {station.current_systems.length > 2 && (
-                    <div className="text-xs opacity-60">
-                      +{station.current_systems.length - 2} 更多...
-                    </div>
-                  )}
                 </div>
-              )}
+              </div>
+            ))}
+          </div>
+
+          {/* 圖例 */}
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-semibold mb-3">圖例說明</h4>
+            <div className="grid grid-cols-3 gap-4 text-xs">
+              <div className="space-y-2">
+                <div className="font-medium text-green-700">完成狀態</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <span>80-100%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-300 rounded"></div>
+                  <span>40-79%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-100 rounded"></div>
+                  <span>0-39%</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="font-medium text-yellow-700">進行中狀態</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                  <span>80-100%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-300 rounded"></div>
+                  <span>40-79%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-100 rounded"></div>
+                  <span>0-39%</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="font-medium text-red-700">未開始狀態</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <span>80-100%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-300 rounded"></div>
+                  <span>40-79%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-100 rounded"></div>
+                  <span>0-39%</span>
+                </div>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
