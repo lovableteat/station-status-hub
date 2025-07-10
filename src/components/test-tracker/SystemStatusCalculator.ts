@@ -55,9 +55,9 @@ export class SystemStatusCalculator {
   } {
     console.log(`=== 計算系統 ${system.id} 狀態 ===`);
 
-    // 只考慮 Station 0-4 (station_order 0-4)
+    // 只考慮 Station 0-4 (station_order 1-5，對應Station 0-4)
     const targetStations = stations
-      .filter(s => s.station_order >= 0 && s.station_order <= 4)
+      .filter(s => s.station_order >= 1 && s.station_order <= 5)
       .sort((a, b) => a.station_order - b.station_order);
 
     console.log('目標站點數量:', targetStations.length);
