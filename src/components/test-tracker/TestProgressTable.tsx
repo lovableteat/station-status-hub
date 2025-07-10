@@ -59,10 +59,8 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
-  // 動態顯示所有站點，按照 station_order 排序
-  const filteredStations = stations
-    .filter(station => station.station_order >= 0) // 顯示所有站點
-    .sort((a, b) => a.station_order - b.station_order);
+  // Show all stations ordered by station_order
+  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
   // Format time helper - 統一時間格式顯示
   const formatTime = (timeStr?: string) => {
@@ -81,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 統一站點處理時間計算邏輯 - 動態支援所有站點
+  // 統一站點處理時間計算邏輯 - Station 0-4 都使用相同邏輯
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -200,7 +198,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 支援所有站點
+                    // 使用統一的處理時間計算邏輯 - 包含Station 4
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
@@ -232,7 +230,7 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                          {/* 所有站點統一顯示處理時長 */}
+                          {/* Station 0-4 統一顯示處理時長 */}
                           {processingTime && (
                             <div className="mt-3 pt-3 border-t space-y-2">
                               <div className="flex justify-between items-center text-sm">
@@ -262,8 +260,8 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 動態調整欄位寬度以適應所有站點
-  const gridColumns = `140px 100px repeat(${filteredStations.length}, minmax(160px, 1fr)) 140px`;
+  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後
+  const gridColumns = `140px 100px repeat(${filteredStations.length}, 180px) 140px`;
 
   return (
     <Card>
@@ -286,7 +284,7 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-fit">
+          <div className="min-w-[1200px]">
             {/* Header Row */}
             <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
@@ -339,7 +337,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 支援所有站點
+                    // 使用統一的處理時間計算邏輯 - 包含Station 4  
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
@@ -366,7 +364,7 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          {/* 所有站點統一顯示處理時長 */}
+                          {/* Station 0-4 統一顯示處理時長 */}
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
                               處理時長: {processingTime.duration} 小時
