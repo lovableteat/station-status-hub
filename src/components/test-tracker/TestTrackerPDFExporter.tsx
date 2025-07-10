@@ -22,7 +22,6 @@ interface TestTrackerPDFExporterProps {
   progress: TestProgress[];
   isOpen: boolean;
   onClose: () => void;
-  maxStationOrder?: number; // 支援未來擴展更多站點
 }
 
 export function TestTrackerPDFExporter({ 
@@ -31,8 +30,7 @@ export function TestTrackerPDFExporter({
   items, 
   progress, 
   isOpen, 
-  onClose,
-  maxStationOrder = 4
+  onClose 
 }: TestTrackerPDFExporterProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
@@ -61,9 +59,7 @@ export function TestTrackerPDFExporter({
       setIsExporting(true);
       
       // 先截取現有的測試進度表
-      const tableElement = document.querySelector('[data-testtracker-table]') ||
-                           document.querySelector('.test-progress-table') ||
-                           document.querySelector('main');
+      const tableElement = document.querySelector('[data-testtracker-table]');
       let canvas = null;
       
       if (tableElement) {
@@ -71,8 +67,7 @@ export function TestTrackerPDFExporter({
           backgroundColor: '#ffffff',
           scale: 1.5,
           useCORS: true,
-          allowTaint: true,
-          logging: false
+          allowTaint: true
         });
       }
       
@@ -90,31 +85,21 @@ export function TestTrackerPDFExporter({
       pdf.setFontSize(12);
       pdf.text(`生成時間: ${new Date().toLocaleString('zh-TW')}`, 20, 30);
       pdf.text(`總系統數: ${systems.length}`, 20, 40);
-      pdf.text(`測試站點: Station 0-${maxStationOrder}`, 20, 50);
       
-      let yPosition = 70;
+      let yPosition = 60;
       
       // 如果有截圖，先添加截圖
       if (canvas) {
         const imgWidth = 360; // A3 橫向可用寬度
-        const imgHeight = Math.min((canvas.height * imgWidth) / canvas.width, 200); // 限制高度
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
-        pdf.addImage(
-          canvas.toDataURL('image/png'), 
-          'PNG', 
-          20, 
-          yPosition, 
-          imgWidth, 
-          imgHeight,
-          undefined,
-          'MEDIUM'
-        );
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 20, yPosition, imgWidth, imgHeight);
         yPosition += imgHeight + 20;
       }
       
       // 添加詳細數據表格
       const filteredStations = stations
-        .filter(s => s.station_order >= 0 && s.station_order <= maxStationOrder)
+        .filter(s => s.station_order >= 0 && s.station_order <= 4)
         .sort((a, b) => a.station_order - b.station_order);
       
       // 表格標題
@@ -132,12 +117,11 @@ export function TestTrackerPDFExporter({
       // 表格標頭
       pdf.setFontSize(8);
       const headers = ['機台編號', '當前站點', '整體進度', ...filteredStations.map(s => s.station_name)];
-      const colWidth = Math.min(45, 350 / headers.length); // 動態計算欄寬
+      const colWidth = 45;
       const startX = 20;
       
       headers.forEach((header, index) => {
-        const text = header.length > 12 ? header.substring(0, 12) + '...' : header;
-        pdf.text(text, startX + (index * colWidth), yPosition);
+        pdf.text(header, startX + (index * colWidth), yPosition);
       });
       yPosition += 8;
       
@@ -155,8 +139,7 @@ export function TestTrackerPDFExporter({
           // 重新繪製標頭
           pdf.setFontSize(8);
           headers.forEach((header, headerIndex) => {
-            const text = header.length > 12 ? header.substring(0, 12) + '...' : header;
-            pdf.text(text, startX + (headerIndex * colWidth), yPosition);
+            pdf.text(header, startX + (headerIndex * colWidth), yPosition);
           });
           yPosition += 8;
           pdf.line(startX, yPosition, startX + (headers.length * colWidth), yPosition);
@@ -173,8 +156,7 @@ export function TestTrackerPDFExporter({
         ];
         
         rowData.forEach((data, colIndex) => {
-          const text = data.length > 15 ? data.substring(0, 15) + '...' : data;
-          pdf.text(text, startX + (colIndex * colWidth), yPosition);
+          pdf.text(data, startX + (colIndex * colWidth), yPosition);
         });
         
         yPosition += 8;
@@ -226,7 +208,7 @@ export function TestTrackerPDFExporter({
             測試追蹤 PDF 匯出
           </DialogTitle>
           <DialogDescription>
-            匯出完整的 GB300 L10 測試追蹤報表，包含所有機台的測試進度和站點狀態圖表 (Station 0-{maxStationOrder})。
+            匯出完整的 GB300 L10 測試追蹤報表，包含所有機台的測試進度和站點狀態圖表。
           </DialogDescription>
         </DialogHeader>
         

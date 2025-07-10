@@ -26,9 +26,7 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
   const captureScreenshot = async () => {
     try {
       // 找到儀表板主要內容區域
-      const dashboardElement = document.querySelector('[data-dashboard-content]') || 
-                               document.querySelector('main') || 
-                               document.body;
+      const dashboardElement = document.querySelector('[data-dashboard-content]') || document.body;
       
       const canvas = await html2canvas(dashboardElement as HTMLElement, {
         backgroundColor: '#ffffff',
@@ -38,14 +36,7 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
         width: dashboardElement.scrollWidth,
         height: dashboardElement.scrollHeight,
         scrollX: 0,
-        scrollY: 0,
-        logging: false, // 關閉控制台日誌
-        onclone: (clonedDoc) => {
-          // 確保克隆的文檔樣式正確
-          const clonedBody = clonedDoc.body;
-          clonedBody.style.transform = 'none';
-          clonedBody.style.position = 'static';
-        }
+        scrollY: 0
       });
       
       return canvas;
@@ -61,23 +52,17 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
       const canvas = await captureScreenshot();
       
       // 轉換為 PNG 並下載
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.download = `系統儀表板_${new Date().toISOString().slice(0, 10)}.png`;
-          link.href = url;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          
-          toast({
-            title: "匯出成功",
-            description: "系統儀表板已匯出為 PNG 圖片",
-          });
-        }
-      }, 'image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = `系統儀表板_${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "匯出成功",
+        description: "系統儀表板已匯出為 PNG 圖片",
+      });
       
       onClose();
     } catch (error) {
@@ -110,12 +95,12 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
       
       if (ratio > pdfWidth / pdfHeight) {
         // 圖片較寬，以寬度為準
-        finalWidth = pdfWidth - 40; // 留邊距
-        finalHeight = finalWidth / ratio;
+        finalWidth = pdfWidth;
+        finalHeight = pdfWidth / ratio;
       } else {
         // 圖片較高，以高度為準
-        finalHeight = pdfHeight - 60; // 留邊距給標題
-        finalWidth = finalHeight * ratio;
+        finalHeight = pdfHeight;
+        finalWidth = pdfHeight * ratio;
       }
       
       const pdf = new jsPDF({
@@ -132,20 +117,7 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
       
       // 添加截圖
       const imgData = canvas.toDataURL('image/png');
-      pdf.addImage(
-        imgData, 
-        'PNG', 
-        (pdfWidth - finalWidth) / 2, 
-        40, 
-        finalWidth, 
-        finalHeight,
-        undefined,
-        'MEDIUM' // 壓縮等級
-      );
-      
-      // 添加頁腳
-      pdf.setFontSize(8);
-      pdf.text(`第 1 頁，共 1 頁`, pdfWidth - 50, pdfHeight - 10);
+      pdf.addImage(imgData, 'PNG', (pdfWidth - finalWidth) / 2, 40, finalWidth, finalHeight);
       
       // 下載 PDF
       pdf.save(`系統儀表板_${new Date().toISOString().slice(0, 10)}.pdf`);
