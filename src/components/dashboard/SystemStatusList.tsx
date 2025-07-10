@@ -25,7 +25,11 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   const calculateSystemOverallProgress = (systemId: string) => {
     // 找出 Station 0-4 的站點
     const targetStations = stations.filter(station => 
-      station.station_order >= 0 && station.station_order <= 4
+      station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
+      station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
+      station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
+      station.station_name.includes('Station 3') || station.station_name.includes('EE') ||
+      station.station_name.includes('Station 4') || station.station_name.includes('NV TEST')
     );
 
     if (targetStations.length === 0) return 0;

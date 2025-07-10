@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { FileText } from "lucide-react";
@@ -30,136 +29,33 @@ export function PDFExportManager({ records }: PDFExportManagerProps) {
         <!DOCTYPE html>
         <html>
         <head>
-          <meta charset="UTF-8">
           <title>測試進度報告</title>
           <style>
-            body { 
-              font-family: 'Microsoft JhengHei', Arial, sans-serif; 
-              margin: 20px; 
-              background: white;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-              border-bottom: 2px solid #333;
-              padding-bottom: 15px;
-            }
-            .summary { 
-              background: #f8f9fa; 
-              padding: 20px; 
-              margin-bottom: 25px; 
-              border-radius: 8px;
-              border: 1px solid #dee2e6;
-            }
-            .summary h2 { margin-top: 0; color: #495057; }
-            .summary-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-              gap: 15px;
-              margin-top: 15px;
-            }
-            .summary-item {
-              background: white;
-              padding: 10px;
-              border-radius: 5px;
-              border: 1px solid #e9ecef;
-            }
-            .summary-item strong { color: #007bff; }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin-bottom: 20px; 
-              font-size: 11px;
-            }
-            th, td { 
-              border: 1px solid #dee2e6; 
-              padding: 6px; 
-              text-align: left; 
-              word-break: break-word;
-              max-width: 150px;
-            }
-            th { 
-              background-color: #343a40; 
-              color: white;
-              font-weight: bold;
-              text-align: center;
-            }
-            .status-done { 
-              color: #28a745; 
-              font-weight: bold; 
-              background-color: #d4edda;
-            }
-            .status-ongoing { 
-              color: #fd7e14; 
-              font-weight: bold; 
-              background-color: #fff3cd;
-            }
-            .status-notstart { 
-              color: #dc3545; 
-              font-weight: bold; 
-              background-color: #f8d7da;
-            }
-            .footer { 
-              margin-top: 30px; 
-              text-align: center; 
-              font-size: 10px; 
-              color: #6c757d; 
-              border-top: 2px solid #dee2e6;
-              padding-top: 15px;
-            }
-            .progress-bar {
-              width: 100%;
-              height: 20px;
-              background-color: #e9ecef;
-              border-radius: 10px;
-              overflow: hidden;
-            }
-            .progress-fill {
-              height: 100%;
-              background-color: #28a745;
-              transition: width 0.3s ease;
-            }
-            @media print {
-              body { margin: 10px; }
-              .header, .summary { break-inside: avoid; }
-              table { break-inside: auto; }
-              tr { break-inside: avoid; }
-            }
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .summary { background: #f5f5f5; padding: 15px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .status-done { color: green; font-weight: bold; }
+            .status-ongoing { color: orange; font-weight: bold; }
+            .status-notstart { color: red; font-weight: bold; }
+            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
           </style>
         </head>
         <body>
           <div class="header">
             <h1>GB300 L10 測試進度報告</h1>
-            <p style="font-size: 14px; color: #6c757d;">生成時間: ${new Date().toLocaleString('zh-TW')}</p>
+            <p>生成時間: ${new Date().toLocaleString('zh-TW')}</p>
           </div>
           
           <div class="summary">
             <h2>統計摘要</h2>
-            <div class="summary-grid">
-              <div class="summary-item">
-                <strong>總測試項目:</strong> ${records.length}
-              </div>
-              <div class="summary-item">
-                <strong>已完成:</strong> ${records.filter(r => r.status === 'Done').length}
-              </div>
-              <div class="summary-item">
-                <strong>進行中:</strong> ${records.filter(r => r.status === 'On-going').length}
-              </div>
-              <div class="summary-item">
-                <strong>未開始:</strong> ${records.filter(r => r.status === 'Not Start').length}
-              </div>
-              <div class="summary-item">
-                <strong>完成率:</strong> ${Math.round((records.filter(r => r.status === 'Done').length / records.length) * 100)}%
-              </div>
-              <div class="summary-item">
-                <strong>測試站點:</strong> Station 0-4
-              </div>
-            </div>
-            <div style="margin-top: 15px;">
-              <div class="progress-bar">
-                <div class="progress-fill" style="width: ${Math.round((records.filter(r => r.status === 'Done').length / records.length) * 100)}%"></div>
-              </div>
-            </div>
+            <p>總測試項目: ${records.length}</p>
+            <p>已完成: ${records.filter(r => r.status === 'Done').length}</p>
+            <p>進行中: ${records.filter(r => r.status === 'On-going').length}</p>
+            <p>未開始: ${records.filter(r => r.status === 'Not Start').length}</p>
+            <p>完成率: ${Math.round((records.filter(r => r.status === 'Done').length / records.length) * 100)}%</p>
           </div>
           
           <table>
@@ -179,11 +75,11 @@ export function PDFExportManager({ records }: PDFExportManagerProps) {
             <tbody>
               ${records.map(record => `
                 <tr>
-                  <td><strong>${record.system_name}</strong></td>
+                  <td>${record.system_name}</td>
                   <td>${record.station_name}</td>
                   <td>${record.test_item}</td>
                   <td class="status-${record.status.toLowerCase().replace(' ', '')}">${record.status}</td>
-                  <td><strong>${record.progress}%</strong></td>
+                  <td>${record.progress}%</td>
                   <td>${record.assigned_engineer}</td>
                   <td>${record.start_date}</td>
                   <td>${record.completion_date || '-'}</td>
@@ -194,9 +90,7 @@ export function PDFExportManager({ records }: PDFExportManagerProps) {
           </table>
           
           <div class="footer">
-            <p><strong>此報告由 GB300 L10 測試管理系統自動生成</strong></p>
-            <p>Production Testing System - Quality Assurance Report</p>
-            <p>版權所有 © ${new Date().getFullYear()}</p>
+            <p>此報告由 GB300 L10 測試管理系統自動生成</p>
           </div>
         </body>
         </html>
@@ -212,20 +106,19 @@ export function PDFExportManager({ records }: PDFExportManagerProps) {
         // Wait for content to load then print
         setTimeout(() => {
           printWindow.print();
-        }, 1000);
+        }, 500);
         
         toast({
           title: "PDF 準備完成",
           description: "請在新視窗中列印或另存為 PDF"
         });
       } else {
-        throw new Error("無法開啟新視窗，請檢查瀏覽器的彈出視窗設定");
+        throw new Error("無法開啟新視窗");
       }
     } catch (error) {
-      console.error('PDF export error:', error);
       toast({
         title: "匯出失敗",
-        description: "無法生成 PDF 報告: " + (error as Error).message,
+        description: "無法生成 PDF 報告",
         variant: "destructive"
       });
     }
