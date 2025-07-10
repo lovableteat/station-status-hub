@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,7 @@ export function ProgressEditDialog({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為Station 0-4（包含Station 4）- 統一時間記錄邏輯
+  // 檢查是否為所有站點（Station 0-4）- 統一時間記錄邏輯
   const isStationWithTimeTracking = () => {
     return stationName.includes('Station 0') || 
            stationName.includes('Station 1') || 
@@ -85,12 +86,12 @@ export function ProgressEditDialog({
            stationName.includes('Station 4');
   };
 
-  // 統一的時間記錄邏輯 - Station 0-4 都使用相同邏輯，確保自動時間記錄
+  // 統一的時間記錄邏輯 - 所有站點（Station 0-4）都使用相同邏輯，確保自動時間記錄
   const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
     const currentTime = new Date().toISOString();
     let timeUpdates = {};
 
-    // 對於 Station 0-4，統一處理時間記錄邏輯 - 確保自動記錄
+    // 對於所有站點（Station 0-4），統一處理時間記錄邏輯 - 確保自動記錄
     if (isStationWithTimeTracking()) {
       // 從 Not Start 變成其他狀態時，自動記錄開始時間（如果還沒有開始時間）
       if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
@@ -131,7 +132,7 @@ export function ProgressEditDialog({
       newProgressPercent = 0;
     }
     
-    // 獲取時間更新 - 確保 Station 4 也能自動記錄時間
+    // 獲取時間更新 - 確保所有站點都能自動記錄時間
     const timeUpdates = updateTimeIfStatusChanged(newStatus, currentItem);
     
     setEditValues(prev => ({ 
@@ -142,14 +143,14 @@ export function ProgressEditDialog({
     }));
   };
 
-  // 增強的儲存處理函數 - 確保 Station 4 在儲存時自動記錄時間
+  // 增強的儲存處理函數 - 確保所有站點在儲存時自動記錄時間
   const handleEnhancedSaveProgress = (systemId: string, stationId: string, itemId: string) => {
     if (!editingProgress) return;
     
     const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
     const currentTime = new Date().toISOString();
     
-    // 針對 Station 0-4 進行最終的時間記錄確認
+    // 針對所有站點（Station 0-4）進行最終的時間記錄確認
     if (isStationWithTimeTracking()) {
       let finalTimeUpdates = { ...editValues };
       
@@ -268,7 +269,7 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 時間記錄管理按鈕 - Station 0-4 統一處理（包含Station 4）*/}
+                        {/* 時間記錄管理按鈕 - 所有站點統一處理（包含Station 4）*/}
                         {isStationWithTimeTracking() && itemProgress && (
                           <TimeRecordManager
                             systemId={systemId}
@@ -380,7 +381,7 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 - Station 0-4 統一處理（包含Station 4 自動時間記錄）*/}
+                        {/* 時間顯示 - 所有站點統一處理（包含Station 4 自動時間記錄）*/}
                         {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
                           <div className="md:col-span-2 space-y-2">
                             <label className="text-sm font-medium">時間記錄</label>
@@ -395,7 +396,7 @@ export function ProgressEditDialog({
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              * Station 0-4 統一自動時間記錄邏輯，狀態變更並儲存時自動記錄時間
+                              * 所有站點統一自動時間記錄邏輯，狀態變更並儲存時自動記錄時間
                             </div>
                           </div>
                         )}
@@ -419,7 +420,7 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - Station 0-4 統一處理（包含Station 4）*/}
+                    {/* 時間資訊顯示 - 所有站點統一處理（包含Station 4）*/}
                     {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">
