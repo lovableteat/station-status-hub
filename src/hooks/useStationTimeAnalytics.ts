@@ -176,7 +176,7 @@ export function useStationTimeAnalytics() {
       total_records: hours.length
     }));
 
-    // Sort by station order - 包含Station 4 的排序邏輯
+    // Sort by station order - 動態排序，包含Station 4
     averages.sort((a, b) => {
       const getStationOrder = (name: string) => {
         const match = name.match(/Station\s*(\d+)/i);
