@@ -1,201 +1,187 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface StationTimeRecord {
   id: string;
-  system_id: string;
-  station_id: string;
   station_name: string;
-  start_time: string | null;
-  end_time: string | null;
-  total_hours: number | null;
+  station_order: number;
+  system_name: string;
+  actual_hours: number;
+  estimated_hours: number;
+  started_at: string;
+  completed_at: string;
+  efficiency_ratio: number;
 }
 
-interface StationAverageTime {
+interface StationAverageData {
   station_name: string;
+  station_order: number;
   average_hours: number;
-  total_records: number;
-}
-
-interface DateFilter {
-  start_date?: string;
-  end_date?: string;
-  filter_type: 'estimated_start' | 'estimated_end' | 'actual_completed';
+  estimated_hours: number;
+  efficiency_percentage: number;
+  record_count: number;
+  total_actual_hours: number;
 }
 
 export function useStationTimeAnalytics() {
-  const [stationTimeRecords, setStationTimeRecords] = useState<StationTimeRecord[]>([]);
-  const [averageTimes, setAverageTimes] = useState<StationAverageTime[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [records, setRecords] = useState<StationTimeRecord[]>([]);
+  const [averages, setAverages] = useState<StationAverageData[]>([]);
+  const [stations, setStations] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const loadStationTimeRecords = async (dateFilter?: DateFilter) => {
+  const loadStationTimeRecords = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Get all test progress records with their station information - including Station 4
+      // Get all test progress records with their station information - 動態載入所有站點
       let query = supabase
         .from('test_progress')
         .select(`
           *,
           test_systems!inner(
             id,
-            system_name,
-            actual_started_at,
-            actual_completed_at
+            system_name
           ),
           test_flow_stations!inner(
             id,
             station_name,
-            station_order
+            station_order,
+            estimated_hours
           )
-        `);
+        `)
+        .not('started_at', 'is', null)
+        .not('completed_at', 'is', null);
 
-      // Apply date filters based on test_systems timestamps
-      if (dateFilter?.start_date || dateFilter?.end_date) {
-        let timeColumn = 'actual_completed_at';
-        if (dateFilter.filter_type === 'estimated_start') {
-          timeColumn = 'actual_started_at';
-        } else if (dateFilter.filter_type === 'estimated_end') {
-          timeColumn = 'actual_completed_at';
-        }
+      const { data: progressData, error } = await query;
 
-        if (dateFilter.start_date) {
-          query = query.gte(`test_systems.${timeColumn}`, dateFilter.start_date);
-        }
-        if (dateFilter.end_date) {
-          query = query.lte(`test_systems.${timeColumn}`, dateFilter.end_date);
-        }
-      }
-
-      const { data, error } = await query;
-      
       if (error) {
-        console.error('Error loading test progress records:', error);
+        console.error('Error loading progress data:', error);
         toast({
           title: "載入失敗",
-          description: "無法載入測試進度記錄",
+          description: "無法載入站點時間分析數據",
           variant: "destructive"
         });
         return;
       }
 
-      if (data) {
-        // Group by system and station to calculate start and end times
-        const stationTimeMap = new Map<string, {
-          system_id: string;
-          station_id: string;
-          station_name: string;
-          start_time: string | null;
-          end_time: string | null;
-          records: any[];
-        }>();
+      // 載入所有站點資訊
+      const { data: stationsData, error: stationsError } = await supabase
+        .from('test_flow_stations')
+        .select('*')
+        .order('station_order');
 
-        data.forEach(record => {
-          const key = `${record.system_id}-${record.station_id}`;
-          if (!stationTimeMap.has(key)) {
-            stationTimeMap.set(key, {
-              system_id: record.system_id,
-              station_id: record.station_id,
-              station_name: record.test_flow_stations.station_name,
-              start_time: null,
-              end_time: null,
-              records: []
-            });
-          }
-          stationTimeMap.get(key)!.records.push(record);
-        });
-
-        // Calculate start and end times for each station
-        const processedRecords: StationTimeRecord[] = [];
-        stationTimeMap.forEach((stationData, key) => {
-          const records = stationData.records;
-          const startTimes = records
-            .filter(r => r.started_at)
-            .map(r => new Date(r.started_at))
-            .sort((a, b) => a.getTime() - b.getTime());
-          
-          const endTimes = records
-            .filter(r => r.completed_at && r.status === 'Done')
-            .map(r => new Date(r.completed_at))
-            .sort((a, b) => b.getTime() - a.getTime());
-
-          const startTime = startTimes.length > 0 ? startTimes[0].toISOString() : null;
-          const endTime = endTimes.length > 0 ? endTimes[0].toISOString() : null;
-          
-          let totalHours = null;
-          if (startTime && endTime) {
-            const start = new Date(startTime);
-            const end = new Date(endTime);
-            totalHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Convert to hours
-          }
-
-          processedRecords.push({
-            id: key,
-            system_id: stationData.system_id,
-            station_id: stationData.station_id,
-            station_name: stationData.station_name,
-            start_time: startTime,
-            end_time: endTime,
-            total_hours: totalHours
-          });
-        });
-
-        setStationTimeRecords(processedRecords);
-        calculateAverageTimes(processedRecords);
+      if (stationsError) {
+        console.error('Error loading stations:', stationsError);
+      } else {
+        setStations(stationsData || []);
       }
+
+      if (!progressData || progressData.length === 0) {
+        console.log('No completed progress records found');
+        setRecords([]);
+        setAverages([]);
+        return;
+      }
+
+      // Transform data with calculated hours
+      const transformedRecords: StationTimeRecord[] = progressData.map(record => {
+        const startTime = new Date(record.started_at);
+        const endTime = new Date(record.completed_at);
+        const actualHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        const estimatedHours = record.test_flow_stations?.estimated_hours || 0;
+        const efficiencyRatio = estimatedHours > 0 ? actualHours / estimatedHours : 0;
+
+        return {
+          id: record.id,
+          station_name: record.test_flow_stations?.station_name || 'Unknown',
+          station_order: record.test_flow_stations?.station_order || 999,
+          system_name: record.test_systems?.system_name || 'Unknown',
+          actual_hours: Math.round(actualHours * 100) / 100,
+          estimated_hours: estimatedHours,
+          started_at: record.started_at,
+          completed_at: record.completed_at,
+          efficiency_ratio: Math.round(efficiencyRatio * 100) / 100
+        };
+      });
+
+      setRecords(transformedRecords);
+
+      // Calculate averages by station
+      const stationGroups = transformedRecords.reduce((acc, record) => {
+        const key = record.station_name;
+        if (!acc[key]) {
+          acc[key] = {
+            station_name: record.station_name,
+            station_order: record.station_order,
+            records: [],
+            estimated_hours: record.estimated_hours
+          };
+        }
+        acc[key].records.push(record);
+        return acc;
+      }, {} as Record<string, {
+        station_name: string;
+        station_order: number;
+        records: StationTimeRecord[];
+        estimated_hours: number;
+      }>);
+
+      const averageData: StationAverageData[] = Object.values(stationGroups).map(group => {
+        const totalHours = group.records.reduce((sum, r) => sum + r.actual_hours, 0);
+        const averageHours = totalHours / group.records.length;
+        const estimatedHours = group.estimated_hours;
+        const efficiencyPercentage = estimatedHours > 0 ? (estimatedHours / averageHours) * 100 : 0;
+
+        return {
+          station_name: group.station_name,
+          station_order: group.station_order,
+          average_hours: Math.round(averageHours * 100) / 100,
+          estimated_hours: estimatedHours,
+          efficiency_percentage: Math.round(efficiencyPercentage),
+          record_count: group.records.length,
+          total_actual_hours: Math.round(totalHours * 100) / 100
+        };
+      });
+
+      // Sort by station order - 支援所有站點的排序邏輯
+      averageData.sort((a, b) => {
+        const getStationOrder = (name: string) => {
+          const match = name.match(/Station\s*(\d+)/i);
+          return match ? parseInt(match[1]) : 999;
+        };
+        
+        const orderA = getStationOrder(a.station_name);
+        const orderB = getStationOrder(b.station_name);
+        
+        return orderA - orderB;
+      });
+
+      setAverages(averageData);
+
     } catch (error) {
       console.error('Error in loadStationTimeRecords:', error);
+      toast({
+        title: "載入錯誤",
+        description: "載入站點時間分析時發生錯誤",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const calculateAverageTimes = (records: StationTimeRecord[]) => {
-    // Only process records with complete time data
-    const validRecords = records.filter(record => 
-      record.start_time && record.end_time && record.total_hours !== null
-    );
-
-    // Group by station name and calculate average
-    const stationGroups: { [key: string]: number[] } = {};
-    
-    validRecords.forEach(record => {
-      if (!stationGroups[record.station_name]) {
-        stationGroups[record.station_name] = [];
-      }
-      stationGroups[record.station_name].push(record.total_hours!);
-    });
-
-    // Calculate averages for each station
-    const averages: StationAverageTime[] = Object.entries(stationGroups).map(([stationName, hours]) => ({
-      station_name: stationName,
-      average_hours: hours.reduce((sum, h) => sum + h, 0) / hours.length,
-      total_records: hours.length
-    }));
-
-    // Sort by station order - 包含 Station 0-4 的排序邏輯
-    averages.sort((a, b) => {
-      const getStationOrder = (name: string) => {
-        const match = name.match(/Station\s*(\d+)/i);
-        return match ? parseInt(match[1]) : 999;
-      };
-      return getStationOrder(a.station_name) - getStationOrder(b.station_name);
-    });
-
-    setAverageTimes(averages);
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadStationTimeRecords();
-  }, []);
+  }, [loadStationTimeRecords]);
 
   return {
-    stationTimeRecords,
-    averageTimes,
+    records,
+    averages,
+    stations,
     isLoading,
-    loadStationTimeRecords
+    refetch: loadStationTimeRecords
   };
 }
