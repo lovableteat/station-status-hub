@@ -29,7 +29,7 @@ export function StationAverageTimeChart() {
     try {
       setIsLoading(true);
       
-      // 載入站點資訊
+      // 載入站點資訊 - 動態載入所有站點
       const { data: stationsData, error: stationsError } = await supabase
         .from('test_flow_stations')
         .select('*')
@@ -118,18 +118,8 @@ export function StationAverageTimeChart() {
         };
       });
 
-      // 排序：包含所有站點的排序邏輯
-      averages.sort((a, b) => {
-        const getStationOrder = (name: string) => {
-          const match = name.match(/Station\s*(\d+)/i);
-          return match ? parseInt(match[1]) : 999;
-        };
-        
-        const orderA = getStationOrder(a.station);
-        const orderB = getStationOrder(b.station);
-        
-        return orderA - orderB;
-      });
+      // 排序：動態支援所有站點
+      averages.sort((a, b) => a.stationOrder - b.stationOrder);
 
       setData(averages);
     } catch (error) {
@@ -143,7 +133,7 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 動態根據實際站點顯示
+  // 準備圖表數據
   const chartData = data.map(item => ({
     ...item,
     name: item.station,
@@ -187,7 +177,7 @@ export function StationAverageTimeChart() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          各站平均處理時間分析
+          各站平均處理時間分析 (包含所有測試站點)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -247,7 +237,7 @@ export function StationAverageTimeChart() {
         {chartData.length > 0 && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {chartData.map((data, index) => (
                 <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
                   <p className="font-medium text-sm">{data.station}</p>
@@ -289,7 +279,7 @@ export function StationAverageTimeChart() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            效率 = (預估時間 / 實際時間) × 100%
+            效率 = (預估時間 / 實際时間) × 100%
           </p>
         </div>
       </CardContent>
