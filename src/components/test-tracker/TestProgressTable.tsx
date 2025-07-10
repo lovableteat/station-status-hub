@@ -79,7 +79,7 @@ export function TestProgressTable({
     }
   };
 
-  // 統一站點處理時間計算邏輯 - Station 0-4 都使用相同邏輯（包含Station 4）
+  // 統一站點處理時間計算邏輯 - 所有站點（包括Station 4）都使用相同邏輯
   const calculateStationProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
@@ -198,7 +198,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 確保Station 4也包含
+                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
@@ -230,7 +230,7 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                          {/* Station 0-4 統一顯示處理時長（確保Station 4也顯示） */}
+                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
                           {processingTime && (
                             <div className="mt-3 pt-3 border-t space-y-2">
                               <div className="flex justify-between items-center text-sm">
@@ -337,7 +337,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 確保Station 4也包含  
+                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
@@ -364,7 +364,7 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          {/* Station 0-4 統一顯示處理時長（確保Station 4也顯示） */}
+                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
                               處理時長: {processingTime.duration} 小時
