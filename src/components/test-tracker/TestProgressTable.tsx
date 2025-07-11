@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, RotateCcw, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,12 +59,11 @@ const TestProgressTable = () => {
   const { systems, stations, testItems, progress, refetch } = useUnifiedData();
   const { toast } = useToast();
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
-  const [showProgressDialog, setShowProgressDialog] = useState(false);
   const [showSystemDialog, setShowSystemDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [expandedSystems, setExpandedSystems] = useState<Set<string>>(new Set());
 
-  // 計算各站的處理時長
+  // Calculate station duration
   const calculateStationDuration = (systemId: string, stationId: string) => {
     const stationProgress = progress.filter(p => p.system_id === systemId && p.station_id === stationId);
     
@@ -89,7 +88,7 @@ const TestProgressTable = () => {
     return `${diffHours.toFixed(1)} 小時`;
   };
 
-  // 獲取站點狀態
+  // Get station status
   const getStationStatus = (systemId: string, stationId: string) => {
     const stationProgress = progress.filter(p => p.system_id === systemId && p.station_id === stationId);
     const stationItems = testItems.filter(item => item.station_id === stationId);
@@ -104,7 +103,7 @@ const TestProgressTable = () => {
     return "待處理";
   };
 
-  // 更新系統狀態
+  // Update system status
   const updateSystemStatus = async (systemId: string, newStatus: string, currentStation?: string) => {
     try {
       const updateData: any = { status: newStatus };
@@ -232,7 +231,6 @@ const TestProgressTable = () => {
                         variant="outline"
                         onClick={() => {
                           setSelectedSystemId(system.id);
-                          setShowProgressDialog(true);
                         }}
                         className="border-primary text-primary hover:bg-primary/10"
                       >
@@ -283,17 +281,6 @@ const TestProgressTable = () => {
           </Table>
         </CardContent>
       </Card>
-
-      {showProgressDialog && selectedSystemId && (
-        <ProgressEditDialog
-          systemId={selectedSystemId}
-          onUpdate={() => {
-            setShowProgressDialog(false);
-            setSelectedSystemId(null);
-            return refetch();
-          }}
-        />
-      )}
 
       {showSystemDialog && (
         <SystemEditDialog
