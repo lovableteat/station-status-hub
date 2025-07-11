@@ -526,6 +526,45 @@ export type Database = {
         }
         Relationships: []
       }
+      issues: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          description: string
+          id: string
+          priority: string
+          station_id: string | null
+          status: string
+          system_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          priority?: string
+          station_id?: string | null
+          status?: string
+          system_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          priority?: string
+          station_id?: string | null
+          status?: string
+          system_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       manufacturers: {
         Row: {
           country: string | null
