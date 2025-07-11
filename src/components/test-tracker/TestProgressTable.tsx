@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -288,25 +287,32 @@ const TestProgressTable = () => {
       {showProgressDialog && selectedSystemId && (
         <ProgressEditDialog
           systemId={selectedSystemId}
-          onClose={() => {
+          onUpdate={() => {
             setShowProgressDialog(false);
             setSelectedSystemId(null);
+            return refetch();
           }}
-          onUpdate={refetch}
         />
       )}
 
       {showSystemDialog && (
         <SystemEditDialog
-          onClose={() => setShowSystemDialog(false)}
-          onUpdate={refetch}
+          systemId=""
+          systemName=""
+          assignedEngineer=""
+          onUpdate={() => {
+            setShowSystemDialog(false);
+            refetch();
+          }}
         />
       )}
 
       {showResetDialog && (
         <BulkResetDialog
-          onClose={() => setShowResetDialog(false)}
-          onUpdate={refetch}
+          onUpdate={() => {
+            setShowResetDialog(false);
+            refetch();
+          }}
         />
       )}
     </div>
