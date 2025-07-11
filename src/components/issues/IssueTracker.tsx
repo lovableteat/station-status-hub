@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
+import { Search, Plus, Edit, AlertTriangle, Bug, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { BackButton } from "../common/BackButton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface Issue {
   id: string;
@@ -31,9 +33,18 @@ export function IssueTracker() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPriority, setFilterPriority] = useState("all-priorities");
   const [filterStatus, setFilterStatus] = useState("all-status");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [newIssue, setNewIssue] = useState({
+    title: "",
+    description: "",
+    priority: "medium" as const,
+    status: "open" as const,
+    assigned_to: "",
+    system_id: "",
+    station_id: ""
+  });
   
   const { toast } = useToast();
   
@@ -80,74 +91,163 @@ export function IssueTracker() {
 
   const loadIssues = async () => {
     try {
-      // Mock data for demonstration
-      const mockIssues: Issue[] = [
-        {
-          id: "1",
-          title: "Station 2 測試項目異常",
-          description: "功能驗證過程中發現通訊問題",
-          priority: "high",
-          status: "open",
-          assigned_to: "Wilson",
-          system_id: "System23",
-          station_id: "station_2",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "2", 
-          title: "系統軟體版本不匹配",
-          description: "需要更新到最新版本以支援新測試項目",
-          priority: "medium",
-          status: "in_progress",
-          assigned_to: "Alice",
-          system_id: "System15",
-          station_id: "station_1",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "3",
-          title: "硬體連接不穩定",
-          description: "偶發性連接中斷影響測試進度",
-          priority: "critical",
-          status: "open",
-          assigned_to: "Bob",
-          system_id: "System08",
-          station_id: "station_0",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
-      
-      setIssues(mockIssues);
-      setIsLoading(false);
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('issues')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setIssues(data || []);
     } catch (error) {
+      console.error('Error loading issues:', error);
       toast({
         title: "載入失敗",
         description: "無法載入問題列表",
         variant: "destructive"
       });
+    } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCreateIssue = async () => {
+    try {
+      if (!newIssue.title.trim() || !newIssue.description.trim()) {
+        toast({
+          title: "輸入錯誤",
+          description: "請填寫問題標題和描述",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('issues')
+        .insert([{
+          title: newIssue.title.trim(),
+          description: newIssue.description.trim(),
+          priority: newIssue.priority,
+          status: newIssue.status,
+          assigned_to: newIssue.assigned_to.trim() || null,
+          system_id: newIssue.system_id.trim() || null,
+          station_id: newIssue.station_id.trim() || null
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "新增成功",
+        description: "問題已成功新增"
+      });
+
+      setIsCreateDialogOpen(false);
+      setNewIssue({
+        title: "",
+        description: "",
+        priority: "medium",
+        status: "open",
+        assigned_to: "",
+        system_id: "",
+        station_id: ""
+      });
+      loadIssues();
+    } catch (error) {
+      console.error('Error creating issue:', error);
+      toast({
+        title: "新增失敗",
+        description: "無法新增問題",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUpdateIssue = async () => {
+    try {
+      if (!editingIssue || !editingIssue.title.trim() || !editingIssue.description.trim()) {
+        toast({
+          title: "輸入錯誤",
+          description: "請填寫問題標題和描述",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('issues')
+        .update({
+          title: editingIssue.title.trim(),
+          description: editingIssue.description.trim(),
+          priority: editingIssue.priority,
+          status: editingIssue.status,
+          assigned_to: editingIssue.assigned_to?.trim() || null,
+          system_id: editingIssue.system_id?.trim() || null,
+          station_id: editingIssue.station_id?.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingIssue.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "更新成功",
+        description: "問題已成功更新"
+      });
+
+      setEditingIssue(null);
+      loadIssues();
+    } catch (error) {
+      console.error('Error updating issue:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新問題",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteIssue = async (issueId: string) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .delete()
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      toast({
+        title: "刪除成功",
+        description: "問題已成功刪除"
+      });
+
+      loadIssues();
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除問題",
+        variant: "destructive"
+      });
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-danger text-danger-foreground';
-      case 'high': return 'bg-warning text-warning-foreground';
-      case 'medium': return 'bg-info text-info-foreground';
-      case 'low': return 'bg-muted text-muted-foreground';
+      case 'critical': return 'bg-red-500 text-white';
+      case 'high': return 'bg-orange-500 text-white';
+      case 'medium': return 'bg-yellow-500 text-white';
+      case 'low': return 'bg-green-500 text-white';
       default: return 'bg-muted text-muted-foreground';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-success text-success-foreground';
-      case 'in_progress': return 'bg-warning text-warning-foreground';
-      case 'open': return 'bg-danger text-danger-foreground';
-      case 'closed': return 'bg-muted text-muted-foreground';
+      case 'resolved': return 'bg-green-500 text-white';
+      case 'in_progress': return 'bg-blue-500 text-white';
+      case 'open': return 'bg-red-500 text-white';
+      case 'closed': return 'bg-gray-500 text-white';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -160,7 +260,6 @@ export function IssueTracker() {
     const matchesStatus = !filterStatus || filterStatus === "all-status" || issue.status === filterStatus;
     return matchesSearch && matchesPriority && matchesStatus;
   });
-
 
   if (isLoading) {
     return (
@@ -188,19 +287,19 @@ export function IssueTracker() {
             <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
             <div className="flex items-center gap-4 mt-2 text-sm">
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-danger"></div>
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
                 開啟: {issueStats.open}
               </span>
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-warning"></div>
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                 處理中: {issueStats.inProgress}
               </span>
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-success"></div>
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 已解決: {issueStats.resolved}
               </span>
               <span className="flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-danger" />
+                <AlertTriangle className="w-3 h-3 text-red-500" />
                 緊急: {issueStats.critical}
               </span>
             </div>
@@ -208,7 +307,7 @@ export function IssueTracker() {
         </div>
         <div className="flex gap-2">
           <IssuePDFExportManager issues={filteredIssues} />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -222,16 +321,24 @@ export function IssueTracker() {
               <div className="space-y-4">
                 <div>
                   <Label>問題標題</Label>
-                  <Input placeholder="請輸入問題標題..." />
+                  <Input 
+                    placeholder="請輸入問題標題..." 
+                    value={newIssue.title}
+                    onChange={(e) => setNewIssue({...newIssue, title: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label>問題描述</Label>
-                  <Textarea placeholder="請詳細描述問題..." />
+                  <Textarea 
+                    placeholder="請詳細描述問題..." 
+                    value={newIssue.description}
+                    onChange={(e) => setNewIssue({...newIssue, description: e.target.value})}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>優先級</Label>
-                    <Select>
+                    <Select value={newIssue.priority} onValueChange={(value) => setNewIssue({...newIssue, priority: value as any})}>
                       <SelectTrigger>
                         <SelectValue placeholder="選擇優先級" />
                       </SelectTrigger>
@@ -245,23 +352,36 @@ export function IssueTracker() {
                   </div>
                   <div>
                     <Label>指派給</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇負責人" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Wilson">Wilson</SelectItem>
-                        <SelectItem value="Alice">Alice</SelectItem>
-                        <SelectItem value="Bob">Bob</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input 
+                      placeholder="負責人姓名" 
+                      value={newIssue.assigned_to}
+                      onChange={(e) => setNewIssue({...newIssue, assigned_to: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>系統編號</Label>
+                    <Input 
+                      placeholder="系統編號" 
+                      value={newIssue.system_id}
+                      onChange={(e) => setNewIssue({...newIssue, system_id: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>站點編號</Label>
+                    <Input 
+                      placeholder="站點編號" 
+                      value={newIssue.station_id}
+                      onChange={(e) => setNewIssue({...newIssue, station_id: e.target.value})}
+                    />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     取消
                   </Button>
-                  <Button onClick={() => setIsDialogOpen(false)}>
+                  <Button onClick={handleCreateIssue}>
                     建立問題
                   </Button>
                 </div>
@@ -327,17 +447,34 @@ export function IssueTracker() {
                       </Select>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>指派給</Label>
+                      <Input 
+                        value={editingIssue.assigned_to || ''}
+                        onChange={(e) => setEditingIssue({...editingIssue, assigned_to: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <Label>系統編號</Label>
+                      <Input 
+                        value={editingIssue.system_id || ''}
+                        onChange={(e) => setEditingIssue({...editingIssue, system_id: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>站點編號</Label>
+                    <Input 
+                      value={editingIssue.station_id || ''}
+                      onChange={(e) => setEditingIssue({...editingIssue, station_id: e.target.value})}
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setEditingIssue(null)}>
                       取消
                     </Button>
-                    <Button onClick={() => {
-                      toast({
-                        title: "更新成功",
-                        description: "問題已成功更新"
-                      });
-                      setEditingIssue(null);
-                    }}>
+                    <Button onClick={handleUpdateIssue}>
                       儲存
                     </Button>
                   </div>
@@ -443,7 +580,7 @@ export function IssueTracker() {
               </div>
               <div className="flex justify-between">
                 <span>待處理</span>
-                <span className="font-medium text-danger">{issueStats.open}</span>
+                <span className="font-medium text-red-500">{issueStats.open}</span>
               </div>
             </div>
           </CardContent>
@@ -483,18 +620,48 @@ export function IssueTracker() {
                     {issue.system_id && (
                       <span>系統: <span className="font-medium">{issue.system_id}</span></span>
                     )}
+                    {issue.station_id && (
+                      <span>站點: <span className="font-medium">{issue.station_id}</span></span>
+                    )}
                     <span>建立時間: {new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
                   </div>
                 </div>
                 
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setEditingIssue(issue)}
-                >
-                  <Edit className="h-4 w-4 mr-1" />
-                  編輯
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setEditingIssue(issue)}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    編輯
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        刪除
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>確認刪除</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          您確定要刪除這個問題嗎？此操作無法復原。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => handleDeleteIssue(issue.id)}
+                          className="bg-red-500 hover:bg-red-600"
+                        >
+                          確認刪除
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             </CardContent>
           </Card>
