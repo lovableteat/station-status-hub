@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,7 +53,12 @@ const IssueTracker = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setIssues(data || []);
+      // Type assertion to ensure correct type mapping
+      setIssues((data || []).map(issue => ({
+        ...issue,
+        priority: issue.priority as Issue['priority'],
+        status: issue.status as Issue['status']
+      })));
     } catch (error) {
       console.error('載入問題失敗:', error);
       toast({
