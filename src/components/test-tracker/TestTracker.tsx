@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
-import { TestProgressTable } from "./TestProgressTable";
+import TestProgressTable from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
 import {
@@ -227,22 +226,7 @@ export function TestTracker() {
 
       {/* Test Progress Table */}
       <div data-testtracker-table>
-        <TestProgressTable
-          filteredSystems={filteredSystems}
-          stations={stations}
-          items={items}
-          progress={progress}
-          editingProgress={editingProgress}
-          setEditingProgress={setEditingProgress}
-          editValues={editValues}
-          setEditValues={setEditValues}
-          getProgressForSystemItem={getProgressForSystemItem}
-          handleEditProgress={handleEditProgress}
-          handleSaveProgress={handleSaveProgress}
-          handleDeleteProgress={handleDeleteProgress}
-          getStatusColor={getStatusColor}
-          onSystemUpdate={loadData}
-        />
+        <TestProgressTable />
       </div>
 
       {/* PDF Exporter Dialog */}
