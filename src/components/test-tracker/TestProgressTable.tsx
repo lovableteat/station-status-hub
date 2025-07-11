@@ -59,7 +59,7 @@ interface UnifiedProgress {
 const TestProgressTable = () => {
   const { systems, stations, testItems, progress, refetch } = useUnifiedData();
   const { toast } = useToast();
-  const [selectedSystem, setSelectedSystem] = useState<UnifiedSystem | null>(null);
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [showProgressDialog, setShowProgressDialog] = useState(false);
   const [showSystemDialog, setShowSystemDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -232,7 +232,7 @@ const TestProgressTable = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          setSelectedSystem(system);
+                          setSelectedSystemId(system.id);
                           setShowProgressDialog(true);
                         }}
                         className="border-primary text-primary hover:bg-primary/10"
@@ -285,12 +285,12 @@ const TestProgressTable = () => {
         </CardContent>
       </Card>
 
-      {showProgressDialog && selectedSystem && (
+      {showProgressDialog && selectedSystemId && (
         <ProgressEditDialog
-          system={selectedSystem}
+          systemId={selectedSystemId}
           onClose={() => {
             setShowProgressDialog(false);
-            setSelectedSystem(null);
+            setSelectedSystemId(null);
           }}
           onUpdate={refetch}
         />
