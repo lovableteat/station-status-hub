@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -287,18 +286,18 @@ const TestProgressTable = () => {
           systemId=""
           systemName=""
           assignedEngineer=""
-          onUpdate={() => {
+          onUpdate={async () => {
             setShowSystemDialog(false);
-            refetch();
+            await refetch();
           }}
         />
       )}
 
       {showResetDialog && (
         <BulkResetDialog
-          onUpdate={() => {
+          onUpdate={async () => {
             setShowResetDialog(false);
-            refetch();
+            await refetch();
           }}
         />
       )}
