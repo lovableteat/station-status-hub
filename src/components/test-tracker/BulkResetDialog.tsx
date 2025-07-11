@@ -1,17 +1,16 @@
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface BulkResetDialogProps {
-  onReset: () => void;
+  onClose: () => void;
+  onUpdate: () => Promise<void>;
 }
 
-export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
+export function BulkResetDialog({ onClose, onUpdate }: BulkResetDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -59,7 +58,8 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
         description: "所有測試進度已重置為初始狀態",
       });
 
-      onReset();
+      await onUpdate();
+      onClose();
     } catch (error) {
       console.error('Error during bulk reset:', error);
       toast({
@@ -75,10 +75,12 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-white border-red-600">
-          <RotateCcw className="h-4 w-4 mr-2" />
-          重置所有進度
-        </Button>
+        <div>
+          <button className="bg-red-600 hover:bg-red-700 text-white border-red-600 px-3 py-2 rounded-md flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" />
+            重置所有進度
+          </button>
+        </div>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -101,7 +103,7 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogCancel onClick={onClose}>取消</AlertDialogCancel>
           <AlertDialogAction 
             onClick={handleResetAllProgress}
             disabled={isLoading}
