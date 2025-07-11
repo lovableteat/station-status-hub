@@ -295,6 +295,7 @@ const TestProgressTable = () => {
 
       {showResetDialog && (
         <BulkResetDialog
+          onClose={() => setShowResetDialog(false)}
           onUpdate={async () => {
             setShowResetDialog(false);
             await refetch();
