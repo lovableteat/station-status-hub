@@ -1,24 +1,23 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
+import { Trash2, Edit, Plus, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { IssuePDFExportManager } from "./IssuePDFExportManager";
-import { BackButton } from "../common/BackButton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface Issue {
   id: string;
   title: string;
   description: string;
-  priority: "low" | "medium" | "high" | "critical";
-  status: "open" | "in_progress" | "resolved" | "closed";
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
   assigned_to?: string;
   system_id?: string;
   station_id?: string;
@@ -26,490 +25,439 @@ interface Issue {
   updated_at: string;
 }
 
-export function IssueTracker() {
+const IssueTracker = () => {
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterPriority, setFilterPriority] = useState("all-priorities");
-  const [filterStatus, setFilterStatus] = useState("all-status");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as Issue['priority'],
+    status: 'open' as Issue['status'],
+    assigned_to: '',
+    system_id: '',
+    station_id: ''
+  });
   const { toast } = useToast();
-  
-  // Calculate issue statistics
-  const issueStats = {
-    total: issues.length,
-    open: issues.filter(i => i.status === 'open').length,
-    inProgress: issues.filter(i => i.status === 'in_progress').length,
-    resolved: issues.filter(i => i.status === 'resolved').length,
-    critical: issues.filter(i => i.priority === 'critical').length,
-    bySystem: issues.reduce((acc, issue) => {
-      const system = issue.system_id || 'Unknown';
-      acc[system] = (acc[system] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-    byStation: issues.reduce((acc, issue) => {
-      const station = issue.station_id || 'Unknown';
-      acc[station] = (acc[station] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  };
 
   useEffect(() => {
     loadIssues();
-    
-    // Listen for navigation events from production monitor
-    const handleNavigation = (event: CustomEvent) => {
-      if (event.detail.module === 'issues' && event.detail.params) {
-        const { station, system } = event.detail.params;
-        if (station) {
-          setSearchTerm(station);
-        }
-        if (system) {
-          setSearchTerm(system);
-        }
-      }
-    };
-
-    window.addEventListener('navigate', handleNavigation as EventListener);
-    return () => {
-      window.removeEventListener('navigate', handleNavigation as EventListener);
-    };
   }, []);
 
   const loadIssues = async () => {
     try {
-      // Mock data for demonstration
-      const mockIssues: Issue[] = [
-        {
-          id: "1",
-          title: "Station 2 測試項目異常",
-          description: "功能驗證過程中發現通訊問題",
-          priority: "high",
-          status: "open",
-          assigned_to: "Wilson",
-          system_id: "System23",
-          station_id: "station_2",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "2", 
-          title: "系統軟體版本不匹配",
-          description: "需要更新到最新版本以支援新測試項目",
-          priority: "medium",
-          status: "in_progress",
-          assigned_to: "Alice",
-          system_id: "System15",
-          station_id: "station_1",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "3",
-          title: "硬體連接不穩定",
-          description: "偶發性連接中斷影響測試進度",
-          priority: "critical",
-          status: "open",
-          assigned_to: "Bob",
-          system_id: "System08",
-          station_id: "station_0",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
-      
-      setIssues(mockIssues);
-      setIsLoading(false);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('issues')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setIssues(data || []);
     } catch (error) {
+      console.error('載入問題失敗:', error);
       toast({
         title: "載入失敗",
         description: "無法載入問題列表",
         variant: "destructive"
       });
-      setIsLoading(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      priority: 'medium',
+      status: 'open',
+      assigned_to: '',
+      system_id: '',
+      station_id: ''
+    });
+    setEditingIssue(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.title.trim() || !formData.description.trim()) {
+      toast({
+        title: "輸入錯誤",
+        description: "標題和描述為必填項目",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      if (editingIssue) {
+        // 更新問題
+        const { error } = await supabase
+          .from('issues')
+          .update({
+            title: formData.title,
+            description: formData.description,
+            priority: formData.priority,
+            status: formData.status,
+            assigned_to: formData.assigned_to || null,
+            system_id: formData.system_id || null,
+            station_id: formData.station_id || null
+          })
+          .eq('id', editingIssue.id);
+
+        if (error) throw error;
+        
+        toast({
+          title: "更新成功",
+          description: "問題已成功更新"
+        });
+      } else {
+        // 創建新問題
+        const { error } = await supabase
+          .from('issues')
+          .insert({
+            title: formData.title,
+            description: formData.description,
+            priority: formData.priority,
+            status: formData.status,
+            assigned_to: formData.assigned_to || null,
+            system_id: formData.system_id || null,
+            station_id: formData.station_id || null
+          });
+
+        if (error) throw error;
+        
+        toast({
+          title: "創建成功",
+          description: "新問題已成功創建"
+        });
+      }
+
+      setShowCreateDialog(false);
+      resetForm();
+      loadIssues();
+    } catch (error) {
+      console.error('提交問題失敗:', error);
+      toast({
+        title: "操作失敗",
+        description: "無法保存問題",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleEdit = (issue: Issue) => {
+    setEditingIssue(issue);
+    setFormData({
+      title: issue.title,
+      description: issue.description,
+      priority: issue.priority,
+      status: issue.status,
+      assigned_to: issue.assigned_to || '',
+      system_id: issue.system_id || '',
+      station_id: issue.station_id || ''
+    });
+    setShowCreateDialog(true);
+  };
+
+  const handleDelete = async (issueId: string) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .delete()
+        .eq('id', issueId);
+
+      if (error) throw error;
+      
+      toast({
+        title: "刪除成功",
+        description: "問題已成功刪除"
+      });
+      
+      loadIssues();
+    } catch (error) {
+      console.error('刪除問題失敗:', error);
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除問題",
+        variant: "destructive"
+      });
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-danger text-danger-foreground';
-      case 'high': return 'bg-warning text-warning-foreground';
-      case 'medium': return 'bg-info text-info-foreground';
-      case 'low': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/50';
+      case 'high': return 'bg-orange-500/20 text-orange-400 border-orange-500/50';
+      case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
+      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/50';
+      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-success text-success-foreground';
-      case 'in_progress': return 'bg-warning text-warning-foreground';
-      case 'open': return 'bg-danger text-danger-foreground';
-      case 'closed': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'open': return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
+      case 'in_progress': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
+      case 'resolved': return 'bg-green-500/20 text-green-400 border-green-500/50';
+      case 'closed': return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
+      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
     }
   };
 
-  const filteredIssues = issues.filter(issue => {
-    const matchesSearch = issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         issue.assigned_to?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPriority = !filterPriority || filterPriority === "all-priorities" || issue.priority === filterPriority;
-    const matchesStatus = !filterStatus || filterStatus === "all-status" || issue.status === filterStatus;
-    return matchesSearch && matchesPriority && matchesStatus;
-  });
-
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 bg-muted rounded"></div>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">載入中...</div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <BackButton />
-          <div>
-            <h1 className="text-3xl font-bold">問題追蹤</h1>
-            <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
-            <div className="flex items-center gap-4 mt-2 text-sm">
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-danger"></div>
-                開啟: {issueStats.open}
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-warning"></div>
-                處理中: {issueStats.inProgress}
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-success"></div>
-                已解決: {issueStats.resolved}
-              </span>
-              <span className="flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-danger" />
-                緊急: {issueStats.critical}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <IssuePDFExportManager issues={filteredIssues} />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                新增問題
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>新增問題</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>問題標題</Label>
-                  <Input placeholder="請輸入問題標題..." />
-                </div>
-                <div>
-                  <Label>問題描述</Label>
-                  <Textarea placeholder="請詳細描述問題..." />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>優先級</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇優先級" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">低</SelectItem>
-                        <SelectItem value="medium">中</SelectItem>
-                        <SelectItem value="high">高</SelectItem>
-                        <SelectItem value="critical">緊急</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>指派給</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇負責人" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Wilson">Wilson</SelectItem>
-                        <SelectItem value="Alice">Alice</SelectItem>
-                        <SelectItem value="Bob">Bob</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    取消
-                  </Button>
-                  <Button onClick={() => setIsDialogOpen(false)}>
-                    建立問題
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Edit Issue Dialog */}
-          <Dialog open={!!editingIssue} onOpenChange={() => setEditingIssue(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>編輯問題</DialogTitle>
-              </DialogHeader>
-              {editingIssue && (
-                <div className="space-y-4">
-                  <div>
-                    <Label>問題標題</Label>
-                    <Input 
-                      value={editingIssue.title}
-                      onChange={(e) => setEditingIssue({...editingIssue, title: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <Label>問題描述</Label>
-                    <Textarea 
-                      value={editingIssue.description}
-                      onChange={(e) => setEditingIssue({...editingIssue, description: e.target.value})}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>優先級</Label>
-                      <Select 
-                        value={editingIssue.priority} 
-                        onValueChange={(value) => setEditingIssue({...editingIssue, priority: value as any})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">低</SelectItem>
-                          <SelectItem value="medium">中</SelectItem>
-                          <SelectItem value="high">高</SelectItem>
-                          <SelectItem value="critical">緊急</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>狀態</Label>
-                      <Select 
-                        value={editingIssue.status} 
-                        onValueChange={(value) => setEditingIssue({...editingIssue, status: value as any})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">開啟</SelectItem>
-                          <SelectItem value="in_progress">處理中</SelectItem>
-                          <SelectItem value="resolved">已解決</SelectItem>
-                          <SelectItem value="closed">已關閉</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setEditingIssue(null)}>
-                      取消
-                    </Button>
-                    <Button onClick={() => {
-                      toast({
-                        title: "更新成功",
-                        description: "問題已成功更新"
-                      });
-                      setEditingIssue(null);
-                    }}>
-                      儲存
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <AlertTriangle className="w-6 h-6" />
+          問題追蹤
+        </h2>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) resetForm();
+        }}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary hover:bg-primary/90">
+              <Plus className="w-4 h-4 mr-2" />
+              新增問題
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">
+                {editingIssue ? '編輯問題' : '新增問題'}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  標題 *
+                </label>
                 <Input
-                  placeholder="搜尋問題標題、描述或負責人..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="輸入問題標題"
+                  className="bg-background border-border text-foreground"
+                  required
                 />
               </div>
-            </div>
-            <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="選擇優先級" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-priorities">全部優先級</SelectItem>
-                <SelectItem value="critical">緊急</SelectItem>
-                <SelectItem value="high">高</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="low">低</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="選擇狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-status">全部狀態</SelectItem>
-                <SelectItem value="open">開啟</SelectItem>
-                <SelectItem value="in_progress">處理中</SelectItem>
-                <SelectItem value="resolved">已解決</SelectItem>
-                <SelectItem value="closed">已關閉</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Statistics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">系統問題統計</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Object.entries(issueStats.bySystem).slice(0, 5).map(([system, count]) => (
-                <div key={system} className="flex justify-between text-sm">
-                  <span className="truncate">{system}</span>
-                  <Badge variant="outline">{count}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">站點問題統計</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Object.entries(issueStats.byStation).slice(0, 5).map(([station, count]) => (
-                <div key={station} className="flex justify-between text-sm">
-                  <span className="truncate">{station}</span>
-                  <Badge variant="outline">{count}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">問題處理效率</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>解決率</span>
-                <span className="font-medium">
-                  {issues.length > 0 ? Math.round((issueStats.resolved / issues.length) * 100) : 0}%
-                </span>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  描述 *
+                </label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="詳細描述問題"
+                  rows={4}
+                  className="bg-background border-border text-foreground"
+                  required
+                />
               </div>
-              <div className="flex justify-between">
-                <span>處理中</span>
-                <span className="font-medium">{issueStats.inProgress}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>待處理</span>
-                <span className="font-medium text-danger">{issueStats.open}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Issues List */}
-      <div className="space-y-4">
-        {filteredIssues.map((issue) => (
-          <Card key={issue.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Bug className="h-5 w-5 text-muted-foreground" />
-                    <h3 className="font-semibold text-lg">{issue.title}</h3>
-                    <Badge className={getPriorityColor(issue.priority)}>
-                      {issue.priority === 'critical' && '緊急'}
-                      {issue.priority === 'high' && '高'}
-                      {issue.priority === 'medium' && '中'}
-                      {issue.priority === 'low' && '低'}
-                    </Badge>
-                    <Badge className={getStatusColor(issue.status)}>
-                      {issue.status === 'open' && '開啟'}
-                      {issue.status === 'in_progress' && '處理中'}
-                      {issue.status === 'resolved' && '已解決'}
-                      {issue.status === 'closed' && '已關閉'}
-                    </Badge>
-                  </div>
-                  
-                  <p className="text-muted-foreground mb-3">{issue.description}</p>
-                  
-                  <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    {issue.assigned_to && (
-                      <span>負責人: <span className="font-medium">{issue.assigned_to}</span></span>
-                    )}
-                    {issue.system_id && (
-                      <span>系統: <span className="font-medium">{issue.system_id}</span></span>
-                    )}
-                    <span>建立時間: {new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    優先級
+                  </label>
+                  <Select value={formData.priority} onValueChange={(value: Issue['priority']) => 
+                    setFormData(prev => ({ ...prev, priority: value }))
+                  }>
+                    <SelectTrigger className="bg-background border-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">低</SelectItem>
+                      <SelectItem value="medium">中</SelectItem>
+                      <SelectItem value="high">高</SelectItem>
+                      <SelectItem value="critical">緊急</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setEditingIssue(issue)}
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    狀態
+                  </label>
+                  <Select value={formData.status} onValueChange={(value: Issue['status']) => 
+                    setFormData(prev => ({ ...prev, status: value }))
+                  }>
+                    <SelectTrigger className="bg-background border-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">開放</SelectItem>
+                      <SelectItem value="in_progress">進行中</SelectItem>
+                      <SelectItem value="resolved">已解決</SelectItem>
+                      <SelectItem value="closed">已關閉</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    指派給
+                  </label>
+                  <Input
+                    value={formData.assigned_to}
+                    onChange={(e) => setFormData(prev => ({ ...prev, assigned_to: e.target.value }))}
+                    placeholder="指派人員"
+                    className="bg-background border-border text-foreground"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    系統ID
+                  </label>
+                  <Input
+                    value={formData.system_id}
+                    onChange={(e) => setFormData(prev => ({ ...prev, system_id: e.target.value }))}
+                    placeholder="相關系統ID"
+                    className="bg-background border-border text-foreground"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  站點ID
+                </label>
+                <Input
+                  value={formData.station_id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, station_id: e.target.value }))}
+                  placeholder="相關站點ID"
+                  className="bg-background border-border text-foreground"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    resetForm();
+                  }}
+                  className="border-border text-foreground hover:bg-muted"
                 >
-                  <Edit className="h-4 w-4 mr-1" />
-                  編輯
+                  取消
+                </Button>
+                <Button type="submit" className="bg-primary hover:bg-primary/90">
+                  {editingIssue ? '更新' : '創建'}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {filteredIssues.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">沒有找到相關問題</h3>
-            <p className="text-muted-foreground">請調整搜尋條件或新增新的問題</p>
-          </CardContent>
-        </Card>
-      )}
+      <div className="grid gap-4">
+        {issues.length === 0 ? (
+          <Card className="bg-card/50 border-border">
+            <CardContent className="p-8 text-center">
+              <AlertTriangle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">目前沒有問題記錄</p>
+              <p className="text-sm text-muted-foreground mt-2">點擊上方按鈕新增第一個問題</p>
+            </CardContent>
+          </Card>
+        ) : (
+          issues.map((issue) => (
+            <Card key={issue.id} className="bg-card/50 border-border hover:bg-card/70 transition-colors">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-lg text-foreground">{issue.title}</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleEdit(issue)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="bg-card border-border">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-foreground">確認刪除</AlertDialogTitle>
+                          <AlertDialogDescription className="text-muted-foreground">
+                            確定要刪除這個問題嗎？此操作無法撤銷。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="border-border text-foreground hover:bg-muted">
+                            取消
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(issue.id)}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            刪除
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Badge className={`${getPriorityColor(issue.priority)} border`}>
+                    {issue.priority === 'low' ? '低' : 
+                     issue.priority === 'medium' ? '中' : 
+                     issue.priority === 'high' ? '高' : '緊急'}
+                  </Badge>
+                  <Badge className={`${getStatusColor(issue.status)} border`}>
+                    {issue.status === 'open' ? '開放' : 
+                     issue.status === 'in_progress' ? '進行中' : 
+                     issue.status === 'resolved' ? '已解決' : '已關閉'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4">{issue.description}</p>
+                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  {issue.assigned_to && (
+                    <div>指派給: <span className="text-foreground">{issue.assigned_to}</span></div>
+                  )}
+                  {issue.system_id && (
+                    <div>系統: <span className="text-foreground">{issue.system_id}</span></div>
+                  )}
+                  {issue.station_id && (
+                    <div>站點: <span className="text-foreground">{issue.station_id}</span></div>
+                  )}
+                  <div>創建時間: <span className="text-foreground">
+                    {new Date(issue.created_at).toLocaleString('zh-TW')}
+                  </span></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default IssueTracker;
