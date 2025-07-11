@@ -4,7 +4,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
-import IssueTracker from "@/components/issues/IssueTracker";
+import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
