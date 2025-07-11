@@ -807,6 +807,57 @@ export type Database = {
           },
         ]
       }
+      station_time_records: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          start_time: string | null
+          station_id: string
+          station_name: string
+          system_id: string
+          total_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string | null
+          station_id: string
+          station_name: string
+          system_id: string
+          total_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string | null
+          station_id?: string
+          station_name?: string
+          system_id?: string
+          total_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_time_records_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "station_time_records_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       station_time_settings: {
         Row: {
           actual_completion_time: string | null
