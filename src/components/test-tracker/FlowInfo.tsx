@@ -218,14 +218,47 @@ export function FlowInfo() {
 
   const handleDeleteNewStation = async (stationId: string) => {
     try {
-      await supabase
+      // 檢查是否有相關的測試項目
+      const { data: relatedItems } = await supabase
+        .from('test_flow_items')
+        .select('id')
+        .eq('station_id', stationId);
+
+      if (relatedItems && relatedItems.length > 0) {
+        toast({
+          title: "無法刪除",
+          description: "此站點還有相關的測試項目，請先刪除測試項目",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // 檢查是否有相關的站點內容
+      const { data: relatedContents } = await supabase
+        .from('station_contents')
+        .select('id')
+        .eq('station_id', stationId);
+
+      if (relatedContents && relatedContents.length > 0) {
+        // 同時刪除站點內容
+        await supabase
+          .from('station_contents')
+          .delete()
+          .eq('station_id', stationId);
+      }
+
+      // 刪除站點
+      const { error } = await supabase
         .from('test_flow_stations')
         .delete()
         .eq('id', stationId);
 
+      if (error) throw error;
+
       toast({ title: "刪除成功", description: "測試站點已刪除" });
       loadData();
     } catch (error) {
+      console.error('Error deleting station:', error);
       toast({
         title: "刪除失敗",
         description: "無法刪除站點",
@@ -509,12 +542,15 @@ export function FlowInfo() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>確認刪除</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  確定要刪除站點 "{station.station_name}" 嗎？此操作無法復原。
+                                  確定要刪除站點 "{station.station_name}" 嗎？此操作將同時刪除相關的站點內容，且無法復原。
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteNewStation(station.id)}>
+                                <AlertDialogAction 
+                                  onClick={() => handleDeleteNewStation(station.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
                                   刪除
                                 </AlertDialogAction>
                               </AlertDialogFooter>
