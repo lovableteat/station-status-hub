@@ -179,7 +179,7 @@ export function FlowInfo() {
     try {
       if (editingNewStation) {
         // Update existing station
-        const { error } = await supabase
+        await supabase
           .from('test_flow_stations')
           .update({
             station_name: newStationForm.station_name,
@@ -189,12 +189,10 @@ export function FlowInfo() {
           })
           .eq('id', editingNewStation.id);
 
-        if (error) throw error;
-
         toast({ title: "更新成功", description: "測試站點已更新，測試進度表將自動更新" });
       } else {
         // Add new station
-        const { error } = await supabase
+        await supabase
           .from('test_flow_stations')
           .insert({
             station_name: newStationForm.station_name,
@@ -203,8 +201,6 @@ export function FlowInfo() {
             estimated_hours: newStationForm.estimated_hours
           });
 
-        if (error) throw error;
-
         toast({ title: "新增成功", description: "測試站點已新增，測試進度表將自動更新" });
       }
 
@@ -212,7 +208,6 @@ export function FlowInfo() {
       setEditingNewStation(null);
       loadData();
     } catch (error) {
-      console.error('Error saving station:', error);
       toast({
         title: "操作失敗",
         description: "無法儲存站點資料",
@@ -223,65 +218,17 @@ export function FlowInfo() {
 
   const handleDeleteNewStation = async (stationId: string) => {
     try {
-      // 檢查是否有相關的測試項目
-      const { data: relatedItems } = await supabase
-        .from('test_flow_items')
-        .select('id')
-        .eq('station_id', stationId);
-
-      if (relatedItems && relatedItems.length > 0) {
-        toast({
-          title: "無法刪除",
-          description: "此站點還有相關的測試項目，請先刪除測試項目",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // 檢查是否有相關的測試進度
-      const { data: relatedProgress } = await supabase
-        .from('test_progress')
-        .select('id')
-        .eq('station_id', stationId);
-
-      if (relatedProgress && relatedProgress.length > 0) {
-        toast({
-          title: "無法刪除",
-          description: "此站點還有相關的測試進度記錄，請先清除相關記錄",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // 檢查是否有相關的站點內容
-      const { data: relatedContents } = await supabase
-        .from('station_contents')
-        .select('id')
-        .eq('station_id', stationId);
-
-      if (relatedContents && relatedContents.length > 0) {
-        // 同時刪除站點內容
-        await supabase
-          .from('station_contents')
-          .delete()
-          .eq('station_id', stationId);
-      }
-
-      // 刪除站點
-      const { error } = await supabase
+      await supabase
         .from('test_flow_stations')
         .delete()
         .eq('id', stationId);
 
-      if (error) throw error;
-
       toast({ title: "刪除成功", description: "測試站點已刪除" });
       loadData();
     } catch (error) {
-      console.error('Error deleting station:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除站點，請檢查是否有相關聯的資料",
+        description: "無法刪除站點",
         variant: "destructive"
       });
     }
@@ -562,15 +509,12 @@ export function FlowInfo() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>確認刪除</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  確定要刪除站點 "{station.station_name}" 嗎？此操作將同時刪除相關的站點內容，且無法復原。
+                                  確定要刪除站點 "{station.station_name}" 嗎？此操作無法復原。
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={() => handleDeleteNewStation(station.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
+                                <AlertDialogAction onClick={() => handleDeleteNewStation(station.id)}>
                                   刪除
                                 </AlertDialogAction>
                               </AlertDialogFooter>

@@ -526,115 +526,6 @@ export type Database = {
         }
         Relationships: []
       }
-      issue_attachments: {
-        Row: {
-          created_at: string
-          file_name: string
-          file_path: string
-          file_size: number | null
-          file_type: string | null
-          id: string
-          issue_id: string
-        }
-        Insert: {
-          created_at?: string
-          file_name: string
-          file_path: string
-          file_size?: number | null
-          file_type?: string | null
-          id?: string
-          issue_id: string
-        }
-        Update: {
-          created_at?: string
-          file_name?: string
-          file_path?: string
-          file_size?: number | null
-          file_type?: string | null
-          id?: string
-          issue_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "issue_attachments_issue_id_fkey"
-            columns: ["issue_id"]
-            isOneToOne: false
-            referencedRelation: "issue_details"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "issue_attachments_issue_id_fkey"
-            columns: ["issue_id"]
-            isOneToOne: false
-            referencedRelation: "issues"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      issues: {
-        Row: {
-          assigned_to: string | null
-          created_at: string
-          description: string
-          id: string
-          priority: string
-          station_id: string | null
-          status: string
-          system_id: string | null
-          test_item_id: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          assigned_to?: string | null
-          created_at?: string
-          description: string
-          id?: string
-          priority?: string
-          station_id?: string | null
-          status?: string
-          system_id?: string | null
-          test_item_id?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          assigned_to?: string | null
-          created_at?: string
-          description?: string
-          id?: string
-          priority?: string
-          station_id?: string | null
-          status?: string
-          system_id?: string | null
-          test_item_id?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "issues_station_id_fkey"
-            columns: ["station_id"]
-            isOneToOne: false
-            referencedRelation: "test_flow_stations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "issues_system_id_fkey"
-            columns: ["system_id"]
-            isOneToOne: false
-            referencedRelation: "test_systems"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "issues_test_item_id_fkey"
-            columns: ["test_item_id"]
-            isOneToOne: false
-            referencedRelation: "test_flow_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       manufacturers: {
         Row: {
           country: string | null
@@ -1744,25 +1635,7 @@ export type Database = {
       }
     }
     Views: {
-      issue_details: {
-        Row: {
-          assigned_engineer: string | null
-          assigned_to: string | null
-          created_at: string | null
-          description: string | null
-          id: string | null
-          priority: string | null
-          station_name: string | null
-          station_order: number | null
-          status: string | null
-          system_name: string | null
-          test_item_description: string | null
-          test_item_name: string | null
-          title: string | null
-          updated_at: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       authenticate_user: {
