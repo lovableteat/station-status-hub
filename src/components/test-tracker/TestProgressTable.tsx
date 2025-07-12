@@ -181,7 +181,7 @@ export function TestProgressTable({
             <CardTitle className="text-card-foreground">測試進度表</CardTitle>
             <div className="flex gap-2">
               <SystemManager onSystemUpdate={onSystemUpdate} />
-              <BulkResetDialog onReset={onSystemUpdate} onClose={() => {}} />
+              <BulkResetDialog onReset={onSystemUpdate} />
             </div>
           </div>
         </CardHeader>
