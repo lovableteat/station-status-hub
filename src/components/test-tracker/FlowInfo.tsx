@@ -179,7 +179,7 @@ export function FlowInfo() {
     try {
       if (editingNewStation) {
         // Update existing station
-        await supabase
+        const { error } = await supabase
           .from('test_flow_stations')
           .update({
             station_name: newStationForm.station_name,
@@ -189,10 +189,12 @@ export function FlowInfo() {
           })
           .eq('id', editingNewStation.id);
 
+        if (error) throw error;
+
         toast({ title: "更新成功", description: "測試站點已更新，測試進度表將自動更新" });
       } else {
         // Add new station
-        await supabase
+        const { error } = await supabase
           .from('test_flow_stations')
           .insert({
             station_name: newStationForm.station_name,
@@ -201,6 +203,8 @@ export function FlowInfo() {
             estimated_hours: newStationForm.estimated_hours
           });
 
+        if (error) throw error;
+
         toast({ title: "新增成功", description: "測試站點已新增，測試進度表將自動更新" });
       }
 
@@ -208,6 +212,7 @@ export function FlowInfo() {
       setEditingNewStation(null);
       loadData();
     } catch (error) {
+      console.error('Error saving station:', error);
       toast({
         title: "操作失敗",
         description: "無法儲存站點資料",
@@ -228,6 +233,21 @@ export function FlowInfo() {
         toast({
           title: "無法刪除",
           description: "此站點還有相關的測試項目，請先刪除測試項目",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // 檢查是否有相關的測試進度
+      const { data: relatedProgress } = await supabase
+        .from('test_progress')
+        .select('id')
+        .eq('station_id', stationId);
+
+      if (relatedProgress && relatedProgress.length > 0) {
+        toast({
+          title: "無法刪除",
+          description: "此站點還有相關的測試進度記錄，請先清除相關記錄",
           variant: "destructive"
         });
         return;
@@ -261,7 +281,7 @@ export function FlowInfo() {
       console.error('Error deleting station:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除站點",
+        description: "無法刪除站點，請檢查是否有相關聯的資料",
         variant: "destructive"
       });
     }

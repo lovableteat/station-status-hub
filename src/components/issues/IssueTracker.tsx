@@ -25,8 +25,20 @@ interface Issue {
   updated_at: string;
 }
 
+interface TestSystem {
+  id: string;
+  system_name: string;
+}
+
+interface TestStation {
+  id: string;
+  station_name: string;
+}
+
 export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [systems, setSystems] = useState<TestSystem[]>([]);
+  const [stations, setStations] = useState<TestStation[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [formData, setFormData] = useState({
@@ -42,19 +54,22 @@ export function IssueTracker() {
   const { toast } = useToast();
 
   useEffect(() => {
-    loadIssues();
+    loadData();
   }, []);
 
-  const loadIssues = async () => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('issues')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [issuesRes, systemsRes, stationsRes] = await Promise.all([
+        supabase.from('issues').select('*').order('created_at', { ascending: false }),
+        supabase.from('test_systems').select('id, system_name'),
+        supabase.from('test_flow_stations').select('id, station_name')
+      ]);
       
-      if (error) throw error;
+      if (issuesRes.error) throw issuesRes.error;
+      if (systemsRes.error) throw systemsRes.error;
+      if (stationsRes.error) throw stationsRes.error;
       
-      const typedIssues: Issue[] = (data || []).map(issue => ({
+      const typedIssues: Issue[] = (issuesRes.data || []).map(issue => ({
         ...issue,
         priority: ['low', 'medium', 'high', 'critical'].includes(issue.priority) 
           ? issue.priority as "low" | "medium" | "high" | "critical"
@@ -62,20 +77,31 @@ export function IssueTracker() {
       }));
       
       setIssues(typedIssues);
+      setSystems(systemsRes.data || []);
+      setStations(stationsRes.data || []);
     } catch (error) {
-      console.error('Error loading issues:', error);
+      console.error('Error loading data:', error);
       toast({
         title: "載入失敗",
-        description: "無法載入問題列表",
+        description: "無法載入資料",
         variant: "destructive"
       });
     }
+  };
+
+  const validateUUID = (value: string) => {
+    if (!value) return null;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(value) ? value : null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
+      const systemId = validateUUID(formData.system_id);
+      const stationId = validateUUID(formData.station_id);
+      
       if (editingIssue) {
         const { error } = await supabase
           .from('issues')
@@ -85,8 +111,8 @@ export function IssueTracker() {
             priority: formData.priority,
             status: formData.status,
             assigned_to: formData.assigned_to || null,
-            system_id: formData.system_id || null,
-            station_id: formData.station_id || null,
+            system_id: systemId,
+            station_id: stationId,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingIssue.id);
@@ -106,8 +132,8 @@ export function IssueTracker() {
             priority: formData.priority,
             status: formData.status,
             assigned_to: formData.assigned_to || null,
-            system_id: formData.system_id || null,
-            station_id: formData.station_id || null
+            system_id: systemId,
+            station_id: stationId
           });
           
         if (error) throw error;
@@ -120,7 +146,7 @@ export function IssueTracker() {
       
       setIsDialogOpen(false);
       resetForm();
-      loadIssues();
+      loadData();
     } catch (error) {
       console.error('Error saving issue:', error);
       toast({
@@ -147,7 +173,7 @@ export function IssueTracker() {
         description: "問題已成功刪除"
       });
       
-      loadIssues();
+      loadData();
     } catch (error) {
       console.error('Error deleting issue:', error);
       toast({
@@ -267,7 +293,7 @@ export function IssueTracker() {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-          <span className="text-muted-foreground">緊急: {stats.closed}</span>
+          <span className="text-muted-foreground">已關閉: {stats.closed}</span>
         </div>
       </div>
 
@@ -275,16 +301,16 @@ export function IssueTracker() {
       <div className="flex gap-4">
         <div className="flex-1">
           <Input
-            placeholder="搜尋問題描述、描述、負責人或系統站點編..."
+            placeholder="搜尋問題標題、描述、負責人或系統站點編號..."
             className="bg-card"
           />
         </div>
         <Select value={filter.status} onValueChange={(value) => setFilter({...filter, status: value})}>
           <SelectTrigger className="w-32">
-            <SelectValue placeholder="全部完成" />
+            <SelectValue placeholder="全部狀態" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部完成</SelectItem>
+            <SelectItem value="all">全部狀態</SelectItem>
             <SelectItem value="open">開放</SelectItem>
             <SelectItem value="in_progress">進行中</SelectItem>
             <SelectItem value="resolved">已解決</SelectItem>
@@ -294,14 +320,14 @@ export function IssueTracker() {
         
         <Select value={filter.priority} onValueChange={(value) => setFilter({...filter, priority: value})}>
           <SelectTrigger className="w-32">
-            <SelectValue placeholder="全部狀態" />
+            <SelectValue placeholder="全部優先級" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部狀態</SelectItem>
-            <SelectItem value="low">低</SelectItem>
-            <SelectItem value="medium">中</SelectItem>
-            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="all">全部優先級</SelectItem>
             <SelectItem value="critical">緊急</SelectItem>
+            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="medium">中</SelectItem>
+            <SelectItem value="low">低</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -347,8 +373,8 @@ export function IssueTracker() {
                 <span className="text-sm text-orange-500 font-medium">{priorityStats.high}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">有重要</span>
-                <span className="text-sm text-red-500 font-medium">{priorityStats.critical}</span>
+                <span className="text-sm text-muted-foreground">中等</span>
+                <span className="text-sm text-yellow-500 font-medium">{priorityStats.medium}</span>
               </div>
             </div>
           </CardContent>
@@ -375,8 +401,8 @@ export function IssueTracker() {
                     <p className="text-muted-foreground mb-3">{issue.description}</p>
                     <div className="flex gap-4 text-sm text-muted-foreground">
                       {issue.assigned_to && <span>負責人: {issue.assigned_to}</span>}
-                      {issue.system_id && <span>系統: {issue.system_id}</span>}
-                      {issue.station_id && <span>站點: {issue.station_id}</span>}
+                      {issue.system_id && <span>系統: {systems.find(s => s.id === issue.system_id)?.system_name || issue.system_id}</span>}
+                      {issue.station_id && <span>站點: {stations.find(s => s.id === issue.station_id)?.station_name || issue.station_id}</span>}
                       <span>建立時間: {new Date(issue.created_at).toLocaleString('zh-TW')}</span>
                     </div>
                   </div>
@@ -469,20 +495,36 @@ export function IssueTracker() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>系統 ID</Label>
-                <Input
-                  value={formData.system_id}
-                  onChange={(e) => setFormData({...formData, system_id: e.target.value})}
-                  placeholder="選填"
-                />
+                <Label>系統</Label>
+                <Select value={formData.system_id} onValueChange={(value) => setFormData({...formData, system_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇系統" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">無</SelectItem>
+                    {systems.map((system) => (
+                      <SelectItem key={system.id} value={system.id}>
+                        {system.system_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label>站點 ID</Label>
-                <Input
-                  value={formData.station_id}
-                  onChange={(e) => setFormData({...formData, station_id: e.target.value})}
-                  placeholder="選填"
-                />
+                <Label>站點</Label>
+                <Select value={formData.station_id} onValueChange={(value) => setFormData({...formData, station_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇站點" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">無</SelectItem>
+                    {stations.map((station) => (
+                      <SelectItem key={station.id} value={station.id}>
+                        {station.station_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2">
