@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit, Trash2, Filter } from "lucide-react";
+import { Plus, Edit, Trash2, Filter, ArrowLeft, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -54,7 +54,6 @@ export function IssueTracker() {
       
       if (error) throw error;
       
-      // 類型轉換確保 priority 符合預期的類型
       const typedIssues: Issue[] = (data || []).map(issue => ({
         ...issue,
         priority: ['low', 'medium', 'high', 'critical'].includes(issue.priority) 
@@ -193,21 +192,11 @@ export function IssueTracker() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-green-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'open': return 'bg-blue-500';
-      case 'in_progress': return 'bg-orange-500';
-      case 'resolved': return 'bg-green-500';
-      case 'closed': return 'bg-gray-500';
-      default: return 'bg-gray-500';
+      case 'critical': return 'text-red-500';
+      case 'high': return 'text-orange-500'; 
+      case 'medium': return 'text-yellow-500';
+      case 'low': return 'text-green-500';
+      default: return 'text-gray-500';
     }
   };
 
@@ -217,96 +206,203 @@ export function IssueTracker() {
     return true;
   });
 
+  // 統計數據
+  const stats = {
+    total: issues.length,
+    open: issues.filter(i => i.status === 'open').length,
+    inProgress: issues.filter(i => i.status === 'in_progress').length,
+    resolved: issues.filter(i => i.status === 'resolved').length,
+    closed: issues.filter(i => i.status === 'closed').length
+  };
+
+  const priorityStats = {
+    critical: issues.filter(i => i.priority === 'critical').length,
+    high: issues.filter(i => i.priority === 'high').length,
+    medium: issues.filter(i => i.priority === 'medium').length,
+    low: issues.filter(i => i.priority === 'low').length
+  };
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6 bg-background min-h-screen">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">問題追蹤</h1>
-        <Button onClick={handleNewIssue} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          新增問題
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" className="text-muted-foreground">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            返回上一頁
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">問題追蹤</h1>
+            <p className="text-sm text-muted-foreground">故障問題管理與追蹤系統</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm">
+            <FileText className="h-4 w-4 mr-2" />
+            匯出 PDF 報告
+          </Button>
+          <Button variant="outline" size="sm">
+            保留篩選
+          </Button>
+          <Button onClick={handleNewIssue} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            新增問題
+          </Button>
+        </div>
       </div>
 
-      {/* 篩選器 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            篩選條件
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label>狀態</Label>
-              <Select value={filter.status} onValueChange={(value) => setFilter({...filter, status: value})}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部</SelectItem>
-                  <SelectItem value="open">開放</SelectItem>
-                  <SelectItem value="in_progress">進行中</SelectItem>
-                  <SelectItem value="resolved">已解決</SelectItem>
-                  <SelectItem value="closed">已關閉</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* 統計卡片 */}
+      <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+          <span className="text-muted-foreground">緊急: {priorityStats.critical}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+          <span className="text-muted-foreground">重要: {priorityStats.high}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+          <span className="text-muted-foreground">已解決: {stats.resolved}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+          <span className="text-muted-foreground">緊急: {stats.closed}</span>
+        </div>
+      </div>
+
+      {/* 搜尋和篩選 */}
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <Input
+            placeholder="搜尋問題描述、描述、負責人或系統站點編..."
+            className="bg-card"
+          />
+        </div>
+        <Select value={filter.status} onValueChange={(value) => setFilter({...filter, status: value})}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="全部完成" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部完成</SelectItem>
+            <SelectItem value="open">開放</SelectItem>
+            <SelectItem value="in_progress">進行中</SelectItem>
+            <SelectItem value="resolved">已解決</SelectItem>
+            <SelectItem value="closed">已關閉</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        <Select value={filter.priority} onValueChange={(value) => setFilter({...filter, priority: value})}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="全部狀態" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部狀態</SelectItem>
+            <SelectItem value="low">低</SelectItem>
+            <SelectItem value="medium">中</SelectItem>
+            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="critical">緊急</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* 統計卡片區域 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">系統問題統計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+              <div className="text-sm text-muted-foreground">總問題數</div>
             </div>
-            <div className="flex-1">
-              <Label>優先級</Label>
-              <Select value={filter.priority} onValueChange={(value) => setFilter({...filter, priority: value})}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部</SelectItem>
-                  <SelectItem value="low">低</SelectItem>
-                  <SelectItem value="medium">中</SelectItem>
-                  <SelectItem value="high">高</SelectItem>
-                  <SelectItem value="critical">緊急</SelectItem>
-                </SelectContent>
-              </Select>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">站點問題統計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="text-2xl font-bold text-foreground">{stats.open}</div>
+              <div className="text-sm text-muted-foreground">開放問題</div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">問題重要度分佈</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">緊急</span>
+                <span className="text-sm text-red-500 font-medium">{priorityStats.critical}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">重要</span>
+                <span className="text-sm text-orange-500 font-medium">{priorityStats.high}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">有重要</span>
+                <span className="text-sm text-red-500 font-medium">{priorityStats.critical}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* 問題列表 */}
       <div className="space-y-4">
-        {filteredIssues.map((issue) => (
-          <Card key={issue.id}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-lg text-foreground">{issue.title}</h3>
-                    <Badge className={`${getPriorityColor(issue.priority)} text-white`}>
-                      {issue.priority}
-                    </Badge>
-                    <Badge className={`${getStatusColor(issue.status)} text-white`}>
-                      {issue.status}
-                    </Badge>
+        {filteredIssues.length > 0 ? (
+          filteredIssues.map((issue) => (
+            <Card key={issue.id} className="bg-card">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-lg text-foreground">{issue.title}</h3>
+                      <Badge variant="outline" className={getPriorityColor(issue.priority)}>
+                        {issue.priority}
+                      </Badge>
+                      <Badge variant="outline" className="text-blue-500">
+                        {issue.status}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground mb-3">{issue.description}</p>
+                    <div className="flex gap-4 text-sm text-muted-foreground">
+                      {issue.assigned_to && <span>負責人: {issue.assigned_to}</span>}
+                      {issue.system_id && <span>系統: {issue.system_id}</span>}
+                      {issue.station_id && <span>站點: {issue.station_id}</span>}
+                      <span>建立時間: {new Date(issue.created_at).toLocaleString('zh-TW')}</span>
+                    </div>
                   </div>
-                  <p className="text-muted-foreground mb-3">{issue.description}</p>
-                  <div className="flex gap-4 text-sm text-muted-foreground">
-                    {issue.assigned_to && <span>負責人: {issue.assigned_to}</span>}
-                    {issue.system_id && <span>系統: {issue.system_id}</span>}
-                    {issue.station_id && <span>站點: {issue.station_id}</span>}
-                    <span>建立時間: {new Date(issue.created_at).toLocaleString('zh-TW')}</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(issue)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleDelete(issue.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(issue)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(issue.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card className="bg-card">
+            <CardContent className="p-12">
+              <div className="text-center">
+                <div className="text-6xl text-muted-foreground mb-4">⚠️</div>
+                <h3 className="text-lg font-medium mb-2">沒有找到相關問題</h3>
+                <p className="text-muted-foreground">請調整搜尋條件或建立新的問題記錄</p>
               </div>
             </CardContent>
           </Card>
-        ))}
+        )}
       </div>
 
       {/* 新增/編輯對話框 */}
