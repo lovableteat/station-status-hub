@@ -51,9 +51,9 @@ export function IssueTracker() {
     priority: "medium",
     status: "open",
     assigned_to: "",
-    system_id: "",
-    station_id: "",
-    test_item_id: ""
+    system_id: "none",
+    station_id: "none",
+    test_item_id: "none"
   });
 
   const statusOptions = [
@@ -124,9 +124,9 @@ export function IssueTracker() {
       priority: "medium",
       status: "open",
       assigned_to: "",
-      system_id: "",
-      station_id: "",
-      test_item_id: ""
+      system_id: "none",
+      station_id: "none",
+      test_item_id: "none"
     });
     setEditingIssue(null);
   };
@@ -144,9 +144,9 @@ export function IssueTracker() {
       priority: issue.priority,
       status: issue.status,
       assigned_to: issue.assigned_to || "",
-      system_id: issue.system_id || "",
-      station_id: issue.station_id || "",
-      test_item_id: issue.test_item_id || ""
+      system_id: issue.system_id || "none",
+      station_id: issue.station_id || "none",
+      test_item_id: issue.test_item_id || "none"
     });
     setShowIssueDialog(true);
   };
@@ -206,9 +206,9 @@ export function IssueTracker() {
         priority: issueForm.priority,
         status: issueForm.status,
         assigned_to: issueForm.assigned_to || null,
-        system_id: issueForm.system_id || null,
-        station_id: issueForm.station_id || null,
-        test_item_id: issueForm.test_item_id || null
+        system_id: issueForm.system_id === "none" ? null : issueForm.system_id,
+        station_id: issueForm.station_id === "none" ? null : issueForm.station_id,
+        test_item_id: issueForm.test_item_id === "none" ? null : issueForm.test_item_id
       };
 
       if (editingIssue) {
@@ -278,13 +278,13 @@ export function IssueTracker() {
   };
 
   const getSystemName = (systemId?: string) => {
-    if (!systemId) return "未指定";
+    if (!systemId || systemId === "none") return "未指定";
     const system = systems.find(s => s.id === systemId);
     return system?.system_name || "未知系統";
   };
 
   const getStationName = (stationId?: string) => {
-    if (!stationId) return "未指定";
+    if (!stationId || stationId === "none") return "未指定";
     const station = stations.find(s => s.id === stationId);
     return station?.station_name || "未知站點";
   };
@@ -522,7 +522,7 @@ export function IssueTracker() {
                   <SelectValue placeholder="選擇系統" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   {systems.map(system => (
                     <SelectItem key={system.id} value={system.id}>
                       {system.system_name}
@@ -538,7 +538,7 @@ export function IssueTracker() {
                   <SelectValue placeholder="選擇站點" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   {stations.map(station => (
                     <SelectItem key={station.id} value={station.id}>
                       {station.station_name}
