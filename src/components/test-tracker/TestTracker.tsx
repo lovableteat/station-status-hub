@@ -31,7 +31,7 @@ export function TestTracker() {
   // Get current tab from URL params
   const [currentTab, setCurrentTab] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('tab') || 'tracker';
+    return urlParams.get('tab') || 'overview';
   });
 
   useEffect(() => {
@@ -139,7 +139,7 @@ export function TestTracker() {
   const handleTabChange = (value: string) => {
     setCurrentTab(value);
     const url = new URL(window.location.href);
-    if (value === 'tracker') {
+    if (value === 'overview') {
       url.searchParams.delete('tab');
     } else {
       url.searchParams.set('tab', value);
@@ -151,10 +151,18 @@ export function TestTracker() {
     <div className="space-y-6">
       <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="tracker">測試追蹤</TabsTrigger>
-          <TabsTrigger value="management">管理測試項目</TabsTrigger>
           <TabsTrigger value="overview">流程總覽</TabsTrigger>
+          <TabsTrigger value="management">管理測試項目</TabsTrigger>
+          <TabsTrigger value="tracker">測試追蹤</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview">
+          <FlowOverview />
+        </TabsContent>
+
+        <TabsContent value="management">
+          <TestManagementPanel />
+        </TabsContent>
 
         <TabsContent value="tracker" className="space-y-6">
           <FilterControls 
@@ -183,14 +191,6 @@ export function TestTracker() {
             getStatusColor={getStatusColor}
             onSystemUpdate={loadData}
           />
-        </TabsContent>
-
-        <TabsContent value="management">
-          <TestManagementPanel />
-        </TabsContent>
-
-        <TabsContent value="overview">
-          <FlowOverview />
         </TabsContent>
       </Tabs>
     </div>
