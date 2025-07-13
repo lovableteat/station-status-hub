@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { CodeStorageManager } from "./CodeStorageManager";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -63,6 +64,7 @@ export function ToolsManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
   const [newTool, setNewTool] = useState({
@@ -142,6 +144,49 @@ export function ToolsManagement() {
       toast({
         title: "新增失敗",
         description: "無法新增工具",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleEditTool = async () => {
+    if (!editingTool || !editingTool.tool_name.trim()) {
+      toast({
+        title: "驗證錯誤",
+        description: "請輸入工具名稱",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tools_management')
+        .update({
+          tool_name: editingTool.tool_name,
+          version: editingTool.version || null,
+          category: editingTool.category,
+          description: editingTool.description || null,
+          is_required: editingTool.is_required,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingTool.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "更新成功",
+        description: "工具已更新",
+      });
+
+      setShowEditDialog(false);
+      setEditingTool(null);
+      loadTools();
+    } catch (error) {
+      console.error('Error updating tool:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新工具",
         variant: "destructive"
       });
     }
@@ -423,6 +468,16 @@ export function ToolsManagement() {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => {
+                                setEditingTool(tool);
+                                setShowEditDialog(true);
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => handleDeleteTool(tool.id)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -448,6 +503,74 @@ export function ToolsManagement() {
           <CodeStorageManager />
         </TabsContent>
       </Tabs>
+
+      {/* Tool Edit Dialog */}
+      {editingTool && (
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>編輯工具</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>工具名稱 *</Label>
+                <Input
+                  value={editingTool.tool_name}
+                  onChange={(e) => setEditingTool({...editingTool, tool_name: e.target.value})}
+                  placeholder="輸入工具名稱"
+                />
+              </div>
+              <div>
+                <Label>版本</Label>
+                <Input
+                  value={editingTool.version || ''}
+                  onChange={(e) => setEditingTool({...editingTool, version: e.target.value})}
+                  placeholder="v1.0.0"
+                />
+              </div>
+              <div>
+                <Label>分類</Label>
+                <Select value={editingTool.category} onValueChange={(value) => setEditingTool({...editingTool, category: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="driver">驅動程式</SelectItem>
+                    <SelectItem value="software">軟體工具</SelectItem>
+                    <SelectItem value="utility">公用程式</SelectItem>
+                    <SelectItem value="documentation">文件</SelectItem>
+                    <SelectItem value="other">其他</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>描述</Label>
+                <Textarea
+                  value={editingTool.description || ''}
+                  onChange={(e) => setEditingTool({...editingTool, description: e.target.value})}
+                  placeholder="工具描述和使用說明"
+                  rows={3}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={editingTool.is_required}
+                  onCheckedChange={(checked) => setEditingTool({...editingTool, is_required: checked})}
+                />
+                <Label>必要工具</Label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                取消
+              </Button>
+              <Button onClick={handleEditTool}>
+                更新
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
