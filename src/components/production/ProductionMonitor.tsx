@@ -93,7 +93,7 @@ export function ProductionMonitor() {
     return ongoingItem?.item_name || '待開始';
   };
 
-  // Calculate station progress for Station 0-4
+  // Calculate station progress - dynamic station support
   const calculateStationProgress = (stationId: string, systemId: string) => {
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
@@ -106,23 +106,19 @@ export function ProductionMonitor() {
     return Math.round((completedItems / stationTestItems.length) * 100);
   };
 
-  // Enhanced overall progress calculation
+  // Enhanced overall progress calculation - dynamic station support
   const calculateOverallProgress = (systemId: string) => {
-    const targetStations = stations.filter(station => 
-      station.id && typeof station.id === 'string' && 
-      (station.name.includes('Station 0') || station.name.includes('組裝') ||
-       station.name.includes('Station 1') || station.name.includes('開機') ||
-       station.name.includes('Station 2') || station.name.includes('FW') ||
-       station.name.includes('Station 3') || station.name.includes('EE') ||
-       station.name.includes('Station 4') || station.name.includes('NV TEST'))
+    // Get all available stations dynamically
+    const availableStations = stations.filter(station => 
+      station.id && typeof station.id === 'string'
     );
     
-    if (targetStations.length === 0) return 0;
+    if (availableStations.length === 0) return 0;
     
     let totalProgress = 0;
     let validStations = 0;
     
-    targetStations.forEach(station => {
+    availableStations.forEach(station => {
       const stationProgress = calculateStationProgress(station.id, systemId);
       totalProgress += stationProgress;
       validStations++;
@@ -155,13 +151,11 @@ export function ProductionMonitor() {
       status,
       currentStation: currentStationName,
       currentTestItem,
-      stationProgress: {
-        station0: calculateStationProgress(stations.find(s => s.name.includes('Station 0') || s.name.includes('組裝'))?.id || '', system.id),
-        station1: calculateStationProgress(stations.find(s => s.name.includes('Station 1') || s.name.includes('開機'))?.id || '', system.id),
-        station2: calculateStationProgress(stations.find(s => s.name.includes('Station 2') || s.name.includes('FW'))?.id || '', system.id),
-        station3: calculateStationProgress(stations.find(s => s.name.includes('Station 3') || s.name.includes('EE'))?.id || '', system.id),
-        station4: calculateStationProgress(stations.find(s => s.name.includes('Station 4') || s.name.includes('NV TEST'))?.id || '', system.id),
-      }
+      stationProgress: stations.reduce((acc: any, station, index) => {
+        const stationKey = `station${index}`;
+        acc[stationKey] = calculateStationProgress(station.id, system.id);
+        return acc;
+      }, {})
     };
   };
 
@@ -234,23 +228,17 @@ export function ProductionMonitor() {
           </Badge>
         </div>
 
-        {/* Video-style Station Flow - 只顯示 Station 0-4 */}
+        {/* Video-style Station Flow - Dynamic station display */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Monitor className="h-5 w-5" />
-              測試流程監控 (Station 0-4)
+              測試流程監控 (動態站點)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-5 gap-4">
-              {stations.filter(station => 
-                station.name.includes('Station 0') || station.name.includes('組裝') ||
-                station.name.includes('Station 1') || station.name.includes('開機') ||
-                station.name.includes('Station 2') || station.name.includes('FW') ||
-                station.name.includes('Station 3') || station.name.includes('EE') ||
-                station.name.includes('Station 4') || station.name.includes('NV TEST')
-              ).map((station, index) => {
+            <div className={`grid gap-4 ${stations.length <= 5 ? `grid-cols-${stations.length}` : 'grid-cols-5'}`}>
+              {stations.map((station, index) => {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
                 const isCompleted = stationProgress === 100;
@@ -315,7 +303,7 @@ export function ProductionMonitor() {
             
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度 (Station 0-4): {systemOverallProgress}%
+                整體進度 (所有站點): {systemOverallProgress}%
               </div>
               <Progress value={systemOverallProgress} className="mt-2 h-3" />
             </div>
@@ -374,7 +362,7 @@ export function ProductionMonitor() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
+            <p className="text-muted-foreground">即時機台狀態監控 - 動態測試站點總覽 ({stations.length} 個站點)</p>
           </div>
         </div>
         <div className="flex gap-2">
