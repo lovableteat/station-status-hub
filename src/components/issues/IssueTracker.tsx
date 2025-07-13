@@ -475,6 +475,39 @@ export function IssueTracker() {
                 rows={4}
               />
             </div>
+            
+            {/* Image Upload Section */}
+            <div>
+              <label className="text-sm font-medium">附件圖片</label>
+              <div className="mt-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      // 這裡可以實現圖片上傳邏輯
+                      toast({
+                        title: "圖片上傳",
+                        description: `已選擇 ${files.length} 個檔案，圖片上傳功能開發中...`,
+                      });
+                    }
+                  }}
+                  className="block w-full text-sm text-muted-foreground
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-medium
+                    file:bg-primary file:text-primary-foreground
+                    hover:file:bg-primary/90
+                    file:cursor-pointer cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  支援 JPG, PNG, GIF 格式，最多可上傳 5 張圖片
+                </p>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">優先級</label>

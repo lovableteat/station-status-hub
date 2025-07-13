@@ -129,11 +129,46 @@ export function DataCenter() {
     });
   };
 
-  const exportToImage = () => {
-    toast({
-      title: "匯出圖片",
-      description: "圖片匯出功能開發中...",
-    });
+  const exportToImage = async () => {
+    try {
+      // 創建一個臨時的canvas元素來生成圖片
+      const element = document.querySelector('.data-center-content');
+      if (!element) {
+        toast({
+          title: "匯出失敗",
+          description: "找不到要匯出的內容",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // 使用 html2canvas 功能 (需要安裝 html2canvas 包)
+      const html2canvas = await import('html2canvas');
+      const canvas = await html2canvas.default(element as HTMLElement, {
+        backgroundColor: '#ffffff',
+        scale: 2, // 提高解析度
+        useCORS: true,
+        allowTaint: true
+      });
+
+      // 創建下載連結
+      const link = document.createElement('a');
+      link.download = `data-center-export-${new Date().toISOString().split('T')[0]}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+
+      toast({
+        title: "匯出成功",
+        description: "圖片已成功匯出",
+      });
+    } catch (error) {
+      console.error('Error exporting image:', error);
+      toast({
+        title: "匯出失敗",
+        description: "圖片匯出功能需要安裝額外套件",
+        variant: "destructive"
+      });
+    }
   };
 
   if (isLoading) {
@@ -148,7 +183,7 @@ export function DataCenter() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 data-center-content">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
