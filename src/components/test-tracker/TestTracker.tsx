@@ -20,6 +20,14 @@ export function TestTracker() {
     completed_at: ''
   });
 
+  // Filter states for FilterControls
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterEngineer, setFilterEngineer] = useState('all-engineers');
+  const [filterStatus, setFilterStatus] = useState('all-status');
+
+  // Get unique engineers from systems
+  const engineers = Array.from(new Set(systems.map(s => s.assigned_engineer).filter(Boolean)));
+
   // Get current tab from URL params
   const [currentTab, setCurrentTab] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -43,6 +51,31 @@ export function TestTracker() {
       window.removeEventListener('navigate', handleNavigation as EventListener);
     };
   }, []);
+
+  // Apply filters to systems
+  useEffect(() => {
+    let filtered = systems;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(system => 
+        system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (system.assigned_engineer && system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    // Apply engineer filter
+    if (filterEngineer !== 'all-engineers') {
+      filtered = filtered.filter(system => system.assigned_engineer === filterEngineer);
+    }
+
+    // Apply status filter
+    if (filterStatus !== 'all-status') {
+      filtered = filtered.filter(system => system.status === filterStatus);
+    }
+
+    setFilteredSystems(filtered);
+  }, [systems, searchTerm, filterEngineer, filterStatus]);
 
   const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
     return progress.find(p => 
@@ -105,7 +138,7 @@ export function TestTracker() {
 
   const handleTabChange = (value: string) => {
     setCurrentTab(value);
-    const url = new URL(window.location);
+    const url = new URL(window.location.href);
     if (value === 'tracker') {
       url.searchParams.delete('tab');
     } else {
@@ -125,8 +158,13 @@ export function TestTracker() {
 
         <TabsContent value="tracker" className="space-y-6">
           <FilterControls 
-            systems={systems}
-            onFilterChange={setFilteredSystems}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filterEngineer={filterEngineer}
+            setFilterEngineer={setFilterEngineer}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            engineers={engineers}
           />
           
           <TestProgressTable
