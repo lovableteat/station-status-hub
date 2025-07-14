@@ -1,250 +1,236 @@
 
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Edit,
+  Eye,
+  Clock,
+  User,
+  Settings,
+  Target,
+  CheckCircle,
+  XCircle,
+  Pause,
+  Play
+} from "lucide-react";
 import { ProgressEditDialog } from "./ProgressEditDialog";
-import { SystemEditDialog } from "./SystemEditDialog";
-import { StationStatusSelector } from "./StationStatusSelector";
-import { BulkResetDialog } from "./BulkResetDialog";
-import { SystemManager, SystemDeleteButton } from "./SystemManager";
-import { SystemResetDialog } from "./SystemResetDialog";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef, useCallback, useMemo } from "react";
-import { SystemStatusCalculator, TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
-import { SystemStatusUpdater } from "./SystemStatusUpdater";
+import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 
 interface TestProgressTableProps {
-  filteredSystems: TestSystem[];
-  stations: TestStation[];
-  items: TestItem[];
-  progress: TestProgress[];
-  editingProgress: string | null;
-  setEditingProgress: (key: string | null) => void;
-  editValues: {
-    status: string;
-    progress_percent: number;
-    notes: string;
-    started_at?: string;
-    completed_at?: string;
-  };
-  setEditValues: (values: any) => void;
-  getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
-  handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
-  handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
-  handleDeleteProgress: (systemId: string, stationId: string, itemId: string) => void;
-  getStatusColor: (status: string) => string;
-  onSystemUpdate: () => void;
+  systems: any[];
+  stations: any[];
+  items: any[];
+  progress: any[];
 }
 
-export function TestProgressTable({
-  filteredSystems,
-  stations,
-  items,
-  progress,
-  editingProgress,
-  setEditingProgress,
-  editValues,
-  setEditValues,
-  getProgressForSystemItem,
-  handleEditProgress,
-  handleSaveProgress,
-  handleDeleteProgress,
-  getStatusColor,
-  onSystemUpdate,
-}: TestProgressTableProps) {
-  const isMobile = useIsMobile();
-  const { toast } = useToast();
-  
-  // Show all stations ordered by station_order
-  const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
+export function TestProgressTable({ systems, stations, items, progress }: TestProgressTableProps) {
+  const { updateProgress } = useTestTrackerData();
+  const [selectedSystem, setSelectedSystem] = useState<any>(null);
+  const [showProgressDialog, setShowProgressDialog] = useState(false);
+  const [selectedProgress, setSelectedProgress] = useState<any>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
 
-  // Format time helper - 統一時間格式顯示
-  const formatTime = (timeStr?: string) => {
-    if (!timeStr) return '-';
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return '-';
+  const handleEditProgress = (system: any, station: any, item: any) => {
+    const existingProgress = progress.find(p => 
+      p.system_id === system.id && 
+      p.station_id === station.id && 
+      p.item_id === item.id
+    );
+    
+    setSelectedProgress({
+      system,
+      station,
+      item,
+      progress: existingProgress
+    });
+    setShowProgressDialog(true);
+  };
+
+  const handleViewSystemDetail = (system: any) => {
+    setSelectedSystem(system);
+    setShowDetailDialog(true);
+  };
+
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "font-medium";
+    switch (status) {
+      case 'Done':
+        return <Badge className={`${baseClasses} bg-green-900 text-green-200 border-green-700`}>完成</Badge>;
+      case 'On-going':
+        return <Badge className={`${baseClasses} bg-orange-900 text-orange-200 border-orange-700`}>進行中</Badge>;
+      case 'Not Start':
+        return <Badge className={`${baseClasses} bg-slate-700 text-slate-300 border-slate-600`}>未開始</Badge>;
+      default:
+        return <Badge className={`${baseClasses} bg-slate-700 text-slate-300 border-slate-600`}>{status}</Badge>;
     }
   };
 
-  // 統一站點處理時間計算邏輯 - 所有站點（包括Station 4）都使用相同邏輯
-  const calculateStationProcessingTime = (systemId: string, stationId: string) => {
-    const stationItems = items.filter(item => item.station_id === stationId);
-    const stationProgressRecords = stationItems.map(item => 
-      getProgressForSystemItem(systemId, stationId, item.id)
-    ).filter(Boolean);
-    
-    // 找出所有測項的開始時間和結束時間
-    const allStartTimes = stationProgressRecords
-      .map(p => p?.started_at)
-      .filter(Boolean)
-      .map(time => new Date(time));
-    
-    const allEndTimes = stationProgressRecords
-      .map(p => p?.completed_at)
-      .filter(Boolean)
-      .map(time => new Date(time));
-    
-    if (allStartTimes.length === 0 || allEndTimes.length === 0) return null;
-    
-    // 站點開始時間 = 最早的測項開始時間
-    const stationStartTime = new Date(Math.min(...allStartTimes.map(t => t.getTime())));
-    // 站點結束時間 = 最晚的測項結束時間
-    const stationEndTime = new Date(Math.max(...allEndTimes.map(t => t.getTime())));
-    
-    // 計算站點總處理時長
-    const diffMs = stationEndTime.getTime() - stationStartTime.getTime();
-    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // 保留一位小數
-    
-    return {
-      startTime: stationStartTime,
-      endTime: stationEndTime,
-      duration: diffHours
-    };
+  const getItemStatusIcon = (status: string) => {
+    switch (status) {
+      case 'Done':
+        return <CheckCircle className="h-4 w-4 text-green-400" />;
+      case 'On-going':
+        return <Play className="h-4 w-4 text-orange-400" />;
+      case 'Pause':
+        return <Pause className="h-4 w-4 text-yellow-400" />;
+      default:
+        return <XCircle className="h-4 w-4 text-slate-500" />;
+    }
   };
 
-  // Mobile card view
-  if (isMobile) {
+  const getProgressForItem = (systemId: string, stationId: string, itemId: string) => {
+    return progress.find(p => 
+      p.system_id === systemId && 
+      p.station_id === stationId && 
+      p.item_id === itemId
+    );
+  };
+
+  const getSystemProgress = (system: any) => {
+    const systemStations = stations.filter(s => [0, 1, 2, 3].includes(s.station_order));
+    let totalWeight = 0;
+    let completedWeight = 0;
+
+    systemStations.forEach(station => {
+      const stationItems = items.filter(item => item.station_id === station.id);
+      stationItems.forEach(item => {
+        totalWeight += 1;
+        const itemProgress = getProgressForItem(system.id, station.id, item.id);
+        if (itemProgress?.status === 'Done') {
+          completedWeight += 1;
+        }
+      });
+    });
+
+    return totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
+  };
+
+  if (!systems.length) {
     return (
-      <div className="space-y-4">
-        <SystemStatusUpdater
-          systems={filteredSystems}
-          stations={stations}
-          items={items}
-          progress={progress}
-          onSystemUpdate={onSystemUpdate}
-        />
-        
-        {/* 新增批量重置按鈕和機台管理 */}
-        <div className="flex justify-between items-center">
-          <SystemManager onSystemUpdate={onSystemUpdate} />
-          <BulkResetDialog onReset={onSystemUpdate} />
-        </div>
-        
-        {filteredSystems.map(system => {
+      <Card className="bg-slate-800 border-slate-700">
+        <CardContent className="p-8 text-center">
+          <Target className="h-12 w-12 mx-auto mb-4 text-slate-500" />
+          <p className="text-slate-400">尚無測試系統資料</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Systems Grid */}
+      <div className="grid gap-6">
+        {systems.map((system) => {
+          const systemStations = stations
+            .filter(s => [0, 1, 2, 3].includes(s.station_order))
+            .sort((a, b) => a.station_order - b.station_order);
+          
+          const systemProgress = getSystemProgress(system);
+
           return (
-            <Card key={system.id} className="border-2">
-              <CardHeader className="pb-3">
+            <Card key={system.id} className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors">
+              <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-bold">
-                    <button 
-                      className="text-primary hover:underline cursor-pointer text-left"
-                      onClick={() => {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.searchParams.set('system', system.system_name);
-                        window.history.pushState({}, '', currentUrl.toString());
-                        
-                        const event = new CustomEvent('navigate', { 
-                          detail: { module: 'monitor', params: { system: system.system_name } } 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                    >
-                      {system.system_name}
-                    </button>
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                    />
-                    <SystemResetDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      onReset={onSystemUpdate}
-                    />
-                    <SystemDeleteButton
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      onSystemUpdate={onSystemUpdate}
-                    />
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <CardTitle className="text-lg text-white">{system.system_name}</CardTitle>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
+                        <div className="flex items-center gap-1">
+                          <User className="h-4 w-4" />
+                          {system.assigned_engineer || '未指派'}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Settings className="h-4 w-4" />
+                          {system.current_station}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Target className="h-4 w-4" />
+                          {systemProgress}%
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col gap-2 mt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">當前站點:</span>
-                    <StationStatusSelector
-                      systemId={system.id}
-                      currentStatus={system.current_station || '未開始'}
-                      onUpdate={onSystemUpdate}
-                    />
+                  <div className="flex items-center gap-3">
+                    {getStatusBadge(system.status)}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewSystemDetail(system)}
+                      className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      詳情
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                
-                <div className="space-y-4">
-                  {filteredStations.map(station => {
-                    const stationItems = items.filter(item => item.station_id === station.id);
-                    const completedItems = stationItems.filter(item => {
-                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
-                      return prog?.status === 'Done';
-                    });
-                    const overallPercent = stationItems.length > 0 
-                      ? Math.round((completedItems.length / stationItems.length) * 100) 
-                      : 0;
-
-                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
-                    const processingTime = calculateStationProcessingTime(system.id, station.id);
+              <CardContent>
+                <div className="space-y-6">
+                  {systemStations.map((station) => {
+                    const stationItems = items
+                      .filter(item => item.station_id === station.id)
+                      .sort((a, b) => a.item_order - b.item_order);
 
                     return (
-                      <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-base">{station.station_name}</h4>
-                          <ProgressEditDialog
-                            systemName={system.system_name}
-                            stationName={station.station_name}
-                            stationItems={stationItems}
-                            progress={progress}
-                            editingProgress={editingProgress}
-                            setEditingProgress={setEditingProgress}
-                            editValues={editValues}
-                            setEditValues={setEditValues}
-                            getProgressForSystemItem={getProgressForSystemItem}
-                            handleEditProgress={handleEditProgress}
-                            handleSaveProgress={handleSaveProgress}
-                            handleDeleteProgress={handleDeleteProgress}
-                            getStatusColor={getStatusColor}
-                            systemId={system.id}
-                            stationId={station.id}
-                          />
+                      <div key={station.id} className="border border-slate-700 rounded-lg p-4 bg-slate-750">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium text-white flex items-center gap-2">
+                            <Settings className="h-4 w-4 text-blue-400" />
+                            {station.station_name}
+                          </h4>
+                          <Badge variant="outline" className="text-slate-300 border-slate-600">
+                            {station.estimated_hours || 0}h
+                          </Badge>
                         </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">進度: {overallPercent}%</span>
-                            <span className="text-muted-foreground">{completedItems.length}/{stationItems.length} 項目</span>
-                          </div>
-                          <Progress value={overallPercent} className="h-3" />
+                        
+                        <div className="grid gap-3">
+                          {stationItems.map((item) => {
+                            const itemProgress = getProgressForItem(system.id, station.id, item.id);
+                            const status = itemProgress?.status || 'Not Start';
+                            
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between p-3 bg-slate-700 rounded border border-slate-600 hover:bg-slate-650 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  {getItemStatusIcon(status)}
+                                  <div className="flex-1">
+                                    <div className="font-medium text-white text-sm">{item.item_name}</div>
+                                    {item.description && (
+                                      <div className="text-xs text-slate-400 mt-1">{item.description}</div>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-slate-400">
+                                    {item.estimated_minutes || 30}min
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-4">
+                                  {itemProgress && (
+                                    <div className="text-xs text-slate-300">
+                                      {itemProgress.progress_percent || 0}%
+                                    </div>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditProgress(system, station, item)}
+                                    className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-600"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
                           
-                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
-                          {processingTime && (
-                            <div className="mt-3 pt-3 border-t space-y-2">
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">站點開始:</span>
-                                <span className="font-medium">{formatTime(processingTime.startTime.toISOString())}</span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">站點完成:</span>
-                                <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">站點處理時長:</span>
-                                <span className="font-medium text-primary">{processingTime.duration} 小時</span>
-                              </div>
+                          {stationItems.length === 0 && (
+                            <div className="text-center py-4 text-slate-500 text-sm">
+                              此站點尚無測試項目
                             </div>
                           )}
                         </div>
@@ -257,148 +243,75 @@ export function TestProgressTable({
           );
         })}
       </div>
-    );
-  }
 
-  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後，增加間距
-  const gridColumns = `160px 120px repeat(${filteredStations.length}, 200px) 160px`;
-
-  return (
-    <Card className="shadow-lg border-0">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">測試進度表</CardTitle>
-          <div className="flex gap-3">
-            <SystemManager onSystemUpdate={onSystemUpdate} />
-            <BulkResetDialog onReset={onSystemUpdate} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-6">
-        <SystemStatusUpdater
-          systems={filteredSystems}
-          stations={stations}
-          items={items}
-          progress={progress}
-          onSystemUpdate={onSystemUpdate}
+      {/* Progress Edit Dialog */}
+      {showProgressDialog && selectedProgress && (
+        <ProgressEditDialog
+          open={showProgressDialog}
+          onOpenChange={setShowProgressDialog}
+          system={selectedProgress.system}
+          station={selectedProgress.station}
+          item={selectedProgress.item}
+          progress={selectedProgress.progress}
+          onUpdate={updateProgress}
         />
-        
-        <div className="overflow-x-auto">
-          <div className="min-w-[1400px]">
-            {/* Header Row */}
-            <div className="grid gap-4 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border-b-2 border-slate-200 mb-2" style={{ gridTemplateColumns: gridColumns }}>
-              <div className="font-semibold text-slate-700 text-sm">機台編號</div>
-              <div className="font-semibold text-slate-700 text-sm">當前站點</div>
-              {filteredStations.map(station => (
-                <div key={station.id} className="font-semibold text-center text-slate-700 text-sm">
-                  {station.station_name}
+      )}
+
+      {/* System Detail Dialog */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-2xl bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {selectedSystem?.system_name} - 系統詳情
+            </DialogTitle>
+          </DialogHeader>
+          {selectedSystem && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-slate-400">系統名稱</p>
+                  <p className="font-medium text-white">{selectedSystem.system_name}</p>
                 </div>
-              ))}
-              <div className="font-semibold text-slate-700 text-sm">操作</div>
+                <div>
+                  <p className="text-sm text-slate-400">指派工程師</p>
+                  <p className="font-medium text-white">{selectedSystem.assigned_engineer || '未指派'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">目前站點</p>
+                  <p className="font-medium text-white">{selectedSystem.current_station}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">整體進度</p>
+                  <p className="font-medium text-white">{selectedSystem.overall_progress || 0}%</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-sm text-slate-400 mb-2">狀態</p>
+                {getStatusBadge(selectedSystem.status)}
+              </div>
+
+              {selectedSystem.actual_started_at && (
+                <div>
+                  <p className="text-sm text-slate-400">開始時間</p>
+                  <p className="font-medium text-white">
+                    {new Date(selectedSystem.actual_started_at).toLocaleString('zh-TW')}
+                  </p>
+                </div>
+              )}
+
+              {selectedSystem.actual_completed_at && (
+                <div>
+                  <p className="text-sm text-slate-400">完成時間</p>
+                  <p className="font-medium text-white">
+                    {new Date(selectedSystem.actual_completed_at).toLocaleString('zh-TW')}
+                  </p>
+                </div>
+              )}
             </div>
-
-            {/* Data Rows */}
-            {filteredSystems.map((system, index) => {
-              return (
-                <div key={system.id} className={`grid gap-4 p-4 border border-slate-200 rounded-lg mb-2 hover:bg-slate-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} style={{ gridTemplateColumns: gridColumns }}>
-                  <div className="flex items-center">
-                    <button 
-                      className="font-medium text-blue-600 hover:text-blue-700 hover:underline cursor-pointer text-left text-sm break-all"
-                      onClick={() => {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.searchParams.set('system', system.system_name);
-                        window.history.pushState({}, '', currentUrl.toString());
-                        
-                        const event = new CustomEvent('navigate', { 
-                          detail: { module: 'monitor', params: { system: system.system_name } } 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                      title={system.system_name}
-                    >
-                      {system.system_name}
-                    </button>
-                  </div>
-                  <div className="flex items-center">
-                    <StationStatusSelector
-                      systemId={system.id}
-                      currentStatus={system.current_station || '未開始'}
-                      onUpdate={onSystemUpdate}
-                    />
-                  </div>
-                  
-                  {filteredStations.map(station => {
-                    const stationItems = items.filter(item => item.station_id === station.id);
-                    const completedItems = stationItems.filter(item => {
-                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
-                      return prog?.status === 'Done';
-                    });
-                    const overallPercent = stationItems.length > 0 
-                      ? Math.round((completedItems.length / stationItems.length) * 100) 
-                      : 0;
-
-                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
-                    const processingTime = calculateStationProcessingTime(system.id, station.id);
-
-                    return (
-                      <div key={station.id} className="px-2 py-1">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-slate-700">進度: {overallPercent}%</span>
-                            <ProgressEditDialog
-                              systemName={system.system_name}
-                              stationName={station.station_name}
-                              stationItems={stationItems}
-                              progress={progress}
-                              editingProgress={editingProgress}
-                              setEditingProgress={setEditingProgress}
-                              editValues={editValues}
-                              setEditValues={setEditValues}
-                              getProgressForSystemItem={getProgressForSystemItem}
-                              handleEditProgress={handleEditProgress}
-                              handleSaveProgress={handleSaveProgress}
-                              handleDeleteProgress={handleDeleteProgress}
-                              getStatusColor={getStatusColor}
-                              systemId={system.id}
-                              stationId={station.id}
-                            />
-                          </div>
-                          <Progress value={overallPercent} className="h-2" />
-                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
-                          {processingTime && (
-                            <div className="text-xs text-slate-600 bg-blue-50 px-2 py-1 rounded">
-                              處理時長: <span className="font-medium text-blue-700">{processingTime.duration} 小時</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  
-                  <div className="flex gap-2 items-center">
-                    <SystemEditDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      assignedEngineer={system.assigned_engineer}
-                      onUpdate={onSystemUpdate}
-                    />
-                    <SystemResetDialog
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      onReset={onSystemUpdate}
-                    />
-                    <SystemDeleteButton
-                      systemId={system.id}
-                      systemName={system.system_name}
-                      onSystemUpdate={onSystemUpdate}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

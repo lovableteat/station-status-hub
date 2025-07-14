@@ -158,34 +158,15 @@ export function TestManagementPanel() {
           description: "站點已更新",
         });
       } else {
-        const { data: newStation, error: stationError } = await supabase
+        const { error } = await supabase
           .from('test_flow_stations')
-          .insert(stationData)
-          .select()
-          .single();
+          .insert(stationData);
 
-        if (stationError) throw stationError;
-
-        // Create default test items
-        const defaultItems = [
-          {
-            station_id: newStation.id,
-            item_name: "基本檢查",
-            item_order: 1,
-            description: "基本功能檢查",
-            estimated_minutes: 30
-          }
-        ];
-
-        const { error: itemsError } = await supabase
-          .from('test_flow_items')
-          .insert(defaultItems);
-
-        if (itemsError) throw itemsError;
+        if (error) throw error;
 
         toast({
           title: "成功",
-          description: "站點及預設項目已創建",
+          description: "站點已創建",
         });
       }
 
@@ -466,19 +447,7 @@ export function TestManagementPanel() {
   // Calculate totals for overview
   const totalItems = testItems.length;
   const totalEstimatedTime = testFlowStations.reduce((sum, station) => sum + (station.estimated_hours || 0), 0);
-  const totalSystems = 40; // Based on your test data
-
-  const getStationProgress = (stationId: string) => {
-    // This would typically come from actual progress data
-    // For now, returning mock data for display
-    return Math.floor(Math.random() * 100);
-  };
-
-  const getStationStatus = (progress: number) => {
-    if (progress === 100) return { color: "bg-emerald-500", text: "完成", textColor: "text-emerald-700", bgColor: "bg-emerald-50", borderColor: "border-emerald-200" };
-    if (progress > 0) return { color: "bg-orange-500", text: "進行中", textColor: "text-orange-700", bgColor: "bg-orange-50", borderColor: "border-orange-200" };
-    return { color: "bg-slate-500", text: "未開始", textColor: "text-slate-700", bgColor: "bg-slate-50", borderColor: "border-slate-200" };
-  };
+  const totalStations = testFlowStations.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
@@ -488,7 +457,7 @@ export function TestManagementPanel() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               GB300 L10 測試流程說明
             </h1>
-            <p className="text-lg text-slate-600">各測試站點流程說明與管理測試項目</p>
+            <p className="text-lg text-slate-600">測試站點與項目管理系統</p>
           </div>
           <Button 
             variant="outline" 
@@ -496,7 +465,7 @@ export function TestManagementPanel() {
             className="flex items-center gap-2 bg-white hover:bg-blue-50 border-blue-200 text-blue-600 hover:text-blue-700 shadow-sm"
           >
             <Eye className="h-4 w-4" />
-            查看流程
+            查看測試追蹤
           </Button>
         </div>
 
@@ -510,106 +479,65 @@ export function TestManagementPanel() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Flow Overview Tab */}
+          {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-8 mt-8">
-            {/* Test Process Overview */}
-            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <BarChart3 className="h-6 w-6" />
-                  測試流程總覽
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                  {testFlowStations
-                    .sort((a, b) => a.station_order - b.station_order)
-                    .map((station) => {
-                      const progress = getStationProgress(station.id);
-                      const status = getStationStatus(progress);
-                      return (
-                        <Card key={station.id} className={`text-center transition-all duration-200 hover:shadow-md ${status.borderColor} ${status.bgColor}`}>
-                          <CardContent className="p-6">
-                            <div className={`w-16 h-16 rounded-full ${status.color} mx-auto mb-4 flex items-center justify-center shadow-lg`}>
-                              <Settings className="h-8 w-8 text-white" />
-                            </div>
-                            <h3 className="font-semibold text-lg mb-2">{station.station_name}</h3>
-                            <p className="text-sm text-slate-500 mb-3">{station.estimated_hours || 0}h</p>
-                            <div className="space-y-2">
-                              <Badge variant="outline" className={`${status.textColor} border-current`}>
-                                {progress}%
-                              </Badge>
-                              <div className={`text-xs font-medium ${status.textColor}`}>
-                                {status.text}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                </div>
+            {/* Summary Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                <CardContent className="p-6 text-center">
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{totalStations}</div>
+                  <div className="text-sm text-blue-700 font-medium flex items-center justify-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    測試站點總數
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+                <CardContent className="p-6 text-center">
+                  <div className="text-3xl font-bold text-emerald-600 mb-2">{totalItems}</div>
+                  <div className="text-sm text-emerald-700 font-medium flex items-center justify-center gap-2">
+                    <Target className="h-4 w-4" />
+                    測試項目總數
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                <CardContent className="p-6 text-center">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">{totalEstimatedTime}h</div>
+                  <div className="text-sm text-purple-700 font-medium flex items-center justify-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    預估總時間
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-                {/* Summary Statistics */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                    <CardContent className="p-6 text-center">
-                      <div className="text-3xl font-bold text-blue-600 mb-2">{totalItems}</div>
-                      <div className="text-sm text-blue-700 font-medium flex items-center justify-center gap-2">
-                        <Target className="h-4 w-4" />
-                        測試系統總數
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-                    <CardContent className="p-6 text-center">
-                      <div className="text-3xl font-bold text-emerald-600 mb-2">{totalEstimatedTime}h</div>
-                      <div className="text-sm text-emerald-700 font-medium flex items-center justify-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        整體總測試時間
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                    <CardContent className="p-6 text-center">
-                      <div className="text-3xl font-bold text-purple-600 mb-2">{totalSystems}</div>
-                      <div className="text-sm text-purple-700 font-medium flex items-center justify-center gap-2">
-                        <Users className="h-4 w-4" />
-                        測試完成數量
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Detailed Station Information */}
+            {/* Stations Overview */}
             <div className="space-y-6">
               {testFlowStations
                 .sort((a, b) => a.station_order - b.station_order)
                 .map((station) => {
                   const stationItems = testItems.filter(item => item.station_id === station.id);
                   const stationContentList = stationContents.filter(content => content.station_id === station.id);
-                  const progress = getStationProgress(station.id);
-                  const status = getStationStatus(progress);
 
                   return (
                     <Card key={station.id} className="shadow-lg border-0 bg-white/80 backdrop-blur-sm overflow-hidden">
                       <CardHeader className="bg-gradient-to-r from-slate-600 to-slate-700 text-white">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-full ${status.color} flex items-center justify-center shadow-lg`}>
+                            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shadow-lg">
                               <Settings className="h-6 w-6 text-white" />
                             </div>
                             <div>
                               <CardTitle className="text-xl">{station.station_name}</CardTitle>
                               <p className="text-slate-200 text-sm">
-                                ME TEAM 機台組配化率精確度
+                                {station.description || "測試站點"}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
                             <Badge variant="secondary" className="mb-2 bg-white/20 text-white border-white/30">
-                              {progress}% 完成
+                              站點 {station.station_order}
                             </Badge>
                             <p className="text-sm text-slate-200">
                               預估時間: {station.estimated_hours || 0}h
@@ -622,13 +550,13 @@ export function TestManagementPanel() {
                         <div>
                           <h4 className="font-semibold text-lg mb-4 flex items-center gap-2 text-slate-700">
                             <Target className="h-5 w-5 text-blue-600" />
-                            測試項目
+                            測試項目 ({stationItems.length})
                           </h4>
                           <div className="space-y-3">
                             {stationItems.length === 0 ? (
                               <div className="text-center py-8 text-slate-500">
                                 <Target className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                                <p>尚無測試項目</p>
+                                <p>此站點尚無測試項目</p>
                               </div>
                             ) : (
                               stationItems
@@ -642,7 +570,7 @@ export function TestManagementPanel() {
                                       )}
                                     </div>
                                     <Badge variant="outline" className="text-blue-600 border-blue-200">
-                                      {item.estimated_minutes}min
+                                      {item.estimated_minutes || 30}min
                                     </Badge>
                                   </div>
                                 ))
@@ -654,13 +582,13 @@ export function TestManagementPanel() {
                         <div>
                           <h4 className="font-semibold text-lg mb-4 flex items-center gap-2 text-slate-700">
                             <FileText className="h-5 w-5 text-emerald-600" />
-                            站點詳細資訊
+                            站點詳細資訊 ({stationContentList.length})
                           </h4>
                           <div className="space-y-4">
                             {stationContentList.length === 0 ? (
                               <div className="text-center py-8 text-slate-500">
                                 <FileText className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                                <p>尚無詳細資訊</p>
+                                <p>此站點尚無詳細資訊</p>
                               </div>
                             ) : (
                               stationContentList
@@ -703,33 +631,20 @@ export function TestManagementPanel() {
               </CardHeader>
               <CardContent className="p-8">
                 <div className="space-y-4">
-                  {/* Station Table Header */}
-                  <div className="grid grid-cols-5 gap-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg font-semibold text-slate-700 border">
-                    <div>站點名稱</div>
-                    <div>順序</div>
-                    <div>描述</div>
-                    <div>預估時間</div>
-                    <div>操作</div>
-                  </div>
-                  
-                  {/* Station Table Rows */}
                   {testFlowStations
                     .sort((a, b) => a.station_order - b.station_order)
                     .map((station) => (
-                      <div key={station.id} className="grid grid-cols-5 gap-6 p-4 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 transition-colors">
-                        <div className="font-medium text-slate-800">{station.station_name}</div>
-                        <div>
+                      <div key={station.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-4">
                           <Badge variant="outline" className="text-blue-600 border-blue-200">
                             {station.station_order}
                           </Badge>
-                        </div>
-                        <div className="text-sm text-slate-600">
-                          {station.description || "無描述"}
-                        </div>
-                        <div>
-                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
-                            {station.estimated_hours || 0} 小時
-                          </Badge>
+                          <div>
+                            <div className="font-medium text-slate-800">{station.station_name}</div>
+                            <div className="text-sm text-slate-600">
+                              {station.description || "無描述"} • {station.estimated_hours || 0}小時
+                            </div>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button 
@@ -751,6 +666,14 @@ export function TestManagementPanel() {
                         </div>
                       </div>
                     ))}
+                  
+                  {testFlowStations.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                      <Settings className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+                      <p className="text-lg">尚未建立任何測試站點</p>
+                      <p className="text-sm">點擊上方「新增站點」按鈕開始建立</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -784,9 +707,6 @@ export function TestManagementPanel() {
                               <Badge variant="secondary" className="text-sm bg-blue-100 text-blue-700">
                                 {stationItems.length} 個項目
                               </Badge>
-                              <Badge variant="outline" className="text-sm text-emerald-600 border-emerald-200">
-                                {Math.round(stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0) / 60 * 10) / 10}小時
-                              </Badge>
                             </div>
                             <Button 
                               variant="outline" 
@@ -803,7 +723,7 @@ export function TestManagementPanel() {
                             {stationItems.length === 0 ? (
                               <div className="text-center py-8 text-slate-500">
                                 <Target className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                                <p>尚無測試項目</p>
+                                <p>此站點尚無測試項目</p>
                               </div>
                             ) : (
                               stationItems
@@ -817,7 +737,7 @@ export function TestManagementPanel() {
                                           順序 {item.item_order}
                                         </Badge>
                                         <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                          {item.estimated_minutes}min
+                                          {item.estimated_minutes || 30}min
                                         </Badge>
                                       </div>
                                       {item.description && (
@@ -858,7 +778,7 @@ export function TestManagementPanel() {
               <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-t-lg">
                 <CardTitle className="flex items-center gap-3 text-xl">
                   <FileText className="h-6 w-6" />
-                  站點詳細資訊管理
+                  站點內容管理
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-8">
@@ -872,7 +792,7 @@ export function TestManagementPanel() {
                           <div className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border">
                             <div className="flex items-center gap-3">
                               <Badge variant="outline" className="text-slate-600 border-slate-300">{station.station_order}</Badge>
-                              <h3 className="font-semibold text-lg text-slate-800">{station.station_name} - 流程內容管理</h3>
+                              <h3 className="font-semibold text-lg text-slate-800">{station.station_name}</h3>
                               <Badge variant="secondary" className="text-sm bg-purple-100 text-purple-700">
                                 {stationContentList.length} 項內容
                               </Badge>
@@ -884,7 +804,7 @@ export function TestManagementPanel() {
                               className="text-purple-600 border-purple-200 hover:bg-purple-50"
                             >
                               <Plus className="h-3 w-3 mr-1" />
-                              管理內容
+                              新增內容
                             </Button>
                           </div>
                           
@@ -892,7 +812,7 @@ export function TestManagementPanel() {
                             {stationContentList.length === 0 ? (
                               <div className="text-center py-8 text-slate-500">
                                 <FileText className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                                <p>尚無詳細資訊內容</p>
+                                <p>此站點尚無詳細內容</p>
                               </div>
                             ) : (
                               stationContentList
