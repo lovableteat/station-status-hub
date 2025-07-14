@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Settings, Plus, Edit, Trash2, FileText, Target, Eye } from "lucide-react";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -23,17 +24,6 @@ export function TestManagementPanel() {
   } = useUnifiedData();
   const { toast } = useToast();
 
-  // Station management states
-  const [showStationDialog, setShowStationDialog] = useState(false);
-  const [editingStation, setEditingStation] = useState<any>(null);
-  const [deleteStationDialog, setDeleteStationDialog] = useState(false);
-  const [stationToDelete, setStationToDelete] = useState<any>(null);
-  const [stationForm, setStationForm] = useState({
-    station_name: "",
-    description: "",
-    estimated_hours: 0
-  });
-
   // Test item management states
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -47,162 +37,7 @@ export function TestManagementPanel() {
     item_order: 1
   });
 
-  // Station content management states
-  const [showContentDialog, setShowContentDialog] = useState(false);
-  const [editingContent, setEditingContent] = useState<any>(null);
-  const [deleteContentDialog, setDeleteContentDialog] = useState(false);
-  const [contentToDelete, setContentToDelete] = useState<any>(null);
-  const [contentForm, setContentForm] = useState({
-    title: "",
-    content: "",
-    station_id: "",
-    order_num: 1
-  });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Station management functions
-  const resetStationForm = () => {
-    setStationForm({
-      station_name: "",
-      description: "",
-      estimated_hours: 0
-    });
-    setEditingStation(null);
-  };
-
-  const handleAddStation = () => {
-    resetStationForm();
-    setShowStationDialog(true);
-  };
-
-  const handleEditStation = (station: any) => {
-    setEditingStation(station);
-    setStationForm({
-      station_name: station.station_name,
-      description: station.description || "",
-      estimated_hours: station.estimated_hours || 0
-    });
-    setShowStationDialog(true);
-  };
-
-  const handleDeleteStation = (station: any) => {
-    setStationToDelete(station);
-    setDeleteStationDialog(true);
-  };
-
-  const confirmDeleteStation = async () => {
-    if (!stationToDelete) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('test_flow_stations')
-        .delete()
-        .eq('id', stationToDelete.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "成功",
-        description: "站點及相關資料已刪除",
-      });
-
-      await refetch();
-      setDeleteStationDialog(false);
-      setStationToDelete(null);
-    } catch (error) {
-      console.error('Error deleting station:', error);
-      toast({
-        title: "錯誤",
-        description: "刪除站點失敗",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmitStation = async () => {
-    if (!stationForm.station_name.trim()) {
-      toast({
-        title: "錯誤",
-        description: "請輸入站點名稱",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const maxOrder = testFlowStations.length > 0 ? Math.max(...testFlowStations.map(s => s.station_order)) : -1;
-      const nextOrder = editingStation ? editingStation.station_order : maxOrder + 1;
-
-      const stationData = {
-        station_name: stationForm.station_name.trim(),
-        description: stationForm.description.trim() || null,
-        estimated_hours: stationForm.estimated_hours,
-        station_order: nextOrder
-      };
-
-      if (editingStation) {
-        const { error } = await supabase
-          .from('test_flow_stations')
-          .update(stationData)
-          .eq('id', editingStation.id);
-
-        if (error) throw error;
-
-        toast({
-          title: "成功",
-          description: "站點已更新",
-        });
-      } else {
-        const { data: newStation, error: stationError } = await supabase
-          .from('test_flow_stations')
-          .insert(stationData)
-          .select()
-          .single();
-
-        if (stationError) throw stationError;
-
-        // Create default test items
-        const defaultItems = [
-          {
-            station_id: newStation.id,
-            item_name: "基本檢查",
-            item_order: 1,
-            description: "基本功能檢查",
-            estimated_minutes: 30
-          }
-        ];
-
-        const { error: itemsError } = await supabase
-          .from('test_flow_items')
-          .insert(defaultItems);
-
-        if (itemsError) throw itemsError;
-
-        toast({
-          title: "成功",
-          description: "站點及預設項目已創建",
-        });
-      }
-
-      await refetch();
-      setShowStationDialog(false);
-      resetStationForm();
-    } catch (error) {
-      console.error('Error saving station:', error);
-      toast({
-        title: "錯誤",
-        description: editingStation ? "更新站點失敗" : "創建站點失敗",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Test item management functions
   const resetItemForm = () => {
@@ -219,7 +54,13 @@ export function TestManagementPanel() {
   const handleAddItem = (stationId?: string) => {
     resetItemForm();
     if (stationId) {
-      setItemForm(prev => ({ ...prev, station_id: stationId }));
+      const stationItems = testItems.filter(item => item.station_id === stationId);
+      const maxOrder = stationItems.length > 0 ? Math.max(...stationItems.map(item => item.item_order)) : 0;
+      setItemForm(prev => ({ 
+        ...prev, 
+        station_id: stationId,
+        item_order: maxOrder + 1
+      }));
     }
     setShowItemDialog(true);
   };
@@ -333,140 +174,9 @@ export function TestManagementPanel() {
     }
   };
 
-  // Content management functions
-  const resetContentForm = () => {
-    setContentForm({
-      title: "",
-      content: "",
-      station_id: "",
-      order_num: 1
-    });
-    setEditingContent(null);
-  };
-
-  const handleAddContent = (stationId: string) => {
-    resetContentForm();
-    const maxOrder = stationContents.filter(c => c.station_id === stationId).length;
-    setContentForm({
-      title: "",
-      content: "",
-      station_id: stationId,
-      order_num: maxOrder + 1
-    });
-    setShowContentDialog(true);
-  };
-
-  const handleEditContent = (content: any) => {
-    setEditingContent(content);
-    setContentForm({
-      title: content.title,
-      content: content.content || "",
-      station_id: content.station_id,
-      order_num: content.order_num
-    });
-    setShowContentDialog(true);
-  };
-
-  const handleDeleteContent = (content: any) => {
-    setContentToDelete(content);
-    setDeleteContentDialog(true);
-  };
-
-  const confirmDeleteContent = async () => {
-    if (!contentToDelete) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('station_contents')
-        .delete()
-        .eq('id', contentToDelete.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "成功",
-        description: "站點內容已刪除",
-      });
-
-      await refetch();
-      setDeleteContentDialog(false);
-      setContentToDelete(null);
-    } catch (error) {
-      console.error('Error deleting content:', error);
-      toast({
-        title: "錯誤",
-        description: "刪除站點內容失敗",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmitContent = async () => {
-    if (!contentForm.title.trim()) {
-      toast({
-        title: "錯誤",
-        description: "請輸入內容標題",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const contentData = {
-        title: contentForm.title.trim(),
-        content: contentForm.content.trim() || null,
-        station_id: contentForm.station_id,
-        order_num: contentForm.order_num
-      };
-
-      if (editingContent) {
-        const { error } = await supabase
-          .from('station_contents')
-          .update(contentData)
-          .eq('id', editingContent.id);
-
-        if (error) throw error;
-
-        toast({
-          title: "成功",
-          description: "站點內容已更新",
-        });
-      } else {
-        const { error } = await supabase
-          .from('station_contents')
-          .insert(contentData);
-
-        if (error) throw error;
-
-        toast({
-          title: "成功",
-          description: "站點內容已創建",
-        });
-      }
-
-      await refetch();
-      setShowContentDialog(false);
-      resetContentForm();
-    } catch (error) {
-      console.error('Error saving content:', error);
-      toast({
-        title: "錯誤",
-        description: editingContent ? "更新站點內容失敗" : "創建站點內容失敗",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   // Calculate totals for overview
   const totalItems = testItems.length;
   const totalEstimatedTime = testFlowStations.reduce((sum, station) => sum + (station.estimated_hours || 0), 0);
-  const totalSystems = 40; // Based on your test data
 
   const getStationProgress = (stationId: string) => {
     // This would typically come from actual progress data
@@ -544,19 +254,19 @@ export function TestManagementPanel() {
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
-                    <div className="text-sm text-muted-foreground">測試系統總數</div>
+                    <div className="text-sm text-muted-foreground">測試項目總數</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
                     <div className="text-2xl font-bold text-green-600">{totalEstimatedTime}h</div>
-                    <div className="text-sm text-muted-foreground">整體總測試時間</div>
+                    <div className="text-sm text-muted-foreground">預估總測試時間</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-600">{totalSystems}</div>
-                    <div className="text-sm text-muted-foreground">測試完成數量</div>
+                    <div className="text-2xl font-bold text-purple-600">{testFlowStations.length}</div>
+                    <div className="text-sm text-muted-foreground">測試站點數量</div>
                   </CardContent>
                 </Card>
               </div>
@@ -583,7 +293,7 @@ export function TestManagementPanel() {
                         <div>
                           <CardTitle className="text-lg">{station.station_name}</CardTitle>
                           <p className="text-sm text-muted-foreground">
-                            ME TEAM 機台組配化率精確度
+                            {station.description || "測試站點"}
                           </p>
                         </div>
                       </div>
@@ -655,73 +365,6 @@ export function TestManagementPanel() {
 
         {/* Management Tab */}
         <TabsContent value="management" className="space-y-6">
-          {/* Station Management */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  站點管理
-                </CardTitle>
-                <Button onClick={handleAddStation}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增站點
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Station Table Header */}
-                <div className="grid grid-cols-5 gap-4 p-3 bg-muted/50 rounded font-medium text-sm">
-                  <div>站點名稱</div>
-                  <div>順序</div>
-                  <div>描述</div>
-                  <div>預估時間</div>
-                  <div>操作</div>
-                </div>
-                
-                {/* Station Table Rows */}
-                {testFlowStations
-                  .sort((a, b) => a.station_order - b.station_order)
-                  .map((station) => (
-                    <div key={station.id} className="grid grid-cols-5 gap-4 p-3 border rounded">
-                      <div className="font-medium">{station.station_name}</div>
-                      <div>
-                        <Badge variant="outline">
-                          {station.station_order}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {station.description || "無描述"}
-                      </div>
-                      <div>
-                        <Badge variant="secondary">
-                          {station.estimated_hours || 0} 小時
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleEditStation(station)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDeleteStation(station)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Test Item Management */}
           <Card>
             <CardHeader>
@@ -814,141 +457,8 @@ export function TestManagementPanel() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Station Content Management */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                站點詳細資訊管理
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {testFlowStations
-                  .sort((a, b) => a.station_order - b.station_order)
-                  .map((station) => {
-                    const stationContentList = stationContents.filter(content => content.station_id === station.id);
-                    return (
-                      <div key={station.id} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{station.station_order}</Badge>
-                            <h3 className="font-medium">{station.station_name} - 流程內容管理</h3>
-                            <Badge variant="secondary" className="text-xs">
-                              {stationContentList.length} 項內容
-                            </Badge>
-                          </div>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleAddContent(station.id)}
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            管理內容
-                          </Button>
-                        </div>
-                        
-                        <div className="ml-8 space-y-2">
-                          {stationContentList.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-4">尚無詳細資訊內容</p>
-                          ) : (
-                            stationContentList
-                              .sort((a, b) => a.order_num - b.order_num)
-                              .map((content) => (
-                                <div key={content.id} className="p-3 border rounded">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <Badge variant="outline" className="text-xs">
-                                          {content.order_num}
-                                        </Badge>
-                                        <span className="font-medium">{content.title}</span>
-                                      </div>
-                                      {content.content && (
-                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                          {content.content}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex gap-1 ml-4">
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm"
-                                        onClick={() => handleEditContent(content)}
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm"
-                                        onClick={() => handleDeleteContent(content)}
-                                        className="text-red-600 hover:text-red-700"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Station Dialog */}
-      <Dialog open={showStationDialog} onOpenChange={setShowStationDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingStation ? "編輯站點" : "新增站點"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>站點名稱 *</Label>
-              <Input
-                value={stationForm.station_name}
-                onChange={(e) => setStationForm({...stationForm, station_name: e.target.value})}
-                placeholder="輸入站點名稱"
-              />
-            </div>
-            <div>
-              <Label>描述</Label>
-              <Textarea
-                value={stationForm.description}
-                onChange={(e) => setStationForm({...stationForm, description: e.target.value})}
-                placeholder="輸入站點描述"
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label>預估時間 (小時)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.5"
-                value={stationForm.estimated_hours}
-                onChange={(e) => setStationForm({...stationForm, estimated_hours: Number(e.target.value)})}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setShowStationDialog(false)}>
-              取消
-            </Button>
-            <Button onClick={handleSubmitStation} disabled={isSubmitting}>
-              {isSubmitting ? "處理中..." : (editingStation ? "更新" : "創建")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Test Item Dialog */}
       <Dialog open={showItemDialog} onOpenChange={setShowItemDialog}>
@@ -969,20 +479,23 @@ export function TestManagementPanel() {
             </div>
             <div>
               <Label>所屬站點 *</Label>
-              <select
-                className="w-full p-2 border rounded"
+              <Select
                 value={itemForm.station_id}
-                onChange={(e) => setItemForm({...itemForm, station_id: e.target.value})}
+                onValueChange={(value) => setItemForm({...itemForm, station_id: value})}
               >
-                <option value="">選擇站點</option>
-                {testFlowStations
-                  .sort((a, b) => a.station_order - b.station_order)
-                  .map(station => (
-                    <option key={station.id} value={station.id}>
-                      {station.station_name}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇站點" />
+                </SelectTrigger>
+                <SelectContent>
+                  {testFlowStations
+                    .sort((a, b) => a.station_order - b.station_order)
+                    .map(station => (
+                      <SelectItem key={station.id} value={station.id}>
+                        {station.station_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>描述</Label>
@@ -1025,81 +538,7 @@ export function TestManagementPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Content Dialog */}
-      <Dialog open={showContentDialog} onOpenChange={setShowContentDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingContent ? "編輯站點內容" : "新增站點內容"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>標題 *</Label>
-              <Input
-                value={contentForm.title}
-                onChange={(e) => setContentForm({...contentForm, title: e.target.value})}
-                placeholder="輸入內容標題"
-              />
-            </div>
-            <div>
-              <Label>內容</Label>
-              <Textarea
-                value={contentForm.content}
-                onChange={(e) => setContentForm({...contentForm, content: e.target.value})}
-                placeholder="輸入詳細內容"
-                rows={5}
-              />
-            </div>
-            <div>
-              <Label>順序</Label>
-              <Input
-                type="number"
-                min="1"
-                value={contentForm.order_num}
-                onChange={(e) => setContentForm({...contentForm, order_num: parseInt(e.target.value) || 1})}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setShowContentDialog(false)}>
-              取消
-            </Button>
-            <Button onClick={handleSubmitContent} disabled={isSubmitting}>
-              {isSubmitting ? "處理中..." : (editingContent ? "更新" : "創建")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialogs */}
-      <AlertDialog open={deleteStationDialog} onOpenChange={setDeleteStationDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除站點</AlertDialogTitle>
-            <AlertDialogDescription>
-              您確定要刪除「{stationToDelete?.station_name}」站點嗎？
-              <br />
-              <strong className="text-red-600">
-                這將會同時刪除該站點的所有測試項目、進度記錄、內容說明和相關設定！
-              </strong>
-              <br />
-              此操作無法撤銷。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteStation}
-              disabled={isSubmitting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isSubmitting ? "刪除中..." : "確認刪除"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteItemDialog} onOpenChange={setDeleteItemDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1113,28 +552,6 @@ export function TestManagementPanel() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteItem}
-              disabled={isSubmitting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isSubmitting ? "刪除中..." : "確認刪除"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={deleteContentDialog} onOpenChange={setDeleteContentDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除站點內容</AlertDialogTitle>
-            <AlertDialogDescription>
-              您確定要刪除「{contentToDelete?.title}」內容嗎？
-              此操作無法撤銷。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteContent}
               disabled={isSubmitting}
               className="bg-red-600 hover:bg-red-700"
             >
