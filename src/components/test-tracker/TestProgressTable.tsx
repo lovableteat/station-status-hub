@@ -260,21 +260,21 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後
-  const gridColumns = `140px 100px repeat(${filteredStations.length}, 180px) 140px`;
+  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後，增加間距
+  const gridColumns = `160px 120px repeat(${filteredStations.length}, 200px) 160px`;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="shadow-lg border-0">
+      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="flex items-center justify-between">
-          <CardTitle>測試進度表</CardTitle>
-          <div className="flex gap-2">
+          <CardTitle className="text-xl">測試進度表</CardTitle>
+          <div className="flex gap-3">
             <SystemManager onSystemUpdate={onSystemUpdate} />
             <BulkResetDialog onReset={onSystemUpdate} />
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         <SystemStatusUpdater
           systems={filteredSystems}
           stations={stations}
@@ -284,26 +284,26 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[1200px]">
+          <div className="min-w-[1400px]">
             {/* Header Row */}
-            <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
-              <div className="font-semibold">機台編號</div>
-              <div className="font-semibold">當前站點</div>
+            <div className="grid gap-4 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border-b-2 border-slate-200 mb-2" style={{ gridTemplateColumns: gridColumns }}>
+              <div className="font-semibold text-slate-700 text-sm">機台編號</div>
+              <div className="font-semibold text-slate-700 text-sm">當前站點</div>
               {filteredStations.map(station => (
-                <div key={station.id} className="font-semibold text-center">
+                <div key={station.id} className="font-semibold text-center text-slate-700 text-sm">
                   {station.station_name}
                 </div>
               ))}
-              <div className="font-semibold">操作</div>
+              <div className="font-semibold text-slate-700 text-sm">操作</div>
             </div>
 
             {/* Data Rows */}
-            {filteredSystems.map(system => {
+            {filteredSystems.map((system, index) => {
               return (
-                <div key={system.id} className="grid gap-2 p-3 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className={`grid gap-4 p-4 border border-slate-200 rounded-lg mb-2 hover:bg-slate-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center">
                     <button 
-                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
+                      className="font-medium text-blue-600 hover:text-blue-700 hover:underline cursor-pointer text-left text-sm break-all"
                       onClick={() => {
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
@@ -319,7 +319,7 @@ export function TestProgressTable({
                       {system.system_name}
                     </button>
                   </div>
-                  <div>
+                  <div className="flex items-center">
                     <StationStatusSelector
                       systemId={system.id}
                       currentStatus={system.current_station || '未開始'}
@@ -341,10 +341,10 @@ export function TestProgressTable({
                     const processingTime = calculateStationProcessingTime(system.id, station.id);
 
                     return (
-                      <div key={station.id} className="px-1">
-                        <div className="space-y-2">
+                      <div key={station.id} className="px-2 py-1">
+                        <div className="space-y-3">
                           <div className="flex items-center justify-between text-xs">
-                            <span>進度: {overallPercent}%</span>
+                            <span className="font-medium text-slate-700">進度: {overallPercent}%</span>
                             <ProgressEditDialog
                               systemName={system.system_name}
                               stationName={station.station_name}
@@ -366,8 +366,8 @@ export function TestProgressTable({
                           <Progress value={overallPercent} className="h-2" />
                           {/* 所有站點統一顯示處理時長（包括Station 4）*/}
                           {processingTime && (
-                            <div className="text-xs text-muted-foreground">
-                              處理時長: {processingTime.duration} 小時
+                            <div className="text-xs text-slate-600 bg-blue-50 px-2 py-1 rounded">
+                              處理時長: <span className="font-medium text-blue-700">{processingTime.duration} 小時</span>
                             </div>
                           )}
                         </div>
@@ -375,7 +375,7 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  <div className="flex gap-1">
+                  <div className="flex gap-2 items-center">
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
