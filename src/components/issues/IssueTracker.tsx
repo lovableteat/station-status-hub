@@ -10,15 +10,16 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
-import { Plus, Search, Filter, Calendar, User, AlertTriangle, Camera } from "lucide-react";
+import { Plus, Search, Calendar, User, Camera } from "lucide-react";
 import { format } from "date-fns";
 
-interface Issue {
+// 定義本地的 Issue 類型，避免與其他地方的衝突
+interface LocalIssue {
   id: string;
   title: string;
   description: string;
-  priority: string;
-  status: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: "open" | "in_progress" | "resolved" | "closed";
   assigned_to?: string;
   system_name?: string;
   station_name?: string;
@@ -35,7 +36,7 @@ interface IssueAttachment {
 }
 
 export function IssueTracker() {
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [attachments, setAttachments] = useState<Record<string, IssueAttachment[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,7 +56,22 @@ export function IssueTracker() {
 
       if (error) throw error;
 
-      setIssues(data || []);
+      // 轉換資料以確保類型正確
+      const convertedIssues: LocalIssue[] = (data || []).map(item => ({
+        id: item.id || '',
+        title: item.title || '',
+        description: item.description || '',
+        priority: (item.priority as "low" | "medium" | "high" | "critical") || "medium",
+        status: (item.status as "open" | "in_progress" | "resolved" | "closed") || "open",
+        assigned_to: item.assigned_to || undefined,
+        system_name: item.system_name || undefined,
+        station_name: item.station_name || undefined,
+        test_item_name: item.test_item_name || undefined,
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString()
+      }));
+
+      setIssues(convertedIssues);
 
       // 載入附件
       const { data: attachmentData, error: attachmentError } = await supabase
@@ -255,7 +271,7 @@ function IssueCard({
   attachments, 
   getImageUrl 
 }: { 
-  issue: Issue; 
+  issue: LocalIssue; 
   attachments: IssueAttachment[];
   getImageUrl: (path: string) => string;
 }) {
