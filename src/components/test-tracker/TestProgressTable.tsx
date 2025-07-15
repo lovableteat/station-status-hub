@@ -9,6 +9,7 @@ import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
+import { ManualTimeTracker } from "./ManualTimeTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,7 +63,7 @@ export function TestProgressTable({
   // Show all stations ordered by station_order
   const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
-  // Format time helper - 統一時間格式顯示
+  // Format time helper
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '-';
     try {
@@ -79,39 +80,49 @@ export function TestProgressTable({
     }
   };
 
-  // 統一站點處理時間計算邏輯 - 所有站點（包括Station 4）都使用相同邏輯
-  const calculateStationProcessingTime = (systemId: string, stationId: string) => {
+  // 手動計時的處理時間計算邏輯
+  const calculateManualProcessingTime = (systemId: string, stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const stationProgressRecords = stationItems.map(item => 
       getProgressForSystemItem(systemId, stationId, item.id)
     ).filter(Boolean);
     
-    // 找出所有測項的開始時間和結束時間
-    const allStartTimes = stationProgressRecords
-      .map(p => p?.started_at)
-      .filter(Boolean)
-      .map(time => new Date(time));
+    // 找出所有已完成測項的處理時間
+    const completedItems = stationProgressRecords.filter(p => 
+      p?.started_at && p?.completed_at && p?.status === 'Done'
+    );
     
-    const allEndTimes = stationProgressRecords
-      .map(p => p?.completed_at)
-      .filter(Boolean)
-      .map(time => new Date(time));
+    if (completedItems.length === 0) return null;
     
-    if (allStartTimes.length === 0 || allEndTimes.length === 0) return null;
+    // 計算每個測項的處理時間並求和
+    let totalHours = 0;
+    completedItems.forEach(item => {
+      if (item.started_at && item.completed_at) {
+        const start = new Date(item.started_at);
+        const end = new Date(item.completed_at);
+        const diffMs = end.getTime() - start.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        totalHours += diffHours;
+      }
+    });
     
-    // 站點開始時間 = 最早的測項開始時間
-    const stationStartTime = new Date(Math.min(...allStartTimes.map(t => t.getTime())));
-    // 站點結束時間 = 最晚的測項結束時間
-    const stationEndTime = new Date(Math.max(...allEndTimes.map(t => t.getTime())));
+    const avgHours = Math.round((totalHours / completedItems.length) * 10) / 10;
     
-    // 計算站點總處理時長
-    const diffMs = stationEndTime.getTime() - stationStartTime.getTime();
-    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10; // 保留一位小數
+    // 找出最早開始時間和最晚結束時間作為站點時間範圍
+    const allStartTimes = completedItems
+      .map(p => new Date(p.started_at!))
+      .sort((a, b) => a.getTime() - b.getTime());
+    
+    const allEndTimes = completedItems
+      .map(p => new Date(p.completed_at!))
+      .sort((a, b) => b.getTime() - a.getTime());
     
     return {
-      startTime: stationStartTime,
-      endTime: stationEndTime,
-      duration: diffHours
+      startTime: allStartTimes[0],
+      endTime: allEndTimes[0],
+      totalHours: Math.round(totalHours * 10) / 10,
+      averageHours: avgHours,
+      completedItemsCount: completedItems.length
     };
   };
 
@@ -127,7 +138,6 @@ export function TestProgressTable({
           onSystemUpdate={onSystemUpdate}
         />
         
-        {/* 新增批量重置按鈕和機台管理 */}
         <div className="flex justify-between items-center">
           <SystemManager onSystemUpdate={onSystemUpdate} />
           <BulkResetDialog onReset={onSystemUpdate} />
@@ -186,7 +196,6 @@ export function TestProgressTable({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                
                 <div className="space-y-4">
                   {filteredStations.map(station => {
                     const stationItems = items.filter(item => item.station_id === station.id);
@@ -198,8 +207,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
-                    const processingTime = calculateStationProcessingTime(system.id, station.id);
+                    const processingTime = calculateManualProcessingTime(system.id, station.id);
 
                     return (
                       <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
@@ -223,6 +231,27 @@ export function TestProgressTable({
                             stationId={station.id}
                           />
                         </div>
+                        
+                        {/* 顯示每個測試項目的手動計時控制 */}
+                        <div className="space-y-2 mb-3">
+                          {stationItems.map(item => {
+                            const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                            return (
+                              <div key={item.id} className="flex items-center justify-between text-sm bg-white/50 rounded p-2">
+                                <span className="font-medium">{item.item_name}</span>
+                                <ManualTimeTracker
+                                  systemId={system.id}
+                                  stationId={station.id}
+                                  itemId={item.id}
+                                  currentStartedAt={itemProgress?.started_at}
+                                  currentCompletedAt={itemProgress?.completed_at}
+                                  onTimeUpdate={onSystemUpdate}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium">進度: {overallPercent}%</span>
@@ -230,7 +259,6 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-3" />
                           
-                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
                           {processingTime && (
                             <div className="mt-3 pt-3 border-t space-y-2">
                               <div className="flex justify-between items-center text-sm">
@@ -242,8 +270,12 @@ export function TestProgressTable({
                                 <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
                               </div>
                               <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">站點處理時長:</span>
-                                <span className="font-medium text-primary">{processingTime.duration} 小時</span>
+                                <span className="text-muted-foreground">總處理時長:</span>
+                                <span className="font-medium text-primary">{processingTime.totalHours} 小時</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">完成項目數:</span>
+                                <span className="font-medium">{processingTime.completedItemsCount}</span>
                               </div>
                             </div>
                           )}
@@ -260,14 +292,14 @@ export function TestProgressTable({
     );
   }
 
-  // Desktop table view - 調整欄位寬度和間距，將操作欄位移到最後
-  const gridColumns = `140px 100px repeat(${filteredStations.length}, 180px) 140px`;
+  // Desktop table view
+  const gridColumns = `140px 100px repeat(${filteredStations.length}, 200px) 140px`;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>測試進度表</CardTitle>
+          <CardTitle>測試進度表 - 手動計時版</CardTitle>
           <div className="flex gap-2">
             <SystemManager onSystemUpdate={onSystemUpdate} />
             <BulkResetDialog onReset={onSystemUpdate} />
@@ -284,7 +316,7 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[1200px]">
+          <div className="min-w-[1400px]">
             {/* Header Row */}
             <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
@@ -337,8 +369,7 @@ export function TestProgressTable({
                       ? Math.round((completedItems.length / stationItems.length) * 100) 
                       : 0;
 
-                    // 使用統一的處理時間計算邏輯 - 所有站點都相同（包括Station 4）
-                    const processingTime = calculateStationProcessingTime(system.id, station.id);
+                    const processingTime = calculateManualProcessingTime(system.id, station.id);
 
                     return (
                       <div key={station.id} className="px-1">
@@ -364,10 +395,33 @@ export function TestProgressTable({
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
-                          {/* 所有站點統一顯示處理時長（包括Station 4）*/}
+                          
+                          {/* 顯示每個測試項目的計時控制 */}
+                          <div className="space-y-1">
+                            {stationItems.map(item => {
+                              const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                              return (
+                                <div key={item.id} className="flex items-center justify-between text-xs">
+                                  <span className="truncate max-w-[80px]" title={item.item_name}>
+                                    {item.item_name}
+                                  </span>
+                                  <ManualTimeTracker
+                                    systemId={system.id}
+                                    stationId={station.id}
+                                    itemId={item.id}
+                                    currentStartedAt={itemProgress?.started_at}
+                                    currentCompletedAt={itemProgress?.completed_at}
+                                    onTimeUpdate={onSystemUpdate}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
                           {processingTime && (
-                            <div className="text-xs text-muted-foreground">
-                              處理時長: {processingTime.duration} 小時
+                            <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
+                              <div>總時長: {processingTime.totalHours}h</div>
+                              <div>完成: {processingTime.completedItemsCount}項</div>
                             </div>
                           )}
                         </div>
