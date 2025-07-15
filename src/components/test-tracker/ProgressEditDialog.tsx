@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Edit2, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TimeRecordManager } from "./TimeRecordManager";
+import { ManualTimeTracker } from "./ManualTimeTracker";
 
 interface TestItem {
   id: string;
@@ -75,111 +75,29 @@ export function ProgressEditDialog({
 }: ProgressEditDialogProps) {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [originalStatus, setOriginalStatus] = useState<string>('');
 
-  // 檢查是否為所有站點（Station 0-4）- 統一時間記錄邏輯
-  const isStationWithTimeTracking = () => {
-    return stationName.includes('Station 0') || 
-           stationName.includes('Station 1') || 
-           stationName.includes('Station 2') || 
-           stationName.includes('Station 3') || 
-           stationName.includes('Station 4');
-  };
-
-  // 統一的時間記錄邏輯 - 所有站點（Station 0-4）都使用相同邏輯，確保自動時間記錄
-  const updateTimeIfStatusChanged = (newStatus: string, currentItem?: TestProgress) => {
-    const currentTime = new Date().toISOString();
-    let timeUpdates = {};
-
-    // 對於所有站點（Station 0-4），統一處理時間記錄邏輯 - 確保自動記錄
-    if (isStationWithTimeTracking()) {
-      // 從 Not Start 變成其他狀態時，自動記錄開始時間（如果還沒有開始時間）
-      if (originalStatus === 'Not Start' && newStatus !== 'Not Start' && !currentItem?.started_at) {
-        timeUpdates = { ...timeUpdates, started_at: currentTime };
-        console.log(`自動記錄開始時間 for ${stationName}:`, currentTime);
-      }
-      
-      // 變成 Done 狀態時，自動記錄完成時間（如果還沒有完成時間）
-      if (newStatus === 'Done' && originalStatus !== 'Done' && !currentItem?.completed_at) {
-        timeUpdates = { ...timeUpdates, completed_at: currentTime };
-        console.log(`自動記錄完成時間 for ${stationName}:`, currentTime);
-      }
-      
-      // 從 Done 變成其他狀態時，清除完成時間但保留開始時間
-      if (originalStatus === 'Done' && newStatus !== 'Done') {
-        timeUpdates = { ...timeUpdates, completed_at: null };
-        console.log(`清除完成時間 for ${stationName}`);
-      }
-    }
-
-    return timeUpdates;
-  };
-
-  // 處理狀態變更 - 自動設定進度百分比和時間記錄
+  // 處理狀態變更 - 簡化邏輯，不自動記錄時間
   const handleStatusChange = (newStatus: string) => {
-    const currentEditKey = editingProgress;
-    if (!currentEditKey) return;
-
-    const [systemId, stationId, itemId] = currentEditKey.split('-');
-    const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
-    
     let newProgressPercent = 0;
     
-    // 根據狀態自動設定進度百分比：只有0%和100%
+    // 根據狀態自動設定進度百分比
     if (newStatus === 'Done') {
       newProgressPercent = 100;
     } else {
       newProgressPercent = 0;
     }
     
-    // 獲取時間更新 - 確保所有站點都能自動記錄時間
-    const timeUpdates = updateTimeIfStatusChanged(newStatus, currentItem);
-    
     setEditValues(prev => ({ 
       ...prev, 
       status: newStatus,
-      progress_percent: newProgressPercent,
-      ...timeUpdates
+      progress_percent: newProgressPercent
     }));
-  };
-
-  // 增強的儲存處理函數 - 確保所有站點在儲存時自動記錄時間
-  const handleEnhancedSaveProgress = (systemId: string, stationId: string, itemId: string) => {
-    if (!editingProgress) return;
-    
-    const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
-    const currentTime = new Date().toISOString();
-    
-    // 針對所有站點（Station 0-4）進行最終的時間記錄確認
-    if (isStationWithTimeTracking()) {
-      let finalTimeUpdates = { ...editValues };
-      
-      // 確保開始時間記錄：如果狀態不是 Not Start 但沒有開始時間，自動記錄
-      if (editValues.status !== 'Not Start' && !editValues.started_at && !currentItem?.started_at) {
-        finalTimeUpdates.started_at = currentTime;
-        console.log(`儲存時自動記錄開始時間 for ${stationName}:`, currentTime);
-      }
-      
-      // 確保完成時間記錄：如果狀態是 Done 但沒有完成時間，自動記錄
-      if (editValues.status === 'Done' && !editValues.completed_at && !currentItem?.completed_at) {
-        finalTimeUpdates.completed_at = currentTime;
-        console.log(`儲存時自動記錄完成時間 for ${stationName}:`, currentTime);
-      }
-      
-      // 更新 editValues 以包含最終的時間記錄
-      setEditValues(finalTimeUpdates);
-    }
-    
-    // 呼叫原始的儲存函數
-    handleSaveProgress(systemId, stationId, itemId);
   };
 
   // 處理進度變更 - 限制只能是0或100
   const handleProgressChange = (newProgress: number) => {
-    // 限制進度只能是0或100
     const validProgress = newProgress >= 50 ? 100 : 0;
     
-    // 根據進度自動調整狀態
     let newStatus = editValues.status;
     if (validProgress === 100) {
       newStatus = 'Done';
@@ -193,20 +111,6 @@ export function ProgressEditDialog({
       status: newStatus
     }));
   };
-
-  // 處理備註變更
-  const handleNotesChange = (newNotes: string) => {
-    setEditValues(prev => ({ ...prev, notes: newNotes }));
-  };
-
-  // 當開始編輯時，記錄原始狀態
-  useEffect(() => {
-    if (editingProgress) {
-      const [systemId, stationId, itemId] = editingProgress.split('-');
-      const currentItem = getProgressForSystemItem(systemId, stationId, itemId);
-      setOriginalStatus(currentItem?.status || 'Not Start');
-    }
-  }, [editingProgress, getProgressForSystemItem]);
 
   const completedItems = stationItems.filter(item => {
     const prog = getProgressForSystemItem(systemId, stationId, item.id);
@@ -227,7 +131,7 @@ export function ProgressEditDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-lg">
-            {systemName} - {stationName} 測試項目編輯
+            {systemName} - {stationName} 測試項目編輯 (手動計時版)
           </DialogTitle>
         </DialogHeader>
         
@@ -244,7 +148,7 @@ export function ProgressEditDialog({
             <div className="text-center mt-2 font-medium">{overallPercent}%</div>
           </div>
 
-          {/* 測試項目列表 - 使用ScrollArea改善顯示 */}
+          {/* 測試項目列表 */}
           <ScrollArea className="h-[400px] w-full rounded-md border">
             <div className="p-4 space-y-4">
               {stationItems.map((item) => {
@@ -269,17 +173,15 @@ export function ProgressEditDialog({
                           {itemProgress?.status || 'Not Start'}
                         </Badge>
                         
-                        {/* 時間記錄管理按鈕 - 所有站點統一處理（包含Station 4）*/}
-                        {isStationWithTimeTracking() && itemProgress && (
-                          <TimeRecordManager
-                            systemId={systemId}
-                            stationId={stationId}
-                            itemId={item.id}
-                            currentStartedAt={itemProgress.started_at}
-                            currentCompletedAt={itemProgress.completed_at}
-                            onTimeUpdate={() => window.location.reload()}
-                          />
-                        )}
+                        {/* 手動計時控制 */}
+                        <ManualTimeTracker
+                          systemId={systemId}
+                          stationId={stationId}
+                          itemId={item.id}
+                          currentStartedAt={itemProgress?.started_at}
+                          currentCompletedAt={itemProgress?.completed_at}
+                          onTimeUpdate={() => window.location.reload()}
+                        />
                         
                         {!isEditing ? (
                           <Button
@@ -294,7 +196,7 @@ export function ProgressEditDialog({
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleEnhancedSaveProgress(systemId, stationId, item.id)}
+                              onClick={() => handleSaveProgress(systemId, stationId, item.id)}
                             >
                               <Save className="h-3 w-3" />
                             </Button>
@@ -343,10 +245,8 @@ export function ProgressEditDialog({
                           <Select 
                             value={editValues.progress_percent.toString()} 
                             onValueChange={(value) => {
-                              // 限制進度只能是0或100
                               const validProgress = Number(value) >= 50 ? 100 : 0;
                               
-                              // 根據進度自動調整狀態
                               let newStatus = editValues.status;
                               if (validProgress === 100) {
                                 newStatus = 'Done';
@@ -381,29 +281,13 @@ export function ProgressEditDialog({
                           />
                         </div>
 
-                        {/* 時間顯示 - 所有站點統一處理（包含Station 4 自動時間記錄）*/}
-                        {isStationWithTimeTracking() && (editValues.started_at || editValues.completed_at) && (
-                          <div className="md:col-span-2 space-y-2">
-                            <label className="text-sm font-medium">時間記錄</label>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">開始時間: </span>
-                                <span>{editValues.started_at ? new Date(editValues.started_at).toLocaleString('zh-TW') : '-'}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">完成時間: </span>
-                                <span>{editValues.completed_at ? new Date(editValues.completed_at).toLocaleString('zh-TW') : '-'}</span>
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              * 所有站點統一自動時間記錄邏輯，狀態變更並儲存時自動記錄時間
-                            </div>
-                          </div>
-                        )}
+                        <div className="md:col-span-2 text-xs text-blue-600 bg-blue-50 rounded p-2">
+                          <strong>手動計時模式:</strong> 請使用上方的「開始」和「結束」按鈕來記錄測試時間，系統將自動計算處理時長。
+                        </div>
                       </div>
                     )}
 
-                    {/* 進度條 - 顯示0%或100% */}
+                    {/* 進度條 */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>進度</span>
@@ -420,8 +304,8 @@ export function ProgressEditDialog({
                       </div>
                     )}
 
-                    {/* 時間資訊顯示 - 所有站點統一處理（包含Station 4）*/}
-                    {isStationWithTimeTracking() && !isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
+                    {/* 時間資訊顯示 */}
+                    {!isEditing && (itemProgress?.started_at || itemProgress?.completed_at) && (
                       <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -433,6 +317,13 @@ export function ProgressEditDialog({
                             <span>{itemProgress.completed_at ? new Date(itemProgress.completed_at).toLocaleString('zh-TW') : '-'}</span>
                           </div>
                         </div>
+                        {itemProgress.started_at && itemProgress.completed_at && (
+                          <div className="mt-1 text-center">
+                            <span className="font-medium text-primary">
+                              處理時長: {Math.round(((new Date(itemProgress.completed_at).getTime() - new Date(itemProgress.started_at).getTime()) / (1000 * 60 * 60)) * 10) / 10} 小時
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

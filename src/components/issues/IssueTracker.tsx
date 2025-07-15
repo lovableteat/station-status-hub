@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Edit, AlertTriangle, Bug, Download } from "lucide-react";
+import { Search, Plus, Edit, AlertTriangle, Bug, Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { BackButton } from "../common/BackButton";
@@ -24,6 +25,17 @@ interface Issue {
   station_id?: string;
   created_at: string;
   updated_at: string;
+  test_item_id?: string;
+}
+
+interface NewIssue {
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: "open" | "in_progress" | "resolved" | "closed";
+  assigned_to: string;
+  system_id?: string;
+  station_id?: string;
 }
 
 export function IssueTracker() {
@@ -34,6 +46,17 @@ export function IssueTracker() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // 新增問題表單狀態
+  const [newIssue, setNewIssue] = useState<NewIssue>({
+    title: "",
+    description: "",
+    priority: "medium",
+    status: "open",
+    assigned_to: "",
+    system_id: "",
+    station_id: ""
+  });
   
   const { toast } = useToast();
   
@@ -80,75 +103,152 @@ export function IssueTracker() {
 
   const loadIssues = async () => {
     try {
-      // Mock data for demonstration
-      const mockIssues: Issue[] = [
-        {
-          id: "1",
-          title: "Station 2 測試項目異常",
-          description: "功能驗證過程中發現通訊問題",
-          priority: "high",
-          status: "open",
-          assigned_to: "Wilson",
-          system_id: "System23",
-          station_id: "station_2",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "2", 
-          title: "系統軟體版本不匹配",
-          description: "需要更新到最新版本以支援新測試項目",
-          priority: "medium",
-          status: "in_progress",
-          assigned_to: "Alice",
-          system_id: "System15",
-          station_id: "station_1",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: "3",
-          title: "硬體連接不穩定",
-          description: "偶發性連接中斷影響測試進度",
-          priority: "critical",
-          status: "open",
-          assigned_to: "Bob",
-          system_id: "System08",
-          station_id: "station_0",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
+      setIsLoading(true);
       
-      setIssues(mockIssues);
-      setIsLoading(false);
+      const { data, error } = await supabase
+        .from('issues')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setIssues(data);
+      }
     } catch (error) {
+      console.error('Error loading issues:', error);
       toast({
         title: "載入失敗",
         description: "無法載入問題列表",
         variant: "destructive"
       });
+    } finally {
       setIsLoading(false);
+    }
+  };
+
+  const createIssue = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('issues')
+        .insert([{
+          title: newIssue.title,
+          description: newIssue.description,
+          priority: newIssue.priority,
+          status: newIssue.status,
+          assigned_to: newIssue.assigned_to || null,
+          system_id: newIssue.system_id || null,
+          station_id: newIssue.station_id || null
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "問題建立成功",
+        description: "新問題已成功建立"
+      });
+
+      setIsDialogOpen(false);
+      setNewIssue({
+        title: "",
+        description: "",
+        priority: "medium",
+        status: "open",
+        assigned_to: "",
+        system_id: "",
+        station_id: ""
+      });
+      
+      loadIssues();
+    } catch (error) {
+      console.error('Error creating issue:', error);
+      toast({
+        title: "建立失敗",
+        description: "無法建立問題",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updateIssue = async (issue: Issue) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .update({
+          title: issue.title,
+          description: issue.description,
+          priority: issue.priority,
+          status: issue.status,
+          assigned_to: issue.assigned_to || null,
+          system_id: issue.system_id || null,
+          station_id: issue.station_id || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', issue.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "更新成功",
+        description: "問題已成功更新"
+      });
+
+      setEditingIssue(null);
+      loadIssues();
+    } catch (error) {
+      console.error('Error updating issue:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新問題",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteIssue = async (issueId: string) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .delete()
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      toast({
+        title: "刪除成功",
+        description: "問題已成功刪除"
+      });
+
+      loadIssues();
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除問題",
+        variant: "destructive"
+      });
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-danger text-danger-foreground';
-      case 'high': return 'bg-warning text-warning-foreground';
-      case 'medium': return 'bg-info text-info-foreground';
-      case 'low': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'medium': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'low': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-success text-success-foreground';
-      case 'in_progress': return 'bg-warning text-warning-foreground';
-      case 'open': return 'bg-danger text-danger-foreground';
-      case 'closed': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'resolved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'open': return 'bg-red-100 text-red-800 border-red-200';
+      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -160,7 +260,6 @@ export function IssueTracker() {
     const matchesStatus = !filterStatus || filterStatus === "all-status" || issue.status === filterStatus;
     return matchesSearch && matchesPriority && matchesStatus;
   });
-
 
   if (isLoading) {
     return (
@@ -188,19 +287,19 @@ export function IssueTracker() {
             <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
             <div className="flex items-center gap-4 mt-2 text-sm">
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-danger"></div>
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
                 開啟: {issueStats.open}
               </span>
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-warning"></div>
+                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
                 處理中: {issueStats.inProgress}
               </span>
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-success"></div>
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 已解決: {issueStats.resolved}
               </span>
               <span className="flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-danger" />
+                <AlertTriangle className="w-3 h-3 text-red-500" />
                 緊急: {issueStats.critical}
               </span>
             </div>
@@ -215,134 +314,84 @@ export function IssueTracker() {
                 新增問題
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>新增問題</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>問題標題</Label>
-                  <Input placeholder="請輸入問題標題..." />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label htmlFor="title">問題標題</Label>
+                  <Input
+                    id="title"
+                    placeholder="請輸入問題標題..."
+                    value={newIssue.title}
+                    onChange={(e) => setNewIssue(prev => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label htmlFor="description">問題描述</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="請詳細描述問題..."
+                    value={newIssue.description}
+                    onChange={(e) => setNewIssue(prev => ({ ...prev, description: e.target.value }))}
+                  />
                 </div>
                 <div>
-                  <Label>問題描述</Label>
-                  <Textarea placeholder="請詳細描述問題..." />
+                  <Label htmlFor="priority">優先級</Label>
+                  <Select value={newIssue.priority} onValueChange={(value) => setNewIssue(prev => ({ ...prev, priority: value as any }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇優先級" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">低</SelectItem>
+                      <SelectItem value="medium">中</SelectItem>
+                      <SelectItem value="high">高</SelectItem>
+                      <SelectItem value="critical">緊急</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>優先級</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇優先級" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">低</SelectItem>
-                        <SelectItem value="medium">中</SelectItem>
-                        <SelectItem value="high">高</SelectItem>
-                        <SelectItem value="critical">緊急</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>指派給</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇負責人" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Wilson">Wilson</SelectItem>
-                        <SelectItem value="Alice">Alice</SelectItem>
-                        <SelectItem value="Bob">Bob</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <Label htmlFor="status">狀態</Label>
+                  <Select value={newIssue.status} onValueChange={(value) => setNewIssue(prev => ({ ...prev, status: value as any }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇狀態" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">開啟</SelectItem>
+                      <SelectItem value="in_progress">處理中</SelectItem>
+                      <SelectItem value="resolved">已解決</SelectItem>
+                      <SelectItem value="closed">已關閉</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex justify-end gap-2">
+                <div>
+                  <Label htmlFor="assigned_to">指派給</Label>
+                  <Input
+                    id="assigned_to"
+                    placeholder="負責人姓名"
+                    value={newIssue.assigned_to}
+                    onChange={(e) => setNewIssue(prev => ({ ...prev, assigned_to: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="system_id">系統ID</Label>
+                  <Input
+                    id="system_id"
+                    placeholder="相關系統ID（可選）"
+                    value={newIssue.system_id}
+                    onChange={(e) => setNewIssue(prev => ({ ...prev, system_id: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2 flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     取消
                   </Button>
-                  <Button onClick={() => setIsDialogOpen(false)}>
+                  <Button onClick={createIssue} disabled={!newIssue.title || !newIssue.description}>
                     建立問題
                   </Button>
                 </div>
               </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Edit Issue Dialog */}
-          <Dialog open={!!editingIssue} onOpenChange={() => setEditingIssue(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>編輯問題</DialogTitle>
-              </DialogHeader>
-              {editingIssue && (
-                <div className="space-y-4">
-                  <div>
-                    <Label>問題標題</Label>
-                    <Input 
-                      value={editingIssue.title}
-                      onChange={(e) => setEditingIssue({...editingIssue, title: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <Label>問題描述</Label>
-                    <Textarea 
-                      value={editingIssue.description}
-                      onChange={(e) => setEditingIssue({...editingIssue, description: e.target.value})}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>優先級</Label>
-                      <Select 
-                        value={editingIssue.priority} 
-                        onValueChange={(value) => setEditingIssue({...editingIssue, priority: value as any})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">低</SelectItem>
-                          <SelectItem value="medium">中</SelectItem>
-                          <SelectItem value="high">高</SelectItem>
-                          <SelectItem value="critical">緊急</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>狀態</Label>
-                      <Select 
-                        value={editingIssue.status} 
-                        onValueChange={(value) => setEditingIssue({...editingIssue, status: value as any})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">開啟</SelectItem>
-                          <SelectItem value="in_progress">處理中</SelectItem>
-                          <SelectItem value="resolved">已解決</SelectItem>
-                          <SelectItem value="closed">已關閉</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setEditingIssue(null)}>
-                      取消
-                    </Button>
-                    <Button onClick={() => {
-                      toast({
-                        title: "更新成功",
-                        description: "問題已成功更新"
-                      });
-                      setEditingIssue(null);
-                    }}>
-                      儲存
-                    </Button>
-                  </div>
-                </div>
-              )}
             </DialogContent>
           </Dialog>
         </div>
@@ -443,7 +492,7 @@ export function IssueTracker() {
               </div>
               <div className="flex justify-between">
                 <span>待處理</span>
-                <span className="font-medium text-danger">{issueStats.open}</span>
+                <span className="font-medium text-red-600">{issueStats.open}</span>
               </div>
             </div>
           </CardContent>
@@ -487,14 +536,29 @@ export function IssueTracker() {
                   </div>
                 </div>
                 
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setEditingIssue(issue)}
-                >
-                  <Edit className="h-4 w-4 mr-1" />
-                  編輯
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setEditingIssue(issue)}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    編輯
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('確定要刪除這個問題嗎？')) {
+                        deleteIssue(issue.id);
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    刪除
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -510,6 +574,89 @@ export function IssueTracker() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Issue Dialog */}
+      <Dialog open={!!editingIssue} onOpenChange={() => setEditingIssue(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>編輯問題</DialogTitle>
+          </DialogHeader>
+          {editingIssue && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>問題標題</Label>
+                <Input 
+                  value={editingIssue.title}
+                  onChange={(e) => setEditingIssue({...editingIssue, title: e.target.value})}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>問題描述</Label>
+                <Textarea 
+                  value={editingIssue.description}
+                  onChange={(e) => setEditingIssue({...editingIssue, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>優先級</Label>
+                <Select 
+                  value={editingIssue.priority} 
+                  onValueChange={(value) => setEditingIssue({...editingIssue, priority: value as any})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">低</SelectItem>
+                    <SelectItem value="medium">中</SelectItem>
+                    <SelectItem value="high">高</SelectItem>
+                    <SelectItem value="critical">緊急</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>狀態</Label>
+                <Select 
+                  value={editingIssue.status} 
+                  onValueChange={(value) => setEditingIssue({...editingIssue, status: value as any})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">開啟</SelectItem>
+                    <SelectItem value="in_progress">處理中</SelectItem>
+                    <SelectItem value="resolved">已解決</SelectItem>
+                    <SelectItem value="closed">已關閉</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>指派給</Label>
+                <Input 
+                  value={editingIssue.assigned_to || ''}
+                  onChange={(e) => setEditingIssue({...editingIssue, assigned_to: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>系統ID</Label>
+                <Input 
+                  value={editingIssue.system_id || ''}
+                  onChange={(e) => setEditingIssue({...editingIssue, system_id: e.target.value})}
+                />
+              </div>
+              <div className="col-span-2 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditingIssue(null)}>
+                  取消
+                </Button>
+                <Button onClick={() => updateIssue(editingIssue)}>
+                  儲存
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
