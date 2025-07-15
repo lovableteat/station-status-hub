@@ -1,4 +1,3 @@
-
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +32,7 @@ interface MachineStatus {
     station1: number;
     station2: number;
     station3: number;
+    station4: number;
   };
 }
 
@@ -93,7 +93,7 @@ export function ProductionMonitor() {
     return ongoingItem?.item_name || '待開始';
   };
 
-  // Calculate station progress - only for stations 0-3
+  // Calculate station progress for Station 0-4
   const calculateStationProgress = (stationId: string, systemId: string) => {
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
@@ -106,25 +106,23 @@ export function ProductionMonitor() {
     return Math.round((completedItems / stationTestItems.length) * 100);
   };
 
-  // Enhanced overall progress calculation - only for stations 0-3
+  // Enhanced overall progress calculation
   const calculateOverallProgress = (systemId: string) => {
-    // Get only stations 0-3 dynamically
-    const availableStations = stations.filter(station => 
+    const targetStations = stations.filter(station => 
       station.id && typeof station.id === 'string' && 
-      station.name && (
-        station.name.includes('Station 0') || 
-        station.name.includes('Station 1') || 
-        station.name.includes('Station 2') || 
-        station.name.includes('Station 3')
-      )
+      (station.name.includes('Station 0') || station.name.includes('組裝') ||
+       station.name.includes('Station 1') || station.name.includes('開機') ||
+       station.name.includes('Station 2') || station.name.includes('FW') ||
+       station.name.includes('Station 3') || station.name.includes('EE') ||
+       station.name.includes('Station 4') || station.name.includes('NV TEST'))
     );
     
-    if (availableStations.length === 0) return 0;
+    if (targetStations.length === 0) return 0;
     
     let totalProgress = 0;
     let validStations = 0;
     
-    availableStations.forEach(station => {
+    targetStations.forEach(station => {
       const stationProgress = calculateStationProgress(station.id, systemId);
       totalProgress += stationProgress;
       validStations++;
@@ -151,27 +149,19 @@ export function ProductionMonitor() {
     const currentTestItem = currentStationData ? 
       getCurrentTestItem(system.id, currentStationData.id) : '待開始';
 
-    // Only get stations 0-3 for progress tracking
-    const stationProgressData = stations
-      .filter(station => 
-        station.name.includes('Station 0') || 
-        station.name.includes('Station 1') || 
-        station.name.includes('Station 2') || 
-        station.name.includes('Station 3')
-      )
-      .reduce((acc: any, station, index) => {
-        const stationKey = `station${index}`;
-        acc[stationKey] = calculateStationProgress(station.id, system.id);
-        return acc;
-      }, {});
-
     return {
       id: system.id,
       name: system.system_name,
       status,
       currentStation: currentStationName,
       currentTestItem,
-      stationProgress: stationProgressData
+      stationProgress: {
+        station0: calculateStationProgress(stations.find(s => s.name.includes('Station 0') || s.name.includes('組裝'))?.id || '', system.id),
+        station1: calculateStationProgress(stations.find(s => s.name.includes('Station 1') || s.name.includes('開機'))?.id || '', system.id),
+        station2: calculateStationProgress(stations.find(s => s.name.includes('Station 2') || s.name.includes('FW'))?.id || '', system.id),
+        station3: calculateStationProgress(stations.find(s => s.name.includes('Station 3') || s.name.includes('EE'))?.id || '', system.id),
+        station4: calculateStationProgress(stations.find(s => s.name.includes('Station 4') || s.name.includes('NV TEST'))?.id || '', system.id),
+      }
     };
   };
 
@@ -224,14 +214,6 @@ export function ProductionMonitor() {
     const systemOverallProgress = calculateOverallProgress(system.id);
     const hasSystemError = progress.some(p => p.system_id === system.id && p.status === 'Error');
 
-    // Filter stations to only show 0-3
-    const filteredStations = stations.filter(station => 
-      station.name.includes('Station 0') || 
-      station.name.includes('Station 1') || 
-      station.name.includes('Station 2') || 
-      station.name.includes('Station 3')
-    );
-
     return (
       <div className="p-6 space-y-6">
         {/* Header */}
@@ -252,17 +234,23 @@ export function ProductionMonitor() {
           </Badge>
         </div>
 
-        {/* Video-style Station Flow - Only stations 0-3 */}
+        {/* Video-style Station Flow - 只顯示 Station 0-4 */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Monitor className="h-5 w-5" />
-              測試流程監控 (Station 0-3)
+              測試流程監控 (Station 0-4)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`grid gap-4 grid-cols-4`}>
-              {filteredStations.map((station, index) => {
+            <div className="grid grid-cols-5 gap-4">
+              {stations.filter(station => 
+                station.name.includes('Station 0') || station.name.includes('組裝') ||
+                station.name.includes('Station 1') || station.name.includes('開機') ||
+                station.name.includes('Station 2') || station.name.includes('FW') ||
+                station.name.includes('Station 3') || station.name.includes('EE') ||
+                station.name.includes('Station 4') || station.name.includes('NV TEST')
+              ).map((station, index) => {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
                 const isCompleted = stationProgress === 100;
@@ -327,7 +315,7 @@ export function ProductionMonitor() {
             
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度 (Station 0-3): {systemOverallProgress}%
+                整體進度 (Station 0-4): {systemOverallProgress}%
               </div>
               <Progress value={systemOverallProgress} className="mt-2 h-3" />
             </div>
@@ -386,7 +374,7 @@ export function ProductionMonitor() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">即時機台狀態監控 - Station 0-3 測試進度總覽</p>
+            <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -434,18 +422,24 @@ export function ProductionMonitor() {
                   </div>
                 </div>
 
-                {/* Station Progress Overview - Only stations 0-3 */}
+                {/* Station Progress Overview */}
                 <div className="space-y-2 mb-4">
-                  <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤 (S0-S3)</h4>
-                  <div className="grid grid-cols-4 gap-1">
-                    {Object.entries(machine.stationProgress).map(([stationKey, stationProgress], index) => (
+                  <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤</h4>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[
+                      { name: 'S0', progress: machine.stationProgress.station0 },
+                      { name: 'S1', progress: machine.stationProgress.station1 },
+                      { name: 'S2', progress: machine.stationProgress.station2 },
+                      { name: 'S3', progress: machine.stationProgress.station3 },
+                      { name: 'S4', progress: machine.stationProgress.station4 },
+                    ].map((station, index) => (
                       <div key={index} className="text-center">
-                        <div className="text-xs text-muted-foreground mb-1">S{index}</div>
+                        <div className="text-xs text-muted-foreground mb-1">{station.name}</div>
                         <div className={`h-2 rounded-full ${
-                          stationProgress === 100 ? 'bg-green-500' :
-                          stationProgress >= 1 ? 'bg-yellow-500' : 'bg-gray-500'
+                          station.progress === 100 ? 'bg-green-500' :
+                          station.progress >= 1 ? 'bg-yellow-500' : 'bg-gray-500'
                         }`} />
-                        <div className="text-xs mt-1">{stationProgress}%</div>
+                        <div className="text-xs mt-1">{station.progress}%</div>
                       </div>
                     ))}
                   </div>
