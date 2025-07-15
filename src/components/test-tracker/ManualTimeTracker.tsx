@@ -32,12 +32,8 @@ export function ManualTimeTracker({
     const start = new Date(currentStartedAt);
     const end = new Date(currentCompletedAt);
     const diffMs = end.getTime() - start.getTime();
-    
-    // 確保計算出的時間是正數
-    if (diffMs < 0) return 0;
-    
-    const diffHours = diffMs / (1000 * 60 * 60);
-    return Math.round(diffHours * 100) / 100; // 保留兩位小數
+    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+    return diffHours;
   };
 
   const handleStartTimer = async () => {
@@ -58,8 +54,7 @@ export function ManualTimeTracker({
           status: 'On-going',
           progress_percent: 0,
           notes: '',
-          completed_at: null, // 清除完成時間
-          actual_hours: 0 // 重置實際時長
+          completed_at: null // 清除完成時間
         }, {
           onConflict: 'system_id,station_id,item_id'
         });
@@ -85,24 +80,11 @@ export function ManualTimeTracker({
   };
 
   const handleStopTimer = async () => {
-    if (isUpdating || !currentStartedAt) return;
+    if (isUpdating) return;
     
     try {
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
-      
-      // 計算實際處理時間
-      const startTime = new Date(currentStartedAt);
-      const endTime = new Date(currentTime);
-      const diffMs = endTime.getTime() - startTime.getTime();
-      const actualHours = Math.max(0, diffMs / (1000 * 60 * 60)); // 確保時間為正數
-      
-      console.log('Calculating time:', {
-        startTime: currentStartedAt,
-        endTime: currentTime,
-        diffMs,
-        actualHours
-      });
       
       // 更新測試進度，設定完成時間和狀態
       const { error } = await supabase
@@ -115,20 +97,16 @@ export function ManualTimeTracker({
           completed_at: currentTime,
           status: 'Done',
           progress_percent: 100,
-          notes: '',
-          actual_hours: actualHours
+          notes: ''
         }, {
           onConflict: 'system_id,station_id,item_id'
         });
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "計時結束",
-        description: `測試項目已完成，處理時間: ${actualHours.toFixed(2)} 小時`,
+        description: "測試項目已完成並儲存",
       });
 
       onTimeUpdate();
@@ -183,9 +161,9 @@ export function ManualTimeTracker({
           <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
             完成
           </Badge>
-          {duration !== null && duration > 0 && (
+          {duration && (
             <span className="text-xs text-muted-foreground">
-              {duration < 1 ? `${Math.round(duration * 60)} 分鐘` : `${duration.toFixed(1)} 小時`}
+              {duration} 小時
             </span>
           )}
         </div>
