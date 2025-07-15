@@ -9,7 +9,6 @@ import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
-import { ManualTimeTracker } from "./ManualTimeTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,6 +77,18 @@ export function TestProgressTable({
     } catch {
       return '-';
     }
+  };
+
+  // 計算處理時長的輔助函數
+  const calculateProcessingTime = (systemId: string, stationId: string, itemId: string) => {
+    const itemProgress = getProgressForSystemItem(systemId, stationId, itemId);
+    if (!itemProgress?.started_at || !itemProgress?.completed_at) return null;
+    
+    const start = new Date(itemProgress.started_at);
+    const end = new Date(itemProgress.completed_at);
+    const diffMs = end.getTime() - start.getTime();
+    const diffHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+    return diffHours;
   };
 
   // 手動計時的處理時間計算邏輯
@@ -229,24 +240,31 @@ export function TestProgressTable({
                             getStatusColor={getStatusColor}
                             systemId={system.id}
                             stationId={station.id}
+                            onTimeUpdate={onSystemUpdate}
                           />
                         </div>
                         
-                        {/* 顯示每個測試項目的手動計時控制 */}
+                        {/* 顯示每個測試項目的處理時長 */}
                         <div className="space-y-2 mb-3">
                           {stationItems.map(item => {
+                            const processingHours = calculateProcessingTime(system.id, station.id, item.id);
                             const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                            
                             return (
                               <div key={item.id} className="flex items-center justify-between text-sm bg-white/50 rounded p-2">
                                 <span className="font-medium">{item.item_name}</span>
-                                <ManualTimeTracker
-                                  systemId={system.id}
-                                  stationId={station.id}
-                                  itemId={item.id}
-                                  currentStartedAt={itemProgress?.started_at}
-                                  currentCompletedAt={itemProgress?.completed_at}
-                                  onTimeUpdate={onSystemUpdate}
-                                />
+                                <div className="flex items-center gap-2">
+                                  {itemProgress?.status && (
+                                    <Badge variant="outline" className={`${getStatusColor(itemProgress.status)} text-xs`}>
+                                      {itemProgress.status}
+                                    </Badge>
+                                  )}
+                                  {processingHours !== null && (
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                      {processingHours} 小時
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -392,27 +410,25 @@ export function TestProgressTable({
                               getStatusColor={getStatusColor}
                               systemId={system.id}
                               stationId={station.id}
+                              onTimeUpdate={onSystemUpdate}
                             />
                           </div>
                           <Progress value={overallPercent} className="h-2" />
                           
-                          {/* 顯示每個測試項目的計時控制 */}
+                          {/* 顯示每個測試項目的處理時長 */}
                           <div className="space-y-1">
                             {stationItems.map(item => {
-                              const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                              const processingHours = calculateProcessingTime(system.id, station.id, item.id);
                               return (
                                 <div key={item.id} className="flex items-center justify-between text-xs">
                                   <span className="truncate max-w-[80px]" title={item.item_name}>
                                     {item.item_name}
                                   </span>
-                                  <ManualTimeTracker
-                                    systemId={system.id}
-                                    stationId={station.id}
-                                    itemId={item.id}
-                                    currentStartedAt={itemProgress?.started_at}
-                                    currentCompletedAt={itemProgress?.completed_at}
-                                    onTimeUpdate={onSystemUpdate}
-                                  />
+                                  {processingHours !== null && (
+                                    <span className="text-muted-foreground font-medium">
+                                      {processingHours}h
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })}
