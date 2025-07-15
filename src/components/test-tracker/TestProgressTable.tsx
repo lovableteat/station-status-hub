@@ -7,23 +7,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { PlusCircle, Edit, Clock } from "lucide-react";
+import { Edit, Clock } from "lucide-react";
 
 export function TestProgressTable() {
   const { systems, stations, testItems, progress, isLoading } = useUnifiedData();
   const [editingProgress, setEditingProgress] = useState<any>(null);
   const [selectedSystem, setSelectedSystem] = useState<string>("");
 
-  // 計算系統的總處理時長
+  // 計算系統的總處理時長（基於實際測項處理時間）
   const calculateSystemTotalHours = (systemId: string) => {
     const systemProgress = progress.filter(p => p.system_id === systemId);
     return systemProgress.reduce((total, p) => {
+      // 使用 actual_hours 如果存在，否則嘗試從時間戳計算
+      if (p.actual_hours && p.actual_hours > 0) {
+        return total + p.actual_hours;
+      }
+      
       const startTime = p.started_at ? new Date(p.started_at) : null;
       const endTime = p.completed_at ? new Date(p.completed_at) : null;
       
       if (startTime && endTime) {
         const diffMs = endTime.getTime() - startTime.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
+        const diffHours = Math.max(0, diffMs / (1000 * 60 * 60)); // 確保時間為正數
         return total + diffHours;
       }
       return total;
