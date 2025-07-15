@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
-import { SimpleTestProgressTable } from "./SimpleTestProgressTable";
+import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
 import {
@@ -67,28 +68,35 @@ export function TestTracker() {
 
   const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
     try {
+      // 找到對應的station，檢查是否為Station 0-4
       const station = stations.find(s => s.id === stationId);
       const isStation0To4 = station && station.station_order >= 0 && station.station_order <= 4;
       
       const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
       const currentTime = new Date().toISOString();
       
+      // 準備更新數據
       const updates: any = {
         status: editValues.status,
         progress_percent: editValues.progress_percent,
         notes: editValues.notes
       };
 
+      // 只對Station 0-4自動記錄時間
       if (isStation0To4) {
+        // 如果狀態從 "Not Start" 變為 "On-going"，設定開始時間
         if (existingProgress?.status === 'Not Start' && editValues.status === 'On-going') {
           updates.started_at = currentTime;
         }
+        // 如果狀態變為 "Done"，設定完成時間
         if (editValues.status === 'Done' && existingProgress?.status !== 'Done') {
           updates.completed_at = currentTime;
+          // 如果沒有開始時間，也設定開始時間
           if (!existingProgress?.started_at) {
             updates.started_at = currentTime;
           }
         }
+        // 保留現有時間（如果不是狀態變更觸發）
         if (editValues.started_at) {
           updates.started_at = editValues.started_at;
         }
@@ -96,6 +104,7 @@ export function TestTracker() {
           updates.completed_at = editValues.completed_at;
         }
       } else {
+        // 非Station 0-4的站點，保持手動設定的時間
         updates.started_at = editValues.started_at;
         updates.completed_at = editValues.completed_at;
       }
@@ -218,7 +227,7 @@ export function TestTracker() {
 
       {/* Test Progress Table */}
       <div data-testtracker-table>
-        <SimpleTestProgressTable
+        <TestProgressTable
           filteredSystems={filteredSystems}
           stations={stations}
           items={items}
