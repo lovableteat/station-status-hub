@@ -32,7 +32,7 @@ export function StationAverageTimeChart() {
     loadStationTimeRecords();
   };
 
-  // 準備圖表數據 - 動態顯示所有站點的實際平均處理時間（包含Station 4）
+  // 準備圖表數據 - 動態顯示所有站點的實際平均處理時間
   const chartData = stations
     .sort((a, b) => a.station_order - b.station_order)
     .map(station => {
@@ -70,7 +70,7 @@ export function StationAverageTimeChart() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          各站平均處理時間分析 (包含Station 4)
+          各站平均處理時間分析
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -171,10 +171,10 @@ export function StationAverageTimeChart() {
           )}
         </div>
 
-        {/* 統計摘要 - 包含Station 4 */}
+        {/* 統計摘要 */}
         {chartData.length > 0 && (
           <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-4">各站點處理時間統計（包含Station 4）</h3>
+            <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
             <div className={`grid grid-cols-1 gap-4 ${chartData.length <= 3 ? 'md:grid-cols-3' : chartData.length <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
               {chartData.map((data, index) => (
                 <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">

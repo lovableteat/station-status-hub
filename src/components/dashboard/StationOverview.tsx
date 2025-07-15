@@ -33,8 +33,12 @@ export function StationOverview() {
   // Calculate metrics based on actual data
   const totalSystems = systems.length;
   
-  // Calculate single machine test time (sum of all station estimated times)
-  const totalEstimatedMinutes = testItems.reduce((sum, item) => sum + (item.estimated_minutes || 30), 0);
+  // 修正單機測試時間計算 - 改為計算所有測項的預估時間總和
+  const totalEstimatedMinutes = testItems.reduce((sum, item) => {
+    // 使用預設值30分鐘，如果沒有estimated_minutes的話
+    const itemMinutes = item.estimated_minutes ?? 30;
+    return sum + itemMinutes;
+  }, 0);
   const singleMachineTestHours = Number((totalEstimatedMinutes / 60).toFixed(1));
   
   // Calculate actual completion status
