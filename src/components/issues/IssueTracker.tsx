@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,7 +112,13 @@ export function IssueTracker() {
       if (error) throw error;
 
       if (data) {
-        setIssues(data);
+        // Properly cast the data to match our Issue interface
+        const typedIssues: Issue[] = data.map(item => ({
+          ...item,
+          priority: item.priority as "low" | "medium" | "high" | "critical",
+          status: item.status as "open" | "in_progress" | "resolved" | "closed"
+        }));
+        setIssues(typedIssues);
       }
     } catch (error) {
       console.error('Error loading issues:', error);
