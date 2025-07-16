@@ -49,9 +49,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
     priority: "medium",
     status: "open",
     assigned_to: "",
-    system_id: "",
-    station_id: "",
-    test_item_id: ""
+    system_id: undefined,
+    station_id: undefined,
+    test_item_id: undefined
   });
 
   // 照片上傳相關狀態
@@ -217,9 +217,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
           priority: newIssue.priority,
           status: newIssue.status,
           assigned_to: newIssue.assigned_to || null,
-          system_id: newIssue.system_id || null,
-          station_id: newIssue.station_id || null,
-          test_item_id: newIssue.test_item_id || null
+          system_id: (newIssue.system_id && newIssue.system_id !== "none") ? newIssue.system_id : null,
+          station_id: (newIssue.station_id && newIssue.station_id !== "none") ? newIssue.station_id : null,
+          test_item_id: (newIssue.test_item_id && newIssue.test_item_id !== "none") ? newIssue.test_item_id : null
         }])
         .select()
         .single();
@@ -243,9 +243,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
         priority: "medium",
         status: "open",
         assigned_to: "",
-        system_id: "",
-        station_id: "",
-        test_item_id: ""
+        system_id: undefined,
+        station_id: undefined,
+        test_item_id: undefined
       });
       setSelectedFiles([]);
       setUploadProgress({});
@@ -350,7 +350,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   <SelectValue placeholder="選擇機台" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   {systems.map(system => (
                     <SelectItem key={system.id} value={system.id}>
                       {system.system_name}
@@ -367,7 +367,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   <SelectValue placeholder="選擇站點" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   {stations.map(station => (
                     <SelectItem key={station.id} value={station.id}>
                       {station.station_name}
@@ -388,7 +388,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   <SelectValue placeholder="選擇測項" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   {filteredTestItems.map(item => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.item_name}
