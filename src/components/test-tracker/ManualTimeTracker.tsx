@@ -86,6 +86,15 @@ export function ManualTimeTracker({
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
       
+      // 計算實際小時數
+      let actualHours = 0;
+      if (currentStartedAt) {
+        const start = new Date(currentStartedAt);
+        const end = new Date(currentTime);
+        const diffMs = end.getTime() - start.getTime();
+        actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4)); // 保留4位小數精度
+      }
+      
       // 更新測試進度，設定完成時間和狀態
       const { error } = await supabase
         .from('test_progress')
@@ -97,6 +106,7 @@ export function ManualTimeTracker({
           completed_at: currentTime,
           status: 'Done',
           progress_percent: 100,
+          actual_hours: actualHours,
           notes: ''
         }, {
           onConflict: 'system_id,station_id,item_id'

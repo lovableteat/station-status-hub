@@ -244,10 +244,19 @@ export function TestProgressTable({
                           />
                         </div>
                         
-                        {/* 顯示每個測試項目的處理時長 */}
+                        {/* 顯示總處理時長 */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">總處理時長:</span>
+                             <span className="font-medium">
+                               {processingTime ? `${processingTime.totalHours} 小時` : '0 小時'}
+                             </span>
+                          </div>
+                        </div>
+                        
+                        {/* 顯示每個測試項目狀態（不顯示個別時長） */}
                         <div className="space-y-2 mb-3">
                           {stationItems.map(item => {
-                            const processingHours = calculateProcessingTime(system.id, station.id, item.id);
                             const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
                             
                             return (
@@ -258,11 +267,6 @@ export function TestProgressTable({
                                     <Badge variant="outline" className={`${getStatusColor(itemProgress.status)} text-xs`}>
                                       {itemProgress.status}
                                     </Badge>
-                                  )}
-                                  {processingHours !== null && (
-                                    <span className="text-xs text-muted-foreground font-medium">
-                                      {processingHours} 小時
-                                    </span>
                                   )}
                                 </div>
                               </div>
