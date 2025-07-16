@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, Edit, AlertTriangle, Bug, Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
+import { IssueCreateDialog } from "./IssueCreateDialog";
 import { BackButton } from "../common/BackButton";
 
 interface Issue {
@@ -312,93 +313,7 @@ export function IssueTracker() {
         </div>
         <div className="flex gap-2">
           <IssuePDFExportManager issues={filteredIssues} />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                新增問題
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>新增問題</DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label htmlFor="title">問題標題</Label>
-                  <Input
-                    id="title"
-                    placeholder="請輸入問題標題..."
-                    value={newIssue.title}
-                    onChange={(e) => setNewIssue(prev => ({ ...prev, title: e.target.value }))}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label htmlFor="description">問題描述</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="請詳細描述問題..."
-                    value={newIssue.description}
-                    onChange={(e) => setNewIssue(prev => ({ ...prev, description: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="priority">優先級</Label>
-                  <Select value={newIssue.priority} onValueChange={(value) => setNewIssue(prev => ({ ...prev, priority: value as any }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="選擇優先級" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">低</SelectItem>
-                      <SelectItem value="medium">中</SelectItem>
-                      <SelectItem value="high">高</SelectItem>
-                      <SelectItem value="critical">緊急</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="status">狀態</Label>
-                  <Select value={newIssue.status} onValueChange={(value) => setNewIssue(prev => ({ ...prev, status: value as any }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="選擇狀態" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">開啟</SelectItem>
-                      <SelectItem value="in_progress">處理中</SelectItem>
-                      <SelectItem value="resolved">已解決</SelectItem>
-                      <SelectItem value="closed">已關閉</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="assigned_to">指派給</Label>
-                  <Input
-                    id="assigned_to"
-                    placeholder="負責人姓名"
-                    value={newIssue.assigned_to}
-                    onChange={(e) => setNewIssue(prev => ({ ...prev, assigned_to: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="system_id">系統ID</Label>
-                  <Input
-                    id="system_id"
-                    placeholder="相關系統ID（可選）"
-                    value={newIssue.system_id}
-                    onChange={(e) => setNewIssue(prev => ({ ...prev, system_id: e.target.value }))}
-                  />
-                </div>
-                <div className="col-span-2 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    取消
-                  </Button>
-                  <Button onClick={createIssue} disabled={!newIssue.title || !newIssue.description}>
-                    建立問題
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <IssueCreateDialog onIssueCreated={loadIssues} />
         </div>
       </div>
 
