@@ -237,19 +237,18 @@ export function ProductionMonitor() {
         {/* Video-style Station Flow - 只顯示 Station 0-4 */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Monitor className="h-5 w-5" />
-              測試流程監控 (Station 0-4)
-            </CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="h-5 w-5" />
+                測試流程監控 (Station 0-3)
+              </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               {stations.filter(station => 
                 station.name.includes('Station 0') || station.name.includes('組裝') ||
                 station.name.includes('Station 1') || station.name.includes('開機') ||
                 station.name.includes('Station 2') || station.name.includes('FW') ||
-                station.name.includes('Station 3') || station.name.includes('EE') ||
-                station.name.includes('Station 4') || station.name.includes('NV TEST')
+                station.name.includes('Station 3') || station.name.includes('EE')
               ).map((station, index) => {
                 const isActive = system.current_station === station.name;
                 const stationProgress = calculateStationProgress(station.id, system.id);
@@ -315,7 +314,7 @@ export function ProductionMonitor() {
             
             <div className="mt-6 text-center">
               <div className="text-2xl font-bold text-primary">
-                整體進度 (Station 0-4): {systemOverallProgress}%
+                整體進度 (Station 0-3): {systemOverallProgress}%
               </div>
               <Progress value={systemOverallProgress} className="mt-2 h-3" />
             </div>
@@ -374,7 +373,7 @@ export function ProductionMonitor() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">生產監控牆</h1>
-            <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-4)</p>
+            <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-3)</p>
           </div>
         </div>
         <div className="flex gap-2">
