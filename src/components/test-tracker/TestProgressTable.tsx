@@ -245,14 +245,14 @@ export function TestProgressTable({
                         </div>
                         
                         {/* 顯示總處理時長 */}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">總處理時長:</span>
-                             <span className="font-medium">
-                               {processingTime ? `${processingTime.totalHours} 小時` : '0 小時'}
-                             </span>
-                          </div>
-                        </div>
+                         <div className="mb-3">
+                           <div className="flex items-center justify-between text-sm">
+                             <span className="text-muted-foreground">總時長:</span>
+                              <span className="font-medium">
+                                {processingTime ? `${processingTime.totalHours} h` : '0 h'}
+                              </span>
+                           </div>
+                         </div>
                         
                         {/* 顯示每個測試項目狀態（不顯示個別時長） */}
                         <div className="space-y-2 mb-3">
@@ -291,10 +291,10 @@ export function TestProgressTable({
                                 <span className="text-muted-foreground">站點完成:</span>
                                 <span className="font-medium">{formatTime(processingTime.endTime.toISOString())}</span>
                               </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">總處理時長:</span>
-                                <span className="font-medium text-primary">{processingTime.totalHours} 小時</span>
-                              </div>
+                               <div className="flex justify-between items-center text-sm">
+                                 <span className="text-muted-foreground">總時長:</span>
+                                 <span className="font-medium text-primary">{processingTime.totalHours} h</span>
+                               </div>
                               <div className="flex justify-between items-center text-sm">
                                 <span className="text-muted-foreground">完成項目數:</span>
                                 <span className="font-medium">{processingTime.completedItemsCount}</span>
@@ -438,12 +438,11 @@ export function TestProgressTable({
                             })}
                           </div>
                           
-                          {processingTime && (
-                            <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
-                              <div>總時長: {processingTime.totalHours}h</div>
-                              <div>完成: {processingTime.completedItemsCount}項</div>
-                            </div>
-                          )}
+                           {processingTime && (
+                             <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
+                               <div>總時長: {processingTime.totalHours} h</div>
+                             </div>
+                           )}
                         </div>
                       </div>
                     );
