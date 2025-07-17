@@ -170,7 +170,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 rounded bg-station-error"></div>
-            <span>進度嚴重落後 (<30%)</span>
+            <span>進度嚴重落後 (&lt;30%)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 rounded bg-station-idle"></div>
