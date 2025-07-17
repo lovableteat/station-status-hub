@@ -1,126 +1,101 @@
+
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Edit, AlertTriangle, Bug, Download, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { IssuePDFExportManager } from "./IssuePDFExportManager";
+import { supabase } from "@/integrations/supabase/client";
+import { 
+  Bug, 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock, 
+  Plus, 
+  Search, 
+  Filter,
+  Eye,
+  Download,
+  Image as ImageIcon,
+  X
+} from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
-import { BackButton } from "../common/BackButton";
+import { BackButton } from "@/components/common/BackButton";
 
 interface Issue {
   id: string;
   title: string;
   description: string;
-  priority: "low" | "medium" | "high" | "critical";
-  status: "open" | "in_progress" | "resolved" | "closed";
-  assigned_to?: string;
-  system_id?: string;
-  station_id?: string;
+  priority: string;
+  status: string;
+  assigned_to: string;
   created_at: string;
   updated_at: string;
-  test_item_id?: string;
-}
-
-interface NewIssue {
-  title: string;
-  description: string;
-  priority: "low" | "medium" | "high" | "critical";
-  status: "open" | "in_progress" | "resolved" | "closed";
-  assigned_to: string;
   system_id?: string;
   station_id?: string;
+  test_item_id?: string;
+  system_name?: string;
+  station_name?: string;
+  test_item_name?: string;
+  attachments?: Array<{
+    id: string;
+    file_name: string;
+    file_path: string;
+    file_size: number;
+    file_type: string;
+  }>;
 }
 
 export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterPriority, setFilterPriority] = useState("all-priorities");
-  const [filterStatus, setFilterStatus] = useState("all-status");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // 新增問題表單狀態
-  const [newIssue, setNewIssue] = useState<NewIssue>({
-    title: "",
-    description: "",
-    priority: "medium",
-    status: "open",
-    assigned_to: "",
-    system_id: "",
-    station_id: ""
-  });
-  
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string>("");
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  
-  // Calculate issue statistics
-  const issueStats = {
-    total: issues.length,
-    open: issues.filter(i => i.status === 'open').length,
-    inProgress: issues.filter(i => i.status === 'in_progress').length,
-    resolved: issues.filter(i => i.status === 'resolved').length,
-    critical: issues.filter(i => i.priority === 'critical').length,
-    bySystem: issues.reduce((acc, issue) => {
-      const system = issue.system_id || 'Unknown';
-      acc[system] = (acc[system] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-    byStation: issues.reduce((acc, issue) => {
-      const station = issue.station_id || 'Unknown';
-      acc[station] = (acc[station] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  };
 
   useEffect(() => {
     loadIssues();
-    
-    // Listen for navigation events from production monitor
-    const handleNavigation = (event: CustomEvent) => {
-      if (event.detail.module === 'issues' && event.detail.params) {
-        const { station, system } = event.detail.params;
-        if (station) {
-          setSearchTerm(station);
-        }
-        if (system) {
-          setSearchTerm(system);
-        }
-      }
-    };
-
-    window.addEventListener('navigate', handleNavigation as EventListener);
-    return () => {
-      window.removeEventListener('navigate', handleNavigation as EventListener);
-    };
   }, []);
+
+  useEffect(() => {
+    filterIssues();
+  }, [issues, searchTerm, statusFilter, priorityFilter]);
 
   const loadIssues = async () => {
     try {
-      setIsLoading(true);
-      
+      setLoading(true);
       const { data, error } = await supabase
-        .from('issues')
+        .from('issue_details')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      if (data) {
-        // Properly cast the data to match our Issue interface
-        const typedIssues: Issue[] = data.map(item => ({
-          ...item,
-          priority: item.priority as "low" | "medium" | "high" | "critical",
-          status: item.status as "open" | "in_progress" | "resolved" | "closed"
-        }));
-        setIssues(typedIssues);
-      }
+      // Load attachments for each issue
+      const issuesWithAttachments = await Promise.all(
+        (data || []).map(async (issue) => {
+          const { data: attachments } = await supabase
+            .from('issue_attachments')
+            .select('*')
+            .eq('issue_id', issue.id);
+
+          return {
+            ...issue,
+            attachments: attachments || []
+          };
+        })
+      );
+
+      setIssues(issuesWithAttachments);
     } catch (error) {
       console.error('Error loading issues:', error);
       toast({
@@ -129,150 +104,128 @@ export function IssueTracker() {
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const createIssue = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('issues')
-        .insert([{
-          title: newIssue.title,
-          description: newIssue.description,
-          priority: newIssue.priority,
-          status: newIssue.status,
-          assigned_to: newIssue.assigned_to || null,
-          system_id: newIssue.system_id || null,
-          station_id: newIssue.station_id || null
-        }])
-        .select()
-        .single();
+  const filterIssues = () => {
+    let filtered = issues;
 
-      if (error) throw error;
-
-      toast({
-        title: "問題建立成功",
-        description: "新問題已成功建立"
-      });
-
-      setIsDialogOpen(false);
-      setNewIssue({
-        title: "",
-        description: "",
-        priority: "medium",
-        status: "open",
-        assigned_to: "",
-        system_id: "",
-        station_id: ""
-      });
-      
-      loadIssues();
-    } catch (error) {
-      console.error('Error creating issue:', error);
-      toast({
-        title: "建立失敗",
-        description: "無法建立問題",
-        variant: "destructive"
-      });
+    if (searchTerm) {
+      filtered = filtered.filter(issue =>
+        issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.system_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.station_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
-  };
 
-  const updateIssue = async (issue: Issue) => {
-    try {
-      const { error } = await supabase
-        .from('issues')
-        .update({
-          title: issue.title,
-          description: issue.description,
-          priority: issue.priority,
-          status: issue.status,
-          assigned_to: issue.assigned_to || null,
-          system_id: issue.system_id || null,
-          station_id: issue.station_id || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', issue.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "更新成功",
-        description: "問題已成功更新"
-      });
-
-      setEditingIssue(null);
-      loadIssues();
-    } catch (error) {
-      console.error('Error updating issue:', error);
-      toast({
-        title: "更新失敗",
-        description: "無法更新問題",
-        variant: "destructive"
-      });
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(issue => issue.status === statusFilter);
     }
-  };
 
-  const deleteIssue = async (issueId: string) => {
-    try {
-      const { error } = await supabase
-        .from('issues')
-        .delete()
-        .eq('id', issueId);
-
-      if (error) throw error;
-
-      toast({
-        title: "刪除成功",
-        description: "問題已成功刪除"
-      });
-
-      loadIssues();
-    } catch (error) {
-      console.error('Error deleting issue:', error);
-      toast({
-        title: "刪除失敗",
-        description: "無法刪除問題",
-        variant: "destructive"
-      });
+    if (priorityFilter !== "all") {
+      filtered = filtered.filter(issue => issue.priority === priorityFilter);
     }
+
+    setFilteredIssues(filtered);
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
-      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'low': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case "high": return "bg-red-100 text-red-800";
+      case "medium": return "bg-yellow-100 text-yellow-800";
+      case "low": return "bg-green-100 text-green-800";
+      default: return "bg-gray-100 text-gray-800";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-200';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'open': return 'bg-red-100 text-red-800 border-red-200';
-      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case "open": return "bg-red-100 text-red-800";
+      case "in_progress": return "bg-blue-100 text-blue-800";
+      case "resolved": return "bg-green-100 text-green-800";
+      case "closed": return "bg-gray-100 text-gray-800";
+      default: return "bg-gray-100 text-gray-800";
     }
   };
 
-  const filteredIssues = issues.filter(issue => {
-    const matchesSearch = issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         issue.assigned_to?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPriority = !filterPriority || filterPriority === "all-priorities" || issue.priority === filterPriority;
-    const matchesStatus = !filterStatus || filterStatus === "all-status" || issue.status === filterStatus;
-    return matchesSearch && matchesPriority && matchesStatus;
-  });
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "open": return <AlertTriangle className="h-4 w-4" />;
+      case "in_progress": return <Clock className="h-4 w-4" />;
+      case "resolved": return <CheckCircle className="h-4 w-4" />;
+      case "closed": return <CheckCircle className="h-4 w-4" />;
+      default: return <Bug className="h-4 w-4" />;
+    }
+  };
 
-  if (isLoading) {
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "open": return "開啟";
+      case "in_progress": return "處理中";
+      case "resolved": return "已解決";
+      case "closed": return "已關閉";
+      default: return status;
+    }
+  };
+
+  const getPriorityText = (priority: string) => {
+    switch (priority) {
+      case "high": return "高";
+      case "medium": return "中";
+      case "low": return "低";
+      default: return priority;
+    }
+  };
+
+  const handleImagePreview = (imagePath: string) => {
+    setPreviewImage(imagePath);
+    setShowImagePreview(true);
+  };
+
+  const handleImageDownload = async (attachment: any) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('issue-attachments')
+        .download(attachment.file_path);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "下載成功",
+        description: `檔案 ${attachment.file_name} 已下載`
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "下載失敗",
+        description: "無法下載檔案",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const isImageFile = (fileName: string) => {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+  };
+
+  if (loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-20 bg-muted rounded"></div>
             ))}
@@ -290,193 +243,154 @@ export function IssueTracker() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">問題追蹤</h1>
-            <p className="text-muted-foreground">故障問題管理與追蹤系統</p>
-            <div className="flex items-center gap-4 mt-2 text-sm">
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                開啟: {issueStats.open}
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                處理中: {issueStats.inProgress}
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                已解決: {issueStats.resolved}
-              </span>
-              <span className="flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-red-500" />
-                緊急: {issueStats.critical}
-              </span>
-            </div>
+            <p className="text-muted-foreground">管理和追蹤測試過程中的問題</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <IssuePDFExportManager issues={filteredIssues} />
-          <IssueCreateDialog onIssueCreated={loadIssues} />
-        </div>
+        <Button onClick={() => setShowCreateDialog(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          新增問題
+        </Button>
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜尋問題標題、描述或負責人..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-            <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="選擇優先級" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-priorities">全部優先級</SelectItem>
-                <SelectItem value="critical">緊急</SelectItem>
-                <SelectItem value="high">高</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="low">低</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="選擇狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-status">全部狀態</SelectItem>
-                <SelectItem value="open">開啟</SelectItem>
-                <SelectItem value="in_progress">處理中</SelectItem>
-                <SelectItem value="resolved">已解決</SelectItem>
-                <SelectItem value="closed">已關閉</SelectItem>
-              </SelectContent>
-            </Select>
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜尋問題..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">系統問題統計</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Object.entries(issueStats.bySystem).slice(0, 5).map(([system, count]) => (
-                <div key={system} className="flex justify-between text-sm">
-                  <span className="truncate">{system}</span>
-                  <Badge variant="outline">{count}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">站點問題統計</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Object.entries(issueStats.byStation).slice(0, 5).map(([station, count]) => (
-                <div key={station} className="flex justify-between text-sm">
-                  <span className="truncate">{station}</span>
-                  <Badge variant="outline">{count}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">問題處理效率</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>解決率</span>
-                <span className="font-medium">
-                  {issues.length > 0 ? Math.round((issueStats.resolved / issues.length) * 100) : 0}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>處理中</span>
-                <span className="font-medium">{issueStats.inProgress}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>待處理</span>
-                <span className="font-medium text-red-600">{issueStats.open}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="狀態篩選" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部狀態</SelectItem>
+            <SelectItem value="open">開啟</SelectItem>
+            <SelectItem value="in_progress">處理中</SelectItem>
+            <SelectItem value="resolved">已解決</SelectItem>
+            <SelectItem value="closed">已關閉</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="優先級篩選" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部優先級</SelectItem>
+            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="medium">中</SelectItem>
+            <SelectItem value="low">低</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Issues List */}
       <div className="space-y-4">
         {filteredIssues.map((issue) => (
-          <Card key={issue.id} className="hover:shadow-md transition-shadow">
+          <Card key={issue.id} className="transition-all hover:shadow-md">
             <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Bug className="h-5 w-5 text-muted-foreground" />
-                    <h3 className="font-semibold text-lg">{issue.title}</h3>
-                    <Badge className={getPriorityColor(issue.priority)}>
-                      {issue.priority === 'critical' && '緊急'}
-                      {issue.priority === 'high' && '高'}
-                      {issue.priority === 'medium' && '中'}
-                      {issue.priority === 'low' && '低'}
-                    </Badge>
-                    <Badge className={getStatusColor(issue.status)}>
-                      {issue.status === 'open' && '開啟'}
-                      {issue.status === 'in_progress' && '處理中'}
-                      {issue.status === 'resolved' && '已解決'}
-                      {issue.status === 'closed' && '已關閉'}
-                    </Badge>
+              <div className="space-y-4">
+                {/* Issue Header */}
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">{issue.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getPriorityColor(issue.priority)}>
+                        {getPriorityText(issue.priority)}
+                      </Badge>
+                      <Badge className={getStatusColor(issue.status)}>
+                        {getStatusIcon(issue.status)}
+                        <span className="ml-1">{getStatusText(issue.status)}</span>
+                      </Badge>
+                    </div>
                   </div>
-                  
-                  <p className="text-muted-foreground mb-3">{issue.description}</p>
-                  
-                  <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    {issue.assigned_to && (
-                      <span>負責人: <span className="font-medium">{issue.assigned_to}</span></span>
-                    )}
-                    {issue.system_id && (
-                      <span>系統: <span className="font-medium">{issue.system_id}</span></span>
-                    )}
-                    <span>建立時間: {new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(issue.created_at).toLocaleString('zh-TW')}
                   </div>
                 </div>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
+
+                {/* Issue Content */}
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {issue.description}
+                  </p>
+                  
+                  {/* System Info */}
+                  {(issue.system_name || issue.station_name || issue.test_item_name) && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {issue.system_name && (
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          系統: {issue.system_name}
+                        </span>
+                      )}
+                      {issue.station_name && (
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                          站點: {issue.station_name}
+                        </span>
+                      )}
+                      {issue.test_item_name && (
+                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                          測項: {issue.test_item_name}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {issue.attachments && issue.attachments.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">附件:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {issue.attachments.map((attachment) => (
+                          <div key={attachment.id} className="flex items-center gap-2 bg-muted p-2 rounded">
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-sm truncate max-w-[100px]" title={attachment.file_name}>
+                              {attachment.file_name}
+                            </span>
+                            <div className="flex gap-1">
+                              {isImageFile(attachment.file_name) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleImagePreview(attachment.file_path)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleImageDownload(attachment)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Issue Footer */}
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    {issue.assigned_to && `負責人: ${issue.assigned_to}`}
+                  </div>
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => setEditingIssue(issue)}
+                    onClick={() => setSelectedIssue(issue)}
                   >
-                    <Edit className="h-4 w-4 mr-1" />
-                    編輯
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      if (confirm('確定要刪除這個問題嗎？')) {
-                        deleteIssue(issue.id);
-                      }
-                    }}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    刪除
+                    查看詳情
                   </Button>
                 </div>
               </div>
@@ -486,97 +400,116 @@ export function IssueTracker() {
       </div>
 
       {filteredIssues.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">沒有找到相關問題</h3>
-            <p className="text-muted-foreground">請調整搜尋條件或新增新的問題</p>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12">
+          <Bug className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">沒有找到問題</h3>
+          <p className="text-muted-foreground">
+            {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
+              ? "請調整篩選條件或建立新問題"
+              : "還沒有任何問題記錄，點擊上方按鈕新增問題"
+            }
+          </p>
+        </div>
       )}
 
-      {/* Edit Issue Dialog */}
-      <Dialog open={!!editingIssue} onOpenChange={() => setEditingIssue(null)}>
-        <DialogContent className="max-w-2xl">
+      {/* Image Preview Dialog */}
+      <Dialog open={showImagePreview} onOpenChange={setShowImagePreview}>
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>編輯問題</DialogTitle>
+            <DialogTitle>圖片預覽</DialogTitle>
           </DialogHeader>
-          {editingIssue && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label>問題標題</Label>
-                <Input 
-                  value={editingIssue.title}
-                  onChange={(e) => setEditingIssue({...editingIssue, title: e.target.value})}
-                />
-              </div>
-              <div className="col-span-2">
-                <Label>問題描述</Label>
-                <Textarea 
-                  value={editingIssue.description}
-                  onChange={(e) => setEditingIssue({...editingIssue, description: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label>優先級</Label>
-                <Select 
-                  value={editingIssue.priority} 
-                  onValueChange={(value) => setEditingIssue({...editingIssue, priority: value as any})}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">低</SelectItem>
-                    <SelectItem value="medium">中</SelectItem>
-                    <SelectItem value="high">高</SelectItem>
-                    <SelectItem value="critical">緊急</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>狀態</Label>
-                <Select 
-                  value={editingIssue.status} 
-                  onValueChange={(value) => setEditingIssue({...editingIssue, status: value as any})}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">開啟</SelectItem>
-                    <SelectItem value="in_progress">處理中</SelectItem>
-                    <SelectItem value="resolved">已解決</SelectItem>
-                    <SelectItem value="closed">已關閉</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>指派給</Label>
-                <Input 
-                  value={editingIssue.assigned_to || ''}
-                  onChange={(e) => setEditingIssue({...editingIssue, assigned_to: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label>系統ID</Label>
-                <Input 
-                  value={editingIssue.system_id || ''}
-                  onChange={(e) => setEditingIssue({...editingIssue, system_id: e.target.value})}
-                />
-              </div>
-              <div className="col-span-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setEditingIssue(null)}>
-                  取消
-                </Button>
-                <Button onClick={() => updateIssue(editingIssue)}>
-                  儲存
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="flex justify-center">
+            {previewImage && (
+              <img 
+                src={`${supabase.storage.from('issue-attachments').getPublicUrl(previewImage).data.publicUrl}`}
+                alt="預覽圖片"
+                className="max-w-full max-h-[70vh] object-contain rounded"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Issue Dialog */}
+      <IssueCreateDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={loadIssues}
+      />
+
+      {/* Issue Detail Dialog */}
+      {selectedIssue && (
+        <Dialog open={!!selectedIssue} onOpenChange={() => setSelectedIssue(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selectedIssue.title}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Badge className={getPriorityColor(selectedIssue.priority)}>
+                  {getPriorityText(selectedIssue.priority)}
+                </Badge>
+                <Badge className={getStatusColor(selectedIssue.status)}>
+                  {getStatusIcon(selectedIssue.status)}
+                  <span className="ml-1">{getStatusText(selectedIssue.status)}</span>
+                </Badge>
+              </div>
+              
+              <div>
+                <h4 className="font-medium mb-2">問題描述:</h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {selectedIssue.description}
+                </p>
+              </div>
+
+              {selectedIssue.attachments && selectedIssue.attachments.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">附件:</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedIssue.attachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center gap-2 bg-muted p-3 rounded">
+                        <ImageIcon className="h-4 w-4" />
+                        <span className="text-sm truncate flex-1" title={attachment.file_name}>
+                          {attachment.file_name}
+                        </span>
+                        <div className="flex gap-1">
+                          {isImageFile(attachment.file_name) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleImagePreview(attachment.file_path)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleImageDownload(attachment)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">負責人:</span> {selectedIssue.assigned_to || "未分配"}
+                </div>
+                <div>
+                  <span className="font-medium">建立時間:</span> {new Date(selectedIssue.created_at).toLocaleString('zh-TW')}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
