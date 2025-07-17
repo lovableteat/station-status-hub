@@ -419,24 +419,7 @@ export function TestProgressTable({
                           </div>
                           <Progress value={overallPercent} className="h-2" />
                           
-                          {/* 顯示每個測試項目的處理時長 */}
-                          <div className="space-y-1">
-                            {stationItems.map(item => {
-                              const processingHours = calculateProcessingTime(system.id, station.id, item.id);
-                              return (
-                                <div key={item.id} className="flex items-center justify-between text-xs">
-                                  <span className="truncate max-w-[80px]" title={item.item_name}>
-                                    {item.item_name}
-                                  </span>
-                                  {processingHours !== null && (
-                                    <span className="text-muted-foreground font-medium">
-                                      {processingHours}h
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                           {/* 只顯示總時長，不顯示個別測項時長 */}
                           
                            {processingTime && (
                              <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
