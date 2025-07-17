@@ -93,7 +93,7 @@ export function ProductionMonitor() {
     return ongoingItem?.item_name || '待開始';
   };
 
-  // Calculate station progress for Station 0-4
+  // Calculate station progress for Station 0-3
   const calculateStationProgress = (stationId: string, systemId: string) => {
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
@@ -106,15 +106,14 @@ export function ProductionMonitor() {
     return Math.round((completedItems / stationTestItems.length) * 100);
   };
 
-  // Enhanced overall progress calculation
+  // Enhanced overall progress calculation for Station 0-3
   const calculateOverallProgress = (systemId: string) => {
     const targetStations = stations.filter(station => 
       station.id && typeof station.id === 'string' && 
       (station.name.includes('Station 0') || station.name.includes('組裝') ||
        station.name.includes('Station 1') || station.name.includes('開機') ||
        station.name.includes('Station 2') || station.name.includes('FW') ||
-       station.name.includes('Station 3') || station.name.includes('EE') ||
-       station.name.includes('Station 4') || station.name.includes('NV TEST'))
+       station.name.includes('Station 3') || station.name.includes('EE'))
     );
     
     if (targetStations.length === 0) return 0;
@@ -160,7 +159,7 @@ export function ProductionMonitor() {
         station1: calculateStationProgress(stations.find(s => s.name.includes('Station 1') || s.name.includes('開機'))?.id || '', system.id),
         station2: calculateStationProgress(stations.find(s => s.name.includes('Station 2') || s.name.includes('FW'))?.id || '', system.id),
         station3: calculateStationProgress(stations.find(s => s.name.includes('Station 3') || s.name.includes('EE'))?.id || '', system.id),
-        station4: calculateStationProgress(stations.find(s => s.name.includes('Station 4') || s.name.includes('NV TEST'))?.id || '', system.id),
+        station4: 0, // 不再使用 Station 4
       }
     };
   };
@@ -234,7 +233,7 @@ export function ProductionMonitor() {
           </Badge>
         </div>
 
-        {/* Video-style Station Flow - 只顯示 Station 0-4 */}
+        {/* Video-style Station Flow - 只顯示 Station 0-3 */}
         <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -421,16 +420,15 @@ export function ProductionMonitor() {
                   </div>
                 </div>
 
-                {/* Station Progress Overview */}
+                {/* Station Progress Overview - 只顯示 Station 0-3 */}
                 <div className="space-y-2 mb-4">
                   <h4 className="text-sm font-medium text-muted-foreground">各站進度追蹤</h4>
-                  <div className="grid grid-cols-5 gap-1">
+                  <div className="grid grid-cols-4 gap-1">
                     {[
                       { name: 'S0', progress: machine.stationProgress.station0 },
                       { name: 'S1', progress: machine.stationProgress.station1 },
                       { name: 'S2', progress: machine.stationProgress.station2 },
                       { name: 'S3', progress: machine.stationProgress.station3 },
-                      { name: 'S4', progress: machine.stationProgress.station4 },
                     ].map((station, index) => (
                       <div key={index} className="text-center">
                         <div className="text-xs text-muted-foreground mb-1">{station.name}</div>
