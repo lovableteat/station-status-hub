@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
@@ -14,15 +15,28 @@ interface SystemEditDialogProps {
   systemId: string;
   systemName: string;
   assignedEngineer: string;
+  model?: string;
+  serialNumber?: string;
   onUpdate: () => void;
   variant?: 'button' | 'icon';
 }
 
-export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpdate, variant = 'icon' }: SystemEditDialogProps) {
+export function SystemEditDialog({ 
+  systemId, 
+  systemName, 
+  assignedEngineer, 
+  model, 
+  serialNumber, 
+  onUpdate, 
+  variant = 'icon' 
+}: SystemEditDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editValues, setEditValues] = useState({
     system_name: systemName,
-    assigned_engineer: assignedEngineer
+    assigned_engineer: assignedEngineer,
+    model: model || 'GB300',
+    serial_number: serialNumber || '',
+    os_mac_address: ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -37,8 +51,28 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
         .order('name');
       if (data) setEngineers(data);
     };
+
+    const loadSystemDetails = async () => {
+      const { data } = await supabase
+        .from('test_systems')
+        .select('*')
+        .eq('id', systemId)
+        .single();
+      
+      if (data) {
+        setEditValues({
+          system_name: data.system_name,
+          assigned_engineer: data.assigned_engineer || '',
+          model: data.model || 'GB300',
+          serial_number: data.serial_number || '',
+          os_mac_address: data.os_mac_address || ''
+        });
+      }
+    };
+
     loadEngineers();
-  }, []);
+    loadSystemDetails();
+  }, [systemId]);
 
   const handleSave = async () => {
     try {
@@ -46,7 +80,10 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
         .from('test_systems')
         .update({
           system_name: editValues.system_name,
-          assigned_engineer: editValues.assigned_engineer
+          assigned_engineer: editValues.assigned_engineer,
+          model: editValues.model,
+          serial_number: editValues.serial_number,
+          os_mac_address: editValues.os_mac_address
         })
         .eq('id', systemId);
 
@@ -107,6 +144,37 @@ export function SystemEditDialog({ systemId, systemName, assignedEngineer, onUpd
               className={isMobile ? "h-12 text-base" : ""}
             />
           </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
+            <Input
+              value={editValues.model}
+              onChange={(e) => setEditValues({...editValues, model: e.target.value})}
+              placeholder="請輸入型號..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>序號</Label>
+            <Input
+              value={editValues.serial_number}
+              onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
+              placeholder="請輸入序號..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>OS MAC Address</Label>
+            <Input
+              value={editValues.os_mac_address}
+              onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
+              placeholder="請輸入 OS MAC Address..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
           <div>
             <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
             <Select 

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, FileSpreadsheet, FileText, FileImage } from "lucide-react";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExportManagerProps {
@@ -18,8 +19,6 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState("excel");
   const [exportScope, setExportScope] = useState("all");
-  const [includeDetails, setIncludeDetails] = useState(true);
-  const [includeNotes, setIncludeNotes] = useState(false);
   const { toast } = useToast();
 
   const generateReport = async () => {
@@ -33,8 +32,6 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
           exported_by: 'system_user',
           export_params: {
             scope: exportScope,
-            include_details: includeDetails,
-            include_notes: includeNotes,
             total_systems: systems.length
           }
         });
@@ -46,8 +43,6 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
         downloadAsExcel(reportData);
       } else if (exportFormat === 'pdf') {
         downloadAsPDF(reportData);
-      } else if (exportFormat === 'csv') {
-        downloadAsCSV(reportData);
       }
 
       setIsDialogOpen(false);
@@ -65,56 +60,71 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
   };
 
   const generateReportData = () => {
-    const data = systems.map(system => {
-      const systemProgress = stations.map(station => {
-        const stationProgress = progress.filter(p => 
-          p.system_id === system.id && p.station_id === station.id
-        );
-        
-        const completedItems = stationProgress.filter(p => p.status === 'Done').length;
-        const totalItems = stationProgress.length;
-        const stationPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-        
-        return {
-          station_name: station.station_name,
-          progress: Math.round(stationPercent),
-          completed_items: completedItems,
-          total_items: totalItems,
-          details: includeDetails ? stationProgress : []
-        };
-      });
+    let filteredSystems = systems;
+    
+    if (exportScope === 'completed') {
+      filteredSystems = systems.filter(system => system.overall_progress === 100);
+    } else if (exportScope === 'ongoing') {
+      filteredSystems = systems.filter(system => system.overall_progress > 0 && system.overall_progress < 100);
+    } else if (exportScope === 'pending') {
+      filteredSystems = systems.filter(system => system.overall_progress === 0);
+    }
+
+    return filteredSystems.map(system => {
+      // Calculate progress for each station
+      const stationProgress = {};
+      
+      // Station 0 - 工廠組裝
+      const station0Items = progress.filter(p => p.system_id === system.id && p.station_id === stations.find(s => s.station_order === 0)?.id);
+      const station0Completed = station0Items.filter(p => p.status === 'Done').length;
+      const station0Total = station0Items.length;
+      stationProgress['Station 0 - 工廠組裝'] = station0Total > 0 ? Math.round((station0Completed / station0Total) * 100) + '%' : '0%';
+
+      // Station 1 - 開機
+      const station1Items = progress.filter(p => p.system_id === system.id && p.station_id === stations.find(s => s.station_order === 1)?.id);
+      const station1Completed = station1Items.filter(p => p.status === 'Done').length;
+      const station1Total = station1Items.length;
+      stationProgress['Station 1 - 開機'] = station1Total > 0 ? Math.round((station1Completed / station1Total) * 100) + '%' : '0%';
+
+      // Station 2 - FW
+      const station2Items = progress.filter(p => p.system_id === system.id && p.station_id === stations.find(s => s.station_order === 2)?.id);
+      const station2Completed = station2Items.filter(p => p.status === 'Done').length;
+      const station2Total = station2Items.length;
+      stationProgress['Station 2 - FW'] = station2Total > 0 ? Math.round((station2Completed / station2Total) * 100) + '%' : '0%';
+
+      // Station 3 - Pega_diag
+      const station3Items = progress.filter(p => p.system_id === system.id && p.station_id === stations.find(s => s.station_order === 3)?.id);
+      const station3Completed = station3Items.filter(p => p.status === 'Done').length;
+      const station3Total = station3Items.length;
+      stationProgress['Station 3 - Pega_diag'] = station3Total > 0 ? Math.round((station3Completed / station3Total) * 100) + '%' : '0%';
 
       return {
-        system_name: system.system_name,
-        assigned_engineer: system.assigned_engineer,
-        current_station: system.current_station,
-        overall_progress: system.overall_progress,
-        status: system.status,
-        stations: systemProgress
+        '機台編號': system.system_name,
+        '當前站點': system.current_station || 'Station 0',
+        '狀態': system.overall_progress === 100 ? '已完成' : 
+               system.overall_progress >= 1 ? '進行中' : '未開始',
+        'Station 0 - 工廠組裝': stationProgress['Station 0 - 工廠組裝'],
+        'Station 1 - 開機': stationProgress['Station 1 - 開機'],
+        'Station 2 - FW': stationProgress['Station 2 - FW'],
+        'Station 3 - Pega_diag': stationProgress['Station 3 - Pega_diag']
       };
     });
-
-    return data;
   };
 
   const downloadAsExcel = (data: any[]) => {
-    // Create CSV content that can be opened by Excel
-    let csvContent = "系統編號,負責工程師,當前站點,整體進度,狀態";
-    
-    // Add station headers
-    stations.forEach(station => {
-      csvContent += `,${station.station_name}進度`;
-    });
-    csvContent += "\n";
+    // Create CSV content for Excel
+    let csvContent = "機台編號,當前站點,狀態,Station 0 - 工廠組裝,Station 1 - 開機,Station 2 - FW,Station 3 - Pega_diag\n";
 
-    // Add data rows
     data.forEach(system => {
-      let row = `${system.system_name},${system.assigned_engineer},${system.current_station},${system.overall_progress}%,${system.status}`;
-      
-      system.stations.forEach((station: any) => {
-        row += `,${station.progress}%`;
-      });
-      
+      const row = [
+        system['機台編號'],
+        system['當前站點'],
+        system['狀態'],
+        system['Station 0 - 工廠組裝'],
+        system['Station 1 - 開機'],
+        system['Station 2 - FW'],
+        system['Station 3 - Pega_diag']
+      ].join(',');
       csvContent += row + "\n";
     });
 
@@ -123,38 +133,23 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `test_report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `GB300_L10_測試追蹤報表_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
-  const downloadAsCSV = (data: any[]) => {
-    downloadAsExcel(data); // Same as Excel for now
-  };
-
   const downloadAsPDF = (data: any[]) => {
-    // For now, create a simple text report
-    let content = "GB300 L10 測試報表\n";
+    let content = "GB300 L10 測試追蹤報表\n";
     content += `匯出時間: ${new Date().toLocaleString('zh-TW')}\n\n`;
+    content += "機台編號\t當前站點\t狀態\tStation 0 - 工廠組裝\tStation 1 - 開機\tStation 2 - FW\tStation 3 - Pega_diag\n";
     
     data.forEach(system => {
-      content += `系統: ${system.system_name}\n`;
-      content += `負責工程師: ${system.assigned_engineer}\n`;
-      content += `當前站點: ${system.current_station}\n`;
-      content += `整體進度: ${system.overall_progress}%\n`;
-      content += `狀態: ${system.status}\n`;
-      content += "站點進度:\n";
-      
-      system.stations.forEach((station: any) => {
-        content += `  ${station.station_name}: ${station.progress}% (${station.completed_items}/${station.total_items})\n`;
-      });
-      
-      content += "\n";
+      content += `${system['機台編號']}\t${system['當前站點']}\t${system['狀態']}\t${system['Station 0 - 工廠組裝']}\t${system['Station 1 - 開機']}\t${system['Station 2 - FW']}\t${system['Station 3 - Pega_diag']}\n`;
     });
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `test_report_${new Date().toISOString().split('T')[0]}.txt`;
+    link.download = `GB300_L10_測試追蹤報表_${new Date().toISOString().split('T')[0]}.txt`;
     link.click();
   };
 
@@ -168,7 +163,7 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>匯出測試報表</DialogTitle>
+          <DialogTitle>匯出 GB300 L10 測試追蹤報表</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -187,13 +182,7 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
                 <SelectItem value="pdf">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    PDF (文字報表)
-                  </div>
-                </SelectItem>
-                <SelectItem value="csv">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    CSV
+                    文字報表
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -215,33 +204,19 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
             </Select>
           </div>
 
-          <div className="space-y-3">
-            <Label>匯出選項</Label>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="details" 
-                  checked={includeDetails}
-                  onCheckedChange={(checked) => setIncludeDetails(checked as boolean)}
-                />
-                <Label htmlFor="details">包含詳細進度資訊</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="notes" 
-                  checked={includeNotes}
-                  onCheckedChange={(checked) => setIncludeNotes(checked as boolean)}
-                />
-                <Label htmlFor="notes">包含測試備註</Label>
-              </div>
-            </div>
-          </div>
-
           <div className="bg-muted/50 p-3 rounded-lg">
             <p className="text-sm text-muted-foreground">
-              將匯出 {systems.length} 個系統的測試進度報表，
-              包含 {stations.length} 個測試站點的詳細資訊。
+              將匯出包含以下欄位的測試進度報表：
             </p>
+            <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+              <li>• 機台編號</li>
+              <li>• 當前站點</li>
+              <li>• 狀態（未開始/進行中/已完成）</li>
+              <li>• Station 0 - 工廠組裝 進度</li>
+              <li>• Station 1 - 開機 進度</li>
+              <li>• Station 2 - FW 進度</li>
+              <li>• Station 3 - Pega_diag 進度</li>
+            </ul>
           </div>
 
           <div className="flex justify-end gap-2">
