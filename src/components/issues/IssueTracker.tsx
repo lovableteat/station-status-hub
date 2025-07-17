@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -14,15 +13,13 @@ import {
   AlertTriangle, 
   CheckCircle, 
   Clock, 
-  Plus, 
   Search, 
-  Filter,
   Eye,
   Download,
-  Image as ImageIcon,
-  X
+  Image as ImageIcon
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
+import { IssueEditDialog } from "./IssueEditDialog";
 import { BackButton } from "@/components/common/BackButton";
 
 interface Issue {
@@ -53,7 +50,6 @@ export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -67,7 +63,7 @@ export function IssueTracker() {
 
   useEffect(() => {
     filterIssues();
-  }, [issues, searchTerm, statusFilter, priorityFilter]);
+  }, [issues, searchTerm, priorityFilter]);
 
   const loadIssues = async () => {
     try {
@@ -119,15 +115,19 @@ export function IssueTracker() {
       );
     }
 
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(issue => issue.status === statusFilter);
-    }
-
     if (priorityFilter !== "all") {
       filtered = filtered.filter(issue => issue.priority === priorityFilter);
     }
 
     setFilteredIssues(filtered);
+  };
+
+  const groupIssuesByStatus = (issues: Issue[]) => {
+    return {
+      open: issues.filter(issue => issue.status === 'open'),
+      in_progress: issues.filter(issue => issue.status === 'in_progress'),
+      resolved: issues.filter(issue => issue.status === 'resolved' || issue.status === 'closed')
+    };
   };
 
   const getPriorityColor = (priority: string) => {
@@ -143,8 +143,8 @@ export function IssueTracker() {
     switch (status) {
       case "open": return "bg-red-100 text-red-800";
       case "in_progress": return "bg-blue-100 text-blue-800";
-      case "resolved": return "bg-green-100 text-green-800";
-      case "closed": return "bg-gray-100 text-gray-800";
+      case "resolved": 
+      case "closed": return "bg-green-100 text-green-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -153,7 +153,7 @@ export function IssueTracker() {
     switch (status) {
       case "open": return <AlertTriangle className="h-4 w-4" />;
       case "in_progress": return <Clock className="h-4 w-4" />;
-      case "resolved": return <CheckCircle className="h-4 w-4" />;
+      case "resolved": 
       case "closed": return <CheckCircle className="h-4 w-4" />;
       default: return <Bug className="h-4 w-4" />;
     }
@@ -161,7 +161,7 @@ export function IssueTracker() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "open": return "開啟";
+      case "open": return "待處理";
       case "in_progress": return "處理中";
       case "resolved": return "已解決";
       case "closed": return "已關閉";
@@ -219,6 +219,83 @@ export function IssueTracker() {
     return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
   };
 
+  const renderIssueCard = (issue: Issue) => (
+    <Card key={issue.id} className="transition-all hover:shadow-md">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex justify-between items-start">
+            <div className="space-y-2 flex-1">
+              <h3 className="text-sm font-semibold">{issue.title}</h3>
+              <div className="flex items-center gap-2">
+                <Badge className={getPriorityColor(issue.priority)}>
+                  {getPriorityText(issue.priority)}
+                </Badge>
+                <Badge className={getStatusColor(issue.status)}>
+                  {getStatusIcon(issue.status)}
+                  <span className="ml-1">{getStatusText(issue.status)}</span>
+                </Badge>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              <IssueEditDialog 
+                issue={issue} 
+                onUpdate={loadIssues} 
+                onDelete={loadIssues} 
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIssue(issue)}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {issue.description}
+          </p>
+
+          {(issue.system_name || issue.station_name || issue.test_item_name) && (
+            <div className="flex flex-wrap gap-1 text-xs">
+              {issue.system_name && (
+                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                  系統: {issue.system_name}
+                </span>
+              )}
+              {issue.station_name && (
+                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                  站點: {issue.station_name}
+                </span>
+              )}
+            </div>
+          )}
+
+          {issue.attachments && issue.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {issue.attachments.slice(0, 2).map((attachment) => (
+                <div key={attachment.id} className="flex items-center gap-1 bg-muted p-1 rounded text-xs">
+                  <ImageIcon className="h-3 w-3" />
+                  <span className="truncate max-w-[60px]" title={attachment.file_name}>
+                    {attachment.file_name}
+                  </span>
+                </div>
+              ))}
+              {issue.attachments.length > 2 && (
+                <span className="text-xs text-muted-foreground">+{issue.attachments.length - 2}</span>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-between items-center text-xs text-muted-foreground">
+            <span>{issue.assigned_to || "未指派"}</span>
+            <span>{new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return (
       <div className="p-6">
@@ -233,6 +310,8 @@ export function IssueTracker() {
       </div>
     );
   }
+
+  const groupedIssues = groupIssuesByStatus(filteredIssues);
 
   return (
     <div className="p-6 space-y-6">
@@ -261,18 +340,6 @@ export function IssueTracker() {
             />
           </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="狀態篩選" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部狀態</SelectItem>
-            <SelectItem value="open">開啟</SelectItem>
-            <SelectItem value="in_progress">處理中</SelectItem>
-            <SelectItem value="resolved">已解決</SelectItem>
-            <SelectItem value="closed">已關閉</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="優先級篩選" />
@@ -286,113 +353,52 @@ export function IssueTracker() {
         </Select>
       </div>
 
-      {/* Issues List */}
-      <div className="space-y-4">
-        {filteredIssues.map((issue) => (
-          <Card key={issue.id} className="transition-all hover:shadow-md">
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                {/* Issue Header */}
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">{issue.title}</h3>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getPriorityColor(issue.priority)}>
-                        {getPriorityText(issue.priority)}
-                      </Badge>
-                      <Badge className={getStatusColor(issue.status)}>
-                        {getStatusIcon(issue.status)}
-                        <span className="ml-1">{getStatusText(issue.status)}</span>
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {new Date(issue.created_at).toLocaleString('zh-TW')}
-                  </div>
-                </div>
-
-                {/* Issue Content */}
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {issue.description}
-                  </p>
-                  
-                  {/* System Info */}
-                  {(issue.system_name || issue.station_name || issue.test_item_name) && (
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {issue.system_name && (
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                          系統: {issue.system_name}
-                        </span>
-                      )}
-                      {issue.station_name && (
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                          站點: {issue.station_name}
-                        </span>
-                      )}
-                      {issue.test_item_name && (
-                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                          測項: {issue.test_item_name}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Attachments */}
-                  {issue.attachments && issue.attachments.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium">附件:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {issue.attachments.map((attachment) => (
-                          <div key={attachment.id} className="flex items-center gap-2 bg-muted p-2 rounded">
-                            <ImageIcon className="h-4 w-4" />
-                            <span className="text-sm truncate max-w-[100px]" title={attachment.file_name}>
-                              {attachment.file_name}
-                            </span>
-                            <div className="flex gap-1">
-                              {isImageFile(attachment.file_name) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleImagePreview(attachment.file_path)}
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleImageDownload(attachment)}
-                                className="h-6 w-6 p-0"
-                              >
-                                <Download className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Issue Footer */}
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    {issue.assigned_to && `負責人: ${issue.assigned_to}`}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedIssue(issue)}
-                  >
-                    查看詳情
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
+      {/* Issues by Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 待處理 */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                待處理 ({groupedIssues.open.length})
+              </CardTitle>
+            </CardHeader>
           </Card>
-        ))}
+          <div className="space-y-3">
+            {groupedIssues.open.map(renderIssueCard)}
+          </div>
+        </div>
+
+        {/* 處理中 */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-blue-500" />
+                處理中 ({groupedIssues.in_progress.length})
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <div className="space-y-3">
+            {groupedIssues.in_progress.map(renderIssueCard)}
+          </div>
+        </div>
+
+        {/* 已完成 */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                已完成 ({groupedIssues.resolved.length})
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <div className="space-y-3">
+            {groupedIssues.resolved.map(renderIssueCard)}
+          </div>
+        </div>
       </div>
 
       {filteredIssues.length === 0 && (
@@ -400,7 +406,7 @@ export function IssueTracker() {
           <Bug className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">沒有找到問題</h3>
           <p className="text-muted-foreground">
-            {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
+            {searchTerm || priorityFilter !== "all"
               ? "請調整篩選條件或建立新問題"
               : "還沒有任何問題記錄，點擊上方按鈕新增問題"
             }
