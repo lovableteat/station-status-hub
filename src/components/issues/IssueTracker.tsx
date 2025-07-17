@@ -56,7 +56,6 @@ export function IssueTracker() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -246,10 +245,7 @@ export function IssueTracker() {
             <p className="text-muted-foreground">管理和追蹤測試過程中的問題</p>
           </div>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          新增問題
-        </Button>
+        <IssueCreateDialog onIssueCreated={loadIssues} />
       </div>
 
       {/* Filters */}
@@ -429,13 +425,6 @@ export function IssueTracker() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Create Issue Dialog */}
-      <IssueCreateDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onSuccess={loadIssues}
-      />
 
       {/* Issue Detail Dialog */}
       {selectedIssue && (
