@@ -1599,6 +1599,7 @@ export type Database = {
           current_station: string | null
           id: string
           model: string | null
+          os_mac_address: string | null
           overall_progress: number | null
           serial_number: string | null
           status: string | null
@@ -1613,6 +1614,7 @@ export type Database = {
           current_station?: string | null
           id?: string
           model?: string | null
+          os_mac_address?: string | null
           overall_progress?: number | null
           serial_number?: string | null
           status?: string | null
@@ -1627,6 +1629,7 @@ export type Database = {
           current_station?: string | null
           id?: string
           model?: string | null
+          os_mac_address?: string | null
           overall_progress?: number | null
           serial_number?: string | null
           status?: string | null
