@@ -18,7 +18,6 @@ import {
   Clock,
   AlertTriangle,
   TrendingUp,
-  Users,
   Download,
   Camera
 } from "lucide-react";
@@ -63,9 +62,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   // 修改測試通過率計算：基於當前站點已完成的系統數量
   const completedSystemsCount = systems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
   const passRate = totalSystems > 0 ? Math.round((completedSystemsCount / totalSystems) * 100) : 0;
-  
-  // Calculate active engineers
-  const engineers = [...new Set(systems.map(s => s.assigned_engineer).filter(Boolean))];
 
   return (
     <div className="p-6 space-y-6 animate-fade-in" data-dashboard-content>
@@ -108,8 +104,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Test Pass Rate Metrics */}
       <TestPassRateCard />
 
-      {/* Key Performance Indicators - 基於當前站點統計 */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Key Performance Indicators - 移除活躍工程師板塊 */}
+      <div className="grid gap-4 md:grid-cols-2">
         <StatsCard
           title="進行中系統"
           value={`${ongoingSystems}`}
@@ -125,13 +121,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           description={`完成率 ${completionRate}%`}
           trend={{ value: completionRate >= 70 ? 5.2 : -2.8, isPositive: completionRate >= 70 }}
           variant={completionRate >= 70 ? "success" : "warning"}
-        />
-        <StatsCard
-          title="活躍工程師"
-          value={`${engineers.length}`}
-          icon={<Users className="h-4 w-4" />}
-          description={`負責 ${totalSystems} 個系統`}
-          variant="default"
         />
       </div>
 
