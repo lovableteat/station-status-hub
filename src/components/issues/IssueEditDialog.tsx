@@ -179,7 +179,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
                 <SelectValue placeholder="請選擇負責人..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">未指派</SelectItem>
+                <SelectItem value="unassigned">未指派</SelectItem>
                 {engineers.map(engineer => (
                   <SelectItem key={engineer.id} value={engineer.name}>
                     {engineer.name}
