@@ -58,105 +58,119 @@ export function TestTrackerPDFExporter({
     try {
       setIsExporting(true);
       
-      // 先截取現有的測試進度表
-      const tableElement = document.querySelector('[data-testtracker-table]');
-      let canvas = null;
-      
-      if (tableElement) {
-        canvas = await html2canvas(tableElement as HTMLElement, {
-          backgroundColor: '#ffffff',
-          scale: 1.5,
-          useCORS: true,
-          allowTaint: true
-        });
-      }
-      
       // 創建 PDF
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: 'a3' // 使用 A3 以容納更多內容
+        format: 'a4'
       });
       
       // 添加標題
-      pdf.setFontSize(18);
-      pdf.text('GB300 L10 測試追蹤報表', 20, 20);
+      pdf.setFontSize(20);
+      pdf.text('GB300 L10 測試進度報表', 20, 20);
       
       pdf.setFontSize(12);
       pdf.text(`生成時間: ${new Date().toLocaleString('zh-TW')}`, 20, 30);
       pdf.text(`總系統數: ${systems.length}`, 20, 40);
       
-      let yPosition = 60;
+      let yPosition = 55;
       
-      // 如果有截圖，先添加截圖
-      if (canvas) {
-        const imgWidth = 360; // A3 橫向可用寬度
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 20, yPosition, imgWidth, imgHeight);
-        yPosition += imgHeight + 20;
-      }
-      
-      // 添加詳細數據表格
-      const filteredStations = stations
-        .filter(s => s.station_order >= 0 && s.station_order <= 4)
-        .sort((a, b) => a.station_order - b.station_order);
-      
-      // 表格標題
-      pdf.setFontSize(14);
-      
-      // 檢查是否需要新頁面
-      if (yPosition > 250) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-      
-      pdf.text('詳細進度數據', 20, yPosition);
-      yPosition += 15;
+      // 獲取 Station 0-3 的站點
+      const targetStations = [
+        { name: 'Station 0 - 工廠組裝', order: 0 },
+        { name: 'Station 1 - 開機', order: 1 },
+        { name: 'Station 2 - FW', order: 2 },
+        { name: 'Station 3 - Pega_diag', order: 3 }
+      ];
       
       // 表格標頭
-      pdf.setFontSize(8);
-      const headers = ['機台編號', '當前站點', '整體進度', ...filteredStations.map(s => s.station_name)];
-      const colWidth = 45;
-      const startX = 20;
+      pdf.setFontSize(10);
+      const headers = [
+        '機台編號', 
+        '當前站點', 
+        '狀態',
+        'Station 0 - 工廠組裝',
+        'Station 1 - 開機',
+        'Station 2 - FW',
+        'Station 3 - Pega_diag'
+      ];
       
+      const colWidths = [35, 30, 25, 45, 35, 30, 50];
+      let currentX = 20;
+      
+      // 繪製表頭
       headers.forEach((header, index) => {
-        pdf.text(header, startX + (index * colWidth), yPosition);
+        pdf.text(header, currentX, yPosition);
+        currentX += colWidths[index];
       });
-      yPosition += 8;
+      yPosition += 5;
       
       // 繪製分隔線
-      pdf.line(startX, yPosition, startX + (headers.length * colWidth), yPosition);
-      yPosition += 5;
+      pdf.line(20, yPosition, currentX - colWidths[colWidths.length - 1] + colWidths.reduce((a, b) => a + b, 0), yPosition);
+      yPosition += 8;
       
       // 表格內容
       systems.forEach((system, index) => {
         // 檢查是否需要新頁面
-        if (yPosition > 280) {
+        if (yPosition > 180) {
           pdf.addPage();
           yPosition = 20;
           
-          // 重新繪製標頭
-          pdf.setFontSize(8);
+          // 重新繪製標頁
+          pdf.setFontSize(10);
+          let headerX = 20;
           headers.forEach((header, headerIndex) => {
-            pdf.text(header, startX + (headerIndex * colWidth), yPosition);
+            pdf.text(header, headerX, yPosition);
+            headerX += colWidths[headerIndex];
           });
-          yPosition += 8;
-          pdf.line(startX, yPosition, startX + (headers.length * colWidth), yPosition);
           yPosition += 5;
+          pdf.line(20, yPosition, headerX - colWidths[colWidths.length - 1] + colWidths.reduce((a, b) => a + b, 0), yPosition);
+          yPosition += 8;
         }
+        
+        // 計算系統狀態
+        const getSystemStatus = (system: any) => {
+          if (system.overall_progress === 100) return '已完成';
+          if (system.overall_progress > 0) return '進行中';
+          return '未開始';
+        };
+        
+        // 計算每個站點的進度
+        const getStationProgress = (systemId: string, stationOrder: number) => {
+          const station = stations.find(s => s.station_order === stationOrder);
+          if (!station) return '0%';
+          
+          const stationItems = items.filter(item => item.station_id === station.id);
+          if (stationItems.length === 0) return '0%';
+          
+          const completedItems = stationItems.filter(item => {
+            const prog = progress.find(p => 
+              p.system_id === systemId && 
+              p.station_id === station.id && 
+              p.item_id === item.id &&
+              p.status === 'Done'
+            );
+            return prog;
+          });
+          
+          const progressPercent = Math.round((completedItems.length / stationItems.length) * 100);
+          return `${progressPercent}%`;
+        };
         
         const rowData = [
           system.system_name,
           system.current_station || '未設定',
-          `${system.overall_progress || 0}%`,
-          ...filteredStations.map(station => 
-            `${calculateStationProgress(system.id, station.id)}%`
-          )
+          getSystemStatus(system),
+          getStationProgress(system.id, 0),
+          getStationProgress(system.id, 1),
+          getStationProgress(system.id, 2),
+          getStationProgress(system.id, 3)
         ];
         
+        let rowX = 20;
         rowData.forEach((data, colIndex) => {
-          pdf.text(data, startX + (colIndex * colWidth), yPosition);
+          pdf.text(data, rowX, yPosition);
+          rowX += colWidths[colIndex];
         });
         
         yPosition += 8;
@@ -164,7 +178,7 @@ export function TestTrackerPDFExporter({
         // 每5行繪製一條淡色分隔線
         if ((index + 1) % 5 === 0) {
           pdf.setDrawColor(200, 200, 200);
-          pdf.line(startX, yPosition, startX + (headers.length * colWidth), yPosition);
+          pdf.line(20, yPosition, rowX - colWidths[colWidths.length - 1] + colWidths.reduce((a, b) => a + b, 0), yPosition);
           pdf.setDrawColor(0, 0, 0);
           yPosition += 2;
         }
@@ -175,15 +189,15 @@ export function TestTrackerPDFExporter({
       for (let i = 1; i <= pageCount; i++) {
         pdf.setPage(i);
         pdf.setFontSize(8);
-        pdf.text(`第 ${i} 頁，共 ${pageCount} 頁`, 350, 290);
+        pdf.text(`第 ${i} 頁，共 ${pageCount} 頁`, 240, 190);
       }
       
       // 下載 PDF
-      pdf.save(`GB300_L10_測試追蹤報表_${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`GB300_L10_測試進度報表_${new Date().toISOString().slice(0, 10)}.pdf`);
       
       toast({
         title: "匯出成功",
-        description: "GB300 L10 測試追蹤報表已匯出為 PDF",
+        description: "GB300 L10 測試進度報表已匯出為 PDF",
       });
       
       onClose();

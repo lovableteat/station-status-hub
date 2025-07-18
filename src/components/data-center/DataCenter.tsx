@@ -129,12 +129,6 @@ export function DataCenter() {
     });
   };
 
-  const exportToImage = () => {
-    toast({
-      title: "匯出圖片",
-      description: "圖片匯出功能開發中...",
-    });
-  };
 
   if (isLoading) {
     return (
@@ -160,10 +154,6 @@ export function DataCenter() {
           <Button variant="outline" onClick={exportToExcel}>
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             匯出 Excel
-          </Button>
-          <Button variant="outline" onClick={exportToImage}>
-            <FileImage className="h-4 w-4 mr-2" />
-            匯出圖片
           </Button>
         </div>
       </div>
