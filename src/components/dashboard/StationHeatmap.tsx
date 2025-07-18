@@ -1,8 +1,10 @@
 
+import React from "react";
 import { cn } from "@/lib/utils";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -32,6 +34,19 @@ interface StationHeatmapProps {
 
 export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
   const { systems, stations, testItems, progress } = useUnifiedData();
+  
+  // 獲取站點時間記錄數據
+  const [stationTimeRecords, setStationTimeRecords] = React.useState<any[]>([]);
+  
+  React.useEffect(() => {
+    const fetchStationTimeRecords = async () => {
+      const { data } = await supabase
+        .from('station_time_records')
+        .select('*');
+      if (data) setStationTimeRecords(data);
+    };
+    fetchStationTimeRecords();
+  }, []);
 
   // 只包含Station 0-3的站點
   const targetStations = stations
@@ -43,7 +58,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
     )
     .sort((a, b) => a.station_order - b.station_order);
 
-  // 計算每個站點的狀態
+  // 計算每個站點的狀態（基於時間記錄和估計時間）
   const calculateStationStatus = (station: any) => {
     const stationItems = testItems.filter(item => item.station_id === station.id);
     
@@ -58,7 +73,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       };
     }
 
-    // 計算每個系統在此站點的進度
+    // 計算每個系統在此站點的進度和時間狀態
     const systemProgressData = systems.map(system => {
       const systemProgressRecords = stationItems.map(item => {
         return progress.find(p => 
@@ -75,13 +90,44 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
       const isCompleted = completedCount === totalCount && totalCount > 0;
       const hasProgress = systemProgressRecords.some(p => p?.status !== 'Not Start');
 
+      // 獲取該系統在該站點的時間記錄
+      const timeRecord = stationTimeRecords.find(tr => 
+        tr.system_id === system.id && tr.station_id === station.id
+      );
+      
+      // 獲取該站點的估計時間
+      const estimatedHours = station.estimated_hours || 0;
+      
+      // 計算實際使用時間
+      let actualHours = 0;
+      if (timeRecord) {
+        if (timeRecord.total_hours !== null) {
+          actualHours = parseFloat(timeRecord.total_hours);
+        } else if (timeRecord.start_time && timeRecord.end_time) {
+          const startTime = new Date(timeRecord.start_time);
+          const endTime = new Date(timeRecord.end_time);
+          actualHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        } else if (timeRecord.start_time && !timeRecord.end_time) {
+          // 正在進行中，計算從開始到現在的時間
+          const startTime = new Date(timeRecord.start_time);
+          const now = new Date();
+          actualHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        }
+      }
+
+      // 計算時間效率（是否落後）
+      const timeEfficiency = estimatedHours > 0 ? (estimatedHours / Math.max(actualHours, estimatedHours)) * 100 : 100;
+
       return {
         system,
         progress: progressPercent,
         isCompleted,
         isActive: hasProgress && !isCompleted,
         completedCount,
-        totalCount
+        totalCount,
+        timeEfficiency,
+        actualHours,
+        estimatedHours
       };
     });
 
@@ -90,21 +136,30 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
     const totalProgress = systemProgressData.reduce((sum, s) => sum + s.progress, 0);
     const averageProgress = systems.length > 0 ? totalProgress / systems.length : 0;
     
+    // 計算平均時間效率
+    const activeTimeData = systemProgressData.filter(s => s.isActive || s.isCompleted);
+    const averageTimeEfficiency = activeTimeData.length > 0 
+      ? activeTimeData.reduce((sum, s) => sum + s.timeEfficiency, 0) / activeTimeData.length 
+      : 100;
+    
     const activeSystems = systemProgressData
       .filter(s => s.isActive || s.isCompleted)
       .map(s => s.system);
 
-    // 確定狀態
+    // 根據進度和時間效率確定狀態
     let status: 'idle' | 'working' | 'warning' | 'error' | 'complete' = 'idle';
     
     if (averageProgress === 100) {
       status = 'complete';
-    } else if (averageProgress >= 70) {
-      status = 'working';
-    } else if (averageProgress >= 30) {
-      status = 'warning';
     } else if (averageProgress > 0) {
-      status = 'error';
+      // 根據時間效率判斷狀態
+      if (averageTimeEfficiency >= 80) {
+        status = 'working';  // 時間效率良好
+      } else if (averageTimeEfficiency >= 60) {
+        status = 'warning';  // 時間效率較差，可能落後
+      } else {
+        status = 'error';    // 嚴重落後
+      }
     } else {
       status = 'idle';
     }
