@@ -1,13 +1,14 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, ReactNode } from "react";
 
 interface User {
+  userId: string;
   username: string;
   role: string;
 }
 
 interface UserContextType {
   user: User | null;
-  login: (username: string, role: string) => void;
+  login: (userId: string, username: string, role: string) => void;
   logout: () => void;
   isLoggedIn: boolean;
 }
@@ -21,8 +22,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const login = (username: string, role: string) => {
-    const userData = { username, role };
+  const login = (userId: string, username: string, role: string) => {
+    const userData = { userId, username, role };
     setUser(userData);
     // 持久化用戶狀態
     localStorage.setItem('user', JSON.stringify(userData));
