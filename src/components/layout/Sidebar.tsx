@@ -1,6 +1,7 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   BarChart3,
   Database,
@@ -36,6 +37,7 @@ const navigationItems = [
 
 export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { canViewModule } = usePermissions();
 
   // On mobile, use isOpen prop; on desktop, use collapsed state
   const isVisible = isMobile ? isOpen : true;
@@ -112,6 +114,12 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeModule === item.id;
+              const hasPermission = canViewModule(item.id);
+              
+              // 如果用戶沒有權限，不顯示此導航項目
+              if (!hasPermission) {
+                return null;
+              }
               
               return (
                 <Button

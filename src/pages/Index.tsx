@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
@@ -10,6 +10,7 @@ import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
 import { LoginPage } from "@/components/auth/LoginPage";
+import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { useUser } from "@/components/auth/UserContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -50,23 +51,59 @@ const Index = () => {
   const renderModule = () => {
     switch (activeModule) {
       case "dashboard":
-        return <Dashboard onNavigate={handleNavigation} />;
+        return (
+          <PermissionGuard module="dashboard">
+            <Dashboard onNavigate={handleNavigation} />
+          </PermissionGuard>
+        );
       case "test-tracker":
-        return <TestTracker />;
+        return (
+          <PermissionGuard module="test-tracker">
+            <TestTracker />
+          </PermissionGuard>
+        );
       case "flow-info":
-        return <FlowInfo />;
+        return (
+          <PermissionGuard module="flow-info">
+            <FlowInfo />
+          </PermissionGuard>
+        );
       case "monitor":
-        return <ProductionMonitor />;
+        return (
+          <PermissionGuard module="monitor">
+            <ProductionMonitor />
+          </PermissionGuard>
+        );
       case "issues":
-        return <IssueTracker />;
+        return (
+          <PermissionGuard module="issues">
+            <IssueTracker />
+          </PermissionGuard>
+        );
       case "data":
-        return <DataCenter />;
+        return (
+          <PermissionGuard module="data">
+            <DataCenter />
+          </PermissionGuard>
+        );
       case "tools":
-        return <ToolsManagement />;
+        return (
+          <PermissionGuard module="tools">
+            <ToolsManagement />
+          </PermissionGuard>
+        );
       case "users":
-        return <AdminPanel />;
+        return (
+          <PermissionGuard module="users">
+            <AdminPanel />
+          </PermissionGuard>
+        );
       default:
-        return <Dashboard onNavigate={handleNavigation} />;
+        return (
+          <PermissionGuard module="dashboard">
+            <Dashboard onNavigate={handleNavigation} />
+          </PermissionGuard>
+        );
     }
   };
 
