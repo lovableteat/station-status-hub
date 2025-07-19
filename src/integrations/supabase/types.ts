@@ -1692,6 +1692,38 @@ export type Database = {
         }
         Relationships: []
       }
+      user_page_permissions: {
+        Row: {
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          permission: Database["public"]["Enums"]["page_permission"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          permission: Database["public"]["Enums"]["page_permission"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          permission?: Database["public"]["Enums"]["page_permission"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_page_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -1798,7 +1830,21 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      page_permission:
+        | "dashboard_view"
+        | "dashboard_edit"
+        | "test_tracker_view"
+        | "test_tracker_edit"
+        | "issues_view"
+        | "issues_edit"
+        | "production_view"
+        | "production_edit"
+        | "data_center_view"
+        | "data_center_edit"
+        | "tools_view"
+        | "tools_edit"
+        | "admin_view"
+        | "admin_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1925,6 +1971,23 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      page_permission: [
+        "dashboard_view",
+        "dashboard_edit",
+        "test_tracker_view",
+        "test_tracker_edit",
+        "issues_view",
+        "issues_edit",
+        "production_view",
+        "production_edit",
+        "data_center_view",
+        "data_center_edit",
+        "tools_view",
+        "tools_edit",
+        "admin_view",
+        "admin_edit",
+      ],
+    },
   },
 } as const
