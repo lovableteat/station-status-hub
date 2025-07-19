@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
+import { UserPermissionsDialog } from "./UserPermissionsDialog";
 
 interface Engineer {
   id: string;
@@ -53,6 +54,9 @@ export function AdminPanel() {
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {} });
   const [newTarget, setNewTarget] = useState({ daily_target: 10, weekly_target: 50 });
   const [editingTarget, setEditingTarget] = useState<string | null>(null);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedUsername, setSelectedUsername] = useState<string>("");
   const { toast } = useToast();
   const { logout, user } = useUser();
 
@@ -491,6 +495,18 @@ export function AdminPanel() {
                         {user.status === 'active' ? '停用' : '啟用'}
                       </Button>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedUserId(user.id);
+                        setSelectedUsername(user.username);
+                        setPermissionsDialogOpen(true);
+                      }}
+                    >
+                      <Shield className="h-4 w-4 mr-1" />
+                      權限
+                    </Button>
                     <UserEditDialog
                       userId={user.id}
                       username={user.username}
@@ -720,6 +736,14 @@ export function AdminPanel() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* User Permissions Dialog */}
+      <UserPermissionsDialog
+        isOpen={permissionsDialogOpen}
+        onClose={() => setPermissionsDialogOpen(false)}
+        userId={selectedUserId}
+        username={selectedUsername}
+      />
     </div>
   );
 }
