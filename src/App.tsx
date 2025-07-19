@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +8,6 @@ import { UserProvider } from "@/components/auth/UserContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import TestTrackerPage from "./pages/TestTrackerPage";
-import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
