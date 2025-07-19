@@ -234,35 +234,38 @@ export function FlowInfo() {
     }
   };
 
-  // Calculate dynamic summary data
+  // Calculate dynamic summary data - 修正計算邏輯
   const totalSystems = systems.length;
+  
+  // 計算每個站點的實際測試時間（基於測試項目預估時間）
+  const getStationEstimatedHours = (stationId: string) => {
+    const stationItems = items.filter(item => item.station_id === stationId);
+    const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
+    return totalMinutes / 60; // 轉換為小時
+  };
+
+  // 計算總測試時間（所有站點時間加總）
   const totalHours = stations.reduce((total, station) => {
-    const calculatedHours = parseFloat(getCalculatedStationHours(station.id));
-    return total + calculatedHours;
+    return total + getStationEstimatedHours(station.id);
   }, 0);
 
-  // Calculate estimated completion days based on bottleneck station
+  // 找出瓶頸站點（耗時最長的站點）
+  const bottleneckHours = Math.max(...stations.map(station => 
+    getStationEstimatedHours(station.id)
+  ));
+
+  // 計算預計完成天數（基於瓶頸站點，假設每天8小時工作時間）
   const getEstimatedDays = () => {
-    if (totalSystems === 0) return 0;
+    if (totalSystems === 0 || bottleneckHours === 0) return 0;
     
-    // Find the station with the longest time (bottleneck)
-    const bottleneckHours = Math.max(...stations.map(station => 
-      parseFloat(getCalculatedStationHours(station.id))
-    ));
-    
-    // Assume 8 working hours per day and calculate based on bottleneck
+    // 基於瓶頸站點計算每天可完成的系統數
     const systemsPerDay = Math.floor(8 / bottleneckHours) || 1;
     return Math.ceil(totalSystems / systemsPerDay);
   };
 
+  // 計算日產能（基於瓶頸站點）
   const getDailyThroughput = () => {
-    if (stations.length === 0) return 0;
-    
-    // Calculate throughput based on bottleneck station
-    const bottleneckHours = Math.max(...stations.map(station => 
-      parseFloat(getCalculatedStationHours(station.id))
-    ));
-    
+    if (bottleneckHours === 0) return 0;
     return Math.floor(8 / bottleneckHours) || 1;
   };
 
@@ -418,7 +421,7 @@ export function FlowInfo() {
          })}
        </div>
 
-      {/* Dynamic Summary */}
+      {/* Dynamic Summary - 更新整體測試時程總結區塊 */}
       <Card>
         <CardHeader>
           <CardTitle>整體測試時程總結</CardTitle>
@@ -430,30 +433,44 @@ export function FlowInfo() {
                 <div key={station.id} className="text-center p-4 border rounded-lg">
                   <div className="text-lg font-bold">{station.station_name}</div>
                   <div className="text-sm text-muted-foreground">{station.description || '測試站點'}</div>
+                  <div className="text-lg font-semibold text-primary mt-2">
+                    {getStationEstimatedHours(station.id).toFixed(1)}h
+                  </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    約 {Math.floor(8 / parseFloat(getCalculatedStationHours(station.id))) || 1} 台/天
+                    約 {Math.floor(8 / getStationEstimatedHours(station.id)) || 1} 台/天
                   </div>
                 </div>
               ))}
-              <div className="text-center p-4 border rounded-lg bg-primary/5">
-                <div className="text-lg font-bold text-primary">總計</div>
-                <div className="text-sm text-muted-foreground">完整流程</div>
-                <div className="text-xs text-muted-foreground mt-1">{getEstimatedDays()} 天</div>
-              </div>
             </div>
             
             <Separator />
             
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 border rounded-lg bg-primary/5">
+                <div className="text-xl font-bold text-primary">瓶頸站點</div>
+                <div className="text-lg font-semibold mt-2">{bottleneckHours.toFixed(1)}h</div>
+                <div className="text-sm text-muted-foreground">最長測試時間</div>
+              </div>
+              <div className="text-center p-4 border rounded-lg bg-secondary/5">
+                <div className="text-xl font-bold text-secondary-foreground">日產能</div>
+                <div className="text-lg font-semibold mt-2">{getDailyThroughput()} 台</div>
+                <div className="text-sm text-muted-foreground">每日可完成系統</div>
+              </div>
+              <div className="text-center p-4 border rounded-lg bg-muted/5">
+                <div className="text-xl font-bold">總工期</div>
+                <div className="text-lg font-semibold mt-2">{getEstimatedDays()} 天</div>
+                <div className="text-sm text-muted-foreground">預計完成時間</div>
+              </div>
+            </div>
+            
             <div className="text-sm text-muted-foreground">
-              <p><strong>注意事項：</strong></p>
+              <p><strong>計算說明：</strong></p>
               <ul className="list-disc list-inside space-y-1 mt-2">
-                <li>總計 {totalSystems} 個測試系統，預計需 {getEstimatedDays()} 天完成</li>
-                <li>日產能約 {getDailyThroughput()} 台，基於瓶頸站點計算</li>
-                <li>各站點需要相應的技術支援人員配合</li>
-                <li>設備數量可能影響實際產能，請確認設備充足性</li>
-                {stations.length > 0 && (
-                  <li>瓶頸站點耗時 {Math.max(...stations.map(station => parseFloat(getCalculatedStationHours(station.id)))).toFixed(1)} 小時，建議增加設備或人力配置</li>
-                )}
+                <li>單機總測試時間：各站點測試項目預估時間加總 ({totalHours.toFixed(1)} 小時)</li>
+                <li>瓶頸站點：{stations.find(s => getStationEstimatedHours(s.id) === bottleneckHours)?.station_name || '未知'} ({bottleneckHours.toFixed(1)} 小時)</li>
+                <li>日產能基於瓶頸站點計算：8小時 ÷ {bottleneckHours.toFixed(1)}小時 = {getDailyThroughput()} 台/日</li>
+                <li>總工期：{totalSystems} 台系統 ÷ {getDailyThroughput()} 台/日 = {getEstimatedDays()} 天</li>
+                <li>此計算基於測試項目管理中設定的預估時間，實際時間可能因設備數量與人力配置而異</li>
               </ul>
             </div>
           </div>

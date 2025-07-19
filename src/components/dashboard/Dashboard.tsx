@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./StatsCard";
 import { TestPassChart } from "./TestPassChart";
-import { StationHeatmap } from "./StationHeatmap";
 import { MachineTable } from "./MachineTable";
 import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
@@ -129,13 +128,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />
-
-      {/* Station Heatmap */}
-      <Card>
-        <CardContent className="pt-6">
-          <StationHeatmap onStationClick={handleStationClick} />
-        </CardContent>
-      </Card>
 
       {/* Machine List */}
       <Card>
