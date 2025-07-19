@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { FileText, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import "jspdf/dist/jspdf.es.min.js";
 import { TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 
 interface TestTrackerPDFExporterProps {
@@ -58,20 +58,23 @@ export function TestTrackerPDFExporter({
     try {
       setIsExporting(true);
       
-      // 創建 PDF
+      // 創建 PDF - 設定支援中文字體
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
         format: 'a4'
       });
       
+      // 設定字體（使用內建字體避免亂碼）
+      pdf.setFont("times", "normal");
+      
       // 添加標題
       pdf.setFontSize(20);
-      pdf.text('GB300 L10 測試進度報表', 20, 20);
+      pdf.text('GB300 L10 Test Progress Report', 20, 20);
       
       pdf.setFontSize(12);
-      pdf.text(`生成時間: ${new Date().toLocaleString('zh-TW')}`, 20, 30);
-      pdf.text(`總系統數: ${systems.length}`, 20, 40);
+      pdf.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+      pdf.text(`Total Systems: ${systems.length}`, 20, 40);
       
       let yPosition = 55;
       
@@ -86,11 +89,11 @@ export function TestTrackerPDFExporter({
       // 表格標頭
       pdf.setFontSize(10);
       const headers = [
-        '機台編號', 
-        '當前站點', 
-        '狀態',
-        'Station 0 - 工廠組裝',
-        'Station 1 - 開機',
+        'Machine No.', 
+        'Current Station', 
+        'Status',
+        'Station 0 - Assembly',
+        'Station 1 - Boot',
         'Station 2 - FW',
         'Station 3 - Pega_diag'
       ];
@@ -130,9 +133,9 @@ export function TestTrackerPDFExporter({
         
         // 計算系統狀態
         const getSystemStatus = (system: any) => {
-          if (system.overall_progress === 100) return '已完成';
-          if (system.overall_progress > 0) return '進行中';
-          return '未開始';
+          if (system.overall_progress === 100) return 'Completed';
+          if (system.overall_progress > 0) return 'In Progress';
+          return 'Not Started';
         };
         
         // 計算每個站點的進度
@@ -159,7 +162,7 @@ export function TestTrackerPDFExporter({
         
         const rowData = [
           system.system_name,
-          system.current_station || '未設定',
+          system.current_station || 'Not Set',
           getSystemStatus(system),
           getStationProgress(system.id, 0),
           getStationProgress(system.id, 1),
@@ -189,11 +192,11 @@ export function TestTrackerPDFExporter({
       for (let i = 1; i <= pageCount; i++) {
         pdf.setPage(i);
         pdf.setFontSize(8);
-        pdf.text(`第 ${i} 頁，共 ${pageCount} 頁`, 240, 190);
+        pdf.text(`Page ${i} of ${pageCount}`, 240, 190);
       }
       
       // 下載 PDF
-      pdf.save(`GB300_L10_測試進度報表_${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`GB300_L10_Test_Progress_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
       
       toast({
         title: "匯出成功",
@@ -222,7 +225,7 @@ export function TestTrackerPDFExporter({
             測試追蹤 PDF 匯出
           </DialogTitle>
           <DialogDescription>
-            匯出完整的 GB300 L10 測試追蹤報表，包含所有機台的測試進度和站點狀態圖表。
+            匯出完整的 GB300 L10 測試追蹤報表，包含所有機台的測試進度。
           </DialogDescription>
         </DialogHeader>
         
