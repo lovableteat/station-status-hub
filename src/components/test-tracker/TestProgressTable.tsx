@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,29 @@ import { Progress } from "@/components/ui/progress";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { EditPermissionWrapper } from "@/components/layout/EditPermissionWrapper";
 import { Edit, Clock, User, FileText } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface TestProgress {
+  id: string;
+  system_id: string;
+  station_id: string;
+  item_id: string;
+  status: string;
+  progress_percent: number;
+  notes: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+interface TestItem {
+  id: string;
+  station_id: string;
+  item_name: string;
+  item_order: number;
+  description: string;
+  estimated_minutes?: number;
+}
 
 interface TestProgressTableProps {
   systems: any[];
@@ -37,11 +61,15 @@ export function TestProgressTable({
   onProgressUpdate,
   canEdit = false
 }: TestProgressTableProps) {
-  const [editingProgress, setEditingProgress] = useState<{
-    systemId: string;
-    stationId: string;
-    itemId: string;
-  } | null>(null);
+  const [editingProgress, setEditingProgress] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState({
+    status: '',
+    progress_percent: 0,
+    notes: '',
+    started_at: '',
+    completed_at: ''
+  });
+  const { toast } = useToast();
 
   const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
     return progress.find(p => 
@@ -52,12 +80,104 @@ export function TestProgressTable({
   };
 
   const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
-    setEditingProgress({ systemId, stationId, itemId });
+    const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+    const editKey = `${systemId}-${stationId}-${itemId}`;
+    
+    if (existingProgress) {
+      setEditValues({
+        status: existingProgress.status || '',
+        progress_percent: existingProgress.progress_percent || 0,
+        notes: existingProgress.notes || '',
+        started_at: existingProgress.started_at || '',
+        completed_at: existingProgress.completed_at || ''
+      });
+    } else {
+      setEditValues({
+        status: 'Not Start',
+        progress_percent: 0,
+        notes: '',
+        started_at: '',
+        completed_at: ''
+      });
+    }
+    
+    setEditingProgress(editKey);
   };
 
-  const handleCloseEditDialog = () => {
-    setEditingProgress(null);
-    onProgressUpdate();
+  const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
+    try {
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+      
+      if (existingProgress) {
+        await supabase
+          .from('test_progress')
+          .update(editValues)
+          .eq('id', existingProgress.id);
+      } else {
+        await supabase
+          .from('test_progress')
+          .insert({
+            system_id: systemId,
+            station_id: stationId,
+            item_id: itemId,
+            ...editValues
+          });
+      }
+
+      setEditingProgress(null);
+      onProgressUpdate();
+      
+      toast({
+        title: "成功",
+        description: "測試進度已更新",
+      });
+    } catch (error) {
+      console.error('Error saving progress:', error);
+      toast({
+        title: "錯誤",
+        description: "儲存測試進度時發生錯誤",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
+    try {
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+      if (existingProgress) {
+        await supabase
+          .from('test_progress')
+          .delete()
+          .eq('id', existingProgress.id);
+
+        onProgressUpdate();
+        
+        toast({
+          title: "成功",
+          description: "測試進度已刪除",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting progress:', error);
+      toast({
+        title: "錯誤",
+        description: "刪除測試進度時發生錯誤",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Done':
+        return 'bg-green-500 text-white';
+      case 'On-going':
+        return 'bg-blue-500 text-white';
+      case 'Issue':
+        return 'bg-red-500 text-white';
+      default:
+        return 'bg-gray-500 text-white';
+    }
   };
 
   const groupedData = systems.map(system => {
@@ -100,6 +220,31 @@ export function TestProgressTable({
       [field]: value
     });
   };
+
+  // Get current editing context for dialog
+  const getEditingContext = () => {
+    if (!editingProgress) return null;
+    
+    const [systemId, stationId] = editingProgress.split('-');
+    const system = systems.find(s => s.id === systemId);
+    const station = stations.find(s => s.id === stationId);
+    const stationItems = items
+      .filter(item => item.station_id === stationId)
+      .map(item => ({
+        ...item,
+        description: item.description || ''
+      }));
+    
+    return {
+      systemId,
+      stationId,
+      systemName: system?.system_name || '',
+      stationName: station?.station_name || '',
+      stationItems
+    };
+  };
+
+  const editingContext = getEditingContext();
 
   return (
     <Card>
@@ -240,12 +385,25 @@ export function TestProgressTable({
           ))}
         </div>
 
-        {editingProgress && (
+        {editingContext && (
           <EditPermissionWrapper module="test-tracker">
             <ProgressEditDialog
-              systemId={editingProgress.systemId}
-              stationId={editingProgress.stationId}
-              itemId={editingProgress.itemId}
+              systemName={editingContext.systemName}
+              stationName={editingContext.stationName}
+              stationItems={editingContext.stationItems}
+              progress={progress}
+              editingProgress={editingProgress}
+              setEditingProgress={setEditingProgress}
+              editValues={editValues}
+              setEditValues={setEditValues}
+              getProgressForSystemItem={getProgressForSystemItem}
+              handleEditProgress={handleEditProgress}
+              handleSaveProgress={handleSaveProgress}
+              handleDeleteProgress={handleDeleteProgress}
+              getStatusColor={getStatusColor}
+              systemId={editingContext.systemId}
+              stationId={editingContext.stationId}
+              onTimeUpdate={onProgressUpdate}
             />
           </EditPermissionWrapper>
         )}
