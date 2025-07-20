@@ -266,7 +266,7 @@ export function TestProgressTable({
                 <SelectValue placeholder="所有系統" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">所有系統</SelectItem>
+                <SelectItem value="all-systems">所有系統</SelectItem>
                 {systems.map(system => (
                   <SelectItem key={system.id} value={system.id}>{system.system_name}</SelectItem>
                 ))}
@@ -284,7 +284,7 @@ export function TestProgressTable({
                 <SelectValue placeholder="所有站點" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">所有站點</SelectItem>
+                <SelectItem value="all-stations">所有站點</SelectItem>
                 {stations.map(station => (
                   <SelectItem key={station.id} value={station.id}>{station.station_name}</SelectItem>
                 ))}
@@ -302,7 +302,7 @@ export function TestProgressTable({
                 <SelectValue placeholder="所有工程師" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">所有工程師</SelectItem>
+                <SelectItem value="all-engineers">所有工程師</SelectItem>
                 {engineers.map(engineer => (
                   <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
                 ))}
@@ -320,7 +320,7 @@ export function TestProgressTable({
                 <SelectValue placeholder="所有狀態" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">所有狀態</SelectItem>
+                <SelectItem value="all-status">所有狀態</SelectItem>
                 <SelectItem value="Not Started">未開始</SelectItem>
                 <SelectItem value="On-going">進行中</SelectItem>
                 <SelectItem value="Done">完成</SelectItem>
