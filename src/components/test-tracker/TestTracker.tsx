@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -267,16 +268,19 @@ export function TestTracker() {
 
       {showFilters && (
         <FilterControls
-          filters={filters}
-          onFiltersChange={setFilters}
+          searchTerm=""
+          setSearchTerm={() => {}}
+          filterEngineer={filters.engineer}
+          setFilterEngineer={(engineer) => setFilters({...filters, engineer})}
+          filterStatus={filters.status}
+          setFilterStatus={(status) => setFilters({...filters, status})}
+          engineers={engineers}
         />
       )}
 
       <EditPermissionWrapper module="test-tracker">
         {showManagement && (
-          <TestManagementPanel
-            onDataChange={loadAllData}
-          />
+          <TestManagementPanel />
         )}
       </EditPermissionWrapper>
 
@@ -295,7 +299,7 @@ export function TestTracker() {
       <EditPermissionWrapper module="test-tracker">
         {showSystemManager && (
           <SystemManager
-            isOpen={showSystemManager}
+            open={showSystemManager}
             onClose={() => setShowSystemManager(false)}
             onDataChange={loadAllData}
           />
@@ -304,7 +308,7 @@ export function TestTracker() {
 
       <EditPermissionWrapper module="test-tracker">
         <BulkResetDialog
-          isOpen={bulkResetOpen}
+          open={bulkResetOpen}
           onClose={() => setBulkResetOpen(false)}
           onReset={loadAllData}
         />
