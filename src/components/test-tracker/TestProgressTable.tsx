@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -241,16 +240,15 @@ export function TestProgressTable({
           ))}
         </div>
 
-        {/* Progress Edit Dialog */}
-        <EditPermissionWrapper module="test-tracker">
-          <ProgressEditDialog
-            open={editingProgress !== null}
-            onOpenChange={handleCloseEditDialog}
-            systemId={editingProgress?.systemId || ''}
-            stationId={editingProgress?.stationId || ''}
-            itemId={editingProgress?.itemId || ''}
-          />
-        </EditPermissionWrapper>
+        {editingProgress && (
+          <EditPermissionWrapper module="test-tracker">
+            <ProgressEditDialog
+              systemId={editingProgress.systemId}
+              stationId={editingProgress.stationId}
+              itemId={editingProgress.itemId}
+            />
+          </EditPermissionWrapper>
+        )}
       </CardContent>
     </Card>
   );

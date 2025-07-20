@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -296,23 +295,24 @@ export function TestTracker() {
         canEdit={canEditModule('test-tracker')}
       />
 
-      <EditPermissionWrapper module="test-tracker">
-        {showSystemManager && (
+      {showSystemManager && (
+        <EditPermissionWrapper module="test-tracker">
           <SystemManager
-            open={showSystemManager}
-            onClose={() => setShowSystemManager(false)}
-            onDataChange={loadAllData}
+            onSystemUpdate={loadAllData}
           />
-        )}
-      </EditPermissionWrapper>
+        </EditPermissionWrapper>
+      )}
 
-      <EditPermissionWrapper module="test-tracker">
-        <BulkResetDialog
-          open={bulkResetOpen}
-          onClose={() => setBulkResetOpen(false)}
-          onReset={loadAllData}
-        />
-      </EditPermissionWrapper>
+      {bulkResetOpen && (
+        <EditPermissionWrapper module="test-tracker">
+          <BulkResetDialog
+            onReset={() => {
+              loadAllData();
+              setBulkResetOpen(false);
+            }}
+          />
+        </EditPermissionWrapper>
+      )}
 
       <TestTrackerPDFExporter
         systems={filteredSystems}
