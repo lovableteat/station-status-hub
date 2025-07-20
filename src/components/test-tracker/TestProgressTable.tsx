@@ -265,9 +265,7 @@ export function TestProgressTable({
 
       {/* Test Management Panel */}
       {showManagementPanel && (
-        <TestManagementPanel
-          onDataChange={onSystemUpdate}
-        />
+        <TestManagementPanel />
       )}
     </div>
   );
