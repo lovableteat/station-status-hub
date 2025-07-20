@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,12 +44,11 @@ export function usePermissions() {
   };
 
   const hasPermission = (permission: Permission): boolean => {
-    // 只有super_admin擁有所有權限，admin需要明確授權
-    if (user?.role === 'super_admin') {
+    // 超級管理員和管理員有所有權限
+    if (user?.role === 'super_admin' || user?.role === 'admin') {
       return true;
     }
     
-    // 其他所有角色（包括admin）都需要明確的權限授予
     return permissions.includes(permission);
   };
 
