@@ -11,16 +11,18 @@ import { supabase } from "@/integrations/supabase/client";
 interface UserEditDialogProps {
   userId: string;
   username: string;
+  displayName?: string;
   role: string;
   status: string;
   onUpdate: () => void;
   onDelete: (userId: string) => void;
 }
 
-export function UserEditDialog({ userId, username, role, status, onUpdate, onDelete }: UserEditDialogProps) {
+export function UserEditDialog({ userId, username, displayName, role, status, onUpdate, onDelete }: UserEditDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editValues, setEditValues] = useState({
     username,
+    displayName: displayName || "",
     role,
     status,
     password: ""
@@ -31,6 +33,7 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
     try {
       const updateData: any = {
         username: editValues.username,
+        display_name: editValues.displayName,
         role: editValues.role,
         status: editValues.status
       };
@@ -97,6 +100,14 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
             />
           </div>
           <div>
+            <Label>顯示名稱</Label>
+            <Input
+              value={editValues.displayName}
+              onChange={(e) => setEditValues({...editValues, displayName: e.target.value})}
+              placeholder="請輸入顯示名稱..."
+            />
+          </div>
+          <div>
             <Label>新密碼 (留空則不更改)</Label>
             <Input
               type="password"
@@ -112,6 +123,7 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="super_admin">超級管理員</SelectItem>
                 <SelectItem value="admin">管理員</SelectItem>
                 <SelectItem value="engineer">工程師</SelectItem>
                 <SelectItem value="viewer">檢視者</SelectItem>
