@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,10 +103,10 @@ export function TestTracker() {
         { data: progressData, error: progressError },
         { data: engineersData, error: engineersError }
       ] = await Promise.all([
-        supabase.from('systems').select('*').order('created_at', { ascending: false }),
-        supabase.from('stations').select('*').order('station_order', { ascending: true }),
-        supabase.from('items').select('*').order('item_order', { ascending: true }),
-        supabase.from('progress').select('*').order('created_at', { ascending: false }),
+        supabase.from('test_systems').select('*').order('created_at', { ascending: false }),
+        supabase.from('test_flow_stations').select('*').order('station_order', { ascending: true }),
+        supabase.from('test_flow_items').select('*').order('item_order', { ascending: true }),
+        supabase.from('test_progress').select('*').order('created_at', { ascending: false }),
         supabase.from('engineers').select('name').order('created_at', { ascending: true })
       ]);
 
@@ -179,7 +180,6 @@ export function TestTracker() {
           <ExportManager 
             systems={filteredSystems}
             stations={stations}
-            items={items}
             progress={progress}
           />
 
@@ -258,9 +258,6 @@ export function TestTracker() {
 
       {showFilters && (
         <FilterControls
-          systems={systems}
-          stations={stations}
-          engineers={engineers}
           filters={filters}
           setFilters={setFilters}
         />
@@ -269,8 +266,6 @@ export function TestTracker() {
       <EditPermissionWrapper module="test-tracker">
         {showManagement && (
           <TestManagementPanel
-            stations={stations}
-            items={items}
             loadAllData={loadAllData}
           />
         )}
@@ -283,7 +278,8 @@ export function TestTracker() {
         progress={progress}
         engineers={engineers}
         filters={filters}
-        loadAllData={loadAllData}
+        onFiltersChange={setFilters}
+        onProgressUpdate={loadAllData}
         canEdit={canEditModule('test-tracker')}
       />
 

@@ -1,7 +1,9 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { ProgressEditDialog } from "./ProgressEditDialog";
@@ -113,7 +115,6 @@ export function TestProgressTable({
           <div>
             <Label htmlFor="system-filter">系統:</Label>
             <Select
-              id="system-filter"
               value={filters.system}
               onValueChange={(value) => handleFilterChange('system', value)}
             >
@@ -132,7 +133,6 @@ export function TestProgressTable({
           <div>
             <Label htmlFor="station-filter">站點:</Label>
             <Select
-              id="station-filter"
               value={filters.station}
               onValueChange={(value) => handleFilterChange('station', value)}
             >
@@ -151,7 +151,6 @@ export function TestProgressTable({
           <div>
             <Label htmlFor="engineer-filter">工程師:</Label>
             <Select
-              id="engineer-filter"
               value={filters.engineer}
               onValueChange={(value) => handleFilterChange('engineer', value)}
             >
@@ -170,7 +169,6 @@ export function TestProgressTable({
           <div>
             <Label htmlFor="status-filter">狀態:</Label>
             <Select
-              id="status-filter"
               value={filters.status}
               onValueChange={(value) => handleFilterChange('status', value)}
             >
@@ -246,7 +244,7 @@ export function TestProgressTable({
         {/* Progress Edit Dialog */}
         <EditPermissionWrapper module="test-tracker">
           <ProgressEditDialog
-            isOpen={editingProgress !== null}
+            open={editingProgress !== null}
             onClose={handleCloseEditDialog}
             systemId={editingProgress?.systemId || ''}
             stationId={editingProgress?.stationId || ''}
