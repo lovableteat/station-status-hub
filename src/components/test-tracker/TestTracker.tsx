@@ -1,326 +1,258 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
+
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { TestProgressTable } from "./TestProgressTable";
-import { SystemManager } from "./SystemManager";
-import { TestManagementPanel } from "./TestManagementPanel";
-import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
+import { Button } from "@/components/ui/button";
+import { Download, FileText } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
+import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
-import { BulkResetDialog } from "./BulkResetDialog";
-import { usePermissions } from "@/hooks/usePermissions";
-import { EditPermissionWrapper } from "@/components/layout/EditPermissionWrapper";
-import { 
-  Download, 
-  RefreshCw, 
-  Settings, 
-  Plus, 
-  FileText,
-  RotateCcw,
-  Filter
-} from "lucide-react";
+import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface System {
-  id: string;
-  system_name: string;
-  current_station: string | null;
-  overall_progress: number;
-  created_at: string;
-  assigned_engineer: string | null;
-  status: string;
-  model: string | null;
-  serial_number: string | null;
-  actual_started_at: string | null;
-  actual_completed_at: string | null;
-}
-
-interface Station {
-  id: string;
-  station_name: string;
-  station_order: number;
-  created_at: string;
-  description: string | null;
-  estimated_hours: number | null;
-}
-
-interface Item {
-  id: string;
-  station_id: string;
-  item_name: string;
-  item_order: number;
-  created_at: string;
-  description: string | null;
-  estimated_minutes: number | null;
-}
-
-interface Progress {
+interface TestProgress {
   id: string;
   system_id: string;
   station_id: string;
   item_id: string;
   status: string;
   progress_percent: number;
-  assigned_to: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  actual_hours: number | null;
+  notes: string;
+  started_at?: string;
+  completed_at?: string;
 }
 
 export function TestTracker() {
-  const [systems, setSystems] = useState<System[]>([]);
-  const [stations, setStations] = useState<Station[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
-  const [progress, setProgress] = useState<Progress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showManagement, setShowManagement] = useState(false);
-  const [showSystemManager, setShowSystemManager] = useState(false);
-  const [bulkResetOpen, setBulkResetOpen] = useState(false);
-  const [pdfExportOpen, setPdfExportOpen] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterEngineer, setFilterEngineer] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [editingProgress, setEditingProgress] = useState<string | null>(null);
+  const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
+  const [editValues, setEditValues] = useState<{
+    status: string;
+    progress_percent: number;
+    notes: string;
+    started_at?: string;
+    completed_at?: string;
+  }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
   const { toast } = useToast();
-  const [filters, setFilters] = useState({
-    system: '',
-    station: '',
-    engineer: '',
-    status: ''
-  });
-  const [engineers, setEngineers] = useState<string[]>([]);
-  const { canEditModule } = usePermissions();
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
+  const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
+    return progress.find(p => 
+      p.system_id === systemId && 
+      p.station_id === stationId && 
+      p.item_id === itemId
+    );
+  };
 
-  const loadAllData = async () => {
-    setLoading(true);
-    setError(null);
+  const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
+    const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+    const editKey = `${systemId}-${stationId}-${itemId}`;
+    
+    setEditingProgress(editKey);
+    setEditValues({
+      status: existingProgress?.status || "Not Start",
+      progress_percent: existingProgress?.progress_percent || 0,
+      notes: existingProgress?.notes || "",
+      started_at: existingProgress?.started_at,
+      completed_at: existingProgress?.completed_at
+    });
+  };
+
+  const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
     try {
-      const [
-        { data: systemsData, error: systemsError },
-        { data: stationsData, error: stationsError },
-        { data: itemsData, error: itemsError },
-        { data: progressData, error: progressError },
-        { data: engineersData, error: engineersError }
-      ] = await Promise.all([
-        supabase.from('test_systems').select('*').order('created_at', { ascending: false }),
-        supabase.from('test_flow_stations').select('*').order('station_order', { ascending: true }),
-        supabase.from('test_flow_items').select('*').order('item_order', { ascending: true }),
-        supabase.from('test_progress').select('*').order('created_at', { ascending: false }),
-        supabase.from('engineers').select('name').order('created_at', { ascending: true })
-      ]);
+      // 找到對應的station，檢查是否為Station 0-4
+      const station = stations.find(s => s.id === stationId);
+      const isStation0To4 = station && station.station_order >= 0 && station.station_order <= 4;
+      
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+      const currentTime = new Date().toISOString();
+      
+      // 準備更新數據
+      const updates: any = {
+        status: editValues.status,
+        progress_percent: editValues.progress_percent,
+        notes: editValues.notes
+      };
 
-      if (systemsError) throw systemsError;
-      if (stationsError) throw stationsError;
-      if (itemsError) throw itemsError;
-      if (progressError) throw progressError;
-      if (engineersError) throw engineersError;
+      // 只對Station 0-4自動記錄時間
+      if (isStation0To4) {
+        // 如果狀態從 "Not Start" 變為 "On-going"，設定開始時間
+        if (existingProgress?.status === 'Not Start' && editValues.status === 'On-going') {
+          updates.started_at = currentTime;
+        }
+        // 如果狀態變為 "Done"，設定完成時間
+        if (editValues.status === 'Done' && existingProgress?.status !== 'Done') {
+          updates.completed_at = currentTime;
+          // 如果沒有開始時間，也設定開始時間
+          if (!existingProgress?.started_at) {
+            updates.started_at = currentTime;
+          }
+        }
+        // 保留現有時間（如果不是狀態變更觸發）
+        if (editValues.started_at) {
+          updates.started_at = editValues.started_at;
+        }
+        if (editValues.completed_at) {
+          updates.completed_at = editValues.completed_at;
+        }
+      } else {
+        // 非Station 0-4的站點，保持手動設定的時間
+        updates.started_at = editValues.started_at;
+        updates.completed_at = editValues.completed_at;
+      }
 
-      setSystems(systemsData || []);
-      setStations(stationsData || []);
-      setItems(itemsData || []);
-      setProgress(progressData || []);
-      setEngineers(engineersData?.map(e => e.name) || []);
-    } catch (e: any) {
-      setError(e.message);
+      const success = await updateProgress(systemId, stationId, itemId, updates);
+      
+      if (success) {
+        setEditingProgress(null);
+        const stationName = station?.station_name || `Station ${station?.station_order}`;
+        toast({
+          title: "儲存成功",
+          description: `${stationName} 測試進度已更新${isStation0To4 ? '，時間已自動記錄' : ''}`,
+        });
+      } else {
+        throw new Error('Update failed');
+      }
+    } catch (error) {
+      console.error('Error saving progress:', error);
       toast({
-        title: "載入失敗",
-        description: "無法載入測試追蹤資料",
+        title: "儲存失敗",
+        description: "無法更新測試進度",
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
+    if (!confirm('DELETE the progress for this test item?')) {
+      return;
+    }
+
+    try {
+      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
+      
+      if (existingProgress) {
+        const { error } = await supabase
+          .from('test_progress')
+          .delete()
+          .eq('id', existingProgress.id);
+
+        if (error) throw error;
+
+        await loadData();
+        
+        toast({
+          title: "Deleted",
+          description: "Test progress record deleted successfully"
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting progress:', error);
+      toast({
+        title: "Delete Error",
+        description: "Failed to delete test progress record",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Done': return 'bg-success text-success-foreground';
+      case 'On-going': return 'bg-warning text-warning-foreground';
+      case 'Not Start': return 'bg-muted text-muted-foreground';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 
   const filteredSystems = systems.filter(system => {
-    if (filters.system && system.system_name !== filters.system) {
-      return false;
-    }
-    const currentStationName = system.current_station || '';
-    if (filters.station && currentStationName !== filters.station) {
-      return false;
-    }
-    return true;
+    const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesEngineer = !filterEngineer || filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
+    const matchesStatus = !filterStatus || filterStatus === "all-status" || system.status === filterStatus;
+    return matchesSearch && matchesEngineer && matchesStatus;
   });
 
-  const stats = {
-    totalSystems: systems.length,
-    completedSystems: systems.filter(system => system.overall_progress === 100).length,
-    inProgressSystems: systems.filter(system => system.overall_progress > 0 && system.overall_progress < 100).length,
-    notStartedSystems: systems.filter(system => system.overall_progress === 0).length,
-  };
+  const engineers = [...new Set(systems.map(s => s.assigned_engineer))];
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
-          <p className="text-muted-foreground">追蹤系統測試進度和狀態</p>
+          <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態</p>
         </div>
-        
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={loadAllData}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            重新載入
-          </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            篩選
-          </Button>
-
+        <div className="flex gap-2">
           <ExportManager 
-            systems={filteredSystems}
-            stations={stations}
-            progress={progress}
+            systems={filteredSystems} 
+            stations={stations} 
+            progress={progress} 
           />
-
-          <Button
-            variant="outline"
-            onClick={() => setPdfExportOpen(true)}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            匯出 PDF
-          </Button>
-
-          <EditPermissionWrapper module="test-tracker">
-            <Button
-              variant="outline"
-              onClick={() => setBulkResetOpen(true)}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              批次重置
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => setShowManagement(!showManagement)}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              管理
-            </Button>
-
-            <Button
-              onClick={() => setShowSystemManager(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              新增系統
-            </Button>
-          </EditPermissionWrapper>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                PDF 匯出
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
+                <FileText className="h-4 w-4 mr-2" />
+                完整測試追蹤 PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>總系統數</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalSystems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>已完成</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">{stats.completedSystems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>進行中</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-500">{stats.inProgressSystems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>未開始</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{stats.notStartedSystems}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {showFilters && (
-        <FilterControls
-          searchTerm=""
-          setSearchTerm={() => {}}
-          filterEngineer={filters.engineer}
-          setFilterEngineer={(engineer) => setFilters({...filters, engineer})}
-          filterStatus={filters.status}
-          setFilterStatus={(status) => setFilters({...filters, status})}
-          engineers={engineers}
-        />
-      )}
-
-      <EditPermissionWrapper module="test-tracker">
-        {showManagement && (
-          <TestManagementPanel />
-        )}
-      </EditPermissionWrapper>
-
-      <TestProgressTable
-        systems={filteredSystems}
-        stations={stations}
-        items={items}
-        progress={progress}
+      {/* Filters */}
+      <FilterControls
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filterEngineer={filterEngineer}
+        setFilterEngineer={setFilterEngineer}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
         engineers={engineers}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onProgressUpdate={loadAllData}
-        canEdit={canEditModule('test-tracker')}
       />
 
-      {showSystemManager && (
-        <EditPermissionWrapper module="test-tracker">
-          <SystemManager
-            onSystemUpdate={loadAllData}
-          />
-        </EditPermissionWrapper>
-      )}
+      {/* Test Progress Table */}
+      <div data-testtracker-table>
+        <TestProgressTable
+          filteredSystems={filteredSystems}
+          stations={stations}
+          items={items}
+          progress={progress}
+          editingProgress={editingProgress}
+          setEditingProgress={setEditingProgress}
+          editValues={editValues}
+          setEditValues={setEditValues}
+          getProgressForSystemItem={getProgressForSystemItem}
+          handleEditProgress={handleEditProgress}
+          handleSaveProgress={handleSaveProgress}
+          handleDeleteProgress={handleDeleteProgress}
+          getStatusColor={getStatusColor}
+          onSystemUpdate={loadData}
+        />
+      </div>
 
-      {bulkResetOpen && (
-        <EditPermissionWrapper module="test-tracker">
-          <BulkResetDialog
-            onReset={() => {
-              loadAllData();
-              setBulkResetOpen(false);
-            }}
-          />
-        </EditPermissionWrapper>
-      )}
-
+      {/* PDF Exporter Dialog */}
       <TestTrackerPDFExporter
         systems={filteredSystems}
         stations={stations}
         items={items}
         progress={progress}
-        isOpen={pdfExportOpen}
-        onClose={() => setPdfExportOpen(false)}
+        isOpen={pdfExporterOpen}
+        onClose={() => setPdfExporterOpen(false)}
       />
     </div>
   );
