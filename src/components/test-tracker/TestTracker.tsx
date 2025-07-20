@@ -313,8 +313,7 @@ export function TestTracker() {
       {/* System Manager Dialog */}
       {systemManagerOpen && (
         <SystemManager
-          onDataChange={loadData}
-          onClose={() => setSystemManagerOpen(false)}
+          onSystemUpdate={loadData}
         />
       )}
 
@@ -322,7 +321,6 @@ export function TestTracker() {
       {bulkResetOpen && (
         <BulkResetDialog
           onReset={loadData}
-          onClose={() => setBulkResetOpen(false)}
         />
       )}
     </div>

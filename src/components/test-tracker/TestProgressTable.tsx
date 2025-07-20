@@ -247,25 +247,25 @@ export function TestProgressTable({
       {/* System Edit Dialog */}
       {showSystemEditDialog && selectedSystem && (
         <SystemEditDialog
-          system={selectedSystem}
-          onSystemUpdate={onSystemUpdate}
-          onClose={() => setShowSystemEditDialog(false)}
+          systemId={selectedSystem.id}
+          systemName={selectedSystem.system_name}
+          assignedEngineer={selectedSystem.assigned_engineer}
+          onUpdate={onSystemUpdate}
         />
       )}
 
       {/* System Reset Dialog */}
       {showSystemResetDialog && selectedSystem && (
         <SystemResetDialog
-          system={selectedSystem}
+          systemId={selectedSystem.id}
+          systemName={selectedSystem.system_name}
           onReset={onSystemUpdate}
-          onClose={() => setShowSystemResetDialog(false)}
         />
       )}
 
       {/* Test Management Panel */}
       {showManagementPanel && (
         <TestManagementPanel
-          onClose={() => setShowManagementPanel(false)}
           onDataChange={onSystemUpdate}
         />
       )}
