@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface LoginPageProps {
-  onLogin: (userId: string, username: string, role: string) => void;
+  onLogin: (userId: string, username: string, displayName: string | undefined, role: string) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
@@ -21,31 +21,42 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
 
     try {
-      // Use secure authentication function with password hashing
+      // First authenticate the user
       const { data, error } = await supabase.rpc('authenticate_user', {
         username_input: username,
         password_input: password
       });
 
-      if (error) {
-        console.error('Authentication error:', error);
-        toast({
-          title: "登入失敗",
-          description: "系統錯誤，請稍後再試",
-          variant: "destructive"
-        });
-      } else if (!data || data.length === 0 || !data[0].success) {
+      if (error) throw error;
+
+      if (!data || data.length === 0 || !data[0].success) {
         toast({
           title: "登入失敗",
           description: "帳號或密碼錯誤",
           variant: "destructive"
         });
-      } else {
-        const userInfo = data[0];
-        onLogin(userInfo.user_id, userInfo.username, userInfo.role);
+        return;
+      }
+
+      // Get complete user info including display_name
+      const { data: userDetails, error: userError } = await supabase
+        .from('system_users')
+        .select('id, username, display_name, role')
+        .eq('username', username)
+        .single();
+
+      if (userError) {
+        console.error('User details error:', userError);
+        toast({
+          title: "登入失敗",
+          description: "系統錯誤，請稍後再試",
+          variant: "destructive"
+        });
+      } else if (userDetails) {
+        onLogin(userDetails.id, userDetails.username, userDetails.display_name, userDetails.role);
         toast({
           title: "登入成功",
-          description: `歡迎回來，${userInfo.role === 'super_admin' ? '超級管理員' : userInfo.role === 'admin' ? '管理員' : '工程師'}`
+          description: `歡迎回來，${userDetails.display_name || userDetails.username}`
         });
       }
     } catch (error) {
