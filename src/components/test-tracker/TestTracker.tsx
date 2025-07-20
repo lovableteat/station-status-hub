@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { TestProgressTable } from "./TestProgressTable";
 import { SystemManager } from "./SystemManager";
 import { TestManagementPanel } from "./TestManagementPanel";
-import { SystemStatusCalculator } from "./SystemStatusCalculator";
-import { SystemStatusUpdater } from "./SystemStatusUpdater";
 import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
 import { FilterControls } from "./FilterControls";
 import { ExportManager } from "./ExportManager";
@@ -35,6 +32,12 @@ interface System {
   current_station: string | null;
   overall_progress: number;
   created_at: string;
+  assigned_engineer: string | null;
+  status: string;
+  model: string | null;
+  serial_number: string | null;
+  actual_started_at: string | null;
+  actual_completed_at: string | null;
 }
 
 interface Station {
@@ -42,6 +45,8 @@ interface Station {
   station_name: string;
   station_order: number;
   created_at: string;
+  description: string | null;
+  estimated_hours: number | null;
 }
 
 interface Item {
@@ -50,6 +55,8 @@ interface Item {
   item_name: string;
   item_order: number;
   created_at: string;
+  description: string | null;
+  estimated_minutes: number | null;
 }
 
 interface Progress {
@@ -58,12 +65,14 @@ interface Progress {
   station_id: string;
   item_id: string;
   status: string;
-  progress_value: number;
-  assigned_engineer: string;
-  start_date: string;
-  completion_date: string | null;
+  progress_percent: number;
+  assigned_to: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   notes: string | null;
   created_at: string;
+  updated_at: string;
+  actual_hours: number | null;
 }
 
 export function TestTracker() {
@@ -259,14 +268,14 @@ export function TestTracker() {
       {showFilters && (
         <FilterControls
           filters={filters}
-          setFilters={setFilters}
+          onFiltersChange={setFilters}
         />
       )}
 
       <EditPermissionWrapper module="test-tracker">
         {showManagement && (
           <TestManagementPanel
-            loadAllData={loadAllData}
+            onDataChange={loadAllData}
           />
         )}
       </EditPermissionWrapper>
@@ -283,30 +292,24 @@ export function TestTracker() {
         canEdit={canEditModule('test-tracker')}
       />
 
-      {/* System Manager Dialog */}
       <EditPermissionWrapper module="test-tracker">
         {showSystemManager && (
           <SystemManager
-            open={showSystemManager}
+            isOpen={showSystemManager}
             onClose={() => setShowSystemManager(false)}
-            loadAllData={loadAllData}
+            onDataChange={loadAllData}
           />
         )}
       </EditPermissionWrapper>
 
-      {/* Bulk Reset Dialog */}
       <EditPermissionWrapper module="test-tracker">
         <BulkResetDialog
-          open={bulkResetOpen}
+          isOpen={bulkResetOpen}
           onClose={() => setBulkResetOpen(false)}
-          systems={systems}
-          stations={stations}
-          items={items}
-          loadAllData={loadAllData}
+          onReset={loadAllData}
         />
       </EditPermissionWrapper>
 
-      {/* PDF Export Dialog */}
       <TestTrackerPDFExporter
         systems={filteredSystems}
         stations={stations}
@@ -314,21 +317,6 @@ export function TestTracker() {
         progress={progress}
         isOpen={pdfExportOpen}
         onClose={() => setPdfExportOpen(false)}
-      />
-
-      {/* System Status Calculator and Updater */}
-      <SystemStatusCalculator
-        systems={systems}
-        stations={stations}
-        items={items}
-        progress={progress}
-      />
-      <SystemStatusUpdater
-        systems={systems}
-        stations={stations}
-        items={items}
-        progress={progress}
-        loadAllData={loadAllData}
       />
     </div>
   );
