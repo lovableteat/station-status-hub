@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useUser } from "@/components/auth/UserContext";
 import {
   BarChart3,
   Database,
@@ -13,7 +14,9 @@ import {
   Home,
   ListChecks,
   FileText,
-  Users
+  Users,
+  LogOut,
+  User
 } from "lucide-react";
 
 interface SidebarProps {
@@ -38,6 +41,7 @@ const navigationItems = [
 export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { canViewModule } = usePermissions();
+  const { user, logout } = useUser();
 
   // On mobile, use isOpen prop; on desktop, use collapsed state
   const isVisible = isMobile ? isOpen : true;
@@ -146,6 +150,35 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
             })}
           </div>
         </nav>
+
+        {/* User info and logout section */}
+        <div className="p-2 border-t border-border">
+          {(!collapsed || isMobile) && (
+            <div className="mb-2 p-2 rounded bg-accent/50">
+              <div className="flex items-center gap-2 text-sm">
+                <User className="h-4 w-4" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{user?.username}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {user?.role === 'super_admin' ? '超級管理員' : 
+                     user?.role === 'admin' ? '管理員' : '工程師'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+              (collapsed && !isMobile) ? "px-2" : "px-3"
+            )}
+            onClick={logout}
+          >
+            <LogOut className={cn("h-4 w-4", (collapsed && !isMobile) ? "mr-0" : "mr-3")} />
+            {(!collapsed || isMobile) && "登出"}
+          </Button>
+        </div>
       </div>
     </>
   );
