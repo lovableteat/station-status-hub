@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,11 +73,11 @@ export function TestProgressTable({
         return {
           itemId,
           itemName,
-          progress: prog ? prog.progress : 0,
+          progress: prog ? prog.progress_percent : 0,
           status: prog ? prog.status : 'Not Started',
-          engineerId: prog ? prog.engineer_id : null,
-          startDate: prog ? prog.start_date : null,
-          completionDate: prog ? prog.completion_date : null,
+          engineerId: prog ? prog.assigned_to : null,
+          startDate: prog ? prog.started_at : null,
+          completionDate: prog ? prog.completed_at : null,
           notes: prog ? prog.notes : null
         };
       });
@@ -160,7 +159,7 @@ export function TestProgressTable({
               <SelectContent>
                 <SelectItem value="">所有工程師</SelectItem>
                 {engineers.map(engineer => (
-                  <SelectItem key={engineer.id} value={engineer.id}>{engineer.name}</SelectItem>
+                  <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -244,7 +243,7 @@ export function TestProgressTable({
         {/* Progress Edit Dialog */}
         <EditPermissionWrapper module="test-tracker">
           <ProgressEditDialog
-            open={editingProgress !== null}
+            isOpen={editingProgress !== null}
             onClose={handleCloseEditDialog}
             systemId={editingProgress?.systemId || ''}
             stationId={editingProgress?.stationId || ''}
