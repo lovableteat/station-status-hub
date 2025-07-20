@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ interface TestProgressTableProps {
   stations: any[];
   items: any[];
   progress: any[];
-  engineers: any[];
+  engineers: string[];
   filters: {
     system: string;
     station: string;
@@ -243,8 +244,8 @@ export function TestProgressTable({
         {/* Progress Edit Dialog */}
         <EditPermissionWrapper module="test-tracker">
           <ProgressEditDialog
-            isOpen={editingProgress !== null}
-            onClose={handleCloseEditDialog}
+            open={editingProgress !== null}
+            onOpenChange={handleCloseEditDialog}
             systemId={editingProgress?.systemId || ''}
             stationId={editingProgress?.stationId || ''}
             itemId={editingProgress?.itemId || ''}
