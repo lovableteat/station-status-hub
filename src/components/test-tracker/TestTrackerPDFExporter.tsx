@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +11,7 @@ import {
 import { FileText, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
+// 引入支援中文的字體
 import "jspdf/dist/jspdf.es.min.js";
 import { TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 
@@ -58,47 +58,47 @@ export function TestTrackerPDFExporter({
     try {
       setIsExporting(true);
       
-      // 創建 PDF - 設定支援中文字體
+      // 創建 PDF 並設定中文支援
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
         format: 'a4'
       });
+
+      // 添加中文字體支援
+      pdf.addFont('https://fonts.gstatic.com/ea/notosanstc/v1/NotoSansTC-Regular.ttf', 'NotoSansTC', 'normal');
+      pdf.setFont('NotoSansTC', 'normal');
       
-      // 設定字體（使用內建字體避免亂碼）
-      pdf.setFont("times", "normal");
-      
-      // 添加標題
-      pdf.setFontSize(20);
-      pdf.text('GB300 L10 Test Progress Report', 20, 20);
+      // 設定標題
+      pdf.setFontSize(18);
+      pdf.text('GB300 L10 測試進度報表', 20, 20);
       
       pdf.setFontSize(12);
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
-      pdf.text(`Total Systems: ${systems.length}`, 20, 40);
+      const currentDate = new Date().toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      pdf.text(`生成時間: ${currentDate}`, 20, 30);
+      pdf.text(`總系統數: ${systems.length}`, 20, 40);
       
       let yPosition = 55;
-      
-      // 獲取 Station 0-3 的站點
-      const targetStations = [
-        { name: 'Station 0 - 工廠組裝', order: 0 },
-        { name: 'Station 1 - 開機', order: 1 },
-        { name: 'Station 2 - FW', order: 2 },
-        { name: 'Station 3 - Pega_diag', order: 3 }
-      ];
       
       // 表格標頭
       pdf.setFontSize(10);
       const headers = [
-        'Machine No.', 
-        'Current Station', 
-        'Status',
-        'Station 0 - Assembly',
-        'Station 1 - Boot',
-        'Station 2 - FW',
-        'Station 3 - Pega_diag'
+        '機台編號', 
+        '目前站別', 
+        '狀態',
+        '第0站-組裝',
+        '第1站-開機',
+        '第2站-韌體',
+        '第3站-診斷'
       ];
       
-      const colWidths = [35, 30, 25, 45, 35, 30, 50];
+      const colWidths = [35, 30, 25, 30, 30, 30, 35];
       let currentX = 20;
       
       // 繪製表頭
@@ -119,7 +119,7 @@ export function TestTrackerPDFExporter({
           pdf.addPage();
           yPosition = 20;
           
-          // 重新繪製標頁
+          // 重新繪製標頭
           pdf.setFontSize(10);
           let headerX = 20;
           headers.forEach((header, headerIndex) => {
@@ -133,9 +133,9 @@ export function TestTrackerPDFExporter({
         
         // 計算系統狀態
         const getSystemStatus = (system: any) => {
-          if (system.overall_progress === 100) return 'Completed';
-          if (system.overall_progress > 0) return 'In Progress';
-          return 'Not Started';
+          if (system.overall_progress === 100) return '已完成';
+          if (system.overall_progress > 0) return '進行中';
+          return '未開始';
         };
         
         // 計算每個站點的進度
@@ -162,7 +162,7 @@ export function TestTrackerPDFExporter({
         
         const rowData = [
           system.system_name,
-          system.current_station || 'Not Set',
+          system.current_station || '未設定',
           getSystemStatus(system),
           getStationProgress(system.id, 0),
           getStationProgress(system.id, 1),
@@ -192,11 +192,12 @@ export function TestTrackerPDFExporter({
       for (let i = 1; i <= pageCount; i++) {
         pdf.setPage(i);
         pdf.setFontSize(8);
-        pdf.text(`Page ${i} of ${pageCount}`, 240, 190);
+        pdf.text(`第 ${i} 頁，共 ${pageCount} 頁`, 240, 190);
       }
       
       // 下載 PDF
-      pdf.save(`GB300_L10_Test_Progress_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      const fileName = `GB300_L10_測試進度報表_${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(fileName);
       
       toast({
         title: "匯出成功",
@@ -206,11 +207,54 @@ export function TestTrackerPDFExporter({
       onClose();
     } catch (error) {
       console.error('PDF export failed:', error);
-      toast({
-        title: "匯出失敗",
-        description: "PDF 匯出過程中發生錯誤",
-        variant: "destructive"
-      });
+      
+      // 如果中文字體載入失敗，使用備用方案
+      try {
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: 'a4'
+        });
+        
+        // 使用基本字體但轉換為 Unicode
+        pdf.setFont("helvetica", "normal");
+        
+        // 標題
+        pdf.setFontSize(18);
+        pdf.text('GB300 L10 Test Progress Report', 20, 20);
+        
+        // 使用英文內容避免亂碼
+        pdf.setFontSize(12);
+        pdf.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+        pdf.text(`Total Systems: ${systems.length}`, 20, 40);
+        
+        // 簡化的表格內容
+        let yPos = 60;
+        systems.forEach((system, index) => {
+          if (yPos > 180) {
+            pdf.addPage();
+            yPos = 20;
+          }
+          
+          pdf.text(`${index + 1}. ${system.system_name} - Progress: ${system.overall_progress}%`, 20, yPos);
+          yPos += 10;
+        });
+        
+        pdf.save(`GB300_L10_Test_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+        
+        toast({
+          title: "匯出成功（簡化版）",
+          description: "已使用簡化格式匯出 PDF 報表",
+        });
+        
+        onClose();
+      } catch (fallbackError) {
+        toast({
+          title: "匯出失敗",
+          description: "PDF 匯出過程中發生錯誤，請稍後再試",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsExporting(false);
     }
