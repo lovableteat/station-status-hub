@@ -2,16 +2,13 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Download, FileText, Settings, RotateCcw } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
-import { usePermissions } from "@/hooks/usePermissions";
 import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
-import { SystemManager } from "./SystemManager";
-import { BulkResetDialog } from "./BulkResetDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,14 +30,11 @@ interface TestProgress {
 
 export function TestTracker() {
   const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
-  const { canEditModule } = usePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
-  const [systemManagerOpen, setSystemManagerOpen] = useState(false);
-  const [bulkResetOpen, setBulkResetOpen] = useState(false);
   const [editValues, setEditValues] = useState<{
     status: string;
     progress_percent: number;
@@ -49,8 +43,6 @@ export function TestTracker() {
     completed_at?: string;
   }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
   const { toast } = useToast();
-
-  const canEdit = canEditModule('test-tracker');
 
   const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
     return progress.find(p => 
@@ -61,15 +53,6 @@ export function TestTracker() {
   };
 
   const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
-    if (!canEdit) {
-      toast({
-        title: "權限不足",
-        description: "您沒有編輯測試追蹤的權限",
-        variant: "destructive"
-      });
-      return;
-    }
-
     const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
     const editKey = `${systemId}-${stationId}-${itemId}`;
     
@@ -84,15 +67,6 @@ export function TestTracker() {
   };
 
   const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
-    if (!canEdit) {
-      toast({
-        title: "權限不足",
-        description: "您沒有編輯測試追蹤的權限",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       // 找到對應的station，檢查是否為Station 0-4
       const station = stations.find(s => s.id === stationId);
@@ -158,15 +132,6 @@ export function TestTracker() {
   };
 
   const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
-    if (!canEdit) {
-      toast({
-        title: "權限不足",
-        description: "您沒有編輯測試追蹤的權限",
-        variant: "destructive"
-      });
-      return;
-    }
-
     if (!confirm('DELETE the progress for this test item?')) {
       return;
     }
@@ -246,25 +211,6 @@ export function TestTracker() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          {canEdit && (
-            <>
-              <Button 
-                variant="outline" 
-                onClick={() => setSystemManagerOpen(true)}
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                系統管理
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setBulkResetOpen(true)}
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                批次重設
-              </Button>
-            </>
-          )}
         </div>
       </div>
 
@@ -296,7 +242,6 @@ export function TestTracker() {
           handleDeleteProgress={handleDeleteProgress}
           getStatusColor={getStatusColor}
           onSystemUpdate={loadData}
-          canEdit={canEdit}
         />
       </div>
 
@@ -309,20 +254,6 @@ export function TestTracker() {
         isOpen={pdfExporterOpen}
         onClose={() => setPdfExporterOpen(false)}
       />
-
-      {/* System Manager Dialog */}
-      {systemManagerOpen && (
-        <SystemManager
-          onSystemUpdate={loadData}
-        />
-      )}
-
-      {/* Bulk Reset Dialog */}
-      {bulkResetOpen && (
-        <BulkResetDialog
-          onReset={loadData}
-        />
-      )}
     </div>
   );
 }
