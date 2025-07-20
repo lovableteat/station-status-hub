@@ -3,13 +3,12 @@ import React, { createContext, useContext, useState, ReactNode } from "react";
 interface User {
   userId: string;
   username: string;
-  displayName?: string;
   role: string;
 }
 
 interface UserContextType {
   user: User | null;
-  login: (userId: string, username: string, displayName: string | undefined, role: string) => void;
+  login: (userId: string, username: string, role: string) => void;
   logout: () => void;
   isLoggedIn: boolean;
 }
@@ -23,8 +22,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const login = (userId: string, username: string, displayName: string | undefined, role: string) => {
-    const userData = { userId, username, displayName, role };
+  const login = (userId: string, username: string, role: string) => {
+    const userData = { userId, username, role };
     setUser(userData);
     // 持久化用戶狀態
     localStorage.setItem('user', JSON.stringify(userData));

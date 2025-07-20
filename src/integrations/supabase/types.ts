@@ -1125,7 +1125,6 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          display_name: string | null
           id: string
           password_hash: string
           permissions: Json | null
@@ -1137,7 +1136,6 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
-          display_name?: string | null
           id?: string
           password_hash: string
           permissions?: Json | null
@@ -1149,7 +1147,6 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
-          display_name?: string | null
           id?: string
           password_hash?: string
           permissions?: Json | null

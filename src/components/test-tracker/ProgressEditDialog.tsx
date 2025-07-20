@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +54,6 @@ interface ProgressEditDialogProps {
   systemId: string;
   stationId: string;
   onTimeUpdate: () => void;
-  onClose: () => void;
 }
 
 export function ProgressEditDialog({
@@ -74,8 +73,9 @@ export function ProgressEditDialog({
   systemId,
   stationId,
   onTimeUpdate,
-  onClose,
 }: ProgressEditDialogProps) {
+  const [open, setOpen] = useState(false);
+
   const getItemProgress = (itemId: string) => {
     return getProgressForSystemItem(systemId, stationId, itemId);
   };
@@ -107,7 +107,13 @@ export function ProgressEditDialog({
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Edit className="h-3 w-3 mr-1" />
+          編輯
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
