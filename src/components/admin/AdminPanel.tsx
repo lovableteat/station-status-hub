@@ -32,6 +32,7 @@ interface SystemUser {
   status: string;
   created_by: string;
   created_at: string;
+  display_name?: string;
 }
 
 interface ProductionTarget {
@@ -51,7 +52,7 @@ export function AdminPanel() {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
-  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {} });
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
   const [newTarget, setNewTarget] = useState({ daily_target: 10, weekly_target: 50 });
   const [editingTarget, setEditingTarget] = useState<string | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
@@ -148,10 +149,10 @@ export function AdminPanel() {
   };
 
   const handleAddUser = async () => {
-    if (!newUser.username || !newUser.password) {
+    if (!newUser.username || !newUser.password || !newUser.displayName) {
       toast({
         title: "新增失敗",
-        description: "請填寫完整的用戶名和密碼",
+        description: "請填寫完整的用戶名、密碼和顯示名稱",
         variant: "destructive"
       });
       return;
@@ -175,6 +176,7 @@ export function AdminPanel() {
           password_hash: hashedPassword,
           role: newUser.role,
           permissions: newUser.permissions,
+          display_name: newUser.displayName,
           created_by: user?.username || 'admin'
         }]);
 
@@ -189,7 +191,7 @@ export function AdminPanel() {
       });
 
       setIsUserDialogOpen(false);
-      setNewUser({ username: "", password: "", role: "engineer", permissions: {} });
+      setNewUser({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
       loadSystemUsers();
     } catch (error: any) {
       console.error('Error adding user:', error);
@@ -382,7 +384,7 @@ export function AdminPanel() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">後台管理</h1>
-          <p className="text-muted-foreground">歡迎，{user?.username} (超級管理員)</p>
+          <p className="text-muted-foreground">歡迎，{user?.displayName || user?.username} (超級管理員)</p>
         </div>
         <Button variant="outline" onClick={logout}>
           <LogOut className="h-4 w-4 mr-2" />
@@ -439,19 +441,27 @@ export function AdminPanel() {
                       placeholder="請輸入密碼..."
                     />
                   </div>
-                  <div>
-                    <Label>角色</Label>
-                    <Select value={newUser.role} onValueChange={(value) => setNewUser({...newUser, role: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">管理員</SelectItem>
-                        <SelectItem value="engineer">工程師</SelectItem>
-                        <SelectItem value="viewer">檢視者</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                   <div>
+                     <Label>顯示名稱</Label>
+                     <Input 
+                       value={newUser.displayName}
+                       onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
+                       placeholder="請輸入顯示名稱..."
+                     />
+                   </div>
+                   <div>
+                     <Label>角色</Label>
+                     <Select value={newUser.role} onValueChange={(value) => setNewUser({...newUser, role: value})}>
+                       <SelectTrigger>
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="admin">管理員</SelectItem>
+                         <SelectItem value="engineer">工程師</SelectItem>
+                         <SelectItem value="viewer">檢視者</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>
                       取消
@@ -474,10 +484,10 @@ export function AdminPanel() {
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                         <Shield className="h-5 w-5 text-primary" />
                       </div>
-                      <div>
-                        <h3 className="font-semibold">{user.username}</h3>
-                        <p className="text-sm text-muted-foreground">建立者: {user.created_by}</p>
-                      </div>
+                       <div>
+                         <h3 className="font-semibold">{user.display_name || user.username}</h3>
+                         <p className="text-sm text-muted-foreground">帳號: {user.username} | 建立者: {user.created_by}</p>
+                       </div>
                       <Badge className={getRoleColor(user.role)}>
                         {user.role === 'super_admin' ? '超級管理員' : user.role === 'admin' ? '管理員' : user.role === 'engineer' ? '工程師' : '檢視者'}
                       </Badge>
@@ -512,6 +522,7 @@ export function AdminPanel() {
                       username={user.username}
                       role={user.role}
                       status={user.status}
+                      displayName={user.display_name}
                       onUpdate={loadSystemUsers}
                       onDelete={handleDeleteUser}
                     />
