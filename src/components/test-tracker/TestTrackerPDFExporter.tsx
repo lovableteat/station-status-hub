@@ -160,9 +160,19 @@ export function TestTrackerPDFExporter({
           return `${progressPercent}%`;
         };
         
+        // 轉換當前站點為中文顯示
+        const getCurrentStationChinese = (currentStation: string) => {
+          if (!currentStation || currentStation === 'Not Set') return '未設定';
+          if (currentStation.includes('Station 0') || currentStation === 'Station 0') return 'Station 0 - 工廠組裝';
+          if (currentStation.includes('Station 1') || currentStation === 'Station 1') return 'Station 1 - 開機';
+          if (currentStation.includes('Station 2') || currentStation === 'Station 2') return 'Station 2 - FW';
+          if (currentStation.includes('Station 3') || currentStation === 'Station 3') return 'Station 3 - Pega_diag';
+          return currentStation;
+        };
+
         const rowData = [
           system.system_name,
-          system.current_station || 'Not Set',
+          getCurrentStationChinese(system.current_station),
           getSystemStatus(system),
           getStationProgress(system.id, 0),
           getStationProgress(system.id, 1),
