@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface LoginPageProps {
-  onLogin: (userId: string, username: string, role: string) => void;
+  onLogin: (userId: string, username: string, role: string, displayName: string) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
@@ -42,10 +42,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         });
       } else {
         const userInfo = data[0];
-        onLogin(userInfo.user_id, userInfo.username, userInfo.role);
+        onLogin(userInfo.user_id, userInfo.username, userInfo.role, userInfo.display_name);
         toast({
           title: "登入成功",
-          description: `歡迎回來，${userInfo.role === 'super_admin' ? '超級管理員' : userInfo.role === 'admin' ? '管理員' : '工程師'}`
+          description: `歡迎回來，${userInfo.display_name || userInfo.username}`
         });
       }
     } catch (error) {
