@@ -13,16 +13,18 @@ interface UserEditDialogProps {
   username: string;
   role: string;
   status: string;
+  displayName?: string;
   onUpdate: () => void;
   onDelete: (userId: string) => void;
 }
 
-export function UserEditDialog({ userId, username, role, status, onUpdate, onDelete }: UserEditDialogProps) {
+export function UserEditDialog({ userId, username, role, status, displayName, onUpdate, onDelete }: UserEditDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editValues, setEditValues] = useState({
     username,
     role,
     status,
+    displayName: displayName || "",
     password: ""
   });
   const { toast } = useToast();
@@ -32,7 +34,8 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
       const updateData: any = {
         username: editValues.username,
         role: editValues.role,
-        status: editValues.status
+        status: editValues.status,
+        display_name: editValues.displayName
       };
 
       // Only update password if provided - use secure hashing
@@ -94,6 +97,14 @@ export function UserEditDialog({ userId, username, role, status, onUpdate, onDel
               value={editValues.username}
               onChange={(e) => setEditValues({...editValues, username: e.target.value})}
               placeholder="請輸入用戶名..."
+            />
+          </div>
+          <div>
+            <Label>顯示名稱</Label>
+            <Input
+              value={editValues.displayName}
+              onChange={(e) => setEditValues({...editValues, displayName: e.target.value})}
+              placeholder="請輸入顯示名稱..."
             />
           </div>
           <div>

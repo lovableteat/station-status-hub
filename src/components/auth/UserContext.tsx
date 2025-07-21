@@ -4,11 +4,12 @@ interface User {
   userId: string;
   username: string;
   role: string;
+  displayName: string;
 }
 
 interface UserContextType {
   user: User | null;
-  login: (userId: string, username: string, role: string) => void;
+  login: (userId: string, username: string, role: string, displayName: string) => void;
   logout: () => void;
   isLoggedIn: boolean;
 }
@@ -22,8 +23,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const login = (userId: string, username: string, role: string) => {
-    const userData = { userId, username, role };
+  const login = (userId: string, username: string, role: string, displayName: string) => {
+    const userData = { userId, username, role, displayName };
     setUser(userData);
     // 持久化用戶狀態
     localStorage.setItem('user', JSON.stringify(userData));
