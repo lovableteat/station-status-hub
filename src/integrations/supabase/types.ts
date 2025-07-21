@@ -1816,6 +1816,7 @@ export type Database = {
           user_id: string
           username: string
           role: string
+          display_name: string
           success: boolean
         }[]
       }
