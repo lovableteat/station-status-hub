@@ -36,8 +36,8 @@ export function TimeRecordManager({
   const handleDialogOpen = (open: boolean) => {
     setDialogOpen(open);
     if (open) {
-      setStartedAt(formatDateTimeLocal(currentStartedAt) || '');
-      setCompletedAt(formatDateTimeLocal(currentCompletedAt) || '');
+      setStartedAt(formatDateTimeLocalTaiwan(currentStartedAt) || '');
+      setCompletedAt(formatDateTimeLocalTaiwan(currentCompletedAt) || '');
     }
   };
 
@@ -49,13 +49,21 @@ export function TimeRecordManager({
       const updates: any = {};
       
       if (startedAt) {
-        updates.started_at = new Date(startedAt).toISOString();
+        // 將台灣時間轉換為UTC時間儲存
+        const taiwanDate = new Date(startedAt);
+        // 台灣時間減去8小時得到UTC時間
+        const utcDate = new Date(taiwanDate.getTime() - (8 * 60 * 60 * 1000));
+        updates.started_at = utcDate.toISOString();
       } else {
         updates.started_at = null;
       }
       
       if (completedAt) {
-        updates.completed_at = new Date(completedAt).toISOString();
+        // 將台灣時間轉換為UTC時間儲存
+        const taiwanDate = new Date(completedAt);
+        // 台灣時間減去8小時得到UTC時間
+        const utcDate = new Date(taiwanDate.getTime() - (8 * 60 * 60 * 1000));
+        updates.completed_at = utcDate.toISOString();
       } else {
         updates.completed_at = null;
       }
@@ -133,13 +141,15 @@ export function TimeRecordManager({
     }
   };
 
-  const formatDateTimeLocal = (isoString?: string) => {
+  // 將UTC時間轉換為台灣時間格式供input使用
+  const formatDateTimeLocalTaiwan = (isoString?: string) => {
     if (!isoString) return '';
     try {
-      const date = new Date(isoString);
-      const offset = date.getTimezoneOffset();
-      const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-      return adjustedDate.toISOString().slice(0, 16);
+      const utcDate = new Date(isoString);
+      // UTC時間加上8小時得到台灣時間
+      const taiwanDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
+      // 格式化為 YYYY-MM-DDTHH:mm 格式
+      return taiwanDate.toISOString().slice(0, 16);
     } catch (error) {
       console.error('Error formatting date:', error);
       return '';
@@ -156,7 +166,7 @@ export function TimeRecordManager({
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>時間記錄管理</DialogTitle>
+          <DialogTitle>時間記錄管理 (台灣時間)</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
