@@ -49,21 +49,15 @@ export function TimeRecordManager({
       const updates: any = {};
       
       if (startedAt) {
-        // 將台灣時間轉換為UTC時間儲存
-        const taiwanDate = new Date(startedAt);
-        // 台灣時間減去8小時得到UTC時間
-        const utcDate = new Date(taiwanDate.getTime() - (8 * 60 * 60 * 1000));
-        updates.started_at = utcDate.toISOString();
+        // datetime-local 輸入框會自動處理時區，直接使用即可
+        updates.started_at = new Date(startedAt).toISOString();
       } else {
         updates.started_at = null;
       }
       
       if (completedAt) {
-        // 將台灣時間轉換為UTC時間儲存
-        const taiwanDate = new Date(completedAt);
-        // 台灣時間減去8小時得到UTC時間
-        const utcDate = new Date(taiwanDate.getTime() - (8 * 60 * 60 * 1000));
-        updates.completed_at = utcDate.toISOString();
+        // datetime-local 輸入框會自動處理時區，直接使用即可
+        updates.completed_at = new Date(completedAt).toISOString();
       } else {
         updates.completed_at = null;
       }
@@ -141,15 +135,18 @@ export function TimeRecordManager({
     }
   };
 
-  // 將UTC時間轉換為台灣時間格式供input使用
+  // 格式化時間供 datetime-local 使用，讓瀏覽器自動處理時區
   const formatDateTimeLocalTaiwan = (isoString?: string) => {
     if (!isoString) return '';
     try {
-      const utcDate = new Date(isoString);
-      // UTC時間加上8小時得到台灣時間
-      const taiwanDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
-      // 格式化為 YYYY-MM-DDTHH:mm 格式
-      return taiwanDate.toISOString().slice(0, 16);
+      const date = new Date(isoString);
+      // 直接使用本地時間格式，瀏覽器會自動處理時區
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     } catch (error) {
       console.error('Error formatting date:', error);
       return '';
