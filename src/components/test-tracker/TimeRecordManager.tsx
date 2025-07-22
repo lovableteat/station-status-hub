@@ -156,11 +156,21 @@ export function TimeRecordManager({
     }
   };
 
+  // 處理開始時間變更，避免跳動
+  const handleStartTimeChange = (value: string) => {
+    setStartedAt(value);
+  };
+
+  // 處理完成時間變更，避免跳動  
+  const handleCompletedTimeChange = (value: string) => {
+    setCompletedAt(value);
+  };
+
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" disabled={isUpdating}>
-          <Clock className="h-3 w-3 mr-1" />
+          <Clock className="h-3 w-3 mr-1 text-white" />
           時間管理
         </Button>
       </DialogTrigger>
@@ -176,8 +186,9 @@ export function TimeRecordManager({
               id="started-at"
               type="datetime-local"
               value={startedAt}
-              onChange={(e) => setStartedAt(e.target.value)}
+              onChange={(e) => handleStartTimeChange(e.target.value)}
               disabled={isUpdating}
+              className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:contrast-100"
             />
           </div>
           
@@ -187,8 +198,9 @@ export function TimeRecordManager({
               id="completed-at"
               type="datetime-local"
               value={completedAt}
-              onChange={(e) => setCompletedAt(e.target.value)}
+              onChange={(e) => handleCompletedTimeChange(e.target.value)}
               disabled={isUpdating}
+              className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:contrast-100"
             />
           </div>
           
