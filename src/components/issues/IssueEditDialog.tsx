@@ -17,6 +17,8 @@ interface Issue {
   priority: string;
   status: string;
   assigned_to: string;
+  process_notes?: string;
+  solution?: string;
 }
 
 interface IssueEditDialogProps {
@@ -32,7 +34,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
     description: issue.description,
     priority: issue.priority,
     status: issue.status,
-    assigned_to: issue.assigned_to
+    assigned_to: issue.assigned_to,
+    process_notes: issue.process_notes || '',
+    solution: issue.solution || ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -187,6 +191,26 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label>處理過程</Label>
+            <Textarea
+              value={formData.process_notes}
+              onChange={(e) => setFormData({...formData, process_notes: e.target.value})}
+              placeholder="請記錄處理過程..."
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>解決方案</Label>
+            <Textarea
+              value={formData.solution}
+              onChange={(e) => setFormData({...formData, solution: e.target.value})}
+              placeholder="請記錄解決方案..."
+              rows={3}
+            />
           </div>
 
           <div className="flex justify-between">
