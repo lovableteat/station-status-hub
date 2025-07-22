@@ -578,6 +578,8 @@ export type Database = {
           description: string
           id: string
           priority: string
+          process_notes: string | null
+          solution: string | null
           station_id: string | null
           status: string
           system_id: string | null
@@ -591,6 +593,8 @@ export type Database = {
           description: string
           id?: string
           priority?: string
+          process_notes?: string | null
+          solution?: string | null
           station_id?: string | null
           status?: string
           system_id?: string | null
@@ -604,6 +608,8 @@ export type Database = {
           description?: string
           id?: string
           priority?: string
+          process_notes?: string | null
+          solution?: string | null
           station_id?: string | null
           status?: string
           system_id?: string | null
