@@ -49,15 +49,19 @@ export function TimeRecordManager({
       const updates: any = {};
       
       if (startedAt) {
-        // datetime-local 輸入框會自動處理時區，直接使用即可
-        updates.started_at = new Date(startedAt).toISOString();
+        // 將台灣時間轉換回UTC儲存
+        const taiwanTime = new Date(startedAt);
+        const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
+        updates.started_at = utcTime.toISOString();
       } else {
         updates.started_at = null;
       }
       
       if (completedAt) {
-        // datetime-local 輸入框會自動處理時區，直接使用即可
-        updates.completed_at = new Date(completedAt).toISOString();
+        // 將台灣時間轉換回UTC儲存
+        const taiwanTime = new Date(completedAt);
+        const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
+        updates.completed_at = utcTime.toISOString();
       } else {
         updates.completed_at = null;
       }
@@ -135,18 +139,15 @@ export function TimeRecordManager({
     }
   };
 
-  // 格式化時間供 datetime-local 使用，讓瀏覽器自動處理時區
+  // 正確格式化UTC時間為台灣本地時間供 datetime-local 使用
   const formatDateTimeLocalTaiwan = (isoString?: string) => {
     if (!isoString) return '';
     try {
-      const date = new Date(isoString);
-      // 直接使用本地時間格式，瀏覽器會自動處理時區
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
+      const utcDate = new Date(isoString);
+      // 手動轉換為台灣時間 (UTC+8)
+      const taiwanTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
+      // 格式化為 YYYY-MM-DDTHH:mm 格式
+      return taiwanTime.toISOString().slice(0, 16);
     } catch (error) {
       console.error('Error formatting date:', error);
       return '';
@@ -166,8 +167,8 @@ export function TimeRecordManager({
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isUpdating}>
-          <Clock className="h-3 w-3 mr-1 text-white" />
+        <Button variant="outline" size="sm" disabled={isUpdating} className="text-foreground border-border hover:bg-accent">
+          <Clock className="h-3 w-3 mr-1 text-foreground" />
           時間管理
         </Button>
       </DialogTrigger>
