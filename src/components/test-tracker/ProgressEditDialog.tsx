@@ -96,12 +96,30 @@ export function ProgressEditDialog({
     handleDeleteProgress(systemId, stationId, itemId);
   };
 
+  // 正確格式化UTC時間為台灣本地時間供 datetime-local 使用
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '';
     try {
-      const date = new Date(dateStr);
-      return date.toISOString().slice(0, 16); // Format for datetime-local input
-    } catch {
+      const utcDate = new Date(dateStr);
+      // 手動轉換為台灣時間 (UTC+8)
+      const taiwanTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
+      // 格式化為 YYYY-MM-DDTHH:mm 格式
+      return taiwanTime.toISOString().slice(0, 16);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
+  };
+
+  // 將台灣時間轉換回UTC時間
+  const convertToUTC = (dateTimeLocal: string) => {
+    if (!dateTimeLocal) return '';
+    try {
+      const taiwanTime = new Date(dateTimeLocal);
+      const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
+      return utcTime.toISOString();
+    } catch (error) {
+      console.error('Error converting to UTC:', error);
       return '';
     }
   };
@@ -230,21 +248,23 @@ export function ProgressEditDialog({
                     
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor={`started-${item.id}`}>開始時間</Label>
+                        <Label htmlFor={`started-${item.id}`}>開始時間 (台灣時間)</Label>
                         <Input
                           id={`started-${item.id}`}
                           type="datetime-local"
                           value={editValues.started_at ? formatDateTime(editValues.started_at) : ''}
-                          onChange={(e) => setEditValues({...editValues, started_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
+                          onChange={(e) => setEditValues({...editValues, started_at: e.target.value ? convertToUTC(e.target.value) : ''})}
+                          className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`completed-${item.id}`}>完成時間</Label>
+                        <Label htmlFor={`completed-${item.id}`}>完成時間 (台灣時間)</Label>
                         <Input
                           id={`completed-${item.id}`}
                           type="datetime-local"
                           value={editValues.completed_at ? formatDateTime(editValues.completed_at) : ''}
-                          onChange={(e) => setEditValues({...editValues, completed_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
+                          onChange={(e) => setEditValues({...editValues, completed_at: e.target.value ? convertToUTC(e.target.value) : ''})}
+                          className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
                     </div>
