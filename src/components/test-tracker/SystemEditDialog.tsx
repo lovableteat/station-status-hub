@@ -36,7 +36,8 @@ export function SystemEditDialog({
     assigned_engineer: assignedEngineer,
     model: model || 'GB300',
     serial_number: serialNumber || '',
-    os_mac_address: ''
+    os_mac_address: '',
+    bmc_address: ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -65,7 +66,8 @@ export function SystemEditDialog({
           assigned_engineer: data.assigned_engineer || '',
           model: data.model || 'GB300',
           serial_number: data.serial_number || '',
-          os_mac_address: data.os_mac_address || ''
+          os_mac_address: data.os_mac_address || '',
+          bmc_address: data.bmc_address || ''
         });
       }
     };
@@ -83,7 +85,8 @@ export function SystemEditDialog({
           assigned_engineer: editValues.assigned_engineer,
           model: editValues.model,
           serial_number: editValues.serial_number,
-          os_mac_address: editValues.os_mac_address
+          os_mac_address: editValues.os_mac_address,
+          bmc_address: editValues.bmc_address
         })
         .eq('id', systemId);
 
@@ -166,11 +169,21 @@ export function SystemEditDialog({
           </div>
 
           <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>OS MAC Address</Label>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>NIC MAC Address</Label>
             <Input
               value={editValues.os_mac_address}
               onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
-              placeholder="請輸入 OS MAC Address..."
+              placeholder="請輸入 NIC MAC Address..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>BMC Address</Label>
+            <Input
+              value={editValues.bmc_address}
+              onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
+              placeholder="請輸入 BMC Address..."
               className={isMobile ? "h-12 text-base" : ""}
             />
           </div>
