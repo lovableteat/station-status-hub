@@ -96,30 +96,20 @@ export function ProgressEditDialog({
     handleDeleteProgress(systemId, stationId, itemId);
   };
 
-  // 正確格式化UTC時間為台灣本地時間供 datetime-local 使用
+  // 格式化時間供 datetime-local 使用（datetime-local 會自動處理本地時區）
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '';
     try {
-      const utcDate = new Date(dateStr);
-      // 手動轉換為台灣時間 (UTC+8)
-      const taiwanTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
-      // 格式化為 YYYY-MM-DDTHH:mm 格式
-      return taiwanTime.toISOString().slice(0, 16);
+      const date = new Date(dateStr);
+      // datetime-local 需要 YYYY-MM-DDTHH:mm 格式，且會自動以本地時區顯示
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     } catch (error) {
       console.error('Error formatting date:', error);
-      return '';
-    }
-  };
-
-  // 將台灣時間轉換回UTC時間
-  const convertToUTC = (dateTimeLocal: string) => {
-    if (!dateTimeLocal) return '';
-    try {
-      const taiwanTime = new Date(dateTimeLocal);
-      const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
-      return utcTime.toISOString();
-    } catch (error) {
-      console.error('Error converting to UTC:', error);
       return '';
     }
   };
@@ -253,7 +243,7 @@ export function ProgressEditDialog({
                           id={`started-${item.id}`}
                           type="datetime-local"
                           value={editValues.started_at ? formatDateTime(editValues.started_at) : ''}
-                          onChange={(e) => setEditValues({...editValues, started_at: e.target.value ? convertToUTC(e.target.value) : ''})}
+                          onChange={(e) => setEditValues({...editValues, started_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
                           className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
@@ -263,7 +253,7 @@ export function ProgressEditDialog({
                           id={`completed-${item.id}`}
                           type="datetime-local"
                           value={editValues.completed_at ? formatDateTime(editValues.completed_at) : ''}
-                          onChange={(e) => setEditValues({...editValues, completed_at: e.target.value ? convertToUTC(e.target.value) : ''})}
+                          onChange={(e) => setEditValues({...editValues, completed_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
                           className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
