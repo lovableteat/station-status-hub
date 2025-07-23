@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MobileProgressInput } from "./MobileProgressInput";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
@@ -222,27 +223,39 @@ export function TestProgressTable({
 
                     return (
                       <div key={station.id} className="border rounded-lg p-4 bg-muted/20">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-base">{station.station_name}</h4>
-                          <ProgressEditDialog
-                            systemName={system.system_name}
-                            stationName={station.station_name}
-                            stationItems={stationItems}
-                            progress={progress}
-                            editingProgress={editingProgress}
-                            setEditingProgress={setEditingProgress}
-                            editValues={editValues}
-                            setEditValues={setEditValues}
-                            getProgressForSystemItem={getProgressForSystemItem}
-                            handleEditProgress={handleEditProgress}
-                            handleSaveProgress={handleSaveProgress}
-                            handleDeleteProgress={handleDeleteProgress}
-                            getStatusColor={getStatusColor}
-                            systemId={system.id}
-                            stationId={station.id}
-                            onTimeUpdate={onSystemUpdate}
-                          />
-                        </div>
+                         <div className="flex items-center justify-between mb-3">
+                           <h4 className="font-semibold text-base">{station.station_name}</h4>
+                           <div className="flex gap-2">
+                             <MobileProgressInput
+                               systemId={system.id}
+                               systemName={system.system_name}
+                               stationId={station.id}
+                               stationName={station.station_name}
+                               items={items}
+                               getProgressForSystemItem={getProgressForSystemItem}
+                               getStatusColor={getStatusColor}
+                               onUpdate={onSystemUpdate}
+                             />
+                             <ProgressEditDialog
+                               systemName={system.system_name}
+                               stationName={station.station_name}
+                               stationItems={stationItems}
+                               progress={progress}
+                               editingProgress={editingProgress}
+                               setEditingProgress={setEditingProgress}
+                               editValues={editValues}
+                               setEditValues={setEditValues}
+                               getProgressForSystemItem={getProgressForSystemItem}
+                               handleEditProgress={handleEditProgress}
+                               handleSaveProgress={handleSaveProgress}
+                               handleDeleteProgress={handleDeleteProgress}
+                               getStatusColor={getStatusColor}
+                               systemId={system.id}
+                               stationId={station.id}
+                               onTimeUpdate={onSystemUpdate}
+                             />
+                           </div>
+                         </div>
                         
                         {/* 顯示總處理時長 */}
                          <div className="mb-3">
