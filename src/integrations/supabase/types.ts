@@ -1605,6 +1605,7 @@ export type Database = {
           actual_started_at: string | null
           assigned_engineer: string | null
           bmc_address: string | null
+          bom_90: string | null
           created_at: string
           current_station: string | null
           id: string
@@ -1621,6 +1622,7 @@ export type Database = {
           actual_started_at?: string | null
           assigned_engineer?: string | null
           bmc_address?: string | null
+          bom_90?: string | null
           created_at?: string
           current_station?: string | null
           id?: string
@@ -1637,6 +1639,7 @@ export type Database = {
           actual_started_at?: string | null
           assigned_engineer?: string | null
           bmc_address?: string | null
+          bom_90?: string | null
           created_at?: string
           current_station?: string | null
           id?: string
