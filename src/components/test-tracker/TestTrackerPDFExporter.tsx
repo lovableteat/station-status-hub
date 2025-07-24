@@ -54,256 +54,202 @@ export function TestTrackerPDFExporter({
       : 0;
   };
 
+  const generateStatsSection = (systems: TestSystem[]) => {
+    const completedSystems = systems.filter(s => s.overall_progress === 100).length;
+    const inProgressSystems = systems.filter(s => s.overall_progress > 0 && s.overall_progress < 100).length;
+    const notStartedSystems = systems.filter(s => s.overall_progress === 0).length;
+    
+    return `
+      <div class="stats">
+        <h2>測試統計總覽</h2>
+        <div style="display: flex; justify-content: space-around; text-align: center;">
+          <div><strong>總系統數:</strong> ${systems.length} 台</div>
+          <div class="progress-100"><strong>已完成:</strong> ${completedSystems} 台 (${Math.round((completedSystems / systems.length) * 100)}%)</div>
+          <div class="progress-partial"><strong>進行中:</strong> ${inProgressSystems} 台 (${Math.round((inProgressSystems / systems.length) * 100)}%)</div>
+          <div class="progress-zero"><strong>未開始:</strong> ${notStartedSystems} 台 (${Math.round((notStartedSystems / systems.length) * 100)}%)</div>
+        </div>
+      </div>
+    `;
+  };
+
+  const generateTableSection = (systems: TestSystem[], stations: TestStation[], items: TestItem[], progress: TestProgress[]) => {
+    const getStationProgress = (systemId: string, stationOrder: number) => {
+      const station = stations.find(s => s.station_order === stationOrder);
+      if (!station) return 0;
+      
+      const stationItems = items.filter(item => item.station_id === station.id);
+      if (stationItems.length === 0) return 0;
+      
+      const completedItems = stationItems.filter(item => {
+        const prog = progress.find(p => 
+          p.system_id === systemId && 
+          p.station_id === station.id && 
+          p.item_id === item.id &&
+          p.status === 'Done'
+        );
+        return prog;
+      });
+      
+      const progressPercent = Math.round((completedItems.length / stationItems.length) * 100);
+      return progressPercent;
+    };
+
+    const getProgressClass = (percent: number) => {
+      if (percent === 100) return 'progress-100';
+      if (percent > 0) return 'progress-partial';
+      return 'progress-zero';
+    };
+
+    const tableRows = systems.map(system => {
+      const station0Progress = getStationProgress(system.id, 0);
+      const station1Progress = getStationProgress(system.id, 1);
+      const station2Progress = getStationProgress(system.id, 2);
+      const station3Progress = getStationProgress(system.id, 3);
+      
+      return `
+        <tr>
+          <td style="text-align: left;">${system.system_name || ''}</td>
+          <td>${system.model || ''}</td>
+          <td>${system.serial_number || ''}</td>
+          <td>${(system as any).bom_90 || ''}</td>
+          <td>${system.assigned_engineer || ''}</td>
+          <td class="${getProgressClass(system.overall_progress)}">${system.overall_progress}%</td>
+          <td class="${getProgressClass(station0Progress)}">${station0Progress}%</td>
+          <td class="${getProgressClass(station1Progress)}">${station1Progress}%</td>
+          <td class="${getProgressClass(station2Progress)}">${station2Progress}%</td>
+          <td class="${getProgressClass(station3Progress)}">${station3Progress}%</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>機台編號</th>
+            <th>型號</th>
+            <th>序號</th>
+            <th>90BOM</th>
+            <th>負責工程師</th>
+            <th>整體進度</th>
+            <th>Station 0<br>工廠組裝</th>
+            <th>Station 1<br>開機</th>
+            <th>Station 2<br>FW</th>
+            <th>Station 3<br>Pega_diag</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+    `;
+  };
+
   const exportPDF = async () => {
     try {
       setIsExporting(true);
       
-      // 創建 PDF - 設定支援中文字體
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      // 設定字體（使用內建字體避免亂碼）
-      pdf.setFont("helvetica", "bold");
-      
-      // 設定顏色和樣式
-      const primaryColor = [41, 128, 185]; // 藍色
-      const secondaryColor = [52, 73, 94]; // 深灰色
-      const lightGray = [245, 245, 245];
-      
-      // 添加標題背景
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      pdf.rect(15, 10, 267, 20, 'F');
-      
-      // 添加標題
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(18);
-      pdf.text('GB300 L10 測試進度報表', 20, 25);
-      
-      // 添加副標題
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-      pdf.setFontSize(10);
-      pdf.text(`報表生成時間: ${new Date().toLocaleString('zh-TW')}`, 20, 40);
-      pdf.text(`系統總數: ${systems.length} 台`, 20, 48);
-      
-      // 計算總體統計
-      const completedSystems = systems.filter(s => s.overall_progress === 100).length;
-      const inProgressSystems = systems.filter(s => s.overall_progress > 0 && s.overall_progress < 100).length;
-      const notStartedSystems = systems.filter(s => s.overall_progress === 0).length;
-      
-      pdf.text(`已完成: ${completedSystems} 台 | 進行中: ${inProgressSystems} 台 | 未開始: ${notStartedSystems} 台`, 150, 40);
-      pdf.text(`完成率: ${Math.round((completedSystems / systems.length) * 100)}%`, 150, 48);
-      
-      let yPosition = 65;
-      
-      // 重新設計的表格標頭（移除當前站點）
-      const headers = [
-        '機台編號', 
-        '型號',
-        '序號',
-        '負責工程師',
-        '整體進度',
-        'Station 0\n工廠組裝',
-        'Station 1\n開機',
-        'Station 2\nFW',
-        'Station 3\nPega_diag'
-      ];
-      
-      const colWidths = [25, 20, 25, 25, 20, 25, 25, 25, 25];
-      
-      // 繪製表頭背景
-      pdf.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
-      pdf.rect(15, yPosition - 8, colWidths.reduce((a, b) => a + b, 0), 16, 'F');
-      
-      // 繪製表頭文字
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(9);
-      pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-      let currentX = 20;
-      
-      headers.forEach((header, index) => {
-        const lines = header.split('\n');
-        if (lines.length > 1) {
-          pdf.text(lines[0], currentX, yPosition - 2);
-          pdf.text(lines[1], currentX, yPosition + 4);
-        } else {
-          pdf.text(header, currentX, yPosition + 1);
-        }
-        currentX += colWidths[index];
-      });
-      
-      yPosition += 12;
-      
-      // 繪製表頭下方分隔線
-      pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      pdf.setLineWidth(0.5);
-      pdf.line(15, yPosition, 15 + colWidths.reduce((a, b) => a + b, 0), yPosition);
-      yPosition += 8;
-      
-      // 表格內容
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8);
-      
-      systems.forEach((system, index) => {
-        // 檢查是否需要新頁面
-        if (yPosition > 180) {
-          pdf.addPage();
-          yPosition = 20;
-          
-          // 重新繪製標頁
-          pdf.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
-          pdf.rect(15, yPosition - 8, colWidths.reduce((a, b) => a + b, 0), 16, 'F');
-          
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(9);
-          pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-          let headerX = 20;
-          headers.forEach((header, headerIndex) => {
-            const lines = header.split('\n');
-            if (lines.length > 1) {
-              pdf.text(lines[0], headerX, yPosition - 2);
-              pdf.text(lines[1], headerX, yPosition + 4);
-            } else {
-              pdf.text(header, headerX, yPosition + 1);
+      // 創建 HTML 內容避免亂碼
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>GB300 L10 測試進度報表</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
             }
-            headerX += colWidths[headerIndex];
-          });
-          
-          yPosition += 12;
-          pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-          pdf.setLineWidth(0.5);
-          pdf.line(15, yPosition, 15 + colWidths.reduce((a, b) => a + b, 0), yPosition);
-          yPosition += 8;
-          
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(8);
-        }
-        
-        // 計算每個站點的進度
-        const getStationProgress = (systemId: string, stationOrder: number) => {
-          const station = stations.find(s => s.station_order === stationOrder);
-          if (!station) return '0%';
-          
-          const stationItems = items.filter(item => item.station_id === station.id);
-          if (stationItems.length === 0) return '0%';
-          
-          const completedItems = stationItems.filter(item => {
-            const prog = progress.find(p => 
-              p.system_id === systemId && 
-              p.station_id === station.id && 
-              p.item_id === item.id &&
-              p.status === 'Done'
-            );
-            return prog;
-          });
-          
-          const progressPercent = Math.round((completedItems.length / stationItems.length) * 100);
-          return `${progressPercent}%`;
-        };
-
-        const rowData = [
-          system.system_name || '',
-          system.model || '',
-          system.serial_number || '',
-          system.assigned_engineer || '',
-          `${system.overall_progress}%`,
-          getStationProgress(system.id, 0),
-          getStationProgress(system.id, 1),
-          getStationProgress(system.id, 2),
-          getStationProgress(system.id, 3)
-        ];
-        
-        // 交替行背景色
-        if (index % 2 === 0) {
-          pdf.setFillColor(250, 250, 250);
-          pdf.rect(15, yPosition - 3, colWidths.reduce((a, b) => a + b, 0), 10, 'F');
-        }
-        
-        // 根據進度設定文字顏色
-        let rowX = 20;
-        rowData.forEach((data, colIndex) => {
-          if (colIndex === 4) { // 整體進度欄位
-            const progress = parseInt(data);
-            if (progress === 100) {
-              pdf.setTextColor(46, 125, 50); // 綠色
-            } else if (progress > 0) {
-              pdf.setTextColor(255, 152, 0); // 橘色
-            } else {
-              pdf.setTextColor(244, 67, 54); // 紅色
+            body { 
+              font-family: 'Microsoft JhengHei', 'Noto Sans TC', '微軟正黑體', Arial, sans-serif; 
+              margin: 20px; 
+              font-size: 14px;
+              line-height: 1.4;
             }
-          } else if (colIndex >= 5) { // 站點進度欄位
-            const progress = parseInt(data);
-            if (progress === 100) {
-              pdf.setTextColor(46, 125, 50); // 綠色
-            } else if (progress > 0) {
-              pdf.setTextColor(255, 152, 0); // 橘色
-            } else {
-            pdf.setTextColor(158, 158, 158); // 灰色
+            .header { 
+              background: #2980b9; 
+              color: white; 
+              padding: 20px; 
+              text-align: center; 
+              margin-bottom: 20px;
+              border-radius: 8px;
             }
-          } else {
-            pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-          }
+            .header h1 { margin: 0 0 10px 0; font-size: 24px; }
+            .header p { margin: 0; font-size: 16px; }
+            .stats { 
+              background: #ecf0f1; 
+              padding: 15px; 
+              margin-bottom: 20px; 
+              border-radius: 8px;
+            }
+            .stats h2 { margin-top: 0; color: #2c3e50; }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 20px; 
+              font-size: 12px;
+            }
+            th, td { 
+              border: 1px solid #ddd; 
+              padding: 8px; 
+              text-align: center; 
+            }
+            th { 
+              background: #f8f9fa; 
+              font-weight: bold; 
+              color: #2c3e50;
+            }
+            .progress-100 { color: #28a745; font-weight: bold; }
+            .progress-partial { color: #fd7e14; font-weight: bold; }
+            .progress-zero { color: #dc3545; }
+            tr:nth-child(even) { background-color: #f8f9fa; }
+            .footer {
+              margin-top: 30px; 
+              text-align: center; 
+              color: #666; 
+              font-size: 12px;
+              border-top: 1px solid #ddd;
+              padding-top: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>GB300 L10 測試進度報表</h1>
+            <p>報表生成時間: ${new Date().toLocaleString('zh-TW')}</p>
+          </div>
           
-          // 文字截斷處理
-          let displayText = data;
-          if (displayText.length > 12) {
-            displayText = displayText.substring(0, 10) + '...';
-          }
+          ${generateStatsSection(systems)}
+          ${generateTableSection(systems, stations, items, progress)}
           
-          pdf.text(displayText, rowX, yPosition);
-          rowX += colWidths[colIndex];
-        });
-        
-        yPosition += 10;
-        
-        // 每10行繪製一條淡色分隔線
-        if ((index + 1) % 10 === 0) {
-          pdf.setDrawColor(220, 220, 220);
-          pdf.setLineWidth(0.1);
-          pdf.line(15, yPosition, 15 + colWidths.reduce((a, b) => a + b, 0), yPosition);
-          yPosition += 2;
-        }
-      });
+          <div class="footer">
+            GB300 L10 測試追蹤系統 | 共 ${systems.length} 台機器
+          </div>
+          
+          <div class="no-print" style="position: fixed; top: 20px; right: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer;">列印 / 儲存為PDF</button>
+            <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">關閉</button>
+          </div>
+        </body>
+        </html>
+      `;
       
-      // 添加底部統計摘要框
-      yPosition += 10;
-      if (yPosition > 160) {
-        pdf.addPage();
-        yPosition = 20;
+      // 開新視窗並顯示報表
+      const printWindow = window.open('', '_blank', 'width=1200,height=800');
+      if (!printWindow) {
+        throw new Error('無法開啟列印視窗，請檢查瀏覽器彈出視窗設定');
       }
       
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      pdf.rect(15, yPosition, 267, 25, 'F');
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
       
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(12);
-      pdf.text('測試進度總結', 20, yPosition + 8);
-      
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(10);
-      pdf.text(`總系統數: ${systems.length}`, 20, yPosition + 16);
-      pdf.text(`已完成: ${completedSystems} (${Math.round((completedSystems / systems.length) * 100)}%)`, 70, yPosition + 16);
-      pdf.text(`進行中: ${inProgressSystems} (${Math.round((inProgressSystems / systems.length) * 100)}%)`, 150, yPosition + 16);
-      pdf.text(`未開始: ${notStartedSystems} (${Math.round((notStartedSystems / systems.length) * 100)}%)`, 220, yPosition + 16);
-      
-      // 添加頁腳
-      const pageCount = pdf.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        pdf.setPage(i);
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8);
-        pdf.setTextColor(128, 128, 128);
-        pdf.text(`第 ${i} 頁 / 共 ${pageCount} 頁`, 240, 190);
-        pdf.text(`GB300 L10 測試追蹤系統`, 20, 190);
-      }
-      
-      // 下載 PDF
-      const fileName = `GB300_L10_測試進度報表_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.pdf`;
-      pdf.save(fileName);
+      // 等待內容載入後自動列印
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      };
       
       toast({
         title: "匯出成功",
