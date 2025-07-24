@@ -37,7 +37,8 @@ export function SystemEditDialog({
     model: model || 'GB300',
     serial_number: serialNumber || '',
     os_mac_address: '',
-    bmc_address: ''
+    bmc_address: '',
+    bom_90: ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -67,7 +68,8 @@ export function SystemEditDialog({
           model: data.model || 'GB300',
           serial_number: data.serial_number || '',
           os_mac_address: data.os_mac_address || '',
-          bmc_address: data.bmc_address || ''
+          bmc_address: data.bmc_address || '',
+          bom_90: data.bom_90 || ''
         });
       }
     };
@@ -86,7 +88,8 @@ export function SystemEditDialog({
           model: editValues.model,
           serial_number: editValues.serial_number,
           os_mac_address: editValues.os_mac_address,
-          bmc_address: editValues.bmc_address
+          bmc_address: editValues.bmc_address,
+          bom_90: editValues.bom_90
         })
         .eq('id', systemId);
 
@@ -184,6 +187,16 @@ export function SystemEditDialog({
               value={editValues.bmc_address}
               onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
               placeholder="請輸入 BMC Address..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>90BOM</Label>
+            <Input
+              value={editValues.bom_90}
+              onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
+              placeholder="請輸入 90BOM..."
               className={isMobile ? "h-12 text-base" : ""}
             />
           </div>
