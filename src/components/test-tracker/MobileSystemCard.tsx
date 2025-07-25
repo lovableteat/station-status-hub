@@ -10,7 +10,7 @@ import { MobileProgressInput } from "./MobileProgressInput";
 import { ProgressEditDialog } from "./ProgressEditDialog";
 import { TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Edit } from "lucide-react";
 import { useState } from "react";
 
 interface MobileSystemCardProps {
@@ -225,24 +225,33 @@ export function MobileSystemCard({
                           getStatusColor={getStatusColor}
                           onUpdate={onSystemUpdate}
                         />
-                        <ProgressEditDialog
-                          systemName={system.system_name}
-                          stationName={station.station_name}
-                          stationItems={stationItems}
-                          progress={progress}
-                          editingProgress={null}
-                          setEditingProgress={() => {}}
-                          editValues={{ status: "", progress_percent: 0, notes: "" }}
-                          setEditValues={() => {}}
-                          getProgressForSystemItem={getProgressForSystemItem}
-                          handleEditProgress={() => {}}
-                          handleSaveProgress={() => {}}
-                          handleDeleteProgress={() => {}}
-                          getStatusColor={getStatusColor}
-                          systemId={system.id}
-                          stationId={station.id}
-                          onTimeUpdate={onSystemUpdate}
-                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const currentUrl = new URL(window.location.href);
+                            currentUrl.searchParams.set('system', system.system_name);
+                            currentUrl.searchParams.set('station', station.station_name);
+                            currentUrl.searchParams.set('action', 'edit');
+                            window.history.pushState({}, '', currentUrl.toString());
+                            
+                            const event = new CustomEvent('navigate', { 
+                              detail: { 
+                                module: 'test-tracker', 
+                                params: { 
+                                  system: system.system_name, 
+                                  station: station.station_name,
+                                  action: 'edit'
+                                } 
+                              } 
+                            });
+                            window.dispatchEvent(event);
+                          }}
+                          className="touch-manipulation min-h-[44px]"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          編輯
+                        </Button>
                       </div>
                     </div>
                    
