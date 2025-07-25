@@ -88,10 +88,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <Download className="h-4 w-4 mr-2" />
                 匯出資料報表
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setScreenshotDialogOpen(true)}>
-                <Camera className="h-4 w-4 mr-2" />
-                儀表板截圖
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
