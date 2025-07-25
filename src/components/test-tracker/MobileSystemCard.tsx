@@ -229,25 +229,10 @@ export function MobileSystemCard({
                           variant="outline" 
                           size="sm"
                           onClick={() => {
-                            const currentUrl = new URL(window.location.href);
-                            currentUrl.searchParams.set('system', system.system_name);
-                            currentUrl.searchParams.set('station', station.station_name);
-                            currentUrl.searchParams.set('action', 'edit');
-                            window.history.pushState({}, '', currentUrl.toString());
-                            
-                            const event = new CustomEvent('navigate', { 
-                              detail: { 
-                                module: 'test-tracker', 
-                                params: { 
-                                  system: system.system_name, 
-                                  station: station.station_name,
-                                  action: 'edit'
-                                } 
-                              } 
-                            });
-                            window.dispatchEvent(event);
+                            // 使用 location.hash 來模擬路由切換
+                            window.location.hash = `#/test-tracker?system=${encodeURIComponent(system.system_name)}&station=${encodeURIComponent(station.station_name)}&action=edit`;
                           }}
-                          className="touch-manipulation min-h-[44px]"
+                          className="touch-manipulation min-h-[44px] px-3"
                         >
                           <Edit className="h-3 w-3 mr-1" />
                           編輯
