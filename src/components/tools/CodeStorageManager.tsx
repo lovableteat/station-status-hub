@@ -22,7 +22,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Code, Plus, Edit2, Trash2, Copy, Eye } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Code, Plus, Edit2, Trash2, Copy, Eye, ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -45,9 +64,11 @@ export function CodeStorageManager() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<CodeSnippet | null>(null);
   const [viewingSnippet, setViewingSnippet] = useState<CodeSnippet | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterLanguage, setFilterLanguage] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [advancedSearch, setAdvancedSearch] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -218,34 +239,61 @@ export function CodeStorageManager() {
     setEditingSnippet(null);
   };
 
+  // 切換行展開狀態
+
+  const toggleRowExpansion = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
+  };
+
   const filteredSnippets = codeSnippets.filter(snippet => {
     const matchesCategory = filterCategory === "all" || snippet.category === filterCategory;
     const matchesLanguage = filterLanguage === "all" || snippet.language === filterLanguage;
-    const matchesSearch = searchTerm === "" || 
-      snippet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      snippet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      snippet.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    return matchesCategory && matchesLanguage && matchesSearch;
+    if (advancedSearch && searchTerm) {
+      // 進階搜尋：支援程式碼內容搜尋
+      const matchesSearch = searchTerm === "" || 
+        snippet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snippet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snippet.code_content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snippet.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+      return matchesCategory && matchesLanguage && matchesSearch;
+    } else {
+      // 一般搜尋：不搜尋程式碼內容
+      const matchesSearch = searchTerm === "" || 
+        snippet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snippet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snippet.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+      return matchesCategory && matchesLanguage && matchesSearch;
+    }
   });
 
   const categories = [...new Set(codeSnippets.map(s => s.category))];
   const languages = [...new Set(codeSnippets.map(s => s.language))];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Code className="h-5 w-5" />
-          <h2 className="text-xl font-semibold">程式碼儲存列表</h2>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="h-4 w-4 mr-2" />
-              新增程式碼
-            </Button>
-          </DialogTrigger>
+    <TooltipProvider>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Code className="h-5 w-5" />
+            <h2 className="text-xl font-semibold">程式碼片段管理</h2>
+            <Badge variant="secondary" className="ml-2">
+              {filteredSnippets.length} 個片段
+            </Badge>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm}>
+                <Plus className="h-4 w-4 mr-2" />
+                新增程式碼
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -354,150 +402,321 @@ export function CodeStorageManager() {
         </Dialog>
       </div>
 
-      {/* 篩選器 */}
-      <div className="flex gap-4 items-center">
-        <Input
-          placeholder="搜尋程式碼片段..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="分類" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">所有分類</SelectItem>
-            {categories.map(category => (
-              <SelectItem key={category} value={category}>{category}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterLanguage} onValueChange={setFilterLanguage}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="語言" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">所有語言</SelectItem>
-            {languages.map(language => (
-              <SelectItem key={language} value={language}>{language}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* 進階搜尋和篩選器 */}
+        <div className="space-y-4">
+          <div className="flex gap-4 items-center flex-wrap">
+            <div className="flex items-center gap-2 flex-1 min-w-[300px]">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={advancedSearch ? "搜尋標題、描述、標籤或程式碼內容..." : "搜尋標題、描述、標籤..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={advancedSearch ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAdvancedSearch(!advancedSearch)}
+                  >
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {advancedSearch ? "關閉進階搜尋" : "開啟進階搜尋 (包含程式碼內容)"}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="分類" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">所有分類</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={filterLanguage} onValueChange={setFilterLanguage}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="語言" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">所有語言</SelectItem>
+                {languages.map(language => (
+                  <SelectItem key={language} value={language}>{language}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {searchTerm && (
+            <div className="text-sm text-muted-foreground">
+              找到 {filteredSnippets.length} 個匹配的程式碼片段
+              {advancedSearch && " (包含程式碼內容搜尋)"}
+            </div>
+          )}
+        </div>
 
-      {/* 程式碼片段列表 */}
-      {isLoading ? (
-        <div className="text-center py-8">載入中...</div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredSnippets.map((snippet) => (
-            <Card key={snippet.id} className="relative">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base">{snippet.title}</CardTitle>
-                  <div className="flex gap-1">
+        {/* 表格式程式碼片段列表 */}
+        {isLoading ? (
+          <div className="text-center py-8">載入中...</div>
+        ) : filteredSnippets.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            {searchTerm ? "沒有找到匹配的程式碼片段" : "還沒有程式碼片段，點擊上方按鈕新增第一個"}
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead className="min-w-[200px]">標題</TableHead>
+                  <TableHead className="w-[100px]">語言</TableHead>
+                  <TableHead className="w-[120px]">分類</TableHead>
+                  <TableHead className="w-[200px]">標籤</TableHead>
+                  <TableHead className="w-[120px]">更新時間</TableHead>
+                  <TableHead className="w-[160px] text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSnippets.map((snippet) => (
+                  <>
+                    <TableRow key={snippet.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => toggleRowExpansion(snippet.id)}
+                        >
+                          {expandedRows.has(snippet.id) ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div>
+                          <div className="font-semibold">{snippet.title}</div>
+                          {snippet.description && (
+                            <div className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                              {snippet.description}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">
+                          {snippet.language}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {snippet.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {snippet.tags.slice(0, 3).map((tag, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              #{tag}
+                            </Badge>
+                          ))}
+                          {snippet.tags.length > 3 && (
+                            <span className="text-xs text-muted-foreground">
+                              +{snippet.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {new Date(snippet.updated_at).toLocaleDateString('zh-TW', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  setViewingSnippet(snippet);
+                                  setIsViewDialogOpen(true);
+                                }}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>檢視程式碼</TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleCopy(snippet.code_content)}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>複製程式碼</TooltipContent>
+                          </Tooltip>
+                          
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEdit(snippet)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>編輯</TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive"
+                                onClick={() => handleDelete(snippet.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>刪除</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* 展開的程式碼內容 */}
+                    {expandedRows.has(snippet.id) && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="bg-muted/30 p-0">
+                          <Collapsible open={true}>
+                            <CollapsibleContent>
+                              <div className="p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-medium text-sm">程式碼內容</h4>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleCopy(snippet.code_content)}
+                                    >
+                                      <Copy className="h-4 w-4 mr-1" />
+                                      快速複製
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setViewingSnippet(snippet);
+                                        setIsViewDialogOpen(true);
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4 mr-1" />
+                                      全螢幕檢視
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="relative">
+                                  <pre className="bg-background border rounded-lg p-3 overflow-auto max-h-80 text-sm">
+                                    <code className="language-{snippet.language}">
+                                      {snippet.code_content}
+                                    </code>
+                                  </pre>
+                                </div>
+                                {snippet.tags.length > 3 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    <span className="text-sm text-muted-foreground mr-2">所有標籤:</span>
+                                    {snippet.tags.map((tag, index) => (
+                                      <Badge key={index} variant="secondary" className="text-xs">
+                                        #{tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* 檢視程式碼對話框 */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Code className="h-5 w-5" />
+                {viewingSnippet?.title}
+              </DialogTitle>
+              {viewingSnippet?.description && (
+                <DialogDescription>{viewingSnippet.description}</DialogDescription>
+              )}
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex gap-2 items-center flex-wrap">
+                <Badge>{viewingSnippet?.language}</Badge>
+                <Badge variant="outline">{viewingSnippet?.category}</Badge>
+                {viewingSnippet?.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary">#{tag}</Badge>
+                ))}
+                <div className="ml-auto text-sm text-muted-foreground">
+                  更新於 {viewingSnippet && new Date(viewingSnippet.updated_at).toLocaleString('zh-TW')}
+                </div>
+              </div>
+              <div className="relative">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">程式碼內容</span>
+                  <div className="flex gap-2">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => {
-                        setViewingSnippet(snippet);
-                        setIsViewDialogOpen(true);
-                      }}
+                      onClick={() => viewingSnippet && handleCopy(viewingSnippet.code_content)}
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleCopy(snippet.code_content)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleEdit(snippet)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-destructive"
-                      onClick={() => handleDelete(snippet.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
+                      <Copy className="h-4 w-4 mr-1" />
+                      複製程式碼
                     </Button>
                   </div>
                 </div>
-                <div className="flex gap-2 items-center">
-                  <Badge variant="secondary" className="text-xs">
-                    {snippet.language}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {snippet.category}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {snippet.description && (
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {snippet.description}
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {snippet.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  更新時間: {new Date(snippet.updated_at).toLocaleDateString('zh-TW')}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[60vh] text-sm border">
+                  <code className="language-{viewingSnippet?.language}">
+                    {viewingSnippet?.code_content}
+                  </code>
+                </pre>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-      {/* 檢視程式碼對話框 */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{viewingSnippet?.title}</DialogTitle>
-            {viewingSnippet?.description && (
-              <DialogDescription>{viewingSnippet.description}</DialogDescription>
-            )}
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2 items-center">
-              <Badge>{viewingSnippet?.language}</Badge>
-              <Badge variant="outline">{viewingSnippet?.category}</Badge>
-              {viewingSnippet?.tags.map((tag, index) => (
-                <Badge key={index} variant="secondary">#{tag}</Badge>
-              ))}
-            </div>
-            <div className="relative">
-              <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-96 text-sm">
-                <code>{viewingSnippet?.code_content}</code>
-              </pre>
-              <Button
-                variant="outline"
-                size="sm"
-                className="absolute top-2 right-2"
-                onClick={() => viewingSnippet && handleCopy(viewingSnippet.code_content)}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
