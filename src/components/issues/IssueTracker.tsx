@@ -357,7 +357,7 @@ export function IssueTracker() {
             <Input
               placeholder="搜尋問題..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
               className="pl-10"
             />
           </div>

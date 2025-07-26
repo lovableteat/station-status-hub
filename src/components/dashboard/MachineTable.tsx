@@ -65,7 +65,7 @@ export function MachineTable() {
           <Input
             placeholder="搜尋系統名稱或機種..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
             className="w-60"
           />
         </div>

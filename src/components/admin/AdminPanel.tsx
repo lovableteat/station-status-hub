@@ -604,7 +604,7 @@ export function AdminPanel() {
                       placeholder="搜尋工程師姓名或郵件..."
                       className="pl-10"
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
                     />
                   </div>
                 </div>

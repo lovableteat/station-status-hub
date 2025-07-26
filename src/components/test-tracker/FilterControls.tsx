@@ -34,7 +34,7 @@ export function FilterControls({
                 placeholder="搜尋機台編號或負責人..."
                 className="pl-10"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
               />
             </div>
           </div>

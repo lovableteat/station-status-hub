@@ -409,8 +409,8 @@ export function CodeStorageManager() {
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={advancedSearch ? "搜尋標題、描述、標籤或程式碼內容..." : "搜尋標題、描述、標籤..."}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
                 className="flex-1"
               />
               <Tooltip>
