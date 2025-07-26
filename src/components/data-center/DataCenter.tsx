@@ -169,7 +169,7 @@ export function DataCenter() {
                   placeholder="搜尋系統、測試項目或工程師..."
                   className="pl-10"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
                 />
               </div>
             </div>
