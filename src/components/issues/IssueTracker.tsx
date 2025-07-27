@@ -132,20 +132,20 @@ export function IssueTracker() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "high": return "bg-red-100 text-red-800";
-      case "medium": return "bg-yellow-100 text-yellow-800";
-      case "low": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "high": return "bg-destructive/10 text-destructive border-destructive/20";
+      case "medium": return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+      case "low": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20";
+      default: return "bg-muted text-muted-foreground border-border";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "open": return "bg-red-100 text-red-800";
-      case "in_progress": return "bg-blue-100 text-blue-800";
+      case "open": return "bg-destructive/10 text-destructive border-destructive/20";
+      case "in_progress": return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
       case "resolved": 
-      case "closed": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "closed": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20";
+      default: return "bg-muted text-muted-foreground border-border";
     }
   };
 
@@ -262,14 +262,14 @@ export function IssueTracker() {
           {(issue.system_name || issue.station_name || issue.test_item_name) && (
             <div className="flex flex-wrap gap-2">
               {issue.system_name && (
-                <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-medium border border-blue-200">
+                <div className="flex items-center gap-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium border border-blue-500/20">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   系統: {issue.system_name}
                 </div>
               )}
               {issue.station_name && (
-                <div className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs font-medium border border-green-200">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-500/20">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                   站點: {issue.station_name}
                 </div>
               )}
@@ -379,15 +379,15 @@ export function IssueTracker() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* 待處理 */}
         <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-red-50 to-red-100/50 border-red-200 shadow-sm">
+          <Card className="bg-gradient-to-r from-destructive/5 to-destructive/10 border-destructive/20 shadow-sm">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-red-700">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
+              <CardTitle className="text-xl flex items-center gap-3 text-destructive">
+                <div className="p-2 bg-destructive/10 rounded-lg">
+                  <AlertTriangle className="h-6 w-6 text-destructive" />
                 </div>
                 <div>
                   <div className="text-lg font-bold">待處理</div>
-                  <div className="text-sm font-normal text-red-600">{groupedIssues.open.length} 個問題</div>
+                  <div className="text-sm font-normal text-destructive/80">{groupedIssues.open.length} 個問題</div>
                 </div>
               </CardTitle>
             </CardHeader>
@@ -405,15 +405,15 @@ export function IssueTracker() {
 
         {/* 處理中 */}
         <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-200 shadow-sm">
+          <Card className="bg-gradient-to-r from-blue-500/5 to-blue-500/10 border-blue-500/20 shadow-sm">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-blue-700">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Clock className="h-6 w-6 text-blue-600" />
+              <CardTitle className="text-xl flex items-center gap-3 text-blue-700 dark:text-blue-400">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <div className="text-lg font-bold">處理中</div>
-                  <div className="text-sm font-normal text-blue-600">{groupedIssues.in_progress.length} 個問題</div>
+                  <div className="text-sm font-normal text-blue-600/80 dark:text-blue-400/80">{groupedIssues.in_progress.length} 個問題</div>
                 </div>
               </CardTitle>
             </CardHeader>
@@ -431,15 +431,15 @@ export function IssueTracker() {
 
         {/* 已完成 */}
         <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-green-50 to-green-100/50 border-green-200 shadow-sm">
+          <Card className="bg-gradient-to-r from-emerald-500/5 to-emerald-500/10 border-emerald-500/20 shadow-sm">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-green-700">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+              <CardTitle className="text-xl flex items-center gap-3 text-emerald-700 dark:text-emerald-400">
+                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                  <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
                   <div className="text-lg font-bold">已完成</div>
-                  <div className="text-sm font-normal text-green-600">{groupedIssues.resolved.length} 個問題</div>
+                  <div className="text-sm font-normal text-emerald-600/80 dark:text-emerald-400/80">{groupedIssues.resolved.length} 個問題</div>
                 </div>
               </CardTitle>
             </CardHeader>
