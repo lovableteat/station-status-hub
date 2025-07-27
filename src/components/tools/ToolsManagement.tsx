@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { CodeStorageManager } from "./CodeStorageManager";
 import {
@@ -34,7 +35,8 @@ import {
   Plus,
   Code2,
   FileText,
-  Settings
+  Settings,
+  ChevronDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +65,7 @@ export function ToolsManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
+  const [isAddToolOpen, setIsAddToolOpen] = useState(false);
   const { toast } = useToast();
 
   const [newTool, setNewTool] = useState({
@@ -254,79 +257,88 @@ export function ToolsManagement() {
         
         <TabsContent value="tools" className="space-y-6">
           {/* 新增工具表單 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                新增工具
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tool_name">工具名稱 *</Label>
-                  <Input
-                    id="tool_name"
-                    value={newTool.tool_name}
-                    onChange={(e) => setNewTool({...newTool, tool_name: e.target.value})}
-                    placeholder="輸入工具名稱"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="version">版本</Label>
-                  <Input
-                    id="version"
-                    value={newTool.version}
-                    onChange={(e) => setNewTool({...newTool, version: e.target.value})}
-                    placeholder="v1.0.0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">分類</Label>
-                  <Select value={newTool.category} onValueChange={(value) => setNewTool({...newTool, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="driver">驅動程式</SelectItem>
-                      <SelectItem value="software">軟體工具</SelectItem>
-                      <SelectItem value="utility">公用程式</SelectItem>
-                      <SelectItem value="documentation">文件</SelectItem>
-                      <SelectItem value="other">其他</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="description">描述</Label>
-                  <Textarea
-                    id="description"
-                    value={newTool.description}
-                    onChange={(e) => setNewTool({...newTool, description: e.target.value})}
-                    placeholder="工具描述和使用說明"
-                    rows={3}
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is_required"
-                    checked={newTool.is_required}
-                    onCheckedChange={(checked) => setNewTool({...newTool, is_required: checked})}
-                  />
-                  <Label htmlFor="is_required">必要工具</Label>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <Button onClick={handleAddTool}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增工具
-                </Button>
-                <Button variant="outline" onClick={() => setIsUploadDialogOpen(true)}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  上傳檔案
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <Collapsible open={isAddToolOpen} onOpenChange={setIsAddToolOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Plus className="h-5 w-5" />
+                      新增工具
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isAddToolOpen ? 'rotate-180' : ''}`} />
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tool_name">工具名稱 *</Label>
+                      <Input
+                        id="tool_name"
+                        value={newTool.tool_name}
+                        onChange={(e) => setNewTool({...newTool, tool_name: e.target.value})}
+                        placeholder="輸入工具名稱"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="version">版本</Label>
+                      <Input
+                        id="version"
+                        value={newTool.version}
+                        onChange={(e) => setNewTool({...newTool, version: e.target.value})}
+                        placeholder="v1.0.0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">分類</Label>
+                      <Select value={newTool.category} onValueChange={(value) => setNewTool({...newTool, category: value})}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="driver">驅動程式</SelectItem>
+                          <SelectItem value="software">軟體工具</SelectItem>
+                          <SelectItem value="utility">公用程式</SelectItem>
+                          <SelectItem value="documentation">文件</SelectItem>
+                          <SelectItem value="other">其他</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="description">描述</Label>
+                      <Textarea
+                        id="description"
+                        value={newTool.description}
+                        onChange={(e) => setNewTool({...newTool, description: e.target.value})}
+                        placeholder="工具描述和使用說明"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="is_required"
+                        checked={newTool.is_required}
+                        onCheckedChange={(checked) => setNewTool({...newTool, is_required: checked})}
+                      />
+                      <Label htmlFor="is_required">必要工具</Label>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Button onClick={handleAddTool}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      新增工具
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsUploadDialogOpen(true)}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      上傳檔案
+                    </Button>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {/* 篩選器 */}
           <div className="flex gap-4 items-center">
