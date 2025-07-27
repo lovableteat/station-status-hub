@@ -641,6 +641,42 @@ export type Database = {
           },
         ]
       }
+      login_audit: {
+        Row: {
+          display_name: string | null
+          id: string
+          ip_address: string | null
+          login_time: string
+          role: string
+          success: boolean
+          user_agent: string | null
+          user_id: string
+          username: string
+        }
+        Insert: {
+          display_name?: string | null
+          id?: string
+          ip_address?: string | null
+          login_time?: string
+          role: string
+          success?: boolean
+          user_agent?: string | null
+          user_id: string
+          username: string
+        }
+        Update: {
+          display_name?: string | null
+          id?: string
+          ip_address?: string | null
+          login_time?: string
+          role?: string
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       manufacturers: {
         Row: {
           country: string | null
