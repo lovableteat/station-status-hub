@@ -175,9 +175,12 @@ export function TestTracker() {
 
   const filteredSystems = systems.filter(system => {
     const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase());
+                         system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         system.current_station?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesEngineer = !filterEngineer || filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
-    const matchesStatus = !filterStatus || filterStatus === "all-status" || system.status === filterStatus;
+    const matchesStatus = !filterStatus || filterStatus === "all-status" || 
+                         system.status === filterStatus || 
+                         system.current_station === filterStatus;
     return matchesSearch && matchesEngineer && matchesStatus;
   });
 
