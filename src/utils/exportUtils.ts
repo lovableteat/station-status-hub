@@ -117,7 +117,7 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
     const workbook = XLSX.utils.book_new();
     
     if (data && data.length > 0) {
-      // Process data for comprehensive Excel report
+      // Process data for comprehensive Excel report with proper formatting
       const processedData = data.map(system => {
         const systemId = system.id;
         const systemProgress = progress?.filter(p => p.system_id === systemId) || [];
@@ -137,55 +137,69 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
         };
 
         return {
-          '系統編號': system.system_name || system.name || 'N/A',
-          '序號': system.serial_number || 'N/A',
-          '型號': system.model || 'N/A',
-          '負責工程師': system.assigned_engineer || 'Unassigned',
-          '目前站點': system.current_station || 'Station 0',
+          '系統編號': system.system_name || system.name || '',
+          '序號': system.serial_number || '',
+          '型號': system.model || '',
+          '負責工程師': system.assigned_engineer || '',
+          '目前站點': system.current_station || '',
           '整體進度(%)': system.overall_progress || 0,
-          '狀態': system.status || 'Not Start',
+          '狀態': system.status || '',
           'Station 0 進度(%)': getStationProgress('Station 0'),
-          'Station 1 進度(%)': getStationProgress('Station 1'),
+          'Station 1 進度(%)': getStationProgress('Station 1'), 
           'Station 2 進度(%)': getStationProgress('Station 2'),
           'Station 3 進度(%)': getStationProgress('Station 3'),
-          '實際開始時間': system.actual_started_at ? new Date(system.actual_started_at).toLocaleString('zh-TW') : '',
-          '實際完成時間': system.actual_completed_at ? new Date(system.actual_completed_at).toLocaleString('zh-TW') : '',
+          '實際開始時間': system.actual_started_at ? new Date(system.actual_started_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.actual_started_at).toLocaleTimeString('zh-TW') : '',
+          '實際完成時間': system.actual_completed_at ? new Date(system.actual_completed_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.actual_completed_at).toLocaleTimeString('zh-TW') : '',
           'OS MAC': system.os_mac_address || '',
           'BMC 位址': system.bmc_address || '',
           'BOM 90': system.bom_90 || '',
-          '建立時間': system.created_at ? new Date(system.created_at).toLocaleString('zh-TW') : '',
-          '更新時間': system.updated_at ? new Date(system.updated_at).toLocaleString('zh-TW') : ''
+          '建立時間': system.created_at ? new Date(system.created_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.created_at).toLocaleTimeString('zh-TW') : '',
+          '更新時間': system.updated_at ? new Date(system.updated_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.updated_at).toLocaleTimeString('zh-TW') : ''
         };
       });
 
-      // Create worksheet from processed data
-      const worksheet = XLSX.utils.json_to_sheet(processedData);
+      // Create worksheet with proper headers
+      const worksheet = XLSX.utils.json_to_sheet(processedData, { 
+        header: [
+          '系統編號', '序號', '型號', '負責工程師', '目前站點', '整體進度(%)', '狀態',
+          'Station 0 進度(%)', 'Station 1 進度(%)', 'Station 2 進度(%)', 'Station 3 進度(%)',
+          '實際開始時間', '實際完成時間', 'OS MAC', 'BMC 位址', 'BOM 90', '建立時間', '更新時間'
+        ]
+      });
       
-      // Add title and headers
-      XLSX.utils.sheet_add_aoa(worksheet, [[title]], { origin: 'A1' });
-      XLSX.utils.sheet_add_aoa(worksheet, [[`生成時間: ${new Date().toLocaleString('zh-TW')}`]], { origin: 'A2' });
-      XLSX.utils.sheet_add_aoa(worksheet, [[`資料筆數: ${data.length}`]], { origin: 'A3' });
+      // Insert title rows at the top
+      XLSX.utils.sheet_add_aoa(worksheet, [
+        [title],
+        [`生成時間: ${new Date().toLocaleDateString('zh-TW')} ${new Date().toLocaleTimeString('zh-TW')}`],
+        [`資料筆數: ${data.length}`],
+        []
+      ], { origin: 'A1' });
       
-      // Adjust column widths
+      // Adjust starting row for data
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      range.s.r = 4; // Start data from row 5 (0-indexed)
+      worksheet['!ref'] = XLSX.utils.encode_range(range);
+      
+      // Set column widths for better readability
       const colWidths = [
         { wch: 15 }, // 系統編號
-        { wch: 12 }, // 序號
-        { wch: 10 }, // 型號
-        { wch: 12 }, // 負責工程師
-        { wch: 12 }, // 目前站點
-        { wch: 10 }, // 整體進度
-        { wch: 10 }, // 狀態
-        { wch: 12 }, // Station 0
-        { wch: 12 }, // Station 1
-        { wch: 12 }, // Station 2
-        { wch: 12 }, // Station 3
-        { wch: 18 }, // 實際開始時間
-        { wch: 18 }, // 實際完成時間
-        { wch: 15 }, // OS MAC
-        { wch: 15 }, // BMC 位址
-        { wch: 10 }, // BOM 90
-        { wch: 18 }, // 建立時間
-        { wch: 18 }  // 更新時間
+        { wch: 20 }, // 序號  
+        { wch: 12 }, // 型號
+        { wch: 15 }, // 負責工程師
+        { wch: 15 }, // 目前站點
+        { wch: 12 }, // 整體進度
+        { wch: 12 }, // 狀態
+        { wch: 15 }, // Station 0
+        { wch: 15 }, // Station 1
+        { wch: 15 }, // Station 2
+        { wch: 15 }, // Station 3
+        { wch: 20 }, // 實際開始時間
+        { wch: 20 }, // 實際完成時間
+        { wch: 20 }, // OS MAC
+        { wch: 18 }, // BMC 位址
+        { wch: 12 }, // BOM 90
+        { wch: 20 }, // 建立時間
+        { wch: 20 }  // 更新時間
       ];
       worksheet['!cols'] = colWidths;
       
@@ -199,13 +213,13 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
           const item = testItems?.find(i => i.id === prog.item_id);
           
           return {
-            '系統名稱': system?.system_name || 'N/A',
-            '站點名稱': station?.station_name || station?.name || 'N/A',
-            '測試項目': item?.item_name || 'N/A',
-            '狀態': prog.status || 'Not Start',
+            '系統名稱': system?.system_name || '',
+            '站點名稱': station?.station_name || station?.name || '',
+            '測試項目': item?.item_name || '',
+            '狀態': prog.status || '',
             '進度(%)': prog.progress_percent || 0,
-            '開始時間': prog.started_at ? new Date(prog.started_at).toLocaleString('zh-TW') : '',
-            '完成時間': prog.completed_at ? new Date(prog.completed_at).toLocaleString('zh-TW') : '',
+            '開始時間': prog.started_at ? new Date(prog.started_at).toLocaleDateString('zh-TW') + ' ' + new Date(prog.started_at).toLocaleTimeString('zh-TW') : '',
+            '完成時間': prog.completed_at ? new Date(prog.completed_at).toLocaleDateString('zh-TW') + ' ' + new Date(prog.completed_at).toLocaleTimeString('zh-TW') : '',
             '實際小時': prog.actual_hours || 0,
             '負責人': prog.assigned_to || '',
             '備註': prog.notes || ''
@@ -214,8 +228,8 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
         
         const progressWorksheet = XLSX.utils.json_to_sheet(progressData);
         progressWorksheet['!cols'] = [
-          { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 8 },
-          { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 30 }
+          { wch: 18 }, { wch: 18 }, { wch: 25 }, { wch: 12 }, { wch: 10 },
+          { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 15 }, { wch: 30 }
         ];
         XLSX.utils.book_append_sheet(workbook, progressWorksheet, '詳細進度');
       }
@@ -223,7 +237,7 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
       // Create empty worksheet with title
       const worksheet = XLSX.utils.aoa_to_sheet([
         [title],
-        [`生成時間: ${new Date().toLocaleString('zh-TW')}`],
+        [`生成時間: ${new Date().toLocaleDateString('zh-TW')} ${new Date().toLocaleTimeString('zh-TW')}`],
         [],
         ['無資料可匯出']
       ]);
