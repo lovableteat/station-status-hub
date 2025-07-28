@@ -138,6 +138,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         onOpenChange={setExportDialogOpen}
         title="系統儀表板"
         data={systems}
+        stations={stations}
+        testItems={testItems}
+        progress={progress}
       />
       
       <DashboardScreenshotExporter

@@ -12,9 +12,20 @@ interface ExportDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   data?: any[];
+  stations?: any[];
+  testItems?: any[];
+  progress?: any[];
 }
 
-export function ExportDialog({ open, onOpenChange, title, data = [] }: ExportDialogProps) {
+export function ExportDialog({ 
+  open, 
+  onOpenChange, 
+  title, 
+  data = [],
+  stations = [],
+  testItems = [],
+  progress = []
+}: ExportDialogProps) {
   const [exportFormat, setExportFormat] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
@@ -37,7 +48,7 @@ export function ExportDialog({ open, onOpenChange, title, data = [] }: ExportDia
         await generatePDF(title, data);
         // PDF generation now handles the download directly
       } else {
-        const excelBlob = await generateExcel(title, data);
+        const excelBlob = await generateExcel(title, data, stations, testItems, progress);
         downloadFile(excelBlob, fileName);
       }
       
