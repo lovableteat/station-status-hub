@@ -466,7 +466,6 @@ export function ToolsManagement() {
                       <TableHead>分類</TableHead>
                       <TableHead>狀態</TableHead>
                       <TableHead>必要</TableHead>
-                      <TableHead>下載次數</TableHead>
                       <TableHead>上傳時間</TableHead>
                       <TableHead>操作</TableHead>
                     </TableRow>
@@ -502,10 +501,9 @@ export function ToolsManagement() {
                             <Badge variant="secondary">選用</Badge>
                           )}
                         </TableCell>
-                        <TableCell>{tool.download_count}</TableCell>
                         <TableCell>
                           {tool.uploaded_at ? 
-                            new Date(tool.uploaded_at).toLocaleDateString('zh-TW') : 
+                            new Date(tool.uploaded_at).toLocaleDateString('zh-TW') + ' ' + new Date(tool.uploaded_at).toLocaleTimeString('zh-TW') : 
                             '-'
                           }
                         </TableCell>
@@ -613,52 +611,94 @@ export function ToolsManagement() {
             </div>
           )}
 
-          {/* 預覽工具對話框 */}
+          {/* 預覽工具對話框 - 仿照程式碼片段管理頁面的預覽方式 */}
           {previewTool && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="bg-background rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                 <h3 className="text-lg font-medium mb-4">工具詳情預覽</h3>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">工具名稱</Label>
-                    <p className="font-medium">{previewTool.tool_name}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">版本</Label>
-                    <p>{previewTool.version || '未指定'}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">分類</Label>
-                    <p>{customCategories.find(cat => cat.value === previewTool.category)?.label || previewTool.category}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">描述</Label>
-                    <p className="text-sm">{previewTool.description || '無描述'}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">狀態</Label>
-                    <div className="flex gap-2">
-                      <Badge className={getStatusColor(previewTool.upload_status)}>
-                        {getStatusText(previewTool.upload_status)}
-                      </Badge>
-                      {previewTool.is_required && (
-                        <Badge variant="destructive">必要</Badge>
-                      )}
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">工具名稱</Label>
+                      <p className="mt-1 text-sm font-mono bg-muted p-2 rounded border">{previewTool.tool_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">版本</Label>
+                      <p className="mt-1 text-sm font-mono bg-muted p-2 rounded border">{previewTool.version || '未指定'}</p>
                     </div>
                   </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">下載次數</Label>
-                    <p>{previewTool.download_count}</p>
-                  </div>
-                  {previewTool.file_size && (
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm text-muted-foreground">檔案大小</Label>
-                      <p>{(previewTool.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                      <Label className="text-sm font-medium text-muted-foreground">分類</Label>
+                      <p className="mt-1 text-sm font-mono bg-muted p-2 rounded border">
+                        {customCategories.find(cat => cat.value === previewTool.category)?.label || previewTool.category}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">上傳時間</Label>
+                      <p className="mt-1 text-sm font-mono bg-muted p-2 rounded border">
+                        {previewTool.uploaded_at ? 
+                          new Date(previewTool.uploaded_at).toLocaleDateString('zh-TW') + ' ' + new Date(previewTool.uploaded_at).toLocaleTimeString('zh-TW') : 
+                          '未上傳'
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">描述</Label>
+                    <div className="mt-1 p-4 bg-muted rounded border">
+                      <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                        {previewTool.description || '無描述'}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">狀態</Label>
+                      <div className="mt-1 p-2 bg-muted rounded border">
+                        <div className="flex gap-2">
+                          <Badge className={getStatusColor(previewTool.upload_status)}>
+                            {getStatusText(previewTool.upload_status)}
+                          </Badge>
+                          {previewTool.is_required && (
+                            <Badge variant="destructive">必要</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {previewTool.file_size && (
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">檔案大小</Label>
+                        <p className="mt-1 text-sm font-mono bg-muted p-2 rounded border">
+                          {(previewTool.file_size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {previewTool.file_path && (
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">檔案路徑</Label>
+                      <div className="mt-1 p-3 bg-muted rounded border font-mono text-sm break-all">
+                        {previewTool.file_path}
+                      </div>
                     </div>
                   )}
-                </div>
-                <div className="flex gap-2 mt-6">
-                  <Button variant="outline" onClick={() => setPreviewTool(null)}>關閉</Button>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setPreviewTool(null)}>
+                      關閉
+                    </Button>
+                    {previewTool.upload_status === 'uploaded' && (
+                      <Button onClick={() => handleDownload(previewTool)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        下載工具
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
