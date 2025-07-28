@@ -122,11 +122,42 @@ export function DataCenter() {
     });
   };
 
-  const exportToExcel = () => {
-    toast({
-      title: "匯出 Excel",
-      description: "Excel 匯出功能開發中...",
-    });
+  const exportToExcel = async () => {
+    try {
+      // Import the excel export function
+      const { generateExcel, downloadFile } = await import('@/utils/exportUtils');
+      
+      // Generate Excel with test records data
+      const excelBlob = await generateExcel(
+        '測試記錄資料', 
+        records.map(record => ({
+          system_name: record.system_name,
+          station_name: record.station_name,
+          test_item: record.test_item,
+          status: record.status,
+          progress: record.progress,
+          assigned_engineer: record.assigned_engineer,
+          start_date: record.start_date,
+          completion_date: record.completion_date,
+          notes: record.notes
+        }))
+      );
+      
+      const fileName = `測試記錄資料_${new Date().toISOString().split('T')[0]}.xlsx`;
+      downloadFile(excelBlob, fileName);
+      
+      toast({
+        title: "匯出成功",
+        description: `已匯出 ${filteredRecords.length} 筆記錄到 Excel`,
+      });
+    } catch (error) {
+      console.error('Excel export error:', error);
+      toast({
+        title: "匯出失敗",
+        description: "Excel 匯出時發生錯誤",
+        variant: "destructive"
+      });
+    }
   };
 
 
