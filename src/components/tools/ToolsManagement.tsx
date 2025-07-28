@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
+import {
   Wrench, 
   Download, 
   Upload, 
@@ -36,7 +36,8 @@ import {
   Code2,
   FileText,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +59,11 @@ interface Tool {
   download_count: number;
 }
 
+interface Category {
+  value: string;
+  label: string;
+}
+
 export function ToolsManagement() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,6 +72,15 @@ export function ToolsManagement() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const [isAddToolOpen, setIsAddToolOpen] = useState(false);
+  const [previewTool, setPreviewTool] = useState<Tool | null>(null);
+  const [customCategories, setCustomCategories] = useState<Category[]>([
+    { value: "driver", label: "驅動程式" },
+    { value: "software", label: "軟體工具" },
+    { value: "utility", label: "公用程式" },
+    { value: "documentation", label: "文件" },
+    { value: "other", label: "其他" }
+  ]);
+  const [newCategory, setNewCategory] = useState("");
   const { toast } = useToast();
 
   const [newTool, setNewTool] = useState({
@@ -150,6 +165,40 @@ export function ToolsManagement() {
     }
   };
 
+  const handleEditTool = async () => {
+    if (!editingTool) return;
+
+    try {
+      const { error } = await supabase
+        .from('tools_management')
+        .update({
+          tool_name: editingTool.tool_name,
+          version: editingTool.version || null,
+          category: editingTool.category,
+          description: editingTool.description || null,
+          is_required: editingTool.is_required
+        })
+        .eq('id', editingTool.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "更新成功",
+        description: "工具資訊已更新",
+      });
+
+      setEditingTool(null);
+      loadTools();
+    } catch (error) {
+      console.error('Error updating tool:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新工具資訊",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleDeleteTool = async (id: string) => {
     if (!confirm('確認要刪除這個工具嗎？')) return;
 
@@ -175,6 +224,29 @@ export function ToolsManagement() {
         variant: "destructive"
       });
     }
+  };
+
+  const addCustomCategory = () => {
+    if (!newCategory.trim()) return;
+    
+    const categoryValue = newCategory.toLowerCase().replace(/\s+/g, '_');
+    const newCat = { value: categoryValue, label: newCategory.trim() };
+    
+    if (customCategories.some(cat => cat.value === categoryValue)) {
+      toast({
+        title: "分類已存在",
+        description: "此分類名稱已存在",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setCustomCategories([...customCategories, newCat]);
+    setNewCategory("");
+    toast({
+      title: "分類新增成功",
+      description: `新增分類: ${newCategory}`,
+    });
   };
 
   const handleDownload = async (tool: Tool) => {
@@ -298,11 +370,9 @@ export function ToolsManagement() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="driver">驅動程式</SelectItem>
-                          <SelectItem value="software">軟體工具</SelectItem>
-                          <SelectItem value="utility">公用程式</SelectItem>
-                          <SelectItem value="documentation">文件</SelectItem>
-                          <SelectItem value="other">其他</SelectItem>
+                          {customCategories.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -325,6 +395,24 @@ export function ToolsManagement() {
                       <Label htmlFor="is_required">必要工具</Label>
                     </div>
                   </div>
+                  
+                  {/* 自訂分類區域 */}
+                  <div className="border-t pt-4 mt-4">
+                    <Label className="text-sm font-medium">自訂分類</Label>
+                    <div className="flex gap-2 mt-2">
+                      <Input
+                        placeholder="輸入新分類名稱"
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button onClick={addCustomCategory} size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增分類
+                      </Button>
+                    </div>
+                  </div>
+                  
                   <div className="flex gap-2 mt-4">
                     <Button onClick={handleAddTool}>
                       <Plus className="h-4 w-4 mr-2" />
@@ -354,11 +442,9 @@ export function ToolsManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">所有分類</SelectItem>
-                <SelectItem value="driver">驅動程式</SelectItem>
-                <SelectItem value="software">軟體工具</SelectItem>
-                <SelectItem value="utility">公用程式</SelectItem>
-                <SelectItem value="documentation">文件</SelectItem>
-                <SelectItem value="other">其他</SelectItem>
+                {customCategories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -400,7 +486,9 @@ export function ToolsManagement() {
                         </TableCell>
                         <TableCell>{tool.version || '-'}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{tool.category}</Badge>
+                          <Badge variant="outline">
+                            {customCategories.find(cat => cat.value === tool.category)?.label || tool.category}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(tool.upload_status)}>
@@ -423,6 +511,20 @@ export function ToolsManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPreviewTool(tool)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingTool(tool)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
                             {tool.upload_status === 'uploaded' && (
                               <Button
                                 variant="outline"
@@ -454,6 +556,113 @@ export function ToolsManagement() {
             onClose={() => setIsUploadDialogOpen(false)}
             onUploadSuccess={loadTools}
           />
+
+          {/* 編輯工具對話框 */}
+          {editingTool && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+                <h3 className="text-lg font-medium mb-4">編輯工具</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>工具名稱</Label>
+                    <Input
+                      value={editingTool.tool_name}
+                      onChange={(e) => setEditingTool({...editingTool, tool_name: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>版本</Label>
+                    <Input
+                      value={editingTool.version || ''}
+                      onChange={(e) => setEditingTool({...editingTool, version: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>分類</Label>
+                    <Select value={editingTool.category} onValueChange={(value) => setEditingTool({...editingTool, category: value})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customCategories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>描述</Label>
+                    <Textarea
+                      value={editingTool.description || ''}
+                      onChange={(e) => setEditingTool({...editingTool, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={editingTool.is_required}
+                      onCheckedChange={(checked) => setEditingTool({...editingTool, is_required: checked})}
+                    />
+                    <Label>必要工具</Label>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-6">
+                  <Button onClick={handleEditTool}>保存變更</Button>
+                  <Button variant="outline" onClick={() => setEditingTool(null)}>取消</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 預覽工具對話框 */}
+          {previewTool && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+                <h3 className="text-lg font-medium mb-4">工具詳情預覽</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">工具名稱</Label>
+                    <p className="font-medium">{previewTool.tool_name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">版本</Label>
+                    <p>{previewTool.version || '未指定'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">分類</Label>
+                    <p>{customCategories.find(cat => cat.value === previewTool.category)?.label || previewTool.category}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">描述</Label>
+                    <p className="text-sm">{previewTool.description || '無描述'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">狀態</Label>
+                    <div className="flex gap-2">
+                      <Badge className={getStatusColor(previewTool.upload_status)}>
+                        {getStatusText(previewTool.upload_status)}
+                      </Badge>
+                      {previewTool.is_required && (
+                        <Badge variant="destructive">必要</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">下載次數</Label>
+                    <p>{previewTool.download_count}</p>
+                  </div>
+                  {previewTool.file_size && (
+                    <div>
+                      <Label className="text-sm text-muted-foreground">檔案大小</Label>
+                      <p>{(previewTool.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-6">
+                  <Button variant="outline" onClick={() => setPreviewTool(null)}>關閉</Button>
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
         
         <TabsContent value="code">

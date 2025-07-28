@@ -356,6 +356,9 @@ export function ProductionMonitor() {
           onOpenChange={setShowExportDialog}
           title="生產監控報表"
           data={systems}
+          stations={stations}
+          testItems={testItems}
+          progress={progress}
         />
       </div>
     );
@@ -501,6 +504,9 @@ export function ProductionMonitor() {
         onOpenChange={setShowExportDialog}
         title="生產監控報表"
         data={systems}
+        stations={stations}
+        testItems={testItems}
+        progress={progress}
       />
 
       <SystemSelectionDialog
