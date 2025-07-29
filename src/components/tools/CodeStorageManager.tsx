@@ -44,6 +44,7 @@ import {
 import { Code, Plus, Edit2, Trash2, Copy, Eye, ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface CodeSnippet {
   id: string;
@@ -55,6 +56,7 @@ interface CodeSnippet {
   tags: string[];
   created_at: string;
   updated_at: string;
+  sop_content?: string;
 }
 
 export function CodeStorageManager() {
@@ -77,7 +79,8 @@ export function CodeStorageManager() {
     code_content: "",
     language: "javascript",
     category: "utility",
-    tags: ""
+    tags: "",
+    sop_content: ""
   });
 
   const loadCodeSnippets = async () => {
@@ -100,7 +103,8 @@ export function CodeStorageManager() {
         category: item.category,
         tags: item.tags || [],
         created_at: item.created_at,
-        updated_at: item.updated_at
+        updated_at: item.updated_at,
+        sop_content: item.sop_content || undefined
       }));
       
       setCodeSnippets(typedData);
@@ -131,6 +135,7 @@ export function CodeStorageManager() {
         language: formData.language,
         category: formData.category,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        sop_content: formData.sop_content || null
       };
 
       if (editingSnippet) {
@@ -179,7 +184,8 @@ export function CodeStorageManager() {
       code_content: snippet.code_content,
       language: snippet.language,
       category: snippet.category,
-      tags: snippet.tags.join(', ')
+      tags: snippet.tags.join(', '),
+      sop_content: snippet.sop_content || ""
     });
     setIsDialogOpen(true);
   };
@@ -234,7 +240,8 @@ export function CodeStorageManager() {
       code_content: "",
       language: "javascript",
       category: "utility",
-      tags: ""
+      tags: "",
+      sop_content: ""
     });
     setEditingSnippet(null);
   };
@@ -386,6 +393,17 @@ export function CodeStorageManager() {
                   rows={12}
                   className="font-mono text-sm"
                   required
+                />
+              </div>
+              
+              {/* SOP 欄位 */}
+              <div className="space-y-2">
+                <Label>SOP 操作說明</Label>
+                <RichTextEditor
+                  content={formData.sop_content}
+                  onChange={(content) => setFormData({...formData, sop_content: content})}
+                  placeholder="撰寫詳細的程式碼使用說明和操作流程..."
+                  className="min-h-[300px]"
                 />
               </div>
               
@@ -706,12 +724,27 @@ export function CodeStorageManager() {
                     </Button>
                   </div>
                 </div>
-                <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[60vh] text-sm border">
+                <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[40vh] text-sm border">
                   <code className="language-{viewingSnippet?.language}">
                     {viewingSnippet?.code_content}
                   </code>
                 </pre>
               </div>
+              
+              {/* SOP 預覽區域 */}
+              {viewingSnippet?.sop_content && (
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium">SOP 操作說明</span>
+                  </div>
+                  <div className="bg-muted p-4 rounded-lg border max-h-[40vh] overflow-auto">
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ __html: viewingSnippet.sop_content }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
