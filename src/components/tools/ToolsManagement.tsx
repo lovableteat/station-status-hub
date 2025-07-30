@@ -11,7 +11,6 @@ import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { CodeStorageManager } from "./CodeStorageManager";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -27,15 +26,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Wrench, 
   Download, 
@@ -67,7 +57,6 @@ interface Tool {
   uploaded_by?: string;
   uploaded_at?: string;
   download_count: number;
-  sop_content?: string;
 }
 
 interface Category {
@@ -99,8 +88,7 @@ export function ToolsManagement() {
     version: "",
     category: "driver",
     description: "",
-    is_required: false,
-    sop_content: ""
+    is_required: false
   });
 
   const loadTools = async () => {
@@ -148,8 +136,7 @@ export function ToolsManagement() {
           category: newTool.category,
           description: newTool.description || null,
           is_required: newTool.is_required,
-          upload_status: 'pending',
-          sop_content: newTool.sop_content || null
+          upload_status: 'pending'
         }]);
 
       if (error) throw error;
@@ -164,8 +151,7 @@ export function ToolsManagement() {
         version: "",
         category: "driver",
         description: "",
-        is_required: false,
-        sop_content: ""
+        is_required: false
       });
 
       loadTools();
@@ -190,8 +176,7 @@ export function ToolsManagement() {
           version: editingTool.version || null,
           category: editingTool.category,
           description: editingTool.description || null,
-          is_required: editingTool.is_required,
-          sop_content: editingTool.sop_content || null
+          is_required: editingTool.is_required
         })
         .eq('id', editingTool.id);
 
@@ -411,17 +396,6 @@ export function ToolsManagement() {
                     </div>
                   </div>
                   
-                  {/* SOP 欄位 */}
-                  <div className="space-y-2 mt-4">
-                    <Label>SOP 操作說明</Label>
-                    <RichTextEditor
-                      content={newTool.sop_content}
-                      onChange={(content) => setNewTool({...newTool, sop_content: content})}
-                      placeholder="撰寫詳細的操作流程說明，可包含圖片、連結等..."
-                      className="min-h-[300px]"
-                    />
-                  </div>
-                  
                   {/* 自訂分類區域 */}
                   <div className="border-t pt-4 mt-4">
                     <Label className="text-sm font-medium">自訂分類</Label>
@@ -583,50 +557,42 @@ export function ToolsManagement() {
 
           {/* 編輯工具對話框 */}
           {editingTool && (
-            <Dialog open={!!editingTool} onOpenChange={() => setEditingTool(null)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>編輯工具</DialogTitle>
-                  <DialogDescription>
-                    編輯工具資訊和SOP操作說明
-                  </DialogDescription>
-                </DialogHeader>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+                <h3 className="text-lg font-medium mb-4">編輯工具</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label>工具名稱</Label>
-                      <Input
-                        value={editingTool.tool_name}
-                        onChange={(e) => setEditingTool({...editingTool, tool_name: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <Label>版本</Label>
-                      <Input
-                        value={editingTool.version || ''}
-                        onChange={(e) => setEditingTool({...editingTool, version: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <Label>分類</Label>
-                      <Select value={editingTool.category} onValueChange={(value) => setEditingTool({...editingTool, category: value})}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customCategories.map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <Label>工具名稱</Label>
+                    <Input
+                      value={editingTool.tool_name}
+                      onChange={(e) => setEditingTool({...editingTool, tool_name: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>版本</Label>
+                    <Input
+                      value={editingTool.version || ''}
+                      onChange={(e) => setEditingTool({...editingTool, version: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>分類</Label>
+                    <Select value={editingTool.category} onValueChange={(value) => setEditingTool({...editingTool, category: value})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customCategories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>描述</Label>
                     <Textarea
                       value={editingTool.description || ''}
                       onChange={(e) => setEditingTool({...editingTool, description: e.target.value})}
-                      rows={3}
                     />
                   </div>
                   <div className="flex items-center space-x-2">
@@ -636,36 +602,20 @@ export function ToolsManagement() {
                     />
                     <Label>必要工具</Label>
                   </div>
-                  
-                  {/* SOP 編輯欄位 */}
-                  <div className="space-y-2">
-                    <Label>SOP 操作說明</Label>
-                    <RichTextEditor
-                      content={editingTool.sop_content || ''}
-                      onChange={(content) => setEditingTool({...editingTool, sop_content: content})}
-                      placeholder="撰寫詳細的操作流程說明，可包含圖片、連結等..."
-                      className="min-h-[300px]"
-                    />
-                  </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setEditingTool(null)}>取消</Button>
+                <div className="flex gap-2 mt-6">
                   <Button onClick={handleEditTool}>保存變更</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <Button variant="outline" onClick={() => setEditingTool(null)}>取消</Button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* 預覽工具對話框 - 仿照程式碼片段管理頁面的預覽方式 */}
           {previewTool && (
-            <Dialog open={!!previewTool} onOpenChange={() => setPreviewTool(null)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>工具詳情預覽</DialogTitle>
-                  <DialogDescription>
-                    查看工具詳細資訊和SOP操作說明
-                  </DialogDescription>
-                </DialogHeader>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-background rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                <h3 className="text-lg font-medium mb-4">工具詳情預覽</h3>
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -705,19 +655,6 @@ export function ToolsManagement() {
                     </div>
                   </div>
 
-                  {/* SOP 預覽區域 */}
-                  {previewTool.sop_content && (
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground">SOP 操作說明</Label>
-                      <div className="mt-1 p-4 bg-muted rounded border">
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                          dangerouslySetInnerHTML={{ __html: previewTool.sop_content }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">狀態</Label>
@@ -750,20 +687,21 @@ export function ToolsManagement() {
                       </div>
                     </div>
                   )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setPreviewTool(null)}>
-                    關閉
-                  </Button>
-                  {previewTool.upload_status === 'uploaded' && (
-                    <Button onClick={() => handleDownload(previewTool)}>
-                      <Download className="h-4 w-4 mr-2" />
-                      下載工具
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setPreviewTool(null)}>
+                      關閉
                     </Button>
-                  )}
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                    {previewTool.upload_status === 'uploaded' && (
+                      <Button onClick={() => handleDownload(previewTool)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        下載工具
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </TabsContent>
         
