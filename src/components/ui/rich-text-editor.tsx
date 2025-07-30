@@ -1,3 +1,4 @@
+
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -23,7 +24,8 @@ import {
   ImageIcon,
   Link2,
   Unlink,
-  Palette
+  Palette,
+  Upload
 } from 'lucide-react';
 import { 
   Dialog,
@@ -45,7 +47,8 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ content, onChange, placeholder, className }: RichTextEditorProps) {
-  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+  const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
+  const [isImageUrlDialogOpen, setIsImageUrlDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
@@ -59,7 +62,9 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
         inline: false,
         allowBase64: true,
         HTMLAttributes: {
-          style: 'max-width: 100%; height: auto; border-radius: 8px;',
+          style: 'max-width: 100%; height: auto; border-radius: 8px; cursor: pointer; resize: both;',
+          draggable: true,
+          contentEditable: false,
         },
       }),
       Link.configure({
@@ -84,14 +89,27 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
           'dark:prose-invert'
         ),
       },
+      handleDOMEvents: {
+        // 讓圖片可以調整大小
+        mousedown: (view, event) => {
+          const target = event.target as HTMLElement;
+          if (target.tagName === 'IMG') {
+            // 允許圖片被選中和調整大小
+            return false;
+          }
+        }
+      }
     },
   });
 
-  const addImage = useCallback(() => {
+  const addImageFromUrl = useCallback(() => {
     if (imageUrl && editor) {
-      editor.chain().focus().setImage({ src: imageUrl }).run();
+      editor.chain().focus().setImage({ 
+        src: imageUrl,
+        style: 'max-width: 100%; height: auto; border-radius: 8px; resize: both; display: block; margin: 16px auto;'
+      }).run();
       setImageUrl('');
-      setIsImageDialogOpen(false);
+      setIsImageUrlDialogOpen(false);
     }
   }, [editor, imageUrl]);
 
@@ -126,7 +144,11 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        editor.chain().focus().setImage({ src: result }).run();
+        editor.chain().focus().setImage({ 
+          src: result,
+          style: 'max-width: 100%; height: auto; border-radius: 8px; resize: both; display: block; margin: 16px auto;'
+        }).run();
+        setIsImageUploadDialogOpen(false);
       };
       reader.readAsDataURL(file);
     }
@@ -245,22 +267,22 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
         <div className="w-px h-6 bg-border mx-1" />
 
         {/* 圖片上傳 */}
-        <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
+        <Dialog open={isImageUploadDialogOpen} onOpenChange={setIsImageUploadDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="sm">
-              <ImageIcon className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>插入圖片</DialogTitle>
+              <DialogTitle>上傳圖片</DialogTitle>
               <DialogDescription>
-                選擇上傳圖片文件或輸入圖片URL
+                選擇要上傳的圖片文件
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="imageFile">上傳圖片</Label>
+                <Label htmlFor="imageFile">選擇圖片</Label>
                 <Input
                   id="imageFile"
                   type="file"
@@ -268,7 +290,30 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
                   onChange={handleImageUpload}
                 />
               </div>
-              <div className="text-center text-muted-foreground">或</div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsImageUploadDialogOpen(false)}>
+                取消
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 圖片URL */}
+        <Dialog open={isImageUrlDialogOpen} onOpenChange={setIsImageUrlDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <ImageIcon className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>插入圖片URL</DialogTitle>
+              <DialogDescription>
+                輸入圖片的網址連結
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="imageUrl">圖片URL</Label>
                 <Input
@@ -280,10 +325,10 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsImageDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsImageUrlDialogOpen(false)}>
                 取消
               </Button>
-              <Button onClick={addImage} disabled={!imageUrl}>
+              <Button onClick={addImageFromUrl} disabled={!imageUrl}>
                 插入
               </Button>
             </DialogFooter>

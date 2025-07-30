@@ -1,247 +1,220 @@
 
 import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit, Save, X } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { Save, X } from "lucide-react";
 
 interface SystemEditDialogProps {
-  systemId: string;
-  systemName: string;
-  assignedEngineer: string;
-  model?: string;
-  serialNumber?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  system: any;
   onUpdate: () => void;
-  variant?: 'button' | 'icon';
 }
 
-export function SystemEditDialog({ 
-  systemId, 
-  systemName, 
-  assignedEngineer, 
-  model, 
-  serialNumber, 
-  onUpdate, 
-  variant = 'icon' 
-}: SystemEditDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editValues, setEditValues] = useState({
-    system_name: systemName,
-    assigned_engineer: assignedEngineer,
-    model: model || 'GB300',
-    serial_number: serialNumber || '',
+export function SystemEditDialog({ isOpen, onClose, system, onUpdate }: SystemEditDialogProps) {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    system_name: '',
+    serial_number: '',
+    model: '',
+    assigned_engineer: '',
+    current_station: '',
+    status: '',
     os_mac_address: '',
     bmc_address: '',
-    bom_90: ''
+    bom_90: '',
+    exclude_from_dashboard: false // 新增欄位
   });
-  const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
-  const { toast } = useToast();
-  const isMobile = useIsMobile();
 
   useEffect(() => {
-    const loadEngineers = async () => {
-      const { data } = await supabase
-        .from('engineers')
-        .select('id, name')
-        .eq('status', 'active')
-        .order('name');
-      if (data) setEngineers(data);
-    };
-
-    const loadSystemDetails = async () => {
-      const { data } = await supabase
-        .from('test_systems')
-        .select('*')
-        .eq('id', systemId)
-        .single();
-      
-      if (data) {
-        setEditValues({
-          system_name: data.system_name,
-          assigned_engineer: data.assigned_engineer || '',
-          model: data.model || 'GB300',
-          serial_number: data.serial_number || '',
-          os_mac_address: data.os_mac_address || '',
-          bmc_address: data.bmc_address || '',
-          bom_90: data.bom_90 || ''
-        });
-      }
-    };
-
-    loadEngineers();
-    loadSystemDetails();
-  }, [systemId]);
+    if (system) {
+      setFormData({
+        system_name: system.system_name || '',
+        serial_number: system.serial_number || '',
+        model: system.model || 'GB300',
+        assigned_engineer: system.assigned_engineer || '',
+        current_station: system.current_station || 'Station 0',
+        status: system.status || 'Not Start',
+        os_mac_address: system.os_mac_address || '',
+        bmc_address: system.bmc_address || '',
+        bom_90: system.bom_90 || '',
+        exclude_from_dashboard: system.exclude_from_dashboard || false
+      });
+    }
+  }, [system]);
 
   const handleSave = async () => {
     try {
       const { error } = await supabase
         .from('test_systems')
-        .update({
-          system_name: editValues.system_name,
-          assigned_engineer: editValues.assigned_engineer,
-          model: editValues.model,
-          serial_number: editValues.serial_number,
-          os_mac_address: editValues.os_mac_address,
-          bmc_address: editValues.bmc_address,
-          bom_90: editValues.bom_90
-        })
-        .eq('id', systemId);
+        .update(formData)
+        .eq('id', system.id);
 
       if (error) throw error;
 
       toast({
         title: "更新成功",
-        description: "系統資料已成功更新"
+        description: "系統資訊已更新"
       });
 
-      setIsOpen(false);
       onUpdate();
+      onClose();
     } catch (error) {
+      console.error('Error updating system:', error);
       toast({
         title: "更新失敗",
-        description: "無法更新系統資料",
+        description: "無法更新系統資訊",
         variant: "destructive"
       });
     }
   };
 
   return (
-    <MobileDialog open={isOpen} onOpenChange={setIsOpen}>
-      <MobileDialogTrigger asChild>
-        {variant === 'button' ? (
-          <Button 
-            variant="outline" 
-            size={isMobile ? "default" : "sm"} 
-            className={cn(
-              "text-sm px-2 py-1 bg-muted hover:bg-accent rounded border cursor-pointer",
-              isMobile && "h-10 px-4 text-base"
-            )}
-          >
-            {assignedEngineer}
-          </Button>
-        ) : (
-          <Button 
-            variant="ghost" 
-            size={isMobile ? "default" : "sm"}
-            className={isMobile ? "h-10 px-4" : ""}
-          >
-            <Edit className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3"} />
-            {isMobile && "編輯"}
-          </Button>
-        )}
-      </MobileDialogTrigger>
-      <MobileDialogContent>
-        <MobileDialogHeader>
-          <MobileDialogTitle>編輯系統資料</MobileDialogTitle>
-        </MobileDialogHeader>
-        <div className={cn("space-y-4", isMobile && "space-y-6")}>
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機台編號</Label>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>編輯系統資訊</DialogTitle>
+        </DialogHeader>
+        
+        <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="system_name">系統名稱 *</Label>
             <Input
-              value={editValues.system_name}
-              onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
-              placeholder="請輸入機台編號..."
-              className={isMobile ? "h-12 text-base" : ""}
+              id="system_name"
+              value={formData.system_name}
+              onChange={(e) => setFormData({...formData, system_name: e.target.value})}
+              placeholder="請輸入系統名稱"
             />
           </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
+          <div className="space-y-2">
+            <Label htmlFor="serial_number">序號</Label>
             <Input
-              value={editValues.model}
-              onChange={(e) => setEditValues({...editValues, model: e.target.value})}
-              placeholder="請輸入型號..."
-              className={isMobile ? "h-12 text-base" : ""}
+              id="serial_number"
+              value={formData.serial_number}
+              onChange={(e) => setFormData({...formData, serial_number: e.target.value})}
+              placeholder="請輸入序號"
             />
           </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>序號</Label>
+          <div className="space-y-2">
+            <Label htmlFor="model">型號</Label>
             <Input
-              value={editValues.serial_number}
-              onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
-              placeholder="請輸入序號..."
-              className={isMobile ? "h-12 text-base" : ""}
+              id="model"
+              value={formData.model}
+              onChange={(e) => setFormData({...formData, model: e.target.value})}
+              placeholder="GB300"
             />
           </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>NIC MAC Address</Label>
+          <div className="space-y-2">
+            <Label htmlFor="assigned_engineer">負責工程師</Label>
             <Input
-              value={editValues.os_mac_address}
-              onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
-              placeholder="請輸入 NIC MAC Address..."
-              className={isMobile ? "h-12 text-base" : ""}
+              id="assigned_engineer"
+              value={formData.assigned_engineer}
+              onChange={(e) => setFormData({...formData, assigned_engineer: e.target.value})}
+              placeholder="請輸入負責工程師"
             />
           </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>BMC Address</Label>
-            <Input
-              value={editValues.bmc_address}
-              onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
-              placeholder="請輸入 BMC Address..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
-
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>90BOM</Label>
-            <Input
-              value={editValues.bom_90}
-              onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
-              placeholder="請輸入 90BOM..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
-
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
-            <Select 
-              value={editValues.assigned_engineer} 
-              onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
+          <div className="space-y-2">
+            <Label htmlFor="current_station">當前站點</Label>
+            <Select
+              value={formData.current_station}
+              onValueChange={(value) => setFormData({...formData, current_station: value})}
             >
-              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                <SelectValue placeholder="請選擇負責工程師..." />
+              <SelectTrigger>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {engineers.map(engineer => (
-                  <SelectItem 
-                    key={engineer.id} 
-                    value={engineer.name}
-                    className={isMobile ? "h-12 text-base" : ""}
-                  >
-                    {engineer.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="Station 0">Station 0</SelectItem>
+                <SelectItem value="Station 1">Station 1</SelectItem>
+                <SelectItem value="Station 2">Station 2</SelectItem>
+                <SelectItem value="Station 3">Station 3</SelectItem>
+                <SelectItem value="已完成">已完成</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="status">狀態</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value) => setFormData({...formData, status: value})}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Not Start">未開始</SelectItem>
+                <SelectItem value="On-going">進行中</SelectItem>
+                <SelectItem value="Done">已完成</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="os_mac_address">OS MAC Address</Label>
+            <Input
+              id="os_mac_address"
+              value={formData.os_mac_address}
+              onChange={(e) => setFormData({...formData, os_mac_address: e.target.value})}
+              placeholder="請輸入OS MAC Address"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bmc_address">BMC Address</Label>
+            <Input
+              id="bmc_address"
+              value={formData.bmc_address}
+              onChange={(e) => setFormData({...formData, bmc_address: e.target.value})}
+              placeholder="請輸入BMC Address"
+            />
+          </div>
+
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="bom_90">BOM 90%</Label>
+            <Textarea
+              id="bom_90"
+              value={formData.bom_90}
+              onChange={(e) => setFormData({...formData, bom_90: e.target.value})}
+              placeholder="請輸入BOM 90%資訊"
+              rows={3}
+            />
+          </div>
+
+          {/* 新增不列入計算選項 */}
+          <div className="col-span-2 flex items-center space-x-2">
+            <Checkbox
+              id="exclude_from_dashboard"
+              checked={formData.exclude_from_dashboard}
+              onCheckedChange={(checked) => setFormData({...formData, exclude_from_dashboard: !!checked})}
+            />
+            <Label htmlFor="exclude_from_dashboard" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              不列入系統儀表板統計計算
+            </Label>
+          </div>
         </div>
-        <MobileDialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => setIsOpen(false)}
-            className={isMobile ? "h-12 text-base font-medium" : ""}
-          >
-            <X className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            <X className="h-4 w-4 mr-2" />
             取消
           </Button>
-          <Button 
-            onClick={handleSave}
-            className={isMobile ? "h-12 text-base font-medium" : ""}
-          >
-            <Save className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
-            儲存
+          <Button onClick={handleSave}>
+            <Save className="h-4 w-4 mr-2" />
+            儲存變更
           </Button>
-        </MobileDialogFooter>
-      </MobileDialogContent>
-    </MobileDialog>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
