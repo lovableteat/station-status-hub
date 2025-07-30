@@ -115,6 +115,45 @@ export function DataCenter() {
 
   const engineers = [...new Set(records.map(r => r.assigned_engineer))];
 
+  // 修改總進度計算方式 - 基於所有測項而非已編輯的測項
+  const calculateOverallProgress = (systemId: string) => {
+    const targetStations = stations.filter(station => 
+      station.id && typeof station.id === 'string' && 
+      (station.name.includes('Station 0') || station.name.includes('組裝') ||
+       station.name.includes('Station 1') || station.name.includes('開機') ||
+       station.name.includes('Station 2') || station.name.includes('FW') ||
+       station.name.includes('Station 3') || station.name.includes('EE'))
+    );
+    
+    if (targetStations.length === 0) return 0;
+    
+    let totalProgress = 0;
+    let validStations = 0;
+    
+    targetStations.forEach(station => {
+      // 獲取該站點的所有測項
+      const stationTestItems = testItems.filter(item => item.station_id === station.id);
+      
+      if (stationTestItems.length === 0) return;
+      
+      // 獲取該系統在該站點的進度記錄
+      const systemStationProgress = progress.filter(p => 
+        p.system_id === systemId && p.station_id === station.id
+      );
+      
+      // 計算已完成的測項數量
+      const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
+      
+      // 計算該站點的完成百分比 (基於所有測項，不論是否有進度記錄)
+      const stationProgress = Math.round((completedItems / stationTestItems.length) * 100);
+      
+      totalProgress += stationProgress;
+      validStations++;
+    });
+    
+    return validStations > 0 ? Math.round(totalProgress / validStations) : 0;
+  };
+
   const exportToPDF = () => {
     toast({
       title: "匯出 PDF",
