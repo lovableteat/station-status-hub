@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import TextStyle from '@tiptap/extension-text-style';
+import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import { Button } from './button';
 import { Input } from './input';
@@ -231,7 +231,7 @@ export function RichTextEditor({
       <div className="min-h-[200px]">
         <EditorContent 
           editor={editor} 
-          className="prose prose-sm max-w-none"
+          className="prose prose-sm max-w-none [&_img]:max-w-full [&_img]:h-auto [&_img]:cursor-pointer [&_img]:rounded-md"
         />
       </div>
 

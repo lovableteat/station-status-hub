@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,6 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { useRouter } from 'next/navigation';
 
 interface TestSystem {
   id: string;
@@ -72,7 +72,6 @@ export function MobileSystemCard({
   progress
 }: MobileSystemCardProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const router = useRouter();
 
   const currentStation = stations.find(station => station.id === system.current_station);
   const systemProgress = progress.filter(p => p.system_id === system.id);
@@ -88,8 +87,9 @@ export function MobileSystemCard({
   }, null as Date | null);
 
   const handleSystemUpdate = useCallback(async () => {
-    router.refresh();
-  }, [router]);
+    // Refresh the data after system update
+    window.location.reload();
+  }, []);
 
   return (
     <Card className="w-full mb-4">
@@ -120,13 +120,13 @@ export function MobileSystemCard({
             </Badge>
           )}
           {system.status === 'Warning' && (
-            <Badge variant="warning">
+            <Badge variant="destructive">
               <AlertTriangle className="h-4 w-4 mr-1" />
               {system.status}
             </Badge>
           )}
           {system.status === 'Completed' && (
-            <Badge variant="success">
+            <Badge variant="secondary">
               <CheckCircle className="h-4 w-4 mr-1" />
               {system.status}
             </Badge>
@@ -164,9 +164,9 @@ export function MobileSystemCard({
       </CardContent>
 
       <SystemEditDialog
+        isOpen={isEditDialogOpen}
+        onClose={() => setIsEditDialogOpen(false)}
         system={system}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
         onUpdate={handleSystemUpdate}
       />
     </Card>
