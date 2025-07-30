@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import {
   Table,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useNavigate } from 'react-router-dom';
 
 interface TestSystem {
   id: string;
@@ -78,15 +78,10 @@ export function TestProgressTable({
   onNavigate
 }: TestProgressTableProps) {
   const [editingSystem, setEditingSystem] = useState<TestSystem | null>(null);
-  const navigate = useNavigate();
 
-  const handleSystemUpdate = async (
-    systemId: string,
-    updates: Partial<TestSystem>
-  ) => {
-    // Implement the update logic here, e.g., using supabase
-    console.log(`Update system ${systemId} with`, updates);
-    // After successful update, you might want to refresh the data
+  const handleSystemUpdate = async () => {
+    // Refresh the data after system update
+    window.location.reload();
   };
 
   const getProgressStatus = (systemId: string, stationId: string, itemId: string) => {
@@ -111,6 +106,10 @@ export function TestProgressTable({
 
   const handleNavigateToStation = (stationId: string) => {
     onNavigate?.('monitor', { station: stationId });
+  };
+
+  const handleSystemDetailView = (systemId: string) => {
+    onNavigate?.('detail', { system: systemId });
   };
 
   return (
@@ -183,7 +182,7 @@ export function TestProgressTable({
                     <DropdownMenuItem onClick={() => setEditingSystem(system)}>
                       編輯
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate(`/test-tracker/${system.id}`)}>
+                    <DropdownMenuItem onClick={() => handleSystemDetailView(system.id)}>
                       <ArrowRight className="h-4 w-4 mr-2" />
                       查看詳細
                     </DropdownMenuItem>
@@ -197,9 +196,9 @@ export function TestProgressTable({
 
       {editingSystem && (
         <SystemEditDialog
+          isOpen={!!editingSystem}
+          onClose={() => setEditingSystem(null)}
           system={editingSystem}
-          open={!!editingSystem}
-          onOpenChange={(open) => !open && setEditingSystem(null)}
           onUpdate={handleSystemUpdate}
         />
       )}
