@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format, subDays } from "date-fns";
-import { zh } from "date-fns/locale";
+import { zhTW } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 export function StationAverageTimeChart() {
@@ -27,10 +27,10 @@ export function StationAverageTimeChart() {
 
   const getStationAverageTime = () => {
     const targetStations = stations.filter(station => 
-      station.name.includes('Station 0') || station.name.includes('組裝') ||
-      station.name.includes('Station 1') || station.name.includes('開機') ||
-      station.name.includes('Station 2') || station.name.includes('FW') ||
-      station.name.includes('Station 3') || station.name.includes('EE')
+      station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
+      station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
+      station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
+      station.station_name.includes('Station 3') || station.station_name.includes('EE')
     );
 
     return targetStations.map(station => {
@@ -53,7 +53,7 @@ export function StationAverageTimeChart() {
 
       if (relevantProgress.length === 0) {
         return {
-          station: station.name.replace('Station ', 'S'),
+          station: station.station_name.replace('Station ', 'S'),
           avgTime: 0,
           systemCount: 0
         };
@@ -67,7 +67,7 @@ export function StationAverageTimeChart() {
       }, 0);
 
       return {
-        station: station.name.replace('Station ', 'S'),
+        station: station.station_name.replace('Station ', 'S'),
         avgTime: parseFloat((totalHours / relevantProgress.length).toFixed(1)),
         systemCount: new Set(relevantProgress.map(p => p.system_id)).size
       };
@@ -98,7 +98,7 @@ export function StationAverageTimeChart() {
                 <Button variant="outline" size="sm">
                   <Calendar className="h-4 w-4 mr-2" />
                   {dateRange.from && dateRange.to ? (
-                    `${format(dateRange.from, 'MM/dd', { locale: zh })} - ${format(dateRange.to, 'MM/dd', { locale: zh })}`
+                    `${format(dateRange.from, 'MM/dd', { locale: zhTW })} - ${format(dateRange.to, 'MM/dd', { locale: zhTW })}`
                   ) : (
                     '選擇時間範圍'
                   )}
