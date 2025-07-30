@@ -43,23 +43,24 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // 直接使用系統的 current_station 欄位進行統計
-  const totalSystems = systems.length;
+  // 排除設定為不列入統計的系統
+  const filteredSystems = systems.filter(system => !system.exclude_from_dashboard);
+  const totalSystems = filteredSystems.length;
   
   // 基於 current_station 欄位統計
-  const completedSystems = systems.filter(system => system.current_station === '已完成').length;
-  const ongoingSystems = systems.filter(system => system.current_station === '進行中').length;
-  const notStartedSystems = systems.filter(system => system.current_station === '未開始').length;
+  const completedSystems = filteredSystems.filter(system => system.current_station === '已完成').length;
+  const ongoingSystems = filteredSystems.filter(system => system.current_station === '進行中').length;
+  const notStartedSystems = filteredSystems.filter(system => system.current_station === '未開始').length;
   
   const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
   
   // Calculate average progress
   const averageProgress = totalSystems > 0 
-    ? Math.round(systems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
+    ? Math.round(filteredSystems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
     : 0;
     
   // 修改測試通過率計算：基於當前站點已完成的系統數量
-  const completedSystemsCount = systems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
+  const completedSystemsCount = filteredSystems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
   const passRate = totalSystems > 0 ? Math.round((completedSystemsCount / totalSystems) * 100) : 0;
 
   return (

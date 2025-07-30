@@ -1646,6 +1646,7 @@ export type Database = {
           bmc_address: string | null
           bom_90: string | null
           created_at: string
+          cuda_version: string | null
           current_station: string | null
           exclude_from_dashboard: boolean | null
           id: string
@@ -1655,6 +1656,7 @@ export type Database = {
           serial_number: string | null
           status: string | null
           system_name: string
+          ubuntu_version: string | null
           updated_at: string
         }
         Insert: {
@@ -1664,6 +1666,7 @@ export type Database = {
           bmc_address?: string | null
           bom_90?: string | null
           created_at?: string
+          cuda_version?: string | null
           current_station?: string | null
           exclude_from_dashboard?: boolean | null
           id?: string
@@ -1673,6 +1676,7 @@ export type Database = {
           serial_number?: string | null
           status?: string | null
           system_name: string
+          ubuntu_version?: string | null
           updated_at?: string
         }
         Update: {
@@ -1682,6 +1686,7 @@ export type Database = {
           bmc_address?: string | null
           bom_90?: string | null
           created_at?: string
+          cuda_version?: string | null
           current_station?: string | null
           exclude_from_dashboard?: boolean | null
           id?: string
@@ -1691,6 +1696,7 @@ export type Database = {
           serial_number?: string | null
           status?: string | null
           system_name?: string
+          ubuntu_version?: string | null
           updated_at?: string
         }
         Relationships: []
