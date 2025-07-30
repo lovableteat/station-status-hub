@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -186,6 +185,11 @@ export function TestTracker() {
 
   const engineers = [...new Set(systems.map(s => s.assigned_engineer))];
 
+  const handleNavigate = (module: string, params?: any) => {
+    // Navigation logic can be implemented here if needed
+    console.log('Navigate to:', module, params);
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -231,20 +235,12 @@ export function TestTracker() {
       {/* Test Progress Table */}
       <div data-testtracker-table>
         <TestProgressTable
-          filteredSystems={filteredSystems}
+          systems={filteredSystems}
           stations={stations}
-          items={items}
+          testItems={items}
           progress={progress}
-          editingProgress={editingProgress}
-          setEditingProgress={setEditingProgress}
-          editValues={editValues}
-          setEditValues={setEditValues}
-          getProgressForSystemItem={getProgressForSystemItem}
-          handleEditProgress={handleEditProgress}
-          handleSaveProgress={handleSaveProgress}
-          handleDeleteProgress={handleDeleteProgress}
-          getStatusColor={getStatusColor}
-          onSystemUpdate={loadData}
+          onProgressUpdate={updateProgress}
+          onNavigate={handleNavigate}
         />
       </div>
 
