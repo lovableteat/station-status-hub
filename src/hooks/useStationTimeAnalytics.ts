@@ -36,6 +36,7 @@ export function useStationTimeAnalytics() {
       setIsLoading(true);
       
       // Get all test progress records with their station information
+      // 排除設定為不列入統計的系統
       let query = supabase
         .from('test_progress')
         .select(`
@@ -44,29 +45,40 @@ export function useStationTimeAnalytics() {
             id,
             system_name,
             actual_started_at,
-            actual_completed_at
+            actual_completed_at,
+            exclude_from_dashboard
           ),
           test_flow_stations!inner(
             id,
             station_name,
             station_order
           )
-        `);
+        `)
+        .eq('test_systems.exclude_from_dashboard', false);
 
-      // Apply date filters based on test_systems timestamps
+      // Apply date filters based on test_systems timestamps or test_progress timestamps
       if (dateFilter?.start_date || dateFilter?.end_date) {
-        let timeColumn = 'actual_completed_at';
+        let timeColumn = 'completed_at';
+        let tablePrefix = '';
+        
         if (dateFilter.filter_type === 'estimated_start') {
           timeColumn = 'actual_started_at';
+          tablePrefix = 'test_systems.';
         } else if (dateFilter.filter_type === 'estimated_end') {
           timeColumn = 'actual_completed_at';
+          tablePrefix = 'test_systems.';
+        } else if (dateFilter.filter_type === 'actual_completed') {
+          timeColumn = 'completed_at';
+          tablePrefix = '';
         }
 
         if (dateFilter.start_date) {
-          query = query.gte(`test_systems.${timeColumn}`, dateFilter.start_date);
+          const startDate = `${dateFilter.start_date}T00:00:00.000Z`;
+          query = query.gte(`${tablePrefix}${timeColumn}`, startDate);
         }
         if (dateFilter.end_date) {
-          query = query.lte(`test_systems.${timeColumn}`, dateFilter.end_date);
+          const endDate = `${dateFilter.end_date}T23:59:59.999Z`;
+          query = query.lte(`${tablePrefix}${timeColumn}`, endDate);
         }
       }
 
