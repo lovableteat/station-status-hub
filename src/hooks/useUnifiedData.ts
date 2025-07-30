@@ -15,7 +15,6 @@ interface UnifiedSystem {
   serial_number?: string;
   actual_started_at?: string;
   actual_completed_at?: string;
-  exclude_from_dashboard?: boolean;
 }
 
 interface UnifiedStation {

@@ -1,193 +1,190 @@
 
-import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Clock, Calendar } from "lucide-react";
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { format, subDays } from "date-fns";
-import { zhTW } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { Calendar, Clock, Filter } from "lucide-react";
 
 export function StationAverageTimeChart() {
-  const { stationStatuses, systems, progress, testItems, stations } = useUnifiedData();
-  const [dateRange, setDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({
-    from: subDays(new Date(), 7),
-    to: new Date()
-  });
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const { averageTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
+  const { stations } = useUnifiedData();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [filterType, setFilterType] = useState<'estimated_start' | 'estimated_end' | 'actual_completed'>('actual_completed');
 
-  // 篩選出不被排除的系統
-  const includedSystems = systems.filter(system => !system.exclude_from_dashboard);
-
-  const getStationAverageTime = () => {
-    const targetStations = stations.filter(station => 
-      station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
-      station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
-      station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
-      station.station_name.includes('Station 3') || station.station_name.includes('EE')
-    );
-
-    return targetStations.map(station => {
-      // 只計算不被排除的系統
-      const relevantProgress = progress.filter(p => {
-        const system = includedSystems.find(s => s.id === p.system_id);
-        const isInDateRange = dateRange.from && dateRange.to ? (
-          p.completed_at && 
-          new Date(p.completed_at) >= dateRange.from && 
-          new Date(p.completed_at) <= dateRange.to
-        ) : true;
-        
-        return system && 
-               p.station_id === station.id && 
-               p.status === 'Done' && 
-               p.started_at && 
-               p.completed_at &&
-               isInDateRange;
-      });
-
-      if (relevantProgress.length === 0) {
-        return {
-          station: station.station_name.replace('Station ', 'S'),
-          avgTime: 0,
-          systemCount: 0
-        };
-      }
-
-      const totalHours = relevantProgress.reduce((sum, p) => {
-        const startTime = new Date(p.started_at!);
-        const endTime = new Date(p.completed_at!);
-        const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-        return sum + hours;
-      }, 0);
-
-      return {
-        station: station.station_name.replace('Station ', 'S'),
-        avgTime: parseFloat((totalHours / relevantProgress.length).toFixed(1)),
-        systemCount: new Set(relevantProgress.map(p => p.system_id)).size
-      };
+  const handleFilter = () => {
+    loadStationTimeRecords({
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      filter_type: filterType
     });
   };
 
-  const chartData = getStationAverageTime();
-  const hasData = chartData.some(d => d.avgTime > 0);
+  const handleReset = () => {
+    setStartDate("");
+    setEndDate("");
+    setFilterType('actual_completed');
+    loadStationTimeRecords();
+  };
 
-  const handleDateRangeSelect = (range: { from: Date | undefined; to: Date | undefined }) => {
-    setDateRange(range);
-    if (range.from && range.to) {
-      setShowDatePicker(false);
+  // 準備圖表數據 - 動態顯示所有站點的實際平均處理時間
+  const chartData = stations
+    .sort((a, b) => a.station_order - b.station_order)
+    .map(station => {
+      const actualData = averageTimes.find(item => item.station_name === station.station_name);
+      const actualTime = actualData ? Number(actualData.average_hours.toFixed(2)) : 0;
+      
+      return {
+        station: station.station_name,
+        actualTime: actualTime,
+        sampleCount: actualData?.total_records || 0
+      };
+    });
+
+  // 自訂 Tooltip 格式化
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+          <p className="font-medium">{data.station}</p>
+          <p className="text-primary">
+            平均處理時間: {data.actualTime} 小時
+          </p>
+          <p className="text-xs text-muted-foreground">
+            樣本數: {data.sampleCount} 筆
+          </p>
+        </div>
+      );
     }
+    return null;
   };
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            <CardTitle>各站平均處理時間分析</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {dateRange.from && dateRange.to ? (
-                    `${format(dateRange.from, 'MM/dd', { locale: zhTW })} - ${format(dateRange.to, 'MM/dd', { locale: zhTW })}`
-                  ) : (
-                    '選擇時間範圍'
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <CalendarComponent
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange.from}
-                  selected={{
-                    from: dateRange.from,
-                    to: dateRange.to
-                  }}
-                  onSelect={(range) => handleDateRangeSelect({
-                    from: range?.from,
-                    to: range?.to
-                  })}
-                  numberOfMonths={2}
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setDateRange({ from: subDays(new Date(), 7), to: new Date() })}
-            >
-              重設
-            </Button>
-          </div>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          分析各測試站點的平均處理時間（已排除標記為不計算的系統）
-        </p>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          各站平均處理時間分析
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {!hasData ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>所選時間範圍內沒有完成的測試記錄</p>
-            <p className="text-xs mt-2">請選擇不同的時間範圍或等待測試完成</p>
+        {/* 篩選器區域 */}
+        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="h-4 w-4" />
+            <Label className="font-medium">時間篩選器</Label>
           </div>
-        ) : (
-          <div className="h-80">
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-2">
+              <Label htmlFor="filter-type">篩選依據</Label>
+              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="actual_completed">實際完成</SelectItem>
+                  <SelectItem value="estimated_start">預計開始</SelectItem>
+                  <SelectItem value="estimated_end">預計完成</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="start-date">開始日期</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="end-date">結束日期</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Button onClick={handleFilter} disabled={isLoading}>
+                <Calendar className="h-4 w-4 mr-2" />
+                篩選
+              </Button>
+              <Button variant="outline" onClick={handleReset} disabled={isLoading}>
+                重設
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* 圖表區域 - 垂直長條圖 */}
+        <div className="h-96">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart 
+                data={chartData} 
+                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="station" 
+                  dataKey="station"
                   tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
                 />
                 <YAxis 
-                  label={{ value: '小時', angle: -90, position: 'insideLeft' }}
                   tick={{ fontSize: 12 }}
+                  label={{ value: '時間 (小時)', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip 
-                  formatter={(value: any, name: string) => [
-                    `${value} 小時`, 
-                    name === 'avgTime' ? '平均時間' : name
-                  ]}
-                  labelFormatter={(label) => `站點: ${label}`}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '6px'
-                  }}
-                />
-                <Legend />
+                <Tooltip content={<CustomTooltip />} />
                 <Bar 
-                  dataKey="avgTime" 
-                  name="平均處理時間"
-                  fill="hsl(var(--primary))" 
+                  dataKey="actualTime" 
+                  fill="#10b981"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
-        
-        {hasData && (
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            {chartData.map((data, index) => (
-              <div key={index} className="text-center p-2 bg-muted/50 rounded">
-                <div className="font-medium">{data.station}</div>
-                <div className="text-primary font-bold">{data.avgTime}h</div>
-                <div className="text-muted-foreground text-xs">{data.systemCount} 系統</div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>目前沒有可用的時間資料</p>
+                <p className="text-sm">請確認有已完成的測試記錄</p>
               </div>
-            ))}
+            </div>
+          )}
+        </div>
+
+        {/* 統計摘要 */}
+        {chartData.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
+            <div className={`grid grid-cols-1 gap-4 ${chartData.length <= 3 ? 'md:grid-cols-3' : chartData.length <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
+              {chartData.map((data, index) => (
+                <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
+                  <p className="font-medium text-sm">{data.station}</p>
+                  <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
+                  <p className="text-xs text-muted-foreground">小時</p>
+                  <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>

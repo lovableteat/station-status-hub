@@ -89,6 +89,7 @@ export function FlowInfo() {
     }
   };
 
+  // Calculate total estimated hours for each station based on test items
   const getCalculatedStationHours = (stationId: string) => {
     const stationItems = items.filter(item => item.station_id === stationId);
     const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
@@ -253,9 +254,13 @@ export function FlowInfo() {
     getStationEstimatedHours(station.id)
   ));
 
-  // 修改預計完成天數計算 - 固定為12天
+  // 計算預計完成天數（基於瓶頸站點，假設每天8小時工作時間）
   const getEstimatedDays = () => {
-    return 12; // 固定返回12天
+    if (totalSystems === 0 || bottleneckHours === 0) return 0;
+    
+    // 基於瓶頸站點計算每天可完成的系統數
+    const systemsPerDay = Math.floor(8 / bottleneckHours) || 1;
+    return Math.ceil(totalSystems / systemsPerDay);
   };
 
   // 計算日產能（基於瓶頸站點）
@@ -324,7 +329,7 @@ export function FlowInfo() {
               <div className="text-sm text-muted-foreground">單機總測試時間</div>
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">12</div>
+              <div className="text-2xl font-bold text-primary">{getEstimatedDays()}</div>
               <div className="text-sm text-muted-foreground">預計完成天數</div>
             </div>
           </div>
@@ -453,7 +458,7 @@ export function FlowInfo() {
               </div>
               <div className="text-center p-4 border rounded-lg bg-muted/5">
                 <div className="text-xl font-bold">總工期</div>
-                <div className="text-lg font-semibold mt-2">12 天</div>
+                <div className="text-lg font-semibold mt-2">{getEstimatedDays()} 天</div>
                 <div className="text-sm text-muted-foreground">預計完成時間</div>
               </div>
             </div>
@@ -464,7 +469,7 @@ export function FlowInfo() {
                 <li>單機總測試時間：各站點測試項目預估時間加總 ({totalHours.toFixed(1)} 小時)</li>
                 <li>瓶頸站點：{stations.find(s => getStationEstimatedHours(s.id) === bottleneckHours)?.station_name || '未知'} ({bottleneckHours.toFixed(1)} 小時)</li>
                 <li>日產能基於瓶頸站點計算：8小時 ÷ {bottleneckHours.toFixed(1)}小時 = {getDailyThroughput()} 台/日</li>
-                <li>總工期：固定設定為 12 天（專案規劃需求）</li>
+                <li>總工期：{totalSystems} 台系統 ÷ {getDailyThroughput()} 台/日 = {getEstimatedDays()} 天</li>
                 <li>此計算基於測試項目管理中設定的預估時間，實際時間可能因設備數量與人力配置而異</li>
               </ul>
             </div>
