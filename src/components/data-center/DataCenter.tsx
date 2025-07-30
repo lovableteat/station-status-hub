@@ -1,323 +1,234 @@
 import { useState, useEffect } from "react";
-import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Download, FileText, Calendar as CalendarIcon, Filter, Eye, FileImage, FileSpreadsheet } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { zhTW } from "date-fns/locale";
-import { PDFExportManager } from "./PDFExportManager";
-import { CollapsibleTestRecords } from "./CollapsibleTestRecords";
+import { supabase } from "@/integrations/supabase/client";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Warning,
+  XCircle,
+  Loader2
+} from "lucide-react";
 
-interface TestRecord {
-  id: string;
-  system_name: string;
-  station_name: string;
-  test_item: string;
-  status: string;
-  progress: number;
-  assigned_engineer: string;
-  start_date: string;
-  completion_date?: string;
-  notes?: string;
+interface SystemProgress {
+  system: any;
+  stationProgress: {
+    stationId: string;
+    stationName: string;
+    progress: number;
+    totalItems: number;
+    completedItems: number;
+  }[];
 }
 
 export function DataCenter() {
-  const { systems, stations, testItems, progress, isLoading, refetch } = useUnifiedData();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterEngineer, setFilterEngineer] = useState("all-engineers");
-  const [filterStatus, setFilterStatus] = useState("all-status");
-  const [dateRange, setDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({ from: undefined, to: undefined });
+  const [sortColumn, setSortColumn] = useState<keyof SystemProgress | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [stationFilter, setStationFilter] = useState<string>("all");
+  const [systemFilter, setSystemFilter] = useState<string>("");
+  const [systemProgress, setSystemProgress] = useState<SystemProgress[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { systems, stations, testItems, progress } = useUnifiedData();
   const { toast } = useToast();
 
-  // 監聽 systems 變化，當資料重置時自動重新載入
   useEffect(() => {
-    const handleDataReset = () => {
-      refetch();
-    };
+    if (systems && stations && testItems && progress) {
+      const calculatedProgress = getSystemProgressByStation();
+      setSystemProgress(calculatedProgress);
+      setIsLoading(false);
+    }
+  }, [systems, stations, testItems, progress]);
 
-    // 監聽自定義事件
-    window.addEventListener('dataReset', handleDataReset);
-    
-    return () => {
-      window.removeEventListener('dataReset', handleDataReset);
-    };
-  }, [refetch]);
+  const handleSort = (column: keyof SystemProgress) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
 
-  // Convert unified data to test records format
-  const generateRecords = (): TestRecord[] => {
-    const records: TestRecord[] = [];
-    
-    progress.forEach(prog => {
-      const system = systems.find(s => s.id === prog.system_id);
-      const station = stations.find(s => s.id === prog.station_id);
-      const item = testItems.find(i => i.id === prog.item_id);
-      
-      if (system && station && item) {
-        records.push({
-          id: prog.id,
-          system_name: system.system_name,
-          station_name: station.station_name,
-          test_item: item.item_name,
-          status: prog.status,
-          progress: prog.progress_percent,
-          assigned_engineer: system.assigned_engineer || 'Unassigned',
-          start_date: prog.started_at ? new Date(prog.started_at).toLocaleDateString('zh-TW', { 
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-          }) : '-',
-          completion_date: prog.completed_at ? new Date(prog.completed_at).toLocaleDateString('zh-TW', { 
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-          }) : undefined,
-          notes: prog.notes
+  const sortedData = () => {
+    let data = [...systemProgress];
+
+    if (sortColumn) {
+      data.sort((a, b) => {
+        const aValue = a[sortColumn];
+        const bValue = b[sortColumn];
+
+        if (aValue === undefined || aValue === null) return 1;
+        if (bValue === undefined || bValue === null) return -1;
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
+        }
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return sortDirection === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        }
+
+        return 0;
+      });
+    }
+
+    return data;
+  };
+
+  // 篩選目標站點並計算總進度
+  const getSystemProgressByStation = () => {
+    const targetStations = stations.filter(station => 
+      station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
+      station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
+      station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
+      station.station_name.includes('Station 3') || station.station_name.includes('EE')
+    );
+
+    return systems.map(system => {
+      const systemProgress = targetStations.map(station => {
+        // 取得該站點的所有測試項目
+        const stationTestItems = testItems.filter(item => item.station_id === station.id);
+        
+        // 如果沒有測試項目，則該站點進度為 0
+        if (stationTestItems.length === 0) {
+          return {
+            stationId: station.id,
+            stationName: station.station_name,
+            progress: 0,
+            totalItems: 0,
+            completedItems: 0
+          };
+        }
+
+        // 計算該系統在該站點的總進度
+        const stationProgress = stationTestItems.map(item => {
+          const itemProgress = progress.find(p => 
+            p.system_id === system.id && 
+            p.station_id === station.id && 
+            p.item_id === item.id
+          );
+          return itemProgress?.progress_percent || 0;
         });
-      }
+
+        const completedItems = stationProgress.filter(p => p === 100).length;
+        const averageProgress = stationProgress.reduce((sum, p) => sum + p, 0) / stationProgress.length;
+
+        return {
+          stationId: station.id,
+          stationName: station.station_name,
+          progress: Math.round(averageProgress),
+          totalItems: stationTestItems.length,
+          completedItems
+        };
+      });
+
+      return {
+        system,
+        stationProgress: systemProgress
+      };
     });
-    
-    return records;
   };
 
-  const records = generateRecords();
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Done': return 'bg-success text-success-foreground';
-      case 'On-going': return 'bg-warning text-warning-foreground';
-      case 'Not Start': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const filteredRecords = records.filter(record => {
-    const matchesSearch = record.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.test_item.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesEngineer = !filterEngineer || filterEngineer === "all-engineers" || record.assigned_engineer === filterEngineer;
-    const matchesStatus = !filterStatus || filterStatus === "all-status" || record.status === filterStatus;
-    
-    let matchesDate = true;
-    if (dateRange.from && dateRange.to) {
-      const recordDate = new Date(record.start_date);
-      matchesDate = recordDate >= dateRange.from && recordDate <= dateRange.to;
-    }
-    
-    return matchesSearch && matchesEngineer && matchesStatus && matchesDate;
+  const filteredData = sortedData().filter(item => {
+    const stationMatch = stationFilter === "all" || item.stationProgress.some(sp => sp.stationName === stationFilter);
+    const systemMatch = item.system.system_name.toLowerCase().includes(systemFilter.toLowerCase());
+    return stationMatch && systemMatch;
   });
 
-  const engineers = [...new Set(records.map(r => r.assigned_engineer))];
-
-  // 修改總進度計算方式 - 基於所有測項而非已編輯的測項
-  const calculateOverallProgress = (systemId: string) => {
-    const targetStations = stations.filter(station => 
-      station.id && typeof station.id === 'string' && 
-      (station.name.includes('Station 0') || station.name.includes('組裝') ||
-       station.name.includes('Station 1') || station.name.includes('開機') ||
-       station.name.includes('Station 2') || station.name.includes('FW') ||
-       station.name.includes('Station 3') || station.name.includes('EE'))
-    );
-    
-    if (targetStations.length === 0) return 0;
-    
-    let totalProgress = 0;
-    let validStations = 0;
-    
-    targetStations.forEach(station => {
-      // 獲取該站點的所有測項
-      const stationTestItems = testItems.filter(item => item.station_id === station.id);
-      
-      if (stationTestItems.length === 0) return;
-      
-      // 獲取該系統在該站點的進度記錄
-      const systemStationProgress = progress.filter(p => 
-        p.system_id === systemId && p.station_id === station.id
-      );
-      
-      // 計算已完成的測項數量
-      const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
-      
-      // 計算該站點的完成百分比 (基於所有測項，不論是否有進度記錄)
-      const stationProgress = Math.round((completedItems / stationTestItems.length) * 100);
-      
-      totalProgress += stationProgress;
-      validStations++;
-    });
-    
-    return validStations > 0 ? Math.round(totalProgress / validStations) : 0;
-  };
-
-  const exportToPDF = () => {
-    toast({
-      title: "匯出 PDF",
-      description: "PDF 匯出功能開發中...",
-    });
-  };
-
-  const exportToExcel = async () => {
-    try {
-      // Import the excel export function
-      const { generateExcel, downloadFile } = await import('@/utils/exportUtils');
-      
-      // Generate Excel with test records data
-      const excelBlob = await generateExcel(
-        '測試記錄資料', 
-        records.map(record => ({
-          system_name: record.system_name,
-          station_name: record.station_name,
-          test_item: record.test_item,
-          status: record.status,
-          progress: record.progress,
-          assigned_engineer: record.assigned_engineer,
-          start_date: record.start_date,
-          completion_date: record.completion_date,
-          notes: record.notes
-        }))
-      );
-      
-      const fileName = `測試記錄資料_${new Date().toISOString().split('T')[0]}.xlsx`;
-      downloadFile(excelBlob, fileName);
-      
-      toast({
-        title: "匯出成功",
-        description: `已匯出 ${filteredRecords.length} 筆記錄到 Excel`,
-      });
-    } catch (error) {
-      console.error('Excel export error:', error);
-      toast({
-        title: "匯出失敗",
-        description: "Excel 匯出時發生錯誤",
-        variant: "destructive"
-      });
+  const getStatusIcon = (progress: number) => {
+    if (progress === 100) {
+      return <CheckCircle className="h-4 w-4 text-green-500" />;
+    } else if (progress > 0 && progress < 100) {
+      return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+    } else {
+      return <XCircle className="h-4 w-4 text-red-500" />;
     }
   };
-
-
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="h-64 bg-muted rounded"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">資料中心</h1>
-          <p className="text-muted-foreground">測試記錄與報告查詢系統</p>
-        </div>
-        <div className="flex gap-2">
-          <PDFExportManager records={filteredRecords} />
-          <Button variant="outline" onClick={exportToExcel}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            匯出 Excel
-          </Button>
-        </div>
+      <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-bold">資料中心</h1>
       </div>
 
-      {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜尋系統、測試項目或工程師..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
-                />
-              </div>
-            </div>
-            
-            <Select value={filterEngineer} onValueChange={setFilterEngineer}>
-              <SelectTrigger>
-                <SelectValue placeholder="選擇工程師" />
+        <CardHeader>
+          <CardTitle>系統進度總覽</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 items-center mb-4">
+            <Select value={stationFilter} onValueChange={setStationFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="站點" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all-engineers">全部工程師</SelectItem>
-                {engineers.map(engineer => (
-                  <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
+                <SelectItem value="all">所有站點</SelectItem>
+                {stations.map(station => (
+                  <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="選擇狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-status">全部狀態</SelectItem>
-                <SelectItem value="Done">已完成</SelectItem>
-                <SelectItem value="On-going">進行中</SelectItem>
-                <SelectItem value="Not Start">未開始</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn(
-                  "justify-start text-left font-normal",
-                  !dateRange.from && !dateRange.to && "text-muted-foreground"
-                )}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.from && dateRange.to ? (
-                    `${format(dateRange.from, "MM/dd", { locale: zhTW })} - ${format(dateRange.to, "MM/dd", { locale: zhTW })}`
-                  ) : (
-                    "選擇日期範圍"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data Table - Collapsible by System */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            測試記錄表 - 依系統分組
-            <Badge variant="outline" className="ml-auto">
-              {filteredRecords.length} 筆記錄
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredRecords.length > 0 ? (
-            <CollapsibleTestRecords 
-              records={filteredRecords} 
-              getStatusColor={getStatusColor}
+            <input
+              type="text"
+              placeholder="搜尋系統..."
+              value={systemFilter}
+              onChange={(e) => setSystemFilter(e.target.value)}
+              className="border rounded px-2 py-1 w-48"
             />
-          ) : (
+          </div>
+          {isLoading ? (
             <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">沒有找到相關記錄</h3>
-              <p className="text-muted-foreground">請調整搜尋條件或選擇其他日期範圍</p>
+              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+              載入中...
             </div>
+          ) : (
+            <ScrollArea className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead onClick={() => handleSort("system")} className="cursor-pointer">
+                      系統名稱
+                      {sortColumn === "system" && (
+                        sortDirection === "asc" ? <ArrowUp className="inline w-4 h-4 ml-1" /> : <ArrowDown className="inline w-4 h-4 ml-1" />
+                      )}
+                    </TableHead>
+                    {stations.map(station => (
+                      <TableHead key={station.id} className="text-right">
+                        {station.station_name}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredData.map(item => (
+                    <TableRow key={item.system.id}>
+                      <TableCell className="font-medium">{item.system.system_name}</TableCell>
+                      {item.stationProgress.map(sp => (
+                        <TableCell key={sp.stationId} className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {getStatusIcon(sp.progress)}
+                            <span>{sp.progress}%</span>
+                          </div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           )}
         </CardContent>
       </Card>
