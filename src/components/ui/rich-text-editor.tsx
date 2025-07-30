@@ -23,7 +23,8 @@ import {
   ImageIcon,
   Link2,
   Unlink,
-  Palette
+  Palette,
+  Globe
 } from 'lucide-react';
 import { 
   Dialog,
@@ -34,8 +35,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import Lightbox from 'yet-another-react-lightbox';
+import 'yet-another-react-lightbox/styles.css';
 
 interface RichTextEditorProps {
   content: string;
@@ -51,6 +54,9 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [selectedColor, setSelectedColor] = useState('#000000');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<Array<{ src: string }>>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const editor = useEditor({
     extensions: [
@@ -129,6 +135,28 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
         editor.chain().focus().setImage({ src: result }).run();
       };
       reader.readAsDataURL(file);
+    }
+  }, [editor]);
+
+  // 為編輯器中的圖片添加點擊事件以支持預覽放大
+  useEffect(() => {
+    if (editor) {
+      const handleImageClick = (event: Event) => {
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'IMG') {
+          const src = (target as HTMLImageElement).src;
+          setLightboxImages([{ src }]);
+          setLightboxIndex(0);
+          setLightboxOpen(true);
+        }
+      };
+
+      const editorElement = editor.view.dom;
+      editorElement.addEventListener('click', handleImageClick);
+
+      return () => {
+        editorElement.removeEventListener('click', handleImageClick);
+      };
     }
   }, [editor]);
 
@@ -244,31 +272,48 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* 圖片上傳 */}
+        {/* 上傳圖片按鈕 */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e) => {
+              const target = e.target as HTMLInputElement;
+              const file = target.files?.[0];
+              if (file && editor) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  const result = e.target?.result as string;
+                  editor.chain().focus().setImage({ src: result }).run();
+                };
+                reader.readAsDataURL(file);
+              }
+            };
+            input.click();
+          }}
+          title="上傳圖片"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+
+        {/* 插入圖片URL */}
         <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <ImageIcon className="h-4 w-4" />
+            <Button variant="ghost" size="sm" title="插入圖片URL">
+              <Globe className="h-4 w-4" />
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>插入圖片</DialogTitle>
+              <DialogTitle>插入圖片URL</DialogTitle>
               <DialogDescription>
-                選擇上傳圖片文件或輸入圖片URL
+                輸入線上圖片網址
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="imageFile">上傳圖片</Label>
-                <Input
-                  id="imageFile"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                />
-              </div>
-              <div className="text-center text-muted-foreground">或</div>
               <div className="space-y-2">
                 <Label htmlFor="imageUrl">圖片URL</Label>
                 <Input
@@ -372,6 +417,14 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
           placeholder={placeholder}
         />
       </div>
+
+      {/* 圖片預覽 Lightbox */}
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        slides={lightboxImages}
+        index={lightboxIndex}
+      />
     </div>
   );
 }

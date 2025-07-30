@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { CodeStorageManager } from "./CodeStorageManager";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -57,6 +58,7 @@ interface Tool {
   uploaded_by?: string;
   uploaded_at?: string;
   download_count: number;
+  sop_content?: string;
 }
 
 interface Category {
@@ -176,7 +178,8 @@ export function ToolsManagement() {
           version: editingTool.version || null,
           category: editingTool.category,
           description: editingTool.description || null,
-          is_required: editingTool.is_required
+          is_required: editingTool.is_required,
+          sop_content: editingTool.sop_content || null
         })
         .eq('id', editingTool.id);
 
@@ -558,7 +561,7 @@ export function ToolsManagement() {
           {/* 編輯工具對話框 */}
           {editingTool && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="bg-background rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-medium mb-4">編輯工具</h3>
                 <div className="space-y-4">
                   <div>
@@ -593,6 +596,15 @@ export function ToolsManagement() {
                     <Textarea
                       value={editingTool.description || ''}
                       onChange={(e) => setEditingTool({...editingTool, description: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>SOP 操作說明</Label>
+                    <RichTextEditor
+                      content={editingTool.sop_content || ''}
+                      onChange={(content) => setEditingTool({...editingTool, sop_content: content})}
+                      placeholder="輸入操作說明..."
+                      className="mt-2"
                     />
                   </div>
                   <div className="flex items-center space-x-2">
@@ -646,14 +658,26 @@ export function ToolsManagement() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">描述</Label>
-                    <div className="mt-1 p-4 bg-muted rounded border">
-                      <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                        {previewTool.description || '無描述'}
-                      </pre>
-                    </div>
-                  </div>
+                   <div>
+                     <Label className="text-sm font-medium text-muted-foreground">描述</Label>
+                     <div className="mt-1 p-4 bg-muted rounded border">
+                       <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                         {previewTool.description || '無描述'}
+                       </pre>
+                     </div>
+                   </div>
+
+                   {previewTool.sop_content && (
+                     <div>
+                       <Label className="text-sm font-medium text-muted-foreground">SOP 操作說明</Label>
+                       <div className="mt-1 p-4 bg-muted rounded border">
+                         <div 
+                           className="prose prose-sm dark:prose-invert max-w-none"
+                           dangerouslySetInnerHTML={{ __html: previewTool.sop_content }}
+                         />
+                       </div>
+                     </div>
+                   )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
