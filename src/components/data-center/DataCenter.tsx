@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +20,6 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
-  Warning,
   XCircle,
   Loader2
 } from "lucide-react";
@@ -102,7 +102,7 @@ export function DataCenter() {
         // 取得該站點的所有測試項目
         const stationTestItems = testItems.filter(item => item.station_id === station.id);
         
-        // 如果沒有測試項目，則該站點進度為 0
+        // 計算總進度：所有測項都列入計算，不管是否已編輯
         if (stationTestItems.length === 0) {
           return {
             stationId: station.id,
