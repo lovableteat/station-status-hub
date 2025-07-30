@@ -1647,6 +1647,7 @@ export type Database = {
           bom_90: string | null
           created_at: string
           current_station: string | null
+          exclude_from_dashboard: boolean | null
           id: string
           model: string | null
           os_mac_address: string | null
@@ -1664,6 +1665,7 @@ export type Database = {
           bom_90?: string | null
           created_at?: string
           current_station?: string | null
+          exclude_from_dashboard?: boolean | null
           id?: string
           model?: string | null
           os_mac_address?: string | null
@@ -1681,6 +1683,7 @@ export type Database = {
           bom_90?: string | null
           created_at?: string
           current_station?: string | null
+          exclude_from_dashboard?: boolean | null
           id?: string
           model?: string | null
           os_mac_address?: string | null
