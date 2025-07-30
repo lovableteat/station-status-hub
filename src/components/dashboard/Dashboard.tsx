@@ -43,24 +43,23 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     onNavigate?.('monitor', { station: stationId });
   };
 
-  // 篩選出不被排除計算的系統
-  const includedSystems = systems.filter(system => !system.exclude_from_dashboard);
-  const totalSystems = includedSystems.length;
+  // 直接使用系統的 current_station 欄位進行統計
+  const totalSystems = systems.length;
   
-  // 基於 current_station 欄位統計（只計算不被排除的系統）
-  const completedSystems = includedSystems.filter(system => system.current_station === '已完成').length;
-  const ongoingSystems = includedSystems.filter(system => system.current_station === '進行中').length;
-  const notStartedSystems = includedSystems.filter(system => system.current_station === '未開始').length;
+  // 基於 current_station 欄位統計
+  const completedSystems = systems.filter(system => system.current_station === '已完成').length;
+  const ongoingSystems = systems.filter(system => system.current_station === '進行中').length;
+  const notStartedSystems = systems.filter(system => system.current_station === '未開始').length;
   
   const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
   
-  // Calculate average progress (只計算不被排除的系統)
+  // Calculate average progress
   const averageProgress = totalSystems > 0 
-    ? Math.round(includedSystems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
+    ? Math.round(systems.reduce((sum, s) => sum + (s.overall_progress || 0), 0) / totalSystems)
     : 0;
     
-  // 修改測試通過率計算：基於當前站點已完成的系統數量（只計算不被排除的系統）
-  const completedSystemsCount = includedSystems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
+  // 修改測試通過率計算：基於當前站點已完成的系統數量
+  const completedSystemsCount = systems.filter(s => s.current_station === '已完成' || s.overall_progress === 100).length;
   const passRate = totalSystems > 0 ? Math.round((completedSystemsCount / totalSystems) * 100) : 0;
 
   return (
@@ -72,7 +71,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">系統儀表板</h1>
             <p className="text-muted-foreground">
-              測試管理系統總覽 - 實時監控測試進度與系統狀態（已排除不計算系統）
+              測試管理系統總覽 - 實時監控測試進度與系統狀態
             </p>
           </div>
         </div>
@@ -100,7 +99,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Test Pass Rate Metrics */}
       <TestPassRateCard />
 
-      {/* Key Performance Indicators */}
+      {/* Key Performance Indicators - 移除活躍工程師板塊 */}
       <div className="grid gap-4 md:grid-cols-2">
         <StatsCard
           title="進行中系統"
@@ -138,7 +137,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
         title="系統儀表板"
-        data={includedSystems} // 只匯出不被排除的系統
+        data={systems}
         stations={stations}
         testItems={testItems}
         progress={progress}
