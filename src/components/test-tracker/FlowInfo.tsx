@@ -254,13 +254,9 @@ export function FlowInfo() {
     getStationEstimatedHours(station.id)
   ));
 
-  // 計算預計完成天數（基於瓶頸站點，假設每天8小時工作時間）
+  // 預計完成天數（固定為12天）
   const getEstimatedDays = () => {
-    if (totalSystems === 0 || bottleneckHours === 0) return 0;
-    
-    // 基於瓶頸站點計算每天可完成的系統數
-    const systemsPerDay = Math.floor(8 / bottleneckHours) || 1;
-    return Math.ceil(totalSystems / systemsPerDay);
+    return 12;
   };
 
   // 計算日產能（基於瓶頸站點）

@@ -38,7 +38,10 @@ export function SystemEditDialog({
     serial_number: serialNumber || '',
     os_mac_address: '',
     bmc_address: '',
-    bom_90: ''
+    bom_90: '',
+    ubuntu_version: '',
+    cuda_version: '',
+    exclude_from_dashboard: false
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -69,7 +72,10 @@ export function SystemEditDialog({
           serial_number: data.serial_number || '',
           os_mac_address: data.os_mac_address || '',
           bmc_address: data.bmc_address || '',
-          bom_90: data.bom_90 || ''
+          bom_90: data.bom_90 || '',
+          ubuntu_version: data.ubuntu_version || '',
+          cuda_version: data.cuda_version || '',
+          exclude_from_dashboard: data.exclude_from_dashboard || false
         });
       }
     };
@@ -89,7 +95,10 @@ export function SystemEditDialog({
           serial_number: editValues.serial_number,
           os_mac_address: editValues.os_mac_address,
           bmc_address: editValues.bmc_address,
-          bom_90: editValues.bom_90
+          bom_90: editValues.bom_90,
+          ubuntu_version: editValues.ubuntu_version,
+          cuda_version: editValues.cuda_version,
+          exclude_from_dashboard: editValues.exclude_from_dashboard
         })
         .eq('id', systemId);
 
@@ -199,6 +208,46 @@ export function SystemEditDialog({
               placeholder="請輸入 90BOM..."
               className={isMobile ? "h-12 text-base" : ""}
             />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>Ubuntu 版本</Label>
+            <Input
+              value={editValues.ubuntu_version}
+              onChange={(e) => setEditValues({...editValues, ubuntu_version: e.target.value})}
+              placeholder="例如：22.04、20.04"
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>CUDA 版本</Label>
+            <Input
+              value={editValues.cuda_version}
+              onChange={(e) => setEditValues({...editValues, cuda_version: e.target.value})}
+              placeholder="例如：12.2、11.8"
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>是否列入系統儀表板統計資料</Label>
+            <Select 
+              value={editValues.exclude_from_dashboard ? "false" : "true"} 
+              onValueChange={(value) => setEditValues({...editValues, exclude_from_dashboard: value === "false"})}
+            >
+              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="true" className={isMobile ? "h-12 text-base" : ""}>
+                  ✅ 是（預設）
+                </SelectItem>
+                <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
+                  ❌ 否（排除）
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
