@@ -20,14 +20,15 @@ import {
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssueEditDialog } from "./IssueEditDialog";
+import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { BackButton } from "@/components/common/BackButton";
 
 interface Issue {
   id: string;
   title: string;
   description: string;
-  priority: string;
-  status: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: "open" | "in_progress" | "resolved" | "closed";
   assigned_to: string;
   created_at: string;
   updated_at: string;
@@ -85,6 +86,9 @@ export function IssueTracker() {
 
           return {
             ...issue,
+            priority: (issue.priority || 'medium') as "low" | "medium" | "high" | "critical",
+            status: (issue.status || 'open') as "open" | "in_progress" | "resolved" | "closed",
+            assigned_to: issue.assigned_to || '',
             attachments: attachments || []
           };
         })
@@ -346,7 +350,10 @@ export function IssueTracker() {
             <p className="text-muted-foreground">管理和追蹤測試過程中的問題</p>
           </div>
         </div>
-        <IssueCreateDialog onIssueCreated={loadIssues} />
+        <div className="flex gap-2">
+          <IssuePDFExportManager issues={issues} />
+          <IssueCreateDialog onIssueCreated={loadIssues} />
+        </div>
       </div>
 
       {/* Filters */}
