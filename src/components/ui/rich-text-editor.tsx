@@ -349,18 +349,23 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         }
         .ProseMirror img {
           resize: both !important;
-          overflow: auto !important;
+          overflow: hidden !important;
           border: 2px dashed transparent !important;
           min-width: 50px !important;
           min-height: 50px !important;
           max-width: 100% !important;
-          cursor: pointer !important;
+          cursor: nw-resize !important;
+          position: relative !important;
         }
         .ProseMirror img:hover {
           border-color: hsl(217 91% 60%) !important;
         }
         .ProseMirror img.ProseMirror-selectednode {
           border-color: hsl(142 76% 36%) !important;
+          resize: both !important;
+        }
+        .ProseMirror img:not(.ProseMirror-selectednode) {
+          cursor: pointer !important;
         }
         .ProseMirror p { margin: 0.5em 0; }
         .ProseMirror ul, .ProseMirror ol { margin: 0.5em 0; padding-left: 1.5em; }
