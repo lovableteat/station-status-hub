@@ -176,7 +176,7 @@ export function useUnifiedData() {
   useEffect(() => {
     loadAllData();
     
-    // Set up real-time updates with more responsive handling
+    // Set up real-time updates with immediate refresh for all critical tables
     const channel = supabase
       .channel('unified-data-changes')
       .on(
@@ -186,9 +186,9 @@ export function useUnifiedData() {
           schema: 'public',
           table: 'test_progress'
         },
-        () => {
-          console.log('Test progress updated, reloading data...');
-          loadAllData(); // 直接調用以確保立即更新
+        (payload) => {
+          console.log('Test progress updated, reloading data...', payload);
+          loadAllData(); // 立即更新，確保多用戶同步
         }
       )
       .on(
@@ -198,9 +198,9 @@ export function useUnifiedData() {
           schema: 'public',
           table: 'test_systems'
         },
-        () => {
-          console.log('Test systems updated, reloading data...');
-          loadAllData(); // 直接調用以確保立即更新
+        (payload) => {
+          console.log('Test systems updated, reloading data...', payload);
+          loadAllData(); // 立即更新，確保多用戶同步
         }
       )
       .on(
@@ -210,9 +210,9 @@ export function useUnifiedData() {
           schema: 'public',
           table: 'test_flow_stations'
         },
-        () => {
-          console.log('Test flow stations updated, reloading data...');
-          debouncedReload();
+        (payload) => {
+          console.log('Test flow stations updated, reloading data...', payload);
+          loadAllData(); // 改為立即更新以確保即時同步
         }
       )
       .on(
@@ -222,9 +222,9 @@ export function useUnifiedData() {
           schema: 'public',
           table: 'test_flow_items'
         },
-        () => {
-          console.log('Test flow items updated, reloading data...');
-          debouncedReload();
+        (payload) => {
+          console.log('Test flow items updated, reloading data...', payload);
+          loadAllData(); // 改為立即更新以確保即時同步
         }
       )
       .on(
@@ -234,9 +234,9 @@ export function useUnifiedData() {
           schema: 'public',
           table: 'station_contents'
         },
-        () => {
-          console.log('Station contents updated, reloading data...');
-          debouncedReload();
+        (payload) => {
+          console.log('Station contents updated, reloading data...', payload);
+          loadAllData(); // 改為立即更新以確保即時同步
         }
       )
       .subscribe();
@@ -244,7 +244,7 @@ export function useUnifiedData() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadAllData, debouncedReload]);
+  }, [loadAllData]);
 
   return {
     systems,
