@@ -9,6 +9,7 @@ import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
+import { TestItemStatusReport } from "./TestItemStatusReport";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ export function TestTracker() {
   const [filterStatus, setFilterStatus] = useState("");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
+  const [showStatusReport, setShowStatusReport] = useState(false);
   const [editValues, setEditValues] = useState<{
     status: string;
     progress_percent: number;
@@ -228,25 +230,50 @@ export function TestTracker() {
         engineers={engineers}
       />
 
-      {/* Test Progress Table */}
-      <div data-testtracker-table>
-        <TestProgressTable
-          filteredSystems={filteredSystems}
+      {/* Navigation Tabs */}
+      <div className="flex border-b">
+        <button 
+          className={`px-4 py-2 font-medium ${!showStatusReport ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          onClick={() => setShowStatusReport(false)}
+        >
+          測試進度表
+        </button>
+        <button 
+          className={`px-4 py-2 font-medium ${showStatusReport ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          onClick={() => setShowStatusReport(true)}
+        >
+          測項狀態報表
+        </button>
+      </div>
+
+      {/* Content */}
+      {!showStatusReport ? (
+        <div data-testtracker-table>
+          <TestProgressTable
+            filteredSystems={filteredSystems}
+            stations={stations}
+            items={items}
+            progress={progress}
+            editingProgress={editingProgress}
+            setEditingProgress={setEditingProgress}
+            editValues={editValues}
+            setEditValues={setEditValues}
+            getProgressForSystemItem={getProgressForSystemItem}
+            handleEditProgress={handleEditProgress}
+            handleSaveProgress={handleSaveProgress}
+            handleDeleteProgress={handleDeleteProgress}
+            getStatusColor={getStatusColor}
+            onSystemUpdate={loadData}
+          />
+        </div>
+      ) : (
+        <TestItemStatusReport
+          systems={filteredSystems}
           stations={stations}
           items={items}
           progress={progress}
-          editingProgress={editingProgress}
-          setEditingProgress={setEditingProgress}
-          editValues={editValues}
-          setEditValues={setEditValues}
-          getProgressForSystemItem={getProgressForSystemItem}
-          handleEditProgress={handleEditProgress}
-          handleSaveProgress={handleSaveProgress}
-          handleDeleteProgress={handleDeleteProgress}
-          getStatusColor={getStatusColor}
-          onSystemUpdate={loadData}
         />
-      </div>
+      )}
 
       {/* PDF Exporter Dialog */}
       <TestTrackerPDFExporter

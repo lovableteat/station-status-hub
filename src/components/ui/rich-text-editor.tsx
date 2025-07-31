@@ -6,25 +6,19 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { 
   Bold, 
   Italic, 
   Underline, 
-  Heading1, 
-  Heading2, 
-  Heading3,
   List, 
   ListOrdered, 
-  Quote,
-  Code,
+  Link2,
+  Upload,
+  ExternalLink,
   Undo,
   Redo,
-  ImageIcon,
-  Link2,
-  Unlink,
-  Palette,
-  Globe
+  RemoveFormatting,
+  Palette
 } from 'lucide-react';
 import { 
   Dialog,
@@ -33,12 +27,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
+import DOMPurify from 'dompurify';
 
 interface RichTextEditorProps {
   content: string;
@@ -47,350 +41,233 @@ interface RichTextEditorProps {
   className?: string;
 }
 
-export function RichTextEditor({ content, onChange, placeholder, className }: RichTextEditorProps) {
-  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
-  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
+export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className }: RichTextEditorProps) {
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isImageUrlModalOpen, setIsImageUrlModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImages, setLightboxImages] = useState<Array<{ src: string }>>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3, 4, 5, 6],
+        },
+      }),
       Image.configure({
-        inline: false,
-        allowBase64: true,
         HTMLAttributes: {
-          style: 'max-width: 100%; height: auto; border-radius: 8px;',
+          class: 'max-w-full h-auto rounded-lg cursor-pointer resizable-image',
+          style: 'resize: both; overflow: auto; border: 2px dashed transparent; min-width: 50px; min-height: 50px;',
         },
       }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: 'text-primary underline hover:text-primary/80 cursor-pointer',
+          class: 'text-primary underline cursor-pointer',
         },
       }),
       TextStyle,
       Color,
     ],
-    content,
+    content: content || '',
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      const sanitizedHtml = DOMPurify.sanitize(html);
+      onChange?.(sanitizedHtml);
     },
     editorProps: {
       attributes: {
-        class: cn(
-          'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[200px] p-4',
-          'prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground',
-          'prose-code:text-foreground prose-blockquote:text-foreground prose-li:text-foreground',
-          'dark:prose-invert'
-        ),
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none p-4 min-h-[200px]',
       },
     },
   });
 
-  const addImage = useCallback(() => {
-    if (imageUrl && editor) {
-      editor.chain().focus().setImage({ src: imageUrl }).run();
-      setImageUrl('');
-      setIsImageDialogOpen(false);
-    }
-  }, [editor, imageUrl]);
-
-  const setLink = useCallback(() => {
-    if (linkUrl && editor) {
-      if (linkText) {
-        editor.chain().focus().insertContent(`<a href="${linkUrl}">${linkText}</a>`).run();
-      } else {
-        editor.chain().focus().setLink({ href: linkUrl }).run();
-      }
-      setLinkUrl('');
-      setLinkText('');
-      setIsLinkDialogOpen(false);
-    }
-  }, [editor, linkUrl, linkText]);
-
-  const unsetLink = useCallback(() => {
-    if (editor) {
-      editor.chain().focus().unsetLink().run();
-    }
-  }, [editor]);
-
-  const setTextColor = useCallback(() => {
-    if (editor && selectedColor) {
-      editor.chain().focus().setColor(selectedColor).run();
-    }
-  }, [editor, selectedColor]);
-
-  const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && editor) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const result = e.target?.result as string;
-        editor.chain().focus().setImage({ src: result }).run();
+        const url = e.target?.result as string;
+        if (url) {
+          insertImage(url);
+        }
       };
       reader.readAsDataURL(file);
     }
   }, [editor]);
 
-  // 為編輯器中的圖片添加點擊事件以支持預覽放大
-  useEffect(() => {
-    if (editor) {
-      const handleImageClick = (event: Event) => {
-        const target = event.target as HTMLElement;
-        if (target.tagName === 'IMG') {
-          const src = (target as HTMLImageElement).src;
-          setLightboxImages([{ src }]);
-          setLightboxIndex(0);
-          setLightboxOpen(true);
-        }
-      };
-
-      const editorElement = editor.view.dom;
-      editorElement.addEventListener('click', handleImageClick);
-
-      return () => {
-        editorElement.removeEventListener('click', handleImageClick);
-      };
+  const insertImage = useCallback((url: string) => {
+    if (editor && url) {
+      editor.chain().focus().setImage({ 
+        src: url
+      }).run();
     }
   }, [editor]);
+
+  const handleImageUrlSubmit = () => {
+    if (imageUrl.trim()) {
+      insertImage(imageUrl);
+      setImageUrl('');
+      setIsImageUrlModalOpen(false);
+    }
+  };
+
+  const handleLinkSubmit = () => {
+    if (linkUrl.trim() && linkText.trim() && editor) {
+      editor.chain().focus().insertContent(
+        `<a href="${linkUrl}" class="text-primary underline cursor-pointer">${linkText}</a>`
+      ).run();
+      setLinkUrl('');
+      setLinkText('');
+      setIsLinkModalOpen(false);
+    }
+  };
+
+  const handleImageClick = (src: string) => {
+    setLightboxImage(src);
+    setLightboxOpen(true);
+  };
 
   if (!editor) {
     return null;
   }
 
   return (
-    <div className={cn('border rounded-lg overflow-hidden bg-background', className)}>
-      {/* 工具列 */}
-      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/50">
+    <div className="border rounded-lg">
+      {/* Toolbar */}
+      <div className="border-b p-2 flex flex-wrap gap-1">
+        {/* Headings */}
+        <select
+          className="px-2 py-1 border rounded text-sm bg-background"
+          value={
+            editor.isActive('heading', { level: 1 }) ? 'h1' :
+            editor.isActive('heading', { level: 2 }) ? 'h2' :
+            editor.isActive('heading', { level: 3 }) ? 'h3' :
+            'p'
+          }
+          onChange={(e) => {
+            const value = e.target.value;
+            if (value === 'p') {
+              editor.chain().focus().setParagraph().run();
+            } else {
+              const level = parseInt(value.replace('h', '')) as 1 | 2 | 3;
+              editor.chain().focus().toggleHeading({ level }).run();
+            }
+          }}
+        >
+          <option value="p">段落</option>
+          <option value="h1">標題1</option>
+          <option value="h2">標題2</option>
+          <option value="h3">標題3</option>
+        </select>
+
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Text Formatting */}
         <Button
-          variant="ghost"
+          variant={editor.isActive('bold') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive('bold') ? 'bg-muted' : ''}
         >
           <Bold className="h-4 w-4" />
         </Button>
-        
+
         <Button
-          variant="ghost"
+          variant={editor.isActive('italic') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive('italic') ? 'bg-muted' : ''}
         >
           <Italic className="h-4 w-4" />
         </Button>
 
         <Button
-          variant="ghost"
+          variant={editor.isActive('underline') ? 'default' : 'ghost'}
           size="sm"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={editor.isActive('heading', { level: 1 }) ? 'bg-muted' : ''}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
-          <Heading1 className="h-4 w-4" />
-        </Button>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={editor.isActive('heading', { level: 2 }) ? 'bg-muted' : ''}
-        >
-          <Heading2 className="h-4 w-4" />
-        </Button>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={editor.isActive('heading', { level: 3 }) ? 'bg-muted' : ''}
-        >
-          <Heading3 className="h-4 w-4" />
+          <Underline className="h-4 w-4" />
         </Button>
 
         <div className="w-px h-6 bg-border mx-1" />
 
+        {/* Lists */}
         <Button
-          variant="ghost"
+          variant={editor.isActive('bulletList') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={editor.isActive('bulletList') ? 'bg-muted' : ''}
         >
           <List className="h-4 w-4" />
         </Button>
 
         <Button
-          variant="ghost"
+          variant={editor.isActive('orderedList') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={editor.isActive('orderedList') ? 'bg-muted' : ''}
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
 
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Link */}
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={editor.isActive('blockquote') ? 'bg-muted' : ''}
+          onClick={() => setIsLinkModalOpen(true)}
         >
-          <Quote className="h-4 w-4" />
+          <Link2 className="h-4 w-4" />
         </Button>
 
+        {/* Image Upload & URL */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept="image/*"
+          onChange={handleFileUpload}
+        />
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          className={editor.isActive('code') ? 'bg-muted' : ''}
+          onClick={() => fileInputRef.current?.click()}
+          title="上傳圖片"
         >
-          <Code className="h-4 w-4" />
+          <Upload className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsImageUrlModalOpen(true)}
+          title="插入圖片 URL"
+        >
+          <ExternalLink className="h-4 w-4" />
         </Button>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* 文字顏色選擇器 */}
+        {/* Text Color */}
         <div className="flex items-center gap-1">
           <input
             type="color"
             value={selectedColor}
-            onChange={(e) => setSelectedColor(e.target.value)}
-            className="w-8 h-8 rounded border border-border cursor-pointer"
+            onChange={(e) => {
+              setSelectedColor(e.target.value);
+              editor.chain().focus().setColor(e.target.value).run();
+            }}
+            className="w-8 h-6 rounded border cursor-pointer"
+            title="文字顏色"
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={setTextColor}
-          >
-            <Palette className="h-4 w-4" />
-          </Button>
+          <Palette className="h-4 w-4 text-muted-foreground" />
         </div>
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* 上傳圖片按鈕 */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => {
-              const target = e.target as HTMLInputElement;
-              const file = target.files?.[0];
-              if (file && editor) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                  const result = e.target?.result as string;
-                  editor.chain().focus().setImage({ src: result }).run();
-                };
-                reader.readAsDataURL(file);
-              }
-            };
-            input.click();
-          }}
-          title="上傳圖片"
-        >
-          <ImageIcon className="h-4 w-4" />
-        </Button>
-
-        {/* 插入圖片URL */}
-        <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" title="插入圖片URL">
-              <Globe className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>插入圖片URL</DialogTitle>
-              <DialogDescription>
-                輸入線上圖片網址
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="imageUrl">圖片URL</Label>
-                <Input
-                  id="imageUrl"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsImageDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={addImage} disabled={!imageUrl}>
-                插入
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* 連結 */}
-        <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Link2 className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>插入連結</DialogTitle>
-              <DialogDescription>
-                設定超連結的URL和顯示文字
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="linkUrl">連結URL *</Label>
-                <Input
-                  id="linkUrl"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://example.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="linkText">顯示文字</Label>
-                <Input
-                  id="linkText"
-                  value={linkText}
-                  onChange={(e) => setLinkText(e.target.value)}
-                  placeholder="連結文字 (可選)"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsLinkDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={setLink} disabled={!linkUrl}>
-                插入
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={unsetLink}
-          disabled={!editor.isActive('link')}
-        >
-          <Unlink className="h-4 w-4" />
-        </Button>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
+        {/* Undo/Redo */}
         <Button
           variant="ghost"
           size="sm"
@@ -408,22 +285,174 @@ export function RichTextEditor({ content, onChange, placeholder, className }: Ri
         >
           <Redo className="h-4 w-4" />
         </Button>
+
+        {/* Clear Formatting */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().unsetAllMarks().run()}
+        >
+          <RemoveFormatting className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* 編輯器內容 */}
-      <div className="min-h-[200px] bg-background">
-        <EditorContent 
-          editor={editor} 
-          placeholder={placeholder}
-        />
-      </div>
+      {/* Editor Content */}
+      <EditorContent 
+        editor={editor} 
+        className={cn("min-h-[200px]", className)}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.tagName === 'IMG') {
+            const src = target.getAttribute('src');
+            if (src) {
+              handleImageClick(src);
+            }
+          }
+        }}
+      />
 
-      {/* 圖片預覽 Lightbox */}
+      {/* Custom CSS for proper heading sizes and image resizing */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        .ProseMirror h1 { 
+          font-size: 2em !important; 
+          font-weight: bold !important; 
+          margin: 0.67em 0 !important; 
+          line-height: 1.2 !important;
+        }
+        .ProseMirror h2 { 
+          font-size: 1.5em !important; 
+          font-weight: bold !important; 
+          margin: 0.75em 0 !important; 
+          line-height: 1.3 !important;
+        }
+        .ProseMirror h3 { 
+          font-size: 1.17em !important; 
+          font-weight: bold !important; 
+          margin: 0.83em 0 !important; 
+          line-height: 1.4 !important;
+        }
+        .ProseMirror h4 { 
+          font-size: 1em !important; 
+          font-weight: bold !important; 
+          margin: 1em 0 !important; 
+        }
+        .ProseMirror h5 { 
+          font-size: 0.83em !important; 
+          font-weight: bold !important; 
+          margin: 1.17em 0 !important; 
+        }
+        .ProseMirror h6 { 
+          font-size: 0.67em !important; 
+          font-weight: bold !important; 
+          margin: 1.33em 0 !important; 
+        }
+        .ProseMirror img {
+          resize: both !important;
+          overflow: auto !important;
+          border: 2px dashed transparent !important;
+          min-width: 50px !important;
+          min-height: 50px !important;
+          max-width: 100% !important;
+          cursor: pointer !important;
+        }
+        .ProseMirror img:hover {
+          border-color: hsl(217 91% 60%) !important;
+        }
+        .ProseMirror img.ProseMirror-selectednode {
+          border-color: hsl(142 76% 36%) !important;
+        }
+        .ProseMirror p { margin: 0.5em 0; }
+        .ProseMirror ul, .ProseMirror ol { margin: 0.5em 0; padding-left: 1.5em; }
+        `
+      }} />
+
+      {/* Link Modal */}
+      <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>插入連結</DialogTitle>
+            <DialogDescription>
+              請輸入連結文字和網址
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">連結文字</label>
+              <Input
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="輸入連結文字"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">連結網址</label>
+              <Input
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://example.com"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsLinkModalOpen(false);
+                setLinkUrl('');
+                setLinkText('');
+              }}
+            >
+              取消
+            </Button>
+            <Button onClick={handleLinkSubmit}>
+              插入
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image URL Modal */}
+      <Dialog open={isImageUrlModalOpen} onOpenChange={setIsImageUrlModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>插入圖片 URL</DialogTitle>
+            <DialogDescription>
+              請輸入圖片的網址
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">圖片網址</label>
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsImageUrlModalOpen(false);
+                setImageUrl('');
+              }}
+            >
+              取消
+            </Button>
+            <Button onClick={handleImageUrlSubmit}>
+              插入
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox for image viewing */}
       <Lightbox
         open={lightboxOpen}
         close={() => setLightboxOpen(false)}
-        slides={lightboxImages}
-        index={lightboxIndex}
+        slides={[{ src: lightboxImage }]}
       />
     </div>
   );
