@@ -296,34 +296,44 @@ export function TestItemStatusReport({
             </div>
           </div>
 
-          {/* 報表預覽 */}
+          {/* 報表預覽 - 全部顯示 */}
           <div className="overflow-x-auto">
             <div className="text-sm text-muted-foreground mb-2">
-              報表預覽（僅顯示前10筆記錄，完整報表請點擊「匯出 PDF 報表」）
+              完整報表預覽 - 所有測項記錄
             </div>
             <table className="w-full text-xs border-collapse border border-border">
               <thead>
                 <tr className="bg-muted/50">
                   <th className="border border-border p-2">機台編號</th>
                   <th className="border border-border p-2">序號</th>
+                  <th className="border border-border p-2">NIC MAC</th>
+                  <th className="border border-border p-2">BMC Address</th>
                   <th className="border border-border p-2">站點</th>
-                  <th className="border border-border p-2">測項</th>
+                  <th className="border border-border p-2">測項序號</th>
+                  <th className="border border-border p-2">測項名稱</th>
                   <th className="border border-border p-2">狀態</th>
                   <th className="border border-border p-2">進度</th>
                   <th className="border border-border p-2">開始時間</th>
+                  <th className="border border-border p-2">完成時間</th>
+                  <th className="border border-border p-2">負責人</th>
+                  <th className="border border-border p-2">Ubuntu版本</th>
+                  <th className="border border-border p-2">CUDA版本</th>
                   <th className="border border-border p-2">備註</th>
                 </tr>
               </thead>
               <tbody>
-                {systems.slice(0, 3).map(system => 
-                  stations.slice(0, 2).map(station => 
-                    items.filter(item => item.station_id === station.id).slice(0, 2).map((item, index) => {
+                {systems.map(system => 
+                  stations.map(station => 
+                    items.filter(item => item.station_id === station.id).map((item, index) => {
                       const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
                       return (
                         <tr key={`${system.id}-${station.id}-${item.id}`} className="hover:bg-muted/25">
                           <td className="border border-border p-2">{system.system_name}</td>
                           <td className="border border-border p-2">{system.serial_number || '-'}</td>
+                          <td className="border border-border p-2 text-xs">{(system as any).os_mac_address || '-'}</td>
+                          <td className="border border-border p-2 text-xs">{(system as any).bmc_address || '-'}</td>
                           <td className="border border-border p-2">{station.station_name}</td>
+                          <td className="border border-border p-2">{index + 1}</td>
                           <td className="border border-border p-2 text-left">{item.item_name}</td>
                           <td className="border border-border p-2">
                             <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeClass(itemProgress?.status || 'Not Start')}`}>
@@ -332,7 +342,11 @@ export function TestItemStatusReport({
                           </td>
                           <td className="border border-border p-2">{itemProgress?.progress_percent || 0}%</td>
                           <td className="border border-border p-2">{formatTime(itemProgress?.started_at)}</td>
-                          <td className="border border-border p-2 text-left max-w-32 truncate">
+                          <td className="border border-border p-2">{formatTime(itemProgress?.completed_at)}</td>
+                          <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
+                          <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
+                          <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
+                          <td className="border border-border p-2 text-left max-w-32 truncate" title={itemProgress?.notes || ''}>
                             {itemProgress?.notes || '-'}
                           </td>
                         </tr>
@@ -343,7 +357,7 @@ export function TestItemStatusReport({
               </tbody>
             </table>
             <div className="text-xs text-muted-foreground mt-2 text-center">
-              ... 更多記錄請查看完整PDF報表
+              共 {systems.length} 台機器，{systems.length * stations.reduce((sum, station) => sum + items.filter(item => item.station_id === station.id).length, 0)} 筆測項記錄
             </div>
           </div>
         </div>
