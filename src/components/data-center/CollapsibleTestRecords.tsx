@@ -54,8 +54,20 @@ export function CollapsibleTestRecords({ records, getStatusColor }: CollapsibleT
     const systemRecords = groupedRecords[systemName];
     const completedItems = systemRecords.filter(r => r.status === 'Done').length;
     const ongoingItems = systemRecords.filter(r => r.status === 'On-going').length;
-    const totalItems = systemRecords.length;
-    const overallProgress = Math.round((completedItems / totalItems) * 100);
+    
+    // 修正總項目數計算 - 應該基於該系統應執行的測試項目總數
+    const system = systems.find(s => s.system_name === systemName);
+    let totalItems = systemRecords.length; // 預設值
+    
+    if (system) {
+      // 計算該系統應執行的總測項數（所有站點的測項加總）
+      totalItems = stations.reduce((total, station) => {
+        const stationItems = testItems.filter(item => item.station_id === station.id);
+        return total + stationItems.length;
+      }, 0);
+    }
+    
+    const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     
     return {
       completed: completedItems,

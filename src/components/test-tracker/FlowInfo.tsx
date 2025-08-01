@@ -417,61 +417,6 @@ export function FlowInfo() {
          })}
        </div>
 
-      {/* Dynamic Summary - 更新整體測試時程總結區塊 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>整體測試時程總結</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {stations.map((station, index) => (
-                <div key={station.id} className="text-center p-4 border rounded-lg">
-                  <div className="text-lg font-bold">{station.station_name}</div>
-                  <div className="text-sm text-muted-foreground">{station.description || '測試站點'}</div>
-                  <div className="text-lg font-semibold text-primary mt-2">
-                    {getStationEstimatedHours(station.id).toFixed(1)}h
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    約 {Math.floor(8 / getStationEstimatedHours(station.id)) || 1} 台/天
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <Separator />
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 border rounded-lg bg-primary/5">
-                <div className="text-xl font-bold text-primary">瓶頸站點</div>
-                <div className="text-lg font-semibold mt-2">{bottleneckHours.toFixed(1)}h</div>
-                <div className="text-sm text-muted-foreground">最長測試時間</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg bg-secondary/5">
-                <div className="text-xl font-bold text-secondary-foreground">日產能</div>
-                <div className="text-lg font-semibold mt-2">{getDailyThroughput()} 台</div>
-                <div className="text-sm text-muted-foreground">每日可完成系統</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg bg-muted/5">
-                <div className="text-xl font-bold">總工期</div>
-                <div className="text-lg font-semibold mt-2">{getEstimatedDays()} 天</div>
-                <div className="text-sm text-muted-foreground">預計完成時間</div>
-              </div>
-            </div>
-            
-            <div className="text-sm text-muted-foreground">
-              <p><strong>計算說明：</strong></p>
-              <ul className="list-disc list-inside space-y-1 mt-2">
-                <li>單機總測試時間：各站點測試項目預估時間加總 ({totalHours.toFixed(1)} 小時)</li>
-                <li>瓶頸站點：{stations.find(s => getStationEstimatedHours(s.id) === bottleneckHours)?.station_name || '未知'} ({bottleneckHours.toFixed(1)} 小時)</li>
-                <li>日產能基於瓶頸站點計算：8小時 ÷ {bottleneckHours.toFixed(1)}小時 = {getDailyThroughput()} 台/日</li>
-                <li>總工期：{totalSystems} 台系統 ÷ {getDailyThroughput()} 台/日 = {getEstimatedDays()} 天</li>
-                <li>此計算基於測試項目管理中設定的預估時間，實際時間可能因設備數量與人力配置而異</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
         </TabsContent>
 
         <TabsContent value="manage" className="space-y-6">
