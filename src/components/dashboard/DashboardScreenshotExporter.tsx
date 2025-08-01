@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Camera, Download, FileImage, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -77,9 +78,36 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
     }
   };
 
+  const validateProgressData = async () => {
+    try {
+      // 驗證已完成系統的進度是否正確顯示為100%
+      const { data: completedSystems } = await supabase
+        .from('test_systems')
+        .select('*')
+        .eq('status', 'Done');
+      
+      if (completedSystems) {
+        for (const system of completedSystems) {
+          if (system.overall_progress !== 100) {
+            console.warn(`系統 ${system.system_name} 狀態為已完成但進度不是100%，正在修正...`);
+            
+            // 手動更新系統進度為100%
+            await supabase
+              .from('test_systems')
+              .update({ overall_progress: 100 })
+              .eq('id', system.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Progress validation failed:', error);
+    }
+  };
+
   const exportAsPDF = async () => {
     try {
       setIsExporting(true);
+      await validateProgressData();
       const canvas = await captureScreenshot();
       
       // 計算 PDF 尺寸
@@ -108,6 +136,7 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
         unit: 'mm',
         format: 'a4'
       });
+      
       
       // 添加標題
       pdf.setFontSize(16);

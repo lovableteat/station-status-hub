@@ -171,19 +171,56 @@ export function StationAverageTimeChart() {
           )}
         </div>
 
-        {/* 統計摘要 */}
+        {/* 統計摘要與樣本數據表 */}
         {chartData.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
-            <div className={`grid grid-cols-1 gap-4 ${chartData.length <= 3 ? 'md:grid-cols-3' : chartData.length <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
-              {chartData.map((data, index) => (
-                <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
-                  <p className="font-medium text-sm">{data.station}</p>
-                  <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
-                  <p className="text-xs text-muted-foreground">小時</p>
-                  <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
-                </div>
-              ))}
+          <div className="mt-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
+              <div className={`grid grid-cols-1 gap-4 ${chartData.length <= 3 ? 'md:grid-cols-3' : chartData.length <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
+                {chartData.map((data, index) => (
+                  <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
+                    <p className="font-medium text-sm">{data.station}</p>
+                    <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
+                    <p className="text-xs text-muted-foreground">小時</p>
+                    <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* 詳細樣本數據表 */}
+            <div>
+              <h4 className="text-md font-semibold mb-3">樣本數據明細</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse border border-border">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="border border-border p-3 text-left">站點名稱</th>
+                      <th className="border border-border p-3 text-right">平均處理時間 (小時)</th>
+                      <th className="border border-border p-3 text-right">樣本數量</th>
+                      <th className="border border-border p-3 text-right">總處理時間 (小時)</th>
+                      <th className="border border-border p-3 text-left">效率評估</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map((data, index) => {
+                      const totalTime = (data.actualTime * data.sampleCount).toFixed(1);
+                      const efficiency = data.actualTime <= 8 ? '良好' : data.actualTime <= 12 ? '正常' : '需改善';
+                      const efficiencyColor = data.actualTime <= 8 ? 'text-success' : data.actualTime <= 12 ? 'text-warning' : 'text-destructive';
+                      
+                      return (
+                        <tr key={index} className="hover:bg-muted/25">
+                          <td className="border border-border p-3 font-medium">{data.station}</td>
+                          <td className="border border-border p-3 text-right">{data.actualTime}</td>
+                          <td className="border border-border p-3 text-right">{data.sampleCount}</td>
+                          <td className="border border-border p-3 text-right">{totalTime}</td>
+                          <td className={`border border-border p-3 font-medium ${efficiencyColor}`}>{efficiency}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

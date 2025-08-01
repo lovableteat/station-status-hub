@@ -346,8 +346,16 @@ export function TestItemStatusReport({
                           <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
                           <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
                           <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
-                          <td className="border border-border p-2 text-left max-w-32 truncate" title={itemProgress?.notes || ''}>
-                            {itemProgress?.notes || '-'}
+                          <td className="border border-border p-2 text-left max-w-32">
+                            <div className="text-xs space-y-1">
+                              {itemProgress?.notes ? (
+                                <div className="p-1 bg-muted/50 rounded text-xs">
+                                  {itemProgress.notes}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

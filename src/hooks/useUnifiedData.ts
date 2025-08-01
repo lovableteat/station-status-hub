@@ -178,67 +178,39 @@ export function useUnifiedData() {
     
     // Set up real-time updates with immediate refresh for all critical tables
     const channel = supabase
-      .channel('unified-data-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_progress'
-        },
-        (payload) => {
-          console.log('Test progress updated, reloading data...', payload);
-          loadAllData(); // 立即更新，確保多用戶同步
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_systems'
-        },
-        (payload) => {
-          console.log('Test systems updated, reloading data...', payload);
-          loadAllData(); // 立即更新，確保多用戶同步
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_flow_stations'
-        },
-        (payload) => {
-          console.log('Test flow stations updated, reloading data...', payload);
-          loadAllData(); // 改為立即更新以確保即時同步
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'test_flow_items'
-        },
-        (payload) => {
-          console.log('Test flow items updated, reloading data...', payload);
-          loadAllData(); // 改為立即更新以確保即時同步
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'station_contents'
-        },
-        (payload) => {
-          console.log('Station contents updated, reloading data...', payload);
-          loadAllData(); // 改為立即更新以確保即時同步
-        }
-      )
+      .channel('unified_data_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, () => {
+        console.log('test_systems changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, () => {
+        console.log('test_progress changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, () => {
+        console.log('test_flow_stations changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, () => {
+        console.log('test_flow_items changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
+        console.log('issues changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_attachments' }, () => {
+        console.log('issue_attachments changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_records' }, () => {
+        console.log('station_time_records changed, reloading...');
+        loadAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_analytics' }, () => {
+        console.log('station_time_analytics changed, reloading...');
+        loadAllData();
+      })
       .subscribe();
 
     return () => {
