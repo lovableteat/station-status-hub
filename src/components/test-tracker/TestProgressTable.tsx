@@ -245,9 +245,24 @@ export function TestProgressTable({
                       const prog = getProgressForSystemItem(system.id, station.id, item.id);
                       return prog?.status === 'Done';
                     });
-                    const overallPercent = stationItems.length > 0 
-                      ? Math.round((completedItems.length / stationItems.length) * 100) 
-                      : 0;
+                    
+                    // 修正進度計算邏輯 - 確保與實際測試進度一致
+                    let overallPercent = 0;
+                    if (stationItems.length > 0) {
+                      overallPercent = Math.round((completedItems.length / stationItems.length) * 100);
+                    } else {
+                      // 如果沒有定義測項，根據系統狀態判斷
+                      if (system.status === 'Done') {
+                        overallPercent = 100;
+                      } else if (system.current_station && station.station_name === system.current_station) {
+                        overallPercent = 50; // 當前站點預設50%
+                      }
+                    }
+                    
+                    // 如果系統狀態為已完成，所有站點應該顯示100%
+                    if (system.status === 'Done') {
+                      overallPercent = 100;
+                    }
 
                     const processingTime = calculateManualProcessingTime(system.id, station.id);
 
