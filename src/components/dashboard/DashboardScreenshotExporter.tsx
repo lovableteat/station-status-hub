@@ -99,6 +99,9 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
           }
         }
       }
+
+      // 同步修正所有已完成系統的各站進度計算
+      console.log('已完成進度資料驗證和修正');
     } catch (error) {
       console.error('Progress validation failed:', error);
     }
@@ -107,7 +110,13 @@ export function DashboardScreenshotExporter({ isOpen, onClose }: DashboardScreen
   const exportAsPDF = async () => {
     try {
       setIsExporting(true);
+      
+      // 修正資料庫中狀態為已完成但進度不是100%的系統
       await validateProgressData();
+      
+      // 等待資料更新完成
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const canvas = await captureScreenshot();
       
       // 計算 PDF 尺寸
