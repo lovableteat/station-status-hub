@@ -21,6 +21,7 @@ import {
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssueEditDialog } from "./IssueEditDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
+import { IssueTableView } from "./IssueTableView";
 import { BackButton } from "@/components/common/BackButton";
 
 interface Issue {
@@ -56,6 +57,7 @@ export function IssueTracker() {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -351,6 +353,22 @@ export function IssueTracker() {
           </div>
         </div>
         <div className="flex gap-2">
+          <div className="flex border rounded-lg p-1">
+            <Button
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+            >
+              卡片模式
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('table')}
+            >
+              表格模式
+            </Button>
+          </div>
           <IssuePDFExportManager issues={issues} />
           <IssueCreateDialog onIssueCreated={loadIssues} />
         </div>
@@ -382,8 +400,11 @@ export function IssueTracker() {
         </Select>
       </div>
 
-      {/* Issues by Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Main Content */}
+      {viewMode === 'table' ? (
+        <IssueTableView issues={issues} onUpdate={loadIssues} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* 待處理 */}
         <div className="space-y-4">
           <Card className="bg-gradient-to-r from-destructive/5 to-destructive/10 border-destructive/20 shadow-sm">
@@ -461,7 +482,8 @@ export function IssueTracker() {
             )}
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {filteredIssues.length === 0 && (
         <div className="text-center py-12">
