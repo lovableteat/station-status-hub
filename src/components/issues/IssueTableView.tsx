@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { ArrowUpDown, Save, Edit, Eye, Download, ImageIcon } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowUpDown, Edit, ImageIcon } from "lucide-react";
+import { IssueEditDialog } from "./IssueEditDialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface Issue {
@@ -40,8 +40,8 @@ interface IssueTableViewProps {
 }
 
 export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Partial<Issue>>({});
+  const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Issue;
     direction: 'asc' | 'desc';
@@ -77,43 +77,14 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const totalPages = Math.ceil(issues.length / pageSize);
 
   const handleEdit = (issue: Issue) => {
-    setEditingId(issue.id);
-    setEditData({
-      title: issue.title,
-      description: issue.description,
-      priority: issue.priority,
-      status: issue.status,
-      assigned_to: issue.assigned_to
-    });
+    setEditingIssue(issue);
+    setIsEditDialogOpen(true);
   };
 
-  const handleSave = async (issueId: string) => {
-    try {
-      await supabase
-        .from('issues')
-        .update(editData)
-        .eq('id', issueId);
-
-      toast({
-        title: "更新成功",
-        description: "問題已更新"
-      });
-
-      setEditingId(null);
-      setEditData({});
-      onUpdate();
-    } catch (error) {
-      toast({
-        title: "更新失敗",
-        description: "無法更新問題",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditData({});
+  const handleEditComplete = () => {
+    setIsEditDialogOpen(false);
+    setEditingIssue(null);
+    onUpdate();
   };
 
   const getPriorityColor = (priority: string) => {
@@ -218,87 +189,27 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
               {paginatedIssues.map((issue) => (
                 <TableRow key={issue.id}>
                   <TableCell>
-                    {editingId === issue.id ? (
-                      <Input
-                        value={editData.title || ''}
-                        onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-                        className="w-full"
-                      />
-                    ) : (
-                      <div className="font-medium line-clamp-2" title={issue.title}>
-                        {issue.title}
-                      </div>
-                    )}
+                    <div className="font-medium line-clamp-2" title={issue.title}>
+                      {issue.title}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {editingId === issue.id ? (
-                      <Textarea
-                        value={editData.description || ''}
-                        onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                        className="w-full min-h-[60px]"
-                        rows={2}
-                      />
-                    ) : (
-                      <div className="line-clamp-3 text-sm" title={issue.description}>
-                        {issue.description}
-                      </div>
-                    )}
+                    <div className="line-clamp-3 text-sm" title={issue.description}>
+                      {issue.description}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {editingId === issue.id ? (
-                      <Select
-                        value={editData.priority || issue.priority}
-                        onValueChange={(value) => setEditData({ ...editData, priority: value as any })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">低</SelectItem>
-                          <SelectItem value="medium">中</SelectItem>
-                          <SelectItem value="high">高</SelectItem>
-                          <SelectItem value="critical">緊急</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant="outline" className={getPriorityColor(issue.priority)}>
-                        {getPriorityText(issue.priority)}
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className={getPriorityColor(issue.priority)}>
+                      {getPriorityText(issue.priority)}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    {editingId === issue.id ? (
-                      <Select
-                        value={editData.status || issue.status}
-                        onValueChange={(value) => setEditData({ ...editData, status: value as any })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">待處理</SelectItem>
-                          <SelectItem value="in_progress">處理中</SelectItem>
-                          <SelectItem value="resolved">已解決</SelectItem>
-                          <SelectItem value="closed">已關閉</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant="outline" className={getStatusColor(issue.status)}>
-                        {getStatusText(issue.status)}
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className={getStatusColor(issue.status)}>
+                      {getStatusText(issue.status)}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    {editingId === issue.id ? (
-                      <Input
-                        value={editData.assigned_to || ''}
-                        onChange={(e) => setEditData({ ...editData, assigned_to: e.target.value })}
-                        className="w-full"
-                        placeholder="負責人"
-                      />
-                    ) : (
-                      <div className="text-sm">{issue.assigned_to || '未指派'}</div>
-                    )}
+                    <div className="text-sm">{issue.assigned_to || '未指派'}</div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
@@ -326,37 +237,14 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
-                      {editingId === issue.id ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSave(issue.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Save className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleCancel}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(issue)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEdit(issue)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -391,6 +279,22 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
             </Button>
           </div>
         </div>
+
+        {/* 編輯對話框 */}
+        {editingIssue && (
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>編輯問題</DialogTitle>
+              </DialogHeader>
+              <IssueEditDialog
+                issue={editingIssue}
+                onUpdate={handleEditComplete}
+                onDelete={handleEditComplete}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </CardContent>
     </Card>
   );
