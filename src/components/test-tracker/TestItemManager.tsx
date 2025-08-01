@@ -92,17 +92,35 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
 
   const handleDelete = async (itemId: string) => {
     try {
-      await supabase
+      // 先檢查是否有相關的測試進度記錄
+      const { data: relatedProgress } = await supabase
+        .from('test_progress')
+        .select('id')
+        .eq('item_id', itemId);
+
+      if (relatedProgress && relatedProgress.length > 0) {
+        // 如果有相關記錄，先刪除測試進度記錄
+        await supabase
+          .from('test_progress')
+          .delete()
+          .eq('item_id', itemId);
+      }
+
+      // 然後刪除測試項目
+      const { error } = await supabase
         .from('test_flow_items')
         .delete()
         .eq('id', itemId);
+
+      if (error) throw error;
       
       toast({ title: "刪除成功", description: "測試項目已刪除" });
       onDataChange();
     } catch (error) {
+      console.error('Delete error:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除測試項目",
+        description: "無法刪除測試項目，可能有相關的測試記錄",
         variant: "destructive"
       });
     }
