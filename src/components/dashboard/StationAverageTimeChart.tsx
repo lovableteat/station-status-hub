@@ -62,7 +62,7 @@ export function StationAverageTimeChart() {
             機台數: {data.sampleCount} 台
           </p>
           <p className="text-xs text-muted-foreground">
-            計算: {data.calculationDetails}
+            計算: 各測項時間加總 ÷ 機台數
           </p>
         </div>
       );
@@ -232,14 +232,15 @@ export function StationAverageTimeChart() {
             {/* 系統各站時長明細 */}
             {systemStationTimes.length > 0 && (
               <div>
-                <h4 className="text-md font-semibold mb-3">各機台站別時長明細</h4>
+                <h4 className="text-md font-semibold mb-3">各機台站別時長明細 (各測項時間加總)</h4>
                 <div className="overflow-x-auto max-h-96">
                   <table className="w-full text-sm border-collapse border border-border">
                     <thead className="sticky top-0 bg-background">
                       <tr className="bg-muted/50">
                         <th className="border border-border p-3 text-left">機台名稱</th>
                         <th className="border border-border p-3 text-left">站點名稱</th>
-                        <th className="border border-border p-3 text-right">總時長 (小時)</th>
+                        <th className="border border-border p-3 text-right">站別總時長 (小時)</th>
+                        <th className="border border-border p-3 text-left">說明</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -260,6 +261,7 @@ export function StationAverageTimeChart() {
                             <td className="border border-border p-3 font-medium">{data.system_name}</td>
                             <td className="border border-border p-3">{data.station_name}</td>
                             <td className="border border-border p-3 text-right">{data.total_duration.toFixed(2)}</td>
+                            <td className="border border-border p-3 text-xs text-muted-foreground">該站別下所有測項時間加總</td>
                           </tr>
                         ))}
                     </tbody>
