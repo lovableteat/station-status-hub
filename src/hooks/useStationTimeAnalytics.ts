@@ -131,24 +131,28 @@ export function useStationTimeAnalytics() {
           }
 
           if (progress && progress.length > 0) {
-            // 計算該站的總時長（從第一個測項開始到最後一個測項完成）
-            const startTimes = progress.map(p => new Date(p.started_at!).getTime()).filter(t => !isNaN(t));
-            const endTimes = progress.map(p => new Date(p.completed_at!).getTime()).filter(t => !isNaN(t));
+            // 計算該站別下所有測項的實際執行時間加總
+            let stationTotalHours = 0;
             
-            if (startTimes.length > 0 && endTimes.length > 0) {
-              const earliestStart = Math.min(...startTimes);
-              const latestEnd = Math.max(...endTimes);
-              const totalDurationHours = (latestEnd - earliestStart) / (1000 * 60 * 60);
+            progress.forEach(item => {
+              const startTime = new Date(item.started_at!).getTime();
+              const endTime = new Date(item.completed_at!).getTime();
+              const itemDuration = (endTime - startTime) / (1000 * 60 * 60);
               
-              if (totalDurationHours > 0) {
-                systemStationData.push({
-                  system_id: system.id,
-                  system_name: system.system_name,
-                  station_id: station.id,
-                  station_name: station.station_name,
-                  total_duration: totalDurationHours
-                });
+              if (itemDuration > 0) {
+                stationTotalHours += itemDuration;
               }
+            });
+            
+            // 只有當站別總時間大於0時才加入統計
+            if (stationTotalHours > 0) {
+              systemStationData.push({
+                system_id: system.id,
+                system_name: system.system_name,
+                station_id: station.id,
+                station_name: station.station_name,
+                total_duration: stationTotalHours
+              });
             }
           }
         }
@@ -181,7 +185,7 @@ export function useStationTimeAnalytics() {
     const averages: StationAverageTime[] = Object.entries(stationGroups).map(([stationName, durations]) => {
       const totalHours = durations.reduce((sum, h) => sum + h, 0);
       const averageHours = totalHours / durations.length;
-      const calculationDetail = `${totalHours.toFixed(2)} 小時 ÷ ${durations.length} 台機台`;
+      const calculationDetail = `${totalHours.toFixed(2)} 小時 ÷ ${durations.length} 台機台 (各測項時間加總)`;
       
       return {
         station_name: stationName,
