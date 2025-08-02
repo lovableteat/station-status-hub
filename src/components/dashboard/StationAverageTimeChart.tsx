@@ -11,7 +11,7 @@ import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Calendar, Clock, Filter } from "lucide-react";
 
 export function StationAverageTimeChart() {
-  const { averageTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
+  const { averageTimes, systemStationTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
   const { stations } = useUnifiedData();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -42,7 +42,9 @@ export function StationAverageTimeChart() {
       return {
         station: station.station_name,
         actualTime: actualTime,
-        sampleCount: actualData?.total_records || 0
+        sampleCount: actualData?.total_records || 0,
+        totalHours: actualData?.total_hours_sum || 0,
+        calculationDetails: actualData?.calculation_details || ''
       };
     });
 
@@ -57,7 +59,10 @@ export function StationAverageTimeChart() {
             平均處理時間: {data.actualTime} 小時
           </p>
           <p className="text-xs text-muted-foreground">
-            樣本數: {data.sampleCount} 筆
+            機台數: {data.sampleCount} 台
+          </p>
+          <p className="text-xs text-muted-foreground">
+            計算: {data.calculationDetails}
           </p>
         </div>
       );
@@ -182,29 +187,29 @@ export function StationAverageTimeChart() {
                     <p className="font-medium text-sm">{data.station}</p>
                     <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
                     <p className="text-xs text-muted-foreground">小時</p>
-                    <p className="text-xs text-muted-foreground">{data.sampleCount} 筆樣本</p>
+                    <p className="text-xs text-muted-foreground">{data.sampleCount} 台機台</p>
                   </div>
                 ))}
               </div>
             </div>
             
-            {/* 詳細樣本數據表 */}
+            {/* 詳細計算過程表 */}
             <div>
-              <h4 className="text-md font-semibold mb-3">樣本數據明細</h4>
+              <h4 className="text-md font-semibold mb-3">計算過程明細</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse border border-border">
                   <thead>
                     <tr className="bg-muted/50">
                       <th className="border border-border p-3 text-left">站點名稱</th>
                       <th className="border border-border p-3 text-right">平均處理時間 (小時)</th>
-                      <th className="border border-border p-3 text-right">樣本數量</th>
+                      <th className="border border-border p-3 text-right">機台數量</th>
                       <th className="border border-border p-3 text-right">總處理時間 (小時)</th>
+                      <th className="border border-border p-3 text-left">計算過程</th>
                       <th className="border border-border p-3 text-left">效率評估</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chartData.map((data, index) => {
-                      const totalTime = (data.actualTime * data.sampleCount).toFixed(1);
                       const efficiency = data.actualTime <= 8 ? '良好' : data.actualTime <= 12 ? '正常' : '需改善';
                       const efficiencyColor = data.actualTime <= 8 ? 'text-success' : data.actualTime <= 12 ? 'text-warning' : 'text-destructive';
                       
@@ -213,7 +218,8 @@ export function StationAverageTimeChart() {
                           <td className="border border-border p-3 font-medium">{data.station}</td>
                           <td className="border border-border p-3 text-right">{data.actualTime}</td>
                           <td className="border border-border p-3 text-right">{data.sampleCount}</td>
-                          <td className="border border-border p-3 text-right">{totalTime}</td>
+                          <td className="border border-border p-3 text-right">{data.totalHours}</td>
+                          <td className="border border-border p-3 text-sm text-muted-foreground">{data.calculationDetails}</td>
                           <td className={`border border-border p-3 font-medium ${efficiencyColor}`}>{efficiency}</td>
                         </tr>
                       );
@@ -222,6 +228,45 @@ export function StationAverageTimeChart() {
                 </table>
               </div>
             </div>
+
+            {/* 系統各站時長明細 */}
+            {systemStationTimes.length > 0 && (
+              <div>
+                <h4 className="text-md font-semibold mb-3">各機台站別時長明細</h4>
+                <div className="overflow-x-auto max-h-96">
+                  <table className="w-full text-sm border-collapse border border-border">
+                    <thead className="sticky top-0 bg-background">
+                      <tr className="bg-muted/50">
+                        <th className="border border-border p-3 text-left">機台名稱</th>
+                        <th className="border border-border p-3 text-left">站點名稱</th>
+                        <th className="border border-border p-3 text-right">總時長 (小時)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {systemStationTimes
+                        .sort((a, b) => {
+                          // 先按系統名稱排序，再按站點順序排序
+                          if (a.system_name !== b.system_name) {
+                            return a.system_name.localeCompare(b.system_name);
+                          }
+                          const getStationOrder = (name: string) => {
+                            const match = name.match(/Station\s*(\d+)/i);
+                            return match ? parseInt(match[1]) : 999;
+                          };
+                          return getStationOrder(a.station_name) - getStationOrder(b.station_name);
+                        })
+                        .map((data, index) => (
+                          <tr key={index} className="hover:bg-muted/25">
+                            <td className="border border-border p-3 font-medium">{data.system_name}</td>
+                            <td className="border border-border p-3">{data.station_name}</td>
+                            <td className="border border-border p-3 text-right">{data.total_duration.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
