@@ -45,7 +45,7 @@ export function ExportDialog({
       const fileName = `${title}_${new Date().toISOString().split('T')[0]}.${exportFormat}`;
       
       if (exportFormat === 'pdf') {
-        await generatePDF(title, data);
+        await generatePDF(title, data, stations, testItems, progress);
         // PDF generation now handles the download directly
       } else {
         const excelBlob = await generateExcel(title, data, stations, testItems, progress);

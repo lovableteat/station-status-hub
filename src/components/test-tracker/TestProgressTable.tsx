@@ -246,21 +246,14 @@ export function TestProgressTable({
                       return prog?.status === 'Done';
                     });
                     
-                    // 修正進度計算邏輯 - 確保與實際測試進度一致
+                    // 使用與SystemStatusCalculator一致的計算邏輯
                     let overallPercent = 0;
                     if (stationItems.length > 0) {
                       overallPercent = Math.round((completedItems.length / stationItems.length) * 100);
-                    } else {
-                      // 如果沒有定義測項，根據系統狀態判斷
-                      if (system.status === 'Done') {
-                        overallPercent = 100;
-                      } else if (system.current_station && station.station_name === system.current_station) {
-                        overallPercent = 50; // 當前站點預設50%
-                      }
                     }
                     
-                    // 如果系統狀態為已完成，所有站點應該顯示100%
-                    if (system.status === 'Done') {
+                    // 如果系統整體狀態為已完成，且這是目標站點(Station 0-3)，則顯示100%
+                    if (system.status === '已完成' && station.station_order >= 1 && station.station_order <= 4) {
                       overallPercent = 100;
                     }
 

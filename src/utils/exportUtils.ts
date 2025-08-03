@@ -3,18 +3,18 @@ import * as XLSX from 'xlsx';
 
 // Export utility functions for generating simplified production reports
 
-export const generatePDF = async (title: string, data: any[]): Promise<void> => {
+export const generatePDF = async (title: string, data: any[], stations?: any[], testItems?: any[], progress?: any[]): Promise<void> => {
   try {
     // Process data for simplified production report
     const processedData = data.map(system => ({
       '機台編號': system.system_name,
       '當前站點': system.current_station || 'Station 0',
-      '狀態': system.overall_progress === 100 ? '已完成' : 
+      '狀態': system.status === '已完成' ? '已完成' : 
              system.overall_progress >= 1 ? '進行中' : '未開始',
-      'Station 0': `${calculateStationProgress(system.id, 'Station 0')}%`,
-      'Station 1': `${calculateStationProgress(system.id, 'Station 1')}%`,
-      'Station 2': `${calculateStationProgress(system.id, 'Station 2')}%`,
-      'Station 3': `${calculateStationProgress(system.id, 'Station 3')}%`
+      'Station 0': `${calculateStationProgress(system.id, 'Station 0', stations, testItems, progress)}%`,
+      'Station 1': `${calculateStationProgress(system.id, 'Station 1', stations, testItems, progress)}%`,
+      'Station 2': `${calculateStationProgress(system.id, 'Station 2', stations, testItems, progress)}%`,
+      'Station 3': `${calculateStationProgress(system.id, 'Station 3', stations, testItems, progress)}%`
     }));
 
     // Create HTML content for simplified report
@@ -46,9 +46,9 @@ export const generatePDF = async (title: string, data: any[]): Promise<void> => 
         <div class="summary">
           <h2>統計摘要</h2>
           <p>總機台數: ${data.length}</p>
-          <p>已完成: ${data.filter(d => d.overall_progress === 100).length}</p>
-          <p>進行中: ${data.filter(d => d.overall_progress >= 1 && d.overall_progress < 100).length}</p>
-          <p>未開始: ${data.filter(d => d.overall_progress === 0).length}</p>
+          <p>已完成: ${data.filter(d => d.status === '已完成').length}</p>
+          <p>進行中: ${data.filter(d => d.status === '進行中').length}</p>
+          <p>未開始: ${data.filter(d => d.status === '未開始').length}</p>
         </div>
         
         <table>
@@ -105,11 +105,30 @@ export const generatePDF = async (title: string, data: any[]): Promise<void> => 
   }
 };
 
-// Helper function to calculate station progress (simplified)
-const calculateStationProgress = (systemId: string, stationName: string) => {
-  // This is a simplified version - in real implementation, 
-  // you would need to access the actual progress data
-  return Math.floor(Math.random() * 101); // Placeholder
+// Helper function to calculate station progress using actual progress data
+const calculateStationProgress = (systemId: string, stationName: string, stations?: any[], testItems?: any[], progress?: any[]) => {
+  if (!stations || !testItems || !progress) return 0;
+  
+  // 找到對應的站點
+  const station = stations.find(s => s.station_name?.includes(stationName));
+  if (!station) return 0;
+  
+  // 該站點的測項
+  const stationItems = testItems.filter(item => item.station_id === station.id);
+  if (stationItems.length === 0) return 0;
+  
+  // 該系統在該站點已完成的測項
+  const completedItems = stationItems.filter(item => {
+    const prog = progress.find(p => 
+      p.system_id === systemId && 
+      p.station_id === station.id && 
+      p.item_id === item.id &&
+      p.status === 'Done'
+    );
+    return prog !== undefined;
+  });
+  
+  return Math.round((completedItems.length / stationItems.length) * 100);
 };
 
 export const generateExcel = async (title: string, data: any[], stations?: any[], testItems?: any[], progress?: any[]): Promise<Blob> => {
@@ -129,11 +148,20 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
           if (!station) return 0;
           
           const stationItems = testItems.filter(item => item.station_id === station.id);
+          if (stationItems.length === 0) return 0;
+          
           const completedItems = systemProgress.filter(p => 
             p.station_id === station.id && p.status === 'Done'
           ).length;
           
-          return stationItems.length > 0 ? Math.round((completedItems / stationItems.length) * 100) : 0;
+          let progress = stationItems.length > 0 ? Math.round((completedItems / stationItems.length) * 100) : 0;
+          
+          // 如果系統狀態為已完成，且這是目標站點，則顯示100%
+          if (system.status === '已完成' && station.station_order >= 1 && station.station_order <= 4) {
+            progress = 100;
+          }
+          
+          return progress;
         };
 
         return {
