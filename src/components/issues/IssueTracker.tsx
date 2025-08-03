@@ -57,7 +57,7 @@ export function IssueTracker() {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -226,25 +226,25 @@ export function IssueTracker() {
   };
 
   const renderIssueCard = (issue: Issue) => (
-    <Card key={issue.id} className="group transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 border-l-4 border-l-primary/20 hover:border-l-primary bg-gradient-to-r from-background to-muted/20">
-      <CardContent className="p-5">
-        <div className="space-y-4">
+    <Card key={issue.id} className="group transition-all duration-300 hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-2 border-l-4 border-l-primary/30 hover:border-l-primary bg-gradient-to-br from-background via-background/95 to-primary/5 hover:to-primary/10">
+      <CardContent className="p-6">
+        <div className="space-y-5">
           <div className="flex justify-between items-start">
-            <div className="space-y-3 flex-1">
-              <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-relaxed">
+            <div className="space-y-4 flex-1">
+              <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-relaxed">
                 {issue.title}
               </h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`${getPriorityColor(issue.priority)} shadow-sm border-0 font-medium`}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Badge variant="outline" className={`${getPriorityColor(issue.priority)} shadow-lg border-2 font-bold px-3 py-1 text-sm`}>
                   {getPriorityText(issue.priority)}
                 </Badge>
-                <Badge variant="outline" className={`${getStatusColor(issue.status)} shadow-sm border-0 font-medium flex items-center gap-1`}>
+                <Badge variant="outline" className={`${getStatusColor(issue.status)} shadow-lg border-2 font-bold flex items-center gap-2 px-3 py-1 text-sm`}>
                   {getStatusIcon(issue.status)}
                   <span>{getStatusText(issue.status)}</span>
                 </Badge>
               </div>
             </div>
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
               <IssueEditDialog 
                 issue={issue} 
                 onUpdate={loadIssues} 
@@ -254,28 +254,28 @@ export function IssueTracker() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedIssue(issue)}
-                className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                className="h-9 w-9 hover:bg-primary/20 hover:text-primary hover:scale-110 transition-all duration-200"
               >
-                <Eye className="h-4 w-4" />
+                <Eye className="h-5 w-5" />
               </Button>
             </div>
           </div>
 
-          <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
+          <p className="text-sm text-muted-foreground line-clamp-4 leading-relaxed font-medium">
             {issue.description}
           </p>
 
           {(issue.system_name || issue.station_name || issue.test_item_name) && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {issue.system_name && (
-                <div className="flex items-center gap-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium border border-blue-500/20">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500/15 to-blue-600/15 text-blue-800 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-bold border-2 border-blue-500/30 shadow-md">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
                   系統: {issue.system_name}
                 </div>
               )}
               {issue.station_name && (
-                <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-500/20">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/15 to-emerald-600/15 text-emerald-800 dark:text-emerald-300 px-4 py-2 rounded-full text-sm font-bold border-2 border-emerald-500/30 shadow-md">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
                   站點: {issue.station_name}
                 </div>
               )}
@@ -283,22 +283,22 @@ export function IssueTracker() {
           )}
 
           {issue.attachments && issue.attachments.length > 0 && (
-            <div className="bg-muted/50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">附件 ({issue.attachments.length})</span>
+            <div className="bg-gradient-to-r from-muted/60 to-muted/40 rounded-xl p-4 border-2 border-muted/30">
+              <div className="flex items-center gap-3 mb-3">
+                <ImageIcon className="h-5 w-5 text-primary" />
+                <span className="text-sm font-bold text-foreground">附件 ({issue.attachments.length})</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {issue.attachments.slice(0, 3).map((attachment) => (
-                  <div key={attachment.id} className="flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded-md text-xs border">
-                    <ImageIcon className="h-3 w-3 text-primary" />
-                    <span className="truncate max-w-[80px] font-medium" title={attachment.file_name}>
+                  <div key={attachment.id} className="flex items-center gap-2 bg-background/90 px-4 py-2 rounded-lg text-sm border-2 border-primary/20 shadow-sm hover:shadow-md transition-shadow">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    <span className="truncate max-w-[100px] font-semibold" title={attachment.file_name}>
                       {attachment.file_name}
                     </span>
                   </div>
                 ))}
                 {issue.attachments.length > 3 && (
-                  <div className="flex items-center justify-center bg-primary/10 text-primary px-3 py-1.5 rounded-md text-xs font-medium">
+                  <div className="flex items-center justify-center bg-gradient-to-r from-primary/15 to-primary/20 text-primary px-4 py-2 rounded-lg text-sm font-bold border-2 border-primary/30">
                     +{issue.attachments.length - 3}
                   </div>
                 )}
@@ -306,16 +306,16 @@ export function IssueTracker() {
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-2 border-t border-border/50">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center">
-                <span className="text-xs font-semibold text-primary">
+          <div className="flex justify-between items-center pt-3 border-t-2 border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center border-2 border-primary/20">
+                <span className="text-sm font-bold text-primary">
                   {(issue.assigned_to || "未").charAt(0)}
                 </span>
               </div>
-              <span className="text-sm font-medium text-foreground">{issue.assigned_to || "未指派"}</span>
+              <span className="text-sm font-bold text-foreground">{issue.assigned_to || "未指派"}</span>
             </div>
-            <span className="text-xs text-muted-foreground font-medium">
+            <span className="text-sm text-muted-foreground font-bold bg-muted/50 px-3 py-1 rounded-full">
               {new Date(issue.created_at).toLocaleDateString('zh-TW')}
             </span>
           </div>

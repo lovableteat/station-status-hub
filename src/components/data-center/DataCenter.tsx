@@ -64,13 +64,24 @@ export function DataCenter() {
       const item = testItems.find(i => i.id === prog.item_id);
       
       if (system && station && item) {
+        // 修正進度計算 - 如果系統已完成且是 Station 0-3，則顯示 100%
+        let displayProgress = prog.progress_percent;
+        if (system.status === '已完成' && (
+          station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
+          station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
+          station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
+          station.station_name.includes('Station 3') || station.station_name.includes('EE')
+        )) {
+          displayProgress = 100;
+        }
+
         records.push({
           id: prog.id,
           system_name: system.system_name,
           station_name: station.station_name,
           test_item: item.item_name,
           status: prog.status,
-          progress: prog.progress_percent,
+          progress: displayProgress,
           assigned_engineer: system.assigned_engineer || 'Unassigned',
           start_date: prog.started_at ? new Date(prog.started_at).toLocaleDateString('zh-TW', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
@@ -136,6 +147,7 @@ export function DataCenter() {
           test_item: record.test_item,
           status: record.status,
           progress: record.progress,
+          exclude_from_dashboard: systems.find(s => s.system_name === record.system_name)?.exclude_from_dashboard || false,
           assigned_engineer: record.assigned_engineer,
           start_date: record.start_date,
           completion_date: record.completion_date,

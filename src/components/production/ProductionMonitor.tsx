@@ -95,12 +95,26 @@ export function ProductionMonitor() {
 
   // Calculate station progress for Station 0-3
   const calculateStationProgress = (stationId: string, systemId: string) => {
+    const system = systems.find(s => s.id === systemId);
+    const station = stations.find(s => s.id === stationId);
+    
     const stationTestItems = testItems.filter(item => item.station_id === stationId);
     const systemStationProgress = progress.filter(p => 
       p.system_id === systemId && p.station_id === stationId
     );
     
     if (stationTestItems.length === 0) return 0;
+    
+    // 如果系統已完成且是 Station 0-3，則顯示 100%
+    const stationData = stations.find(s => s.id === stationId);
+    if (system?.status === '已完成' && stationData && (
+      stationData.name.includes('Station 0') || stationData.name.includes('組裝') ||
+      stationData.name.includes('Station 1') || stationData.name.includes('開機') ||
+      stationData.name.includes('Station 2') || stationData.name.includes('FW') ||
+      stationData.name.includes('Station 3') || stationData.name.includes('EE')
+    )) {
+      return 100;
+    }
     
     const completedItems = systemStationProgress.filter(p => p.status === 'Done').length;
     return Math.round((completedItems / stationTestItems.length) * 100);

@@ -14,7 +14,8 @@ export const generatePDF = async (title: string, data: any[], stations?: any[], 
       'Station 0': `${calculateStationProgress(system.id, 'Station 0', stations, testItems, progress)}%`,
       'Station 1': `${calculateStationProgress(system.id, 'Station 1', stations, testItems, progress)}%`,
       'Station 2': `${calculateStationProgress(system.id, 'Station 2', stations, testItems, progress)}%`,
-      'Station 3': `${calculateStationProgress(system.id, 'Station 3', stations, testItems, progress)}%`
+      'Station 3': `${calculateStationProgress(system.id, 'Station 3', stations, testItems, progress)}%`,
+      exclude_from_dashboard: system.exclude_from_dashboard || false
     }));
 
     // Create HTML content for simplified report
@@ -61,6 +62,7 @@ export const generatePDF = async (title: string, data: any[], stations?: any[], 
               <th>Station 1</th>
               <th>Station 2</th>
               <th>Station 3</th>
+              <th>列入統計</th>
             </tr>
           </thead>
           <tbody>
@@ -73,6 +75,7 @@ export const generatePDF = async (title: string, data: any[], stations?: any[], 
                 <td>${item['Station 1']}</td>
                 <td>${item['Station 2']}</td>
                 <td>${item['Station 3']}</td>
+                <td>${item.exclude_from_dashboard ? '否' : '是'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -182,7 +185,8 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
           'BMC 位址': system.bmc_address || '',
           'BOM 90': system.bom_90 || '',
           '建立時間': system.created_at ? new Date(system.created_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.created_at).toLocaleTimeString('zh-TW') : '',
-          '更新時間': system.updated_at ? new Date(system.updated_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.updated_at).toLocaleTimeString('zh-TW') : ''
+          '更新時間': system.updated_at ? new Date(system.updated_at).toLocaleDateString('zh-TW') + ' ' + new Date(system.updated_at).toLocaleTimeString('zh-TW') : '',
+          '列入系統統計': system.exclude_from_dashboard ? '否' : '是'
         };
       });
 
@@ -191,7 +195,7 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
         header: [
           '系統編號', '序號', '型號', '負責工程師', '目前站點', '整體進度(%)', '狀態',
           'Station 0 進度(%)', 'Station 1 進度(%)', 'Station 2 進度(%)', 'Station 3 進度(%)',
-          '實際開始時間', '實際完成時間', 'OS MAC', 'BMC 位址', 'BOM 90', '建立時間', '更新時間'
+          '實際開始時間', '實際完成時間', 'OS MAC', 'BMC 位址', 'BOM 90', '建立時間', '更新時間', '列入系統統計'
         ]
       });
       
@@ -227,7 +231,8 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
         { wch: 18 }, // BMC 位址
         { wch: 12 }, // BOM 90
         { wch: 20 }, // 建立時間
-        { wch: 20 }  // 更新時間
+        { wch: 20 },  // 更新時間
+        { wch: 15 }   // 列入系統統計
       ];
       worksheet['!cols'] = colWidths;
       
