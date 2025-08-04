@@ -11,6 +11,7 @@ import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
+import { ManualTimeTracker } from "./ManualTimeTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -239,63 +240,79 @@ export function TestProgressTable({
                     />
                   </div>
                   
-                  {filteredStations.map(station => {
-                    const stationItems = items.filter(item => item.station_id === station.id);
-                    const completedItems = stationItems.filter(item => {
-                      const prog = getProgressForSystemItem(system.id, station.id, item.id);
-                      return prog?.status === 'Done';
-                    });
-                    
-                    // 使用與SystemStatusCalculator一致的計算邏輯
-                    let overallPercent = 0;
-                    if (stationItems.length > 0) {
-                      overallPercent = Math.round((completedItems.length / stationItems.length) * 100);
-                    }
-                    
-                    // 如果系統整體狀態為已完成，且這是目標站點(Station 0-3)，則顯示100%
-                    if (system.status === '已完成' && station.station_order >= 1 && station.station_order <= 4) {
-                      overallPercent = 100;
-                    }
+                   {filteredStations.map(station => {
+                     const stationItems = items.filter(item => item.station_id === station.id);
+                     const completedItems = stationItems.filter(item => {
+                       const prog = getProgressForSystemItem(system.id, station.id, item.id);
+                       return prog?.status === 'Done';
+                     });
+                     
+                     // 使用與SystemStatusCalculator一致的計算邏輯
+                     let overallPercent = 0;
+                     if (stationItems.length > 0) {
+                       overallPercent = Math.round((completedItems.length / stationItems.length) * 100);
+                     }
+                     
+                     // 如果系統整體狀態為已完成，且這是目標站點(Station 0-3)，則顯示100%
+                     if (system.status === '已完成' && station.station_order >= 1 && station.station_order <= 4) {
+                       overallPercent = 100;
+                     }
 
-                    const processingTime = calculateManualProcessingTime(system.id, station.id);
+                     const processingTime = calculateManualProcessingTime(system.id, station.id);
+                     
+                     // 為快速計時顯示第一個測項的計時器
+                     const firstItem = stationItems[0];
+                     const firstItemProgress = firstItem ? getProgressForSystemItem(system.id, station.id, firstItem.id) : null;
 
-                    return (
-                      <div key={station.id} className="px-1">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span>進度: {overallPercent}%</span>
-                            <ProgressEditDialog
-                              systemName={system.system_name}
-                              stationName={station.station_name}
-                              stationItems={stationItems}
-                              progress={progress}
-                              editingProgress={editingProgress}
-                              setEditingProgress={setEditingProgress}
-                              editValues={editValues}
-                              setEditValues={setEditValues}
-                              getProgressForSystemItem={getProgressForSystemItem}
-                              handleEditProgress={handleEditProgress}
-                              handleSaveProgress={handleSaveProgress}
-                              handleDeleteProgress={handleDeleteProgress}
-                              getStatusColor={getStatusColor}
-                              systemId={system.id}
-                              stationId={station.id}
-                              onTimeUpdate={onSystemUpdate}
-                            />
-                          </div>
-                          <Progress value={overallPercent} className="h-2" />
-                          
-                           {/* 只顯示總時長，不顯示個別測項時長 */}
-                          
-                           {processingTime && (
-                             <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
-                               <div>總時長: {processingTime.totalHours} h</div>
+                     return (
+                       <div key={station.id} className="px-1">
+                         <div className="space-y-2">
+                           <div className="flex items-center justify-between text-xs">
+                             <span>進度: {overallPercent}%</span>
+                             <ProgressEditDialog
+                               systemName={system.system_name}
+                               stationName={station.station_name}
+                               stationItems={stationItems}
+                               progress={progress}
+                               editingProgress={editingProgress}
+                               setEditingProgress={setEditingProgress}
+                               editValues={editValues}
+                               setEditValues={setEditValues}
+                               getProgressForSystemItem={getProgressForSystemItem}
+                               handleEditProgress={handleEditProgress}
+                               handleSaveProgress={handleSaveProgress}
+                               handleDeleteProgress={handleDeleteProgress}
+                               getStatusColor={getStatusColor}
+                               systemId={system.id}
+                               stationId={station.id}
+                               onTimeUpdate={onSystemUpdate}
+                             />
+                           </div>
+                           <Progress value={overallPercent} className="h-2" />
+                           
+                           {/* 為第一個測項顯示快速計時按鈕 */}
+                           {firstItem && (
+                             <div className="flex justify-center">
+                               <ManualTimeTracker
+                                 systemId={system.id}
+                                 stationId={station.id}
+                                 itemId={firstItem.id}
+                                 currentStartedAt={firstItemProgress?.started_at}
+                                 currentCompletedAt={firstItemProgress?.completed_at}
+                                 onTimeUpdate={onSystemUpdate}
+                               />
                              </div>
                            )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                           
+                            {processingTime && (
+                              <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
+                                <div>總時長: {processingTime.totalHours} h</div>
+                              </div>
+                            )}
+                         </div>
+                       </div>
+                     );
+                   })}
                   
                   <div className="flex gap-1">
                     <SystemEditDialog
