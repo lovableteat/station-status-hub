@@ -139,17 +139,26 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                       />
                     </div>
 
-                    {/* Details */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">當前站點:</span>
-                        <p className="font-medium">{system.current_station}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">負責人:</span>
-                        <p className="font-medium">{system.assigned_engineer || '未分配'}</p>
-                      </div>
-                    </div>
+                     {/* Details */}
+                     <div className="grid grid-cols-2 gap-2 text-xs">
+                       <div>
+                         <span className="text-muted-foreground">當前站點:</span>
+                         <p className="font-medium">{system.current_station}</p>
+                       </div>
+                       <div>
+                         <span className="text-muted-foreground">負責人:</span>
+                         <p className="font-medium">{system.assigned_engineer || '未分配'}</p>
+                       </div>
+                       {(system as any).team && (
+                         <>
+                           <div>
+                             <span className="text-muted-foreground">TEAM:</span>
+                             <p className="font-medium text-primary">{(system as any).team}</p>
+                           </div>
+                           <div></div>
+                         </>
+                       )}
+                     </div>
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-2">

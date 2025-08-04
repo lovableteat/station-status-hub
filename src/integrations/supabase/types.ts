@@ -1656,6 +1656,7 @@ export type Database = {
           serial_number: string | null
           status: string | null
           system_name: string
+          team: string | null
           ubuntu_version: string | null
           updated_at: string
         }
@@ -1676,6 +1677,7 @@ export type Database = {
           serial_number?: string | null
           status?: string | null
           system_name: string
+          team?: string | null
           ubuntu_version?: string | null
           updated_at?: string
         }
@@ -1696,6 +1698,7 @@ export type Database = {
           serial_number?: string | null
           status?: string | null
           system_name?: string
+          team?: string | null
           ubuntu_version?: string | null
           updated_at?: string
         }

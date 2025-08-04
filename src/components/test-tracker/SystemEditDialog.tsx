@@ -77,7 +77,7 @@ export function SystemEditDialog({
           ubuntu_version: data.ubuntu_version || '',
           cuda_version: data.cuda_version || '',
           exclude_from_dashboard: data.exclude_from_dashboard || false,
-          team: data.team || ''
+          team: (data as any).team || ''
         });
       }
     };
