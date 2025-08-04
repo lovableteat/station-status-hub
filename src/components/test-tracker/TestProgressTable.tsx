@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useCallback, useMemo } from "react";
 import { SystemStatusCalculator, TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 import { SystemStatusUpdater } from "./SystemStatusUpdater";
+import ManualTimeTracker from "./ManualTimeTracker";
 
 interface TestProgressTableProps {
   filteredSystems: TestSystem[];
@@ -286,7 +287,21 @@ export function TestProgressTable({
                           <Progress value={overallPercent} className="h-2" />
                           
                            {/* 只顯示總時長，不顯示個別測項時長 */}
-                          
+                           
+                           {/* 為第一個測項顯示計時按鈕 */}
+                           {stationItems.length > 0 && (
+                             <div className="mt-1">
+                               <ManualTimeTracker
+                                 systemId={system.id}
+                                 stationId={station.id}
+                                 itemId={stationItems[0].id}
+                                 currentStartedAt={getProgressForSystemItem(system.id, station.id, stationItems[0].id)?.started_at}
+                                 currentCompletedAt={getProgressForSystemItem(system.id, station.id, stationItems[0].id)?.completed_at}
+                                 onTimeUpdate={onSystemUpdate}
+                               />
+                             </div>
+                           )}
+                           
                            {processingTime && (
                              <div className="text-xs text-muted-foreground bg-muted/30 rounded p-1">
                                <div>總時長: {processingTime.totalHours} h</div>
