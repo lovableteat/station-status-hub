@@ -18,11 +18,16 @@ export function StationAverageTimeChart() {
   const [filterType, setFilterType] = useState<'estimated_start' | 'estimated_end' | 'actual_completed'>('actual_completed');
 
   const handleFilter = () => {
-    loadStationTimeRecords({
-      start_date: startDate || undefined,
-      end_date: endDate || undefined,
-      filter_type: filterType
-    });
+    if (!startDate && !endDate) {
+      // 如果沒有選擇日期，載入所有資料
+      loadStationTimeRecords();
+    } else {
+      loadStationTimeRecords({
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        filter_type: filterType
+      });
+    }
   };
 
   const handleReset = () => {

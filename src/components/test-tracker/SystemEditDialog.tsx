@@ -41,7 +41,8 @@ export function SystemEditDialog({
     bom_90: '',
     ubuntu_version: '',
     cuda_version: '',
-    exclude_from_dashboard: false
+    exclude_from_dashboard: false,
+    team: ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -75,7 +76,8 @@ export function SystemEditDialog({
           bom_90: data.bom_90 || '',
           ubuntu_version: data.ubuntu_version || '',
           cuda_version: data.cuda_version || '',
-          exclude_from_dashboard: data.exclude_from_dashboard || false
+          exclude_from_dashboard: data.exclude_from_dashboard || false,
+          team: data.team || ''
         });
       }
     };
@@ -98,7 +100,8 @@ export function SystemEditDialog({
           bom_90: editValues.bom_90,
           ubuntu_version: editValues.ubuntu_version,
           cuda_version: editValues.cuda_version,
-          exclude_from_dashboard: editValues.exclude_from_dashboard
+          exclude_from_dashboard: editValues.exclude_from_dashboard,
+          team: editValues.team
         })
         .eq('id', systemId);
 
@@ -245,6 +248,32 @@ export function SystemEditDialog({
                 </SelectItem>
                 <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
                   ❌ 否（排除）
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>TEAM</Label>
+            <Select 
+              value={editValues.team || ''} 
+              onValueChange={(value) => setEditValues({...editValues, team: value})}
+            >
+              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
+                <SelectValue placeholder="請選擇團隊..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ME" className={isMobile ? "h-12 text-base" : ""}>
+                  ME TEAM (第0站)
+                </SelectItem>
+                <SelectItem value="BIOS/BMC" className={isMobile ? "h-12 text-base" : ""}>
+                  BIOS/BMC TEAM (第1站)
+                </SelectItem>
+                <SelectItem value="EE" className={isMobile ? "h-12 text-base" : ""}>
+                  EE TEAM (第2站)
+                </SelectItem>
+                <SelectItem value="SIT/RAD" className={isMobile ? "h-12 text-base" : ""}>
+                  SIT/RAD TEAM (第3站)
                 </SelectItem>
               </SelectContent>
             </Select>

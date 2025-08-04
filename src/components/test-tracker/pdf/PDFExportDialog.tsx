@@ -111,27 +111,27 @@ export function PDFExportDialog({
             </ul>
           </div>
           
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h4 className="font-medium mb-2 text-blue-900">📊 當前數據統計</h4>
+          <div className="bg-muted p-4 rounded-lg border border-border">
+            <h4 className="font-medium mb-2 text-foreground">📊 當前數據統計</h4>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-blue-700">總系統數:</span>
-                <span className="font-medium ml-2">{systems.length} 台</span>
+                <span className="text-muted-foreground">總系統數:</span>
+                <span className="font-medium ml-2 text-foreground">{systems.length} 台</span>
               </div>
               <div>
-                <span className="text-blue-700">已完成:</span>
+                <span className="text-muted-foreground">已完成:</span>
                 <span className="font-medium ml-2 text-green-600">
                   {systems.filter(s => s.status === '已完成').length} 台
                 </span>
               </div>
               <div>
-                <span className="text-blue-700">進行中:</span>
+                <span className="text-muted-foreground">進行中:</span>
                 <span className="font-medium ml-2 text-orange-600">
                   {systems.filter(s => s.status === '進行中').length} 台
                 </span>
               </div>
               <div>
-                <span className="text-blue-700">未開始:</span>
+                <span className="text-muted-foreground">未開始:</span>
                 <span className="font-medium ml-2 text-red-600">
                   {systems.filter(s => s.status === '未開始').length} 台
                 </span>
