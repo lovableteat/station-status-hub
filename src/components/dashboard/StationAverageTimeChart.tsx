@@ -1,15 +1,38 @@
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { Clock } from "lucide-react";
-import { DailyStationCompletionChart } from "./DailyStationCompletionChart";
+import { Calendar, Clock, RotateCcw } from "lucide-react";
 
 export function StationAverageTimeChart() {
-  const { averageTimes, systemStationTimes, isLoading } = useStationTimeAnalytics();
+  const { averageTimes, systemStationTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
   const { stations } = useUnifiedData();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
+  const handleFilter = () => {
+    if (!startDate || !endDate) {
+      loadStationTimeRecords();
+      return;
+    }
+    
+    loadStationTimeRecords({
+      start_date: startDate,
+      end_date: endDate,
+      filter_type: 'actual_completed'
+    });
+  };
+
+  const handleReset = () => {
+    setStartDate("");
+    setEndDate("");
+    loadStationTimeRecords();
+  };
 
   // 準備圖表數據 - 動態顯示所有站點的實際平均處理時間
   const chartData = stations
@@ -50,16 +73,64 @@ export function StationAverageTimeChart() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 各站平均處理時間分析 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            各站平均處理時間分析
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          各站平均處理時間分析
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* 簡化的時間篩選器 */}
+        <div className="mb-6 p-4 bg-card border rounded-lg">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              <Label className="font-medium text-card-foreground">時間範圍篩選</Label>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Label htmlFor="start-date" className="text-sm text-muted-foreground">從</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Label htmlFor="end-date" className="text-sm text-muted-foreground">到</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+            
+            <Button onClick={handleFilter} disabled={isLoading} size="sm">
+              <Calendar className="h-4 w-4 mr-2" />
+              {isLoading ? "載入中..." : "篩選"}
+            </Button>
+            
+            <Button variant="outline" onClick={handleReset} disabled={isLoading} size="sm">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              重設
+            </Button>
+          </div>
+          
+          {(startDate || endDate) && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {startDate && endDate 
+                ? `顯示 ${startDate} 至 ${endDate} 期間完成的機台資料`
+                : "請選擇完整的日期範圍進行篩選"
+              }
+            </div>
+          )}
+        </div>
 
         {/* 圖表區域 - 垂直長條圖 */}
         <div className="h-96">
@@ -199,11 +270,7 @@ export function StationAverageTimeChart() {
             )}
           </div>
         )}
-        </CardContent>
-      </Card>
-      
-      {/* 每日站別完成動態分析 */}
-      <DailyStationCompletionChart />
-    </div>
+      </CardContent>
+    </Card>
   );
 }
