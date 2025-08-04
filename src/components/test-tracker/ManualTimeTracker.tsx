@@ -42,12 +42,20 @@ export default function ManualTimeTracker({
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
       
-      console.log('開始計時:', { systemId, stationId, itemId, currentTime });
+      console.log('開始計時 - 參數:', { 
+        systemId, 
+        stationId, 
+        itemId, 
+        currentTime,
+        type: typeof systemId,
+        stationIdType: typeof stationId,
+        itemIdType: typeof itemId
+      });
       
-      // 直接更新測試進度表
+      // 直接使用 INSERT ON CONFLICT，避免觸發器問題
       const { data, error } = await supabase
         .from('test_progress')
-        .upsert({
+        .insert({
           system_id: systemId,
           station_id: stationId,
           item_id: itemId,
@@ -55,18 +63,43 @@ export default function ManualTimeTracker({
           status: 'On-going',
           progress_percent: 0,
           completed_at: null,
-          notes: ''
-        }, {
-          onConflict: 'system_id,station_id,item_id'
+          notes: '',
+          actual_hours: 0
         })
-        .select();
+        .select()
+        .single();
 
-      if (error) {
-        console.error('計時開始失敗:', error);
+      // 如果插入失敗（可能是重複），嘗試更新
+      if (error && error.code === '23505') {
+        console.log('記錄已存在，執行更新操作');
+        
+        const { data: updateData, error: updateError } = await supabase
+          .from('test_progress')
+          .update({
+            started_at: currentTime,
+            status: 'On-going',
+            progress_percent: 0,
+            completed_at: null,
+            notes: ''
+          })
+          .eq('system_id', systemId)
+          .eq('station_id', stationId)
+          .eq('item_id', itemId)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('更新失敗:', updateError);
+          throw updateError;
+        }
+
+        console.log('計時開始成功 (更新):', updateData);
+      } else if (error) {
+        console.error('插入失敗:', error);
         throw error;
+      } else {
+        console.log('計時開始成功 (插入):', data);
       }
-
-      console.log('計時開始成功:', data);
 
       toast({
         title: "計時開始",
@@ -87,43 +120,44 @@ export default function ManualTimeTracker({
   };
 
   const handleStopTimer = async () => {
-    if (isUpdating) return;
+    if (isUpdating || !currentStartedAt) return;
     
     try {
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
       
       // 計算實際小時數
-      let actualHours = 0;
-      if (currentStartedAt) {
-        const start = new Date(currentStartedAt);
-        const end = new Date(currentTime);
-        const diffMs = end.getTime() - start.getTime();
-        actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4));
-      }
+      const start = new Date(currentStartedAt);
+      const end = new Date(currentTime);
+      const diffMs = end.getTime() - start.getTime();
+      const actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4));
       
-      console.log('結束計時:', { systemId, stationId, itemId, currentTime, actualHours });
+      console.log('結束計時 - 參數:', { 
+        systemId, 
+        stationId, 
+        itemId, 
+        currentTime, 
+        actualHours,
+        startTime: currentStartedAt
+      });
       
-      // 更新測試進度
+      // 直接更新完成狀態
       const { data, error } = await supabase
         .from('test_progress')
-        .upsert({
-          system_id: systemId,
-          station_id: stationId,
-          item_id: itemId,
-          started_at: currentStartedAt,
+        .update({
           completed_at: currentTime,
           status: 'Done',
           progress_percent: 100,
-          actual_hours: actualHours,
-          notes: ''
-        }, {
-          onConflict: 'system_id,station_id,item_id'
+          actual_hours: actualHours
         })
-        .select();
+        .eq('system_id', systemId)
+        .eq('station_id', stationId)
+        .eq('item_id', itemId)
+        .select()
+        .single();
 
       if (error) {
-        console.error('計時結束失敗:', error);
+        console.error('結束計時失敗:', error);
         throw error;
       }
 
@@ -131,7 +165,7 @@ export default function ManualTimeTracker({
 
       toast({
         title: "計時結束",
-        description: "測試項目已完成並儲存",
+        description: `測試項目已完成，耗時 ${actualHours.toFixed(2)} 小時`,
       });
 
       onTimeUpdate();
@@ -162,7 +196,7 @@ export default function ManualTimeTracker({
           className="h-8 px-2"
         >
           <Play className="h-3 w-3 mr-1" />
-          開始
+          {isUpdating ? "處理中..." : "開始"}
         </Button>
       ) : isRunning ? (
         <div className="flex items-center gap-2">
@@ -178,7 +212,7 @@ export default function ManualTimeTracker({
             className="h-8 px-2"
           >
             <Square className="h-3 w-3 mr-1" />
-            結束
+            {isUpdating ? "處理中..." : "結束"}
           </Button>
         </div>
       ) : isCompleted ? (
