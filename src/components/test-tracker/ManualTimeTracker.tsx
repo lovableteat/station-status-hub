@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Play, Square, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/components/auth/UserContext";
 
 interface ManualTimeTrackerProps {
   systemId: string;
@@ -24,6 +25,7 @@ export default function ManualTimeTracker({
 }: ManualTimeTrackerProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const { user } = useUser();
 
   // 計算處理時長
   const calculateDuration = () => {
@@ -93,12 +95,31 @@ export default function ManualTimeTracker({
           throw updateError;
         }
 
-        console.log('計時開始成功 (更新):', updateData);
+      console.log('計時開始成功 (更新):', updateData);
       } else if (error) {
         console.error('插入失敗:', error);
         throw error;
       } else {
         console.log('計時開始成功 (插入):', data);
+      }
+
+      // 記錄修改歷史
+      try {
+        await supabase.from('test_progress_audit').insert({
+          system_id: systemId,
+          station_id: stationId,
+          item_id: itemId,
+          change_type: 'start_timer',
+          old_values: {},
+          new_values: {
+            started_at: currentTime,
+            status: 'On-going',
+            user: user?.displayName || user?.username || '未知用戶'
+          },
+          user_id: user?.userId
+        });
+      } catch (auditError) {
+        console.error('記錄審計失敗:', auditError);
       }
 
       toast({
@@ -162,6 +183,29 @@ export default function ManualTimeTracker({
       }
 
       console.log('計時結束成功:', data);
+
+      // 記錄修改歷史
+      try {
+        await supabase.from('test_progress_audit').insert({
+          system_id: systemId,
+          station_id: stationId,
+          item_id: itemId,
+          change_type: 'complete_timer',
+          old_values: {
+            started_at: currentStartedAt,
+            status: 'On-going'
+          },
+          new_values: {
+            completed_at: currentTime,
+            status: 'Done',
+            actual_hours: actualHours,
+            user: user?.displayName || user?.username || '未知用戶'
+          },
+          user_id: user?.userId
+        });
+      } catch (auditError) {
+        console.error('記錄審計失敗:', auditError);
+      }
 
       toast({
         title: "計時結束",
