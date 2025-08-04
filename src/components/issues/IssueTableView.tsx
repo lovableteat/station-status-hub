@@ -25,6 +25,8 @@ interface Issue {
   system_name?: string;
   station_name?: string;
   test_item_name?: string;
+  relate?: string;
+  category?: string;
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -176,6 +178,8 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                 </TableHead>
                 <TableHead className="w-[100px]">系統</TableHead>
                 <TableHead className="w-[100px]">站點</TableHead>
+                <TableHead className="w-[120px]">相關項目</TableHead>
+                <TableHead className="w-[120px]">問題分類</TableHead>
                 <TableHead className="w-[80px]">附件</TableHead>
                 <TableHead className="w-[120px]">
                   <Button variant="ghost" onClick={() => handleSort('created_at')}>
@@ -219,6 +223,16 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
                       {issue.station_name || '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm text-muted-foreground">
+                      {issue.relate || '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm text-muted-foreground">
+                      {issue.category || '-'}
                     </div>
                   </TableCell>
                   <TableCell>

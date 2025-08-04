@@ -577,11 +577,13 @@ export type Database = {
       issues: {
         Row: {
           assigned_to: string | null
+          category: string | null
           created_at: string
           description: string
           id: string
           priority: string
           process_notes: string | null
+          relate: string | null
           solution: string | null
           station_id: string | null
           status: string
@@ -592,11 +594,13 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          category?: string | null
           created_at?: string
           description: string
           id?: string
           priority?: string
           process_notes?: string | null
+          relate?: string | null
           solution?: string | null
           station_id?: string | null
           status?: string
@@ -607,11 +611,13 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          category?: string | null
           created_at?: string
           description?: string
           id?: string
           priority?: string
           process_notes?: string | null
+          relate?: string | null
           solution?: string | null
           station_id?: string | null
           status?: string
