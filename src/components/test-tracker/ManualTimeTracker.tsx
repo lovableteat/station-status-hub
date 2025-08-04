@@ -43,7 +43,7 @@ export default function ManualTimeTracker({
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
       
-      // 更新測試進度，設定開始時間和狀態
+      // 直接更新測試進度，不依賴審計表
       const { error } = await supabase
         .from('test_progress')
         .upsert({
@@ -54,7 +54,7 @@ export default function ManualTimeTracker({
           status: 'On-going',
           progress_percent: 0,
           notes: '',
-          completed_at: null // 清除完成時間
+          completed_at: null
         }, {
           onConflict: 'system_id,station_id,item_id'
         });
@@ -95,14 +95,14 @@ export default function ManualTimeTracker({
         actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4)); // 保留4位小數精度
       }
       
-      // 更新測試進度，設定完成時間和狀態
+      // 直接更新測試進度，設定完成時間和狀態
       const { error } = await supabase
         .from('test_progress')
         .upsert({
           system_id: systemId,
           station_id: stationId,
           item_id: itemId,
-          started_at: currentStartedAt, // 保持原有開始時間
+          started_at: currentStartedAt,
           completed_at: currentTime,
           status: 'Done',
           progress_percent: 100,
