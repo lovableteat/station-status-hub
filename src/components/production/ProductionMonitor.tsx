@@ -392,16 +392,7 @@ export function ProductionMonitor() {
             <p className="text-muted-foreground">即時機台狀態監控 - 測試站點總覽 (Station 0-3)</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowProductionHistory(true)}>
-            <History className="h-4 w-4 mr-2" />
-            生產履歷
-          </Button>
-          <Button variant="outline" onClick={exportData}>
-            <Download className="h-4 w-4 mr-2" />
-            匯出報表
-          </Button>
-        </div>
+        {/* 按鈕已移除 */}
       </div>
 
       {/* Enhanced Machine Status Grid */}
