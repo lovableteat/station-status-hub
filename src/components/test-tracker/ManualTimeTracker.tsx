@@ -15,7 +15,7 @@ interface ManualTimeTrackerProps {
   onTimeUpdate: () => void;
 }
 
-export function ManualTimeTracker({
+export default function ManualTimeTracker({
   systemId,
   stationId,
   itemId,
