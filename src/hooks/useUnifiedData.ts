@@ -87,12 +87,99 @@ export function useUnifiedData() {
   const [progress, setProgress] = useState<UnifiedProgress[]>([]);
   const [stationContents, setStationContents] = useState<StationContent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
   // Use the optimized station status hook
   const stationStatuses = useStationStatus(systems, stations, progress);
 
-  // Debounced reload function to prevent excessive API calls
+  // Incremental update functions for specific tables
+  const updateSystems = useCallback(async (payload: any) => {
+    setIsUpdating(true);
+    try {
+      if (payload.eventType === 'DELETE') {
+        setSystems(prev => prev.filter(item => item.id !== payload.old.id));
+      } else if (payload.eventType === 'INSERT') {
+        setSystems(prev => [...prev, payload.new]);
+      } else if (payload.eventType === 'UPDATE') {
+        setSystems(prev => prev.map(item => 
+          item.id === payload.new.id ? { ...item, ...payload.new } : item
+        ));
+      }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 500);
+    }
+  }, []);
+
+  const updateProgressData = useCallback(async (payload: any) => {
+    setIsUpdating(true);
+    try {
+      if (payload.eventType === 'DELETE') {
+        setProgress(prev => prev.filter(item => item.id !== payload.old.id));
+      } else if (payload.eventType === 'INSERT') {
+        setProgress(prev => [...prev, payload.new]);
+      } else if (payload.eventType === 'UPDATE') {
+        setProgress(prev => prev.map(item => 
+          item.id === payload.new.id ? { ...item, ...payload.new } : item
+        ));
+      }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 500);
+    }
+  }, []);
+
+  const updateStations = useCallback(async (payload: any) => {
+    setIsUpdating(true);
+    try {
+      if (payload.eventType === 'DELETE') {
+        setStations(prev => prev.filter(item => item.id !== payload.old.id));
+      } else if (payload.eventType === 'INSERT') {
+        setStations(prev => [...prev, payload.new].sort((a, b) => a.station_order - b.station_order));
+      } else if (payload.eventType === 'UPDATE') {
+        setStations(prev => prev.map(item => 
+          item.id === payload.new.id ? { ...item, ...payload.new } : item
+        ).sort((a, b) => a.station_order - b.station_order));
+      }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 500);
+    }
+  }, []);
+
+  const updateTestItems = useCallback(async (payload: any) => {
+    setIsUpdating(true);
+    try {
+      if (payload.eventType === 'DELETE') {
+        setTestItems(prev => prev.filter(item => item.id !== payload.old.id));
+      } else if (payload.eventType === 'INSERT') {
+        setTestItems(prev => [...prev, payload.new].sort((a, b) => a.item_order - b.item_order));
+      } else if (payload.eventType === 'UPDATE') {
+        setTestItems(prev => prev.map(item => 
+          item.id === payload.new.id ? { ...item, ...payload.new } : item
+        ).sort((a, b) => a.item_order - b.item_order));
+      }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 500);
+    }
+  }, []);
+
+  const updateStationContents = useCallback(async (payload: any) => {
+    setIsUpdating(true);
+    try {
+      if (payload.eventType === 'DELETE') {
+        setStationContents(prev => prev.filter(item => item.id !== payload.old.id));
+      } else if (payload.eventType === 'INSERT') {
+        setStationContents(prev => [...prev, payload.new].sort((a, b) => a.order_num - b.order_num));
+      } else if (payload.eventType === 'UPDATE') {
+        setStationContents(prev => prev.map(item => 
+          item.id === payload.new.id ? { ...item, ...payload.new } : item
+        ).sort((a, b) => a.order_num - b.order_num));
+      }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 500);
+    }
+  }, []);
+
+  // Debounced reload function as fallback for complex updates
   const debouncedReload = useCallback(
     (() => {
       let timeoutId: NodeJS.Timeout;
@@ -100,7 +187,7 @@ export function useUnifiedData() {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           loadAllData();
-        }, 300); // 減少延遲時間以更快響應
+        }, 300);
       };
     })(),
     []
@@ -183,40 +270,62 @@ export function useUnifiedData() {
   useEffect(() => {
     loadAllData();
     
-    // Set up real-time updates with immediate refresh for all critical tables
+    // Set up real-time updates with incremental updates for better performance
     const channel = supabase
       .channel('unified_data_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, () => {
-        console.log('test_systems changed, reloading...');
-        loadAllData();
+      // Core tables with incremental updates
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, (payload) => {
+        console.log('test_systems changed:', payload.eventType);
+        updateSystems(payload);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, () => {
-        console.log('test_progress changed, reloading...');
-        loadAllData();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, (payload) => {
+        console.log('test_progress changed:', payload.eventType);
+        updateProgressData(payload);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, () => {
-        console.log('test_flow_stations changed, reloading...');
-        loadAllData();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, (payload) => {
+        console.log('test_flow_stations changed:', payload.eventType);
+        updateStations(payload);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, () => {
-        console.log('test_flow_items changed, reloading...');
-        loadAllData();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, (payload) => {
+        console.log('test_flow_items changed:', payload.eventType);
+        updateTestItems(payload);
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_contents' }, (payload) => {
+        console.log('station_contents changed:', payload.eventType);
+        updateStationContents(payload);
+      })
+      // New tables for enhanced real-time experience
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_users' }, () => {
+        console.log('system_users changed, showing update indicator...');
+        setIsUpdating(true);
+        setTimeout(() => setIsUpdating(false), 1000);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_production_stats' }, () => {
+        console.log('daily_production_stats changed, showing update indicator...');
+        setIsUpdating(true);
+        setTimeout(() => setIsUpdating(false), 1000);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
+        console.log('announcements changed, showing update indicator...');
+        setIsUpdating(true);
+        setTimeout(() => setIsUpdating(false), 1000);
+      })
+      // Fallback to full reload for complex related changes
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
-        console.log('issues changed, reloading...');
-        loadAllData();
+        console.log('issues changed, using debounced reload...');
+        debouncedReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_attachments' }, () => {
-        console.log('issue_attachments changed, reloading...');
-        loadAllData();
+        console.log('issue_attachments changed, using debounced reload...');
+        debouncedReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_records' }, () => {
-        console.log('station_time_records changed, reloading...');
-        loadAllData();
+        console.log('station_time_records changed, using debounced reload...');
+        debouncedReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_analytics' }, () => {
-        console.log('station_time_analytics changed, reloading...');
-        loadAllData();
+        console.log('station_time_analytics changed, using debounced reload...');
+        debouncedReload();
       })
       .subscribe();
 
@@ -233,6 +342,7 @@ export function useUnifiedData() {
     stationContents,
     stationStatuses,
     isLoading,
+    isUpdating,
     refetch: loadAllData,
     updateProgress
   };
