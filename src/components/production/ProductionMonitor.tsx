@@ -9,7 +9,6 @@ import { useEffect, useState } from "react";
 import { TestProgressAuditLog } from "./TestProgressAuditLog";
 import { ExportDialog } from "./ExportDialog";
 import { ProductionHistory } from "./ProductionHistory";
-import { ProductionHistoryPDFExporter } from "./ProductionHistoryPDFExporter";
 import { BackButton } from "@/components/common/BackButton";
 import { SystemSelectionDialog } from "./SystemSelectionDialog";
 
@@ -398,7 +397,6 @@ export function ProductionMonitor() {
             <History className="h-4 w-4 mr-2" />
             生產履歷
           </Button>
-          <ProductionHistoryPDFExporter />
           <Button variant="outline" onClick={exportData}>
             <Download className="h-4 w-4 mr-2" />
             匯出報表
