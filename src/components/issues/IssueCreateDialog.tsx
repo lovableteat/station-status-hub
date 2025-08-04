@@ -20,6 +20,8 @@ interface NewIssue {
   test_item_id?: string;
   relate: string;
   category: string;
+  process_notes: string;
+  solution: string;
 }
 
 interface IssueCreateDialogProps {
@@ -55,7 +57,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
     station_id: undefined,
     test_item_id: undefined,
     relate: "",
-    category: ""
+    category: "",
+    process_notes: "",
+    solution: ""
   });
 
   // 照片上傳相關狀態
@@ -225,7 +229,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
           station_id: (newIssue.station_id && newIssue.station_id !== "none") ? newIssue.station_id : null,
           test_item_id: (newIssue.test_item_id && newIssue.test_item_id !== "none") ? newIssue.test_item_id : null,
           relate: newIssue.relate || null,
-          category: newIssue.category || null
+          category: newIssue.category || null,
+          process_notes: newIssue.process_notes || null,
+          solution: newIssue.solution || null
         }])
         .select()
         .single();
@@ -253,7 +259,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
         station_id: undefined,
         test_item_id: undefined,
         relate: "",
-        category: ""
+        category: "",
+        process_notes: "",
+        solution: ""
       });
       setSelectedFiles([]);
       setUploadProgress({});
@@ -423,6 +431,28 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                 placeholder="請輸入問題分類"
                 value={newIssue.category}
                 onChange={(e) => setNewIssue(prev => ({ ...prev, category: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="process_notes">處理過程</Label>
+              <Textarea
+                id="process_notes"
+                placeholder="請記錄處理過程..."
+                value={newIssue.process_notes}
+                onChange={(e) => setNewIssue(prev => ({ ...prev, process_notes: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="solution">解決方案</Label>
+              <Textarea
+                id="solution"
+                placeholder="請記錄解決方案..."
+                value={newIssue.solution}
+                onChange={(e) => setNewIssue(prev => ({ ...prev, solution: e.target.value }))}
+                rows={3}
               />
             </div>
 
