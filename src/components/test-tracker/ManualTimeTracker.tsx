@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,8 +42,10 @@ export default function ManualTimeTracker({
       setIsUpdating(true);
       const currentTime = new Date().toISOString();
       
-      // 直接更新測試進度，不依賴審計表
-      const { error } = await supabase
+      console.log('開始計時:', { systemId, stationId, itemId, currentTime });
+      
+      // 直接更新測試進度表
+      const { data, error } = await supabase
         .from('test_progress')
         .upsert({
           system_id: systemId,
@@ -53,13 +54,19 @@ export default function ManualTimeTracker({
           started_at: currentTime,
           status: 'On-going',
           progress_percent: 0,
-          notes: '',
-          completed_at: null
+          completed_at: null,
+          notes: ''
         }, {
           onConflict: 'system_id,station_id,item_id'
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('計時開始失敗:', error);
+        throw error;
+      }
+
+      console.log('計時開始成功:', data);
 
       toast({
         title: "計時開始",
@@ -67,11 +74,11 @@ export default function ManualTimeTracker({
       });
 
       onTimeUpdate();
-    } catch (error) {
-      console.error('Error starting timer:', error);
+    } catch (error: any) {
+      console.error('開始計時錯誤:', error);
       toast({
         title: "開始計時失敗",
-        description: "無法開始計時，請重試",
+        description: error.message || "無法開始計時，請重試",
         variant: "destructive"
       });
     } finally {
@@ -92,11 +99,13 @@ export default function ManualTimeTracker({
         const start = new Date(currentStartedAt);
         const end = new Date(currentTime);
         const diffMs = end.getTime() - start.getTime();
-        actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4)); // 保留4位小數精度
+        actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(4));
       }
       
-      // 直接更新測試進度，設定完成時間和狀態
-      const { error } = await supabase
+      console.log('結束計時:', { systemId, stationId, itemId, currentTime, actualHours });
+      
+      // 更新測試進度
+      const { data, error } = await supabase
         .from('test_progress')
         .upsert({
           system_id: systemId,
@@ -110,9 +119,15 @@ export default function ManualTimeTracker({
           notes: ''
         }, {
           onConflict: 'system_id,station_id,item_id'
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('計時結束失敗:', error);
+        throw error;
+      }
+
+      console.log('計時結束成功:', data);
 
       toast({
         title: "計時結束",
@@ -120,11 +135,11 @@ export default function ManualTimeTracker({
       });
 
       onTimeUpdate();
-    } catch (error) {
-      console.error('Error stopping timer:', error);
+    } catch (error: any) {
+      console.error('結束計時錯誤:', error);
       toast({
         title: "結束計時失敗",
-        description: "無法結束計時，請重試",
+        description: error.message || "無法結束計時，請重試",
         variant: "destructive"
       });
     } finally {
