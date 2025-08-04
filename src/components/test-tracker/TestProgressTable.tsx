@@ -11,7 +11,7 @@ import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
-import { ManualTimeTracker } from "./ManualTimeTracker";
+import ManualTimeTracker from "./ManualTimeTracker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
