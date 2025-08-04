@@ -8,7 +8,7 @@ import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
-import { TestTrackerPDFExporter } from "./TestTrackerPDFExporter";
+import { PDFExportDialog } from "./pdf/PDFExportDialog";
 import { TestItemStatusReport } from "./TestItemStatusReport";
 import {
   DropdownMenu,
@@ -276,7 +276,7 @@ export function TestTracker() {
       )}
 
       {/* PDF Exporter Dialog */}
-      <TestTrackerPDFExporter
+      <PDFExportDialog
         systems={filteredSystems}
         stations={stations}
         items={items}
