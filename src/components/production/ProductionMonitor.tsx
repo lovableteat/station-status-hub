@@ -393,14 +393,7 @@ export function ProductionMonitor() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowProductionHistory(true)}>
-            <History className="h-4 w-4 mr-2" />
-            生產履歷
-          </Button>
-          <Button variant="outline" onClick={exportData}>
-            <Download className="h-4 w-4 mr-2" />
-            匯出報表
-          </Button>
+          {/* 移除生產履歷和匯出報表按鈕 */}
         </div>
       </div>
 
