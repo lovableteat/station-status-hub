@@ -155,7 +155,7 @@ export function useUnifiedData() {
           .from('test_progress')
           .update({
             ...updates,
-            assigned_to: user?.username || updates.assigned_to
+            assigned_to: user?.username || updates.assigned_to || 'system'
           })
           .eq('id', existingProgress.id);
       } else {
@@ -165,7 +165,7 @@ export function useUnifiedData() {
             system_id: systemId,
             station_id: stationId,
             item_id: itemId,
-            assigned_to: user?.username,
+            assigned_to: user?.username || 'system',
             ...updates
           });
       }
