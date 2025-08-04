@@ -13,6 +13,7 @@ import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
+import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
@@ -120,6 +121,7 @@ const Index = () => {
       {/* Real-time update indicators */}
       <UpdateIndicator isUpdating={isUpdating} />
       <FacebookStyleNotifications />
+      <OnlineUsersIndicator />
       <RealtimeNotifications />
       
       {/* Mobile overlay */}
