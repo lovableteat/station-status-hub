@@ -181,3 +181,5 @@ export function ManualTimeTracker({
     </div>
   );
 }
+
+export default ManualTimeTracker;
