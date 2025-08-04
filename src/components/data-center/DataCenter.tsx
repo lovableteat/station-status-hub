@@ -1,20 +1,20 @@
 import { useState, useEffect } from "react";
-import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Download, FileText, Calendar as CalendarIcon, Filter, Eye, FileImage, FileSpreadsheet } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon, FileText, FileSpreadsheet, Search } from "lucide-react";
 import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
-import { PDFExportManager } from "./PDFExportManager";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { useToast } from "@/hooks/use-toast";
 import { CollapsibleTestRecords } from "./CollapsibleTestRecords";
+import { PDFExportManager } from "./PDFExportManager";
+import { TestProgressReport } from "@/components/reports/TestProgressReport";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface TestRecord {
   id: string;
@@ -128,13 +128,6 @@ export function DataCenter() {
 
   const engineers = [...new Set(records.map(r => r.assigned_engineer))];
 
-  const exportToPDF = () => {
-    toast({
-      title: "匯出 PDF",
-      description: "PDF 匯出功能開發中...",
-    });
-  };
-
   const exportToExcel = async () => {
     try {
       // Import the excel export function
@@ -174,7 +167,6 @@ export function DataCenter() {
     }
   };
 
-
   if (isLoading) {
     return (
       <div className="p-6">
@@ -194,108 +186,131 @@ export function DataCenter() {
           <h1 className="text-3xl font-bold">資料中心</h1>
           <p className="text-muted-foreground">測試記錄與報告查詢系統</p>
         </div>
-        <div className="flex gap-2">
-          <PDFExportManager records={filteredRecords} />
-          <Button variant="outline" onClick={exportToExcel}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            匯出 Excel
-          </Button>
-        </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜尋系統、測試項目或工程師..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
-                />
-              </div>
-            </div>
-            
-            <Select value={filterEngineer} onValueChange={setFilterEngineer}>
-              <SelectTrigger>
-                <SelectValue placeholder="選擇工程師" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-engineers">全部工程師</SelectItem>
-                {engineers.map(engineer => (
-                  <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="選擇狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-status">全部狀態</SelectItem>
-                <SelectItem value="Done">已完成</SelectItem>
-                <SelectItem value="On-going">進行中</SelectItem>
-                <SelectItem value="Not Start">未開始</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn(
-                  "justify-start text-left font-normal",
-                  !dateRange.from && !dateRange.to && "text-muted-foreground"
-                )}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.from && dateRange.to ? (
-                    `${format(dateRange.from, "MM/dd", { locale: zhTW })} - ${format(dateRange.to, "MM/dd", { locale: zhTW })}`
-                  ) : (
-                    "選擇日期範圍"
-                  )}
+      {/* Tabs for different views */}
+      <Tabs defaultValue="progress-report" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="progress-report">GB300 L10 測試進度報告</TabsTrigger>
+          <TabsTrigger value="detailed-records">詳細測試記錄</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="progress-report" className="space-y-6">
+          <TestProgressReport />
+        </TabsContent>
+        
+        <TabsContent value="detailed-records" className="space-y-6">
+          {/* Export Buttons */}
+          <Card>
+            <CardHeader>
+              <CardTitle>資料匯出</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <PDFExportManager records={filteredRecords} />
+                <Button variant="outline" onClick={exportToExcel}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  匯出 Excel
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Data Table - Collapsible by System */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            測試記錄表 - 依系統分組
-            <Badge variant="outline" className="ml-auto">
-              {filteredRecords.length} 筆記錄
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredRecords.length > 0 ? (
-            <CollapsibleTestRecords 
-              records={filteredRecords} 
-              getStatusColor={getStatusColor}
-            />
-          ) : (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">沒有找到相關記錄</h3>
-              <p className="text-muted-foreground">請調整搜尋條件或選擇其他日期範圍</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle>搜尋與篩選</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="搜尋系統、測項或工程師"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                
+                <Select value={filterEngineer} onValueChange={setFilterEngineer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇工程師" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-engineers">所有工程師</SelectItem>
+                    {engineers.map(engineer => (
+                      <SelectItem key={engineer} value={engineer}>
+                        {engineer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇狀態" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-status">所有狀態</SelectItem>
+                    <SelectItem value="Done">Done</SelectItem>
+                    <SelectItem value="On-going">On-going</SelectItem>
+                    <SelectItem value="Not Start">Not Start</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange.from && dateRange.to ? (
+                        `${format(dateRange.from, "MM/dd", { locale: zhTW })} - ${format(dateRange.to, "MM/dd", { locale: zhTW })}`
+                      ) : (
+                        "選擇日期範圍"
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      selected={{ from: dateRange.from, to: dateRange.to }}
+                      onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Data Table - Collapsible by System */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                測試記錄表 - 依系統分組
+                <Badge variant="outline" className="ml-auto">
+                  {filteredRecords.length} 筆記錄
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredRecords.length > 0 ? (
+                <CollapsibleTestRecords 
+                  records={filteredRecords} 
+                  getStatusColor={getStatusColor}
+                />
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">沒有找到相關記錄</h3>
+                  <p className="text-muted-foreground">請調整搜尋條件或選擇其他日期範圍</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
