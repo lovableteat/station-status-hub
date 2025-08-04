@@ -81,56 +81,7 @@ export function StationAverageTimeChart() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* 簡化的時間篩選器 */}
-        <div className="mb-6 p-4 bg-card border rounded-lg">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              <Label className="font-medium text-card-foreground">時間範圍篩選</Label>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Label htmlFor="start-date" className="text-sm text-muted-foreground">從</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-auto"
-              />
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Label htmlFor="end-date" className="text-sm text-muted-foreground">到</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-auto"
-              />
-            </div>
-            
-            <Button onClick={handleFilter} disabled={isLoading} size="sm">
-              <Calendar className="h-4 w-4 mr-2" />
-              {isLoading ? "載入中..." : "篩選"}
-            </Button>
-            
-            <Button variant="outline" onClick={handleReset} disabled={isLoading} size="sm">
-              <RotateCcw className="h-4 w-4 mr-2" />
-              重設
-            </Button>
-          </div>
-          
-          {(startDate || endDate) && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              {startDate && endDate 
-                ? `顯示 ${startDate} 至 ${endDate} 期間完成的機台資料`
-                : "請選擇完整的日期範圍進行篩選"
-              }
-            </div>
-          )}
-        </div>
+        {/* 移除時間範圍篩選功能 */}
 
         {/* 圖表區域 - 垂直長條圖 */}
         <div className="h-96">

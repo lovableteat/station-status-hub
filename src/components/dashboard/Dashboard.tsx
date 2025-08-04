@@ -8,6 +8,7 @@ import { SystemStatusList } from "./SystemStatusList";
 import { StationOverview } from "./StationOverview";
 import { TestPassRateCard } from "./TestPassRateCard";
 import { StationAverageTimeChart } from "./StationAverageTimeChart";
+import { DailyStationCompletionChart } from "./DailyStationCompletionChart";
 import { ExportDialog } from "@/components/production/ExportDialog";
 import { DashboardScreenshotExporter } from "./DashboardScreenshotExporter";
 import { BackButton } from "@/components/common/BackButton";
@@ -122,6 +123,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Station Average Time Chart */}
       <StationAverageTimeChart />
+
+      {/* Daily Station Completion Chart */}
+      <DailyStationCompletionChart />
 
       {/* System Status List */}
       <SystemStatusList onNavigate={onNavigate} />
