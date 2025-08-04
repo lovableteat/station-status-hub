@@ -4,36 +4,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useStationTimeAnalytics } from "@/hooks/useStationTimeAnalytics";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { Calendar, Clock, Filter } from "lucide-react";
+import { Calendar, Clock, RotateCcw } from "lucide-react";
 
 export function StationAverageTimeChart() {
   const { averageTimes, systemStationTimes, isLoading, loadStationTimeRecords } = useStationTimeAnalytics();
   const { stations } = useUnifiedData();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [filterType, setFilterType] = useState<'estimated_start' | 'estimated_end' | 'actual_completed'>('actual_completed');
 
   const handleFilter = () => {
-    if (!startDate && !endDate) {
-      // 如果沒有選擇日期，載入所有資料
+    if (!startDate || !endDate) {
       loadStationTimeRecords();
-    } else {
-      loadStationTimeRecords({
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        filter_type: filterType
-      });
+      return;
     }
+    
+    loadStationTimeRecords({
+      start_date: startDate,
+      end_date: endDate,
+      filter_type: 'actual_completed'
+    });
   };
 
   const handleReset = () => {
     setStartDate("");
     setEndDate("");
-    setFilterType('actual_completed');
     loadStationTimeRecords();
   };
 
@@ -58,8 +55,8 @@ export function StationAverageTimeChart() {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-          <p className="font-medium">{data.station}</p>
+        <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
+          <p className="font-medium text-popover-foreground">{data.station}</p>
           <p className="text-primary">
             平均處理時間: {data.actualTime} 小時
           </p>
@@ -84,58 +81,55 @@ export function StationAverageTimeChart() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* 篩選器區域 */}
-        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="h-4 w-4" />
-            <Label className="font-medium">時間篩選器</Label>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div className="space-y-2">
-              <Label htmlFor="filter-type">篩選依據</Label>
-              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="actual_completed">實際完成</SelectItem>
-                  <SelectItem value="estimated_start">預計開始</SelectItem>
-                  <SelectItem value="estimated_end">預計完成</SelectItem>
-                </SelectContent>
-              </Select>
+        {/* 簡化的時間篩選器 */}
+        <div className="mb-6 p-4 bg-card border rounded-lg">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              <Label className="font-medium text-card-foreground">時間範圍篩選</Label>
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="start-date">開始日期</Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="start-date" className="text-sm text-muted-foreground">從</Label>
               <Input
                 id="start-date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="w-auto"
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="end-date">結束日期</Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="end-date" className="text-sm text-muted-foreground">到</Label>
               <Input
                 id="end-date"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="w-auto"
               />
             </div>
             
-            <div className="flex gap-2">
-              <Button onClick={handleFilter} disabled={isLoading}>
-                <Calendar className="h-4 w-4 mr-2" />
-                篩選
-              </Button>
-              <Button variant="outline" onClick={handleReset} disabled={isLoading}>
-                重設
-              </Button>
-            </div>
+            <Button onClick={handleFilter} disabled={isLoading} size="sm">
+              <Calendar className="h-4 w-4 mr-2" />
+              {isLoading ? "載入中..." : "篩選"}
+            </Button>
+            
+            <Button variant="outline" onClick={handleReset} disabled={isLoading} size="sm">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              重設
+            </Button>
           </div>
+          
+          {(startDate || endDate) && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {startDate && endDate 
+                ? `顯示 ${startDate} 至 ${endDate} 期間完成的機台資料`
+                : "請選擇完整的日期範圍進行篩選"
+              }
+            </div>
+          )}
         </div>
 
         {/* 圖表區域 - 垂直長條圖 */}
@@ -165,7 +159,7 @@ export function StationAverageTimeChart() {
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
                   dataKey="actualTime" 
-                  fill="#10b981"
+                  fill="hsl(var(--primary))"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
