@@ -31,7 +31,7 @@ export function OnlineUsersIndicator() {
     <Popover>
       <PopoverTrigger asChild>
         <button className={cn(
-          "fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all duration-300",
+          "fixed bottom-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all duration-300",
           "bg-primary/10 border border-primary/20 backdrop-blur-sm hover:bg-primary/20",
           "animate-fade-in"
         )}>
