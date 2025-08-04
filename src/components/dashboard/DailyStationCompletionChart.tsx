@@ -5,6 +5,7 @@ import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface DailyStationData {
@@ -17,6 +18,7 @@ export function DailyStationCompletionChart() {
   const { toast } = useToast();
   const [chartData, setChartData] = useState<DailyStationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [days, setDays] = useState<number>(7);
 
   // 站點顏色映射
   const stationColors = [
@@ -28,24 +30,23 @@ export function DailyStationCompletionChart() {
     try {
       setIsLoading(true);
       
-      // 獲取最近7天的數據
+      // 獲取指定天數的數據
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(endDate.getDate() - 6);
+      startDate.setDate(endDate.getDate() - (days - 1));
       
-      // 查詢每日每站完成的機台數量
+      // 查詢每日每站完成的系統數量 - 以站點完成為基準
       const { data, error } = await supabase
-        .from('test_progress')
+        .from('station_time_records')
         .select(`
-          completed_at,
-          station_id,
           system_id,
-          test_flow_stations(station_name, station_order)
+          station_id,
+          station_name,
+          end_time
         `)
-        .not('completed_at', 'is', null)
-        .gte('completed_at', startDate.toISOString())
-        .lte('completed_at', endDate.toISOString())
-        .eq('status', 'Done');
+        .not('end_time', 'is', null)
+        .gte('end_time', startDate.toISOString())
+        .lte('end_time', endDate.toISOString());
 
       if (error) throw error;
 
@@ -53,10 +54,10 @@ export function DailyStationCompletionChart() {
       const processedData: { [date: string]: { [station: string]: Set<string> } } = {};
       
       data?.forEach(record => {
-        if (!record.completed_at || !record.test_flow_stations) return;
+        if (!record.end_time) return;
         
-        const date = new Date(record.completed_at).toISOString().split('T')[0];
-        const stationName = record.test_flow_stations.station_name;
+        const date = new Date(record.end_time).toISOString().split('T')[0];
+        const stationName = record.station_name;
         
         if (!processedData[date]) {
           processedData[date] = {};
@@ -70,9 +71,9 @@ export function DailyStationCompletionChart() {
         processedData[date][stationName].add(record.system_id);
       });
 
-      // 生成最近7天的圖表數據
+      // 生成指定天數的圖表數據
       const chartData: DailyStationData[] = [];
-      for (let i = 6; i >= 0; i--) {
+      for (let i = days - 1; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
@@ -104,7 +105,7 @@ export function DailyStationCompletionChart() {
 
   useEffect(() => {
     loadDailyStationData();
-  }, [stations]);
+  }, [stations, days]);
 
   // 自訂 Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -129,16 +130,27 @@ export function DailyStationCompletionChart() {
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5" />
           每站每日完成數量趨勢
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={loadDailyStationData}
-            disabled={isLoading}
-            className="ml-auto"
-          >
-            <Calendar className="h-4 w-4 mr-1" />
-            {isLoading ? "載入中..." : "重新整理"}
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Select value={days.toString()} onValueChange={(value) => setDays(Number(value))}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7天</SelectItem>
+                <SelectItem value="14">14天</SelectItem>
+                <SelectItem value="30">30天</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={loadDailyStationData}
+              disabled={isLoading}
+            >
+              <Calendar className="h-4 w-4 mr-1" />
+              {isLoading ? "載入中..." : "重新整理"}
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -211,7 +223,7 @@ export function DailyStationCompletionChart() {
                     <p className="font-medium text-sm">{station.station_name}</p>
                     <p className="text-lg font-bold text-primary">{todayCount}</p>
                     <p className="text-xs text-muted-foreground">今日完成</p>
-                    <p className="text-xs text-muted-foreground">7天總計: {weekTotal}</p>
+                    <p className="text-xs text-muted-foreground">{days}天總計: {weekTotal}</p>
                   </div>
                 );
               })}
