@@ -41,16 +41,23 @@ export function DailyStationCompletionChart() {
       const actualStartDate = startDate < validStartDate ? validStartDate : startDate;
       
       const { data, error } = await supabase
-        .from('station_time_records')
+        .from('test_progress')
         .select(`
           system_id,
           station_id,
-          station_name,
-          end_time
+          completed_at,
+          test_systems!inner(
+            exclude_from_dashboard,
+            system_name
+          ),
+          test_flow_stations!inner(
+            station_name
+          )
         `)
-        .not('end_time', 'is', null)
-        .gte('end_time', actualStartDate.toISOString())
-        .lte('end_time', endDate.toISOString());
+        .not('completed_at', 'is', null)
+        .eq('test_systems.exclude_from_dashboard', false)
+        .gte('completed_at', actualStartDate.toISOString())
+        .lte('completed_at', endDate.toISOString());
 
       if (error) throw error;
 
@@ -58,10 +65,10 @@ export function DailyStationCompletionChart() {
       const processedData: { [date: string]: { [station: string]: Set<string> } } = {};
       
       data?.forEach(record => {
-        if (!record.end_time) return;
+        if (!record.completed_at) return;
         
-        const date = new Date(record.end_time).toISOString().split('T')[0];
-        const stationName = record.station_name;
+        const date = new Date(record.completed_at).toISOString().split('T')[0];
+        const stationName = record.test_flow_stations.station_name;
         
         if (!processedData[date]) {
           processedData[date] = {};
