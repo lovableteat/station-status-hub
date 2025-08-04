@@ -226,25 +226,14 @@ export function IssueTracker() {
   };
 
   const renderIssueCard = (issue: Issue) => (
-    <Card key={issue.id} className="group transition-all duration-300 hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-2 border-l-4 border-l-primary/30 hover:border-l-primary bg-gradient-to-br from-background via-background/95 to-primary/5 hover:to-primary/10">
-      <CardContent className="p-6">
-        <div className="space-y-5">
+    <Card key={issue.id} className="h-fit">
+      <CardContent className="p-4">
+        <div className="space-y-3">
           <div className="flex justify-between items-start">
-            <div className="space-y-4 flex-1">
-              <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-relaxed">
-                {issue.title}
-              </h3>
-              <div className="flex items-center gap-3 flex-wrap">
-                <Badge variant="outline" className={`${getPriorityColor(issue.priority)} shadow-lg border-2 font-bold px-3 py-1 text-sm`}>
-                  {getPriorityText(issue.priority)}
-                </Badge>
-                <Badge variant="outline" className={`${getStatusColor(issue.status)} shadow-lg border-2 font-bold flex items-center gap-2 px-3 py-1 text-sm`}>
-                  {getStatusIcon(issue.status)}
-                  <span>{getStatusText(issue.status)}</span>
-                </Badge>
-              </div>
-            </div>
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+            <h3 className="font-medium text-sm line-clamp-2 flex-1 pr-2">
+              {issue.title}
+            </h3>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <IssueEditDialog 
                 issue={issue} 
                 onUpdate={loadIssues} 
@@ -254,70 +243,45 @@ export function IssueTracker() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedIssue(issue)}
-                className="h-9 w-9 hover:bg-primary/20 hover:text-primary hover:scale-110 transition-all duration-200"
+                className="h-7 w-7 p-0"
               >
-                <Eye className="h-5 w-5" />
+                <Eye className="h-3 w-3" />
               </Button>
             </div>
           </div>
 
-          <p className="text-sm text-muted-foreground line-clamp-4 leading-relaxed font-medium">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={`${getPriorityColor(issue.priority)} text-xs px-2 py-0.5`}>
+              {getPriorityText(issue.priority)}
+            </Badge>
+            <Badge variant="outline" className={`${getStatusColor(issue.status)} text-xs px-2 py-0.5 flex items-center gap-1`}>
+              {getStatusIcon(issue.status)}
+              <span>{getStatusText(issue.status)}</span>
+            </Badge>
+          </div>
+
+          <p className="text-xs text-muted-foreground line-clamp-2">
             {issue.description}
           </p>
 
-          {(issue.system_name || issue.station_name || issue.test_item_name) && (
-            <div className="flex flex-wrap gap-3">
+          {(issue.system_name || issue.station_name) && (
+            <div className="flex flex-wrap gap-1">
               {issue.system_name && (
-                <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500/15 to-blue-600/15 text-blue-800 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-bold border-2 border-blue-500/30 shadow-md">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  系統: {issue.system_name}
-                </div>
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  {issue.system_name}
+                </span>
               )}
               {issue.station_name && (
-                <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/15 to-emerald-600/15 text-emerald-800 dark:text-emerald-300 px-4 py-2 rounded-full text-sm font-bold border-2 border-emerald-500/30 shadow-md">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                  站點: {issue.station_name}
-                </div>
+                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                  {issue.station_name}
+                </span>
               )}
             </div>
           )}
 
-          {issue.attachments && issue.attachments.length > 0 && (
-            <div className="bg-gradient-to-r from-muted/60 to-muted/40 rounded-xl p-4 border-2 border-muted/30">
-              <div className="flex items-center gap-3 mb-3">
-                <ImageIcon className="h-5 w-5 text-primary" />
-                <span className="text-sm font-bold text-foreground">附件 ({issue.attachments.length})</span>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {issue.attachments.slice(0, 3).map((attachment) => (
-                  <div key={attachment.id} className="flex items-center gap-2 bg-background/90 px-4 py-2 rounded-lg text-sm border-2 border-primary/20 shadow-sm hover:shadow-md transition-shadow">
-                    <ImageIcon className="h-4 w-4 text-primary" />
-                    <span className="truncate max-w-[100px] font-semibold" title={attachment.file_name}>
-                      {attachment.file_name}
-                    </span>
-                  </div>
-                ))}
-                {issue.attachments.length > 3 && (
-                  <div className="flex items-center justify-center bg-gradient-to-r from-primary/15 to-primary/20 text-primary px-4 py-2 rounded-lg text-sm font-bold border-2 border-primary/30">
-                    +{issue.attachments.length - 3}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-between items-center pt-3 border-t-2 border-border/30">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center border-2 border-primary/20">
-                <span className="text-sm font-bold text-primary">
-                  {(issue.assigned_to || "未").charAt(0)}
-                </span>
-              </div>
-              <span className="text-sm font-bold text-foreground">{issue.assigned_to || "未指派"}</span>
-            </div>
-            <span className="text-sm text-muted-foreground font-bold bg-muted/50 px-3 py-1 rounded-full">
-              {new Date(issue.created_at).toLocaleDateString('zh-TW')}
-            </span>
+          <div className="flex justify-between items-center text-xs text-muted-foreground">
+            <span>{issue.assigned_to || "未指派"}</span>
+            <span>{new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
           </div>
         </div>
       </CardContent>

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/components/auth/UserContext";
 import { useStationStatus } from "./useStationStatus";
 
 interface UnifiedSystem {
@@ -47,6 +48,7 @@ interface UnifiedProgress {
   notes: string;
   started_at?: string;
   completed_at?: string;
+  assigned_to?: string;
 }
 
 interface StationContent {
@@ -78,6 +80,7 @@ interface StationStatus {
 }
 
 export function useUnifiedData() {
+  const { user } = useUser();
   const [systems, setSystems] = useState<UnifiedSystem[]>([]);
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
@@ -150,7 +153,10 @@ export function useUnifiedData() {
       if (existingProgress) {
         await supabase
           .from('test_progress')
-          .update(updates)
+          .update({
+            ...updates,
+            assigned_to: user?.username || updates.assigned_to
+          })
           .eq('id', existingProgress.id);
       } else {
         await supabase
@@ -159,6 +165,7 @@ export function useUnifiedData() {
             system_id: systemId,
             station_id: stationId,
             item_id: itemId,
+            assigned_to: user?.username,
             ...updates
           });
       }
@@ -171,7 +178,7 @@ export function useUnifiedData() {
       console.error('Error updating progress:', error);
       return false;
     }
-  }, [progress, loadAllData]);
+  }, [progress, loadAllData, user]);
 
   useEffect(() => {
     loadAllData();
