@@ -5,7 +5,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, User, Clock, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/components/auth/UserContext";
 import { AuditRecordEditDialog } from "./AuditRecordEditDialog";
 
 interface AuditEntry {
@@ -31,14 +30,11 @@ interface TestProgressAuditLogProps {
 
 export function TestProgressAuditLog({ systemId, systemName }: TestProgressAuditLogProps) {
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
-  const [userNames, setUserNames] = useState<{[key: string]: string}>({});
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const { user } = useUser();
 
   useEffect(() => {
     loadAuditLogs();
-    loadUserNames();
   }, [systemId]);
 
   const loadAuditLogs = async () => {
@@ -62,24 +58,6 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadUserNames = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('system_users')
-        .select('username, display_name');
-
-      if (error) throw error;
-      
-      const nameMap: {[key: string]: string} = {};
-      data?.forEach(user => {
-        nameMap[user.username] = user.display_name || user.username;
-      });
-      setUserNames(nameMap);
-    } catch (error) {
-      console.error('Error loading user names:', error);
     }
   };
 
@@ -169,7 +147,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
                   
                   <div className="flex items-center gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <span>操作者: {entry.changed_by ? (userNames[entry.changed_by] || entry.changed_by) : '系統'}</span>
+                    <span>操作者: {entry.changed_by || '系統'}</span>
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm">
