@@ -1749,6 +1749,84 @@ export type Database = {
         }
         Relationships: []
       }
+      user_mentions: {
+        Row: {
+          content_id: string
+          content_text: string | null
+          content_type: string
+          created_at: string
+          id: string
+          mention_id: string
+          mentioned_by_user_id: string
+          mentioned_user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_text?: string | null
+          content_type: string
+          created_at?: string
+          id?: string
+          mention_id: string
+          mentioned_by_user_id: string
+          mentioned_user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_text?: string | null
+          content_type?: string
+          created_at?: string
+          id?: string
+          mention_id?: string
+          mentioned_by_user_id?: string
+          mentioned_user_id?: string
+        }
+        Relationships: []
+      }
+      user_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          notification_type: string
+          recipient_id: string
+          reference_id: string | null
+          reference_type: string | null
+          sender_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          notification_type?: string
+          recipient_id: string
+          reference_id?: string | null
+          reference_type?: string | null
+          sender_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          notification_type?: string
+          recipient_id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          sender_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_page_permissions: {
         Row: {
           granted_at: string | null

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Users, Circle, Bell, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Users, Circle, Bell, X, AtSign } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/components/auth/UserContext";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const moduleLabels: Record<string, string> = {
@@ -27,13 +29,139 @@ const roleColors: Record<string, string> = {
   tester: "bg-yellow-500"
 };
 
+interface UserNotification {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  reference_type?: string;
+  reference_id?: string;
+  metadata?: any;
+  is_read: boolean;
+  created_at: string;
+  sender_id: string;
+}
+
 export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"users" | "notifications">("users");
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { onlineUsers, totalOnlineUsers } = useUserPresence();
   const { toasts } = useToast();
+  const { user } = useUser();
+
+  // 獲取用戶通知
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_notifications')
+          .select('*')
+          .eq('recipient_id', user.userId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error) throw error;
+
+        setNotifications(data || []);
+        setUnreadCount(data?.filter(n => !n.is_read).length || 0);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+
+    fetchNotifications();
+
+    // 設置實時訂閱
+    const channel = supabase
+      .channel('user_notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `recipient_id=eq.${user.userId}`
+        },
+        (payload) => {
+          const newNotification = payload.new as UserNotification;
+          setNotifications(prev => [newNotification, ...prev]);
+          setUnreadCount(prev => prev + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // 標記通知為已讀
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      setNotifications(prev => 
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // 標記所有通知為已讀
+  const markAllAsRead = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_notifications')
+        .update({ is_read: true })
+        .eq('recipient_id', user.userId)
+        .eq('is_read', false);
+
+      if (error) throw error;
+
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  // 格式化時間
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return '剛剛';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}分鐘前`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}小時前`;
+    return `${Math.floor(diffInSeconds / 86400)}天前`;
+  };
+
+  // 獲取通知圖標
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'mention':
+        return <AtSign className="h-4 w-4 text-primary" />;
+      default:
+        return <Bell className="h-4 w-4 text-primary" />;
+    }
+  };
 
   const recentNotifications = toasts.slice(-5); // 顯示最近5個通知
+  const totalNotifications = unreadCount + recentNotifications.length;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
@@ -69,9 +197,9 @@ export function NotificationCenter() {
           >
             <div className="relative">
               <Bell className="h-4 w-4 text-primary" />
-              {recentNotifications.length > 0 && (
+              {totalNotifications > 0 && (
                 <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
-                  {recentNotifications.length > 9 ? "9+" : recentNotifications.length}
+                  {totalNotifications > 9 ? "9+" : totalNotifications}
                 </div>
               )}
             </div>
@@ -101,7 +229,7 @@ export function NotificationCenter() {
                   className="h-8"
                 >
                   <Bell className="h-4 w-4 mr-1" />
-                  通知
+                  通知 ({unreadCount})
                 </Button>
               </div>
               <Button
@@ -161,7 +289,55 @@ export function NotificationCenter() {
 
               {activeTab === "notifications" && (
                 <div className="p-3 space-y-2">
-                  {recentNotifications.length > 0 ? (
+                  {/* 全部標為已讀按鈕 */}
+                  {unreadCount > 0 && (
+                    <div className="flex justify-end mb-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={markAllAsRead}
+                        className="text-xs"
+                      >
+                        全部標為已讀
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* 標註通知 */}
+                  {notifications.length > 0 ? (
+                    notifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        className={cn(
+                          "p-2 rounded-lg border cursor-pointer transition-colors",
+                          !notification.is_read 
+                            ? "bg-primary/5 border-primary/20 hover:bg-primary/10" 
+                            : "bg-muted/30 hover:bg-muted/50"
+                        )}
+                        onClick={() => !notification.is_read && markAsRead(notification.id)}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-shrink-0 mt-0.5">
+                            {getNotificationIcon(notification.notification_type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium">{notification.title}</div>
+                              {!notification.is_read && (
+                                <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {notification.message}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatTime(notification.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : recentNotifications.length > 0 ? (
                     recentNotifications.map((notification, index) => (
                       <div key={index} className="p-2 rounded-lg border bg-muted/30">
                         <div className="text-sm font-medium">{notification.title}</div>
