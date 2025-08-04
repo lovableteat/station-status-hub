@@ -45,7 +45,6 @@ export function useStationTimeAnalytics() {
   const loadStationTimeRecords = async (dateFilter?: DateFilter) => {
     try {
       setIsLoading(true);
-      console.log('Loading station time records with filter:', dateFilter);
       
       // 從GB300測試追蹤頁面計算各機台在不同站別的總時長
       // 首先取得所有符合條件的系統及其測試進度
@@ -59,30 +58,31 @@ export function useStationTimeAnalytics() {
           actual_completed_at,
           exclude_from_dashboard
         `)
-        .eq('exclude_from_dashboard', false);
+        .eq('exclude_from_dashboard', false)
+        .neq('status', 'Not Start'); // 排除還未開始的機台
 
       // Apply date filters to systems
       if (dateFilter?.start_date && dateFilter?.end_date) {
-        console.log('Applying date filter:', dateFilter);
-        const startDateStr = `${dateFilter.start_date}T00:00:00.000Z`;
-        const endDateStr = `${dateFilter.end_date}T23:59:59.999Z`;
+        let timeColumn = 'actual_completed_at';
         
-        if (dateFilter.filter_type === 'actual_completed') {
-          // 篩選在指定時間範圍內完成的系統
+        if (dateFilter.filter_type === 'estimated_start') {
+          timeColumn = 'actual_started_at';
+        } else if (dateFilter.filter_type === 'estimated_end') {
+          timeColumn = 'actual_completed_at';
+        }
+
+        // 只在 actual_completed_at 不為 null 的情況下篩選
+        if (timeColumn === 'actual_completed_at') {
           systemQuery = systemQuery
             .not('actual_completed_at', 'is', null)
-            .gte('actual_completed_at', startDateStr)
-            .lte('actual_completed_at', endDateStr);
-        } else if (dateFilter.filter_type === 'estimated_start') {
-          // 篩選在指定時間範圍內開始的系統
+            .gte(timeColumn, dateFilter.start_date)
+            .lte(timeColumn, dateFilter.end_date);
+        } else {
           systemQuery = systemQuery
             .not('actual_started_at', 'is', null)
-            .gte('actual_started_at', startDateStr)
-            .lte('actual_started_at', endDateStr);
+            .gte(timeColumn, dateFilter.start_date)
+            .lte(timeColumn, dateFilter.end_date);
         }
-      } else {
-        // 如果沒有日期篩選，只取有實際進度的系統
-        systemQuery = systemQuery.neq('status', 'Not Start');
       }
 
       const { data: systems, error: systemError } = await systemQuery;
