@@ -1554,48 +1554,36 @@ export type Database = {
       test_progress_audit: {
         Row: {
           change_type: string
-          changed_at: string
-          changed_by: string | null
+          created_at: string
           id: string
           item_id: string
-          new_notes: string | null
-          new_progress_percent: number | null
-          new_status: string | null
-          old_notes: string | null
-          old_progress_percent: number | null
-          old_status: string | null
+          new_values: Json | null
+          old_values: Json | null
           station_id: string
           system_id: string
+          user_id: string | null
         }
         Insert: {
           change_type: string
-          changed_at?: string
-          changed_by?: string | null
+          created_at?: string
           id?: string
           item_id: string
-          new_notes?: string | null
-          new_progress_percent?: number | null
-          new_status?: string | null
-          old_notes?: string | null
-          old_progress_percent?: number | null
-          old_status?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
           station_id: string
           system_id: string
+          user_id?: string | null
         }
         Update: {
           change_type?: string
-          changed_at?: string
-          changed_by?: string | null
+          created_at?: string
           id?: string
           item_id?: string
-          new_notes?: string | null
-          new_progress_percent?: number | null
-          new_status?: string | null
-          old_notes?: string | null
-          old_progress_percent?: number | null
-          old_status?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
           station_id?: string
           system_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
