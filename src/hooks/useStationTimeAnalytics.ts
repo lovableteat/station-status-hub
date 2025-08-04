@@ -62,7 +62,7 @@ export function useStationTimeAnalytics() {
         .neq('status', 'Not Start'); // 排除還未開始的機台
 
       // Apply date filters to systems
-      if (dateFilter?.start_date || dateFilter?.end_date) {
+      if (dateFilter?.start_date && dateFilter?.end_date) {
         let timeColumn = 'actual_completed_at';
         
         if (dateFilter.filter_type === 'estimated_start') {
@@ -71,11 +71,17 @@ export function useStationTimeAnalytics() {
           timeColumn = 'actual_completed_at';
         }
 
-        if (dateFilter.start_date) {
-          systemQuery = systemQuery.gte(timeColumn, dateFilter.start_date);
-        }
-        if (dateFilter.end_date) {
-          systemQuery = systemQuery.lte(timeColumn, dateFilter.end_date);
+        // 只在 actual_completed_at 不為 null 的情況下篩選
+        if (timeColumn === 'actual_completed_at') {
+          systemQuery = systemQuery
+            .not('actual_completed_at', 'is', null)
+            .gte(timeColumn, dateFilter.start_date)
+            .lte(timeColumn, dateFilter.end_date);
+        } else {
+          systemQuery = systemQuery
+            .not('actual_started_at', 'is', null)
+            .gte(timeColumn, dateFilter.start_date)
+            .lte(timeColumn, dateFilter.end_date);
         }
       }
 

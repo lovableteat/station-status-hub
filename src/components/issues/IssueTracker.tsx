@@ -324,22 +324,6 @@ export function IssueTracker() {
           </div>
         </div>
         <div className="flex gap-2">
-          <div className="flex border rounded-lg p-1">
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('cards')}
-            >
-              卡片模式
-            </Button>
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('table')}
-            >
-              表格模式
-            </Button>
-          </div>
           <IssuePDFExportManager issues={issues} />
           <IssueCreateDialog onIssueCreated={loadIssues} />
         </div>
@@ -372,74 +356,7 @@ export function IssueTracker() {
       </div>
 
       {/* Main Content */}
-      {viewMode === 'table' ? (
-        <IssueTableView issues={issues} onUpdate={loadIssues} />
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 待處理 */}
-        <div className="space-y-3">
-          <Card className="bg-gradient-to-r from-destructive/5 to-destructive/10 border-destructive/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-                <span>待處理 ({groupedIssues.open.length})</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {groupedIssues.open.map(renderIssueCard)}
-            {groupedIssues.open.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>目前沒有待處理的問題</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 處理中 */}
-        <div className="space-y-3">
-          <Card className="bg-gradient-to-r from-blue-500/5 to-blue-500/10 border-blue-500/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                <Clock className="h-5 w-5" />
-                <span>處理中 ({groupedIssues.in_progress.length})</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {groupedIssues.in_progress.map(renderIssueCard)}
-            {groupedIssues.in_progress.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>目前沒有處理中的問題</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 已完成 */}
-        <div className="space-y-3">
-          <Card className="bg-gradient-to-r from-emerald-500/5 to-emerald-500/10 border-emerald-500/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-                <CheckCircle className="h-5 w-5" />
-                <span>已完成 ({groupedIssues.resolved.length})</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {groupedIssues.resolved.map(renderIssueCard)}
-            {groupedIssues.resolved.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>目前沒有已完成的問題</p>
-              </div>
-            )}
-          </div>
-        </div>
-        </div>
-      )}
+      <IssueTableView issues={issues} onUpdate={loadIssues} />
 
       {filteredIssues.length === 0 && (
         <div className="text-center py-12">
