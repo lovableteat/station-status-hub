@@ -17,6 +17,8 @@ interface Issue {
   assigned_to: string;
   process_notes?: string;
   solution?: string;
+  relate?: string;
+  category?: string;
 }
 
 interface IssueEditDialogProps {
@@ -33,7 +35,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
     status: issue.status,
     assigned_to: issue.assigned_to,
     process_notes: issue.process_notes || '',
-    solution: issue.solution || ''
+    solution: issue.solution || '',
+    relate: issue.relate || '',
+    category: issue.category || ''
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
@@ -176,6 +180,26 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>相關項目</Label>
+          <Input
+            value={formData.relate}
+            onChange={(e) => setFormData({...formData, relate: e.target.value})}
+            placeholder="請輸入相關項目..."
+          />
+        </div>
+
+        <div>
+          <Label>問題分類</Label>
+          <Input
+            value={formData.category}
+            onChange={(e) => setFormData({...formData, category: e.target.value})}
+            placeholder="請輸入問題分類..."
+          />
+        </div>
       </div>
 
       <div>
