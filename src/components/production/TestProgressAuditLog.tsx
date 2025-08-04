@@ -5,7 +5,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, User, Clock, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { AuditRecordEditDialog } from "./AuditRecordEditDialog";
 
 interface AuditEntry {
   id: string;
@@ -13,14 +12,10 @@ interface AuditEntry {
   station_id: string;
   item_id: string;
   change_type: string;
-  old_status?: string;
-  new_status?: string;
-  old_progress_percent?: number;
-  new_progress_percent?: number;
-  old_notes?: string;
-  new_notes?: string;
-  changed_by?: string;
-  changed_at: string;
+  old_values?: any;
+  new_values?: any;
+  user_id?: string;
+  created_at: string;
 }
 
 interface TestProgressAuditLogProps {
@@ -44,7 +39,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
         .from('test_progress_audit')
         .select('*')
         .eq('system_id', systemId)
-        .order('changed_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
@@ -63,34 +58,59 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
 
   const getChangeTypeColor = (changeType: string) => {
     switch (changeType) {
-      case 'insert': return 'bg-success text-success-foreground';
-      case 'update': return 'bg-warning text-warning-foreground';
-      case 'delete': return 'bg-danger text-danger-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'insert': return 'bg-green-100 text-green-800 border-green-200';
+      case 'update': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'delete': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const formatChangeDescription = (entry: AuditEntry) => {
+    const oldValues = entry.old_values || {};
+    const newValues = entry.new_values || {};
+    
     switch (entry.change_type) {
       case 'insert':
-        return `新增測試項目，狀態: ${entry.new_status}，進度: ${entry.new_progress_percent}%`;
+        return `新增測試項目${newValues.status ? `，狀態: ${newValues.status}` : ''}${newValues.started_at ? '，開始計時' : ''}`;
       case 'update':
         const changes = [];
-        if (entry.old_status !== entry.new_status) {
-          changes.push(`狀態: ${entry.old_status} → ${entry.new_status}`);
+        if (oldValues.status !== newValues.status) {
+          changes.push(`狀態: ${oldValues.status || '未設定'} → ${newValues.status || '未設定'}`);
         }
-        if (entry.old_progress_percent !== entry.new_progress_percent) {
-          changes.push(`進度: ${entry.old_progress_percent}% → ${entry.new_progress_percent}%`);
+        if (oldValues.started_at !== newValues.started_at) {
+          if (!oldValues.started_at && newValues.started_at) {
+            changes.push('開始計時');
+          } else if (oldValues.started_at && !newValues.started_at) {
+            changes.push('清除開始時間');
+          }
         }
-        if (entry.old_notes !== entry.new_notes) {
-          changes.push(`備註已更新`);
+        if (oldValues.completed_at !== newValues.completed_at) {
+          if (!oldValues.completed_at && newValues.completed_at) {
+            changes.push('完成計時');
+          } else if (oldValues.completed_at && !newValues.completed_at) {
+            changes.push('清除完成時間');
+          }
+        }
+        if (newValues.actual_hours && newValues.actual_hours !== oldValues.actual_hours) {
+          changes.push(`處理時間: ${newValues.actual_hours} 小時`);
         }
         return changes.join(', ') || '資料已更新';
       case 'delete':
-        return `刪除測試項目，原狀態: ${entry.old_status}`;
+        return `刪除測試項目${oldValues.status ? `，原狀態: ${oldValues.status}` : ''}`;
       default:
         return '未知變更';
     }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   };
 
   if (isLoading) {
@@ -139,15 +159,14 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
                       </Badge>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
-                        {new Date(entry.changed_at).toLocaleString('zh-TW')}
+                        {formatTimestamp(entry.created_at)}
                       </div>
                     </div>
-                    <AuditRecordEditDialog record={entry} onUpdate={loadAuditLogs} />
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <span>操作者: {entry.changed_by || '系統'}</span>
+                    <span>操作者: {entry.user_id || '系統'}</span>
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm">
@@ -155,9 +174,9 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
                     <span>{formatChangeDescription(entry)}</span>
                   </div>
                   
-                  {entry.new_notes && entry.change_type !== 'delete' && (
+                  {entry.new_values?.notes && entry.change_type !== 'delete' && (
                     <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                      <strong>備註:</strong> {entry.new_notes}
+                      <strong>備註:</strong> {entry.new_values.notes}
                     </div>
                   )}
                 </div>
