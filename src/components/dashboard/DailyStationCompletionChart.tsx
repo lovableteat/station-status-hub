@@ -36,6 +36,10 @@ export function DailyStationCompletionChart() {
       startDate.setDate(endDate.getDate() - (days - 1));
       
       // 查詢每日每站完成的系統數量 - 以站點完成為基準
+      // 只查詢7/21之後的有效資料
+      const validStartDate = new Date('2025-07-21');
+      const actualStartDate = startDate < validStartDate ? validStartDate : startDate;
+      
       const { data, error } = await supabase
         .from('station_time_records')
         .select(`
@@ -45,7 +49,7 @@ export function DailyStationCompletionChart() {
           end_time
         `)
         .not('end_time', 'is', null)
-        .gte('end_time', startDate.toISOString())
+        .gte('end_time', actualStartDate.toISOString())
         .lte('end_time', endDate.toISOString());
 
       if (error) throw error;
