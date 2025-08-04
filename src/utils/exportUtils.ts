@@ -144,13 +144,10 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
         const systemId = system.id;
         const systemProgress = progress?.filter(p => p.system_id === systemId) || [];
         
-        // Calculate station-specific progress correctly
+        // Calculate station-specific progress
         const getStationProgress = (stationName: string) => {
-          if (!stations || !testItems || !progress) return 0;
-          const station = stations.find(s => 
-            s.station_name?.includes(stationName) || 
-            s.name?.includes(stationName)
-          );
+          if (!stations || !testItems) return 0;
+          const station = stations.find(s => s.station_name?.includes(stationName) || s.name?.includes(stationName));
           if (!station) return 0;
           
           const stationItems = testItems.filter(item => item.station_id === station.id);
@@ -160,15 +157,14 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
             p.station_id === station.id && p.status === 'Done'
           ).length;
           
-          const progressPercent = stationItems.length > 0 ? Math.round((completedItems / stationItems.length) * 100) : 0;
+          let progress = stationItems.length > 0 ? Math.round((completedItems / stationItems.length) * 100) : 0;
           
-          // 如果系統狀態為Done，且這是Station 0-3，則顯示100%
-          if ((system.status === 'Done' || system.status === '已完成') && 
-              station.station_order >= 0 && station.station_order <= 3) {
-            return 100;
+          // 如果系統狀態為已完成，且這是目標站點，則顯示100%
+          if (system.status === '已完成' && station.station_order >= 1 && station.station_order <= 4) {
+            progress = 100;
           }
           
-          return progressPercent;
+          return progress;
         };
 
         return {
