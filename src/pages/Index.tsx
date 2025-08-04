@@ -12,7 +12,7 @@ import { UserManagement } from "@/components/user-management/UserManagement";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
-import { NotificationCenter } from "@/components/common/NotificationCenter";
+import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
@@ -119,7 +119,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Real-time update indicators */}
       <UpdateIndicator isUpdating={isUpdating} />
-      <NotificationCenter />
+      <FacebookStyleNotifications />
       <RealtimeNotifications />
       
       {/* Mobile overlay */}
