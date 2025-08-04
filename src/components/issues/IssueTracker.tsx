@@ -226,9 +226,10 @@ export function IssueTracker() {
   };
 
   const renderIssueCard = (issue: Issue) => (
-    <Card key={issue.id} className="h-fit">
+    <Card key={issue.id} className="h-fit group hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="space-y-3">
+          {/* Header with hover controls */}
           <div className="flex justify-between items-start">
             <h3 className="font-medium text-sm line-clamp-2 flex-1 pr-2">
               {issue.title}
@@ -250,6 +251,7 @@ export function IssueTracker() {
             </div>
           </div>
 
+          {/* Basic Info - Priority and Status */}
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={`${getPriorityColor(issue.priority)} text-xs px-2 py-0.5`}>
               {getPriorityText(issue.priority)}
@@ -260,27 +262,25 @@ export function IssueTracker() {
             </Badge>
           </div>
 
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {issue.description}
-          </p>
-
+          {/* System and Station Info */}
           {(issue.system_name || issue.station_name) && (
             <div className="flex flex-wrap gap-1">
               {issue.system_name && (
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">
                   {issue.system_name}
                 </span>
               )}
               {issue.station_name && (
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded">
                   {issue.station_name}
                 </span>
               )}
             </div>
           )}
 
-          <div className="flex justify-between items-center text-xs text-muted-foreground">
-            <span>{issue.assigned_to || "未指派"}</span>
+          {/* Footer Info */}
+          <div className="flex justify-between items-center text-xs text-muted-foreground pt-2 border-t">
+            <span>負責人: {issue.assigned_to || "未指派"}</span>
             <span>{new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
           </div>
         </div>
