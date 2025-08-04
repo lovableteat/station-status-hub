@@ -226,14 +226,43 @@ export function IssueTracker() {
   };
 
   const renderIssueCard = (issue: Issue) => (
-    <Card key={issue.id} className="h-fit group hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* Header with hover controls */}
-          <div className="flex justify-between items-start">
-            <h3 className="font-medium text-sm line-clamp-2 flex-1 pr-2">
+    <Card key={issue.id} className="group hover:shadow-md transition-all hover:bg-muted/20 cursor-pointer border-l-4" 
+          style={{borderLeftColor: issue.priority === 'high' ? 'hsl(var(--destructive))' : 
+                                   issue.priority === 'medium' ? 'hsl(var(--warning))' : 
+                                   'hsl(var(--muted-foreground))'}}
+          onClick={() => setSelectedIssue(issue)}>
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Title and basic info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-sm truncate mb-1" title={issue.title}>
               {issue.title}
             </h3>
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="outline" className={`${getStatusColor(issue.status)} text-xs px-1.5 py-0.5 flex items-center gap-1`}>
+                {getStatusIcon(issue.status)}
+                <span>{getStatusText(issue.status)}</span>
+              </Badge>
+              <Badge variant="outline" className={`${getPriorityColor(issue.priority)} text-xs px-1.5 py-0.5`}>
+                {getPriorityText(issue.priority)}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {issue.system_name && (
+                <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs">
+                  {issue.system_name}
+                </span>
+              )}
+              {issue.station_name && (
+                <span className="bg-secondary/10 text-secondary-foreground px-1.5 py-0.5 rounded text-xs">
+                  {issue.station_name}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Actions and date */}
+          <div className="flex flex-col items-end gap-1">
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <IssueEditDialog 
                 issue={issue} 
@@ -243,45 +272,23 @@ export function IssueTracker() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedIssue(issue)}
-                className="h-7 w-7 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedIssue(issue);
+                }}
+                className="h-6 w-6 p-0"
               >
                 <Eye className="h-3 w-3" />
               </Button>
             </div>
-          </div>
-
-          {/* Basic Info - Priority and Status */}
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={`${getPriorityColor(issue.priority)} text-xs px-2 py-0.5`}>
-              {getPriorityText(issue.priority)}
-            </Badge>
-            <Badge variant="outline" className={`${getStatusColor(issue.status)} text-xs px-2 py-0.5 flex items-center gap-1`}>
-              {getStatusIcon(issue.status)}
-              <span>{getStatusText(issue.status)}</span>
-            </Badge>
-          </div>
-
-          {/* System and Station Info */}
-          {(issue.system_name || issue.station_name) && (
-            <div className="flex flex-wrap gap-1">
-              {issue.system_name && (
-                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">
-                  {issue.system_name}
-                </span>
-              )}
-              {issue.station_name && (
-                <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded">
-                  {issue.station_name}
-                </span>
-              )}
+            <div className="text-xs text-muted-foreground">
+              {new Date(issue.created_at).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
             </div>
-          )}
-
-          {/* Footer Info */}
-          <div className="flex justify-between items-center text-xs text-muted-foreground pt-2 border-t">
-            <span>負責人: {issue.assigned_to || "未指派"}</span>
-            <span>{new Date(issue.created_at).toLocaleDateString('zh-TW')}</span>
+            {issue.assigned_to && (
+              <div className="text-xs text-muted-foreground truncate max-w-20" title={issue.assigned_to}>
+                {issue.assigned_to}
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -368,23 +375,18 @@ export function IssueTracker() {
       {viewMode === 'table' ? (
         <IssueTableView issues={issues} onUpdate={loadIssues} />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 待處理 */}
-        <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-destructive/5 to-destructive/10 border-destructive/20 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-destructive">
-                <div className="p-2 bg-destructive/10 rounded-lg">
-                  <AlertTriangle className="h-6 w-6 text-destructive" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold">待處理</div>
-                  <div className="text-sm font-normal text-destructive/80">{groupedIssues.open.length} 個問題</div>
-                </div>
+        <div className="space-y-3">
+          <Card className="bg-gradient-to-r from-destructive/5 to-destructive/10 border-destructive/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                <span>待處理 ({groupedIssues.open.length})</span>
               </CardTitle>
             </CardHeader>
           </Card>
-          <div className="space-y-4 min-h-[200px]">
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {groupedIssues.open.map(renderIssueCard)}
             {groupedIssues.open.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -396,21 +398,16 @@ export function IssueTracker() {
         </div>
 
         {/* 處理中 */}
-        <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-blue-500/5 to-blue-500/10 border-blue-500/20 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-blue-700 dark:text-blue-400">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold">處理中</div>
-                  <div className="text-sm font-normal text-blue-600/80 dark:text-blue-400/80">{groupedIssues.in_progress.length} 個問題</div>
-                </div>
+        <div className="space-y-3">
+          <Card className="bg-gradient-to-r from-blue-500/5 to-blue-500/10 border-blue-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <Clock className="h-5 w-5" />
+                <span>處理中 ({groupedIssues.in_progress.length})</span>
               </CardTitle>
             </CardHeader>
           </Card>
-          <div className="space-y-4 min-h-[200px]">
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {groupedIssues.in_progress.map(renderIssueCard)}
             {groupedIssues.in_progress.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -422,21 +419,16 @@ export function IssueTracker() {
         </div>
 
         {/* 已完成 */}
-        <div className="space-y-4">
-          <Card className="bg-gradient-to-r from-emerald-500/5 to-emerald-500/10 border-emerald-500/20 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3 text-emerald-700 dark:text-emerald-400">
-                <div className="p-2 bg-emerald-500/10 rounded-lg">
-                  <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold">已完成</div>
-                  <div className="text-sm font-normal text-emerald-600/80 dark:text-emerald-400/80">{groupedIssues.resolved.length} 個問題</div>
-                </div>
+        <div className="space-y-3">
+          <Card className="bg-gradient-to-r from-emerald-500/5 to-emerald-500/10 border-emerald-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                <CheckCircle className="h-5 w-5" />
+                <span>已完成 ({groupedIssues.resolved.length})</span>
               </CardTitle>
             </CardHeader>
           </Card>
-          <div className="space-y-4 min-h-[200px]">
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {groupedIssues.resolved.map(renderIssueCard)}
             {groupedIssues.resolved.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
