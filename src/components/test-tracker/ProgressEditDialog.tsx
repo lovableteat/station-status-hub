@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash2, Save, X } from "lucide-react";
-import { ManualTimeTracker } from "./ManualTimeTracker";
+import ManualTimeTracker from "./ManualTimeTracker";
 
 interface TestProgress {
   id: string;
