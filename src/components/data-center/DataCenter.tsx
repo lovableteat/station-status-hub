@@ -66,13 +66,15 @@ export function DataCenter() {
       if (system && station && item) {
         // 修正進度計算 - 如果系統已完成且是 Station 0-3，則顯示 100%
         let displayProgress = prog.progress_percent;
-        if (system.status === '已完成' && (
-          station.station_name.includes('Station 0') || station.station_name.includes('工廠組裝') ||
-          station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
-          station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
-          station.station_name.includes('Station 3') || station.station_name.includes('Pega')
-        )) {
-          displayProgress = 100;
+        if (system.status === '已完成') {
+          // 匹配station名稱中包含的關鍵字
+          const stationName = station.station_name.toLowerCase();
+          if (stationName.includes('station 0') || stationName.includes('工廠組裝') ||
+              stationName.includes('station 1') || stationName.includes('開機') ||
+              stationName.includes('station 2') || stationName.includes('fw') || stationName.includes('sft') ||
+              stationName.includes('station 3') || stationName.includes('pega') || stationName.includes('diag')) {
+            displayProgress = 100;
+          }
         }
 
         records.push({
