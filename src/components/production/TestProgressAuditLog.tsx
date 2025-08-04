@@ -16,6 +16,10 @@ interface AuditEntry {
   new_values?: any;
   user_id?: string;
   created_at: string;
+  system_users?: {
+    username: string;
+    display_name?: string;
+  };
 }
 
 interface TestProgressAuditLogProps {
@@ -35,15 +39,49 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
   const loadAuditLogs = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      
+      // 先獲取審計記錄
+      const { data: auditData, error: auditError } = await supabase
         .from('test_progress_audit')
         .select('*')
         .eq('system_id', systemId)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (error) throw error;
-      setAuditLogs(data || []);
+      if (auditError) throw auditError;
+
+      // 如果有用戶ID，獲取用戶信息
+      if (auditData && auditData.length > 0) {
+        const userIds = auditData
+          .map(audit => audit.user_id)
+          .filter(Boolean)
+          .filter((id, index, arr) => arr.indexOf(id) === index); // 去重
+
+        let usersMap: { [key: string]: any } = {};
+        
+        if (userIds.length > 0) {
+          const { data: usersData, error: usersError } = await supabase
+            .from('system_users')
+            .select('id, username, display_name')
+            .in('id', userIds);
+
+          if (!usersError && usersData) {
+            usersMap = Object.fromEntries(
+              usersData.map(user => [user.id, user])
+            );
+          }
+        }
+
+        // 合併用戶信息到審計記錄
+        const enrichedAuditData = auditData.map(audit => ({
+          ...audit,
+          system_users: audit.user_id ? usersMap[audit.user_id] : null
+        }));
+
+        setAuditLogs(enrichedAuditData);
+      } else {
+        setAuditLogs([]);
+      }
     } catch (error) {
       console.error('Error loading audit logs:', error);
       toast({
@@ -58,6 +96,8 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
 
   const getChangeTypeColor = (changeType: string) => {
     switch (changeType) {
+      case 'start_timer': return 'bg-green-100 text-green-800 border-green-200';
+      case 'complete_timer': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'insert': return 'bg-green-100 text-green-800 border-green-200';
       case 'update': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'delete': return 'bg-red-100 text-red-800 border-red-200';
@@ -70,6 +110,10 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
     const newValues = entry.new_values || {};
     
     switch (entry.change_type) {
+      case 'start_timer':
+        return '開始計時';
+      case 'complete_timer':
+        return `完成計時${newValues.actual_hours ? `，耗時 ${newValues.actual_hours} 小時` : ''}`;
       case 'insert':
         return `新增測試項目${newValues.status ? `，狀態: ${newValues.status}` : ''}${newValues.started_at ? '，開始計時' : ''}`;
       case 'update':
@@ -153,6 +197,8 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Badge className={getChangeTypeColor(entry.change_type)}>
+                        {entry.change_type === 'start_timer' && '開始計時'}
+                        {entry.change_type === 'complete_timer' && '完成計時'}
                         {entry.change_type === 'insert' && '新增'}
                         {entry.change_type === 'update' && '更新'}
                         {entry.change_type === 'delete' && '刪除'}
@@ -166,7 +212,11 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
                   
                   <div className="flex items-center gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <span>操作者: {entry.user_id || '系統'}</span>
+                    <span>操作者: {
+                      entry.system_users?.display_name || 
+                      entry.system_users?.username || 
+                      (entry.new_values?.user ? entry.new_values.user : '系統')
+                    }</span>
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm">
