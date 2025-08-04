@@ -67,10 +67,10 @@ export function DataCenter() {
         // 修正進度計算 - 如果系統已完成且是 Station 0-3，則顯示 100%
         let displayProgress = prog.progress_percent;
         if (system.status === '已完成' && (
-          station.station_name.includes('Station 0') || station.station_name.includes('組裝') ||
+          station.station_name.includes('Station 0') || station.station_name.includes('工廠組裝') ||
           station.station_name.includes('Station 1') || station.station_name.includes('開機') ||
           station.station_name.includes('Station 2') || station.station_name.includes('FW') ||
-          station.station_name.includes('Station 3') || station.station_name.includes('EE')
+          station.station_name.includes('Station 3') || station.station_name.includes('Pega')
         )) {
           displayProgress = 100;
         }
