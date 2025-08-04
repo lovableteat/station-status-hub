@@ -145,6 +145,6 @@ export function useUserPresence() {
     onlineUsers,
     updateCurrentModule,
     updateEditingState,
-    totalOnlineUsers: onlineUsers.length + 1 // +1 for current user
+    totalOnlineUsers: onlineUsers.length // 只計算其他在線用戶，不包含自己
   };
 }
