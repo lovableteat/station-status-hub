@@ -74,8 +74,14 @@ export function TestTrackerPDFExporter({
 
   const generateTableSection = (systems: TestSystem[], stations: TestStation[], items: TestItem[], progress: TestProgress[]) => {
     const getStationProgress = (systemId: string, stationOrder: number) => {
+      const system = systems.find(s => s.id === systemId);
       const station = stations.find(s => s.station_order === stationOrder);
-      if (!station) return 0;
+      if (!station || !system) return 0;
+      
+      // 如果系統已完成，所有站點都應該顯示100%
+      if (system.status === '已完成') {
+        return 100;
+      }
       
       const stationItems = items.filter(item => item.station_id === station.id);
       if (stationItems.length === 0) return 0;
