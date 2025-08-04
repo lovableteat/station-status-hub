@@ -31,7 +31,7 @@ export function OnlineUsersIndicator() {
     <Popover>
       <PopoverTrigger asChild>
         <button className={cn(
-          "fixed bottom-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all duration-300",
+          "fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all duration-300",
           "bg-primary/10 border border-primary/20 backdrop-blur-sm hover:bg-primary/20",
           "animate-fade-in"
         )}>
@@ -40,13 +40,13 @@ export function OnlineUsersIndicator() {
             <Circle className="absolute -top-1 -right-1 h-3 w-3 fill-green-500 text-green-500" />
           </div>
           <span className="text-sm font-medium text-primary">
-            {totalOnlineUsers} 在線
+            {totalOnlineUsers > 0 ? `${totalOnlineUsers} 在線` : '無其他用戶在線'}
           </span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
         <div className="space-y-3">
-          <h4 className="font-semibold text-sm">在線用戶 ({totalOnlineUsers})</h4>
+          <h4 className="font-semibold text-sm">其他在線用戶 ({totalOnlineUsers})</h4>
           
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {onlineUsers.map((user) => (
