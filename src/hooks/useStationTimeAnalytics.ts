@@ -72,12 +72,10 @@ export function useStationTimeAnalytics() {
         }
 
         if (dateFilter.start_date) {
-          const startDate = `${dateFilter.start_date}T00:00:00.000Z`;
-          systemQuery = systemQuery.gte(timeColumn, startDate);
+          systemQuery = systemQuery.gte(timeColumn, dateFilter.start_date);
         }
         if (dateFilter.end_date) {
-          const endDate = `${dateFilter.end_date}T23:59:59.999Z`;
-          systemQuery = systemQuery.lte(timeColumn, endDate);
+          systemQuery = systemQuery.lte(timeColumn, dateFilter.end_date);
         }
       }
 

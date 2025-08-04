@@ -149,15 +149,15 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                          <span className="text-muted-foreground">負責人:</span>
                          <p className="font-medium">{system.assigned_engineer || '未分配'}</p>
                        </div>
-                       {(system as any).team && (
-                         <>
-                           <div>
-                             <span className="text-muted-foreground">TEAM:</span>
-                             <p className="font-medium text-primary">{(system as any).team}</p>
-                           </div>
-                           <div></div>
-                         </>
-                       )}
+                        {(system as any).team && (
+                          <>
+                            <div>
+                              <span className="text-muted-foreground">位置:</span>
+                              <p className="font-medium text-primary">{(system as any).team}</p>
+                            </div>
+                            <div></div>
+                          </>
+                        )}
                      </div>
 
                     {/* Actions */}

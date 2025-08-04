@@ -254,29 +254,13 @@ export function SystemEditDialog({
           </div>
 
           <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>TEAM</Label>
-            <Select 
-              value={editValues.team || ''} 
-              onValueChange={(value) => setEditValues({...editValues, team: value})}
-            >
-              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                <SelectValue placeholder="請選擇團隊..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ME" className={isMobile ? "h-12 text-base" : ""}>
-                  ME TEAM (第0站)
-                </SelectItem>
-                <SelectItem value="BIOS/BMC" className={isMobile ? "h-12 text-base" : ""}>
-                  BIOS/BMC TEAM (第1站)
-                </SelectItem>
-                <SelectItem value="EE" className={isMobile ? "h-12 text-base" : ""}>
-                  EE TEAM (第2站)
-                </SelectItem>
-                <SelectItem value="SIT/RAD" className={isMobile ? "h-12 text-base" : ""}>
-                  SIT/RAD TEAM (第3站)
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>位置</Label>
+            <Input
+              value={editValues.team}
+              onChange={(e) => setEditValues({...editValues, team: e.target.value})}
+              placeholder="請輸入機台位置..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
           </div>
 
           <div>
