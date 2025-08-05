@@ -305,6 +305,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                 issue={editingIssue}
                 onUpdate={handleEditComplete}
                 onDelete={handleEditComplete}
+                onClose={() => setIsEditDialogOpen(false)}
               />
             </DialogContent>
           </Dialog>
