@@ -70,6 +70,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       });
 
       onUpdate();
+      onClose?.(); // 成功後關閉對話框
     } catch (error) {
       toast({
         title: "更新失敗",
