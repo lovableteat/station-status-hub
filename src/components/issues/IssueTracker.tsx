@@ -16,10 +16,10 @@ import {
   Search, 
   Eye,
   Download,
+  Edit,
   Image as ImageIcon
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
-import { IssueEditDialog } from "./IssueEditDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
 import { BackButton } from "@/components/common/BackButton";
@@ -264,11 +264,17 @@ export function IssueTracker() {
           {/* Right: Actions and date */}
           <div className="flex flex-col items-end gap-1">
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <IssueEditDialog 
-                issue={issue} 
-                onUpdate={loadIssues} 
-                onDelete={loadIssues} 
-              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // TODO: 這裡需要實現編輯對話框
+                }}
+                className="h-6 w-6 p-0"
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

@@ -25,9 +25,10 @@ interface IssueEditDialogProps {
   issue: Issue;
   onUpdate: () => void;
   onDelete: () => void;
+  onClose?: () => void;
 }
 
-export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogProps) {
+export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEditDialogProps) {
   const [formData, setFormData] = useState({
     title: issue.title,
     description: issue.description,
@@ -228,7 +229,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
           刪除問題
         </Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onUpdate}>
+          <Button variant="outline" onClick={onClose}>
             取消
           </Button>
           <Button onClick={handleSave}>
