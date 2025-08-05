@@ -36,9 +36,16 @@ interface Issue {
   system_id?: string;
   station_id?: string;
   test_item_id?: string;
+  relate?: string;
+  category?: string;
+  process_notes?: string;
+  solution?: string;
   system_name?: string;
+  assigned_engineer?: string;
   station_name?: string;
+  station_order?: number;
   test_item_name?: string;
+  test_item_description?: string;
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -72,8 +79,22 @@ export function IssueTracker() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('issue_details')
-        .select('*')
+        .from('issues')
+        .select(`
+          *,
+          test_systems!issues_system_id_fkey (
+            system_name,
+            assigned_engineer
+          ),
+          test_flow_stations!issues_station_id_fkey (
+            station_name,
+            station_order
+          ),
+          test_flow_items!issues_test_item_id_fkey (
+            item_name,
+            description
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -91,6 +112,12 @@ export function IssueTracker() {
             priority: (issue.priority || 'medium') as "low" | "medium" | "high" | "critical",
             status: (issue.status || 'open') as "open" | "in_progress" | "resolved" | "closed",
             assigned_to: issue.assigned_to || '',
+            system_name: issue.test_systems?.system_name,
+            assigned_engineer: issue.test_systems?.assigned_engineer,
+            station_name: issue.test_flow_stations?.station_name,
+            station_order: issue.test_flow_stations?.station_order,
+            test_item_name: issue.test_flow_items?.item_name,
+            test_item_description: issue.test_flow_items?.description,
             attachments: attachments || []
           };
         })

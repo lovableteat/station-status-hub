@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowUpDown, Edit, ImageIcon } from "lucide-react";
+import { ArrowUpDown, Edit, ImageIcon, Eye } from "lucide-react";
 import { IssueEditDialog } from "./IssueEditDialog";
+import { IssueDetailDialog } from "./IssueDetailDialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface Issue {
@@ -27,6 +28,8 @@ interface Issue {
   test_item_name?: string;
   relate?: string;
   category?: string;
+  process_notes?: string;
+  solution?: string;
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -43,7 +46,9 @@ interface IssueTableViewProps {
 
 export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
+  const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Issue;
     direction: 'asc' | 'desc';
@@ -87,6 +92,23 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     setIsEditDialogOpen(false);
     setEditingIssue(null);
     onUpdate();
+  };
+
+  const handleView = (issue: Issue) => {
+    setViewingIssue(issue);
+    setIsDetailDialogOpen(true);
+  };
+
+  const handleViewClose = () => {
+    setIsDetailDialogOpen(false);
+    setViewingIssue(null);
+  };
+
+  const handleViewEdit = (issue: Issue) => {
+    setIsDetailDialogOpen(false);
+    setViewingIssue(null);
+    setEditingIssue(issue);
+    setIsEditDialogOpen(true);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -251,14 +273,26 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(issue)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(issue)}
+                        className="h-8 w-8 p-0"
+                        title="查看詳細資訊"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(issue)}
+                        className="h-8 w-8 p-0"
+                        title="編輯問題"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -309,6 +343,16 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
               />
             </DialogContent>
           </Dialog>
+        )}
+
+        {/* 查看詳細資訊對話框 */}
+        {viewingIssue && (
+          <IssueDetailDialog
+            issue={viewingIssue}
+            isOpen={isDetailDialogOpen}
+            onClose={handleViewClose}
+            onEdit={handleViewEdit}
+          />
         )}
       </CardContent>
     </Card>
