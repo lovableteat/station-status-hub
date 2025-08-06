@@ -82,65 +82,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
       if (error) throw error;
 
-      // Send notifications to mentioned users if assigned user changed
-      if (formData.assigned_to !== issue.assigned_to && formData.assigned_to !== 'unassigned') {
-        await sendMentionNotifications(
-          `@[${formData.assigned_to}](${formData.assigned_to})`,
-          {
-            title: "問題指派通知",
-            message: `您被指派處理問題：${formData.title}`,
-            referenceType: "issue",
-            referenceId: issue.id
-          }
-        );
-      }
-
-      // Send notifications to mentioned users
-      if (mentionedUsers.length > 0) {
-        for (const user of mentionedUsers) {
-          await sendMentionNotifications(
-            `@[${user.displayName}](${user.id})`,
-            {
-              title: "問題標註通知",
-              message: `您被標註在問題：${formData.title}`,
-              referenceType: "issue",
-              referenceId: issue.id
-            }
-          );
-        }
-      }
-
-      // 當問題狀態變更為已解決時，自動發送完成通知給所有被標註的用戶
-      if (oldStatus !== 'resolved' && updateData.status === 'resolved') {
-        // 查詢該問題的所有標註記錄
-        const { data: mentions } = await supabase
-          .from('user_mentions')
-          .select('mentioned_user_id')
-          .eq('content_type', 'issue')
-          .eq('content_id', issue.id);
-
-        if (mentions && mentions.length > 0) {
-          // 為每個被標註的用戶發送完成通知
-          const completionNotifications = mentions.map(mention => ({
-            recipient_id: mention.mentioned_user_id,
-            sender_id: user?.userId,
-            notification_type: 'completion',
-            title: `問題已解決`,
-            message: `您被標註的問題「${updateData.title}」已由 ${user?.displayName || user?.username} 解決`,
-            reference_type: 'issue',
-            reference_id: issue.id,
-            metadata: {
-              issue_title: updateData.title,
-              resolved_by: user?.displayName || user?.username,
-              solution: updateData.solution
-            }
-          }));
-
-          await supabase
-            .from('user_notifications')
-            .insert(completionNotifications);
-        }
-      }
+      // 不再發送標註通知 - 根據用戶要求移除
 
       toast({
         title: "更新成功",
