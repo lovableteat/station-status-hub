@@ -303,9 +303,16 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.tagName === 'IMG') {
+            e.preventDefault();
+            e.stopPropagation();
             const src = target.getAttribute('src');
             if (src) {
-              handleImageClick(src);
+              // 切換 lightbox 狀態
+              if (lightboxOpen && lightboxImage === src) {
+                setLightboxOpen(false);
+              } else {
+                handleImageClick(src);
+              }
             }
           }
         }}
@@ -458,6 +465,17 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         open={lightboxOpen}
         close={() => setLightboxOpen(false)}
         slides={[{ src: lightboxImage }]}
+        render={{
+          buttonPrev: () => null,
+          buttonNext: () => null,
+        }}
+        carousel={{
+          finite: true,
+        }}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
       />
     </div>
   );
