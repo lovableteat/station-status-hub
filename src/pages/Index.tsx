@@ -122,7 +122,6 @@ const Index = () => {
       <UpdateIndicator isUpdating={isUpdating} />
       <FacebookStyleNotifications />
       <OnlineUsersIndicator />
-      <NotificationCenter />
       
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
@@ -145,9 +144,13 @@ const Index = () => {
           isMobile={isMobile}
         />
         <main className={cn(
-          "flex-1 overflow-auto",
+          "flex-1 overflow-auto relative",
           isMobile && "pt-14" // Add top padding on mobile for fixed header
         )}>
+          {/* 通知中心 - 固定在右上角 */}
+          <div className="fixed top-4 right-4 z-50">
+            <NotificationCenter />
+          </div>
           {renderModule()}
         </main>
       </div>
