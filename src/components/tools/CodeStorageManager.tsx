@@ -429,18 +429,21 @@ export function CodeStorageManager() {
                 <RichTextEditor
                   content={formData.sop_content}
                   onChange={(content) => setFormData({...formData, sop_content: content})}
-                  placeholder="請輸入詳細的SOP操作說明，包含：&#10;1. 使用前準備&#10;2. 操作步驟詳解&#10;3. 注意事項&#10;4. 常見問題處理&#10;5. 相關資源連結"
-                  className="min-h-[200px]"
+                  placeholder="請輸入詳細的程式碼片段SOP操作說明，包含：&#10;📋 使用前準備&#10;⚙️ 操作步驟詳解&#10;⚠️ 注意事項&#10;🔧 常見問題處理&#10;📚 相關資源連結"
+                  className="min-h-[300px]"
                 />
-                <div className="text-xs text-muted-foreground mt-1">
-                  <strong>建議包含以下內容：</strong>
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    <li>使用前的環境準備與相依性檢查</li>
-                    <li>詳細的操作步驟說明（含截圖或範例）</li>
-                    <li>重要的注意事項與限制條件</li>
-                    <li>常見錯誤的排除方法</li>
-                    <li>相關文件或資源的連結</li>
-                  </ul>
+                <div className="text-xs text-muted-foreground mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border-l-4 border-blue-500">
+                  <div className="font-semibold text-blue-700 dark:text-blue-300 mb-2">📝 SOP 編寫指南：</div>
+                  <div className="space-y-2">
+                    <div><strong>📋 使用前準備：</strong>列出所需環境、工具版本、相依性檢查等</div>
+                    <div><strong>⚙️ 操作步驟詳解：</strong>提供詳細的逐步說明，包含程式碼範例與預期結果</div>
+                    <div><strong>⚠️ 注意事項：</strong>重要限制條件、安全性考量、效能影響等</div>
+                    <div><strong>🔧 常見問題處理：</strong>錯誤訊息解析、故障排除方法、替代方案</div>
+                    <div><strong>📚 相關資源連結：</strong>官方文件、教學資源、相關工具連結等</div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
+                    <strong>💡 提示：</strong>使用清楚的標題、項目符號、程式碼區塊和圖片來提升可讀性
+                  </div>
                 </div>
               </div>
               
