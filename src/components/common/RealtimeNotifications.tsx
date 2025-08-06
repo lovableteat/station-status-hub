@@ -300,8 +300,10 @@ export function RealtimeNotifications() {
   };
 
   const handleQuickReply = async (notification: UserNotification) => {
+    console.log('🔍 handleQuickReply 被觸發:', notification);
+    
     if (!notification?.id || notification.id === 'undefined') {
-      console.error('Invalid notification for quick reply:', notification);
+      console.error('❌ Invalid notification for quick reply:', notification);
       toast({
         title: "錯誤",
         description: "通知數據無效",
@@ -310,7 +312,7 @@ export function RealtimeNotifications() {
       return;
     }
     
-    console.log('Opening quick reply for:', notification.id);
+    console.log('✅ Opening quick reply for:', notification.id);
     setSelectedNotification(notification);
     setShowReplyDialog(true);
     await markUserNotificationAsRead(notification);
@@ -510,14 +512,17 @@ export function RealtimeNotifications() {
                 </CardTitle>
                 <div className="flex items-center gap-1">
                   {unreadCount > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={markAllAsRead}
-                      className="text-xs px-2 h-7"
-                      disabled={isLoading}
-                    >
-                      全部已讀
+                     <Button 
+                       variant="ghost" 
+                       size="sm" 
+                       onClick={() => {
+                         console.log('🔍 全部已讀按鍵被點擊');
+                         markAllAsRead();
+                       }}
+                       className="text-xs px-2 h-7"
+                       disabled={isLoading}
+                     >
+                       全部已讀
                     </Button>
                   )}
                   
@@ -536,27 +541,33 @@ export function RealtimeNotifications() {
                       <PopoverContent className="w-48" align="end">
                         <div className="space-y-2">
                           {completedCount > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleClearCompleted}
-                              disabled={isLoading}
-                              className="w-full justify-start text-xs"
-                            >
-                              <Trash2 className="h-3 w-3 mr-2" />
-                              清理已完成 ({completedCount})
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               onClick={() => {
+                                 console.log('🔍 清理已完成按鍵被點擊');
+                                 handleClearCompleted();
+                               }}
+                               disabled={isLoading}
+                               className="w-full justify-start text-xs"
+                             >
+                               <Trash2 className="h-3 w-3 mr-2" />
+                               清理已完成 ({completedCount})
                             </Button>
                           )}
                           {readCount > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleClearRead}
-                              disabled={isLoading}
-                              className="w-full justify-start text-xs"
-                            >
-                              <Trash2 className="h-3 w-3 mr-2" />
-                              清理已讀 ({readCount})
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               onClick={() => {
+                                 console.log('🔍 清理已讀按鍵被點擊');
+                                 handleClearRead();
+                               }}
+                               disabled={isLoading}
+                               className="w-full justify-start text-xs"
+                             >
+                               <Trash2 className="h-3 w-3 mr-2" />
+                               清理已讀 ({readCount})
                             </Button>
                           )}
                         </div>
