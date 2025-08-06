@@ -92,6 +92,21 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         );
       }
 
+      // Send notifications to mentioned users
+      if (mentionedUsers.length > 0) {
+        for (const user of mentionedUsers) {
+          await sendMentionNotifications(
+            `@[${user.displayName}](${user.id})`,
+            {
+              title: "問題標註通知",
+              message: `您被標註在問題：${formData.title}`,
+              referenceType: "issue",
+              referenceId: issue.id
+            }
+          );
+        }
+      }
+
       toast({
         title: "更新成功",
         description: "問題資料已成功更新"
