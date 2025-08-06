@@ -54,26 +54,47 @@ export function useNotificationManager() {
     }
   }, [user?.userId, toast]);
 
-  // 刪除單個通知 - 核心功能
+  // 刪除單個通知 - 核心功能  
   const deleteNotification = useCallback(async (notificationId: string): Promise<boolean> => {
     if (!notificationId || notificationId === 'undefined') {
       console.error('❌ 無效的通知 ID:', notificationId);
       return false;
     }
 
+    if (!user?.userId) {
+      console.error('❌ 用戶未登入');
+      return false;
+    }
+
     setIsLoading(true);
     try {
-      console.log('🗑️ 正在刪除通知:', notificationId);
+      console.log('🗑️ 正在刪除通知:', notificationId, '用戶:', user.userId);
       
-      const { error } = await supabase
+      // 使用更明確的刪除語法
+      const { data, error, count } = await supabase
         .from('user_notifications')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', notificationId)
-        .eq('recipient_id', user?.userId); // 安全檢查
+        .eq('recipient_id', user.userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ 刪除錯誤:', error);
+        throw error;
+      }
 
-      console.log('✅ 通知刪除成功:', notificationId);
+      console.log('✅ 刪除結果:', { data, count });
+      
+      if (count === 0) {
+        console.warn('⚠️ 沒有刪除任何記錄，可能通知不存在或權限不足');
+        toast({
+          title: "刪除失敗",
+          description: "通知不存在或無權限刪除",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      console.log('✅ 通知刪除成功:', notificationId, '刪除數量:', count);
       
       // 立即更新本地狀態
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
@@ -84,7 +105,7 @@ export function useNotificationManager() {
 
       toast({
         title: "刪除成功",
-        description: "通知已刪除"
+        description: "通知已永久刪除"
       });
 
       return true;
