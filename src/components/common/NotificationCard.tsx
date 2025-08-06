@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Bell, MessageSquare, Check, Trash2, MoreVertical, Archive } from "lucide-react";
+import { Bell, MessageSquare, Check, Trash2, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserNotification {
@@ -33,7 +33,6 @@ interface NotificationCardProps {
   onConfirmReply: (notification: UserNotification) => void;
   onShowConversation: (notification: UserNotification) => void;
   onDelete: (notification: UserNotification) => void;
-  onArchive: (notification: UserNotification) => void;
   onMarkAsRead: (notification: UserNotification) => void;
 }
 
@@ -76,7 +75,6 @@ export function NotificationCard({
   onConfirmReply,
   onShowConversation,
   onDelete,
-  onArchive,
   onMarkAsRead
 }: NotificationCardProps) {
   const handleCardClick = () => {
@@ -103,11 +101,6 @@ export function NotificationCard({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(notification);
-  };
-
-  const handleArchive = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onArchive(notification);
   };
 
   // 判斷主要操作按鈕
@@ -144,10 +137,8 @@ export function NotificationCard({
 
   const primaryAction = getPrimaryAction();
   
-  // 改善刪除條件：已完成/已關閉的通知都可以刪除，已讀通知可以歸檔
-  const canDelete = ['closed', 'completed', 'replied'].includes(notification.status);
-  const canArchive = notification.is_read && !canDelete;
-  const showDeleteOptions = canDelete || canArchive;
+  // 簡化刪除條件：已完成/已關閉的通知都可以刪除
+  const canDelete = ['closed', 'completed', 'replied'].includes(notification.status) || notification.is_read;
 
   return (
     <Card 
@@ -205,7 +196,7 @@ export function NotificationCard({
                 </Button>
               )}
 
-              {/* 顯示直接的刪除/歸檔按鈕，針對已完成的通知 */}
+              {/* 顯示直接的刪除按鈕 */}
               {canDelete && (
                 <Button
                   variant="ghost"
@@ -218,22 +209,9 @@ export function NotificationCard({
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
-
-              {canArchive && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleArchive}
-                  disabled={isLoading}
-                  className="h-7 w-7 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50"
-                  title="歸檔通知"
-                >
-                  <Archive className="h-3 w-3" />
-                </Button>
-              )}
               
               {/* 下拉選單用於其他操作 */}
-              {(showDeleteOptions || (!primaryAction && (notification.reference_type === 'issue' || notification.reference_type === 'test_progress'))) && (
+              {!primaryAction && (notification.reference_type === 'issue' || notification.reference_type === 'test_progress') && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -246,29 +224,18 @@ export function NotificationCard({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-32">
-                    {!primaryAction && (notification.reference_type === 'issue' || notification.reference_type === 'test_progress') && (
-                      <DropdownMenuItem onClick={handleShowConversation}>
-                        <MessageSquare className="h-3 w-3 mr-2" />
-                        查看對話
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onClick={handleShowConversation}>
+                      <MessageSquare className="h-3 w-3 mr-2" />
+                      查看對話
+                    </DropdownMenuItem>
                     
-                    {canArchive && (
-                      <DropdownMenuItem onClick={handleArchive}>
-                        <Archive className="h-3 w-3 mr-2" />
-                        歸檔通知
-                      </DropdownMenuItem>
-                    )}
-                    
-                    {canDelete && (
-                      <DropdownMenuItem 
-                        onClick={handleDelete}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <Trash2 className="h-3 w-3 mr-2" />
-                        刪除通知
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem 
+                      onClick={handleDelete}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="h-3 w-3 mr-2" />
+                      刪除通知
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

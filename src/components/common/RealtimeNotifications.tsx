@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, X, Trash2, Archive } from "lucide-react";
+import { Bell, X, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,13 +57,12 @@ export function RealtimeNotifications() {
     sendReply, 
     confirmReply, 
     deleteNotification, 
-    archiveNotification,
     clearCompletedNotifications,
     clearReadNotifications,
     isLoading 
   } = useNotificationReplies();
 
-  // 載入用戶通知 - 只查詢未歸檔的通知
+  // 載入用戶通知
   useEffect(() => {
     if (!user) return;
 
@@ -73,7 +72,6 @@ export function RealtimeNotifications() {
           .from('user_notifications')
           .select('*')
           .eq('recipient_id', user.userId)
-          .is('archived_at', null) // 只查詢未歸檔的通知
           .order('created_at', { ascending: false })
           .limit(20);
 
@@ -274,16 +272,6 @@ export function RealtimeNotifications() {
     }
   };
 
-  const handleArchiveNotification = async (notification: UserNotification) => {
-    const success = await archiveNotification(notification.id);
-    if (success) {
-      setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
-      if (!notification.is_read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    }
-  };
-
   const handleClearCompleted = async () => {
     const success = await clearCompletedNotifications();
     if (success) {
@@ -410,8 +398,8 @@ export function RealtimeNotifications() {
                               disabled={isLoading}
                               className="w-full justify-start text-xs"
                             >
-                              <Archive className="h-3 w-3 mr-2" />
-                              歸檔已讀 ({readCount})
+                              <Trash2 className="h-3 w-3 mr-2" />
+                              清理已讀 ({readCount})
                             </Button>
                           )}
                         </div>
@@ -440,7 +428,6 @@ export function RealtimeNotifications() {
                           onConfirmReply={handleConfirmReply}
                           onShowConversation={handleShowConversation}
                           onDelete={handleDeleteNotification}
-                          onArchive={handleArchiveNotification}
                           onMarkAsRead={markUserNotificationAsRead}
                         />
                       ))}
