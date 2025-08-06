@@ -1,343 +1,278 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface Notification {
   id: string;
+  recipient_id: string;
+  sender_id: string;
+  notification_type: string;
   title: string;
   message: string;
-  notification_type: string;
+  reference_type?: string;
+  reference_id?: string;
   status: string;
   is_read: boolean;
   created_at: string;
-  sender_id: string;
-  reference_type?: string;
-  reference_id?: string;
-  metadata?: any;
-  archived_at?: string;
+  updated_at: string;
+  priority: string;
+  tags: string[];
 }
 
 export function useNotificationManager() {
   const { user } = useUser();
-  const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-  // 載入通知
+  // 載入通知 - 簡化版
   const loadNotifications = useCallback(async () => {
     if (!user?.userId) return;
 
     try {
-      console.log('🔄 載入通知中...');
+      setIsLoading(true);
+      console.log('🔍 載入通知中...');
+      
       const { data, error } = await supabase
         .from('user_notifications')
         .select('*')
         .eq('recipient_id', user.userId)
         .is('archived_at', null)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      console.log(`✅ 載入了 ${data?.length || 0} 個通知`);
       setNotifications(data || []);
       setUnreadCount((data || []).filter(n => !n.is_read).length);
-      console.log(`✅ 載入了 ${data?.length || 0} 個通知`);
     } catch (error) {
-      console.error('❌ 載入通知失敗:', error);
-      toast({
-        title: "載入失敗",
-        description: "無法載入通知",
-        variant: "destructive"
-      });
-    }
-  }, [user?.userId, toast]);
-
-  // 刪除單個通知 - 核心功能  
-  const deleteNotification = useCallback(async (notificationId: string): Promise<boolean> => {
-    if (!notificationId || notificationId === 'undefined') {
-      console.error('❌ 無效的通知 ID:', notificationId);
-      return false;
-    }
-
-    if (!user?.userId) {
-      console.error('❌ 用戶未登入');
-      return false;
-    }
-
-    setIsLoading(true);
-    try {
-      console.log('🗑️ 正在刪除通知:', notificationId, '用戶:', user.userId);
-      
-      // 使用更明確的刪除語法
-      const { data, error, count } = await supabase
-        .from('user_notifications')
-        .delete({ count: 'exact' })
-        .eq('id', notificationId)
-        .eq('recipient_id', user.userId);
-
-      if (error) {
-        console.error('❌ 刪除錯誤:', error);
-        throw error;
-      }
-
-      console.log('✅ 刪除結果:', { data, count });
-      
-      if (count === 0) {
-        console.warn('⚠️ 沒有刪除任何記錄，可能通知不存在或權限不足');
-        toast({
-          title: "刪除失敗",
-          description: "通知不存在或無權限刪除",
-          variant: "destructive"
-        });
-        return false;
-      }
-
-      console.log('✅ 通知刪除成功:', notificationId, '刪除數量:', count);
-      
-      // 立即更新本地狀態
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      setUnreadCount(prev => {
-        const deletedNotif = notifications.find(n => n.id === notificationId);
-        return deletedNotif && !deletedNotif.is_read ? Math.max(0, prev - 1) : prev;
-      });
-
-      toast({
-        title: "刪除成功",
-        description: "通知已永久刪除"
-      });
-
-      return true;
-    } catch (error) {
-      console.error('❌ 刪除通知失敗:', error);
-      toast({
-        title: "刪除失敗",
-        description: "請稍後再試",
-        variant: "destructive"
-      });
-      return false;
+      console.error('載入通知失敗:', error);
+      toast.error('載入通知失敗');
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, notifications, toast]);
+  }, [user?.userId]);
 
-  // 批量刪除
-  const deleteMultipleNotifications = useCallback(async (notificationIds: string[]): Promise<boolean> => {
-    if (notificationIds.length === 0) return true;
+  // 刪除通知 - 徹底刪除
+  const deleteNotification = useCallback(async (notificationId: string): Promise<boolean> => {
+    if (!user?.userId) return false;
 
-    setIsLoading(true);
     try {
-      console.log(`🗑️ 正在批量刪除 ${notificationIds.length} 個通知`);
+      console.log(`🗑️ 徹底刪除通知: ${notificationId}`);
+      
+      // 直接從資料庫永久刪除
+      const { error } = await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('id', notificationId)
+        .eq('recipient_id', user.userId);
+
+      if (error) throw error;
+
+      console.log('✅ 通知已徹底刪除');
+      toast.success('通知已刪除');
+      
+      // 立即從本地移除
+      setNotifications(prev => {
+        const filtered = prev.filter(n => n.id !== notificationId);
+        const deletedNotification = prev.find(n => n.id === notificationId);
+        if (deletedNotification && !deletedNotification.is_read) {
+          setUnreadCount(current => Math.max(0, current - 1));
+        }
+        return filtered;
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('刪除失敗:', error);
+      toast.error('刪除失敗');
+      return false;
+    }
+  }, [user?.userId]);
+
+  // 按標籤批量刪除
+  const deleteByTag = useCallback(async (tag: string): Promise<boolean> => {
+    if (!user?.userId) return false;
+
+    try {
+      console.log(`🏷️ 刪除標籤為 "${tag}" 的通知`);
+      
+      const { error } = await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('recipient_id', user.userId)
+        .contains('tags', [tag]);
+
+      if (error) throw error;
+
+      const deletedCount = notifications.filter(n => n.tags?.includes(tag)).length;
+      console.log(`✅ 已刪除 ${deletedCount} 個 "${tag}" 標籤的通知`);
+      toast.success(`已刪除 ${deletedCount} 個 "${tag}" 通知`);
+      
+      // 更新本地狀態
+      setNotifications(prev => prev.filter(n => !n.tags?.includes(tag)));
+      
+      return true;
+    } catch (error) {
+      console.error('按標籤刪除失敗:', error);
+      toast.error('刪除失敗');
+      return false;
+    }
+  }, [user?.userId, notifications]);
+
+  // 批量刪除多個通知
+  const deleteMultipleNotifications = useCallback(async (notificationIds: string[]): Promise<boolean> => {
+    if (!user?.userId || notificationIds.length === 0) return false;
+
+    try {
+      console.log(`🗑️ 批量刪除 ${notificationIds.length} 個通知`);
       
       const { error } = await supabase
         .from('user_notifications')
         .delete()
         .in('id', notificationIds)
-        .eq('recipient_id', user?.userId);
+        .eq('recipient_id', user.userId);
 
       if (error) throw error;
 
-      console.log('✅ 批量刪除成功');
+      console.log(`✅ 批量刪除成功`);
+      toast.success(`已刪除 ${notificationIds.length} 個通知`);
       
-      // 更新本地狀態
       setNotifications(prev => prev.filter(n => !notificationIds.includes(n.id)));
-      setUnreadCount(prev => {
-        const deletedUnreadCount = notifications.filter(n => 
-          notificationIds.includes(n.id) && !n.is_read
-        ).length;
-        return Math.max(0, prev - deletedUnreadCount);
-      });
-
-      toast({
-        title: "批量刪除成功",
-        description: `已刪除 ${notificationIds.length} 個通知`
-      });
-
       return true;
     } catch (error) {
-      console.error('❌ 批量刪除失敗:', error);
-      toast({
-        title: "批量刪除失敗",
-        description: "請稍後再試",
-        variant: "destructive"
-      });
+      console.error('批量刪除失敗:', error);
+      toast.error('批量刪除失敗');
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, [user?.userId, notifications, toast]);
+  }, [user?.userId]);
 
   // 清空所有通知
   const clearAllNotifications = useCallback(async (): Promise<boolean> => {
     if (!user?.userId) return false;
 
-    setIsLoading(true);
     try {
-      console.log('🧹 正在清空所有通知...');
+      console.log('🗑️ 清空所有通知');
       
       const { error } = await supabase
         .from('user_notifications')
         .delete()
-        .eq('recipient_id', user.userId)
-        .is('archived_at', null);
+        .eq('recipient_id', user.userId);
 
       if (error) throw error;
 
       console.log('✅ 所有通知已清空');
+      toast.success('所有通知已清除');
       
       setNotifications([]);
       setUnreadCount(0);
-
-      toast({
-        title: "清空成功",
-        description: "所有通知已清空"
-      });
-
+      
       return true;
     } catch (error) {
-      console.error('❌ 清空失敗:', error);
-      toast({
-        title: "清空失敗",
-        description: "請稍後再試",
-        variant: "destructive"
-      });
+      console.error('清空失敗:', error);
+      toast.error('清空失敗');
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, [user?.userId, toast]);
+  }, [user?.userId]);
 
   // 標記為已讀
   const markAsRead = useCallback(async (notificationId: string): Promise<boolean> => {
+    if (!user?.userId) return false;
+
     try {
+      console.log(`👁️ 標記已讀: ${notificationId}`);
+      
       const { error } = await supabase
         .from('user_notifications')
         .update({ 
-          is_read: true, 
-          read_at: new Date().toISOString() 
+          is_read: true,
+          read_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .eq('id', notificationId)
-        .eq('recipient_id', user?.userId);
+        .eq('recipient_id', user.userId);
 
       if (error) throw error;
 
-      // 更新本地狀態
+      console.log('✅ 已標記為已讀');
+      
       setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+        prev.map(n => 
+          n.id === notificationId 
+            ? { ...n, is_read: true, read_at: new Date().toISOString() }
+            : n
+        )
       );
+      
       setUnreadCount(prev => Math.max(0, prev - 1));
-
       return true;
     } catch (error) {
-      console.error('❌ 標記已讀失敗:', error);
+      console.error('標記失敗:', error);
       return false;
     }
   }, [user?.userId]);
 
-  // 強制重新載入通知 - 無快取
+  // 獲取所有標籤
+  const getAllTags = useCallback(() => {
+    const allTags = new Set<string>();
+    notifications.forEach(n => {
+      n.tags?.forEach(tag => allTags.add(tag));
+    });
+    return Array.from(allTags).sort();
+  }, [notifications]);
+
+  // 根據標籤過濾通知
+  const getFilteredNotifications = useCallback(() => {
+    if (!selectedTag) return notifications;
+    return notifications.filter(n => n.tags?.includes(selectedTag));
+  }, [notifications, selectedTag]);
+
+  // 強制重新載入
   const forceReloadNotifications = useCallback(async () => {
-    if (!user?.userId) return;
+    await loadNotifications();
+  }, [loadNotifications]);
 
-    try {
-      console.log('🔄 強制重新載入通知...');
-      setIsLoading(true);
-      
-      // 清空本地狀態
-      setNotifications([]);
-      setUnreadCount(0);
-      
-      const { data, error } = await supabase
-        .from('user_notifications')
-        .select('*')
-        .eq('recipient_id', user.userId)
-        .is('archived_at', null)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-
-      console.log(`✅ 強制載入了 ${data?.length || 0} 個通知`);
-      setNotifications(data || []);
-      setUnreadCount((data || []).filter(n => !n.is_read).length);
-    } catch (error) {
-      console.error('❌ 強制重新載入失敗:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.userId]);
-
-  // 設置實時訂閱
+  // 實時訂閱
   useEffect(() => {
     if (!user?.userId) return;
 
-    // 初次載入
-    forceReloadNotifications();
+    loadNotifications();
 
     const channel = supabase
       .channel(`notifications_${user.userId}`)
       .on('postgres_changes', { 
-        event: 'INSERT', 
+        event: '*', 
         schema: 'public', 
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
-        console.log('📩 收到新通知:', payload.new);
-        const newNotification = payload.new as Notification;
-        if (!newNotification.archived_at) {
-          setNotifications(prev => {
-            // 避免重複通知
-            const exists = prev.find(n => n.id === newNotification.id);
-            if (exists) return prev;
-            return [newNotification, ...prev.slice(0, 49)];
-          });
-          if (!newNotification.is_read) {
-            setUnreadCount(prev => prev + 1);
-          }
-        }
-      })
-      .on('postgres_changes', { 
-        event: 'DELETE', 
-        schema: 'public', 
-        table: 'user_notifications',
-        filter: `recipient_id=eq.${user.userId}`
-      }, (payload) => {
-        console.log('🗑️ 實時刪除通知:', payload.old);
-        const deletedNotification = payload.old as Notification;
-        setNotifications(prev => prev.filter(n => n.id !== deletedNotification.id));
-        if (deletedNotification && !deletedNotification.is_read) {
-          setUnreadCount(prev => Math.max(0, prev - 1));
-        }
-      })
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'user_notifications',
-        filter: `recipient_id=eq.${user.userId}`
-      }, (payload) => {
-        console.log('📝 通知更新:', payload.new);
-        const updatedNotification = payload.new as Notification;
-        setNotifications(prev => 
-          prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
-        );
+        console.log('🔄 通知變更:', payload);
+        // 任何變更都重新載入，確保資料同步
+        loadNotifications();
       })
       .subscribe();
 
     return () => {
-      console.log('🔌 關閉通知訂閱');
       supabase.removeChannel(channel);
     };
-  }, [user?.userId, forceReloadNotifications]);
+  }, [user?.userId, loadNotifications]);
 
   return {
-    notifications,
+    notifications: getFilteredNotifications(),
+    allNotifications: notifications,
     unreadCount,
     isLoading,
+    selectedTag,
+    setSelectedTag,
     deleteNotification,
     deleteMultipleNotifications,
+    deleteByTag,
     clearAllNotifications,
     markAsRead,
     loadNotifications,
-    forceReloadNotifications
+    forceReloadNotifications,
+    getAllTags
   };
 }
