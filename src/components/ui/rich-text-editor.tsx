@@ -303,18 +303,9 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.tagName === 'IMG') {
-            e.preventDefault();
-            e.stopPropagation();
             const src = target.getAttribute('src');
             if (src) {
-              // 簡單的切換邏輯：如果已經開啟且是同一張圖片就關閉，否則開啟
-              if (lightboxOpen && lightboxImage === src) {
-                setLightboxOpen(false);
-                setLightboxImage('');
-              } else {
-                setLightboxImage(src);
-                setLightboxOpen(true);
-              }
+              handleImageClick(src);
             }
           }
         }}
@@ -465,28 +456,8 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       {/* Lightbox for image viewing */}
       <Lightbox
         open={lightboxOpen}
-        close={() => {
-          setLightboxOpen(false);
-          setLightboxImage('');
-        }}
-        slides={lightboxImage ? [{ src: lightboxImage }] : []}
-        render={{
-          buttonPrev: () => null,
-          buttonNext: () => null,
-        }}
-        carousel={{
-          finite: true,
-        }}
-        controller={{
-          closeOnBackdropClick: false,
-          closeOnPullDown: false,
-        }}
-        on={{
-          click: () => {
-            setLightboxOpen(false);
-            setLightboxImage('');
-          }
-        }}
+        close={() => setLightboxOpen(false)}
+        slides={[{ src: lightboxImage }]}
       />
     </div>
   );
