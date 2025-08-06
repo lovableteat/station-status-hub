@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Edit } from "lucide-react";
+import { Edit, Tag } from "lucide-react";
 
 interface Issue {
   id: string;
@@ -15,6 +15,8 @@ interface Issue {
   solution?: string;
   relate?: string;
   category?: string;
+  tags?: string[];
+  mentioned_users?: string[];
   created_at: string;
   updated_at: string;
   system_name?: string;
@@ -152,25 +154,43 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
           <div>
             <label className="text-sm font-medium text-muted-foreground">問題描述</label>
             <div className="mt-2 p-3 bg-muted/50 rounded-md">
-              <p className="text-sm whitespace-pre-wrap">{issue.description}</p>
+              <div 
+                className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ __html: issue.description }}
+              />
             </div>
           </div>
 
-          {/* 相關項目和分類 */}
-          {(issue.relate || issue.category) && (
+          {/* 相關項目、分類和標籤 */}
+          {(issue.relate || issue.category || (issue.tags && issue.tags.length > 0)) && (
             <>
               <Separator />
-              <div className="grid grid-cols-2 gap-4">
-                {issue.relate && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {issue.relate && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">相關項目</label>
+                      <p className="mt-1 text-sm">{issue.relate}</p>
+                    </div>
+                  )}
+                  {issue.category && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">問題分類</label>
+                      <p className="mt-1 text-sm">{issue.category}</p>
+                    </div>
+                  )}
+                </div>
+                {issue.tags && issue.tags.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">相關項目</label>
-                    <p className="mt-1 text-sm">{issue.relate}</p>
-                  </div>
-                )}
-                {issue.category && (
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">問題分類</label>
-                    <p className="mt-1 text-sm">{issue.category}</p>
+                    <label className="text-sm font-medium text-muted-foreground">標籤</label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {issue.tags.map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          <Tag className="h-3 w-3 mr-1" />
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -184,7 +204,10 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
               <div>
                 <label className="text-sm font-medium text-muted-foreground">處理過程</label>
                 <div className="mt-2 p-3 bg-muted/50 rounded-md">
-                  <p className="text-sm whitespace-pre-wrap">{issue.process_notes}</p>
+                  <div 
+                    className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: issue.process_notes }}
+                  />
                 </div>
               </div>
             </>
@@ -197,7 +220,10 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
               <div>
                 <label className="text-sm font-medium text-muted-foreground">解決方案</label>
                 <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800">
-                  <p className="text-sm whitespace-pre-wrap">{issue.solution}</p>
+                  <div 
+                    className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: issue.solution }}
+                  />
                 </div>
               </div>
             </>

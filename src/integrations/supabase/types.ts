@@ -581,6 +581,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          mentioned_users: string[] | null
           priority: string
           process_notes: string | null
           relate: string | null
@@ -588,6 +589,7 @@ export type Database = {
           station_id: string | null
           status: string
           system_id: string | null
+          tags: string[] | null
           test_item_id: string | null
           title: string
           updated_at: string
@@ -598,6 +600,7 @@ export type Database = {
           created_at?: string
           description: string
           id?: string
+          mentioned_users?: string[] | null
           priority?: string
           process_notes?: string | null
           relate?: string | null
@@ -605,6 +608,7 @@ export type Database = {
           station_id?: string | null
           status?: string
           system_id?: string | null
+          tags?: string[] | null
           test_item_id?: string | null
           title: string
           updated_at?: string
@@ -615,6 +619,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          mentioned_users?: string[] | null
           priority?: string
           process_notes?: string | null
           relate?: string | null
@@ -622,6 +627,7 @@ export type Database = {
           station_id?: string | null
           status?: string
           system_id?: string | null
+          tags?: string[] | null
           test_item_id?: string | null
           title?: string
           updated_at?: string
