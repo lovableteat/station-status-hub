@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,12 +52,8 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const [mentionedUsers, setMentionedUsers] = useState<any[]>([]);
   const { toast } = useToast();
-  const { sendMentionNotifications } = useMentionNotifications();
+  const { sendMentionNotifications, isLoading: isSendingNotification } = useMentionNotifications();
   const { user } = useUser();
-
-  useEffect(() => {
-    loadEngineers();
-  }, []);
 
   const loadEngineers = async () => {
     try {
@@ -78,6 +73,10 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       console.error('載入工程師列表失敗:', error);
     }
   };
+
+  useEffect(() => {
+    loadEngineers();
+  }, []);
 
   const handleSave = async () => {
     if (!formData.title.trim()) {
@@ -124,27 +123,22 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         throw error;
       }
 
-      // 發送標註通知
+      // 發送標註通知 - 簡化版本
       if (mentionedUsers.length > 0 && formData.mentionMessage.trim()) {
-        try {
-          await sendMentionNotifications(
-            formData.mentionMessage,
-            {
-              title: `問題更新通知: ${formData.title}`,
-              message: `${user?.displayName || '用戶'} 在問題 "${formData.title}" 中標註了您: ${formData.mentionMessage}`,
-              referenceType: 'issue',
-              referenceId: issue.id,
-              metadata: {
-                issueTitle: formData.title,
-                issueStatus: formData.status,
-                mentionContext: formData.mentionMessage
-              }
+        console.log('準備發送標註通知...'); 
+        await sendMentionNotifications(
+          formData.mentionMessage,
+          {
+            title: `問題更新: ${formData.title}`,
+            message: `${user?.displayName || '用戶'} 標註了您: ${formData.mentionMessage}`,
+            referenceType: 'issue',
+            referenceId: issue.id,
+            metadata: {
+              issueTitle: formData.title,
+              issueStatus: formData.status
             }
-          );
-        } catch (notificationError) {
-          console.error('發送通知失敗:', notificationError);
-          // 不阻止主要更新流程
-        }
+          }
+        );
       }
 
       toast({
@@ -339,12 +333,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           <RichTextEditor
             content={formData.process_notes}
             onChange={(content) => handleInputChange('process_notes', content)}
-            placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
+            placeholder="請記錄詳細的處理過程..."
             className="min-h-[100px]"
           />
-          <div className="text-xs text-muted-foreground mt-1">
-            <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
-          </div>
         </div>
 
         <div>
@@ -358,25 +349,24 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           />
         </div>
 
+        {/* 標註功能 - 簡化版 */}
         <div>
-          <Label htmlFor="mention">標註用戶與訊息 (輸入 @ 可選擇用戶)</Label>
+          <Label htmlFor="mention">標註用戶與訊息</Label>
           <MentionInput
             value={formData.mentionMessage}
             onChange={(value, mentions) => {
+              console.log('MentionInput onChange:', value, mentions);
               handleInputChange('mentionMessage', value);
               setMentionedUsers(mentions || []);
             }}
-            placeholder="輸入 @ 來標註相關用戶，並在此輸入要告知他們的訊息..."
-            className="min-h-[80px]"
+            placeholder="輸入 @ 來標註用戶，告訴他們要做什麼..."
+            disabled={isSubmitting || isSendingNotification}
           />
           {mentionedUsers.length > 0 && (
-            <div className="mt-2 p-2 bg-muted rounded border">
-              <div className="text-sm font-medium mb-1">已標註用戶:</div>
+            <div className="mt-2 p-2 bg-muted rounded">
+              <div className="text-sm font-medium">已標註用戶:</div>
               <div className="text-sm text-muted-foreground">
                 {mentionedUsers.map(user => user.displayName).join(', ')}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                這些用戶將收到即時通知並可在頁面上方的通知中心查看
               </div>
             </div>
           )}
@@ -402,10 +392,10 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           </Button>
           <Button 
             onClick={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isSendingNotification}
           >
             <Save className="h-4 w-4 mr-2" />
-            {isSubmitting ? '保存中...' : '儲存變更'}
+            {isSubmitting || isSendingNotification ? '處理中...' : '儲存變更'}
           </Button>
         </div>
       </div>
