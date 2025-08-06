@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Bell, MessageSquare, Check, Trash2, MoreVertical, X } from "lucide-react";
+import { Bell, MessageSquare, Check, Trash2, MoreVertical, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserNotification {
@@ -21,6 +21,8 @@ interface UserNotification {
   metadata?: any;
   require_confirmation?: boolean;
   reply_id?: string;
+  archived_at?: string;
+  archived_by?: string;
 }
 
 interface NotificationCardProps {
@@ -31,6 +33,7 @@ interface NotificationCardProps {
   onConfirmReply: (notification: UserNotification) => void;
   onShowConversation: (notification: UserNotification) => void;
   onDelete: (notification: UserNotification) => void;
+  onArchive: (notification: UserNotification) => void;
   onMarkAsRead: (notification: UserNotification) => void;
 }
 
@@ -39,6 +42,7 @@ const getStatusColor = (status: string) => {
     case 'pending': return 'bg-yellow-500/10 text-yellow-700 border-yellow-200';
     case 'replied': return 'bg-blue-500/10 text-blue-700 border-blue-200';
     case 'closed': return 'bg-green-500/10 text-green-700 border-green-200';
+    case 'completed': return 'bg-green-500/10 text-green-700 border-green-200';
     default: return 'bg-gray-500/10 text-gray-700 border-gray-200';
   }
 };
@@ -47,7 +51,8 @@ const getStatusText = (status: string) => {
   switch (status) {
     case 'pending': return '待處理';
     case 'replied': return '已回覆';
-    case 'closed': return '已完成';
+    case 'closed': return '已關閉';
+    case 'completed': return '已完成';
     default: return '未知';
   }
 };
@@ -71,6 +76,7 @@ export function NotificationCard({
   onConfirmReply,
   onShowConversation,
   onDelete,
+  onArchive,
   onMarkAsRead
 }: NotificationCardProps) {
   const handleCardClick = () => {
@@ -97,6 +103,11 @@ export function NotificationCard({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(notification);
+  };
+
+  const handleArchive = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onArchive(notification);
   };
 
   // 判斷主要操作按鈕
@@ -132,8 +143,11 @@ export function NotificationCard({
   };
 
   const primaryAction = getPrimaryAction();
-  const canDelete = notification.sender_id === currentUserId && 
-                   ['closed', 'completed', 'replied'].includes(notification.status);
+  
+  // 改善刪除條件：已完成/已關閉的通知都可以刪除，已讀通知可以歸檔
+  const canDelete = ['closed', 'completed', 'replied'].includes(notification.status);
+  const canArchive = notification.is_read && !canDelete;
+  const showDeleteOptions = canDelete || canArchive;
 
   return (
     <Card 
@@ -190,8 +204,36 @@ export function NotificationCard({
                   {primaryAction.label}
                 </Button>
               )}
+
+              {/* 顯示直接的刪除/歸檔按鈕，針對已完成的通知 */}
+              {canDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={isLoading}
+                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  title="刪除通知"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
+
+              {canArchive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleArchive}
+                  disabled={isLoading}
+                  className="h-7 w-7 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                  title="歸檔通知"
+                >
+                  <Archive className="h-3 w-3" />
+                </Button>
+              )}
               
-              {(canDelete || (!primaryAction && (notification.reference_type === 'issue' || notification.reference_type === 'test_progress'))) && (
+              {/* 下拉選單用於其他操作 */}
+              {(showDeleteOptions || (!primaryAction && (notification.reference_type === 'issue' || notification.reference_type === 'test_progress'))) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -210,13 +252,21 @@ export function NotificationCard({
                         查看對話
                       </DropdownMenuItem>
                     )}
+                    
+                    {canArchive && (
+                      <DropdownMenuItem onClick={handleArchive}>
+                        <Archive className="h-3 w-3 mr-2" />
+                        歸檔通知
+                      </DropdownMenuItem>
+                    )}
+                    
                     {canDelete && (
                       <DropdownMenuItem 
                         onClick={handleDelete}
                         className="text-red-600 focus:text-red-600"
                       >
                         <Trash2 className="h-3 w-3 mr-2" />
-                        刪除
+                        刪除通知
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
