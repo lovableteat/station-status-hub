@@ -23,6 +23,21 @@ import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
 import { BackButton } from "@/components/common/BackButton";
+import { AdvancedIssueFilters } from "./AdvancedIssueFilters";
+
+interface FilterState {
+  searchTerm: string;
+  priorities: string[];
+  statuses: string[];
+  assignees: string[];
+  systems: string[];
+  stations: string[];
+  categories: string[];
+  dateRange: {
+    from: Date | undefined;
+    to: Date | undefined;
+  };
+}
 
 interface Issue {
   id: string;
@@ -58,8 +73,16 @@ interface Issue {
 export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [filters, setFilters] = useState<FilterState>({
+    searchTerm: "",
+    priorities: [],
+    statuses: [],
+    assignees: [],
+    systems: [],
+    stations: [],
+    categories: [],
+    dateRange: { from: undefined, to: undefined }
+  });
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
@@ -93,7 +116,7 @@ export function IssueTracker() {
 
   useEffect(() => {
     filterIssues();
-  }, [issues, searchTerm, priorityFilter]);
+  }, [issues, filters]);
 
   const loadIssues = async () => {
     try {
@@ -159,17 +182,66 @@ export function IssueTracker() {
   const filterIssues = () => {
     let filtered = issues;
 
-    if (searchTerm) {
+    // 搜尋篩選
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(issue =>
-        issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.system_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.station_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        issue.title.toLowerCase().includes(searchLower) ||
+        issue.description.toLowerCase().includes(searchLower) ||
+        issue.system_name?.toLowerCase().includes(searchLower) ||
+        issue.station_name?.toLowerCase().includes(searchLower) ||
+        issue.assigned_to?.toLowerCase().includes(searchLower) ||
+        issue.category?.toLowerCase().includes(searchLower) ||
+        issue.test_item_name?.toLowerCase().includes(searchLower)
       );
     }
 
-    if (priorityFilter !== "all") {
-      filtered = filtered.filter(issue => issue.priority === priorityFilter);
+    // 優先級篩選
+    if (filters.priorities.length > 0) {
+      filtered = filtered.filter(issue => filters.priorities.includes(issue.priority));
+    }
+
+    // 狀態篩選
+    if (filters.statuses.length > 0) {
+      filtered = filtered.filter(issue => filters.statuses.includes(issue.status));
+    }
+
+    // 指派人篩選
+    if (filters.assignees.length > 0) {
+      filtered = filtered.filter(issue => 
+        issue.assigned_to && filters.assignees.includes(issue.assigned_to)
+      );
+    }
+
+    // 系統篩選
+    if (filters.systems.length > 0) {
+      filtered = filtered.filter(issue => 
+        issue.system_name && filters.systems.includes(issue.system_name)
+      );
+    }
+
+    // 工站篩選
+    if (filters.stations.length > 0) {
+      filtered = filtered.filter(issue => 
+        issue.station_name && filters.stations.includes(issue.station_name)
+      );
+    }
+
+    // 分類篩選
+    if (filters.categories.length > 0) {
+      filtered = filtered.filter(issue => 
+        issue.category && filters.categories.includes(issue.category)
+      );
+    }
+
+    // 日期範圍篩選
+    if (filters.dateRange.from || filters.dateRange.to) {
+      filtered = filtered.filter(issue => {
+        const issueDate = new Date(issue.created_at);
+        const fromMatch = !filters.dateRange.from || issueDate >= filters.dateRange.from;
+        const toMatch = !filters.dateRange.to || issueDate <= filters.dateRange.to;
+        return fromMatch && toMatch;
+      });
     }
 
     setFilteredIssues(filtered);
@@ -382,41 +454,30 @@ export function IssueTracker() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex-1 min-w-[200px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="搜尋問題..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
-              className="pl-10"
-            />
-          </div>
-        </div>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="優先級篩選" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部優先級</SelectItem>
-            <SelectItem value="high">高</SelectItem>
-            <SelectItem value="medium">中</SelectItem>
-            <SelectItem value="low">低</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* 高級篩選器 */}
+      <AdvancedIssueFilters 
+        onFiltersChange={setFilters}
+        issueCount={issues.length}
+        filteredCount={filteredIssues.length}
+      />
 
       {/* Main Content */}
       <IssueTableView issues={issues} onUpdate={loadIssues} />
 
-      {filteredIssues.length === 0 && (
+      {filteredIssues.length === 0 && !loading && (
         <div className="text-center py-12">
           <Bug className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">沒有找到問題</h3>
           <p className="text-muted-foreground">
-            {searchTerm || priorityFilter !== "all"
+            {filters.searchTerm || 
+             filters.priorities.length > 0 || 
+             filters.statuses.length > 0 || 
+             filters.assignees.length > 0 ||
+             filters.systems.length > 0 ||
+             filters.stations.length > 0 ||
+             filters.categories.length > 0 ||
+             filters.dateRange.from ||
+             filters.dateRange.to
               ? "請調整篩選條件或建立新問題"
               : "還沒有任何問題記錄，點擊上方按鈕新增問題"
             }
