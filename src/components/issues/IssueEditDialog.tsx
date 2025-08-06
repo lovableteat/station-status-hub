@@ -396,6 +396,17 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
             </div>
           )}
         </div>
+
+        {/* 顯示通知對話歷史 */}
+        <div>
+          <Label>相關通知對話</Label>
+          <div className="mt-2">
+            <NotificationConversationView 
+              referenceType="issue"
+              referenceId={issue.id}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-between pt-4 border-t">
