@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, X, MessageSquare, Check } from "lucide-react";
+import { Bell, X, MessageSquare, Check, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +48,7 @@ export function RealtimeNotifications() {
   const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [showConversation, setShowConversation] = useState<{ issueId?: string; referenceType?: string; referenceId?: string } | null>(null);
   
-  const { sendReply, confirmReply, isLoading } = useNotificationReplies();
+  const { sendReply, confirmReply, deleteNotification, isLoading } = useNotificationReplies();
 
   // 載入用戶通知
   useEffect(() => {
@@ -221,6 +221,17 @@ export function RealtimeNotifications() {
     });
   };
 
+  const handleDeleteNotification = async (notification: UserNotification) => {
+    const success = await deleteNotification(notification.id);
+    if (success) {
+      // 從列表中移除通知
+      setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
+      if (!notification.is_read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    }
+  };
+
   const getNotificationIcon = (type: RealtimeNotification['type']) => {
     switch (type) {
       case 'system_update': return '🔧';
@@ -357,30 +368,44 @@ export function RealtimeNotifications() {
                                 <Check className="h-3 w-3 mr-1" />
                                 確認完成
                               </Button>
-                            )}
-                            {(notification.reference_type === 'issue' || notification.reference_type === 'test_progress') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleShowConversation(notification)}
-                                className="h-6 text-xs px-2"
-                              >
-                                <MessageSquare className="h-3 w-3 mr-1" />
-                                查看對話
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        {!notification.is_read && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => markUserNotificationAsRead(notification)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
+                             )}
+                             {(notification.reference_type === 'issue' || notification.reference_type === 'test_progress') && (
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={() => handleShowConversation(notification)}
+                                 className="h-6 text-xs px-2"
+                               >
+                                 <MessageSquare className="h-3 w-3 mr-1" />
+                                 查看對話
+                               </Button>
+                             )}
+                             {/* 刪除按鈕 - 只有發送者且狀態為已完成時可見 */}
+                             {notification.sender_id === user?.userId && 
+                              ['closed', 'completed', 'replied'].includes(notification.status) && (
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={() => handleDeleteNotification(notification)}
+                                 className="h-6 text-xs px-2 text-red-600 hover:text-red-700"
+                                 disabled={isLoading}
+                               >
+                                 <Trash2 className="h-3 w-3 mr-1" />
+                                 刪除
+                               </Button>
+                             )}
+                           </div>
+                         </div>
+                         {!notification.is_read && (
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={() => markUserNotificationAsRead(notification)}
+                             className="h-6 w-6 p-0"
+                           >
+                             <X className="h-3 w-3" />
+                           </Button>
+                         )}
                       </div>
                     ))}
                   </div>

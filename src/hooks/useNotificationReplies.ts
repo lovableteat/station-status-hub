@@ -240,11 +240,60 @@ export function useNotificationReplies() {
     }
   }, [user]);
 
+  // 刪除已完成的通知
+  const deleteNotification = useCallback(async (notificationId: string) => {
+    if (!user?.userId) {
+      toast({
+        title: "錯誤",
+        description: "請先登入",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (!notificationId) {
+      toast({
+        title: "錯誤",
+        description: "通知ID不能為空",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('user_notifications')
+        .delete()
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      toast({
+        title: "成功",
+        description: "通知已刪除"
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast({
+        title: "刪除失敗",
+        description: "請稍後再試",
+        variant: "destructive"
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, toast]);
+
   return {
     isLoading,
     sendReply,
     confirmReply,
     getNotificationReplies,
-    createConversation
+    createConversation,
+    deleteNotification
   };
 }
