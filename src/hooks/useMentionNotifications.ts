@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
@@ -34,7 +33,7 @@ export function useMentionNotifications() {
       const [, displayName, userId] = match;
       mentions.push({
         id: userId,
-        username: '',
+        username: '', // 暫時為空，實際使用時可以從數據庫獲取
         displayName,
         role: ''
       });
@@ -43,7 +42,7 @@ export function useMentionNotifications() {
     return mentions;
   }, []);
 
-  // 發送標註通知（簡化版本）
+  // 發送標註通知（升級版）
   const sendMentionNotifications = useCallback(async (
     text: string,
     notificationData: NotificationData
@@ -59,7 +58,7 @@ export function useMentionNotifications() {
 
     if (!notificationData.referenceId) {
       toast({
-        title: "錯誤", 
+        title: "錯誤",
         description: "參考ID不能為空",
         variant: "destructive"
       });
@@ -74,7 +73,7 @@ export function useMentionNotifications() {
         return; // 沒有標註，不需要發送通知
       }
 
-      // 直接創建通知記錄，使用當前登入用戶的資訊
+      // 創建通知記錄（支援回覆確認）
       const notifications = mentions.map(mention => ({
         recipient_id: mention.id,
         sender_id: user.userId,
@@ -84,8 +83,7 @@ export function useMentionNotifications() {
         reference_type: notificationData.referenceType,
         reference_id: notificationData.referenceId,
         status: 'pending',
-        priority: 'normal',
-        category: 'mention',
+        require_confirmation: true, // 需要確認的通知
         metadata: {
           ...notificationData.metadata,
           mention_text: text,
@@ -93,19 +91,28 @@ export function useMentionNotifications() {
         }
       }));
 
-      console.log('Sending notifications:', notifications);
-
       const { data: createdNotifications, error: notificationError } = await supabase
         .from('user_notifications')
         .insert(notifications)
         .select();
 
-      if (notificationError) {
-        console.error('Notification error:', notificationError);
-        throw notificationError;
-      }
+      if (notificationError) throw notificationError;
 
-      console.log('Notifications created successfully:', createdNotifications);
+      // 為每個通知創建對話
+      if (createdNotifications) {
+        const conversations = createdNotifications.map(notification => ({
+          notification_id: notification.id,
+          participant_ids: [user.userId, notification.recipient_id],
+          subject: notificationData.title,
+          status: 'active'
+        }));
+
+        const { error: conversationError } = await supabase
+          .from('notification_conversations')
+          .insert(conversations);
+
+        if (conversationError) throw conversationError;
+      }
 
       // 創建標註記錄
       const mentionRecords = mentions.map(mention => ({
@@ -121,14 +128,11 @@ export function useMentionNotifications() {
         .from('user_mentions')
         .insert(mentionRecords);
 
-      if (mentionError) {
-        console.error('Mention error:', mentionError);
-        // 不拋出錯誤，因為通知已經成功創建
-      }
+      if (mentionError) throw mentionError;
 
       toast({
         title: "成功",
-        description: `已標註 ${mentions.length} 位用戶，通知已發送`
+        description: `已標註 ${mentions.length} 位用戶，等待回覆確認`
       });
 
     } catch (error) {
