@@ -180,24 +180,9 @@ export function NotificationCenter() {
     }
   };
 
-  // 獲取通知圖標
+  // 獲取通知圖標 - 統一使用小鈴鐺
   const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'mention':
-        return <AtSign className="h-4 w-4 text-primary" />;
-      case 'reply':
-        return <MessageSquare className="h-4 w-4 text-blue-500" />;
-      case 'issue':
-        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
-      case 'system':
-        return <Settings className="h-4 w-4 text-gray-500" />;
-      case 'assignment':
-        return <Users className="h-4 w-4 text-blue-500" />;
-      case 'completion':
-        return <Circle className="h-4 w-4 text-green-500 fill-green-500" />;
-      default:
-        return <Bell className="h-4 w-4 text-primary" />;
-    }
+    return <Bell className="h-4 w-4 text-primary" />;
   };
 
   // 處理通知點擊 - 擴展支援回覆功能
