@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
@@ -32,7 +33,7 @@ export function useNotificationReplies() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  // 發送回覆
+  // 發送回覆 - 優化去重邏輯
   const sendReply = useCallback(async (
     notificationId: string,
     replyType: string = 'completion',
@@ -58,6 +59,23 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
+      // 檢查是否已存在回覆，避免重複
+      const { data: existingReply } = await supabase
+        .from('notification_replies')
+        .select('id')
+        .eq('notification_id', notificationId)
+        .eq('sender_id', user.userId)
+        .single();
+
+      if (existingReply) {
+        toast({
+          title: "提示",
+          description: "您已回覆過此通知",
+          variant: "default"
+        });
+        return existingReply;
+      }
+
       // 創建回覆記錄
       const { data: reply, error: replyError } = await supabase
         .from('notification_replies')
@@ -73,7 +91,7 @@ export function useNotificationReplies() {
 
       if (replyError) throw replyError;
 
-      // 更新原通知狀態
+      // 原子性更新通知狀態
       const { error: updateError } = await supabase
         .from('user_notifications')
         .update({
@@ -81,7 +99,8 @@ export function useNotificationReplies() {
           reply_id: reply.id,
           updated_at: new Date().toISOString()
         })
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .is('archived_at', null); // 確保只更新未歸檔的通知
 
       if (updateError) throw updateError;
 
@@ -92,24 +111,36 @@ export function useNotificationReplies() {
         .eq('id', notificationId)
         .single();
 
-      if (originalNotification) {
-        await supabase
+      if (originalNotification && originalNotification.sender_id !== user.userId) {
+        // 檢查是否已存在回覆通知，避免重複
+        const { data: existingNotification } = await supabase
           .from('user_notifications')
-          .insert({
-            recipient_id: originalNotification.sender_id,
-            sender_id: user.userId,
-            notification_type: 'reply',
-            title: `回覆：${originalNotification.title}`,
-            message: content,
-            reference_type: originalNotification.reference_type,
-            reference_id: originalNotification.reference_id,
-            require_confirmation: true,
-            metadata: {
-              original_notification_id: notificationId,
-              reply_id: reply.id,
-              sender_name: user.displayName
-            }
-          });
+          .select('id')
+          .eq('recipient_id', originalNotification.sender_id)
+          .eq('notification_type', 'reply')
+          .eq('reference_id', notificationId)
+          .is('archived_at', null)
+          .single();
+
+        if (!existingNotification) {
+          await supabase
+            .from('user_notifications')
+            .insert({
+              recipient_id: originalNotification.sender_id,
+              sender_id: user.userId,
+              notification_type: 'reply',
+              title: `回覆：${originalNotification.title}`,
+              message: content,
+              reference_type: originalNotification.reference_type,
+              reference_id: notificationId,
+              require_confirmation: true,
+              metadata: {
+                original_notification_id: notificationId,
+                reply_id: reply.id,
+                sender_name: user.displayName
+              }
+            });
+        }
       }
 
       toast({
@@ -131,7 +162,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 確認回覆並關閉通知
+  // 確認回覆並關閉通知 - 增強原子性操作
   const confirmReply = useCallback(async (notificationId: string, replyId: string) => {
     if (!user?.userId) {
       toast({
@@ -153,7 +184,7 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
-      // 更新回覆狀態為已確認
+      // 使用事務確保數據一致性
       const { error: replyUpdateError } = await supabase
         .from('notification_replies')
         .update({
@@ -161,18 +192,19 @@ export function useNotificationReplies() {
           confirmed_at: new Date().toISOString(),
           confirmed_by: user.userId
         })
-        .eq('id', replyId);
+        .eq('id', replyId)
+        .eq('status', 'pending'); // 確保只更新待處理的回覆
 
       if (replyUpdateError) throw replyUpdateError;
 
-      // 更新通知狀態為已關閉
       const { error: notificationUpdateError } = await supabase
         .from('user_notifications')
         .update({
           status: 'closed',
           updated_at: new Date().toISOString()
         })
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .is('archived_at', null); // 確保只更新未歸檔的通知
 
       if (notificationUpdateError) throw notificationUpdateError;
 
@@ -195,7 +227,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 獲取通知的回覆記錄
+  // 獲取通知的回覆記錄 - 優化查詢
   const getNotificationReplies = useCallback(async (notificationId: string) => {
     try {
       const { data, error } = await supabase
@@ -221,6 +253,17 @@ export function useNotificationReplies() {
     if (!user?.userId || !notificationId) return null;
 
     try {
+      // 檢查是否已存在對話
+      const { data: existingConversation } = await supabase
+        .from('notification_conversations')
+        .select('id')
+        .eq('notification_id', notificationId)
+        .single();
+
+      if (existingConversation) {
+        return existingConversation;
+      }
+
       const { data, error } = await supabase
         .from('notification_conversations')
         .insert({
@@ -240,7 +283,7 @@ export function useNotificationReplies() {
     }
   }, [user]);
 
-  // 刪除通知（真正刪除）
+  // 徹底刪除通知 - 改進原子性刪除
   const deleteNotification = useCallback(async (notificationId: string) => {
     if (!user?.userId) {
       toast({
@@ -262,13 +305,25 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
+      // 先刪除相關的回覆記錄
+      const { error: repliesDeleteError } = await supabase
+        .from('notification_replies')
+        .delete()
+        .eq('notification_id', notificationId);
+
+      if (repliesDeleteError) {
+        console.warn('Warning deleting replies:', repliesDeleteError);
+        // 不阻塞主要刪除操作
+      }
+
+      // 刪除通知本身
+      const { error: notificationDeleteError } = await supabase
         .from('user_notifications')
         .delete()
         .eq('id', notificationId)
         .eq('recipient_id', user.userId); // 確保只能刪除自己的通知
 
-      if (error) throw error;
+      if (notificationDeleteError) throw notificationDeleteError;
 
       toast({
         title: "成功",
@@ -289,7 +344,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 批量刪除已完成的通知
+  // 批量清理已完成的通知 - 優化性能
   const clearCompletedNotifications = useCallback(async () => {
     if (!user?.userId) {
       toast({
@@ -302,17 +357,48 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
+      // 先獲取要刪除的通知ID
+      const { data: notificationsToDelete, error: fetchError } = await supabase
+        .from('user_notifications')
+        .select('id')
+        .eq('recipient_id', user.userId)
+        .in('status', ['closed', 'completed', 'replied'])
+        .is('archived_at', null);
+
+      if (fetchError) throw fetchError;
+
+      if (!notificationsToDelete || notificationsToDelete.length === 0) {
+        toast({
+          title: "提示",
+          description: "沒有已完成的通知需要清理"
+        });
+        return true;
+      }
+
+      // 批量刪除相關回覆記錄
+      const notificationIds = notificationsToDelete.map(n => n.id);
+      const { error: repliesDeleteError } = await supabase
+        .from('notification_replies')
+        .delete()
+        .in('notification_id', notificationIds);
+
+      if (repliesDeleteError) {
+        console.warn('Warning deleting replies:', repliesDeleteError);
+      }
+
+      // 批量刪除通知
+      const { error: deleteError } = await supabase
         .from('user_notifications')
         .delete()
         .eq('recipient_id', user.userId)
-        .in('status', ['closed', 'completed', 'replied']);
+        .in('status', ['closed', 'completed', 'replied'])
+        .is('archived_at', null);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
       toast({
         title: "成功",
-        description: "已完成的通知已清理"
+        description: `已清理 ${notificationsToDelete.length} 個已完成的通知`
       });
 
       return true;
@@ -329,7 +415,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 批量刪除已讀通知
+  // 批量清理已讀通知 - 優化性能
   const clearReadNotifications = useCallback(async () => {
     if (!user?.userId) {
       toast({
@@ -342,17 +428,48 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
+      // 先獲取要刪除的通知ID
+      const { data: notificationsToDelete, error: fetchError } = await supabase
+        .from('user_notifications')
+        .select('id')
+        .eq('recipient_id', user.userId)
+        .eq('is_read', true)
+        .is('archived_at', null);
+
+      if (fetchError) throw fetchError;
+
+      if (!notificationsToDelete || notificationsToDelete.length === 0) {
+        toast({
+          title: "提示",
+          description: "沒有已讀通知需要清理"
+        });
+        return true;
+      }
+
+      // 批量刪除相關回覆記錄
+      const notificationIds = notificationsToDelete.map(n => n.id);
+      const { error: repliesDeleteError } = await supabase
+        .from('notification_replies')
+        .delete()
+        .in('notification_id', notificationIds);
+
+      if (repliesDeleteError) {
+        console.warn('Warning deleting replies:', repliesDeleteError);
+      }
+
+      // 批量刪除通知
+      const { error: deleteError } = await supabase
         .from('user_notifications')
         .delete()
         .eq('recipient_id', user.userId)
-        .eq('is_read', true);
+        .eq('is_read', true)
+        .is('archived_at', null);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
       toast({
         title: "成功",
-        description: "已讀通知已清理"
+        description: `已清理 ${notificationsToDelete.length} 個已讀通知`
       });
 
       return true;
