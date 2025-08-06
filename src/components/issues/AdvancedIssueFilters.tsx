@@ -262,14 +262,14 @@ export function AdvancedIssueFilters({
             </div>
 
             {/* 快速篩選 */}
-            <Select value={filters.priorities[0] || ""} onValueChange={(value) => 
-              updateFilters({ priorities: value ? [value] : [] })
+            <Select value={filters.priorities[0] || "all-priorities"} onValueChange={(value) => 
+              updateFilters({ priorities: value === "all-priorities" ? [] : [value] })
             }>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="優先級" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部優先級</SelectItem>
+                <SelectItem value="all-priorities">全部優先級</SelectItem>
                 {priorityOptions.map(option => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
@@ -278,14 +278,14 @@ export function AdvancedIssueFilters({
               </SelectContent>
             </Select>
 
-            <Select value={filters.statuses[0] || ""} onValueChange={(value) => 
-              updateFilters({ statuses: value ? [value] : [] })
+            <Select value={filters.statuses[0] || "all-statuses"} onValueChange={(value) => 
+              updateFilters({ statuses: value === "all-statuses" ? [] : [value] })
             }>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="狀態" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部狀態</SelectItem>
+                <SelectItem value="all-statuses">全部狀態</SelectItem>
                 {statusOptions.map(option => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
