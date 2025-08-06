@@ -719,6 +719,108 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_analytics: {
+        Row: {
+          action: string
+          id: string
+          metadata: Json | null
+          notification_id: string
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          id?: string
+          metadata?: Json | null
+          notification_id: string
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          id?: string
+          metadata?: Json | null
+          notification_id?: string
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: {
+          category: string
+          created_at: string
+          delivery_method: string[] | null
+          enabled: boolean
+          id: string
+          quiet_hours_end: string | null
+          quiet_hours_start: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          delivery_method?: string[] | null
+          enabled?: boolean
+          id?: string
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          delivery_method?: string[] | null
+          enabled?: boolean
+          id?: string
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_templates: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          message_template: string
+          metadata_schema: Json | null
+          priority: string | null
+          template_key: string
+          title_template: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          message_template: string
+          metadata_schema?: Json | null
+          priority?: string | null
+          template_key: string
+          title_template: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          message_template?: string
+          metadata_schema?: Json | null
+          priority?: string | null
+          template_key?: string
+          title_template?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       production_metrics: {
         Row: {
           completed_today: number | null
@@ -1796,12 +1898,18 @@ export type Database = {
       }
       user_notifications: {
         Row: {
+          action_url: string | null
+          category: string | null
           created_at: string
+          expires_at: string | null
+          grouped_id: string | null
           id: string
           is_read: boolean
           message: string
           metadata: Json | null
           notification_type: string
+          priority: string | null
+          read_at: string | null
           recipient_id: string
           reference_id: string | null
           reference_type: string | null
@@ -1810,12 +1918,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          action_url?: string | null
+          category?: string | null
           created_at?: string
+          expires_at?: string | null
+          grouped_id?: string | null
           id?: string
           is_read?: boolean
           message: string
           metadata?: Json | null
           notification_type?: string
+          priority?: string | null
+          read_at?: string | null
           recipient_id: string
           reference_id?: string | null
           reference_type?: string | null
@@ -1824,12 +1938,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          action_url?: string | null
+          category?: string | null
           created_at?: string
+          expires_at?: string | null
+          grouped_id?: string | null
           id?: string
           is_read?: boolean
           message?: string
           metadata?: Json | null
           notification_type?: string
+          priority?: string | null
+          read_at?: string | null
           recipient_id?: string
           reference_id?: string | null
           reference_type?: string | null
@@ -1967,6 +2087,20 @@ export type Database = {
       calculate_daily_production_stats: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      cleanup_old_notifications: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      get_notification_stats: {
+        Args: { user_uuid: string }
+        Returns: {
+          total_notifications: number
+          unread_notifications: number
+          high_priority_unread: number
+          urgent_priority_unread: number
+          categories_breakdown: Json
+        }[]
       }
       hash_password: {
         Args: { password: string }
