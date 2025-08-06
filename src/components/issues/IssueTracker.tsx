@@ -461,8 +461,8 @@ export function IssueTracker() {
         filteredCount={filteredIssues.length}
       />
 
-      {/* Main Content */}
-      <IssueTableView issues={issues} onUpdate={loadIssues} />
+      {/* 主要內容 - 問題列表 (表格模式) */}
+      <IssueTableView issues={filteredIssues} onUpdate={loadIssues} />
 
       {filteredIssues.length === 0 && !loading && (
         <div className="text-center py-12">
