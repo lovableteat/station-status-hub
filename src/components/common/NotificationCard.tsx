@@ -86,29 +86,37 @@ export function NotificationCard({
   onMarkAsRead
 }: NotificationCardProps) {
   const handleCardClick = () => {
-    if (!notification.is_read) {
+    if (!notification.is_read && notification?.id && notification.id !== 'undefined') {
       onMarkAsRead(notification);
     }
   };
 
   const handleQuickReply = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onQuickReply(notification);
+    if (notification?.id && notification.id !== 'undefined') {
+      onQuickReply(notification);
+    }
   };
 
   const handleConfirmReply = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onConfirmReply(notification);
+    if (notification?.id && notification.id !== 'undefined') {
+      onConfirmReply(notification);
+    }
   };
 
   const handleShowConversation = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onShowConversation(notification);
+    if (notification?.id && notification.id !== 'undefined') {
+      onShowConversation(notification);
+    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete(notification);
+    if (notification?.id && notification.id !== 'undefined') {
+      onDelete(notification);
+    }
   };
 
   // 獲取主要操作按鈕 - 修復動態圖標問題
