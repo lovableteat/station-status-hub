@@ -70,24 +70,26 @@ export function IssueTracker() {
   // 處理 URL 參數以自動開啟特定問題
   useEffect(() => {
     loadIssues();
+  }, []);
+
+  // 單獨處理 URL 參數跳轉
+  useEffect(() => {
+    if (issues.length === 0) return;
     
     // 檢查 URL 參數是否要求開啟特定問題
     const urlParams = new URLSearchParams(window.location.search);
     const openIssueId = urlParams.get('openIssue');
     
     if (openIssueId) {
-      // 等待問題載入後再開啟編輯對話框
-      setTimeout(() => {
-        const issueToOpen = issues.find(issue => issue.id === openIssueId);
-        if (issueToOpen) {
-          setSelectedIssue(issueToOpen);
-        }
-      }, 500);
+      const issueToOpen = issues.find(issue => issue.id === openIssueId);
+      if (issueToOpen) {
+        setSelectedIssue(issueToOpen);
+      }
       
       // 清除 URL 參數
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, []);
+  }, [issues]);
 
   useEffect(() => {
     filterIssues();
