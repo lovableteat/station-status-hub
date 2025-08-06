@@ -354,26 +354,143 @@ export function RealtimeNotifications() {
   };
 
   const handleDeleteNotification = async (notification: UserNotification) => {
-    console.log('Deleting notification:', notification.id);
-    const success = await deleteNotification(notification.id);
-    if (success) {
-      console.log('Notification deleted successfully');
+    console.log('準備刪除通知:', notification.id);
+    
+    // 樂觀更新：立即從前端狀態移除
+    const previousNotifications = userNotifications;
+    const previousUnreadCount = unreadCount;
+    
+    // 立即更新 UI
+    setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
+    if (!notification.is_read) {
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+
+    try {
+      const success = await deleteNotification(notification.id);
+      
+      if (!success) {
+        // 如果刪除失敗，恢復之前的狀態
+        console.log('刪除失敗，恢復前端狀態');
+        setUserNotifications(previousNotifications);
+        setUnreadCount(previousUnreadCount);
+        
+        toast({
+          title: "刪除失敗",
+          description: "通知刪除失敗，請重試",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      console.log('通知刪除成功，前端狀態已更新');
+      
+      // 成功時顯示確認訊息
+      toast({
+        title: "成功",
+        description: "通知已刪除"
+      });
+      
+    } catch (error) {
+      // 如果出現異常，恢復之前的狀態
+      console.error('刪除通知時發生異常:', error);
+      setUserNotifications(previousNotifications);
+      setUnreadCount(previousUnreadCount);
+      
+      toast({
+        title: "錯誤",
+        description: "刪除時發生錯誤，請重試",
+        variant: "destructive"
+      });
     }
   };
 
   const handleClearCompleted = async () => {
-    console.log('Clearing completed notifications...');
-    const success = await clearCompletedNotifications();
-    if (success) {
-      console.log('Completed notifications cleared successfully');
+    console.log('準備清理已完成通知...');
+    
+    const completedNotifications = userNotifications.filter(n => 
+      ['closed', 'completed', 'replied'].includes(n.status)
+    );
+    
+    if (completedNotifications.length === 0) {
+      toast({
+        title: "提示",
+        description: "沒有已完成的通知需要清理"
+      });
+      return;
+    }
+
+    // 樂觀更新：立即從前端狀態移除已完成的通知
+    const previousNotifications = userNotifications;
+    const previousUnreadCount = unreadCount;
+    
+    const remainingNotifications = userNotifications.filter(n => 
+      !['closed', 'completed', 'replied'].includes(n.status)
+    );
+    
+    const unreadCompletedCount = completedNotifications.filter(n => !n.is_read).length;
+    
+    setUserNotifications(remainingNotifications);
+    setUnreadCount(prev => Math.max(0, prev - unreadCompletedCount));
+
+    try {
+      const success = await clearCompletedNotifications();
+      
+      if (!success) {
+        // 如果清理失敗，恢復之前的狀態
+        console.log('清理失敗，恢復前端狀態');
+        setUserNotifications(previousNotifications);
+        setUnreadCount(previousUnreadCount);
+        return;
+      }
+      
+      console.log('已完成通知清理成功，前端狀態已更新');
+      
+    } catch (error) {
+      // 如果出現異常，恢復之前的狀態
+      console.error('清理已完成通知時發生異常:', error);
+      setUserNotifications(previousNotifications);
+      setUnreadCount(previousUnreadCount);
     }
   };
 
   const handleClearRead = async () => {
-    console.log('Clearing read notifications...');
-    const success = await clearReadNotifications();
-    if (success) {
-      console.log('Read notifications cleared successfully');
+    console.log('準備清理已讀通知...');
+    
+    const readNotifications = userNotifications.filter(n => n.is_read);
+    
+    if (readNotifications.length === 0) {
+      toast({
+        title: "提示", 
+        description: "沒有已讀通知需要清理"
+      });
+      return;
+    }
+
+    // 樂觀更新：立即從前端狀態移除已讀通知
+    const previousNotifications = userNotifications;
+    
+    const unreadNotifications = userNotifications.filter(n => !n.is_read);
+    
+    setUserNotifications(unreadNotifications);
+    // unreadCount 不變，因為只刪除已讀通知
+
+    try {
+      const success = await clearReadNotifications();
+      
+      if (!success) {
+        // 如果清理失敗，恢復之前的狀態
+        console.log('清理失敗，恢復前端狀態');
+        setUserNotifications(previousNotifications);
+        return;
+      }
+      
+      console.log('已讀通知清理成功，前端狀態已更新');
+      
+    } catch (error) {
+      // 如果出現異常，恢復之前的狀態
+      console.error('清理已讀通知時發生異常:', error);
+      setUserNotifications(previousNotifications);
     }
   };
 
