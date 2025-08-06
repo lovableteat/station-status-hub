@@ -177,6 +177,10 @@ export function NotificationCenter() {
     switch (type) {
       case 'mention':
         return <AtSign className="h-4 w-4 text-primary" />;
+      case 'assignment':
+        return <Users className="h-4 w-4 text-blue-500" />;
+      case 'completion':
+        return <Circle className="h-4 w-4 text-green-500 fill-green-500" />;
       default:
         return <Bell className="h-4 w-4 text-primary" />;
     }
@@ -355,8 +359,15 @@ export function NotificationCenter() {
                             <div className="text-xs text-muted-foreground mt-1">
                               {notification.message}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {formatTime(notification.created_at)}
+                            <div className="flex items-center justify-between mt-1">
+                              <div className="text-xs text-muted-foreground">
+                                {formatTime(notification.created_at)}
+                              </div>
+                              {notification.metadata?.issue_title && (
+                                <div className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                                  點擊查看
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
