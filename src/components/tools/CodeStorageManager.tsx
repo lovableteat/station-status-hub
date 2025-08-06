@@ -190,27 +190,33 @@ export function CodeStorageManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('確認要刪除這個程式碼片段嗎？')) return;
-
     try {
+      // 顯示確認對話框
+      const confirmed = window.confirm('確認要刪除這個程式碼片段嗎？此操作無法復原。');
+      if (!confirmed) return;
+
       const { error } = await supabase
         .from('code_snippets')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('刪除程式碼片段錯誤:', error);
+        throw error;
+      }
 
       toast({
         title: "刪除成功",
-        description: "程式碼片段已刪除",
+        description: "程式碼片段已成功刪除",
       });
 
-      loadCodeSnippets();
+      // 重新載入列表
+      await loadCodeSnippets();
     } catch (error) {
       console.error('Error deleting code snippet:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除程式碼片段",
+        description: "無法刪除程式碼片段，請稍後再試",
         variant: "destructive"
       });
     }
