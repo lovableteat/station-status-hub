@@ -307,11 +307,13 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
             e.stopPropagation();
             const src = target.getAttribute('src');
             if (src) {
-              // 切換 lightbox 狀態
+              // 簡單的切換邏輯：如果已經開啟且是同一張圖片就關閉，否則開啟
               if (lightboxOpen && lightboxImage === src) {
                 setLightboxOpen(false);
+                setLightboxImage('');
               } else {
-                handleImageClick(src);
+                setLightboxImage(src);
+                setLightboxOpen(true);
               }
             }
           }
@@ -463,8 +465,11 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       {/* Lightbox for image viewing */}
       <Lightbox
         open={lightboxOpen}
-        close={() => setLightboxOpen(false)}
-        slides={[{ src: lightboxImage }]}
+        close={() => {
+          setLightboxOpen(false);
+          setLightboxImage('');
+        }}
+        slides={lightboxImage ? [{ src: lightboxImage }] : []}
         render={{
           buttonPrev: () => null,
           buttonNext: () => null,
