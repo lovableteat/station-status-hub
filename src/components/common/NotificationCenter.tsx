@@ -462,7 +462,7 @@ export function NotificationCenter() {
                       </div>
                     ))
                   ) : recentNotifications.length > 0 ? (
-                    recentNotifications.map((notification, index) => (
+                     recentNotifications.map((notification, index) => (
                       <div key={index} className="p-2 rounded-lg border bg-muted/30">
                         <div className="text-sm font-medium">{notification.title}</div>
                         {notification.description && (
