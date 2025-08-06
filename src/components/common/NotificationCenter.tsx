@@ -152,17 +152,19 @@ export function NotificationCenter() {
     return `${Math.floor(diffInSeconds / 86400)}天前`;
   };
 
-  // 處理通知點擊 - 跳轉到相關頁面
+  // 處理通知點擊 - 跳轉到相關頁面並打開特定項目
   const handleNotificationClick = (notification: UserNotification) => {
     setIsOpen(false);
     
     if (notification.reference_type && notification.reference_id) {
       switch (notification.reference_type) {
         case 'issue':
-          navigate('/issues');
+          // 跳轉到問題追蹤頁面並打開特定問題
+          navigate(`/issues?openIssue=${notification.reference_id}`);
           break;
         case 'code_snippet':
-          navigate('/tools');
+          // 跳轉到工具管理頁面並打開特定程式碼片段
+          navigate(`/tools?openSnippet=${notification.reference_id}&tab=code`);
           break;
         default:
           break;
