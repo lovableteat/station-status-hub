@@ -221,7 +221,12 @@ export function RealtimeNotifications() {
     });
   };
 
-  const handleDeleteNotification = async (notification: UserNotification) => {
+  const handleDeleteNotification = async (notification: UserNotification, event: React.MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    if (!confirm("確定要刪除這個通知嗎？")) return;
+    
     const success = await deleteNotification(notification.id);
     if (success) {
       // 從列表中移除通知
@@ -329,7 +334,7 @@ export function RealtimeNotifications() {
                             : "bg-background border-primary/20 shadow-sm"
                         )}
                       >
-                        <div className="mt-0.5">{getUserNotificationIcon(notification.notification_type)}</div>
+                        <div className="mt-0.5"><Bell className="h-4 w-4 text-primary" /></div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{notification.title}</div>
                           <div className="text-xs text-muted-foreground mt-1">
@@ -386,7 +391,7 @@ export function RealtimeNotifications() {
                                <Button
                                  variant="ghost"
                                  size="sm"
-                                 onClick={() => handleDeleteNotification(notification)}
+                                 onClick={(e) => handleDeleteNotification(notification, e)}
                                  className="h-6 text-xs px-2 text-red-600 hover:text-red-700"
                                  disabled={isLoading}
                                >
