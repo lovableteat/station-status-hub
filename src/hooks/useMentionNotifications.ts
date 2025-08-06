@@ -42,7 +42,7 @@ export function useMentionNotifications() {
     return mentions;
   }, []);
 
-  // 發送標註通知
+  // 發送標註通知（升級版）
   const sendMentionNotifications = useCallback(async (
     text: string,
     notificationData: NotificationData
@@ -64,7 +64,7 @@ export function useMentionNotifications() {
         return; // 沒有標註，不需要發送通知
       }
 
-      // 創建通知記錄
+      // 創建通知記錄（支援回覆確認）
       const notifications = mentions.map(mention => ({
         recipient_id: mention.id,
         sender_id: user.userId,
@@ -73,6 +73,8 @@ export function useMentionNotifications() {
         message: notificationData.message,
         reference_type: notificationData.referenceType,
         reference_id: notificationData.referenceId,
+        status: 'pending',
+        require_confirmation: true, // 需要確認的通知
         metadata: {
           ...notificationData.metadata,
           mention_text: text,
@@ -80,11 +82,28 @@ export function useMentionNotifications() {
         }
       }));
 
-      const { error: notificationError } = await supabase
+      const { data: createdNotifications, error: notificationError } = await supabase
         .from('user_notifications')
-        .insert(notifications);
+        .insert(notifications)
+        .select();
 
       if (notificationError) throw notificationError;
+
+      // 為每個通知創建對話
+      if (createdNotifications) {
+        const conversations = createdNotifications.map(notification => ({
+          notification_id: notification.id,
+          participant_ids: [user.userId, notification.recipient_id],
+          subject: notificationData.title,
+          status: 'active'
+        }));
+
+        const { error: conversationError } = await supabase
+          .from('notification_conversations')
+          .insert(conversations);
+
+        if (conversationError) throw conversationError;
+      }
 
       // 創建標註記錄
       const mentionRecords = mentions.map(mention => ({
@@ -104,7 +123,7 @@ export function useMentionNotifications() {
 
       toast({
         title: "成功",
-        description: `已標註 ${mentions.length} 位用戶`
+        description: `已標註 ${mentions.length} 位用戶，等待回覆確認`
       });
 
     } catch (error) {
