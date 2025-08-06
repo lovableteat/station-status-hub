@@ -1992,6 +1992,7 @@ export type Database = {
           require_confirmation: boolean | null
           sender_id: string
           status: string | null
+          tags: string[] | null
           title: string
           updated_at: string
         }
@@ -2018,6 +2019,7 @@ export type Database = {
           require_confirmation?: boolean | null
           sender_id: string
           status?: string | null
+          tags?: string[] | null
           title: string
           updated_at?: string
         }
@@ -2044,6 +2046,7 @@ export type Database = {
           require_confirmation?: boolean | null
           sender_id?: string
           status?: string | null
+          tags?: string[] | null
           title?: string
           updated_at?: string
         }
