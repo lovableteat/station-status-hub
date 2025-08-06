@@ -49,6 +49,12 @@ export function NotificationReplyDialog({
   const handleSendReply = async () => {
     if (!replyContent.trim()) return;
 
+    // 驗證通知 ID
+    if (!notification?.id || notification.id === 'undefined') {
+      console.error('Invalid notification ID for reply:', notification);
+      return;
+    }
+
     const result = await sendReply(notification.id, selectedReplyType, replyContent);
     if (result) {
       onClose();

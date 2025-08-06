@@ -14,7 +14,9 @@ export function useNotificationOperations() {
     replyType: string = 'completion',
     content: string = '任務已完成'
   ) => {
-    if (!user?.userId || !notificationId) {
+    // 嚴格驗證參數
+    if (!user?.userId || !notificationId || notificationId === 'undefined') {
+      console.error('Invalid parameters:', { userId: user?.userId, notificationId });
       toast({
         title: "錯誤",
         description: "請先登入或提供有效的通知ID",
@@ -31,7 +33,7 @@ export function useNotificationOperations() {
         .select('id')
         .eq('notification_id', notificationId)
         .eq('sender_id', user.userId)
-        .single();
+        .maybeSingle();
 
       if (existingReply) {
         toast({
@@ -78,7 +80,9 @@ export function useNotificationOperations() {
   }, [user, toast]);
 
   const confirmReply = useCallback(async (notificationId: string, replyId: string) => {
-    if (!user?.userId || !notificationId || !replyId) {
+    // 嚴格驗證參數
+    if (!user?.userId || !notificationId || notificationId === 'undefined' || !replyId || replyId === 'undefined') {
+      console.error('Invalid parameters:', { userId: user?.userId, notificationId, replyId });
       toast({
         title: "錯誤",
         description: "缺少必要參數",
