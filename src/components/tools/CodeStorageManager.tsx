@@ -423,9 +423,19 @@ export function CodeStorageManager() {
                 <RichTextEditor
                   content={formData.sop_content}
                   onChange={(content) => setFormData({...formData, sop_content: content})}
-                  placeholder="請輸入詳細的操作說明..."
+                  placeholder="請輸入詳細的SOP操作說明，包含：&#10;1. 使用前準備&#10;2. 操作步驟詳解&#10;3. 注意事項&#10;4. 常見問題處理&#10;5. 相關資源連結"
                   className="min-h-[200px]"
                 />
+                <div className="text-xs text-muted-foreground mt-1">
+                  <strong>建議包含以下內容：</strong>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5">
+                    <li>使用前的環境準備與相依性檢查</li>
+                    <li>詳細的操作步驟說明（含截圖或範例）</li>
+                    <li>重要的注意事項與限制條件</li>
+                    <li>常見錯誤的排除方法</li>
+                    <li>相關文件或資源的連結</li>
+                  </ul>
+                </div>
               </div>
               
               <DialogFooter>
