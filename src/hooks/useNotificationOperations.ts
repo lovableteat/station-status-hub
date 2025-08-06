@@ -89,7 +89,24 @@ export function useNotificationOperations() {
 
     setIsLoading(true);
     try {
-      // 觸發器會自動處理通知狀態更新
+      // 首先獲取原始通知信息和回覆信息
+      const { data: originalNotification, error: notificationError } = await supabase
+        .from('user_notifications')
+        .select('sender_id, title, message, metadata')
+        .eq('id', notificationId)
+        .single();
+
+      if (notificationError) throw notificationError;
+
+      const { data: replyData, error: replyError } = await supabase
+        .from('notification_replies')
+        .select('content, sender_id')
+        .eq('id', replyId)
+        .single();
+
+      if (replyError) throw replyError;
+
+      // 更新回覆狀態
       const { error: replyUpdateError } = await supabase
         .from('notification_replies')
         .update({
@@ -102,9 +119,39 @@ export function useNotificationOperations() {
 
       if (replyUpdateError) throw replyUpdateError;
 
+      // 發送結果通知給原發送人
+      if (originalNotification.sender_id && originalNotification.sender_id !== user.userId) {
+        const metadata = originalNotification.metadata as any;
+        const { error: resultNotificationError } = await supabase
+          .from('user_notifications')
+          .insert({
+            recipient_id: originalNotification.sender_id,
+            sender_id: user.userId,
+            notification_type: 'reply_result',
+            title: `任務回覆結果: ${originalNotification.title}`,
+            message: `您的任務標註已收到回覆並確認完成: "${replyData.content}"`,
+            reference_type: metadata?.referenceType || 'issue',
+            reference_id: metadata?.referenceId,
+            status: 'completed',
+            priority: 'normal',
+            category: 'task_result',
+            metadata: {
+              originalNotificationId: notificationId,
+              replyId: replyId,
+              replyContent: replyData.content,
+              originalTitle: originalNotification.title
+            }
+          });
+
+        if (resultNotificationError) {
+          console.error('Error sending result notification:', resultNotificationError);
+          // 不阻止主要流程，但記錄錯誤
+        }
+      }
+
       toast({
         title: "成功",
-        description: "通知已確認並關閉"
+        description: "通知已確認並關閉，結果已發送給發送人"
       });
 
       return true;
