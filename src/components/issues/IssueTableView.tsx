@@ -443,6 +443,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
               className="max-w-6xl max-h-[85vh] overflow-y-auto"
               onPointerDownOutside={(e) => e.preventDefault()}
               onEscapeKeyDown={(e) => e.preventDefault()}
+              onInteractOutside={(e) => e.preventDefault()}
             >
               <DialogHeader>
                 <DialogTitle>編輯問題</DialogTitle>
