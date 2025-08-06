@@ -18,10 +18,6 @@ interface NewIssue {
   system_id?: string;
   station_id?: string;
   test_item_id?: string;
-  relate: string;
-  category: string;
-  process_notes: string;
-  solution: string;
 }
 
 interface IssueCreateDialogProps {
@@ -55,11 +51,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
     assigned_to: "",
     system_id: undefined,
     station_id: undefined,
-    test_item_id: undefined,
-    relate: "",
-    category: "",
-    process_notes: "",
-    solution: ""
+    test_item_id: undefined
   });
 
   // 照片上傳相關狀態
@@ -227,11 +219,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
           assigned_to: newIssue.assigned_to || null,
           system_id: (newIssue.system_id && newIssue.system_id !== "none") ? newIssue.system_id : null,
           station_id: (newIssue.station_id && newIssue.station_id !== "none") ? newIssue.station_id : null,
-          test_item_id: (newIssue.test_item_id && newIssue.test_item_id !== "none") ? newIssue.test_item_id : null,
-          relate: newIssue.relate || null,
-          category: newIssue.category || null,
-          process_notes: newIssue.process_notes || null,
-          solution: newIssue.solution || null
+          test_item_id: (newIssue.test_item_id && newIssue.test_item_id !== "none") ? newIssue.test_item_id : null
         }])
         .select()
         .single();
@@ -257,11 +245,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
         assigned_to: "",
         system_id: undefined,
         station_id: undefined,
-        test_item_id: undefined,
-        relate: "",
-        category: "",
-        process_notes: "",
-        solution: ""
+        test_item_id: undefined
       });
       setSelectedFiles([]);
       setUploadProgress({});
@@ -412,48 +396,6 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="relate">相關項目</Label>
-              <Input
-                id="relate"
-                placeholder="請輸入相關項目"
-                value={newIssue.relate}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, relate: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="category">問題分類</Label>
-              <Input
-                id="category"
-                placeholder="請輸入問題分類"
-                value={newIssue.category}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, category: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="process_notes">處理過程</Label>
-              <Textarea
-                id="process_notes"
-                placeholder="請記錄處理過程..."
-                value={newIssue.process_notes}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, process_notes: e.target.value }))}
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="solution">解決方案</Label>
-              <Textarea
-                id="solution"
-                placeholder="請記錄解決方案..."
-                value={newIssue.solution}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, solution: e.target.value }))}
-                rows={3}
-              />
             </div>
 
             {/* 照片上傳區域 */}
