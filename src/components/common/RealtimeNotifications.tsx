@@ -80,15 +80,7 @@ export function RealtimeNotifications() {
 
       if (error) throw error;
       
-      const uniqueNotifications = data?.filter((notification, index, self) => 
-        index === self.findIndex((n) => 
-          n.id === notification.id || 
-          (n.reference_id === notification.reference_id && 
-           n.notification_type === notification.notification_type &&
-           n.sender_id === notification.sender_id &&
-           Math.abs(new Date(n.created_at).getTime() - new Date(notification.created_at).getTime()) < 60000)
-        )
-      ) || [];
+      const uniqueNotifications = data || [];
       
       setUserNotifications(uniqueNotifications);
       setUnreadCount(uniqueNotifications.filter(n => !n.is_read).length);
@@ -163,19 +155,7 @@ export function RealtimeNotifications() {
         console.log('Received new notification:', payload.new);
         const newNotification = payload.new as UserNotification;
         if (!newNotification.archived_at) {
-          setUserNotifications(prev => {
-            const exists = prev.some(n => 
-              n.id === newNotification.id ||
-              (n.reference_id === newNotification.reference_id && 
-               n.notification_type === newNotification.notification_type &&
-               n.sender_id === newNotification.sender_id &&
-               Math.abs(new Date(n.created_at).getTime() - new Date(newNotification.created_at).getTime()) < 60000)
-            );
-            
-            if (exists) return prev;
-            
-            return [newNotification, ...prev.slice(0, 49)];
-          });
+          setUserNotifications(prev => [newNotification, ...prev.slice(0, 49)]);
           
           if (!newNotification.is_read) {
             setUnreadCount(prev => prev + 1);
@@ -356,11 +336,10 @@ export function RealtimeNotifications() {
   const handleDeleteNotification = async (notification: UserNotification) => {
     console.log('準備刪除通知:', notification.id);
     
-    // 樂觀更新：立即從前端狀態移除
+    // 樂觀更新
     const previousNotifications = userNotifications;
     const previousUnreadCount = unreadCount;
     
-    // 立即更新 UI
     setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
     if (!notification.is_read) {
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -370,38 +349,14 @@ export function RealtimeNotifications() {
       const success = await deleteNotification(notification.id);
       
       if (!success) {
-        // 如果刪除失敗，恢復之前的狀態
-        console.log('刪除失敗，恢復前端狀態');
+        // 恢復狀態
         setUserNotifications(previousNotifications);
         setUnreadCount(previousUnreadCount);
-        
-        toast({
-          title: "刪除失敗",
-          description: "通知刪除失敗，請重試",
-          variant: "destructive"
-        });
-        return;
       }
-      
-      console.log('通知刪除成功，前端狀態已更新');
-      
-      // 成功時顯示確認訊息
-      toast({
-        title: "成功",
-        description: "通知已刪除"
-      });
-      
     } catch (error) {
-      // 如果出現異常，恢復之前的狀態
       console.error('刪除通知時發生異常:', error);
       setUserNotifications(previousNotifications);
       setUnreadCount(previousUnreadCount);
-      
-      toast({
-        title: "錯誤",
-        description: "刪除時發生錯誤，請重試",
-        variant: "destructive"
-      });
     }
   };
 
@@ -420,7 +375,7 @@ export function RealtimeNotifications() {
       return;
     }
 
-    // 樂觀更新：立即從前端狀態移除已完成的通知
+    // 樂觀更新
     const previousNotifications = userNotifications;
     const previousUnreadCount = unreadCount;
     
@@ -437,17 +392,10 @@ export function RealtimeNotifications() {
       const success = await clearCompletedNotifications();
       
       if (!success) {
-        // 如果清理失敗，恢復之前的狀態
-        console.log('清理失敗，恢復前端狀態');
         setUserNotifications(previousNotifications);
         setUnreadCount(previousUnreadCount);
-        return;
       }
-      
-      console.log('已完成通知清理成功，前端狀態已更新');
-      
     } catch (error) {
-      // 如果出現異常，恢復之前的狀態
       console.error('清理已完成通知時發生異常:', error);
       setUserNotifications(previousNotifications);
       setUnreadCount(previousUnreadCount);
@@ -467,28 +415,19 @@ export function RealtimeNotifications() {
       return;
     }
 
-    // 樂觀更新：立即從前端狀態移除已讀通知
+    // 樂觀更新
     const previousNotifications = userNotifications;
-    
     const unreadNotifications = userNotifications.filter(n => !n.is_read);
     
     setUserNotifications(unreadNotifications);
-    // unreadCount 不變，因為只刪除已讀通知
 
     try {
       const success = await clearReadNotifications();
       
       if (!success) {
-        // 如果清理失敗，恢復之前的狀態
-        console.log('清理失敗，恢復前端狀態');
         setUserNotifications(previousNotifications);
-        return;
       }
-      
-      console.log('已讀通知清理成功，前端狀態已更新');
-      
     } catch (error) {
-      // 如果出現異常，恢復之前的狀態
       console.error('清理已讀通知時發生異常:', error);
       setUserNotifications(previousNotifications);
     }
