@@ -11,7 +11,13 @@ import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
+import { UpdateIndicator } from "@/components/common/UpdateIndicator";
+import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
+import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
+import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { useUser } from "@/components/auth/UserContext";
+import { useUserPresence } from "@/hooks/useUserPresence";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +25,8 @@ const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, login, isLoggedIn } = useUser();
+  const { updateCurrentModule } = useUserPresence();
+  const { isUpdating } = useUnifiedData();
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -41,6 +49,7 @@ const Index = () => {
 
   const handleNavigation = (module: string, params?: any) => {
     setActiveModule(module);
+    updateCurrentModule(module); // Update user presence
     // Close sidebar on mobile after navigation
     if (isMobile) {
       setSidebarOpen(false);
@@ -109,6 +118,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Real-time update indicators */}
+      <UpdateIndicator isUpdating={isUpdating} />
+      <FacebookStyleNotifications />
+      <OnlineUsersIndicator />
+      <RealtimeNotifications />
+      
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
         <div 
@@ -122,6 +137,7 @@ const Index = () => {
           activeModule={activeModule} 
           onModuleChange={(module) => {
             setActiveModule(module);
+            updateCurrentModule(module); // Update user presence
             if (isMobile) setSidebarOpen(false);
           }}
           isOpen={sidebarOpen}
