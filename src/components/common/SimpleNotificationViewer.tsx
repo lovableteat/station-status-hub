@@ -49,6 +49,8 @@ export function SimpleNotificationViewer() {
     if (!user?.userId) return;
 
     try {
+      console.log('載入通知，用戶ID:', user.userId);
+      
       const { data, error } = await supabase
         .from('user_notifications')
         .select('*')
@@ -61,6 +63,7 @@ export function SimpleNotificationViewer() {
         return;
       }
 
+      console.log('載入的通知:', data);
       setNotifications(data || []);
     } catch (error) {
       console.error('載入通知錯誤:', error);
@@ -69,33 +72,46 @@ export function SimpleNotificationViewer() {
 
   const markAsRead = async (id: string) => {
     try {
+      console.log('標記通知為已讀:', id);
+      
       const { error } = await supabase
         .from('user_notifications')
         .update({ is_read: true })
         .eq('id', id);
 
-      if (!error) {
-        setNotifications(prev => 
-          prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-        );
+      if (error) {
+        console.error('標記已讀失敗:', error);
+        return;
       }
+
+      setNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+      );
+      
+      console.log('已標記為已讀');
     } catch (error) {
-      console.error('標記已讀失敗:', error);
+      console.error('標記已讀錯誤:', error);
     }
   };
 
   const deleteNotification = async (id: string) => {
     try {
+      console.log('刪除通知:', id);
+      
       const { error } = await supabase
         .from('user_notifications')
         .delete()
         .eq('id', id);
 
-      if (!error) {
-        setNotifications(prev => prev.filter(n => n.id !== id));
+      if (error) {
+        console.error('刪除通知失敗:', error);
+        return;
       }
+
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      console.log('通知已刪除');
     } catch (error) {
-      console.error('刪除通知失敗:', error);
+      console.error('刪除通知錯誤:', error);
     }
   };
 
