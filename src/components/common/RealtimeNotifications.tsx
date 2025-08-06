@@ -12,6 +12,7 @@ import { useNotificationReplies } from "@/hooks/useNotificationReplies";
 import { NotificationReplyDialog } from "@/components/common/NotificationReplyDialog";
 import { NotificationConversationView } from "@/components/issues/NotificationConversationView";
 import { NotificationCard } from "@/components/common/NotificationCard";
+import { useOptimizedRealtime } from "@/hooks/useOptimizedRealtime";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -63,34 +64,39 @@ export function RealtimeNotifications() {
     isLoading 
   } = useNotificationReplies();
 
-  // 載入用戶通知 - 優化查詢和去重
+  useOptimizedRealtime();
+
   const loadUserNotifications = async () => {
     if (!user?.userId) return;
 
     try {
       setIsUpdating(true);
+      console.log('Loading user notifications...');
+      
       const { data, error } = await supabase
         .from('user_notifications')
         .select('*')
         .eq('recipient_id', user.userId)
-        .is('archived_at', null) // 只獲取未歸檔的通知
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
-        .limit(50); // 限制數量以提升效能
+        .limit(50);
 
       if (error) throw error;
       
-      // 去重處理，基於 id 和 reference_id 組合
       const uniqueNotifications = data?.filter((notification, index, self) => 
         index === self.findIndex((n) => 
           n.id === notification.id || 
           (n.reference_id === notification.reference_id && 
            n.notification_type === notification.notification_type &&
-           n.sender_id === notification.sender_id)
+           n.sender_id === notification.sender_id &&
+           Math.abs(new Date(n.created_at).getTime() - new Date(notification.created_at).getTime()) < 60000)
         )
       ) || [];
       
       setUserNotifications(uniqueNotifications);
       setUnreadCount(uniqueNotifications.filter(n => !n.is_read).length);
+      
+      console.log(`Loaded ${uniqueNotifications.length} notifications, ${uniqueNotifications.filter(n => !n.is_read).length} unread`);
     } catch (error) {
       console.error('Error fetching notifications:', error);
       toast({
@@ -108,13 +114,13 @@ export function RealtimeNotifications() {
     loadUserNotifications();
   }, [user]);
 
-  // 優化實時監聽 - 完整的 CRUD 操作監聽
   useEffect(() => {
     if (!user) return;
 
+    console.log('Setting up real-time subscription for notifications...');
+
     const channel = supabase
       .channel('notification_updates')
-      // 系統通知監聽（保持現有功能）
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'test_systems' }, (payload) => {
         addNotification({
           type: 'system_update',
@@ -151,22 +157,22 @@ export function RealtimeNotifications() {
           });
         }
       })
-      // 用戶通知的完整 CRUD 監聽
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
+        console.log('Received new notification:', payload.new);
         const newNotification = payload.new as UserNotification;
         if (!newNotification.archived_at) {
           setUserNotifications(prev => {
-            // 檢查是否已存在相同通知，避免重複
             const exists = prev.some(n => 
               n.id === newNotification.id ||
               (n.reference_id === newNotification.reference_id && 
                n.notification_type === newNotification.notification_type &&
-               n.sender_id === newNotification.sender_id)
+               n.sender_id === newNotification.sender_id &&
+               Math.abs(new Date(n.created_at).getTime() - new Date(newNotification.created_at).getTime()) < 60000)
             );
             
             if (exists) return prev;
@@ -185,9 +191,9 @@ export function RealtimeNotifications() {
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
+        console.log('Notification updated:', payload.new);
         const updatedNotification = payload.new as UserNotification;
         
-        // 如果通知被歸檔，從列表中移除
         if (updatedNotification.archived_at) {
           setUserNotifications(prev => prev.filter(n => n.id !== updatedNotification.id));
           if (!payload.old.is_read && updatedNotification.is_read) {
@@ -200,7 +206,6 @@ export function RealtimeNotifications() {
           prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
         );
         
-        // 更新未讀計數
         if (!payload.old.is_read && updatedNotification.is_read) {
           setUnreadCount(prev => Math.max(0, prev - 1));
         } else if (payload.old.is_read && !updatedNotification.is_read) {
@@ -213,20 +218,17 @@ export function RealtimeNotifications() {
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
+        console.log('Notification deleted:', payload.old);
         const deletedNotification = payload.old as UserNotification;
         setUserNotifications(prev => prev.filter(n => n.id !== deletedNotification.id));
         if (!deletedNotification.is_read) {
           setUnreadCount(prev => Math.max(0, prev - 1));
         }
       })
-      // 監聽回覆更新
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_replies' }, () => {
-        // 當回覆狀態變化時，重新載入通知以確保狀態同步
-        setTimeout(loadUserNotifications, 500);
-      })
       .subscribe();
 
     return () => {
+      console.log('Cleaning up real-time subscription...');
       supabase.removeChannel(channel);
     };
   }, [user, toast]);
@@ -240,7 +242,6 @@ export function RealtimeNotifications() {
     };
 
     setNotifications(prev => {
-      // 去重處理
       const exists = prev.some(n => 
         n.metadata?.systemId === newNotification.metadata?.systemId &&
         n.type === newNotification.type
@@ -266,6 +267,7 @@ export function RealtimeNotifications() {
     if (notification.is_read) return;
     
     try {
+      console.log('Marking notification as read:', notification.id);
       const { error } = await supabase
         .from('user_notifications')
         .update({ 
@@ -273,7 +275,7 @@ export function RealtimeNotifications() {
           read_at: new Date().toISOString() 
         })
         .eq('id', notification.id)
-        .is('archived_at', null); // 確保只更新未歸檔的通知
+        .is('archived_at', null);
 
       if (error) throw error;
     } catch (error) {
@@ -290,6 +292,7 @@ export function RealtimeNotifications() {
     if (!user) return;
     
     try {
+      console.log('Marking all notifications as read...');
       const { error } = await supabase
         .from('user_notifications')
         .update({ 
@@ -298,7 +301,7 @@ export function RealtimeNotifications() {
         })
         .eq('recipient_id', user.userId)
         .eq('is_read', false)
-        .is('archived_at', null); // 只更新未歸檔的通知
+        .is('archived_at', null);
 
       if (error) throw error;
 
@@ -320,6 +323,7 @@ export function RealtimeNotifications() {
   };
 
   const handleQuickReply = async (notification: UserNotification) => {
+    console.log('Opening quick reply for:', notification.id);
     setSelectedNotification(notification);
     setShowReplyDialog(true);
     await markUserNotificationAsRead(notification);
@@ -335,6 +339,7 @@ export function RealtimeNotifications() {
       return;
     }
     
+    console.log('Confirming reply for:', notification.id, notification.reply_id);
     const success = await confirmReply(notification.id, notification.reply_id);
     if (success) {
       await markUserNotificationAsRead(notification);
@@ -342,6 +347,7 @@ export function RealtimeNotifications() {
   };
 
   const handleShowConversation = async (notification: UserNotification) => {
+    console.log('Showing conversation for:', notification.id);
     await markUserNotificationAsRead(notification);
     setShowConversation({
       issueId: notification.reference_id,
@@ -351,23 +357,26 @@ export function RealtimeNotifications() {
   };
 
   const handleDeleteNotification = async (notification: UserNotification) => {
+    console.log('Deleting notification:', notification.id);
     const success = await deleteNotification(notification.id);
     if (success) {
-      // 實時更新會自動處理 UI 更新
+      console.log('Notification deleted successfully');
     }
   };
 
   const handleClearCompleted = async () => {
+    console.log('Clearing completed notifications...');
     const success = await clearCompletedNotifications();
     if (success) {
-      // 實時更新會自動處理 UI 更新
+      console.log('Completed notifications cleared successfully');
     }
   };
 
   const handleClearRead = async () => {
+    console.log('Clearing read notifications...');
     const success = await clearReadNotifications();
     if (success) {
-      // 實時更新會自動處理 UI 更新
+      console.log('Read notifications cleared successfully');
     }
   };
 
@@ -411,6 +420,7 @@ export function RealtimeNotifications() {
               "animate-fade-in",
               isUpdating && "animate-pulse"
             )}
+            disabled={isLoading}
           >
             <div className="relative">
               <Bell className="h-4 w-4" />
@@ -601,6 +611,7 @@ export function RealtimeNotifications() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowConversation(null)}
+                  disabled={isLoading}
                 >
                   <X className="h-4 w-4" />
                 </Button>
