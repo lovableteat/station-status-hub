@@ -148,6 +148,26 @@ export function NotificationCard({
   // 簡化刪除條件
   const canDelete = ['closed', 'completed', 'replied'].includes(notification.status) || notification.is_read;
 
+  // 修復動態圖標渲染 - 使用正確的 JSX 語法
+  const renderPrimaryActionButton = () => {
+    if (!primaryAction) return null;
+    
+    const IconComponent = primaryAction.icon;
+    
+    return (
+      <Button
+        variant={primaryAction.variant}
+        size="sm"
+        onClick={primaryAction.onClick}
+        disabled={isLoading}
+        className="h-7 text-xs px-2 hover:bg-primary/10 transition-colors"
+      >
+        <IconComponent className="h-3 w-3 mr-1" />
+        {primaryAction.label}
+      </Button>
+    );
+  };
+
   return (
     <Card 
       className={cn(
@@ -191,19 +211,8 @@ export function NotificationCard({
             </div>
             
             <div className="flex items-center gap-1">
-              {/* 主要操作按鈕 - 修復動態圖標渲染 */}
-              {primaryAction && (
-                <Button
-                  variant={primaryAction.variant}
-                  size="sm"
-                  onClick={primaryAction.onClick}
-                  disabled={isLoading}
-                  className="h-7 text-xs px-2"
-                >
-                  <primaryAction.icon className="h-3 w-3 mr-1" />
-                  {primaryAction.label}
-                </Button>
-              )}
+              {/* 主要操作按鈕 - 使用修復後的渲染函數 */}
+              {renderPrimaryActionButton()}
 
               {/* 直接顯示刪除按鈕 */}
               {canDelete && (
@@ -212,7 +221,7 @@ export function NotificationCard({
                   size="sm"
                   onClick={handleDelete}
                   disabled={isLoading}
-                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
                   title="刪除通知"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -226,7 +235,7 @@ export function NotificationCard({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 w-7 p-0"
+                      className="h-7 w-7 p-0 hover:bg-muted transition-colors"
                       onClick={(e) => e.stopPropagation()}
                       disabled={isLoading}
                     >
@@ -237,6 +246,7 @@ export function NotificationCard({
                     <DropdownMenuItem 
                       onClick={handleShowConversation}
                       disabled={isLoading}
+                      className="hover:bg-muted transition-colors"
                     >
                       <MessageSquare className="h-3 w-3 mr-2" />
                       查看對話
@@ -245,7 +255,7 @@ export function NotificationCard({
                     <DropdownMenuItem 
                       onClick={handleDelete}
                       disabled={isLoading}
-                      className="text-red-600 focus:text-red-600"
+                      className="text-red-600 focus:text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="h-3 w-3 mr-2" />
                       刪除通知
