@@ -203,9 +203,18 @@ export function RealtimeNotifications() {
     await markUserNotificationAsRead(notification);
   };
 
-  const handleConfirmReply = async (notification: UserNotification) => {
-    if (!notification.reply_id) return;
+  const handleConfirmReply = async (notification: UserNotification, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
     
+    if (!notification.reply_id) {
+      console.error('No reply_id found for notification:', notification.id);
+      return;
+    }
+    
+    console.log('Confirming reply for notification:', notification.id, 'reply_id:', notification.reply_id);
     const success = await confirmReply(notification.id, notification.reply_id);
     if (success) {
       await markUserNotificationAsRead(notification);
@@ -362,11 +371,11 @@ export function RealtimeNotifications() {
                                 快速回覆
                               </Button>
                             )}
-                            {notification.notification_type === 'reply' && notification.require_confirmation && (
+                            {notification.notification_type === 'reply' && notification.require_confirmation && notification.reply_id && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleConfirmReply(notification)}
+                                onClick={(e) => handleConfirmReply(notification, e)}
                                 className="h-6 text-xs px-2"
                                 disabled={isLoading}
                               >
