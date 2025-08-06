@@ -14,7 +14,7 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
-import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
+import { NotificationCenter } from "@/components/common/NotificationCenter";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -122,7 +122,7 @@ const Index = () => {
       <UpdateIndicator isUpdating={isUpdating} />
       <FacebookStyleNotifications />
       <OnlineUsersIndicator />
-      <RealtimeNotifications />
+      <NotificationCenter />
       
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
