@@ -47,10 +47,19 @@ export function useMentionNotifications() {
     text: string,
     notificationData: NotificationData
   ) => {
-    if (!user) {
+    if (!user?.userId) {
       toast({
         title: "錯誤",
         description: "請先登入",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!notificationData.referenceId) {
+      toast({
+        title: "錯誤",
+        description: "參考ID不能為空",
         variant: "destructive"
       });
       return;

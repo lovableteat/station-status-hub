@@ -38,10 +38,19 @@ export function useNotificationReplies() {
     replyType: string = 'completion',
     content: string = '任務已完成'
   ) => {
-    if (!user) {
+    if (!user?.userId) {
       toast({
         title: "錯誤",
         description: "請先登入",
+        variant: "destructive"
+      });
+      return null;
+    }
+
+    if (!notificationId) {
+      toast({
+        title: "錯誤",
+        description: "通知ID不能為空",
         variant: "destructive"
       });
       return null;
@@ -124,10 +133,19 @@ export function useNotificationReplies() {
 
   // 確認回覆並關閉通知
   const confirmReply = useCallback(async (notificationId: string, replyId: string) => {
-    if (!user) {
+    if (!user?.userId) {
       toast({
         title: "錯誤",
         description: "請先登入",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    if (!notificationId || !replyId) {
+      toast({
+        title: "錯誤",
+        description: "通知ID和回覆ID不能為空",
         variant: "destructive"
       });
       return false;
@@ -200,7 +218,7 @@ export function useNotificationReplies() {
     participantIds: string[],
     subject: string
   ) => {
-    if (!user) return null;
+    if (!user?.userId || !notificationId) return null;
 
     try {
       const { data, error } = await supabase
