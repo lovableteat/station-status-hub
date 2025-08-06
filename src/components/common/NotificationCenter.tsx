@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Users, Circle, Bell, X, AtSign } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,7 @@ export function NotificationCenter() {
   const { onlineUsers, totalOnlineUsers } = useUserPresence();
   const { toasts } = useToast();
   const { user } = useUser();
+  const navigate = useNavigate();
 
   // 獲取用戶通知
   useEffect(() => {
@@ -148,6 +150,24 @@ export function NotificationCenter() {
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}分鐘前`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}小時前`;
     return `${Math.floor(diffInSeconds / 86400)}天前`;
+  };
+
+  // 處理通知點擊 - 跳轉到相關頁面
+  const handleNotificationClick = (notification: UserNotification) => {
+    setIsOpen(false);
+    
+    if (notification.reference_type && notification.reference_id) {
+      switch (notification.reference_type) {
+        case 'issue':
+          navigate('/issues');
+          break;
+        case 'code_snippet':
+          navigate('/tools');
+          break;
+        default:
+          break;
+      }
+    }
   };
 
   // 獲取通知圖標
@@ -306,7 +326,7 @@ export function NotificationCenter() {
                   {/* 標註通知 */}
                   {notifications.length > 0 ? (
                     notifications.map((notification) => (
-                      <div
+                       <div
                         key={notification.id}
                         className={cn(
                           "p-2 rounded-lg border cursor-pointer transition-colors",
@@ -314,7 +334,10 @@ export function NotificationCenter() {
                             ? "bg-primary/5 border-primary/20 hover:bg-primary/10" 
                             : "bg-muted/30 hover:bg-muted/50"
                         )}
-                        onClick={() => !notification.is_read && markAsRead(notification.id)}
+                        onClick={() => {
+                          if (!notification.is_read) markAsRead(notification.id);
+                          handleNotificationClick(notification);
+                        }}
                       >
                         <div className="flex items-start gap-2">
                           <div className="flex-shrink-0 mt-0.5">
