@@ -235,14 +235,47 @@ export function useNotificationManager() {
     }
   }, [user?.userId]);
 
+  // 強制重新載入通知 - 無快取
+  const forceReloadNotifications = useCallback(async () => {
+    if (!user?.userId) return;
+
+    try {
+      console.log('🔄 強制重新載入通知...');
+      setIsLoading(true);
+      
+      // 清空本地狀態
+      setNotifications([]);
+      setUnreadCount(0);
+      
+      const { data, error } = await supabase
+        .from('user_notifications')
+        .select('*')
+        .eq('recipient_id', user.userId)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      console.log(`✅ 強制載入了 ${data?.length || 0} 個通知`);
+      setNotifications(data || []);
+      setUnreadCount((data || []).filter(n => !n.is_read).length);
+    } catch (error) {
+      console.error('❌ 強制重新載入失敗:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.userId]);
+
   // 設置實時訂閱
   useEffect(() => {
     if (!user?.userId) return;
 
-    loadNotifications();
+    // 初次載入
+    forceReloadNotifications();
 
     const channel = supabase
-      .channel('notifications_manager')
+      .channel(`notifications_${user.userId}`)
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
@@ -252,7 +285,12 @@ export function useNotificationManager() {
         console.log('📩 收到新通知:', payload.new);
         const newNotification = payload.new as Notification;
         if (!newNotification.archived_at) {
-          setNotifications(prev => [newNotification, ...prev.slice(0, 49)]);
+          setNotifications(prev => {
+            // 避免重複通知
+            const exists = prev.find(n => n.id === newNotification.id);
+            if (exists) return prev;
+            return [newNotification, ...prev.slice(0, 49)];
+          });
           if (!newNotification.is_read) {
             setUnreadCount(prev => prev + 1);
           }
@@ -264,19 +302,32 @@ export function useNotificationManager() {
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
-        console.log('🗑️ 通知被刪除:', payload.old);
+        console.log('🗑️ 實時刪除通知:', payload.old);
         const deletedNotification = payload.old as Notification;
         setNotifications(prev => prev.filter(n => n.id !== deletedNotification.id));
-        if (!deletedNotification.is_read) {
+        if (deletedNotification && !deletedNotification.is_read) {
           setUnreadCount(prev => Math.max(0, prev - 1));
         }
+      })
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'user_notifications',
+        filter: `recipient_id=eq.${user.userId}`
+      }, (payload) => {
+        console.log('📝 通知更新:', payload.new);
+        const updatedNotification = payload.new as Notification;
+        setNotifications(prev => 
+          prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
+        );
       })
       .subscribe();
 
     return () => {
+      console.log('🔌 關閉通知訂閱');
       supabase.removeChannel(channel);
     };
-  }, [user?.userId, loadNotifications]);
+  }, [user?.userId, forceReloadNotifications]);
 
   return {
     notifications,
@@ -286,6 +337,7 @@ export function useNotificationManager() {
     deleteMultipleNotifications,
     clearAllNotifications,
     markAsRead,
-    loadNotifications
+    loadNotifications,
+    forceReloadNotifications
   };
 }
