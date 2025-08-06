@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,6 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { MentionInput } from "@/components/common/MentionInput";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { useUser } from "@/components/auth/UserContext";
-import { NotificationConversationView } from './NotificationConversationView';
 
 interface Issue {
   id: string;
@@ -44,7 +44,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     status: issue.status,
     assigned_to: issue.assigned_to,
     process_notes: issue.process_notes || '',
-    solution: issue.solution || '',
     relate: issue.relate || '',
     category: issue.category || '',
     tags: issue.tags?.join(', ') || '',
@@ -109,7 +108,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         status: formData.status,
         assigned_to: formData.assigned_to,
         process_notes: formData.process_notes.trim() || null,
-        solution: formData.solution.trim() || null,
         relate: formData.relate.trim() || null,
         category: formData.category.trim() || null,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
@@ -350,19 +348,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         </div>
 
         <div>
-          <Label htmlFor="solution">解決方案 / SOP 操作說明</Label>
-          <RichTextEditor
-            content={formData.solution}
-            onChange={(content) => handleInputChange('solution', content)}
-            placeholder="請記錄解決方案與SOP操作說明，包含：&#10;1. 具體解決步驟&#10;2. 所需工具與資源&#10;3. 操作注意事項&#10;4. 驗證方法&#10;5. 預防措施"
-            className="min-h-[100px]"
-          />
-          <div className="text-xs text-muted-foreground mt-1">
-            <strong>建議包含：</strong> 詳細操作步驟、所需權限、工具清單、安全注意事項、驗證檢查點
-          </div>
-        </div>
-
-        <div>
           <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
           <Input
             id="tags"
@@ -395,17 +380,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
               </div>
             </div>
           )}
-        </div>
-
-        {/* 顯示通知對話歷史 */}
-        <div>
-          <Label>相關通知對話</Label>
-          <div className="mt-2">
-            <NotificationConversationView 
-              referenceType="issue"
-              referenceId={issue.id}
-            />
-          </div>
         </div>
       </div>
 
