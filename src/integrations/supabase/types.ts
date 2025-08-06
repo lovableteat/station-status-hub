@@ -746,6 +746,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          notification_id: string
+          participant_ids: string[]
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          notification_id: string
+          participant_ids?: string[]
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          notification_id?: string
+          participant_ids?: string[]
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           category: string
@@ -779,6 +812,45 @@ export type Database = {
           quiet_hours_start?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      notification_replies: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          content: string | null
+          created_at: string
+          id: string
+          notification_id: string
+          reply_type: string
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          notification_id: string
+          reply_type?: string
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          notification_id?: string
+          reply_type?: string
+          sender_id?: string
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1900,6 +1972,7 @@ export type Database = {
         Row: {
           action_url: string | null
           category: string | null
+          conversation_id: string | null
           created_at: string
           expires_at: string | null
           grouped_id: string | null
@@ -1913,13 +1986,17 @@ export type Database = {
           recipient_id: string
           reference_id: string | null
           reference_type: string | null
+          reply_id: string | null
+          require_confirmation: boolean | null
           sender_id: string
+          status: string | null
           title: string
           updated_at: string
         }
         Insert: {
           action_url?: string | null
           category?: string | null
+          conversation_id?: string | null
           created_at?: string
           expires_at?: string | null
           grouped_id?: string | null
@@ -1933,13 +2010,17 @@ export type Database = {
           recipient_id: string
           reference_id?: string | null
           reference_type?: string | null
+          reply_id?: string | null
+          require_confirmation?: boolean | null
           sender_id: string
+          status?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           action_url?: string | null
           category?: string | null
+          conversation_id?: string | null
           created_at?: string
           expires_at?: string | null
           grouped_id?: string | null
@@ -1953,7 +2034,10 @@ export type Database = {
           recipient_id?: string
           reference_id?: string | null
           reference_type?: string | null
+          reply_id?: string | null
+          require_confirmation?: boolean | null
           sender_id?: string
+          status?: string | null
           title?: string
           updated_at?: string
         }
