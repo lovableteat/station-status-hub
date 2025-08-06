@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Bell, MessageSquare, Check, Trash2, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
 interface UserNotification {
   id: string;
@@ -34,6 +35,13 @@ interface NotificationCardProps {
   onShowConversation: (notification: UserNotification) => void;
   onDelete: (notification: UserNotification) => void;
   onMarkAsRead: (notification: UserNotification) => void;
+}
+
+interface PrimaryAction {
+  label: string;
+  icon: LucideIcon;
+  onClick: (e: React.MouseEvent) => void;
+  variant: 'default' | 'outline' | 'ghost' | 'destructive' | 'secondary' | 'link';
 }
 
 const getStatusColor = (status: string) => {
@@ -103,14 +111,14 @@ export function NotificationCard({
     onDelete(notification);
   };
 
-  // 判斷主要操作按鈕
-  const getPrimaryAction = () => {
+  // 獲取主要操作按鈕 - 修復動態圖標問題
+  const getPrimaryAction = (): PrimaryAction | null => {
     if (notification.notification_type === 'mention' && notification.status === 'pending') {
       return {
         label: '回覆',
         icon: MessageSquare,
         onClick: handleQuickReply,
-        variant: 'default' as const
+        variant: 'default'
       };
     }
     
@@ -119,7 +127,7 @@ export function NotificationCard({
         label: '確認完成',
         icon: Check,
         onClick: handleConfirmReply,
-        variant: 'default' as const
+        variant: 'default'
       };
     }
 
@@ -128,7 +136,7 @@ export function NotificationCard({
         label: '查看對話',
         icon: MessageSquare,
         onClick: handleShowConversation,
-        variant: 'outline' as const
+        variant: 'outline'
       };
     }
 
@@ -137,7 +145,7 @@ export function NotificationCard({
 
   const primaryAction = getPrimaryAction();
   
-  // 簡化刪除條件：已完成/已關閉的通知都可以刪除
+  // 簡化刪除條件
   const canDelete = ['closed', 'completed', 'replied'].includes(notification.status) || notification.is_read;
 
   return (
@@ -183,6 +191,7 @@ export function NotificationCard({
             </div>
             
             <div className="flex items-center gap-1">
+              {/* 主要操作按鈕 - 修復動態圖標渲染 */}
               {primaryAction && (
                 <Button
                   variant={primaryAction.variant}
@@ -196,7 +205,7 @@ export function NotificationCard({
                 </Button>
               )}
 
-              {/* 顯示直接的刪除按鈕 */}
+              {/* 直接顯示刪除按鈕 */}
               {canDelete && (
                 <Button
                   variant="ghost"
@@ -219,18 +228,23 @@ export function NotificationCard({
                       size="sm"
                       className="h-7 w-7 p-0"
                       onClick={(e) => e.stopPropagation()}
+                      disabled={isLoading}
                     >
                       <MoreVertical className="h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-32">
-                    <DropdownMenuItem onClick={handleShowConversation}>
+                    <DropdownMenuItem 
+                      onClick={handleShowConversation}
+                      disabled={isLoading}
+                    >
                       <MessageSquare className="h-3 w-3 mr-2" />
                       查看對話
                     </DropdownMenuItem>
                     
                     <DropdownMenuItem 
                       onClick={handleDelete}
+                      disabled={isLoading}
                       className="text-red-600 focus:text-red-600"
                     >
                       <Trash2 className="h-3 w-3 mr-2" />
