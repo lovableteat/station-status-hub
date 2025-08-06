@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -14,7 +15,7 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
-import { NotificationCenter } from "@/components/common/NotificationCenter";
+import { NewNotificationCenter } from "@/components/common/NewNotificationCenter";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -147,9 +148,9 @@ const Index = () => {
           "flex-1 overflow-auto relative",
           isMobile && "pt-14" // Add top padding on mobile for fixed header
         )}>
-          {/* 通知中心 - 固定在右上角 */}
+          {/* 新通知中心 - 固定在右上角 */}
           <div className="fixed top-4 right-4 z-50">
-            <NotificationCenter />
+            <NewNotificationCenter />
           </div>
           {renderModule()}
         </main>
