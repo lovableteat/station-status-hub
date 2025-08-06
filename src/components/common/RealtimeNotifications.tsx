@@ -12,7 +12,6 @@ import { useNotificationReplies } from "@/hooks/useNotificationReplies";
 import { NotificationReplyDialog } from "@/components/common/NotificationReplyDialog";
 import { NotificationConversationView } from "@/components/issues/NotificationConversationView";
 import { NotificationCard } from "@/components/common/NotificationCard";
-import { useOptimizedRealtime } from "@/hooks/useOptimizedRealtime";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -63,8 +62,6 @@ export function RealtimeNotifications() {
     clearReadNotifications,
     isLoading 
   } = useNotificationReplies();
-
-  useOptimizedRealtime(user?.userId || '');
 
   const loadUserNotifications = async () => {
     if (!user?.userId) return;
