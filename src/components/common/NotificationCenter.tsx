@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Circle, Bell, X, AtSign } from "lucide-react";
+import { Users, Circle, Bell, X, AtSign, MessageSquare, AlertTriangle, Settings, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { NotificationReplyDialog } from './NotificationReplyDialog';
+import { useNotificationReplies } from '@/hooks/useNotificationReplies';
 
 const moduleLabels: Record<string, string> = {
   dashboard: "儀表板",
@@ -41,6 +43,9 @@ interface UserNotification {
   is_read: boolean;
   created_at: string;
   sender_id: string;
+  status?: string;
+  require_confirmation?: boolean;
+  reply_id?: string;
 }
 
 export function NotificationCenter() {
@@ -48,9 +53,12 @@ export function NotificationCenter() {
   const [activeTab, setActiveTab] = useState<"users" | "notifications">("users");
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<UserNotification | null>(null);
   const { onlineUsers, totalOnlineUsers } = useUserPresence();
   const { toasts } = useToast();
   const { user } = useUser();
+  const { confirmReply } = useNotificationReplies();
   const navigate = useNavigate();
 
   // 獲取用戶通知
@@ -177,12 +185,77 @@ export function NotificationCenter() {
     switch (type) {
       case 'mention':
         return <AtSign className="h-4 w-4 text-primary" />;
+      case 'reply':
+        return <MessageSquare className="h-4 w-4 text-blue-500" />;
+      case 'issue':
+        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+      case 'system':
+        return <Settings className="h-4 w-4 text-gray-500" />;
       case 'assignment':
         return <Users className="h-4 w-4 text-blue-500" />;
       case 'completion':
         return <Circle className="h-4 w-4 text-green-500 fill-green-500" />;
       default:
         return <Bell className="h-4 w-4 text-primary" />;
+    }
+  };
+
+  // 處理通知點擊 - 擴展支援回覆功能
+  const handleNotificationAction = (notification: UserNotification) => {
+    if (notification.notification_type === 'mention' && notification.status === 'pending') {
+      // 標註通知 - 打開回覆對話框
+      setSelectedNotification(notification);
+      setReplyDialogOpen(true);
+    } else if (notification.notification_type === 'reply' && notification.require_confirmation) {
+      // 回覆通知 - 確認並關閉
+      handleConfirmReply(notification);
+    } else {
+      // 其他通知 - 原有邏輯
+      handleNotificationClick(notification);
+    }
+    markAsRead(notification.id);
+  };
+
+  // 確認回覆並關閉通知
+  const handleConfirmReply = async (notification: UserNotification) => {
+    if (!notification.reply_id) return;
+    
+    const success = await confirmReply(notification.id, notification.reply_id);
+    if (success) {
+      // 更新本地狀態
+      setNotifications(prev => prev.map(n => 
+        n.id === notification.id 
+          ? { ...n, status: 'closed' }
+          : n
+      ));
+    }
+  };
+
+  // 獲取通知狀態顏色
+  const getNotificationStatusColor = (notification: UserNotification) => {
+    switch (notification.status) {
+      case 'pending':
+        return 'bg-yellow-500';
+      case 'replied':
+        return 'bg-blue-500';
+      case 'closed':
+        return 'bg-green-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  // 獲取通知狀態文字
+  const getNotificationStatusText = (notification: UserNotification) => {
+    switch (notification.status) {
+      case 'pending':
+        return '待處理';
+      case 'replied':
+        return '已回覆';
+      case 'closed':
+        return '已完成';
+      default:
+        return '';
     }
   };
 
@@ -330,9 +403,9 @@ export function NotificationCenter() {
                   )}
                   
                   {/* 標註通知 */}
-                  {notifications.length > 0 ? (
-                    notifications.map((notification) => (
-                       <div
+                   {notifications.length > 0 ? (
+                     notifications.map((notification) => (
+                        <div
                         key={notification.id}
                         className={cn(
                           "p-2 rounded-lg border cursor-pointer transition-colors",
@@ -340,10 +413,7 @@ export function NotificationCenter() {
                             ? "bg-primary/5 border-primary/20 hover:bg-primary/10" 
                             : "bg-muted/30 hover:bg-muted/50"
                         )}
-                        onClick={() => {
-                          if (!notification.is_read) markAsRead(notification.id);
-                          handleNotificationClick(notification);
-                        }}
+                        onClick={() => handleNotificationAction(notification)}
                       >
                         <div className="flex items-start gap-2">
                           <div className="flex-shrink-0 mt-0.5">
@@ -352,6 +422,14 @@ export function NotificationCenter() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="text-sm font-medium">{notification.title}</div>
+                              {notification.status && (
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs px-1 py-0 ${getNotificationStatusColor(notification)} text-white border-0`}
+                                >
+                                  {getNotificationStatusText(notification)}
+                                </Badge>
+                              )}
                               {!notification.is_read && (
                                 <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                               )}
@@ -363,6 +441,16 @@ export function NotificationCenter() {
                               <div className="text-xs text-muted-foreground">
                                 {formatTime(notification.created_at)}
                               </div>
+                              {notification.notification_type === 'mention' && notification.status === 'pending' && (
+                                <Badge variant="secondary" className="text-xs">
+                                  點擊回覆
+                                </Badge>
+                              )}
+                              {notification.notification_type === 'reply' && notification.require_confirmation && (
+                                <Badge variant="default" className="text-xs">
+                                  點擊確認完成
+                                </Badge>
+                              )}
                               {notification.metadata?.issue_title && (
                                 <div className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                                   點擊查看
@@ -392,6 +480,18 @@ export function NotificationCenter() {
             </div>
           </CardContent>
         </Card>
+      )}
+      
+      {/* 回覆對話框 */}
+      {selectedNotification && (
+        <NotificationReplyDialog
+          isOpen={replyDialogOpen}
+          onClose={() => {
+            setReplyDialogOpen(false);
+            setSelectedNotification(null);
+          }}
+          notification={selectedNotification}
+        />
       )}
     </div>
   );
