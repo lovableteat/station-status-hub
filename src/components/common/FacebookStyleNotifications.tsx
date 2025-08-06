@@ -30,7 +30,7 @@ export function FacebookStyleNotifications() {
   const [notifications, setNotifications] = useState<FacebookNotification[]>([]);
   const [toastNotifications, setToastNotifications] = useState<ToastNotification[]>([]);
 
-  // 獲取用戶通知
+  // 獲取系統通知（非用戶標註通知）
   useEffect(() => {
     if (!user) return;
 
@@ -41,9 +41,9 @@ export function FacebookStyleNotifications() {
           .select('*')
           .eq('recipient_id', user.userId)
           .eq('is_read', false)
-          .neq('notification_type', 'mention') // 過濾掉標註通知
+          .eq('notification_type', 'system') // 只顯示系統通知
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(3);
 
         if (error) throw error;
         setNotifications(data || []);
@@ -54,7 +54,7 @@ export function FacebookStyleNotifications() {
 
     fetchNotifications();
 
-    // 設置實時訂閱 - 過濾掉標註通知
+    // 設置實時訂閱 - 只監聽系統通知
     const channel = supabase
       .channel('facebook_notifications')
       .on(
@@ -68,12 +68,12 @@ export function FacebookStyleNotifications() {
         (payload) => {
           const newNotification = payload.new as FacebookNotification;
           
-          // 完全過濾掉標註通知，不在右下角顯示
-          if (newNotification.notification_type === 'mention') {
+          // 只顯示系統通知，過濾掉用戶標註和回覆通知
+          if (newNotification.notification_type !== 'system') {
             return;
           }
           
-          setNotifications(prev => [newNotification, ...prev.slice(0, 4)]);
+          setNotifications(prev => [newNotification, ...prev.slice(0, 2)]);
           
           // 創建臨時顯示的toast通知
           const toastId = crypto.randomUUID();
@@ -220,13 +220,13 @@ export function FacebookStyleNotifications() {
         ))}
       </div>
 
-      {/* Facebook 風格持久通知 - 右下角 */}
+      {/* Facebook 風格持久通知 - 右下角（僅系統通知）*/}
       {notifications.length > 0 && (
         <div className="fixed bottom-4 right-4 z-50 space-y-3 w-80">
           {notifications.map((notification) => (
             <Card
               key={notification.id}
-              className="p-4 bg-white shadow-lg border-l-4 border-l-blue-500 animate-scale-in"
+              className="p-4 bg-white shadow-lg border-l-4 border-l-green-500 animate-scale-in"
             >
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-1">
@@ -244,13 +244,6 @@ export function FacebookStyleNotifications() {
                   <p className="text-sm text-gray-600 mt-1 leading-relaxed">
                     {notification.message}
                   </p>
-                  
-                  {/* 標註通知的特殊顯示 */}
-                  {notification.notification_type === 'mention' && notification.metadata?.sender_name && (
-                    <p className="text-xs text-blue-600 mt-2">
-                      來自 {notification.metadata.sender_name} 的標註
-                    </p>
-                  )}
                 </div>
                 <Button
                   variant="ghost"
