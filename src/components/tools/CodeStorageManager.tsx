@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,6 @@ interface CodeSnippet {
   language: string;
   category: string;
   tags: string[];
-  sop_content?: string;
   created_at: string;
   updated_at: string;
 }
@@ -78,8 +77,7 @@ export function CodeStorageManager() {
     code_content: "",
     language: "javascript",
     category: "utility",
-    tags: "",
-    sop_content: ""
+    tags: ""
   });
 
   const loadCodeSnippets = async () => {
@@ -101,7 +99,6 @@ export function CodeStorageManager() {
         language: item.language,
         category: item.category,
         tags: item.tags || [],
-        sop_content: item.sop_content || undefined,
         created_at: item.created_at,
         updated_at: item.updated_at
       }));
@@ -134,7 +131,6 @@ export function CodeStorageManager() {
         language: formData.language,
         category: formData.category,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        sop_content: formData.sop_content || null,
       };
 
       if (editingSnippet) {
@@ -183,40 +179,33 @@ export function CodeStorageManager() {
       code_content: snippet.code_content,
       language: snippet.language,
       category: snippet.category,
-      tags: snippet.tags.join(', '),
-      sop_content: snippet.sop_content || ""
+      tags: snippet.tags.join(', ')
     });
     setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      // 顯示確認對話框
-      const confirmed = window.confirm('確認要刪除這個程式碼片段嗎？此操作無法復原。');
-      if (!confirmed) return;
+    if (!confirm('確認要刪除這個程式碼片段嗎？')) return;
 
+    try {
       const { error } = await supabase
         .from('code_snippets')
         .delete()
         .eq('id', id);
 
-      if (error) {
-        console.error('刪除程式碼片段錯誤:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "刪除成功",
-        description: "程式碼片段已成功刪除",
+        description: "程式碼片段已刪除",
       });
 
-      // 重新載入列表
-      await loadCodeSnippets();
+      loadCodeSnippets();
     } catch (error) {
       console.error('Error deleting code snippet:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除程式碼片段，請稍後再試",
+        description: "無法刪除程式碼片段",
         variant: "destructive"
       });
     }
@@ -245,8 +234,7 @@ export function CodeStorageManager() {
       code_content: "",
       language: "javascript",
       category: "utility",
-      tags: "",
-      sop_content: ""
+      tags: ""
     });
     setEditingSnippet(null);
   };
@@ -306,30 +294,7 @@ export function CodeStorageManager() {
                 新增程式碼
               </Button>
             </DialogTrigger>
-          <DialogContent 
-            className="max-w-4xl max-h-[80vh] overflow-y-auto" 
-            onPointerDownOutside={(e) => {
-              // 檢查點擊的元素是否為文件上傳相關
-              const target = e.target as HTMLElement;
-              if (target?.closest('input[type="file"]') || target?.closest('.rich-text-editor')) {
-                e.preventDefault();
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              // 檢查是否在編輯器中，如果是則不關閉對話框
-              const target = document.activeElement as HTMLElement;
-              if (target?.closest('.ProseMirror') || target?.closest('.rich-text-editor')) {
-                e.preventDefault();
-              }
-            }}
-            onInteractOutside={(e) => {
-              // 檢查交互的元素是否為編輯器相關
-              const target = e.target as HTMLElement;
-              if (target?.closest('.rich-text-editor') || target?.closest('input[type="file"]') || target?.closest('.lightbox')) {
-                e.preventDefault();
-              }
-            }}
-          >
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingSnippet ? "編輯程式碼片段" : "新增程式碼片段"}
@@ -404,47 +369,24 @@ export function CodeStorageManager() {
               
               <div className="space-y-2">
                 <Label htmlFor="description">描述</Label>
-                <RichTextEditor
-                  content={formData.description}
-                  onChange={(content) => setFormData({...formData, description: content})}
-                  placeholder="請輸入程式碼片段的描述..."
-                  className="min-h-[80px]"
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
                 />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="code_content">程式碼內容 *</Label>
-                <textarea
+                <Textarea
                   id="code_content"
                   value={formData.code_content}
                   onChange={(e) => setFormData({...formData, code_content: e.target.value})}
                   rows={12}
-                  className="w-full px-3 py-2 border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-sm resize-y"
+                  className="font-mono text-sm"
                   required
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sop_content">SOP 操作說明</Label>
-                <RichTextEditor
-                  content={formData.sop_content}
-                  onChange={(content) => setFormData({...formData, sop_content: content})}
-                  placeholder="請輸入詳細的程式碼片段SOP操作說明，包含：&#10;📋 使用前準備&#10;⚙️ 操作步驟詳解&#10;⚠️ 注意事項&#10;🔧 常見問題處理&#10;📚 相關資源連結"
-                  className="min-h-[300px]"
-                />
-                <div className="text-xs text-muted-foreground mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border-l-4 border-blue-500">
-                  <div className="font-semibold text-blue-700 dark:text-blue-300 mb-2">📝 SOP 編寫指南：</div>
-                  <div className="space-y-2">
-                    <div><strong>📋 使用前準備：</strong>列出所需環境、工具版本、相依性檢查等</div>
-                    <div><strong>⚙️ 操作步驟詳解：</strong>提供詳細的逐步說明，包含程式碼範例與預期結果</div>
-                    <div><strong>⚠️ 注意事項：</strong>重要限制條件、安全性考量、效能影響等</div>
-                    <div><strong>🔧 常見問題處理：</strong>錯誤訊息解析、故障排除方法、替代方案</div>
-                    <div><strong>📚 相關資源連結：</strong>官方文件、教學資源、相關工具連結等</div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-                    <strong>💡 提示：</strong>使用清楚的標題、項目符號、程式碼區塊和圖片來提升可讀性
-                  </div>
-                </div>
               </div>
               
               <DialogFooter>

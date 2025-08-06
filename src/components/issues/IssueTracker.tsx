@@ -16,28 +16,13 @@ import {
   Search, 
   Eye,
   Download,
-  Edit,
   Image as ImageIcon
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
+import { IssueEditDialog } from "./IssueEditDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
 import { BackButton } from "@/components/common/BackButton";
-import { AdvancedIssueFilters } from "./AdvancedIssueFilters";
-
-interface FilterState {
-  searchTerm: string;
-  priorities: string[];
-  statuses: string[];
-  assignees: string[];
-  systems: string[];
-  stations: string[];
-  categories: string[];
-  dateRange: {
-    from: Date | undefined;
-    to: Date | undefined;
-  };
-}
 
 interface Issue {
   id: string;
@@ -51,16 +36,9 @@ interface Issue {
   system_id?: string;
   station_id?: string;
   test_item_id?: string;
-  relate?: string;
-  category?: string;
-  process_notes?: string;
-  solution?: string;
   system_name?: string;
-  assigned_engineer?: string;
   station_name?: string;
-  station_order?: number;
   test_item_name?: string;
-  test_item_description?: string;
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -73,16 +51,8 @@ interface Issue {
 export function IssueTracker() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
-  const [filters, setFilters] = useState<FilterState>({
-    searchTerm: "",
-    priorities: [],
-    statuses: [],
-    assignees: [],
-    systems: [],
-    stations: [],
-    categories: [],
-    dateRange: { from: undefined, to: undefined }
-  });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
@@ -90,54 +60,20 @@ export function IssueTracker() {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const { toast } = useToast();
 
-  // 處理 URL 參數以自動開啟特定問題
   useEffect(() => {
     loadIssues();
   }, []);
 
-  // 單獨處理 URL 參數跳轉
-  useEffect(() => {
-    if (issues.length === 0) return;
-    
-    // 檢查 URL 參數是否要求開啟特定問題
-    const urlParams = new URLSearchParams(window.location.search);
-    const openIssueId = urlParams.get('openIssue');
-    
-    if (openIssueId) {
-      const issueToOpen = issues.find(issue => issue.id === openIssueId);
-      if (issueToOpen) {
-        setSelectedIssue(issueToOpen);
-      }
-      
-      // 清除 URL 參數
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [issues]);
-
   useEffect(() => {
     filterIssues();
-  }, [issues, filters]);
+  }, [issues, searchTerm, priorityFilter]);
 
   const loadIssues = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('issues')
-        .select(`
-          *,
-          test_systems!issues_system_id_fkey (
-            system_name,
-            assigned_engineer
-          ),
-          test_flow_stations!issues_station_id_fkey (
-            station_name,
-            station_order
-          ),
-          test_flow_items!issues_test_item_id_fkey (
-            item_name,
-            description
-          )
-        `)
+        .from('issue_details')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -155,12 +91,6 @@ export function IssueTracker() {
             priority: (issue.priority || 'medium') as "low" | "medium" | "high" | "critical",
             status: (issue.status || 'open') as "open" | "in_progress" | "resolved" | "closed",
             assigned_to: issue.assigned_to || '',
-            system_name: issue.test_systems?.system_name,
-            assigned_engineer: issue.test_systems?.assigned_engineer,
-            station_name: issue.test_flow_stations?.station_name,
-            station_order: issue.test_flow_stations?.station_order,
-            test_item_name: issue.test_flow_items?.item_name,
-            test_item_description: issue.test_flow_items?.description,
             attachments: attachments || []
           };
         })
@@ -182,66 +112,17 @@ export function IssueTracker() {
   const filterIssues = () => {
     let filtered = issues;
 
-    // 搜尋篩選
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
+    if (searchTerm) {
       filtered = filtered.filter(issue =>
-        issue.title.toLowerCase().includes(searchLower) ||
-        issue.description.toLowerCase().includes(searchLower) ||
-        issue.system_name?.toLowerCase().includes(searchLower) ||
-        issue.station_name?.toLowerCase().includes(searchLower) ||
-        issue.assigned_to?.toLowerCase().includes(searchLower) ||
-        issue.category?.toLowerCase().includes(searchLower) ||
-        issue.test_item_name?.toLowerCase().includes(searchLower)
+        issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.system_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        issue.station_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // 優先級篩選
-    if (filters.priorities.length > 0) {
-      filtered = filtered.filter(issue => filters.priorities.includes(issue.priority));
-    }
-
-    // 狀態篩選
-    if (filters.statuses.length > 0) {
-      filtered = filtered.filter(issue => filters.statuses.includes(issue.status));
-    }
-
-    // 指派人篩選
-    if (filters.assignees.length > 0) {
-      filtered = filtered.filter(issue => 
-        issue.assigned_to && filters.assignees.includes(issue.assigned_to)
-      );
-    }
-
-    // 系統篩選
-    if (filters.systems.length > 0) {
-      filtered = filtered.filter(issue => 
-        issue.system_name && filters.systems.includes(issue.system_name)
-      );
-    }
-
-    // 工站篩選
-    if (filters.stations.length > 0) {
-      filtered = filtered.filter(issue => 
-        issue.station_name && filters.stations.includes(issue.station_name)
-      );
-    }
-
-    // 分類篩選
-    if (filters.categories.length > 0) {
-      filtered = filtered.filter(issue => 
-        issue.category && filters.categories.includes(issue.category)
-      );
-    }
-
-    // 日期範圍篩選
-    if (filters.dateRange.from || filters.dateRange.to) {
-      filtered = filtered.filter(issue => {
-        const issueDate = new Date(issue.created_at);
-        const fromMatch = !filters.dateRange.from || issueDate >= filters.dateRange.from;
-        const toMatch = !filters.dateRange.to || issueDate <= filters.dateRange.to;
-        return fromMatch && toMatch;
-      });
+    if (priorityFilter !== "all") {
+      filtered = filtered.filter(issue => issue.priority === priorityFilter);
     }
 
     setFilteredIssues(filtered);
@@ -383,17 +264,11 @@ export function IssueTracker() {
           {/* Right: Actions and date */}
           <div className="flex flex-col items-end gap-1">
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // TODO: 這裡需要實現編輯對話框
-                }}
-                className="h-6 w-6 p-0"
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
+              <IssueEditDialog 
+                issue={issue} 
+                onUpdate={loadIssues} 
+                onDelete={loadIssues} 
+              />
               <Button
                 variant="ghost"
                 size="sm"
@@ -454,30 +329,41 @@ export function IssueTracker() {
         </div>
       </div>
 
-      {/* 高級篩選器 */}
-      <AdvancedIssueFilters 
-        onFiltersChange={setFilters}
-        issueCount={issues.length}
-        filteredCount={filteredIssues.length}
-      />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜尋問題..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
+              className="pl-10"
+            />
+          </div>
+        </div>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="優先級篩選" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部優先級</SelectItem>
+            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="medium">中</SelectItem>
+            <SelectItem value="low">低</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      {/* 主要內容 - 問題列表 (表格模式) */}
-      <IssueTableView issues={filteredIssues} onUpdate={loadIssues} />
+      {/* Main Content */}
+      <IssueTableView issues={issues} onUpdate={loadIssues} />
 
-      {filteredIssues.length === 0 && !loading && (
+      {filteredIssues.length === 0 && (
         <div className="text-center py-12">
           <Bug className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">沒有找到問題</h3>
           <p className="text-muted-foreground">
-            {filters.searchTerm || 
-             filters.priorities.length > 0 || 
-             filters.statuses.length > 0 || 
-             filters.assignees.length > 0 ||
-             filters.systems.length > 0 ||
-             filters.stations.length > 0 ||
-             filters.categories.length > 0 ||
-             filters.dateRange.from ||
-             filters.dateRange.to
+            {searchTerm || priorityFilter !== "all"
               ? "請調整篩選條件或建立新問題"
               : "還沒有任何問題記錄，點擊上方按鈕新增問題"
             }

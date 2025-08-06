@@ -115,27 +115,8 @@ export function ToolsManagement() {
     }
   };
 
-  // 處理 URL 參數以自動開啟特定程式碼片段
   useEffect(() => {
     loadTools();
-    
-    // 檢查 URL 參數是否要求開啟程式碼片段管理
-    const urlParams = new URLSearchParams(window.location.search);
-    const openSnippet = urlParams.get('openSnippet');
-    const tabParam = urlParams.get('tab');
-    
-    if (openSnippet && tabParam === 'code') {
-      // 這裡可以設置一個狀態來通知 CodeStorageManager 開啟特定片段
-      // 由於 CodeStorageManager 是獨立的組件，我們可以通過 props 傳遞這個信息
-      setTimeout(() => {
-        // 觸發切換到程式碼標籤
-        const codeTab = document.querySelector('[value="code"]') as HTMLElement;
-        if (codeTab) codeTab.click();
-      }, 100);
-      
-      // 清除 URL 參數
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, []);
 
   const handleAddTool = async () => {
