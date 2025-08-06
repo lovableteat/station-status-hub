@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -15,7 +14,7 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
-import { NewNotificationCenter } from "@/components/common/NewNotificationCenter";
+import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
@@ -123,6 +122,7 @@ const Index = () => {
       <UpdateIndicator isUpdating={isUpdating} />
       <FacebookStyleNotifications />
       <OnlineUsersIndicator />
+      <RealtimeNotifications />
       
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
@@ -145,13 +145,9 @@ const Index = () => {
           isMobile={isMobile}
         />
         <main className={cn(
-          "flex-1 overflow-auto relative",
+          "flex-1 overflow-auto",
           isMobile && "pt-14" // Add top padding on mobile for fixed header
         )}>
-          {/* 新通知中心 - 固定在右上角 */}
-          <div className="fixed top-4 right-4 z-50">
-            <NewNotificationCenter />
-          </div>
           {renderModule()}
         </main>
       </div>
