@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
@@ -283,7 +282,7 @@ export function useNotificationReplies() {
     }
   }, [user]);
 
-  // 徹底刪除通知 - 改進原子性刪除
+  // 修復刪除通知功能 - 確保真正刪除
   const deleteNotification = useCallback(async (notificationId: string) => {
     if (!user?.userId) {
       toast({
@@ -305,25 +304,86 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
-      // 先刪除相關的回覆記錄
+      console.log('開始刪除通知:', notificationId);
+      
+      // 首先檢查通知是否存在且屬於當前用戶
+      const { data: existingNotification, error: checkError } = await supabase
+        .from('user_notifications')
+        .select('id, recipient_id')
+        .eq('id', notificationId)
+        .eq('recipient_id', user.userId)
+        .single();
+
+      if (checkError) {
+        console.error('檢查通知時發生錯誤:', checkError);
+        throw checkError;
+      }
+
+      if (!existingNotification) {
+        toast({
+          title: "錯誤",
+          description: "找不到該通知或您沒有權限刪除",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      // 先刪除相關的回覆記錄（使用級聯刪除或手動刪除）
       const { error: repliesDeleteError } = await supabase
         .from('notification_replies')
         .delete()
         .eq('notification_id', notificationId);
 
       if (repliesDeleteError) {
-        console.warn('Warning deleting replies:', repliesDeleteError);
-        // 不阻塞主要刪除操作
+        console.warn('刪除回覆記錄時警告:', repliesDeleteError);
+        // 不阻塞主要刪除操作，但記錄警告
       }
 
-      // 刪除通知本身
-      const { error: notificationDeleteError } = await supabase
+      // 刪除通知本身 - 使用更嚴格的條件
+      const { error: notificationDeleteError, count } = await supabase
         .from('user_notifications')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', notificationId)
-        .eq('recipient_id', user.userId); // 確保只能刪除自己的通知
+        .eq('recipient_id', user.userId); // 雙重確認權限
 
-      if (notificationDeleteError) throw notificationDeleteError;
+      if (notificationDeleteError) {
+        console.error('刪除通知時發生錯誤:', notificationDeleteError);
+        throw notificationDeleteError;
+      }
+
+      // 檢查是否真的刪除了記錄
+      if (count === 0) {
+        console.warn('沒有記錄被刪除，可能是權限問題');
+        toast({
+          title: "警告",
+          description: "通知可能未被完全刪除，請重新整理頁面",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      console.log(`成功刪除 ${count} 筆通知記錄`);
+      
+      // 驗證刪除是否成功
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('user_notifications')
+        .select('id')
+        .eq('id', notificationId)
+        .maybeSingle();
+
+      if (verifyError) {
+        console.error('驗證刪除時發生錯誤:', verifyError);
+      }
+
+      if (verifyData) {
+        console.warn('通知仍然存在，刪除可能失敗');
+        toast({
+          title: "錯誤",
+          description: "通知刪除失敗，請稍後再試",
+          variant: "destructive"
+        });
+        return false;
+      }
 
       toast({
         title: "成功",
@@ -332,10 +392,10 @@ export function useNotificationReplies() {
 
       return true;
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      console.error('刪除通知時發生錯誤:', error);
       toast({
         title: "刪除失敗",
-        description: "請稍後再試",
+        description: `刪除時發生錯誤: ${error.message || '未知錯誤'}`,
         variant: "destructive"
       });
       return false;
@@ -344,7 +404,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 批量清理已完成的通知 - 優化性能
+  // 修復批量清理功能 - 確保真正刪除
   const clearCompletedNotifications = useCallback(async () => {
     if (!user?.userId) {
       toast({
@@ -357,6 +417,8 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
+      console.log('開始清理已完成的通知...');
+      
       // 先獲取要刪除的通知ID
       const { data: notificationsToDelete, error: fetchError } = await supabase
         .from('user_notifications')
@@ -375,38 +437,51 @@ export function useNotificationReplies() {
         return true;
       }
 
-      // 批量刪除相關回覆記錄
       const notificationIds = notificationsToDelete.map(n => n.id);
+      console.log('準備刪除的通知ID:', notificationIds);
+
+      // 批量刪除相關回覆記錄
       const { error: repliesDeleteError } = await supabase
         .from('notification_replies')
         .delete()
         .in('notification_id', notificationIds);
 
       if (repliesDeleteError) {
-        console.warn('Warning deleting replies:', repliesDeleteError);
+        console.warn('刪除回覆記錄時警告:', repliesDeleteError);
       }
 
-      // 批量刪除通知
-      const { error: deleteError } = await supabase
+      // 批量刪除通知 - 使用 count 來驗證刪除結果
+      const { error: deleteError, count } = await supabase
         .from('user_notifications')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('recipient_id', user.userId)
         .in('status', ['closed', 'completed', 'replied'])
         .is('archived_at', null);
 
       if (deleteError) throw deleteError;
 
+      console.log(`實際刪除了 ${count} 筆記錄，預期刪除 ${notificationIds.length} 筆`);
+
+      if (count === 0) {
+        toast({
+          title: "警告",
+          description: "沒有記錄被刪除，請檢查權限設定",
+          variant: "destructive"
+        });
+        return false;
+      }
+
       toast({
         title: "成功",
-        description: `已清理 ${notificationsToDelete.length} 個已完成的通知`
+        description: `已清理 ${count} 個已完成的通知`
       });
 
       return true;
     } catch (error) {
-      console.error('Error clearing completed notifications:', error);
+      console.error('清理已完成通知時發生錯誤:', error);
       toast({
         title: "清理失敗",
-        description: "請稍後再試",
+        description: `清理時發生錯誤: ${error.message || '未知錯誤'}`,
         variant: "destructive"
       });
       return false;
@@ -415,7 +490,7 @@ export function useNotificationReplies() {
     }
   }, [user, toast]);
 
-  // 批量清理已讀通知 - 優化性能
+  // 修復批量清理已讀功能 - 確保真正刪除
   const clearReadNotifications = useCallback(async () => {
     if (!user?.userId) {
       toast({
@@ -428,6 +503,8 @@ export function useNotificationReplies() {
 
     setIsLoading(true);
     try {
+      console.log('開始清理已讀通知...');
+      
       // 先獲取要刪除的通知ID
       const { data: notificationsToDelete, error: fetchError } = await supabase
         .from('user_notifications')
@@ -446,38 +523,51 @@ export function useNotificationReplies() {
         return true;
       }
 
-      // 批量刪除相關回覆記錄
       const notificationIds = notificationsToDelete.map(n => n.id);
+      console.log('準備刪除的已讀通知ID:', notificationIds);
+
+      // 批量刪除相關回覆記錄
       const { error: repliesDeleteError } = await supabase
         .from('notification_replies')
         .delete()
         .in('notification_id', notificationIds);
 
       if (repliesDeleteError) {
-        console.warn('Warning deleting replies:', repliesDeleteError);
+        console.warn('刪除回覆記錄時警告:', repliesDeleteError);
       }
 
-      // 批量刪除通知
-      const { error: deleteError } = await supabase
+      // 批量刪除通知 - 使用 count 來驗證刪除結果
+      const { error: deleteError, count } = await supabase
         .from('user_notifications')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('recipient_id', user.userId)
         .eq('is_read', true)
         .is('archived_at', null);
 
       if (deleteError) throw deleteError;
 
+      console.log(`實際刪除了 ${count} 筆記錄，預期刪除 ${notificationIds.length} 筆`);
+
+      if (count === 0) {
+        toast({
+          title: "警告",
+          description: "沒有記錄被刪除，請檢查權限設定",
+          variant: "destructive"
+        });
+        return false;
+      }
+
       toast({
         title: "成功",
-        description: `已清理 ${notificationsToDelete.length} 個已讀通知`
+        description: `已清理 ${count} 個已讀通知`
       });
 
       return true;
     } catch (error) {
-      console.error('Error clearing read notifications:', error);
+      console.error('清理已讀通知時發生錯誤:', error);
       toast({
         title: "清理失敗",
-        description: "請稍後再試",
+        description: `清理時發生錯誤: ${error.message || '未知錯誤'}`,
         variant: "destructive"
       });
       return false;
