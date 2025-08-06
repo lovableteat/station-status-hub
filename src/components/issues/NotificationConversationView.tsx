@@ -8,7 +8,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
 
 interface NotificationConversationViewProps {
-  issueId: string;
+  issueId?: string;
+  referenceType?: string;
+  referenceId?: string;
 }
 
 interface ConversationData {
@@ -34,26 +36,34 @@ interface ConversationData {
   users: Record<string, { displayName: string; role: string }>;
 }
 
-export function NotificationConversationView({ issueId }: NotificationConversationViewProps) {
+export function NotificationConversationView({ 
+  issueId, 
+  referenceType = 'issue', 
+  referenceId 
+}: NotificationConversationViewProps) {
   const { user } = useUser();
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (issueId) {
+    const targetId = referenceId || issueId;
+    if (targetId) {
       loadConversations();
     }
-  }, [issueId]);
+  }, [issueId, referenceId, referenceType]);
 
   const loadConversations = async () => {
+    const targetId = referenceId || issueId;
+    if (!targetId) return;
+    
     setIsLoading(true);
     try {
       // 獲取與此問題相關的所有通知
       const { data: notifications, error: notificationsError } = await supabase
         .from('user_notifications')
         .select('*')
-        .eq('reference_type', 'issue')
-        .eq('reference_id', issueId)
+        .eq('reference_type', referenceType)
+        .eq('reference_id', targetId)
         .order('created_at', { ascending: true });
 
       if (notificationsError) throw notificationsError;
