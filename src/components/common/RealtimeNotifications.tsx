@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, X, MessageSquare, Check, Trash2 } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,9 @@ import { useUser } from "@/components/auth/UserContext";
 import { useNotificationReplies } from "@/hooks/useNotificationReplies";
 import { NotificationReplyDialog } from "@/components/common/NotificationReplyDialog";
 import { NotificationConversationView } from "@/components/issues/NotificationConversationView";
+import { NotificationCard } from "@/components/common/NotificationCard";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface RealtimeNotification {
   id: string;
@@ -41,6 +43,7 @@ interface UserNotification {
 
 export function RealtimeNotifications() {
   const { user } = useUser();
+  const { toast } = useToast();
   const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
   const [userNotifications, setUserNotifications] = useState<UserNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -79,7 +82,6 @@ export function RealtimeNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    // Listen to real-time changes and create notifications
     const channel = supabase
       .channel('notification_updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'test_systems' }, (payload) => {
@@ -118,7 +120,6 @@ export function RealtimeNotifications() {
           });
         }
       })
-      // 監聽用戶通知
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
@@ -142,7 +143,6 @@ export function RealtimeNotifications() {
           prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
         );
         
-        // 重新計算未讀數量
         setUserNotifications(current => {
           const unread = current.filter(n => !n.is_read).length;
           setUnreadCount(unread);
@@ -164,7 +164,7 @@ export function RealtimeNotifications() {
       read: false
     };
 
-    setNotifications(prev => [newNotification, ...prev.slice(0, 19)]); // Keep only 20 notifications
+    setNotifications(prev => [newNotification, ...prev.slice(0, 19)]);
     setUnreadCount(prev => prev + 1);
   };
 
@@ -192,9 +192,33 @@ export function RealtimeNotifications() {
     }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
-    setUnreadCount(0);
+  const markAllAsRead = async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('user_notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('recipient_id', user.userId)
+        .eq('is_read', false);
+
+      if (error) throw error;
+
+      setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
+      setUnreadCount(0);
+      
+      toast({
+        title: "成功",
+        description: "所有通知已標記為已讀"
+      });
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      toast({
+        title: "錯誤",
+        description: "標記已讀失敗",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleQuickReply = async (notification: UserNotification) => {
@@ -203,18 +227,16 @@ export function RealtimeNotifications() {
     await markUserNotificationAsRead(notification);
   };
 
-  const handleConfirmReply = async (notification: UserNotification, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
-      event.preventDefault();
-    }
-    
+  const handleConfirmReply = async (notification: UserNotification) => {
     if (!notification.reply_id) {
-      console.error('No reply_id found for notification:', notification.id);
+      toast({
+        title: "錯誤",
+        description: "找不到回覆記錄",
+        variant: "destructive"
+      });
       return;
     }
     
-    console.log('Confirming reply for notification:', notification.id, 'reply_id:', notification.reply_id);
     const success = await confirmReply(notification.id, notification.reply_id);
     if (success) {
       await markUserNotificationAsRead(notification);
@@ -230,15 +252,9 @@ export function RealtimeNotifications() {
     });
   };
 
-  const handleDeleteNotification = async (notification: UserNotification, event: React.MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    
-    if (!confirm("確定要刪除這個通知嗎？")) return;
-    
+  const handleDeleteNotification = async (notification: UserNotification) => {
     const success = await deleteNotification(notification.id);
     if (success) {
-      // 從列表中移除通知
       setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
       if (!notification.is_read) {
         setUnreadCount(prev => Math.max(0, prev - 1));
@@ -253,28 +269,6 @@ export function RealtimeNotifications() {
       case 'issue_created': return '⚠️';
       case 'test_completed': return '✅';
       default: return '📢';
-    }
-  };
-
-  const getUserNotificationIcon = (type: string) => {
-    return <Bell className="h-4 w-4 text-primary" />;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'text-yellow-600';
-      case 'replied': return 'text-blue-600';
-      case 'closed': return 'text-green-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return '等待回覆';
-      case 'replied': return '已回覆';
-      case 'closed': return '已關閉';
-      default: return status;
     }
   };
 
@@ -315,13 +309,21 @@ export function RealtimeNotifications() {
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="center" className="w-96">
-          <Card>
-            <CardHeader className="pb-2">
+        <PopoverContent align="center" className="w-96 p-0">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">即時通知</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  通知中心
+                </CardTitle>
                 {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={markAllAsRead}
+                    className="text-xs"
+                  >
                     全部標記已讀 ({unreadCount})
                   </Button>
                 )}
@@ -329,151 +331,76 @@ export function RealtimeNotifications() {
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-96">
-                {/* 用戶通知 */}
-                {userNotifications.length > 0 && (
-                  <div className="space-y-1 p-4">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">用戶通知</div>
-                    {userNotifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-lg border transition-colors",
-                          notification.is_read 
-                            ? "bg-muted/50 border-transparent" 
-                            : "bg-background border-primary/20 shadow-sm"
-                        )}
-                      >
-                        <div className="mt-0.5"><Bell className="h-4 w-4 text-primary" /></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{notification.title}</div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {notification.message}
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className={cn("text-xs", getStatusColor(notification.status))}>
-                              {getStatusText(notification.status)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatTimestamp(notification.created_at)}
-                            </span>
-                          </div>
-                          
-                          {/* 操作按鈕 */}
-                          <div className="flex gap-1 mt-2">
-                            {notification.notification_type === 'mention' && notification.status === 'pending' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleQuickReply(notification)}
-                                className="h-6 text-xs px-2"
-                                disabled={isLoading}
-                              >
-                                快速回覆
-                              </Button>
-                            )}
-                            {notification.notification_type === 'reply' && notification.require_confirmation && notification.reply_id && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => handleConfirmReply(notification, e)}
-                                className="h-6 text-xs px-2"
-                                disabled={isLoading}
-                              >
-                                <Check className="h-3 w-3 mr-1" />
-                                確認完成
-                              </Button>
-                             )}
-                             {(notification.reference_type === 'issue' || notification.reference_type === 'test_progress') && (
-                               <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 onClick={() => handleShowConversation(notification)}
-                                 className="h-6 text-xs px-2"
-                               >
-                                 <MessageSquare className="h-3 w-3 mr-1" />
-                                 查看對話
-                               </Button>
-                             )}
-                             {/* 刪除按鈕 - 只有發送者且狀態為已完成時可見 */}
-                             {notification.sender_id === user?.userId && 
-                              ['closed', 'completed', 'replied'].includes(notification.status) && (
-                               <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 onClick={(e) => handleDeleteNotification(notification, e)}
-                                 className="h-6 text-xs px-2 text-red-600 hover:text-red-700"
-                                 disabled={isLoading}
-                               >
-                                 <Trash2 className="h-3 w-3 mr-1" />
-                                 刪除
-                               </Button>
-                             )}
-                           </div>
-                         </div>
-                         {!notification.is_read && (
-                           <Button
-                             variant="ghost"
-                             size="sm"
-                             onClick={() => markUserNotificationAsRead(notification)}
-                             className="h-6 w-6 p-0"
-                           >
-                             <X className="h-3 w-3" />
-                           </Button>
-                         )}
+                <div className="space-y-1 p-3">
+                  {/* 用戶通知 */}
+                  {userNotifications.length > 0 && (
+                    <>
+                      <div className="text-xs font-medium text-muted-foreground mb-3 px-1">
+                        用戶通知 ({userNotifications.length})
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {userNotifications.map((notification) => (
+                        <NotificationCard
+                          key={notification.id}
+                          notification={notification}
+                          currentUserId={user?.userId}
+                          isLoading={isLoading}
+                          onQuickReply={handleQuickReply}
+                          onConfirmReply={handleConfirmReply}
+                          onShowConversation={handleShowConversation}
+                          onDelete={handleDeleteNotification}
+                          onMarkAsRead={markUserNotificationAsRead}
+                        />
+                      ))}
+                    </>
+                  )}
 
-                {/* 系統通知 */}
-                {notifications.length > 0 && (
-                  <>
-                    {userNotifications.length > 0 && <Separator />}
-                    <div className="space-y-1 p-4">
-                      <div className="text-xs font-medium text-muted-foreground mb-2">系統通知</div>
+                  {/* 系統通知 */}
+                  {notifications.length > 0 && (
+                    <>
+                      {userNotifications.length > 0 && <Separator className="my-4" />}
+                      <div className="text-xs font-medium text-muted-foreground mb-3 px-1">
+                        系統通知 ({notifications.length})
+                      </div>
                       {notifications.map((notification) => (
-                        <div
+                        <Card
                           key={notification.id}
                           className={cn(
-                            "flex items-start gap-3 p-3 rounded-lg border transition-colors",
+                            "p-3 transition-all duration-200 cursor-pointer hover:shadow-md",
                             notification.read 
-                              ? "bg-muted/50 border-transparent" 
+                              ? "bg-muted/30 border-transparent" 
                               : "bg-background border-primary/20 shadow-sm"
                           )}
+                          onClick={() => markAsRead(notification.id)}
                         >
-                          <div className="text-lg">{getNotificationIcon(notification.type)}</div>
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{notification.title}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {notification.message}
+                          <div className="flex items-start gap-3">
+                            <div className="text-lg mt-0.5">{getNotificationIcon(notification.type)}</div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">{notification.title}</div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {notification.message}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-2">
+                                {formatTimestamp(notification.timestamp)}
+                              </div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {formatTimestamp(notification.timestamp)}
-                            </div>
+                            {!notification.read && (
+                              <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1" />
+                            )}
                           </div>
-                          {!notification.read && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => markAsRead(notification.id)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
+                        </Card>
                       ))}
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
-                {/* 無通知顯示 */}
-                {notifications.length === 0 && userNotifications.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <div className="text-sm">暫無通知</div>
-                  </div>
-                )}
+                  {/* 無通知顯示 */}
+                  {notifications.length === 0 && userNotifications.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Bell className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <div className="text-sm font-medium">暫無通知</div>
+                      <div className="text-xs mt-1 opacity-75">新的通知會在這裡顯示</div>
+                    </div>
+                  )}
+                </div>
               </ScrollArea>
             </CardContent>
           </Card>
