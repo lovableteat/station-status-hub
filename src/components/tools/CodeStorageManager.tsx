@@ -304,6 +304,7 @@ export function CodeStorageManager() {
             className="max-w-4xl max-h-[80vh] overflow-y-auto" 
             onPointerDownOutside={(e) => e.preventDefault()}
             onEscapeKeyDown={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
           >
             <DialogHeader>
               <DialogTitle>
