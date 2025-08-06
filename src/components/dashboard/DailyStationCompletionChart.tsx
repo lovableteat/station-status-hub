@@ -35,45 +35,85 @@ export function DailyStationCompletionChart() {
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - (days - 1));
       
-      // 查詢每日每站完成的系統數量 - 以站點完成為基準
+      // 查詢每日每站完成的系統數量 - 只有所有測項都完成才算站點完成
       // 只查詢7/21之後的有效資料
       const validStartDate = new Date('2025-07-21');
       const actualStartDate = startDate < validStartDate ? validStartDate : startDate;
       
-      const { data, error } = await supabase
-        .from('station_time_records')
+      // 首先獲取所有站點和對應的測項
+      const { data: stationItems, error: stationError } = await supabase
+        .from('test_flow_stations')
+        .select(`
+          id,
+          station_name,
+          station_order,
+          test_flow_items(id, item_name)
+        `);
+
+      if (stationError) throw stationError;
+
+      // 獲取指定日期範圍內的測試進度數據
+      const { data: progressData, error: progressError } = await supabase
+        .from('test_progress')
         .select(`
           system_id,
           station_id,
-          station_name,
-          end_time
+          item_id,
+          status,
+          completed_at,
+          test_systems!inner(
+            exclude_from_dashboard,
+            system_name
+          )
         `)
-        .not('end_time', 'is', null)
-        .gte('end_time', actualStartDate.toISOString())
-        .lte('end_time', endDate.toISOString());
+        .eq('test_systems.exclude_from_dashboard', false)
+        .gte('completed_at', actualStartDate.toISOString())
+        .lte('completed_at', endDate.toISOString());
 
-      if (error) throw error;
+      if (progressError) throw progressError;
 
-      // 處理數據：按日期和站點統計完成數量
+      // 處理數據：只有當站點所有測項都完成時才算該站點完成
       const processedData: { [date: string]: { [station: string]: Set<string> } } = {};
       
-      data?.forEach(record => {
-        if (!record.end_time) return;
-        
-        const date = new Date(record.end_time).toISOString().split('T')[0];
-        const stationName = record.station_name;
-        
-        if (!processedData[date]) {
-          processedData[date] = {};
+      // 為每個系統檢查每個站點是否完全完成
+      const systemsToCheck = new Set(progressData?.map(p => p.system_id) || []);
+      
+      for (const systemId of systemsToCheck) {
+        for (const station of stationItems || []) {
+          const stationTestItems = station.test_flow_items || [];
+          
+          // 如果站點沒有測項，跳過
+          if (stationTestItems.length === 0) continue;
+          
+          // 獲取該系統在該站點的所有測試進度
+          const systemStationProgress = progressData?.filter(
+            p => p.system_id === systemId && p.station_id === station.id
+          ) || [];
+          
+          // 檢查是否所有測項都已完成
+          const completedItems = systemStationProgress.filter(p => p.status === 'Done');
+          const allItemsCompleted = completedItems.length === stationTestItems.length;
+          
+          if (allItemsCompleted && completedItems.length > 0) {
+            // 找到最後完成的測項時間作為站點完成時間
+            const latestCompletionTime = completedItems
+              .map(item => new Date(item.completed_at!))
+              .sort((a, b) => b.getTime() - a.getTime())[0];
+            
+            const date = latestCompletionTime.toISOString().split('T')[0];
+            
+            if (!processedData[date]) {
+              processedData[date] = {};
+            }
+            
+            if (!processedData[date][station.station_name]) {
+              processedData[date][station.station_name] = new Set();
+            }
+            
+            processedData[date][station.station_name].add(systemId);
+          }
         }
-        
-        if (!processedData[date][stationName]) {
-          processedData[date][stationName] = new Set();
-        }
-        
-        // 用Set確保每個系統每站只計算一次
-        processedData[date][stationName].add(record.system_id);
-      });
+      }
 
       // 生成指定天數的圖表數據
       const chartData: DailyStationData[] = [];

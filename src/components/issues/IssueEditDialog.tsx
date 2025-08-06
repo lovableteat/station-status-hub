@@ -4,9 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MentionInput } from "@/components/common/MentionInput";
+import { useMentionNotifications } from "@/hooks/useMentionNotifications";
+import { useUser } from "@/components/auth/UserContext";
 
 interface Issue {
   id: string;
@@ -17,15 +21,21 @@ interface Issue {
   assigned_to: string;
   process_notes?: string;
   solution?: string;
+  relate?: string;
+  category?: string;
+  tags?: string[];
+  mentioned_users?: string[];
 }
 
 interface IssueEditDialogProps {
   issue: Issue;
   onUpdate: () => void;
   onDelete: () => void;
+  onClose?: () => void;
 }
 
-export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogProps) {
+export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEditDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: issue.title,
     description: issue.description,
@@ -33,31 +43,110 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
     status: issue.status,
     assigned_to: issue.assigned_to,
     process_notes: issue.process_notes || '',
-    solution: issue.solution || ''
+    solution: issue.solution || '',
+    relate: issue.relate || '',
+    category: issue.category || '',
+    tags: issue.tags?.join(', ') || '',
+    mentionMessage: ''
   });
+  
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
+  const [mentionedUsers, setMentionedUsers] = useState<any[]>([]);
   const { toast } = useToast();
+  const { sendMentionNotifications } = useMentionNotifications();
+  const { user } = useUser();
 
   useEffect(() => {
-    const loadEngineers = async () => {
-      const { data } = await supabase
+    loadEngineers();
+  }, []);
+
+  const loadEngineers = async () => {
+    try {
+      const { data, error } = await supabase
         .from('engineers')
         .select('id, name')
         .eq('status', 'active')
         .order('name');
-      if (data) setEngineers(data);
-    };
-    loadEngineers();
-  }, []);
+      
+      if (error) {
+        console.error('載入工程師列表錯誤:', error);
+        return;
+      }
+      
+      setEngineers(data || []);
+    } catch (error) {
+      console.error('載入工程師列表失敗:', error);
+    }
+  };
 
   const handleSave = async () => {
+    if (!formData.title.trim()) {
+      toast({
+        title: "驗證錯誤",
+        description: "請輸入問題標題",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      toast({
+        title: "驗證錯誤", 
+        description: "請輸入問題描述",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
     try {
+      const updateData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        priority: formData.priority,
+        status: formData.status,
+        assigned_to: formData.assigned_to,
+        process_notes: formData.process_notes.trim() || null,
+        solution: formData.solution.trim() || null,
+        relate: formData.relate.trim() || null,
+        category: formData.category.trim() || null,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        updated_at: new Date().toISOString()
+      };
+
       const { error } = await supabase
         .from('issues')
-        .update(formData)
+        .update(updateData)
         .eq('id', issue.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('更新問題錯誤:', error);
+        throw error;
+      }
+
+      // 發送標註通知
+      if (mentionedUsers.length > 0 && formData.mentionMessage.trim()) {
+        try {
+          await sendMentionNotifications(
+            formData.mentionMessage,
+            {
+              title: `問題更新通知: ${formData.title}`,
+              message: `${user?.displayName || '用戶'} 在問題 "${formData.title}" 中標註了您: ${formData.mentionMessage}`,
+              referenceType: 'issue',
+              referenceId: issue.id,
+              metadata: {
+                issueTitle: formData.title,
+                issueStatus: formData.status,
+                mentionContext: formData.mentionMessage
+              }
+            }
+          );
+        } catch (notificationError) {
+          console.error('發送通知失敗:', notificationError);
+          // 不阻止主要更新流程
+        }
+      }
 
       toast({
         title: "更新成功",
@@ -65,25 +154,45 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
       });
 
       onUpdate();
+      onClose?.();
     } catch (error) {
+      console.error('保存問題失敗:', error);
       toast({
         title: "更新失敗",
-        description: "無法更新問題資料",
+        description: "無法更新問題資料，請稍後再試",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
     if (!confirm("確定要刪除這個問題嗎？此操作無法復原。")) return;
 
+    setIsSubmitting(true);
+    
     try {
+      // 先刪除相關附件
+      const { error: attachmentError } = await supabase
+        .from('issue_attachments')
+        .delete()
+        .eq('issue_id', issue.id);
+
+      if (attachmentError) {
+        console.error('刪除附件錯誤:', attachmentError);
+      }
+
+      // 刪除問題
       const { error } = await supabase
         .from('issues')
         .delete()
         .eq('id', issue.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('刪除問題錯誤:', error);
+        throw error;
+      }
 
       toast({
         title: "刪除成功",
@@ -92,124 +201,225 @@ export function IssueEditDialog({ issue, onUpdate, onDelete }: IssueEditDialogPr
 
       onDelete();
     } catch (error) {
+      console.error('刪除問題失敗:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除問題",
+        description: "無法刪除問題，請稍後再試",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   return (
-    <div className="space-y-4">
-      <div>
-        <Label>問題標題</Label>
-        <Input
-          value={formData.title}
-          onChange={(e) => setFormData({...formData, title: e.target.value})}
-          placeholder="請輸入問題標題..."
-        />
-      </div>
-      
-      <div>
-        <Label>問題描述</Label>
-        <Textarea
-          value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
-          placeholder="請詳細描述問題..."
-          rows={4}
-        />
+    <div className="space-y-6 p-1">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">編輯問題</h3>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4">
         <div>
-          <Label>優先級</Label>
+          <Label htmlFor="title">問題標題 *</Label>
+          <Input
+            id="title"
+            value={formData.title}
+            onChange={(e) => handleInputChange('title', e.target.value)}
+            placeholder="請輸入問題標題..."
+            disabled={isSubmitting}
+          />
+        </div>
+        
+        <div>
+          <Label htmlFor="description">問題描述 *</Label>
+          <RichTextEditor
+            content={formData.description}
+            onChange={(content) => handleInputChange('description', content)}
+            placeholder="請詳細描述問題..."
+            className="min-h-[120px]"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="priority">優先級</Label>
+            <Select 
+              value={formData.priority} 
+              onValueChange={(value) => handleInputChange('priority', value)}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">低</SelectItem>
+                <SelectItem value="medium">中</SelectItem>
+                <SelectItem value="high">高</SelectItem>
+                <SelectItem value="critical">緊急</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="status">狀態</Label>
+            <Select 
+              value={formData.status} 
+              onValueChange={(value) => handleInputChange('status', value)}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">開啟</SelectItem>
+                <SelectItem value="in_progress">處理中</SelectItem>
+                <SelectItem value="resolved">已解決</SelectItem>
+                <SelectItem value="closed">已關閉</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="assigned_to">負責人</Label>
           <Select 
-            value={formData.priority} 
-            onValueChange={(value) => setFormData({...formData, priority: value})}
+            value={formData.assigned_to} 
+            onValueChange={(value) => handleInputChange('assigned_to', value)}
+            disabled={isSubmitting}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="請選擇負責人..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">低</SelectItem>
-              <SelectItem value="medium">中</SelectItem>
-              <SelectItem value="high">高</SelectItem>
+              <SelectItem value="unassigned">未指派</SelectItem>
+              {engineers.map(engineer => (
+                <SelectItem key={engineer.id} value={engineer.name}>
+                  {engineer.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="relate">相關項目</Label>
+            <Input
+              id="relate"
+              value={formData.relate}
+              onChange={(e) => handleInputChange('relate', e.target.value)}
+              placeholder="請輸入相關項目..."
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="category">問題分類</Label>
+            <Input
+              id="category"
+              value={formData.category}
+              onChange={(e) => handleInputChange('category', e.target.value)}
+              placeholder="請輸入問題分類..."
+              disabled={isSubmitting}
+            />
+          </div>
+        </div>
+
         <div>
-          <Label>狀態</Label>
-          <Select 
-            value={formData.status} 
-            onValueChange={(value) => setFormData({...formData, status: value})}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="open">開啟</SelectItem>
-              <SelectItem value="in_progress">處理中</SelectItem>
-              <SelectItem value="resolved">已解決</SelectItem>
-              <SelectItem value="closed">已關閉</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label htmlFor="process_notes">處理過程</Label>
+          <RichTextEditor
+            content={formData.process_notes}
+            onChange={(content) => handleInputChange('process_notes', content)}
+            placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
+            className="min-h-[100px]"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="solution">解決方案 / SOP 操作說明</Label>
+          <RichTextEditor
+            content={formData.solution}
+            onChange={(content) => handleInputChange('solution', content)}
+            placeholder="請記錄解決方案與SOP操作說明，包含：&#10;1. 具體解決步驟&#10;2. 所需工具與資源&#10;3. 操作注意事項&#10;4. 驗證方法&#10;5. 預防措施"
+            className="min-h-[100px]"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            <strong>建議包含：</strong> 詳細操作步驟、所需權限、工具清單、安全注意事項、驗證檢查點
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
+          <Input
+            id="tags"
+            value={formData.tags}
+            onChange={(e) => handleInputChange('tags', e.target.value)}
+            placeholder="例如：緊急, 硬體, 網路..."
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="mention">標註用戶與訊息 (輸入 @ 可選擇用戶)</Label>
+          <MentionInput
+            value={formData.mentionMessage}
+            onChange={(value, mentions) => {
+              handleInputChange('mentionMessage', value);
+              setMentionedUsers(mentions || []);
+            }}
+            placeholder="輸入 @ 來標註相關用戶，並在此輸入要告知他們的訊息..."
+            className="min-h-[80px]"
+          />
+          {mentionedUsers.length > 0 && (
+            <div className="mt-2 p-2 bg-muted rounded border">
+              <div className="text-sm font-medium mb-1">已標註用戶:</div>
+              <div className="text-sm text-muted-foreground">
+                {mentionedUsers.map(user => user.displayName).join(', ')}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                這些用戶將收到即時通知並可在頁面上方的通知中心查看
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div>
-        <Label>負責人</Label>
-        <Select 
-          value={formData.assigned_to} 
-          onValueChange={(value) => setFormData({...formData, assigned_to: value})}
+      <div className="flex justify-between pt-4 border-t">
+        <Button 
+          variant="destructive" 
+          onClick={handleDelete}
+          disabled={isSubmitting}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="請選擇負責人..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="unassigned">未指派</SelectItem>
-            {engineers.map(engineer => (
-              <SelectItem key={engineer.id} value={engineer.name}>
-                {engineer.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label>處理過程</Label>
-        <Textarea
-          value={formData.process_notes}
-          onChange={(e) => setFormData({...formData, process_notes: e.target.value})}
-          placeholder="請記錄處理過程..."
-          rows={3}
-        />
-      </div>
-
-      <div>
-        <Label>解決方案</Label>
-        <Textarea
-          value={formData.solution}
-          onChange={(e) => setFormData({...formData, solution: e.target.value})}
-          placeholder="請記錄解決方案..."
-          rows={3}
-        />
-      </div>
-
-      <div className="flex justify-between">
-        <Button variant="destructive" onClick={handleDelete}>
           <Trash2 className="h-4 w-4 mr-2" />
           刪除問題
         </Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onUpdate}>
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
             取消
           </Button>
-          <Button onClick={handleSave}>
+          <Button 
+            onClick={handleSave}
+            disabled={isSubmitting}
+          >
             <Save className="h-4 w-4 mr-2" />
-            儲存變更
+            {isSubmitting ? '保存中...' : '儲存變更'}
           </Button>
         </div>
       </div>

@@ -16,10 +16,10 @@ import {
   Search, 
   Eye,
   Download,
+  Edit,
   Image as ImageIcon
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
-import { IssueEditDialog } from "./IssueEditDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
 import { BackButton } from "@/components/common/BackButton";
@@ -36,9 +36,16 @@ interface Issue {
   system_id?: string;
   station_id?: string;
   test_item_id?: string;
+  relate?: string;
+  category?: string;
+  process_notes?: string;
+  solution?: string;
   system_name?: string;
+  assigned_engineer?: string;
   station_name?: string;
+  station_order?: number;
   test_item_name?: string;
+  test_item_description?: string;
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -60,9 +67,29 @@ export function IssueTracker() {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const { toast } = useToast();
 
+  // 處理 URL 參數以自動開啟特定問題
   useEffect(() => {
     loadIssues();
   }, []);
+
+  // 單獨處理 URL 參數跳轉
+  useEffect(() => {
+    if (issues.length === 0) return;
+    
+    // 檢查 URL 參數是否要求開啟特定問題
+    const urlParams = new URLSearchParams(window.location.search);
+    const openIssueId = urlParams.get('openIssue');
+    
+    if (openIssueId) {
+      const issueToOpen = issues.find(issue => issue.id === openIssueId);
+      if (issueToOpen) {
+        setSelectedIssue(issueToOpen);
+      }
+      
+      // 清除 URL 參數
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [issues]);
 
   useEffect(() => {
     filterIssues();
@@ -72,8 +99,22 @@ export function IssueTracker() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('issue_details')
-        .select('*')
+        .from('issues')
+        .select(`
+          *,
+          test_systems!issues_system_id_fkey (
+            system_name,
+            assigned_engineer
+          ),
+          test_flow_stations!issues_station_id_fkey (
+            station_name,
+            station_order
+          ),
+          test_flow_items!issues_test_item_id_fkey (
+            item_name,
+            description
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -91,6 +132,12 @@ export function IssueTracker() {
             priority: (issue.priority || 'medium') as "low" | "medium" | "high" | "critical",
             status: (issue.status || 'open') as "open" | "in_progress" | "resolved" | "closed",
             assigned_to: issue.assigned_to || '',
+            system_name: issue.test_systems?.system_name,
+            assigned_engineer: issue.test_systems?.assigned_engineer,
+            station_name: issue.test_flow_stations?.station_name,
+            station_order: issue.test_flow_stations?.station_order,
+            test_item_name: issue.test_flow_items?.item_name,
+            test_item_description: issue.test_flow_items?.description,
             attachments: attachments || []
           };
         })
@@ -264,11 +311,17 @@ export function IssueTracker() {
           {/* Right: Actions and date */}
           <div className="flex flex-col items-end gap-1">
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <IssueEditDialog 
-                issue={issue} 
-                onUpdate={loadIssues} 
-                onDelete={loadIssues} 
-              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // TODO: 這裡需要實現編輯對話框
+                }}
+                className="h-6 w-6 p-0"
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

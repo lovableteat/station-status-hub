@@ -577,45 +577,57 @@ export type Database = {
       issues: {
         Row: {
           assigned_to: string | null
+          category: string | null
           created_at: string
           description: string
           id: string
+          mentioned_users: string[] | null
           priority: string
           process_notes: string | null
+          relate: string | null
           solution: string | null
           station_id: string | null
           status: string
           system_id: string | null
+          tags: string[] | null
           test_item_id: string | null
           title: string
           updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          category?: string | null
           created_at?: string
           description: string
           id?: string
+          mentioned_users?: string[] | null
           priority?: string
           process_notes?: string | null
+          relate?: string | null
           solution?: string | null
           station_id?: string | null
           status?: string
           system_id?: string | null
+          tags?: string[] | null
           test_item_id?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          category?: string | null
           created_at?: string
           description?: string
           id?: string
+          mentioned_users?: string[] | null
           priority?: string
           process_notes?: string | null
+          relate?: string | null
           solution?: string | null
           station_id?: string | null
           status?: string
           system_id?: string | null
+          tags?: string[] | null
           test_item_id?: string | null
           title?: string
           updated_at?: string
@@ -1746,6 +1758,84 @@ export type Database = {
           uploaded_at?: string | null
           uploaded_by?: string | null
           version?: string | null
+        }
+        Relationships: []
+      }
+      user_mentions: {
+        Row: {
+          content_id: string
+          content_text: string | null
+          content_type: string
+          created_at: string
+          id: string
+          mention_id: string
+          mentioned_by_user_id: string
+          mentioned_user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_text?: string | null
+          content_type: string
+          created_at?: string
+          id?: string
+          mention_id: string
+          mentioned_by_user_id: string
+          mentioned_user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_text?: string | null
+          content_type?: string
+          created_at?: string
+          id?: string
+          mention_id?: string
+          mentioned_by_user_id?: string
+          mentioned_user_id?: string
+        }
+        Relationships: []
+      }
+      user_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          notification_type: string
+          recipient_id: string
+          reference_id: string | null
+          reference_type: string | null
+          sender_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          notification_type?: string
+          recipient_id: string
+          reference_id?: string | null
+          reference_type?: string | null
+          sender_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          notification_type?: string
+          recipient_id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          sender_id?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
