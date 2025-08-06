@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, X } from "lucide-react";
+import { Bell, X, Trash2, Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,8 @@ interface UserNotification {
   metadata?: any;
   require_confirmation?: boolean;
   reply_id?: string;
+  archived_at?: string;
+  archived_by?: string;
 }
 
 export function RealtimeNotifications() {
@@ -51,9 +53,17 @@ export function RealtimeNotifications() {
   const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [showConversation, setShowConversation] = useState<{ issueId?: string; referenceType?: string; referenceId?: string } | null>(null);
   
-  const { sendReply, confirmReply, deleteNotification, isLoading } = useNotificationReplies();
+  const { 
+    sendReply, 
+    confirmReply, 
+    deleteNotification, 
+    archiveNotification,
+    clearCompletedNotifications,
+    clearReadNotifications,
+    isLoading 
+  } = useNotificationReplies();
 
-  // 載入用戶通知
+  // 載入用戶通知 - 只查詢未歸檔的通知
   useEffect(() => {
     if (!user) return;
 
@@ -63,6 +73,7 @@ export function RealtimeNotifications() {
           .from('user_notifications')
           .select('*')
           .eq('recipient_id', user.userId)
+          .is('archived_at', null) // 只查詢未歸檔的通知
           .order('created_at', { ascending: false })
           .limit(20);
 
@@ -200,7 +211,8 @@ export function RealtimeNotifications() {
         .from('user_notifications')
         .update({ is_read: true, read_at: new Date().toISOString() })
         .eq('recipient_id', user.userId)
-        .eq('is_read', false);
+        .eq('is_read', false)
+        .is('archived_at', null); // 只更新未歸檔的通知
 
       if (error) throw error;
 
@@ -262,6 +274,35 @@ export function RealtimeNotifications() {
     }
   };
 
+  const handleArchiveNotification = async (notification: UserNotification) => {
+    const success = await archiveNotification(notification.id);
+    if (success) {
+      setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
+      if (!notification.is_read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    }
+  };
+
+  const handleClearCompleted = async () => {
+    const success = await clearCompletedNotifications();
+    if (success) {
+      // 重新載入通知列表
+      setUserNotifications(prev => 
+        prev.filter(n => !['closed', 'completed', 'replied'].includes(n.status))
+      );
+    }
+  };
+
+  const handleClearRead = async () => {
+    const success = await clearReadNotifications();
+    if (success) {
+      // 重新載入通知列表
+      setUserNotifications(prev => prev.filter(n => !n.is_read));
+      setUnreadCount(prev => prev); // 未讀數量不變，因為只清理已讀的
+    }
+  };
+
   const getNotificationIcon = (type: RealtimeNotification['type']) => {
     switch (type) {
       case 'system_update': return '🔧';
@@ -282,6 +323,12 @@ export function RealtimeNotifications() {
     if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} 小時前`;
     return date.toLocaleDateString('zh-TW');
   };
+
+  const completedCount = userNotifications.filter(n => 
+    ['closed', 'completed', 'replied'].includes(n.status)
+  ).length;
+  
+  const readCount = userNotifications.filter(n => n.is_read).length;
 
   return (
     <>
@@ -317,16 +364,61 @@ export function RealtimeNotifications() {
                   <Bell className="h-5 w-5" />
                   通知中心
                 </CardTitle>
-                {unreadCount > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={markAllAsRead}
-                    className="text-xs"
-                  >
-                    全部標記已讀 ({unreadCount})
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {unreadCount > 0 && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={markAllAsRead}
+                      className="text-xs px-2 h-7"
+                    >
+                      全部已讀
+                    </Button>
+                  )}
+                  
+                  {/* 批量清理選項 */}
+                  {(completedCount > 0 || readCount > 0) && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-xs px-2 h-7"
+                        >
+                          清理
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48" align="end">
+                        <div className="space-y-2">
+                          {completedCount > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleClearCompleted}
+                              disabled={isLoading}
+                              className="w-full justify-start text-xs"
+                            >
+                              <Trash2 className="h-3 w-3 mr-2" />
+                              清理已完成 ({completedCount})
+                            </Button>
+                          )}
+                          {readCount > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleClearRead}
+                              disabled={isLoading}
+                              className="w-full justify-start text-xs"
+                            >
+                              <Archive className="h-3 w-3 mr-2" />
+                              歸檔已讀 ({readCount})
+                            </Button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -348,6 +440,7 @@ export function RealtimeNotifications() {
                           onConfirmReply={handleConfirmReply}
                           onShowConversation={handleShowConversation}
                           onDelete={handleDeleteNotification}
+                          onArchive={handleArchiveNotification}
                           onMarkAsRead={markUserNotificationAsRead}
                         />
                       ))}

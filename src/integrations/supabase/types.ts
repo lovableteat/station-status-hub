@@ -1971,6 +1971,8 @@ export type Database = {
       user_notifications: {
         Row: {
           action_url: string | null
+          archived_at: string | null
+          archived_by: string | null
           category: string | null
           conversation_id: string | null
           created_at: string
@@ -1995,6 +1997,8 @@ export type Database = {
         }
         Insert: {
           action_url?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -2019,6 +2023,8 @@ export type Database = {
         }
         Update: {
           action_url?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -2137,6 +2143,87 @@ export type Database = {
       }
     }
     Views: {
+      active_notifications: {
+        Row: {
+          action_url: string | null
+          archived_at: string | null
+          archived_by: string | null
+          category: string | null
+          conversation_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          grouped_id: string | null
+          id: string | null
+          is_read: boolean | null
+          message: string | null
+          metadata: Json | null
+          notification_type: string | null
+          priority: string | null
+          read_at: string | null
+          recipient_id: string | null
+          reference_id: string | null
+          reference_type: string | null
+          reply_id: string | null
+          require_confirmation: boolean | null
+          sender_id: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          action_url?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          category?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          grouped_id?: string | null
+          id?: string | null
+          is_read?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          notification_type?: string | null
+          priority?: string | null
+          read_at?: string | null
+          recipient_id?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reply_id?: string | null
+          require_confirmation?: boolean | null
+          sender_id?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          action_url?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          category?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          grouped_id?: string | null
+          id?: string | null
+          is_read?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          notification_type?: string | null
+          priority?: string | null
+          read_at?: string | null
+          recipient_id?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reply_id?: string | null
+          require_confirmation?: boolean | null
+          sender_id?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       issue_details: {
         Row: {
           assigned_engineer: string | null
