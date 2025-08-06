@@ -241,7 +241,7 @@ export function RealtimeNotifications() {
   };
 
   const markUserNotificationAsRead = async (notification: UserNotification) => {
-    if (notification.is_read) return;
+    if (notification.is_read || !notification?.id || notification.id === 'undefined') return;
     
     try {
       console.log('Marking notification as read:', notification.id);
@@ -300,6 +300,16 @@ export function RealtimeNotifications() {
   };
 
   const handleQuickReply = async (notification: UserNotification) => {
+    if (!notification?.id || notification.id === 'undefined') {
+      console.error('Invalid notification for quick reply:', notification);
+      toast({
+        title: "錯誤",
+        description: "通知數據無效",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     console.log('Opening quick reply for:', notification.id);
     setSelectedNotification(notification);
     setShowReplyDialog(true);
@@ -307,10 +317,11 @@ export function RealtimeNotifications() {
   };
 
   const handleConfirmReply = async (notification: UserNotification) => {
-    if (!notification.reply_id) {
+    if (!notification?.id || notification.id === 'undefined' || !notification.reply_id || notification.reply_id === 'undefined') {
+      console.error('Invalid notification or reply ID:', { notification: notification?.id, replyId: notification?.reply_id });
       toast({
         title: "錯誤",
-        description: "找不到回覆記錄",
+        description: "找不到回覆記錄或通知數據無效",
         variant: "destructive"
       });
       return;
