@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Tag, X, Trash2, CheckCheck } from 'lucide-react';
+import { Bell, Tag, X, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -30,6 +30,7 @@ export function NotificationCenter() {
   const allTags = getAllTags();
 
   const handleDeleteSingle = async (id: string) => {
+    console.log('🗑️ 處理單個通知刪除:', id);
     const success = await deleteNotification(id);
     if (success) {
       console.log('✅ 通知刪除成功');
@@ -37,38 +38,52 @@ export function NotificationCenter() {
   };
 
   const handleDeleteByTag = async (tag: string) => {
+    console.log('🏷️ 處理標籤刪除:', tag);
     const success = await deleteByTag(tag);
     if (success) {
       setShowTagDeleteDialog(null);
       setSelectedTag(null);
+      console.log('✅ 標籤通知刪除成功');
     }
   };
 
   const handleClearAll = async () => {
+    console.log('🗑️ 處理清空所有通知');
     const success = await clearAllNotifications();
     if (success) {
       setShowClearDialog(false);
+      console.log('✅ 所有通知清空成功');
     }
   };
 
   const handleMarkAsRead = async (id: string) => {
-    await markAsRead(id);
+    console.log('👁️ 處理標記已讀:', id);
+    const success = await markAsRead(id);
+    if (success) {
+      console.log('✅ 標記已讀成功');
+    }
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    console.log('🔔 通知中心狀態變更:', open);
+    setIsOpen(open);
   };
 
   return (
     <>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="relative h-9 w-9 p-0"
+            className="relative h-9 w-9 p-0 hover:bg-accent"
+            aria-label="通知中心"
           >
             <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
               <Badge
                 variant="destructive"
-                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0 min-w-[20px]"
+                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0 min-w-[20px] animate-pulse"
               >
                 {unreadCount > 99 ? '99+' : unreadCount}
               </Badge>
@@ -76,11 +91,20 @@ export function NotificationCenter() {
           </Button>
         </PopoverTrigger>
         
-        <PopoverContent className="w-96 p-0" align="end">
-          <div className="border-b p-4">
+        <PopoverContent className="w-96 p-0" align="end" sideOffset={5}>
+          {/* 標題欄 */}
+          <div className="border-b bg-muted/50 p-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">通知中心</h3>
-              <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                通知中心
+                {unreadCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {unreadCount} 未讀
+                  </Badge>
+                )}
+              </h3>
+              <div className="flex items-center gap-1">
                 {notifications.length > 0 && (
                   <Button
                     variant="ghost"
@@ -103,56 +127,73 @@ export function NotificationCenter() {
               </div>
             </div>
             
-            {/* Microsoft 365 風格的標籤過濾 */}
+            {/* 標籤過濾器 */}
             {allTags.length > 0 && (
               <div className="mt-3">
                 <div className="flex flex-wrap gap-1">
                   <Button
                     variant={selectedTag === null ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setSelectedTag(null)}
+                    onClick={() => {
+                      console.log('🏷️ 選擇標籤: 全部');
+                      setSelectedTag(null);
+                    }}
                     className="h-6 px-2 text-xs"
                   >
-                    全部
+                    全部 ({notifications.length})
                   </Button>
-                  {allTags.map(tag => (
-                    <div key={tag} className="flex items-center gap-1">
-                      <Button
-                        variant={selectedTag === tag ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSelectedTag(tag)}
-                        className="h-6 px-2 text-xs"
-                      >
-                        <Tag className="h-3 w-3 mr-1" />
-                        {tag}
-                      </Button>
-                      {selectedTag === tag && (
+                  {allTags.map(tag => {
+                    const tagCount = notifications.filter(n => n.tags?.includes(tag)).length;
+                    return (
+                      <div key={tag} className="flex items-center gap-1">
                         <Button
-                          variant="ghost"
+                          variant={selectedTag === tag ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setShowTagDeleteDialog(tag)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            console.log('🏷️ 選擇標籤:', tag);
+                            setSelectedTag(tag);
+                          }}
+                          className="h-6 px-2 text-xs"
                         >
-                          <X className="h-3 w-3" />
+                          <Tag className="h-3 w-3 mr-1" />
+                          {tag} ({tagCount})
                         </Button>
-                      )}
-                    </div>
-                  ))}
+                        {selectedTag === tag && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowTagDeleteDialog(tag)}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                            title={`刪除所有 ${tag} 通知`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
 
+          {/* 通知列表 */}
           <ScrollArea className="h-96">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  <p className="text-xs text-muted-foreground">載入中...</p>
+                </div>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
                 <Bell className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">
+                <p className="text-sm font-medium">
                   {selectedTag ? `沒有 "${selectedTag}" 標籤的通知` : '沒有通知'}
+                </p>
+                <p className="text-xs">
+                  {selectedTag ? '試試選擇其他標籤' : '您目前沒有任何通知'}
                 </p>
               </div>
             ) : (
@@ -186,7 +227,10 @@ export function NotificationCenter() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction 
+              onClick={handleClearAll} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               確定清空
             </AlertDialogAction>
           </AlertDialogFooter>
