@@ -41,6 +41,7 @@ export function FacebookStyleNotifications() {
           .select('*')
           .eq('recipient_id', user.userId)
           .eq('is_read', false)
+          .neq('notification_type', 'mention') // 過濾掉標註通知
           .order('created_at', { ascending: false })
           .limit(5);
 
@@ -53,7 +54,7 @@ export function FacebookStyleNotifications() {
 
     fetchNotifications();
 
-    // 設置實時訂閱
+    // 設置實時訂閱 - 過濾掉標註通知
     const channel = supabase
       .channel('facebook_notifications')
       .on(
@@ -66,6 +67,12 @@ export function FacebookStyleNotifications() {
         },
         (payload) => {
           const newNotification = payload.new as FacebookNotification;
+          
+          // 完全過濾掉標註通知，不在右下角顯示
+          if (newNotification.notification_type === 'mention') {
+            return;
+          }
+          
           setNotifications(prev => [newNotification, ...prev.slice(0, 4)]);
           
           // 創建臨時顯示的toast通知
