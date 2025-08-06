@@ -64,7 +64,7 @@ export function RealtimeNotifications() {
     isLoading 
   } = useNotificationReplies();
 
-  useOptimizedRealtime();
+  useOptimizedRealtime(user?.userId || '');
 
   const loadUserNotifications = async () => {
     if (!user?.userId) return;
