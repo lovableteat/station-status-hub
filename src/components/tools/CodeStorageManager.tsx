@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,7 @@ interface CodeSnippet {
   language: string;
   category: string;
   tags: string[];
+  sop_content?: string;
   created_at: string;
   updated_at: string;
 }
@@ -77,7 +78,8 @@ export function CodeStorageManager() {
     code_content: "",
     language: "javascript",
     category: "utility",
-    tags: ""
+    tags: "",
+    sop_content: ""
   });
 
   const loadCodeSnippets = async () => {
@@ -99,6 +101,7 @@ export function CodeStorageManager() {
         language: item.language,
         category: item.category,
         tags: item.tags || [],
+        sop_content: item.sop_content || undefined,
         created_at: item.created_at,
         updated_at: item.updated_at
       }));
@@ -131,6 +134,7 @@ export function CodeStorageManager() {
         language: formData.language,
         category: formData.category,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        sop_content: formData.sop_content || null,
       };
 
       if (editingSnippet) {
@@ -179,7 +183,8 @@ export function CodeStorageManager() {
       code_content: snippet.code_content,
       language: snippet.language,
       category: snippet.category,
-      tags: snippet.tags.join(', ')
+      tags: snippet.tags.join(', '),
+      sop_content: snippet.sop_content || ""
     });
     setIsDialogOpen(true);
   };
@@ -234,7 +239,8 @@ export function CodeStorageManager() {
       code_content: "",
       language: "javascript",
       category: "utility",
-      tags: ""
+      tags: "",
+      sop_content: ""
     });
     setEditingSnippet(null);
   };
@@ -369,23 +375,33 @@ export function CodeStorageManager() {
               
               <div className="space-y-2">
                 <Label htmlFor="description">描述</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  rows={3}
+                <RichTextEditor
+                  content={formData.description}
+                  onChange={(content) => setFormData({...formData, description: content})}
+                  placeholder="請輸入程式碼片段的描述..."
+                  className="min-h-[80px]"
                 />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="code_content">程式碼內容 *</Label>
-                <Textarea
+                <textarea
                   id="code_content"
                   value={formData.code_content}
                   onChange={(e) => setFormData({...formData, code_content: e.target.value})}
                   rows={12}
-                  className="font-mono text-sm"
+                  className="w-full px-3 py-2 border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-sm resize-y"
                   required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sop_content">SOP 操作說明</Label>
+                <RichTextEditor
+                  content={formData.sop_content}
+                  onChange={(content) => setFormData({...formData, sop_content: content})}
+                  placeholder="請輸入詳細的操作說明..."
+                  className="min-h-[200px]"
                 />
               </div>
               
