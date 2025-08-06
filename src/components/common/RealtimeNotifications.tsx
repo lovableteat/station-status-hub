@@ -269,7 +269,7 @@ export function RealtimeNotifications() {
     if (!user) return;
     
     try {
-      console.log('Marking all notifications as read...');
+      console.log('🔍 標記所有通知為已讀...');
       const { error } = await supabase
         .from('user_notifications')
         .update({ 
@@ -282,15 +282,17 @@ export function RealtimeNotifications() {
 
       if (error) throw error;
 
-      setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
-      setUnreadCount(0);
+      console.log('✅ 所有通知已標記為已讀');
+      
+      // 重新載入通知列表以確保數據一致性
+      await loadUserNotifications();
       
       toast({
         title: "成功",
         description: "所有通知已標記為已讀"
       });
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      console.error('❌ 標記所有通知為已讀失敗:', error);
       toast({
         title: "錯誤",
         description: "標記已讀失敗",
@@ -347,34 +349,30 @@ export function RealtimeNotifications() {
   };
 
   const handleDeleteNotification = async (notification: UserNotification) => {
-    console.log('準備刪除通知:', notification.id);
+    console.log('🔍 準備刪除通知:', notification.id);
     
-    // 樂觀更新
-    const previousNotifications = userNotifications;
-    const previousUnreadCount = unreadCount;
-    
-    setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
-    if (!notification.is_read) {
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    }
-
     try {
       const success = await deleteNotification(notification.id);
       
-      if (!success) {
-        // 恢復狀態
-        setUserNotifications(previousNotifications);
-        setUnreadCount(previousUnreadCount);
+      if (success) {
+        console.log('✅ 刪除通知成功:', notification.id);
+        // 重新載入通知列表以確保數據一致性
+        await loadUserNotifications();
+      } else {
+        console.log('❌ 刪除通知失敗:', notification.id);
       }
     } catch (error) {
-      console.error('刪除通知時發生異常:', error);
-      setUserNotifications(previousNotifications);
-      setUnreadCount(previousUnreadCount);
+      console.error('❌ 刪除通知時發生異常:', error);
+      toast({
+        title: "錯誤",
+        description: "刪除失敗，請稍後再試",
+        variant: "destructive"
+      });
     }
   };
 
   const handleClearCompleted = async () => {
-    console.log('準備清理已完成通知...');
+    console.log('🔍 準備清理已完成通知...');
     
     const completedNotifications = userNotifications.filter(n => 
       ['closed', 'completed', 'replied'].includes(n.status)
@@ -388,35 +386,31 @@ export function RealtimeNotifications() {
       return;
     }
 
-    // 樂觀更新
-    const previousNotifications = userNotifications;
-    const previousUnreadCount = unreadCount;
-    
-    const remainingNotifications = userNotifications.filter(n => 
-      !['closed', 'completed', 'replied'].includes(n.status)
-    );
-    
-    const unreadCompletedCount = completedNotifications.filter(n => !n.is_read).length;
-    
-    setUserNotifications(remainingNotifications);
-    setUnreadCount(prev => Math.max(0, prev - unreadCompletedCount));
+    console.log(`📋 找到 ${completedNotifications.length} 個已完成通知需要清理`);
 
     try {
+      // 直接調用清理函數，不做樂觀更新
       const success = await clearCompletedNotifications();
       
-      if (!success) {
-        setUserNotifications(previousNotifications);
-        setUnreadCount(previousUnreadCount);
+      if (success) {
+        console.log('✅ 清理已完成通知成功');
+        // 重新載入通知列表以確保數據一致性
+        await loadUserNotifications();
+      } else {
+        console.log('❌ 清理已完成通知失敗');
       }
     } catch (error) {
-      console.error('清理已完成通知時發生異常:', error);
-      setUserNotifications(previousNotifications);
-      setUnreadCount(previousUnreadCount);
+      console.error('❌ 清理已完成通知時發生異常:', error);
+      toast({
+        title: "錯誤",
+        description: "清理失敗，請稍後再試",
+        variant: "destructive"
+      });
     }
   };
 
   const handleClearRead = async () => {
-    console.log('準備清理已讀通知...');
+    console.log('🔍 準備清理已讀通知...');
     
     const readNotifications = userNotifications.filter(n => n.is_read);
     
@@ -428,21 +422,26 @@ export function RealtimeNotifications() {
       return;
     }
 
-    // 樂觀更新
-    const previousNotifications = userNotifications;
-    const unreadNotifications = userNotifications.filter(n => !n.is_read);
-    
-    setUserNotifications(unreadNotifications);
+    console.log(`📋 找到 ${readNotifications.length} 個已讀通知需要清理`);
 
     try {
+      // 直接調用清理函數，不做樂觀更新
       const success = await clearReadNotifications();
       
-      if (!success) {
-        setUserNotifications(previousNotifications);
+      if (success) {
+        console.log('✅ 清理已讀通知成功');
+        // 重新載入通知列表以確保數據一致性
+        await loadUserNotifications();
+      } else {
+        console.log('❌ 清理已讀通知失敗');
       }
     } catch (error) {
-      console.error('清理已讀通知時發生異常:', error);
-      setUserNotifications(previousNotifications);
+      console.error('❌ 清理已讀通知時發生異常:', error);
+      toast({
+        title: "錯誤",
+        description: "清理失敗，請稍後再試",
+        variant: "destructive"
+      });
     }
   };
 
