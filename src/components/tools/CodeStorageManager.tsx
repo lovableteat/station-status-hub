@@ -302,11 +302,27 @@ export function CodeStorageManager() {
             </DialogTrigger>
           <DialogContent 
             className="max-w-4xl max-h-[80vh] overflow-y-auto" 
-            onPointerDownOutside={(e) => e.preventDefault()}
-            onEscapeKeyDown={(e) => e.preventDefault()}
-            onInteractOutside={(e) => e.preventDefault()}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => {
+              // 檢查點擊的元素是否為文件上傳相關
+              const target = e.target as HTMLElement;
+              if (target?.closest('input[type="file"]') || target?.closest('.rich-text-editor')) {
+                e.preventDefault();
+              }
+            }}
+            onEscapeKeyDown={(e) => {
+              // 檢查是否在編輯器中，如果是則不關閉對話框
+              const target = document.activeElement as HTMLElement;
+              if (target?.closest('.ProseMirror') || target?.closest('.rich-text-editor')) {
+                e.preventDefault();
+              }
+            }}
+            onInteractOutside={(e) => {
+              // 檢查交互的元素是否為編輯器相關
+              const target = e.target as HTMLElement;
+              if (target?.closest('.rich-text-editor') || target?.closest('input[type="file"]') || target?.closest('.lightbox')) {
+                e.preventDefault();
+              }
+            }}
           >
             <DialogHeader>
               <DialogTitle>
