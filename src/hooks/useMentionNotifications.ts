@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
@@ -33,7 +34,7 @@ export function useMentionNotifications() {
       const [, displayName, userId] = match;
       mentions.push({
         id: userId,
-        username: '', // 暫時為空，實際使用時可以從數據庫獲取
+        username: '', 
         displayName,
         role: ''
       });
@@ -42,26 +43,12 @@ export function useMentionNotifications() {
     return mentions;
   }, []);
 
-  // 發送標註通知（升級版）
+  // 簡化版發送標註通知
   const sendMentionNotifications = useCallback(async (
     text: string,
     notificationData: NotificationData
   ) => {
-    if (!user?.userId) {
-      toast({
-        title: "錯誤",
-        description: "請先登入",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!notificationData.referenceId) {
-      toast({
-        title: "錯誤",
-        description: "參考ID不能為空",
-        variant: "destructive"
-      });
+    if (!user?.userId || !text.trim()) {
       return;
     }
 
@@ -70,10 +57,13 @@ export function useMentionNotifications() {
       const mentions = parseMentions(text);
       
       if (mentions.length === 0) {
-        return; // 沒有標註，不需要發送通知
+        return;
       }
 
-      // 創建通知記錄（支援回覆確認）
+      console.log('發送通知給:', mentions);
+      console.log('通知內容:', notificationData);
+
+      // 直接插入通知，不做複雜驗證
       const notifications = mentions.map(mention => ({
         recipient_id: mention.id,
         sender_id: user.userId,
@@ -83,63 +73,38 @@ export function useMentionNotifications() {
         reference_type: notificationData.referenceType,
         reference_id: notificationData.referenceId,
         status: 'pending',
-        require_confirmation: true, // 需要確認的通知
+        priority: 'normal',
+        category: 'mention',
+        is_read: false,
         metadata: {
           ...notificationData.metadata,
           mention_text: text,
-          sender_name: user.displayName
+          sender_name: user.displayName || user.username
         }
       }));
 
-      const { data: createdNotifications, error: notificationError } = await supabase
+      const { data, error } = await supabase
         .from('user_notifications')
         .insert(notifications)
         .select();
 
-      if (notificationError) throw notificationError;
-
-      // 為每個通知創建對話
-      if (createdNotifications) {
-        const conversations = createdNotifications.map(notification => ({
-          notification_id: notification.id,
-          participant_ids: [user.userId, notification.recipient_id],
-          subject: notificationData.title,
-          status: 'active'
-        }));
-
-        const { error: conversationError } = await supabase
-          .from('notification_conversations')
-          .insert(conversations);
-
-        if (conversationError) throw conversationError;
+      if (error) {
+        console.error('插入通知錯誤:', error);
+        throw error;
       }
 
-      // 創建標註記錄
-      const mentionRecords = mentions.map(mention => ({
-        mention_id: crypto.randomUUID(),
-        mentioned_user_id: mention.id,
-        mentioned_by_user_id: user.userId,
-        content_type: notificationData.referenceType,
-        content_id: notificationData.referenceId,
-        content_text: text
-      }));
-
-      const { error: mentionError } = await supabase
-        .from('user_mentions')
-        .insert(mentionRecords);
-
-      if (mentionError) throw mentionError;
+      console.log('通知發送成功:', data);
 
       toast({
-        title: "成功",
-        description: `已標註 ${mentions.length} 位用戶，等待回覆確認`
+        title: "通知發送成功",
+        description: `已標註 ${mentions.length} 位用戶`
       });
 
     } catch (error) {
-      console.error('Error sending mention notifications:', error);
+      console.error('發送通知失敗:', error);
       toast({
         title: "發送通知失敗",
-        description: "請稍後再試",
+        description: error instanceof Error ? error.message : "未知錯誤",
         variant: "destructive"
       });
     } finally {
@@ -152,16 +117,10 @@ export function useMentionNotifications() {
     return text.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1');
   }, []);
 
-  // 獲取文本中的標註用戶
-  const getMentionedUsers = useCallback((text: string): MentionUser[] => {
-    return parseMentions(text);
-  }, [parseMentions]);
-
   return {
     isLoading,
     sendMentionNotifications,
     cleanMentionText,
-    getMentionedUsers,
     parseMentions
   };
 }
