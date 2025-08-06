@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { MentionInput } from "@/components/common/MentionInput";
+import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 
 interface Issue {
   id: string;
@@ -19,6 +21,8 @@ interface Issue {
   solution?: string;
   relate?: string;
   category?: string;
+  tags?: string[];
+  mentioned_users?: string[];
 }
 
 interface IssueEditDialogProps {
@@ -38,10 +42,14 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     process_notes: issue.process_notes || '',
     solution: issue.solution || '',
     relate: issue.relate || '',
-    category: issue.category || ''
+    category: issue.category || '',
+    tags: issue.tags?.join(', ') || '',
+    mentioned_users: issue.mentioned_users || []
   });
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
+  const [mentionedUsers, setMentionedUsers] = useState<any[]>([]);
   const { toast } = useToast();
+  const { sendMentionNotifications } = useMentionNotifications();
 
   useEffect(() => {
     const loadEngineers = async () => {
@@ -57,12 +65,32 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   const handleSave = async () => {
     try {
+      const updateData = {
+        ...formData,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        mentioned_users: mentionedUsers.map(user => user.id)
+      };
+      delete updateData.mentioned_users; // Remove from update data as we handle it separately
+
       const { error } = await supabase
         .from('issues')
-        .update(formData)
+        .update(updateData)
         .eq('id', issue.id);
 
       if (error) throw error;
+
+      // Send notifications to mentioned users if assigned user changed
+      if (formData.assigned_to !== issue.assigned_to && formData.assigned_to !== 'unassigned') {
+        await sendMentionNotifications(
+          `@[${formData.assigned_to}](${formData.assigned_to})`,
+          {
+            title: "問題指派通知",
+            message: `您被指派處理問題：${formData.title}`,
+            referenceType: "issue",
+            referenceId: issue.id
+          }
+        );
+      }
 
       toast({
         title: "更新成功",
@@ -119,11 +147,11 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       
       <div>
         <Label>問題描述</Label>
-        <Textarea
-          value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
+        <RichTextEditor
+          content={formData.description}
+          onChange={(content) => setFormData({...formData, description: content})}
           placeholder="請詳細描述問題..."
-          rows={4}
+          className="min-h-[120px]"
         />
       </div>
 
@@ -206,22 +234,46 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
       <div>
         <Label>處理過程</Label>
-        <Textarea
-          value={formData.process_notes}
-          onChange={(e) => setFormData({...formData, process_notes: e.target.value})}
+        <RichTextEditor
+          content={formData.process_notes}
+          onChange={(content) => setFormData({...formData, process_notes: content})}
           placeholder="請記錄處理過程..."
-          rows={3}
+          className="min-h-[100px]"
         />
       </div>
 
       <div>
         <Label>解決方案</Label>
-        <Textarea
-          value={formData.solution}
-          onChange={(e) => setFormData({...formData, solution: e.target.value})}
+        <RichTextEditor
+          content={formData.solution}
+          onChange={(content) => setFormData({...formData, solution: content})}
           placeholder="請記錄解決方案..."
-          rows={3}
+          className="min-h-[100px]"
         />
+      </div>
+
+      <div>
+        <Label>標籤 (用逗號分隔)</Label>
+        <Input
+          value={formData.tags}
+          onChange={(e) => setFormData({...formData, tags: e.target.value})}
+          placeholder="例如：緊急, 硬體, 網路..."
+        />
+      </div>
+
+      <div>
+        <Label>標註用戶 (輸入 @ 可選擇用戶)</Label>
+        <MentionInput
+          value=""
+          onChange={(value, mentions) => setMentionedUsers(mentions || [])}
+          placeholder="輸入 @ 來標註相關用戶..."
+          className="min-h-[60px]"
+        />
+        {mentionedUsers.length > 0 && (
+          <div className="mt-2 text-sm text-muted-foreground">
+            已標註用戶: {mentionedUsers.map(user => user.displayName).join(', ')}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between">

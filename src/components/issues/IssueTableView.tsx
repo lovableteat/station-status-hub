@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,10 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowUpDown, Edit, ImageIcon, Eye } from "lucide-react";
+import { ArrowUpDown, Edit, ImageIcon, Eye, Tag, UserPlus } from "lucide-react";
 import { IssueEditDialog } from "./IssueEditDialog";
 import { IssueDetailDialog } from "./IssueDetailDialog";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 
 interface Issue {
   id: string;
@@ -30,6 +32,8 @@ interface Issue {
   category?: string;
   process_notes?: string;
   solution?: string;
+  tags?: string[];
+  mentioned_users?: string[];
   attachments?: Array<{
     id: string;
     file_name: string;
@@ -55,7 +59,22 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
+  const [inlineEditingAssignee, setInlineEditingAssignee] = useState<string | null>(null);
   const { toast } = useToast();
+  const { sendMentionNotifications } = useMentionNotifications();
+
+  useEffect(() => {
+    const loadEngineers = async () => {
+      const { data } = await supabase
+        .from('engineers')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      if (data) setEngineers(data);
+    };
+    loadEngineers();
+  }, []);
 
   const handleSort = (key: keyof Issue) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -109,6 +128,48 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     setViewingIssue(null);
     setEditingIssue(issue);
     setIsEditDialogOpen(true);
+  };
+
+  const handleAssigneeChange = async (issueId: string, newAssignee: string) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .update({ assigned_to: newAssignee })
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      // Send notification to newly assigned user
+      if (newAssignee !== 'unassigned') {
+        const issue = issues.find(i => i.id === issueId);
+        if (issue) {
+          await sendMentionNotifications(
+            `@[${newAssignee}](${newAssignee})`,
+            {
+              title: "問題指派通知",
+              message: `您被指派處理問題：${issue.title}`,
+              referenceType: "issue",
+              referenceId: issueId
+            }
+          );
+        }
+      }
+
+      toast({
+        title: "指派成功",
+        description: "負責人已更新"
+      });
+
+      onUpdate();
+    } catch (error) {
+      toast({
+        title: "指派失敗",
+        description: "無法更新負責人",
+        variant: "destructive"
+      });
+    } finally {
+      setInlineEditingAssignee(null);
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -202,6 +263,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                 <TableHead className="w-[100px]">站點</TableHead>
                 <TableHead className="w-[120px]">相關項目</TableHead>
                 <TableHead className="w-[120px]">問題分類</TableHead>
+                <TableHead className="w-[120px]">標籤</TableHead>
                 <TableHead className="w-[80px]">附件</TableHead>
                 <TableHead className="w-[120px]">
                   <Button variant="ghost" onClick={() => handleSort('created_at')}>
@@ -235,7 +297,34 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">{issue.assigned_to || '未指派'}</div>
+                    {inlineEditingAssignee === issue.id ? (
+                      <Select
+                        defaultValue={issue.assigned_to}
+                        onValueChange={(value) => handleAssigneeChange(issue.id, value)}
+                      >
+                        <SelectTrigger className="w-24 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">未指派</SelectItem>
+                          {engineers.map(engineer => (
+                            <SelectItem key={engineer.id} value={engineer.name}>
+                              {engineer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-sm justify-start"
+                        onClick={() => setInlineEditingAssignee(issue.id)}
+                      >
+                        <UserPlus className="h-3 w-3 mr-1" />
+                        {issue.assigned_to || '未指派'}
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
@@ -255,6 +344,25 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
                       {issue.category || '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {issue.tags && issue.tags.length > 0 ? (
+                        issue.tags.slice(0, 2).map((tag, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            <Tag className="h-3 w-3 mr-1" />
+                            {tag}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                      {issue.tags && issue.tags.length > 2 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{issue.tags.length - 2}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
