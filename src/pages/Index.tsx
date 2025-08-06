@@ -1,162 +1,36 @@
 
-import React, { useState, useEffect } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
-import { TestTracker } from "@/components/test-tracker/TestTracker";
-import { FlowInfo } from "@/components/test-tracker/FlowInfo";
-import { ProductionMonitor } from "@/components/production/ProductionMonitor";
-import { IssueTracker } from "@/components/issues/IssueTracker";
-import { DataCenter } from "@/components/data-center/DataCenter";
-import { ToolsManagement } from "@/components/tools/ToolsManagement";
-import { AdminPanel } from "@/components/admin/AdminPanel";
-import { UserManagement } from "@/components/user-management/UserManagement";
-import { LoginPage } from "@/components/auth/LoginPage";
-import { PermissionGuard } from "@/components/layout/PermissionGuard";
-import { UpdateIndicator } from "@/components/common/UpdateIndicator";
-import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
-import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { NewNotificationCenter } from "@/components/common/NewNotificationCenter";
+import { NotificationTester } from "@/components/common/NotificationTester";
 import { useUser } from "@/components/auth/UserContext";
-import { useUserPresence } from "@/hooks/useUserPresence";
-import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
 
-const Index = () => {
-  const [activeModule, setActiveModule] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, login, isLoggedIn } = useUser();
-  const { updateCurrentModule } = useUserPresence();
-  const { isUpdating } = useUnifiedData();
-  const isMobile = useIsMobile();
-
-  useEffect(() => {
-    // Listen for navigation events from other components
-    const handleNavigationEvent = (event: CustomEvent) => {
-      const { module } = event.detail;
-      setActiveModule(module);
-    };
-
-    window.addEventListener('navigate', handleNavigationEvent as EventListener);
-    
-    return () => {
-      window.removeEventListener('navigate', handleNavigationEvent as EventListener);
-    };
-  }, []);
-
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={login} />;
-  }
-
-  const handleNavigation = (module: string, params?: any) => {
-    setActiveModule(module);
-    updateCurrentModule(module); // Update user presence
-    // Close sidebar on mobile after navigation
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-    // Here you could handle routing params in the future
-  };
-
-  const renderModule = () => {
-    switch (activeModule) {
-      case "dashboard":
-        return (
-          <PermissionGuard module="dashboard">
-            <Dashboard onNavigate={handleNavigation} />
-          </PermissionGuard>
-        );
-      case "test-tracker":
-        return (
-          <PermissionGuard module="test-tracker">
-            <TestTracker />
-          </PermissionGuard>
-        );
-      case "flow-info":
-        return (
-          <PermissionGuard module="flow-info">
-            <FlowInfo />
-          </PermissionGuard>
-        );
-      case "monitor":
-        return (
-          <PermissionGuard module="monitor">
-            <ProductionMonitor />
-          </PermissionGuard>
-        );
-      case "issues":
-        return (
-          <PermissionGuard module="issues">
-            <IssueTracker />
-          </PermissionGuard>
-        );
-      case "data":
-        return (
-          <PermissionGuard module="data">
-            <DataCenter />
-          </PermissionGuard>
-        );
-      case "tools":
-        return (
-          <PermissionGuard module="tools">
-            <ToolsManagement />
-          </PermissionGuard>
-        );
-      case "users":
-        return (
-          <PermissionGuard module="users">
-            <AdminPanel />
-          </PermissionGuard>
-        );
-      default:
-        return (
-          <PermissionGuard module="dashboard">
-            <Dashboard onNavigate={handleNavigation} />
-          </PermissionGuard>
-        );
-    }
-  };
+export default function Index() {
+  const { user } = useUser();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Real-time update indicators */}
-      <UpdateIndicator isUpdating={isUpdating} />
-      <FacebookStyleNotifications />
-      <OnlineUsersIndicator />
+      <div className="flex justify-between items-center p-4 border-b">
+        <h1 className="text-2xl font-bold">測試追蹤系統</h1>
+        <div className="flex items-center gap-4">
+          {user && <NewNotificationCenter />}
+          {user && (
+            <span className="text-sm text-muted-foreground">
+              歡迎, {user.displayName}
+            </span>
+          )}
+        </div>
+      </div>
       
-      {/* Mobile overlay */}
-      {isMobile && sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      <div className="flex min-h-screen">
-        <Sidebar 
-          activeModule={activeModule} 
-          onModuleChange={(module) => {
-            setActiveModule(module);
-            updateCurrentModule(module); // Update user presence
-            if (isMobile) setSidebarOpen(false);
-          }}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-          isMobile={isMobile}
-        />
-        <main className={cn(
-          "flex-1 overflow-auto relative",
-          isMobile && "pt-14" // Add top padding on mobile for fixed header
-        )}>
-          {/* 新通知中心 - 固定在右上角 */}
-          <div className="fixed top-4 right-4 z-50">
-            <NewNotificationCenter />
+      <div className="container mx-auto py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Dashboard />
           </div>
-          {renderModule()}
-        </main>
+          <div className="space-y-6">
+            <NotificationTester />
+          </div>
+        </div>
       </div>
     </div>
   );
-};
-
-export default Index;
+}
