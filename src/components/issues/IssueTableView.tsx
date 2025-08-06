@@ -439,7 +439,11 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         {/* 編輯對話框 */}
         {editingIssue && (
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+            <DialogContent 
+              className="max-w-6xl max-h-[85vh] overflow-y-auto"
+              onPointerDownOutside={(e) => e.preventDefault()}
+              onEscapeKeyDown={(e) => e.preventDefault()}
+            >
               <DialogHeader>
                 <DialogTitle>編輯問題</DialogTitle>
               </DialogHeader>

@@ -300,7 +300,11 @@ export function CodeStorageManager() {
                 新增程式碼
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogContent 
+            className="max-w-4xl max-h-[80vh] overflow-y-auto" 
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>
                 {editingSnippet ? "編輯程式碼片段" : "新增程式碼片段"}
