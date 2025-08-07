@@ -393,11 +393,12 @@ export function CodeSnippetManager() {
               <RichTextEditor
                 content={formData.description}
                 onChange={(content) => setFormData(prev => ({ ...prev, description: content }))}
-                placeholder="請輸入 SOP 操作說明，支援上傳圖片、拖曳調整..."
+                placeholder="請輸入 SOP 操作說明..."
                 className="min-h-[150px]"
+                disableImageUpload={true}
               />
               <div className="text-xs text-muted-foreground mt-1">
-                <strong>支援功能：</strong> 圖片上傳、拖曳、調整大小、格式化文字等
+                <strong>支援功能：</strong> 格式化文字、插入連結等
               </div>
             </div>
 
