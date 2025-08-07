@@ -213,6 +213,11 @@ export function NotificationCenter() {
           ? { ...n, status: 'closed' }
           : n
       ));
+      
+      // 觸發對話更新事件
+      window.dispatchEvent(new CustomEvent('notification-conversation-updated', { 
+        detail: { notificationId: notification.id } 
+      }));
     }
   };
 

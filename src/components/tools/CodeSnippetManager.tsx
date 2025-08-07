@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Edit, Trash2, Search, Code2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface CodeSnippet {
   id: string;
@@ -325,16 +326,6 @@ export function CodeSnippetManager() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="description">描述</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="請輸入片段描述..."
-                disabled={isSubmitting}
-              />
-            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -395,6 +386,19 @@ export function CodeSnippetManager() {
                 className="min-h-[300px] font-mono"
                 disabled={isSubmitting}
               />
+            </div>
+
+            <div>
+              <Label htmlFor="sop_description">SOP 說明</Label>
+              <RichTextEditor
+                content={formData.description}
+                onChange={(content) => setFormData(prev => ({ ...prev, description: content }))}
+                placeholder="請輸入 SOP 操作說明，支援上傳圖片、拖曳調整..."
+                className="min-h-[150px]"
+              />
+              <div className="text-xs text-muted-foreground mt-1">
+                <strong>支援功能：</strong> 圖片上傳、拖曳、調整大小、格式化文字等
+              </div>
             </div>
 
             <div>
