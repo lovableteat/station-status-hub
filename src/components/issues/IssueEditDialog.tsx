@@ -44,6 +44,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     status: issue.status,
     assigned_to: issue.assigned_to,
     process_notes: issue.process_notes || '',
+    solution: issue.solution || '',
     relate: issue.relate || '',
     category: issue.category || '',
     tags: issue.tags?.join(', ') || '',
@@ -108,6 +109,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         status: formData.status,
         assigned_to: formData.assigned_to,
         process_notes: formData.process_notes.trim() || null,
+        solution: formData.solution.trim() || null,
         relate: formData.relate.trim() || null,
         category: formData.category.trim() || null,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
@@ -344,6 +346,19 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           />
           <div className="text-xs text-muted-foreground mt-1">
             <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="solution">解決方案</Label>
+          <RichTextEditor
+            content={formData.solution}
+            onChange={(content) => handleInputChange('solution', content)}
+            placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
+            className="min-h-[120px]"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            <strong>支援功能：</strong> 可上傳圖片、插入連結、調整格式。圖片可拖曳調整大小。
           </div>
         </div>
 
