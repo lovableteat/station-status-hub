@@ -39,9 +39,11 @@ interface RichTextEditorProps {
   onChange: (content: string) => void;
   placeholder?: string;
   className?: string;
+  disableImageResize?: boolean;
+  disableImageUpload?: boolean;
 }
 
-export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className }: RichTextEditorProps) {
+export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className, disableImageResize = false, disableImageUpload = false }: RichTextEditorProps) {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isImageUrlModalOpen, setIsImageUrlModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -61,8 +63,8 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       }),
       Image.configure({
         HTMLAttributes: {
-          class: 'max-w-full h-auto rounded-lg cursor-pointer resizable-image',
-          style: 'resize: both; overflow: auto; border: 2px dashed transparent; min-width: 50px; min-height: 50px;',
+          class: `max-w-full h-auto rounded-lg cursor-pointer ${disableImageResize ? '' : 'resizable-image'}`,
+          style: disableImageResize ? '' : 'resize: both; overflow: auto; border: 2px dashed transparent; min-width: 50px; min-height: 50px;',
         },
       }),
       Link.configure({
@@ -224,29 +226,33 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         </Button>
 
         {/* Image Upload & URL */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          accept="image/*"
-          onChange={handleFileUpload}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          title="上傳圖片"
-        >
-          <Upload className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsImageUrlModalOpen(true)}
-          title="插入圖片 URL"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </Button>
+        {!disableImageUpload && (
+          <>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleFileUpload}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              title="上傳圖片"
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsImageUrlModalOpen(true)}
+              title="插入圖片 URL"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </>
+        )}
 
         <div className="w-px h-6 bg-border mx-1" />
 
@@ -357,21 +363,21 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           margin: 1.33em 0 !important; 
         }
         .ProseMirror img {
-          resize: both !important;
+          ${disableImageResize ? 'resize: none !important;' : 'resize: both !important;'}
           overflow: hidden !important;
-          border: 2px dashed transparent !important;
-          min-width: 50px !important;
-          min-height: 50px !important;
+          border: ${disableImageResize ? 'none !important;' : '2px dashed transparent !important;'}
+          min-width: ${disableImageResize ? 'auto !important;' : '50px !important;'}
+          min-height: ${disableImageResize ? 'auto !important;' : '50px !important;'}
           max-width: 100% !important;
-          cursor: nw-resize !important;
+          cursor: ${disableImageResize ? 'pointer !important;' : 'nw-resize !important;'}
           position: relative !important;
         }
         .ProseMirror img:hover {
-          border-color: hsl(217 91% 60%) !important;
+          border-color: ${disableImageResize ? 'transparent !important;' : 'hsl(217 91% 60%) !important;'}
         }
         .ProseMirror img.ProseMirror-selectednode {
-          border-color: hsl(142 76% 36%) !important;
-          resize: both !important;
+          border-color: ${disableImageResize ? 'transparent !important;' : 'hsl(142 76% 36%) !important;'}
+          resize: ${disableImageResize ? 'none !important;' : 'both !important;'}
         }
         .ProseMirror img:not(.ProseMirror-selectednode) {
           cursor: pointer !important;
