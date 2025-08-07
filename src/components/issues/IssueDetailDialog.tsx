@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Edit, Tag } from "lucide-react";
+import { NotificationConversationView } from "@/components/common/NotificationConversationView";
 
 interface Issue {
   id: string;
@@ -228,6 +229,17 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
               </div>
             </>
           )}
+
+          {/* 標註對話 */}
+          <Separator />
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-3 block">標註對話記錄</label>
+            <NotificationConversationView 
+              issueId={issue.id}
+              referenceType="issue"
+              referenceId={issue.id}
+            />
+          </div>
 
           {/* 時間戳 */}
           <Separator />

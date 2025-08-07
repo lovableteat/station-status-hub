@@ -51,6 +51,10 @@ export function NotificationReplyDialog({
 
     const result = await sendReply(notification.id, selectedReplyType, replyContent);
     if (result) {
+      // 回覆成功後，觸發頁面刷新以顯示新的對話
+      window.dispatchEvent(new CustomEvent('notification-reply-sent', { 
+        detail: { notificationId: notification.id, replyId: result.id } 
+      }));
       onClose();
       setReplyContent('');
       setSelectedReplyType('completion');
