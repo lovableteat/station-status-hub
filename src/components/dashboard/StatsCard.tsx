@@ -53,18 +53,6 @@ export function StatsCard({
             {description}
           </p>
         )}
-        {trend && (
-          <div className={cn(
-            "flex items-center text-xs",
-            trend.isPositive ? "text-success" : "text-danger",
-            variant !== "default" && "opacity-80"
-          )}>
-            <span className="mr-1">
-              {trend.isPositive ? "↗" : "↘"}
-            </span>
-            {Math.abs(trend.value)}% vs 昨日
-          </div>
-        )}
       </CardContent>
     </Card>
   );

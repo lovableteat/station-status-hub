@@ -20,6 +20,8 @@ import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { BomCenter } from "@/components/bom/BomCenter";
+import { ProjectManagementCenter } from "@/components/projects/ProjectManagementCenter";
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
@@ -99,6 +101,18 @@ const Index = () => {
         return (
           <PermissionGuard module="tools">
             <ToolsManagement />
+          </PermissionGuard>
+        );
+      case "bom-center":
+        return (
+          <PermissionGuard module="bom-center">
+            <BomCenter />
+          </PermissionGuard>
+        );
+      case "project-center":
+        return (
+          <PermissionGuard module="project-center">
+            <ProjectManagementCenter />
           </PermissionGuard>
         );
       case "users":

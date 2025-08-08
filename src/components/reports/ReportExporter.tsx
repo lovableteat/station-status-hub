@@ -148,7 +148,7 @@ export function ReportExporter({ data, title = "GB300 L10 測試進度報告" }:
                 <th>Station 0<br/>工廠組裝</th>
                 <th>Station 1<br/>開機</th>
                 <th>Station 2<br/>FW & SFT</th>
-                <th>Station 3<br/>Pega diag</th>
+                <th>Station 3<br/>NV diag</th>
                 <th>整體進度</th>
                 <th>開始時間</th>
                 <th>完成時間</th>
@@ -254,7 +254,7 @@ export function ReportExporter({ data, title = "GB300 L10 測試進度報告" }:
         { id: 'station0', station_name: 'Station 0 - 工廠組裝', station_order: 0 },
         { id: 'station1', station_name: 'Station 1 - 開機', station_order: 1 },
         { id: 'station2', station_name: 'Station 2 - FW & SFT', station_order: 2 },
-        { id: 'station3', station_name: 'Station 3 - Pega diag', station_order: 3 }
+        { id: 'station3', station_name: 'Station 3 - NV diag', station_order: 3 }
       ];
 
       const progress = data.flatMap(item => [
