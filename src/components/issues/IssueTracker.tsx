@@ -390,7 +390,7 @@ export function IssueTracker() {
             <Input
               placeholder="搜尋問題..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -409,7 +409,7 @@ export function IssueTracker() {
       </div>
 
       {/* Main Content */}
-      <IssueTableView issues={issues} onUpdate={loadIssues} />
+      <IssueTableView issues={filteredIssues} onUpdate={loadIssues} />
 
       {filteredIssues.length === 0 && (
         <div className="text-center py-12">

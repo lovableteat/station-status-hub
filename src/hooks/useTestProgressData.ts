@@ -19,10 +19,12 @@ export function useTestProgressData() {
   }, [systems, stations, testItems, progress]);
 
   const statistics = useMemo(() => {
-    const total = progressData.length;
-    const completed = progressData.filter(d => d.status === '已完成').length;
-    const inProgress = progressData.filter(d => d.status === '進行中').length;
-    const notStarted = progressData.filter(d => d.status === '未開始').length;
+    // 僅統計列入儀表板的系統
+    const included = progressData.filter(d => !d.excludeFromDashboard);
+    const total = included.length;
+    const completed = included.filter(d => d.status === '已完成' || d.overallProgress === 100).length;
+    const inProgress = included.filter(d => d.status === '進行中' || (d.overallProgress > 0 && d.overallProgress < 100)).length;
+    const notStarted = included.filter(d => d.status === '未開始' || d.overallProgress === 0).length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return {

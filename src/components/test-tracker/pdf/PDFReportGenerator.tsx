@@ -290,7 +290,7 @@ export class PDFReportGenerator {
             <th style="width: 9%;">Station 0<br/>工廠組裝</th>
             <th style="width: 9%;">Station 1<br/>開機</th>
             <th style="width: 9%;">Station 2<br/>FW & SFT</th>
-            <th style="width: 9%;">Station 3<br/>Pega diag</th>
+            <th style="width: 9%;">Station 3<br/>NV diag</th>
             <th style="width: 8%;">整體進度</th>
             <th style="width: 12%;">開始時間</th>
             <th style="width: 12%;">完成時間</th>
