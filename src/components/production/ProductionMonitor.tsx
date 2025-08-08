@@ -428,6 +428,10 @@ export function ProductionMonitor() {
                     <span className="text-muted-foreground">目前測項:</span>
                     <span className="font-medium text-xs">{machine.currentTestItem}</span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">位置:</span>
+                    <span className="font-medium text-xs">{(systems.find(s => s.id === machine.id) as any)?.team || machine.currentStation}</span>
+                  </div>
                 </div>
 
                 {/* Station Progress Overview - 只顯示 Station 0-3 */}

@@ -41,9 +41,10 @@ interface RichTextEditorProps {
   className?: string;
   disableImageResize?: boolean;
   disableImageUpload?: boolean;
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
-export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className, disableImageResize = false, disableImageUpload = false }: RichTextEditorProps) {
+export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className, disableImageResize = false, disableImageUpload = false, onImageUpload }: RichTextEditorProps) {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isImageUrlModalOpen, setIsImageUrlModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -89,20 +90,6 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
     },
   });
 
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && editor) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const url = e.target?.result as string;
-        if (url) {
-          insertImage(url);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  }, [editor]);
-
   const insertImage = useCallback((url: string) => {
     if (editor && url) {
       editor.chain().focus().setImage({ 
@@ -110,6 +97,31 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       }).run();
     }
   }, [editor]);
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && editor) {
+      try {
+        if (onImageUpload) {
+          const uploadedUrl = await onImageUpload(file);
+          if (uploadedUrl) {
+            insertImage(uploadedUrl);
+          }
+        } else {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const url = e.target?.result as string;
+            if (url) {
+              insertImage(url);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      } catch (err) {
+        console.error('Image upload failed:', err);
+      }
+    }
+  }, [editor, onImageUpload, insertImage]);
 
   const handleImageUrlSubmit = () => {
     if (imageUrl.trim()) {
