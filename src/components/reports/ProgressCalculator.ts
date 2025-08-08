@@ -51,7 +51,7 @@ export class ProgressCalculator {
         s.stationName.includes('Station 2') || s.stationName.includes('FW') || s.stationName.includes('SFT')
       );
       const station3 = stationProgresses.find(s => 
-        s.stationName.includes('Station 3') || s.stationName.includes('Pega') || s.stationName.includes('diag')
+        s.stationName.includes('Station 3') || s.stationName.includes('NV') || s.stationName.includes('diag') || s.stationName.includes('Pega')
       );
 
       // 如果系統已完成，所有站點都應該顯示100%

@@ -72,7 +72,7 @@ export function DataCenter() {
           if (stationName.includes('station 0') || stationName.includes('工廠組裝') ||
               stationName.includes('station 1') || stationName.includes('開機') ||
               stationName.includes('station 2') || stationName.includes('fw') || stationName.includes('sft') ||
-              stationName.includes('station 3') || stationName.includes('pega') || stationName.includes('diag')) {
+              stationName.includes('station 3') || stationName.includes('nv') || stationName.includes('diag')) {
             displayProgress = 100;
           }
         }

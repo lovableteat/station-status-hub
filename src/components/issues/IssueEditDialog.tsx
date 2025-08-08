@@ -12,6 +12,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { MentionInput } from "@/components/common/MentionInput";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { useUser } from "@/components/auth/UserContext";
+import { Badge } from "@/components/ui/badge";
 
 interface Issue {
   id: string;
@@ -145,7 +146,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           );
         } catch (notificationError) {
           console.error('發送通知失敗:', notificationError);
-          // 不阻止主要更新流程
         }
       }
 
@@ -343,6 +343,22 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
             onChange={(content) => handleInputChange('process_notes', content)}
             placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
             className="min-h-[100px]"
+            onImageUpload={async (file) => {
+              const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
+              const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
+                upsert: true
+              });
+              if (error) throw error;
+              await supabase.from('issue_attachments').insert({
+                issue_id: issue.id,
+                file_name: file.name,
+                file_path: path,
+                file_size: file.size,
+                file_type: file.type
+              });
+              const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
+              return publicUrl.publicUrl;
+            }}
           />
           <div className="text-xs text-muted-foreground mt-1">
             <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
@@ -357,10 +373,54 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
             placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
             className="min-h-[120px]"
             disableImageResize={true}
+            onImageUpload={async (file) => {
+              const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
+              const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
+                upsert: true
+              });
+              if (error) throw error;
+              await supabase.from('issue_attachments').insert({
+                issue_id: issue.id,
+                file_name: file.name,
+                file_path: path,
+                file_size: file.size,
+                file_type: file.type
+              });
+              const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
+              return publicUrl.publicUrl;
+            }}
           />
           <div className="text-xs text-muted-foreground mt-1">
             <strong>支援功能：</strong> 可上傳圖片、插入連結、調整格式。
           </div>
+        </div>
+
+        {/* 附件上傳區塊 */}
+        <div className="space-y-2">
+          <Label>附件上傳與預覽</Label>
+          <div className="flex items-center gap-2">
+            <Input type="file" multiple accept="image/*,application/pdf" onChange={async (e) => {
+              const files = Array.from(e.target.files || []);
+              for (const file of files) {
+                const path = `${issue.id}/attachments/${Date.now()}-${file.name}`;
+                const { error } = await supabase.storage.from('issue-attachments').upload(path, file, { upsert: true });
+                if (!error) {
+                  await supabase.from('issue_attachments').insert({
+                    issue_id: issue.id,
+                    file_name: file.name,
+                    file_path: path,
+                    file_size: file.size,
+                    file_type: file.type
+                  });
+                }
+              }
+              // 觸發父層更新
+              onUpdate();
+            }} />
+          </div>
+          {/* 附件預覽：僅顯示圖片縮圖，其它檔案顯示名稱 */}
+          {/** 這裡可在父層重新載入後由 IssueDetail 或 IssueTable 顯示，為了即時性簡易顯示提示文字 **/}
+          <div className="text-xs text-muted-foreground">上傳完成後，附件會即時出現在清單中，可於「查看詳細」預覽與下載。</div>
         </div>
 
         <div>
