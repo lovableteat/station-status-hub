@@ -58,13 +58,6 @@ const PERMISSION_GROUPS = {
       { key: 'bom_edit', label: '編輯BOM比對中心' }
     ]
   },
-  'project_center': {
-    name: '專案管理中心',
-    permissions: [
-      { key: 'project_view', label: '檢視專案管理中心' },
-      { key: 'project_edit', label: '編輯專案管理中心' }
-    ]
-  },
   'tools': {
     name: '工具管理',
     permissions: [
