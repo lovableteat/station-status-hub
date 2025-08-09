@@ -373,6 +373,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
             placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
             className="min-h-[120px]"
             disableImageResize={true}
+            disableImageUpload={false}
             onImageUpload={async (file) => {
               const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
               const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
