@@ -52,6 +52,8 @@ export function BomComparisonTool() {
   const [comparisonResults, setComparisonResults] = useState<ComparisonResult[]>([]);
   const [isComparing, setIsComparing] = useState(false);
   const [activeTab, setActiveTab] = useState("upload");
+  const [resultFilter, setResultFilter] = useState<'all'|'add'|'remove'|'change'|'none'>('all');
+  const [keyword, setKeyword] = useState('');
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'old' | 'new') => {
@@ -209,6 +211,8 @@ export function BomComparisonTool() {
       </Badge>
     );
   };
+
+  const filteredResults = comparisonResults.filter(r => (resultFilter === 'all' || r.diffType === resultFilter) && (keyword === '' || (r.mfrPN?.includes(keyword) || r.description?.includes(keyword) || r.oldRefDes?.includes(keyword) || r.newRefDes?.includes(keyword))));
 
   return (
     <div className="space-y-6">
@@ -386,23 +390,37 @@ export function BomComparisonTool() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>比對結果</CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                <Select value={resultFilter} onValueChange={setResultFilter}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="差異類型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部</SelectItem>
+                    <SelectItem value="add">新增</SelectItem>
+                    <SelectItem value="remove">刪除</SelectItem>
+                    <SelectItem value="change">變更</SelectItem>
+                    <SelectItem value="none">無變化</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="關鍵字搜尋 (料號/描述/RefDes)"
+                  className="w-64"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                />
                 <Button variant="outline" onClick={exportResults}>
                   <Download className="h-4 w-4 mr-2" />
                   匯出Excel
                 </Button>
-                <Button variant="outline" onClick={exportResults}>
-                  <Download className="h-4 w-4 mr-2" />
-                  匯出PDF
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {comparisonResults.length > 0 ? (
+              {filteredResults.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-200 dark:border-gray-700">
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-gray-800">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-muted/50">
+                      <tr>
                         <th className="border p-2 text-left">Mfr PN</th>
                         <th className="border p-2 text-left">舊數量</th>
                         <th className="border p-2 text-left">新數量</th>
@@ -412,7 +430,7 @@ export function BomComparisonTool() {
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisonResults.map((result, index) => (
+                      {filteredResults.map((result, index) => (
                         <tr key={index} className={
                           result.diffType === 'add' ? 'bg-green-50 dark:bg-green-950' :
                           result.diffType === 'remove' ? 'bg-red-50 dark:bg-red-950' :
