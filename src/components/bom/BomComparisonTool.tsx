@@ -391,7 +391,7 @@ export function BomComparisonTool() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>比對結果</CardTitle>
               <div className="flex gap-2 items-center">
-                <Select value={resultFilter} onValueChange={setResultFilter}>
+                <Select value={resultFilter} onValueChange={(v) => setResultFilter(v as 'all'|'add'|'remove'|'change'|'none')}>
                   <SelectTrigger className="w-32">
                     <SelectValue placeholder="差異類型" />
                   </SelectTrigger>
