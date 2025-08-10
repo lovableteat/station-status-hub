@@ -430,7 +430,7 @@ export function ProductionMonitor() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">位置:</span>
-                    <span className="font-semibold text-sm bg-primary/20 text-primary px-2 py-1 rounded">
+                    <span className="font-semibold text-sm bg-warning/20 text-warning px-2 py-1 rounded">
                       {(systems.find(s => s.id === machine.id) as any)?.team || machine.currentStation}
                     </span>
                   </div>

@@ -61,6 +61,8 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const [pageSize, setPageSize] = useState(20);
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const [inlineEditingAssignee, setInlineEditingAssignee] = useState<string | null>(null);
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+  const [attachmentPreview, setAttachmentPreview] = useState<Issue['attachments']>([]);
   const { toast } = useToast();
   const { sendMentionNotifications } = useMentionNotifications();
 
@@ -366,13 +368,22 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {issue.attachments && issue.attachments.length > 0 && (
-                      <div className="flex items-center gap-1">
-                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {issue.attachments.length}
-                        </span>
-                      </div>
+                    {issue.attachments && issue.attachments.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={() => {
+                          setAttachmentPreview(issue.attachments || []);
+                          setAttachmentDialogOpen(true);
+                        }}
+                        title="查看附件"
+                      >
+                        <ImageIcon className="h-4 w-4 mr-1" />
+                        <span className="text-xs">{issue.attachments.length}</span>
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -460,15 +471,48 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
           </Dialog>
         )}
 
-        {/* 查看詳細資訊對話框 */}
-        {viewingIssue && (
-          <IssueDetailDialog
-            issue={viewingIssue}
-            isOpen={isDetailDialogOpen}
-            onClose={handleViewClose}
-            onEdit={handleViewEdit}
-          />
-        )}
+          {/* 查看詳細資訊對話框 */}
+          {viewingIssue && (
+            <IssueDetailDialog
+              issue={viewingIssue}
+              isOpen={isDetailDialogOpen}
+              onClose={handleViewClose}
+              onEdit={handleViewEdit}
+            />
+          )}
+
+          {/* 附件預覽對話框 */}
+          <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>附件預覽</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4">
+                {attachmentPreview?.map((att) => {
+                  const pub = supabase.storage.from('issue-attachments').getPublicUrl(att.file_path).data.publicUrl;
+                  const isImg = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(att.file_name);
+                  return (
+                    <div key={att.id} className="border rounded p-2">
+                      {isImg ? (
+                        <img src={pub} alt={att.file_name} className="w-full h-40 object-contain rounded" />
+                      ) : (
+                        <div className="text-sm text-muted-foreground">{att.file_name}</div>
+                      )}
+                      <div className="mt-2 flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => window.open(pub, '_blank')}>開啟</Button>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          const a = document.createElement('a');
+                          a.href = pub;
+                          a.download = att.file_name;
+                          a.click();
+                        }}>下載</Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
       </CardContent>
     </Card>
   );
