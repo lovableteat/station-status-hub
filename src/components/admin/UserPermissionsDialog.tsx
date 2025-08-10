@@ -52,11 +52,11 @@ const PERMISSION_GROUPS = {
     ]
   },
   'bom_center': {
-    name: 'BOM比對中心',
-    permissions: [
-      { key: 'bom_view', label: '檢視BOM比對中心' },
-      { key: 'bom_edit', label: '編輯BOM比對中心' }
-    ]
+  name: '比對中心',
+  permissions: [
+    { key: 'bom_view', label: '檢視比對中心' },
+    { key: 'bom_edit', label: '編輯比對中心' }
+  ]
   },
   'tools': {
     name: '工具管理',
@@ -93,13 +93,16 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
         .eq('user_id', userId);
 
       if (error) throw error;
-      
       setPermissions(data?.map(p => p.permission) || []);
     } catch (error) {
+      // Fallback: localStorage
+      try {
+        const local = localStorage.getItem(`user_page_permissions:${userId}`);
+        setPermissions(local ? JSON.parse(local) : []);
+      } catch {}
       toast({
-        title: "載入失敗",
-        description: "無法載入用戶權限",
-        variant: "destructive"
+        title: "載入權限（離線）",
+        description: "資料庫不可用，使用本機權限設定",
       });
     }
   };
@@ -116,15 +119,13 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
     try {
       setIsLoading(true);
 
-      // 刪除現有權限
+      // 先嘗試保存到資料庫
       const { error: deleteError } = await supabase
         .from('user_page_permissions')
         .delete()
         .eq('user_id', userId);
-
       if (deleteError) throw deleteError;
 
-      // 添加新權限
       if (permissions.length > 0) {
         const { error: insertError } = await supabase
           .from('user_page_permissions')
@@ -135,9 +136,11 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
               granted_by: 'admin'
             }))
           );
-
         if (insertError) throw insertError;
       }
+
+      // 同步一份到本機，作為離線備份
+      localStorage.setItem(`user_page_permissions:${userId}` , JSON.stringify(permissions));
 
       toast({
         title: "設定成功",
@@ -146,11 +149,13 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
 
       onClose();
     } catch (error) {
+      // 資料庫失敗時，使用本機儲存以維持可用性
+      localStorage.setItem(`user_page_permissions:${userId}` , JSON.stringify(permissions));
       toast({
-        title: "設定失敗",
-        description: "無法更新用戶權限",
-        variant: "destructive"
+        title: "已以本機方式儲存",
+        description: "資料庫不可用，先保存至本機，稍後可再同步",
       });
+      onClose();
     } finally {
       setIsLoading(false);
     }
