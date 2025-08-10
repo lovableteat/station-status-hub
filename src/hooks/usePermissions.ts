@@ -34,11 +34,16 @@ export function usePermissions() {
         .eq('user_id', user?.userId);
 
       if (error) throw error;
-      
       setPermissions(data?.map(p => p.permission as Permission) || []);
     } catch (error) {
       console.error('Failed to load permissions:', error);
-      setPermissions([]);
+      // Fallback to localStorage so the app remains usable
+      try {
+        const local = localStorage.getItem(`user_page_permissions:${user?.userId}`);
+        setPermissions(local ? JSON.parse(local) : []);
+      } catch {
+        setPermissions([]);
+      }
     } finally {
       setLoading(false);
     }
