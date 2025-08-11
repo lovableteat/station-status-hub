@@ -1992,6 +1992,7 @@ export type Database = {
           require_confirmation: boolean | null
           sender_id: string
           status: string | null
+          tags: string[] | null
           title: string
           updated_at: string
         }
@@ -2018,6 +2019,7 @@ export type Database = {
           require_confirmation?: boolean | null
           sender_id: string
           status?: string | null
+          tags?: string[] | null
           title: string
           updated_at?: string
         }
@@ -2044,6 +2046,7 @@ export type Database = {
           require_confirmation?: boolean | null
           sender_id?: string
           status?: string | null
+          tags?: string[] | null
           title?: string
           updated_at?: string
         }
@@ -2298,6 +2301,8 @@ export type Database = {
         | "tools_edit"
         | "admin_view"
         | "admin_edit"
+        | "comparison_view"
+        | "comparison_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2440,6 +2445,8 @@ export const Constants = {
         "tools_edit",
         "admin_view",
         "admin_edit",
+        "comparison_view",
+        "comparison_edit",
       ],
     },
   },
