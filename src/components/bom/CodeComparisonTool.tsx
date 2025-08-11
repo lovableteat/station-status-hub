@@ -136,7 +136,14 @@ export function CodeComparisonTool() {
     });
   };
 
-  const getBg = (type: string) => type === 'add' ? 'bg-green-100 dark:bg-green-900/30' : type === 'remove' ? 'bg-red-100 dark:bg-red-900/30' : type === 'modify' ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-gray-50 dark:bg-gray-800/50';
+  const getBg = (type: string) => {
+    switch (type) {
+      case 'add': return 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500';
+      case 'remove': return 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500';
+      case 'modify': return 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500';
+      default: return 'bg-background';
+    }
+  };
 
 
   const getTypeIcon = (type: string) => {
@@ -273,21 +280,24 @@ export function CodeComparisonTool() {
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.oldNumber ?? ''}
                       </div>
-                      <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                        {d.type === 'modify' && d.parts ? (
-                          <span>
-                            {d.parts.map((p, i) => p.removed ? (
-                              <span key={i} className="bg-red-500/20 line-through">{p.value}</span>
-                            ) : !p.added ? (
-                              <span key={i}>{p.value}</span>
-                            ) : null)}
-                          </span>
-                        ) : (
-                          <span className={d.type === 'remove' ? 'text-red-600' : d.type === 'add' ? 'opacity-50' : ''}>
-                            {d.oldText ?? ''}
-                          </span>
-                        )}
-                      </div>
+                       <div className="w-4 flex justify-center">
+                         {getTypeIcon(d.type)}
+                       </div>
+                       <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
+                         {d.type === 'modify' && d.parts ? (
+                           <span>
+                             {d.parts.map((p, i) => p.removed ? (
+                               <span key={i} className="bg-red-300 text-red-800 px-1 rounded">{p.value}</span>
+                             ) : !p.added ? (
+                               <span key={i} className="text-gray-600">{p.value}</span>
+                             ) : null)}
+                           </span>
+                         ) : (
+                           <span className={d.type === 'remove' ? 'text-red-700 bg-red-100 px-1 rounded' : d.type === 'add' ? 'opacity-30' : 'text-gray-700'}>
+                             {d.oldText ?? ''}
+                           </span>
+                         )}
+                       </div>
                     </div>
                   ))}
                 </div>
@@ -298,21 +308,24 @@ export function CodeComparisonTool() {
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.newNumber ?? ''}
                       </div>
-                      <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                        {d.type === 'modify' && d.parts ? (
-                          <span>
-                            {d.parts.map((p, i) => p.added ? (
-                              <span key={i} className="bg-green-500/20 underline">{p.value}</span>
-                            ) : !p.removed ? (
-                              <span key={i}>{p.value}</span>
-                            ) : null)}
-                          </span>
-                        ) : (
-                          <span className={d.type === 'add' ? 'text-green-600' : d.type === 'remove' ? 'opacity-50' : ''}>
-                            {d.newText ?? ''}
-                          </span>
-                        )}
-                      </div>
+                       <div className="w-4 flex justify-center">
+                         {getTypeIcon(d.type)}
+                       </div>
+                       <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
+                         {d.type === 'modify' && d.parts ? (
+                           <span>
+                             {d.parts.map((p, i) => p.added ? (
+                               <span key={i} className="bg-green-300 text-green-800 px-1 rounded">{p.value}</span>
+                             ) : !p.removed ? (
+                               <span key={i} className="text-gray-600">{p.value}</span>
+                             ) : null)}
+                           </span>
+                         ) : (
+                           <span className={d.type === 'add' ? 'text-green-700 bg-green-100 px-1 rounded' : d.type === 'remove' ? 'opacity-30' : 'text-gray-700'}>
+                             {d.newText ?? ''}
+                           </span>
+                         )}
+                       </div>
                     </div>
                   ))}
                 </div>
