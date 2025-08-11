@@ -51,12 +51,12 @@ const PERMISSION_GROUPS = {
       { key: 'data_center_edit', label: '編輯資料中心' }
     ]
   },
-  'bom_center': {
-  name: '比對中心',
-  permissions: [
-    { key: 'bom_view', label: '檢視比對中心' },
-    { key: 'bom_edit', label: '編輯比對中心' }
-  ]
+  'comparison_center': {
+    name: '比對中心',
+    permissions: [
+      { key: 'comparison_view', label: '檢視比對中心' },
+      { key: 'comparison_edit', label: '編輯比對中心' }
+    ]
   },
   'tools': {
     name: '工具管理',

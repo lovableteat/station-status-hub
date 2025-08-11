@@ -13,6 +13,7 @@ import { MentionInput } from "@/components/common/MentionInput";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { useUser } from "@/components/auth/UserContext";
 import { Badge } from "@/components/ui/badge";
+import { AttachmentManager } from "./AttachmentManager";
 
 interface Issue {
   id: string;
@@ -229,7 +230,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         </Button>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左側：基本資訊 */}
+        <div className="lg:col-span-2 space-y-4">
         <div>
           <Label htmlFor="title">問題標題 *</Label>
           <Input
@@ -241,223 +244,232 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           />
         </div>
         
-        <div>
-          <Label htmlFor="description">問題描述 *</Label>
-          <RichTextEditor
-            content={formData.description}
-            onChange={(content) => handleInputChange('description', content)}
-            placeholder="請詳細描述問題..."
-            className="min-h-[120px]"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="priority">優先級</Label>
-            <Select 
-              value={formData.priority} 
-              onValueChange={(value) => handleInputChange('priority', value)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">低</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="high">高</SelectItem>
-                <SelectItem value="critical">緊急</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="status">狀態</Label>
-            <Select 
-              value={formData.status} 
-              onValueChange={(value) => handleInputChange('status', value)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="open">開啟</SelectItem>
-                <SelectItem value="in_progress">處理中</SelectItem>
-                <SelectItem value="resolved">已解決</SelectItem>
-                <SelectItem value="closed">已關閉</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="assigned_to">負責人</Label>
-          <Select 
-            value={formData.assigned_to} 
-            onValueChange={(value) => handleInputChange('assigned_to', value)}
-            disabled={isSubmitting}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="請選擇負責人..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">未指派</SelectItem>
-              {engineers.map(engineer => (
-                <SelectItem key={engineer.id} value={engineer.name}>
-                  {engineer.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="relate">相關項目</Label>
-            <Input
-              id="relate"
-              value={formData.relate}
-              onChange={(e) => handleInputChange('relate', e.target.value)}
-              placeholder="請輸入相關項目..."
-              disabled={isSubmitting}
+            <Label htmlFor="description">問題描述 *</Label>
+            <RichTextEditor
+              content={formData.description}
+              onChange={(content) => handleInputChange('description', content)}
+              placeholder="請詳細描述問題..."
+              className="min-h-[120px]"
             />
           </div>
 
-          <div>
-            <Label htmlFor="category">問題分類</Label>
-            <Input
-              id="category"
-              value={formData.category}
-              onChange={(e) => handleInputChange('category', e.target.value)}
-              placeholder="請輸入問題分類..."
-              disabled={isSubmitting}
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="process_notes">處理過程</Label>
-          <RichTextEditor
-            content={formData.process_notes}
-            onChange={(content) => handleInputChange('process_notes', content)}
-            placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
-            className="min-h-[100px]"
-            onImageUpload={async (file) => {
-              const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
-              const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
-                upsert: true
-              });
-              if (error) throw error;
-              await supabase.from('issue_attachments').insert({
-                issue_id: issue.id,
-                file_name: file.name,
-                file_path: path,
-                file_size: file.size,
-                file_type: file.type
-              });
-              const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
-              return publicUrl.publicUrl;
-            }}
-          />
-          <div className="text-xs text-muted-foreground mt-1">
-            <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="solution">解決方案</Label>
-          <RichTextEditor
-            content={formData.solution}
-            onChange={(content) => handleInputChange('solution', content)}
-            placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
-            className="min-h-[120px]"
-            disableImageResize={true}
-            disableImageUpload={false}
-            onImageUpload={async (file) => {
-              const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
-              const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
-                upsert: true
-              });
-              if (error) throw error;
-              await supabase.from('issue_attachments').insert({
-                issue_id: issue.id,
-                file_name: file.name,
-                file_path: path,
-                file_size: file.size,
-                file_type: file.type
-              });
-              const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
-              return publicUrl.publicUrl;
-            }}
-          />
-          <div className="text-xs text-muted-foreground mt-1">
-            <strong>支援功能：</strong> 可上傳圖片、插入連結、調整格式。
-          </div>
-        </div>
-
-        {/* 附件上傳區塊 */}
-        <div className="space-y-2">
-          <Label>附件上傳與預覽</Label>
-          <div className="flex items-center gap-2">
-            <Input type="file" multiple accept="image/*,application/pdf" onChange={async (e) => {
-              const files = Array.from(e.target.files || []);
-              for (const file of files) {
-                const path = `${issue.id}/attachments/${Date.now()}-${file.name}`;
-                const { error } = await supabase.storage.from('issue-attachments').upload(path, file, { upsert: true });
-                if (!error) {
-                  await supabase.from('issue_attachments').insert({
-                    issue_id: issue.id,
-                    file_name: file.name,
-                    file_path: path,
-                    file_size: file.size,
-                    file_type: file.type
-                  });
-                }
-              }
-              // 觸發父層更新
-              onUpdate();
-            }} />
-          </div>
-          {/* 附件預覽：僅顯示圖片縮圖，其它檔案顯示名稱 */}
-          {/** 這裡可在父層重新載入後由 IssueDetail 或 IssueTable 顯示，為了即時性簡易顯示提示文字 **/}
-          <div className="text-xs text-muted-foreground">上傳完成後，附件會即時出現在清單中，可於「查看詳細」預覽與下載。</div>
-        </div>
-
-        <div>
-          <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
-          <Input
-            id="tags"
-            value={formData.tags}
-            onChange={(e) => handleInputChange('tags', e.target.value)}
-            placeholder="例如：緊急, 硬體, 網路..."
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="mention">標註用戶與訊息 (輸入 @ 可選擇用戶)</Label>
-          <MentionInput
-            value={formData.mentionMessage}
-            onChange={(value, mentions) => {
-              handleInputChange('mentionMessage', value);
-              setMentionedUsers(mentions || []);
-            }}
-            placeholder="輸入 @ 來標註相關用戶，並在此輸入要告知他們的訊息..."
-            className="min-h-[80px]"
-          />
-          {mentionedUsers.length > 0 && (
-            <div className="mt-2 p-2 bg-muted rounded border">
-              <div className="text-sm font-medium mb-1">已標註用戶:</div>
-              <div className="text-sm text-muted-foreground">
-                {mentionedUsers.map(user => user.displayName).join(', ')}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                這些用戶將收到即時通知並可在頁面上方的通知中心查看
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="priority">優先級</Label>
+              <Select 
+                value={formData.priority} 
+                onValueChange={(value) => handleInputChange('priority', value)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">低</SelectItem>
+                  <SelectItem value="medium">中</SelectItem>
+                  <SelectItem value="high">高</SelectItem>
+                  <SelectItem value="critical">緊急</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
+
+            <div>
+              <Label htmlFor="status">狀態</Label>
+              <Select 
+                value={formData.status} 
+                onValueChange={(value) => handleInputChange('status', value)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">開啟</SelectItem>
+                  <SelectItem value="in_progress">處理中</SelectItem>
+                  <SelectItem value="resolved">已解決</SelectItem>
+                  <SelectItem value="closed">已關閉</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="assigned_to">負責人</Label>
+            <Select 
+              value={formData.assigned_to} 
+              onValueChange={(value) => handleInputChange('assigned_to', value)}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="請選擇負責人..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">未指派</SelectItem>
+                {engineers.map(engineer => (
+                  <SelectItem key={engineer.id} value={engineer.name}>
+                    {engineer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="relate">相關項目</Label>
+              <Input
+                id="relate"
+                value={formData.relate}
+                onChange={(e) => handleInputChange('relate', e.target.value)}
+                placeholder="請輸入相關項目..."
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="category">問題分類</Label>
+              <Input
+                id="category"
+                value={formData.category}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+                placeholder="請輸入問題分類..."
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="process_notes">處理過程</Label>
+            <RichTextEditor
+              content={formData.process_notes}
+              onChange={(content) => handleInputChange('process_notes', content)}
+              placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
+              className="min-h-[100px]"
+              onImageUpload={async (file) => {
+                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
+                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
+                  upsert: true
+                });
+                if (error) throw error;
+                await supabase.from('issue_attachments').insert({
+                  issue_id: issue.id,
+                  file_name: file.name,
+                  file_path: path,
+                  file_size: file.size,
+                  file_type: file.type
+                });
+                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
+                return publicUrl.publicUrl;
+              }}
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="solution">解決方案</Label>
+            <RichTextEditor
+              content={formData.solution}
+              onChange={(content) => handleInputChange('solution', content)}
+              placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
+              className="min-h-[120px]"
+              disableImageResize={true}
+              disableImageUpload={false}
+              onImageUpload={async (file) => {
+                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
+                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
+                  upsert: true
+                });
+                if (error) throw error;
+                await supabase.from('issue_attachments').insert({
+                  issue_id: issue.id,
+                  file_name: file.name,
+                  file_path: path,
+                  file_size: file.size,
+                  file_type: file.type
+                });
+                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
+                return publicUrl.publicUrl;
+              }}
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              <strong>支援功能：</strong> 可上傳圖片、插入連結、調整格式。
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
+            <Input
+              id="tags"
+              value={formData.tags}
+              onChange={(e) => handleInputChange('tags', e.target.value)}
+              placeholder="例如：緊急, 硬體, 網路..."
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="mention">標註用戶與訊息 (輸入 @ 可選擇用戶)</Label>
+            <MentionInput
+              value={formData.mentionMessage}
+              onChange={(value, mentions) => {
+                handleInputChange('mentionMessage', value);
+                setMentionedUsers(mentions || []);
+              }}
+              placeholder="輸入 @ 來標註相關用戶，並在此輸入要告知他們的訊息..."
+              className="min-h-[80px]"
+            />
+            {mentionedUsers.length > 0 && (
+              <div className="mt-2 p-2 bg-muted rounded border">
+                <div className="text-sm font-medium mb-1">已標註用戶:</div>
+                <div className="text-sm text-muted-foreground">
+                  {mentionedUsers.map(user => user.displayName).join(', ')}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  這些用戶將收到即時通知並可在頁面上方的通知中心查看
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* 右側：附件管理 */}
+        <div className="space-y-4">
+          <div>
+            <Label>附件管理</Label>
+            <div className="space-y-2">
+              <Input 
+                type="file" 
+                multiple 
+                accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx" 
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  for (const file of files) {
+                    const path = `${issue.id}/attachments/${Date.now()}-${file.name}`;
+                    const { error } = await supabase.storage
+                      .from('issue-attachments')
+                      .upload(path, file, { upsert: true });
+                    if (!error) {
+                      await supabase.from('issue_attachments').insert({
+                        issue_id: issue.id,
+                        file_name: file.name,
+                        file_path: path,
+                        file_size: file.size,
+                        file_type: file.type
+                      });
+                    }
+                  }
+                  onUpdate();
+                }} 
+                className="text-sm"
+              />
+              <AttachmentManager issueId={issue.id} onUpdate={onUpdate} />
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <div className="flex justify-between pt-4 border-t">
