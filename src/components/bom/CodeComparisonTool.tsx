@@ -5,12 +5,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Code, 
-  GitCompare, 
+import { Switch } from "@/components/ui/switch";
+import {
+  Code,
+  GitCompare,
   Download,
   RotateCcw,
-  Copy
+  Copy,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { diffLines, diffWords } from 'diff';
@@ -30,6 +33,10 @@ export function CodeComparisonTool() {
   const [language, setLanguage] = useState("javascript");
   const [isComparing, setIsComparing] = useState(false);
   const [stats, setStats] = useState({ added: 0, removed: 0, modified: 0 });
+  const [showInline, setShowInline] = useState(true);
+  const [showUnchanged, setShowUnchanged] = useState(true);
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  const [currentChange, setCurrentChange] = useState(0);
   const { toast } = useToast();
 
   const supportedLanguages = [
@@ -57,7 +64,7 @@ export function CodeComparisonTool() {
 
   const lineDiffs = useMemo<LineDiff[]>(() => {
     if (!oldCode && !newCode) return [];
-    const diffs = diffLines(oldCode, newCode);
+    const diffs = diffLines(oldCode, newCode, { ignoreWhitespace });
     const result: LineDiff[] = [];
     let oldNum = 1;
     let newNum = 1;
@@ -93,7 +100,7 @@ export function CodeComparisonTool() {
       const cur = result[i];
       const next = result[i + 1];
       if (cur && next && cur.type === 'remove' && next.type === 'add') {
-        const parts = diffWords(cur.oldText || '', next.newText || '');
+        const parts = diffWords(cur.oldText || '', next.newText || '', { ignoreWhitespace });
         merged.push({ type: 'modify', oldNumber: cur.oldNumber, newNumber: next.newNumber, oldText: cur.oldText, newText: next.newText, parts });
         modified++;
         i++; // skip next
@@ -104,7 +111,7 @@ export function CodeComparisonTool() {
 
     setStats({ added, removed, modified });
     return merged;
-  }, [oldCode, newCode]);
+  }, [oldCode, newCode, ignoreWhitespace]);
 
 
   const clearAll = () => {
@@ -138,9 +145,9 @@ export function CodeComparisonTool() {
 
   const getBg = (type: string) => {
     switch (type) {
-      case 'add': return 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500';
-      case 'remove': return 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500';
-      case 'modify': return 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500';
+      case 'add': return 'bg-accent/10 border-l-4 border-accent';
+      case 'remove': return 'bg-destructive/10 border-l-4 border-destructive';
+      case 'modify': return 'bg-primary/10 border-l-4 border-primary';
       default: return 'bg-background';
     }
   };
@@ -149,14 +156,48 @@ export function CodeComparisonTool() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'add':
-        return <span className="text-green-600 font-bold">+</span>;
+        return <span className="text-accent font-bold">+</span>;
       case 'remove':
-        return <span className="text-red-600 font-bold">-</span>;
+        return <span className="text-destructive font-bold">-</span>;
       case 'modify':
-        return <span className="text-orange-600 font-bold">~</span>;
+        return <span className="text-primary font-bold">~</span>;
       default:
-        return <span className="text-gray-400"></span>;
+        return <span className="text-muted-foreground"></span>;
     }
+  };
+
+  // 派生顯示資料與差異索引
+  const displayDiffs = useMemo(() => (
+    showUnchanged ? lineDiffs : lineDiffs.filter((d) => d.type !== 'same')
+  ), [lineDiffs, showUnchanged]);
+
+  const changeRowIndices = useMemo(() => (
+    displayDiffs.map((d, i) => (d.type !== 'same' ? i : -1)).filter((i) => i !== -1)
+  ), [displayDiffs]);
+
+  const scrollToRow = (rowIdx: number) => {
+    document.getElementById(`diff-old-${rowIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById(`diff-new-${rowIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const gotoPrev = () => {
+    if (!changeRowIndices.length) return;
+    setCurrentChange((prev) => {
+      const len = changeRowIndices.length;
+      const nextPtr = (prev - 1 + len) % len;
+      scrollToRow(changeRowIndices[nextPtr]);
+      return nextPtr;
+    });
+  };
+
+  const gotoNext = () => {
+    if (!changeRowIndices.length) return;
+    setCurrentChange((prev) => {
+      const len = changeRowIndices.length;
+      const nextPtr = (prev + 1) % len;
+      scrollToRow(changeRowIndices[nextPtr]);
+      return nextPtr;
+    });
   };
 
   return (
@@ -250,33 +291,49 @@ export function CodeComparisonTool() {
       {/* 比對結果 - 兩欄式逐字差異 */}
       {lineDiffs.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle>比對結果</CardTitle>
-              <div className="flex gap-4 mt-2">
-                <Badge variant="default" className="bg-green-500">
-                  新增 {stats.added} 行
-                </Badge>
-                <Badge variant="destructive">
-                  刪除 {stats.removed} 行
-                </Badge>
-                <Badge variant="secondary">
-                  修改 {stats.modified} 行
-                </Badge>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge variant="default">新增 {stats.added} 行</Badge>
+                <Badge variant="destructive">刪除 {stats.removed} 行</Badge>
+                <Badge variant="secondary">修改 {stats.modified} 行</Badge>
               </div>
             </div>
-            <Button variant="outline" onClick={exportDiff}>
-              <Download className="h-4 w-4 mr-2" />
-              匯出差異摘要
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">逐字</Label>
+                <Switch checked={showInline} onCheckedChange={setShowInline} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">顯示未變更</Label>
+                <Switch checked={showUnchanged} onCheckedChange={setShowUnchanged} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">忽略空白</Label>
+                <Switch checked={ignoreWhitespace} onCheckedChange={setIgnoreWhitespace} />
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" onClick={gotoPrev} aria-label="上一個差異">
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={gotoNext} aria-label="下一個差異">
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button variant="outline" onClick={exportDiff}>
+                <Download className="h-4 w-4 mr-2" />
+                匯出差異摘要
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
                 {/* Old */}
                 <div className="max-h-[600px] overflow-auto">
-                  {lineDiffs.map((d, idx) => (
-                    <div key={`old-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
+                  {displayDiffs.map((d, idx) => (
+                    <div id={`diff-old-${idx}`} key={`old-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.oldNumber ?? ''}
                       </div>
@@ -284,16 +341,24 @@ export function CodeComparisonTool() {
                          {getTypeIcon(d.type)}
                        </div>
                        <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                         {d.type === 'modify' && d.parts ? (
+                         {showInline && d.type === 'modify' && d.parts ? (
                            <span>
-                             {d.parts.map((p, i) => p.removed ? (
-                               <span key={i} className="bg-red-300 text-red-800 px-1 rounded">{p.value}</span>
-                             ) : !p.added ? (
-                               <span key={i} className="text-gray-600">{p.value}</span>
-                             ) : null)}
+                             {d.parts.map((p, i) =>
+                               p.removed ? (
+                                 <span key={i} className="line-through bg-destructive/20 text-destructive-foreground/90 px-1 rounded">{p.value}</span>
+                               ) : !p.added ? (
+                                 <span key={i} className="text-muted-foreground">{p.value}</span>
+                               ) : null
+                             )}
                            </span>
                          ) : (
-                           <span className={d.type === 'remove' ? 'text-red-700 bg-red-100 px-1 rounded' : d.type === 'add' ? 'opacity-30' : 'text-gray-700'}>
+                           <span className={
+                             d.type === 'remove'
+                               ? 'line-through text-destructive bg-destructive/10 px-1 rounded'
+                               : d.type === 'add'
+                               ? 'opacity-40'
+                               : 'text-foreground'
+                           }>
                              {d.oldText ?? ''}
                            </span>
                          )}
@@ -303,8 +368,8 @@ export function CodeComparisonTool() {
                 </div>
                 {/* New */}
                 <div className="max-h-[600px] overflow-auto">
-                  {lineDiffs.map((d, idx) => (
-                    <div key={`new-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
+                  {displayDiffs.map((d, idx) => (
+                    <div id={`diff-new-${idx}`} key={`new-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.newNumber ?? ''}
                       </div>
@@ -312,16 +377,24 @@ export function CodeComparisonTool() {
                          {getTypeIcon(d.type)}
                        </div>
                        <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                         {d.type === 'modify' && d.parts ? (
+                         {showInline && d.type === 'modify' && d.parts ? (
                            <span>
-                             {d.parts.map((p, i) => p.added ? (
-                               <span key={i} className="bg-green-300 text-green-800 px-1 rounded">{p.value}</span>
-                             ) : !p.removed ? (
-                               <span key={i} className="text-gray-600">{p.value}</span>
-                             ) : null)}
+                             {d.parts.map((p, i) =>
+                               p.added ? (
+                                 <span key={i} className="underline decoration-2 underline-offset-2 bg-accent/20 text-foreground px-1 rounded">{p.value}</span>
+                               ) : !p.removed ? (
+                                 <span key={i} className="text-muted-foreground">{p.value}</span>
+                               ) : null
+                             )}
                            </span>
                          ) : (
-                           <span className={d.type === 'add' ? 'text-green-700 bg-green-100 px-1 rounded' : d.type === 'remove' ? 'opacity-30' : 'text-gray-700'}>
+                           <span className={
+                             d.type === 'add'
+                               ? 'text-accent bg-accent/10 underline decoration-2 underline-offset-2 px-1 rounded'
+                               : d.type === 'remove'
+                               ? 'opacity-40'
+                               : 'text-foreground'
+                           }>
                              {d.newText ?? ''}
                            </span>
                          )}
