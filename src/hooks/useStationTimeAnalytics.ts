@@ -114,6 +114,20 @@ export function useStationTimeAnalytics() {
         return;
       }
 
+      // 取得每台機台要排除的測項對照
+      const { data: exclusions, error: exclusionError } = await supabase
+        .from('dashboard_item_exclusions')
+        .select('system_id,item_id');
+
+      if (exclusionError) {
+        console.error('Error loading exclusions:', exclusionError);
+      }
+      const excludedMap = new Map<string, Set<string>>();
+      (exclusions || []).forEach((e: any) => {
+        if (!excludedMap.has(e.system_id)) excludedMap.set(e.system_id, new Set());
+        excludedMap.get(e.system_id)!.add(e.item_id);
+      });
+
       // 計算每個系統在每個站的總時長
       const systemStationData: SystemStationTime[] = [];
       
@@ -138,14 +152,13 @@ export function useStationTimeAnalytics() {
             // 計算該站別下所有測項的實際執行時間加總
             let stationTotalHours = 0;
             
+            const excludedSet = excludedMap.get(system.id) || new Set<string>();
             progress.forEach(item => {
+              if (excludedSet.has(item.item_id)) return; // 排除指定測項
               const startTime = new Date(item.started_at!).getTime();
               const endTime = new Date(item.completed_at!).getTime();
               const itemDuration = (endTime - startTime) / (1000 * 60 * 60);
-              
-              if (itemDuration > 0) {
-                stationTotalHours += itemDuration;
-              }
+              if (itemDuration > 0) stationTotalHours += itemDuration;
             });
             
             // 只有當站別總時間大於0時才加入統計
