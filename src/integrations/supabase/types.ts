@@ -398,6 +398,55 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_item_exclusions: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          reason: string | null
+          station_id: string | null
+          system_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          reason?: string | null
+          station_id?: string | null
+          system_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          reason?: string | null
+          station_id?: string | null
+          system_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_item_exclusions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_item_exclusions_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_item_exclusions_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers_and_tools: {
         Row: {
           comment: string | null
