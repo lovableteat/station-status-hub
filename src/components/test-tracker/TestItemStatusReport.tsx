@@ -72,7 +72,9 @@ export function TestItemStatusReport({
       
       systems.forEach(system => {
         stations.forEach(station => {
-          const stationItems = items.filter(item => item.station_id === station.id);
+          const stationItems = items
+            .filter(item => item.station_id === station.id)
+            .sort((a, b) => a.item_order - b.item_order);
           
           stationItems.forEach((item, index) => {
             const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
@@ -83,7 +85,7 @@ export function TestItemStatusReport({
               nicMacAddress: (system as any).os_mac_address || '',
               bmcAddress: (system as any).bmc_address || '',
               stationName: station.station_name,
-              itemSeq: index + 1,
+              itemSeq: item.item_order ?? (index + 1),
               itemName: item.item_name,
               itemDescription: item.description || '',
               status: itemProgress?.status || 'Not Start',
@@ -322,44 +324,48 @@ export function TestItemStatusReport({
                 </tr>
               </thead>
               <tbody>
-                {systems.map(system => 
+                {systems.map((system, sysIdx) => 
                   stations.map(station => 
-                    items.filter(item => item.station_id === station.id).map((item, index) => {
-                      const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
-                      return (
-                        <tr key={`${system.id}-${station.id}-${item.id}`} className="hover:bg-muted/25">
-                          <td className="border border-border p-2">{system.system_name}</td>
-                          <td className="border border-border p-2">{system.serial_number || '-'}</td>
-                          <td className="border border-border p-2 text-xs">{(system as any).os_mac_address || '-'}</td>
-                          <td className="border border-border p-2 text-xs">{(system as any).bmc_address || '-'}</td>
-                          <td className="border border-border p-2">{station.station_name}</td>
-                          <td className="border border-border p-2">{index + 1}</td>
-                          <td className="border border-border p-2 text-left">{item.item_name}</td>
-                          <td className="border border-border p-2">
-                            <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeClass(itemProgress?.status || 'Not Start')}`}>
-                              {itemProgress?.status || 'Not Start'}
-                            </span>
-                          </td>
-                          <td className="border border-border p-2">{itemProgress?.progress_percent || 0}%</td>
-                          <td className="border border-border p-2">{formatTime(itemProgress?.started_at)}</td>
-                          <td className="border border-border p-2">{formatTime(itemProgress?.completed_at)}</td>
-                          <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
-                          <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
-                          <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
-                          <td className="border border-border p-2 text-left max-w-32">
-                            <div className="text-xs space-y-1">
-                              {itemProgress?.notes ? (
-                                <div className="p-1 bg-muted/50 rounded text-xs">
-                                  {itemProgress.notes}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    items
+                      .filter(item => item.station_id === station.id)
+                      .sort((a, b) => a.item_order - b.item_order)
+                      .map((item) => {
+                        const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                        const rowBg = sysIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20';
+                        return (
+                          <tr key={`${system.id}-${station.id}-${item.id}`} className={`hover:bg-muted/25 ${rowBg}`}>
+                            <td className="border border-border p-2">{system.system_name}</td>
+                            <td className="border border-border p-2">{system.serial_number || '-'}</td>
+                            <td className="border border-border p-2 text-xs">{(system as any).os_mac_address || '-'}</td>
+                            <td className="border border-border p-2 text-xs">{(system as any).bmc_address || '-'}</td>
+                            <td className="border border-border p-2">{station.station_name}</td>
+                            <td className="border border-border p-2">{item.item_order}</td>
+                            <td className="border border-border p-2 text-left">{item.item_name}</td>
+                            <td className="border border-border p-2">
+                              <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeClass(itemProgress?.status || 'Not Start')}`}>
+                                {itemProgress?.status || 'Not Start'}
+                              </span>
+                            </td>
+                            <td className="border border-border p-2">{itemProgress?.progress_percent || 0}%</td>
+                            <td className="border border-border p-2">{formatTime(itemProgress?.started_at)}</td>
+                            <td className="border border-border p-2">{formatTime(itemProgress?.completed_at)}</td>
+                            <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
+                            <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
+                            <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
+                            <td className="border border-border p-2 text-left max-w-32">
+                              <div className="text-xs space-y-1">
+                                {itemProgress?.notes ? (
+                                  <div className="p-1 bg-muted/50 rounded text-xs">
+                                    {itemProgress.notes}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                   )
                 ).flat().flat()}
               </tbody>
