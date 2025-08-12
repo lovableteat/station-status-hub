@@ -43,18 +43,10 @@ export function BomCenter() {
   ];
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6 space-y-8">
-      <header className="text-center space-y-4 py-8">
-        <div className="inline-flex items-center gap-3 px-6 py-2 bg-primary/10 rounded-full border border-primary/20">
-          <GitCompare className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium text-primary">Professional Comparison Suite</span>
-        </div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
-          比對中心
-        </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          集中管理所有比對工具，提升效率與準確性。專業級比對解決方案，支援多人協作與版本控制
-        </p>
+    <main className="min-h-screen">
+      <header className="container mx-auto px-4 pt-6 pb-4">
+        <h1 className="text-3xl font-bold">比對中心</h1>
+        <p className="text-muted-foreground mt-1">集中管理BOM與程式碼比對工具，維持一致的站內樣式。</p>
         <link rel="canonical" href="/compare" />
         <meta name="description" content="比對中心，提供BOM表比對、程式碼比對等多種工具，支援多人協作" />
       </header>

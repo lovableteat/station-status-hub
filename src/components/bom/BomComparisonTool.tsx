@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Upload, 
   Download, 
@@ -20,6 +21,7 @@ import {
   Plus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
 
 interface BomItem {
   id: string;
@@ -54,30 +56,59 @@ export function BomComparisonTool() {
   const [activeTab, setActiveTab] = useState("upload");
   const [resultFilter, setResultFilter] = useState<'all'|'add'|'remove'|'change'|'none'>('all');
   const [keyword, setKeyword] = useState('');
+  const [compareFields, setCompareFields] = useState({ qty: true, refDes: true, description: false });
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'old' | 'new') => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // 模擬文件解析
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = () => {
       try {
-        // 這裡應該解析Excel/CSV文件
+        const data = new Uint8Array(reader.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        // 合併多工作表資料
+        const allRows: BomItem[] = [];
+        wb.SheetNames.forEach((sheetName, sIdx) => {
+          const sheet = wb.Sheets[sheetName];
+          const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          json.forEach((row, idx) => {
+            const keys = Object.keys(row);
+            const norm = (s: string) => s.toLowerCase().replace(/\s|_/g, '');
+            const findKey = (...cands: string[]) => keys.find(k => cands.some(c => norm(k).includes(c)));
+            const mfrPNKey = findKey('mfrpn', 'mpn', 'partnumber', 'pn') || 'MfrPN';
+            const qtyKey = findKey('qty', 'quantity') || 'Qty';
+            const refKey = findKey('refdes', 'ref', 'reference') || 'RefDes';
+            const descKey = findKey('desc', 'description') || 'Description';
+
+            allRows.push({
+              id: `${type}-${sIdx}-${idx}`,
+              mfrPN: String(row[mfrPNKey] ?? ''),
+              qty: Number(row[qtyKey] ?? 0) || 0,
+              refDes: String(row[refKey] ?? ''),
+              description: String(row[descKey] ?? '')
+            });
+          });
+        });
+
+        if (type === 'old') setOldBom(allRows);
+        else setNewBom(allRows);
+
         toast({
           title: "上傳成功",
-          description: `${type === 'old' ? '舊版' : '新版'} BOM 文件已上傳`,
+          description: `${type === 'old' ? '舊版' : '新版'} BOM 已從 ${wb.SheetNames.length} 個工作表匯入 ${allRows.length} 筆資料`,
         });
       } catch (error) {
+        console.error(error);
         toast({
           title: "上傳失敗",
-          description: "文件格式不正確",
+          description: "文件格式不正確或內容為空",
           variant: "destructive"
         });
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handlePasteData = (data: string, type: 'old' | 'new') => {
@@ -117,32 +148,58 @@ export function BomComparisonTool() {
 
   const runComparison = async () => {
     setIsComparing(true);
-    
     try {
-      // 模擬比對邏輯
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       const results: ComparisonResult[] = [];
       const allMfrPNs = new Set([
-        ...oldBom.map(item => item.mfrPN || ''),
-        ...newBom.map(item => item.mfrPN || '')
+        ...oldBom.map((item) => item.mfrPN || ""),
+        ...newBom.map((item) => item.mfrPN || ""),
       ]);
 
-      allMfrPNs.forEach(mfrPN => {
+      const normRef = (s?: string) =>
+        (s || "")
+          .replace(/\s+/g, "")
+          .replace(/[;，]/g, ",")
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean)
+          .sort()
+          .join(",");
+
+      allMfrPNs.forEach((mfrPN) => {
         if (!mfrPN) return;
-        
-        const oldItem = oldBom.find(item => item.mfrPN === mfrPN);
-        const newItem = newBom.find(item => item.mfrPN === mfrPN);
-        
+
+        const oldItem = oldBom.find((item) => item.mfrPN === mfrPN);
+        const newItem = newBom.find((item) => item.mfrPN === mfrPN);
+
         const oldQty = oldItem?.qty || 0;
         const newQty = newItem?.qty || 0;
         const qtyDelta = newQty - oldQty;
-        
-        let diffType: ComparisonResult['diffType'] = 'none';
-        if (!oldItem && newItem) diffType = 'add';
-        else if (oldItem && !newItem) diffType = 'remove';
-        else if (qtyDelta !== 0) diffType = 'change';
-        
+
+        let diffType: ComparisonResult["diffType"] = "none";
+        if (!oldItem && newItem) diffType = "add";
+        else if (oldItem && !newItem) diffType = "remove";
+        else {
+          const refChanged = compareFields.refDes && normRef(oldItem?.refDes) !== normRef(newItem?.refDes);
+          const descChanged = compareFields.description && (oldItem?.description || "") !== (newItem?.description || "");
+          const qtyChanged = compareFields.qty && qtyDelta !== 0;
+          if (refChanged || descChanged || qtyChanged) diffType = "change";
+        }
+
+        let refDesAnalysis: string | undefined;
+        if (compareFields.refDes && oldItem && newItem) {
+          const os = new Set(normRef(oldItem.refDes).split(",").filter(Boolean));
+          const ns = new Set(normRef(newItem.refDes).split(",").filter(Boolean));
+          const added: string[] = [];
+          const removed: string[] = [];
+          ns.forEach((v) => { if (!os.has(v)) added.push(v); });
+          os.forEach((v) => { if (!ns.has(v)) removed.push(v); });
+          if (added.length || removed.length) {
+            refDesAnalysis = `${added.length ? "+" + added.join(",") : ""}${added.length && removed.length ? " / " : ""}${removed.length ? "-" + removed.join(",") : ""}` || undefined;
+          }
+        }
+
         results.push({
           mfrPN,
           oldQty,
@@ -151,22 +208,22 @@ export function BomComparisonTool() {
           diffType,
           oldRefDes: oldItem?.refDes,
           newRefDes: newItem?.refDes,
-          description: newItem?.description || oldItem?.description
+          refDesAnalysis,
+          description: newItem?.description || oldItem?.description,
         });
       });
 
       setComparisonResults(results);
       setActiveTab("results");
-      
       toast({
         title: "比對完成",
-        description: `發現 ${results.filter(r => r.diffType !== 'none').length} 項差異`,
+        description: `發現 ${results.filter((r) => r.diffType !== "none").length} 項差異`,
       });
     } catch (error) {
       toast({
         title: "比對失敗",
         description: "系統錯誤，請稍後再試",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsComparing(false);
