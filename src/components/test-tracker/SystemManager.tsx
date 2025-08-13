@@ -77,56 +77,10 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
 
   const handleDeleteSystem = async (systemId: string, systemName: string) => {
     try {
-      // 先刪除相關的問題附件與問題（若有綁定此機台）
-      const { data: issues, error: issuesLoadError } = await supabase
-        .from('issues')
-        .select('id')
-        .eq('system_id', systemId);
-      if (issuesLoadError) {
-        console.warn('Load related issues failed:', issuesLoadError);
-      }
-      const issueIds = (issues || []).map(i => i.id);
-      if (issueIds.length > 0) {
-        const { error: delAttachmentsError } = await supabase
-          .from('issue_attachments')
-          .delete()
-          .in('issue_id', issueIds);
-        if (delAttachmentsError) console.warn('Delete related attachments failed:', delAttachmentsError);
-
-        const { error: delIssuesError } = await supabase
-          .from('issues')
-          .delete()
-          .in('id', issueIds);
-        if (delIssuesError) console.warn('Delete related issues failed:', delIssuesError);
-      }
-
-      // 刪除儀表板排除規則
-      const { error: exclError } = await supabase
-        .from('dashboard_item_exclusions')
-        .delete()
-        .eq('system_id', systemId);
-      if (exclError) console.warn('Delete exclusions failed:', exclError);
-
-      // 再刪除相關的測試進度記錄
-      const { error: progressError } = await supabase
-        .from('test_progress')
-        .delete()
-        .eq('system_id', systemId);
-
-      if (progressError) {
-        console.error('Error deleting progress records:', progressError);
-        throw progressError;
-      }
-
-      // 最後刪除系統
-      const { error: systemError } = await supabase
-        .from('test_systems')
-        .delete()
-        .eq('id', systemId);
-
-      if (systemError) {
-        console.error('Error deleting system:', systemError);
-        throw systemError;
+      const { error } = await supabase.rpc('delete_test_system', { p_system_id: systemId });
+      if (error) {
+        console.error('RPC delete_test_system error:', error);
+        throw error;
       }
 
       toast({
@@ -140,7 +94,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
       console.error('Error deleting system:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除機台，請重試",
+        description: "無法刪除機台，請稍後重試或聯絡管理員",
         variant: "destructive"
       });
     }
@@ -236,56 +190,10 @@ export function SystemDeleteButton({
     try {
       setIsDeleting(true);
 
-      // 先刪除相關的問題附件與問題
-      const { data: issues, error: issuesLoadError } = await supabase
-        .from('issues')
-        .select('id')
-        .eq('system_id', systemId);
-      if (issuesLoadError) {
-        console.warn('Load related issues failed:', issuesLoadError);
-      }
-      const issueIds = (issues || []).map(i => i.id);
-      if (issueIds.length > 0) {
-        const { error: delAttachmentsError } = await supabase
-          .from('issue_attachments')
-          .delete()
-          .in('issue_id', issueIds);
-        if (delAttachmentsError) console.warn('Delete related attachments failed:', delAttachmentsError);
-
-        const { error: delIssuesError } = await supabase
-          .from('issues')
-          .delete()
-          .in('id', issueIds);
-        if (delIssuesError) console.warn('Delete related issues failed:', delIssuesError);
-      }
-
-      // 刪除儀表板排除規則
-      const { error: exclError } = await supabase
-        .from('dashboard_item_exclusions')
-        .delete()
-        .eq('system_id', systemId);
-      if (exclError) console.warn('Delete exclusions failed:', exclError);
-
-      // 刪除相關的測試進度記錄
-      const { error: progressError } = await supabase
-        .from('test_progress')
-        .delete()
-        .eq('system_id', systemId);
-
-      if (progressError) {
-        console.error('Error deleting progress records:', progressError);
-        throw progressError;
-      }
-
-      // 最後刪除系統
-      const { error: systemError } = await supabase
-        .from('test_systems')
-        .delete()
-        .eq('id', systemId);
-
-      if (systemError) {
-        console.error('Error deleting system:', systemError);
-        throw systemError;
+      const { error } = await supabase.rpc('delete_test_system', { p_system_id: systemId });
+      if (error) {
+        console.error('RPC delete_test_system error:', error);
+        throw error;
       }
 
       toast({
@@ -299,7 +207,7 @@ export function SystemDeleteButton({
       console.error('Error deleting system:', error);
       toast({
         title: "刪除失敗",
-        description: "無法刪除機台，請重試",
+        description: "無法刪除機台，請稍後重試或聯絡管理員",
         variant: "destructive"
       });
     } finally {
