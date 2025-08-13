@@ -251,6 +251,24 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
               onChange={(content) => handleInputChange('description', content)}
               placeholder="請詳細描述問題..."
               className="min-h-[120px]"
+              disableImageResize={true}
+              disableImageUpload={false}
+              onImageUpload={async (file) => {
+                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
+                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
+                  upsert: true
+                });
+                if (error) throw error;
+                await supabase.from('issue_attachments').insert({
+                  issue_id: issue.id,
+                  file_name: file.name,
+                  file_path: path,
+                  file_size: file.size,
+                  file_type: file.type
+                });
+                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
+                return publicUrl.publicUrl;
+              }}
             />
           </div>
 
@@ -445,22 +463,39 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
                 multiple 
                 accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx" 
                 onChange={async (e) => {
-                  const files = Array.from(e.target.files || []);
+                  const inputEl = e.currentTarget;
+                  const files = Array.from(inputEl.files || []);
+                  if (files.length === 0) return;
+                  let successCount = 0;
                   for (const file of files) {
-                    const path = `${issue.id}/attachments/${Date.now()}-${file.name}`;
-                    const { error } = await supabase.storage
-                      .from('issue-attachments')
-                      .upload(path, file, { upsert: true });
-                    if (!error) {
-                      await supabase.from('issue_attachments').insert({
+                    try {
+                      const path = `${issue.id}/attachments/${Date.now()}-${file.name}`;
+                      const { error } = await supabase.storage
+                        .from('issue-attachments')
+                        .upload(path, file, { upsert: true });
+                      if (error) throw error;
+                      const { error: dbErr } = await supabase.from('issue_attachments').insert({
                         issue_id: issue.id,
                         file_name: file.name,
                         file_path: path,
                         file_size: file.size,
                         file_type: file.type
                       });
+                      if (dbErr) throw dbErr;
+                      successCount++;
+                    } catch (err) {
+                      console.error('附件上傳失敗:', err);
+                      toast({
+                        title: '上傳失敗',
+                        description: `${file.name} 無法上傳`,
+                        variant: 'destructive'
+                      });
                     }
                   }
+                  if (successCount > 0) {
+                    toast({ title: '上傳完成', description: `已成功上傳 ${successCount} 個附件` });
+                  }
+                  inputEl.value = '';
                   onUpdate();
                 }} 
                 className="text-sm"
