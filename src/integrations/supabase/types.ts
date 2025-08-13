@@ -2315,6 +2315,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      delete_test_system: {
+        Args: { p_system_id: string }
+        Returns: undefined
+      }
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
