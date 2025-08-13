@@ -352,12 +352,10 @@ export function TestItemStatusReport({
                             <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
                             <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
                             <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
-                            <td className="border border-border p-2 text-left max-w-32">
-                              <div className="text-xs space-y-1">
+                            <td className="border border-border p-2 text-left align-top">
+                              <div className="text-xs whitespace-pre-wrap break-words max-w-[360px] max-h-24 overflow-auto p-1 bg-muted/40 rounded">
                                 {itemProgress?.notes ? (
-                                  <div className="p-1 bg-muted/50 rounded text-xs">
-                                    {itemProgress.notes}
-                                  </div>
+                                  <>{itemProgress.notes}</>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
                                 )}
