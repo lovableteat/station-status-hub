@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,7 +37,11 @@ export function CodeComparisonTool() {
   const [showUnchanged, setShowUnchanged] = useState(true);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [currentChange, setCurrentChange] = useState(0);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
   const { toast } = useToast();
+  const oldColRef = useRef<HTMLDivElement>(null);
+  const newColRef = useRef<HTMLDivElement>(null);
+  const isSyncing = useRef(false);
 
   const supportedLanguages = [
     { value: "javascript", label: "JavaScript" },
@@ -170,15 +174,27 @@ export function CodeComparisonTool() {
   const displayDiffs = useMemo(() => (
     showUnchanged ? lineDiffs : lineDiffs.filter((d) => d.type !== 'same')
   ), [lineDiffs, showUnchanged]);
-
+  
   const changeRowIndices = useMemo(() => (
     displayDiffs.map((d, i) => (d.type !== 'same' ? i : -1)).filter((i) => i !== -1)
   ), [displayDiffs]);
-
+  
   const scrollToRow = (rowIdx: number) => {
     document.getElementById(`diff-old-${rowIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById(`diff-new-${rowIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setActiveRow(rowIdx);
   };
+  
+  const syncScroll = useCallback((fromOld: boolean) => {
+    if (isSyncing.current) return;
+    const source = fromOld ? oldColRef.current : newColRef.current;
+    const target = fromOld ? newColRef.current : oldColRef.current;
+    if (!source || !target) return;
+    isSyncing.current = true;
+    target.scrollTop = source.scrollTop;
+    // small timeout to prevent ping-pong
+    setTimeout(() => { isSyncing.current = false; }, 0);
+  }, []);
 
   const gotoPrev = () => {
     if (!changeRowIndices.length) return;
@@ -331,74 +347,112 @@ export function CodeComparisonTool() {
             <div className="border rounded-lg overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
                 {/* Old */}
-                <div className="max-h-[600px] overflow-auto">
+                <div ref={oldColRef} className="max-h-[600px] overflow-auto" onScroll={() => syncScroll(true)}>
                   {displayDiffs.map((d, idx) => (
-                    <div id={`diff-old-${idx}`} key={`old-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
+                    <div
+                      id={`diff-old-${idx}`}
+                      key={`old-${idx}`}
+                      tabIndex={0}
+                      onMouseEnter={() => setActiveRow(idx)}
+                      onFocus={() => setActiveRow(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const next = Math.min((activeRow ?? 0) + 1, displayDiffs.length - 1);
+                          scrollToRow(next);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prev = Math.max((activeRow ?? 0) - 1, 0);
+                          scrollToRow(prev);
+                        }
+                      }}
+                      className={`flex gap-2 px-3 py-1 ${getBg(d.type)} ${activeRow === idx ? 'bg-primary/15 outline outline-1 outline-primary' : ''}`}
+                      aria-selected={activeRow === idx}
+                    >
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.oldNumber ?? ''}
                       </div>
-                       <div className="w-4 flex justify-center">
-                         {getTypeIcon(d.type)}
-                       </div>
-                       <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                         {showInline && d.type === 'modify' && d.parts ? (
-                           <span>
-                             {d.parts.map((p, i) =>
-                               p.removed ? (
-                                 <span key={i} className="line-through bg-destructive/20 text-destructive-foreground/90 px-1 rounded">{p.value}</span>
-                               ) : !p.added ? (
-                                 <span key={i} className="text-muted-foreground">{p.value}</span>
-                               ) : null
-                             )}
-                           </span>
-                         ) : (
-                           <span className={
-                             d.type === 'remove'
-                               ? 'line-through text-destructive bg-destructive/10 px-1 rounded'
-                               : d.type === 'add'
-                               ? 'opacity-40'
-                               : 'text-foreground'
-                           }>
-                             {d.oldText ?? ''}
-                           </span>
-                         )}
-                       </div>
+                      <div className="w-4 flex justify-center">
+                        {getTypeIcon(d.type)}
+                      </div>
+                      <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
+                        {showInline && d.type === 'modify' && d.parts ? (
+                          <span>
+                            {d.parts.map((p, i) =>
+                              p.removed ? (
+                                <span key={i} className="line-through bg-destructive/20 text-destructive-foreground/90 px-1 rounded">{p.value}</span>
+                              ) : !p.added ? (
+                                <span key={i} className="text-muted-foreground">{p.value}</span>
+                              ) : null
+                            )}
+                          </span>
+                        ) : (
+                          <span className={
+                            d.type === 'remove'
+                              ? 'line-through text-destructive bg-destructive/10 px-1 rounded'
+                              : d.type === 'add'
+                              ? 'opacity-40'
+                              : 'text-foreground'
+                          }>
+                            {d.oldText ?? ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
                 {/* New */}
-                <div className="max-h-[600px] overflow-auto">
+                <div ref={newColRef} className="max-h-[600px] overflow-auto" onScroll={() => syncScroll(false)}>
                   {displayDiffs.map((d, idx) => (
-                    <div id={`diff-new-${idx}`} key={`new-${idx}`} className={`flex gap-2 px-3 py-1 ${getBg(d.type)}`}>
+                    <div
+                      id={`diff-new-${idx}`}
+                      key={`new-${idx}`}
+                      tabIndex={0}
+                      onMouseEnter={() => setActiveRow(idx)}
+                      onFocus={() => setActiveRow(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const next = Math.min((activeRow ?? 0) + 1, displayDiffs.length - 1);
+                          scrollToRow(next);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prev = Math.max((activeRow ?? 0) - 1, 0);
+                          scrollToRow(prev);
+                        }
+                      }}
+                      className={`flex gap-2 px-3 py-1 ${getBg(d.type)} ${activeRow === idx ? 'bg-primary/15 outline outline-1 outline-primary' : ''}`}
+                      aria-selected={activeRow === idx}
+                    >
                       <div className="w-10 text-right text-xs text-muted-foreground select-none">
                         {d.newNumber ?? ''}
                       </div>
-                       <div className="w-4 flex justify-center">
-                         {getTypeIcon(d.type)}
-                       </div>
-                       <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
-                         {showInline && d.type === 'modify' && d.parts ? (
-                           <span>
-                             {d.parts.map((p, i) =>
-                               p.added ? (
-                                 <span key={i} className="underline decoration-2 underline-offset-2 bg-accent/20 text-foreground px-1 rounded">{p.value}</span>
-                               ) : !p.removed ? (
-                                 <span key={i} className="text-muted-foreground">{p.value}</span>
-                               ) : null
-                             )}
-                           </span>
-                         ) : (
-                           <span className={
-                             d.type === 'add'
-                               ? 'text-accent bg-accent/10 underline decoration-2 underline-offset-2 px-1 rounded'
-                               : d.type === 'remove'
-                               ? 'opacity-40'
-                               : 'text-foreground'
-                           }>
-                             {d.newText ?? ''}
-                           </span>
-                         )}
-                       </div>
+                      <div className="w-4 flex justify-center">
+                        {getTypeIcon(d.type)}
+                      </div>
+                      <div className="flex-1 whitespace-pre-wrap break-all font-mono text-sm">
+                        {showInline && d.type === 'modify' && d.parts ? (
+                          <span>
+                            {d.parts.map((p, i) =>
+                              p.added ? (
+                                <span key={i} className="underline decoration-2 underline-offset-2 bg-accent/20 text-foreground px-1 rounded">{p.value}</span>
+                              ) : !p.removed ? (
+                                <span key={i} className="text-muted-foreground">{p.value}</span>
+                              ) : null
+                            )}
+                          </span>
+                        ) : (
+                          <span className={
+                            d.type === 'add'
+                              ? 'text-accent bg-accent/10 underline decoration-2 underline-offset-2 px-1 rounded'
+                              : d.type === 'remove'
+                              ? 'opacity-40'
+                              : 'text-foreground'
+                          }>
+                            {d.newText ?? ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

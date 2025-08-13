@@ -496,14 +496,8 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           finite: true,
         }}
         controller={{
-          closeOnBackdropClick: false,
-          closeOnPullDown: false,
-        }}
-        on={{
-          click: () => {
-            setLightboxOpen(false);
-            setLightboxImage('');
-          }
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
         }}
       />
     </div>
