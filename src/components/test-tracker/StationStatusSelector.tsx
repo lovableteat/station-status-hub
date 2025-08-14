@@ -19,16 +19,23 @@ export function StationStatusSelector({ systemId, currentStatus, onUpdate }: Sta
     try {
       const { error } = await supabase
         .from('test_systems')
-        .update({ current_station: newStatus })
+        .update({ 
+          current_station: newStatus,
+          // 同時更新 status 以確保儀表板顯示正確
+          status: newStatus === '已完成' ? 'Done' : 
+                  newStatus === '進行中' ? 'On-going' : 
+                  newStatus === '未開始' ? 'Not Start' : 'On-going'
+        })
         .eq('id', systemId);
 
       if (error) throw error;
 
-      await onUpdate();
+      // 觸發資料重新載入
+      onUpdate();
       
       toast({
         title: "更新成功",
-        description: "當前站點狀態已更新",
+        description: `當前站點狀態已更新為：${newStatus}`,
       });
     } catch (error) {
       console.error('Error updating station status:', error);
