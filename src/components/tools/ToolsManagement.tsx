@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { CodeStorageManager } from "./CodeStorageManager";
+import { CommandLibrary } from "./CommandLibrary";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Select,
@@ -338,7 +339,7 @@ export function ToolsManagement() {
       </div>
 
       <Tabs defaultValue="tools" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="tools" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             工具列表
@@ -346,6 +347,10 @@ export function ToolsManagement() {
           <TabsTrigger value="code" className="flex items-center gap-2">
             <Code2 className="h-4 w-4" />
             程式碼儲存
+          </TabsTrigger>
+          <TabsTrigger value="commands" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            指令集
           </TabsTrigger>
         </TabsList>
         
@@ -750,6 +755,10 @@ export function ToolsManagement() {
         
         <TabsContent value="code">
           <CodeStorageManager />
+        </TabsContent>
+
+        <TabsContent value="commands">
+          <CommandLibrary />
         </TabsContent>
       </Tabs>
     </div>

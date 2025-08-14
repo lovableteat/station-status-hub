@@ -330,10 +330,21 @@ export function TestItemStatusReport({
                       .filter(item => item.station_id === station.id)
                       .sort((a, b) => a.item_order - b.item_order)
                       .map((item) => {
-                        const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
-                        const rowBg = sysIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20';
-                        return (
-                          <tr key={`${system.id}-${station.id}-${item.id}`} className={`hover:bg-muted/25 ${rowBg}`}>
+                       const itemProgress = getProgressForSystemItem(system.id, station.id, item.id);
+                         // 使用更鮮明的顏色區分不同機台
+                         const colorVariants = [
+                           'bg-blue-50 dark:bg-blue-950/20',
+                           'bg-green-50 dark:bg-green-950/20', 
+                           'bg-purple-50 dark:bg-purple-950/20',
+                           'bg-orange-50 dark:bg-orange-950/20',
+                           'bg-pink-50 dark:bg-pink-950/20',
+                           'bg-cyan-50 dark:bg-cyan-950/20',
+                           'bg-yellow-50 dark:bg-yellow-950/20',
+                           'bg-red-50 dark:bg-red-950/20'
+                         ];
+                         const rowBg = colorVariants[sysIdx % colorVariants.length];
+                         return (
+                           <tr key={`${system.id}-${station.id}-${item.id}`} className={`hover:bg-muted/40 transition-colors ${rowBg}`}>
                             <td className="border border-border p-2">{system.system_name}</td>
                             <td className="border border-border p-2">{system.serial_number || '-'}</td>
                             <td className="border border-border p-2 text-xs">{(system as any).os_mac_address || '-'}</td>
