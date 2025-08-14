@@ -87,12 +87,45 @@ export function SystemStatusUpdater({
             console.log(`需要更新整體進度: ${system.overall_progress}% → ${statusResult.overallProgress}%`);
           }
           
-          // 系統狀態更新
+          // 系統狀態更新 - 使用更加細緻的邏輯
+          // 只有在特定情況下才更新 status 和 current_station
           const newStatus = statusResult.status;
-          if (system.status !== newStatus) {
-            updatedFields.status = newStatus;
-            needsUpdate = true;
-            console.log(`需要更新狀態: "${system.status}" → "${newStatus}"`);
+          
+          // 如果系統已完成（100%），強制設定為 Done 和 已完成
+          if (isComplete && statusResult.overallProgress === 100) {
+            if (system.status !== 'Done') {
+              updatedFields.status = 'Done';
+              needsUpdate = true;
+              console.log(`系統已完成，更新狀態: "${system.status}" → "Done"`);
+            }
+            if (system.current_station !== '已完成') {
+              updatedFields.current_station = '已完成';
+              needsUpdate = true;
+              console.log(`系統已完成，更新當前站點: "${system.current_station}" → "已完成"`);
+            }
+          }
+          // 如果系統未開始且沒有任何進度，設定為 Not Start 和 未開始
+          else if (statusResult.overallProgress === 0 && system.current_station === '未開始') {
+            if (system.status !== 'Not Start') {
+              updatedFields.status = 'Not Start';
+              needsUpdate = true;
+              console.log(`系統未開始，更新狀態: "${system.status}" → "Not Start"`);
+            }
+          }
+          // 如果有進度但不是 Done/已完成，且用戶設定的是 "進行中"，保持不變
+          else if (statusResult.overallProgress > 0 && statusResult.overallProgress < 100) {
+            // 只在當前沒有手動設定或狀態不一致時才更新
+            if (system.current_station === '未開始' || system.current_station === '已完成') {
+              // 如果用戶之前設定為未開始或已完成，但現在有進度了，更新為進行中
+              updatedFields.current_station = '進行中';
+              needsUpdate = true;
+              console.log(`有進度但狀態不符，更新當前站點: "${system.current_station}" → "進行中"`);
+            }
+            if (system.status !== 'On-going') {
+              updatedFields.status = 'On-going';
+              needsUpdate = true;
+              console.log(`有進度，更新狀態: "${system.status}" → "On-going"`);
+            }
           }
           
           // 實際完成時間處理
@@ -107,8 +140,6 @@ export function SystemStatusUpdater({
             needsUpdate = true;
             console.log(`清除實際完成時間`);
           }
-          
-          // 注意：不再自動更新 current_station，保留用戶手動設定的值
           
           if (needsUpdate) {
             updates.push({
