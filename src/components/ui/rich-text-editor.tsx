@@ -498,8 +498,38 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         controller={{
           closeOnBackdropClick: true,
           closeOnPullDown: true,
+          closeOnPullUp: true
         }}
       />
+      
+      {/* Custom close button overlay */}
+      {lightboxOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 10001,
+            background: 'rgba(0, 0, 0, 0.8)',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: 'white',
+            fontSize: '24px',
+            fontWeight: 'bold'
+          }}
+          onClick={() => {
+            setLightboxOpen(false);
+            setLightboxImage('');
+          }}
+        >
+          ×
+        </div>
+      )}
     </div>
   );
 }
