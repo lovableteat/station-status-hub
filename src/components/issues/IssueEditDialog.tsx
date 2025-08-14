@@ -455,14 +455,14 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
         {/* 右側：附件管理 */}
         <div className="space-y-4">
-          <div>
-            <Label>附件管理</Label>
-            <div className="space-y-2">
-              <Input 
-                type="file" 
-                multiple 
-                accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx" 
-                onChange={async (e) => {
+            <div>
+              <Label>附件管理</Label>
+              <div className="space-y-2">
+                <Input 
+                  type="file" 
+                  multiple 
+                  accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.exe,.dmg,.msi,.deb,.rpm" 
+                  onChange={async (e) => {
                   const inputEl = e.currentTarget;
                   const files = Array.from(inputEl.files || []);
                   if (files.length === 0) return;
