@@ -165,10 +165,10 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
           key={attachment.id}
           className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
         >
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             {getFileIcon(attachment.file_type)}
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{attachment.file_name}</p>
+              <p className="font-medium truncate" title={attachment.file_name}>{attachment.file_name}</p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{formatFileSize(attachment.file_size)}</span>
                 <span>•</span>

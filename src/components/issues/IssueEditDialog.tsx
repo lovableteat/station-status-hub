@@ -243,34 +243,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
             disabled={isSubmitting}
           />
         </div>
-        
-          <div>
-            <Label htmlFor="description">問題描述 *</Label>
-            <RichTextEditor
-              content={formData.description}
-              onChange={(content) => handleInputChange('description', content)}
-              placeholder="請詳細描述問題..."
-              className="min-h-[120px]"
-              disableImageResize={true}
-              disableImageUpload={false}
-              onImageUpload={async (file) => {
-                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
-                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
-                  upsert: true
-                });
-                if (error) throw error;
-                await supabase.from('issue_attachments').insert({
-                  issue_id: issue.id,
-                  file_name: file.name,
-                  file_path: path,
-                  file_size: file.size,
-                  file_type: file.type
-                });
-                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
-                return publicUrl.publicUrl;
-              }}
-            />
-          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -358,28 +330,24 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
           </div>
 
           <div>
+            <Label htmlFor="description">問題描述 *</Label>
+            <RichTextEditor
+              content={formData.description}
+              onChange={(content) => handleInputChange('description', content)}
+              placeholder="請詳細描述問題..."
+              className="min-h-[120px]"
+              disableImageUpload={true}
+            />
+          </div>
+
+          <div>
             <Label htmlFor="process_notes">處理過程</Label>
             <RichTextEditor
               content={formData.process_notes}
               onChange={(content) => handleInputChange('process_notes', content)}
               placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
               className="min-h-[100px]"
-              onImageUpload={async (file) => {
-                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
-                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
-                  upsert: true
-                });
-                if (error) throw error;
-                await supabase.from('issue_attachments').insert({
-                  issue_id: issue.id,
-                  file_name: file.name,
-                  file_path: path,
-                  file_size: file.size,
-                  file_type: file.type
-                });
-                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
-                return publicUrl.publicUrl;
-              }}
+              disableImageUpload={true}
             />
             <div className="text-xs text-muted-foreground mt-1">
               <strong>建議記錄內容：</strong> 問題診斷過程、解決方案選擇理由、實施步驟、測試結果、影響評估
@@ -393,27 +361,10 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
               onChange={(content) => handleInputChange('solution', content)}
               placeholder="請詳細記錄解決方案，包含：&#10;1. 採用的解決方法&#10;2. 實施步驟說明&#10;3. 相關文件或圖片&#10;4. 測試驗證結果&#10;5. 預防措施建議"
               className="min-h-[120px]"
-              disableImageResize={true}
-              disableImageUpload={false}
-              onImageUpload={async (file) => {
-                const path = `${issue.id}/inline/${Date.now()}-${file.name}`;
-                const { data, error } = await supabase.storage.from('issue-attachments').upload(path, file, {
-                  upsert: true
-                });
-                if (error) throw error;
-                await supabase.from('issue_attachments').insert({
-                  issue_id: issue.id,
-                  file_name: file.name,
-                  file_path: path,
-                  file_size: file.size,
-                  file_type: file.type
-                });
-                const { data: publicUrl } = supabase.storage.from('issue-attachments').getPublicUrl(path);
-                return publicUrl.publicUrl;
-              }}
+              disableImageUpload={true}
             />
             <div className="text-xs text-muted-foreground mt-1">
-              <strong>支援功能：</strong> 可上傳圖片、插入連結、調整格式。
+              <strong>支援功能：</strong> 插入連結、調整格式等。
             </div>
           </div>
 
