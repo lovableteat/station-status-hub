@@ -694,9 +694,9 @@ export function ToolsManagement() {
                    {previewTool.sop_content && (
                      <div>
                        <Label className="text-sm font-medium text-muted-foreground">SOP 操作說明</Label>
-                       <div className="mt-1 p-4 bg-muted rounded border">
+                       <div className="mt-1 p-4 bg-muted rounded border max-h-96 overflow-y-auto">
                          <div 
-                           className="prose prose-sm dark:prose-invert max-w-none"
+                           className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-mono text-sm leading-relaxed"
                            dangerouslySetInnerHTML={{ __html: previewTool.sop_content }}
                          />
                        </div>
