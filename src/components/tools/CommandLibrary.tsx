@@ -112,15 +112,24 @@ export function CommandLibrary() {
   const loadCommands = async () => {
     try {
       setIsLoading(true);
-      // 暫時使用本地存儲，等數據庫表建立後再切換
-      const storedCommands = localStorage.getItem('command_library');
-      if (storedCommands) {
-        setCommands(JSON.parse(storedCommands));
+      
+      // 從 Supabase 資料庫載入指令
+      const { data, error } = await supabase
+        .from('command_library')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setCommands(data);
       } else {
-        // 預設指令庫
-        const defaultCommands: Command[] = [
+        // 如果資料庫為空，插入預設指令
+        const defaultCommands = [
           {
-            id: "1",
             name: "檢查系統資訊",
             command: "uname -a",
             description: "顯示完整的系統資訊，包括核心版本、主機名稱等",
@@ -128,12 +137,9 @@ export function CommandLibrary() {
             platform: "linux",
             tags: ["系統", "資訊", "核心"],
             examples: "uname -a\n# 輸出範例：Linux hostname 5.4.0-42-generic #46-Ubuntu SMP Fri Jul 10 00:24:02 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux",
-            notes: "常用於確認系統版本和架構",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            notes: "常用於確認系統版本和架構"
           },
           {
-            id: "2", 
             name: "查看磁碟使用量",
             command: "df -h",
             description: "以人類可讀的格式顯示文件系統的磁碟使用量",
@@ -141,12 +147,9 @@ export function CommandLibrary() {
             platform: "linux",
             tags: ["磁碟", "儲存", "空間"],
             examples: "df -h\n# 輸出範例：\n# Filesystem      Size  Used Avail Use% Mounted on\n# /dev/sda1        20G   15G  4.2G  79% /",
-            notes: "監控磁碟空間使用情況的基本指令",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            notes: "監控磁碟空間使用情況的基本指令"
           },
           {
-            id: "3",
             name: "查看網路連線",
             command: "netstat -tulpn",
             description: "顯示所有TCP和UDP連接以及監聽的埠",
@@ -154,13 +157,20 @@ export function CommandLibrary() {
             platform: "linux",
             tags: ["網路", "連線", "埠"],
             examples: "netstat -tulpn\n# 顯示所有網路連線和監聽埠",
-            notes: "用於網路問題診斷和安全檢查",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            notes: "用於網路問題診斷和安全檢查"
           }
         ];
-        setCommands(defaultCommands);
-        localStorage.setItem('command_library', JSON.stringify(defaultCommands));
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from('command_library')
+          .insert(defaultCommands)
+          .select();
+
+        if (insertError) {
+          console.error('Error inserting default commands:', insertError);
+        } else if (insertedData) {
+          setCommands(insertedData);
+        }
       }
     } catch (error) {
       console.error('Error loading commands:', error);
@@ -174,11 +184,7 @@ export function CommandLibrary() {
     }
   };
 
-  const saveToLocalStorage = (commandList: Command[]) => {
-    localStorage.setItem('command_library', JSON.stringify(commandList));
-  };
-
-  const handleAddCommand = () => {
+  const handleAddCommand = async () => {
     if (!newCommand.name.trim() || !newCommand.command.trim()) {
       toast({
         title: "驗證錯誤",
@@ -188,72 +194,130 @@ export function CommandLibrary() {
       return;
     }
 
-    const command: Command = {
-      id: Date.now().toString(),
-      name: newCommand.name.trim(),
-      command: newCommand.command.trim(),
-      description: newCommand.description.trim(),
-      category: newCommand.category,
-      platform: newCommand.platform,
-      tags: newCommand.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-      examples: newCommand.examples.trim() || undefined,
-      notes: newCommand.notes.trim() || undefined,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    try {
+      const commandData = {
+        name: newCommand.name.trim(),
+        command: newCommand.command.trim(),
+        description: newCommand.description.trim(),
+        category: newCommand.category,
+        platform: newCommand.platform,
+        tags: newCommand.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        examples: newCommand.examples.trim() || null,
+        notes: newCommand.notes.trim() || null
+      };
 
-    const updatedCommands = [...commands, command];
-    setCommands(updatedCommands);
-    saveToLocalStorage(updatedCommands);
+      const { data, error } = await supabase
+        .from('command_library')
+        .insert([commandData])
+        .select()
+        .single();
 
-    toast({
-      title: "新增成功",
-      description: "指令已新增到指令庫",
-    });
+      if (error) {
+        throw error;
+      }
 
-    setNewCommand({
-      name: "",
-      command: "",
-      description: "",
-      category: "system",
-      platform: "linux",
-      tags: "",
-      examples: "",
-      notes: ""
-    });
-    setIsAddDialogOpen(false);
+      setCommands(prev => [data, ...prev]);
+
+      toast({
+        title: "新增成功",
+        description: "指令已新增到指令庫",
+      });
+
+      setNewCommand({
+        name: "",
+        command: "",
+        description: "",
+        category: "system",
+        platform: "linux",
+        tags: "",
+        examples: "",
+        notes: ""
+      });
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding command:', error);
+      toast({
+        title: "新增失敗",
+        description: "無法新增指令到資料庫",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleEditCommand = () => {
+  const handleEditCommand = async () => {
     if (!editingCommand) return;
 
-    const updatedCommands = commands.map(cmd => 
-      cmd.id === editingCommand.id 
-        ? { ...editingCommand, updated_at: new Date().toISOString() }
-        : cmd
-    );
-    setCommands(updatedCommands);
-    saveToLocalStorage(updatedCommands);
+    try {
+      const updateData = {
+        name: editingCommand.name.trim(),
+        command: editingCommand.command.trim(),
+        description: editingCommand.description.trim(),
+        category: editingCommand.category,
+        platform: editingCommand.platform,
+        tags: editingCommand.tags,
+        examples: editingCommand.examples?.trim() || null,
+        notes: editingCommand.notes?.trim() || null
+      };
 
-    toast({
-      title: "更新成功",
-      description: "指令已更新",
-    });
+      const { error } = await supabase
+        .from('command_library')
+        .update(updateData)
+        .eq('id', editingCommand.id);
 
-    setEditingCommand(null);
+      if (error) {
+        throw error;
+      }
+
+      // 更新本地狀態
+      setCommands(prev => prev.map(cmd => 
+        cmd.id === editingCommand.id 
+          ? { ...editingCommand, ...updateData, updated_at: new Date().toISOString() }
+          : cmd
+      ));
+
+      toast({
+        title: "更新成功",
+        description: "指令已更新",
+      });
+
+      setEditingCommand(null);
+    } catch (error) {
+      console.error('Error updating command:', error);
+      toast({
+        title: "更新失敗",
+        description: "無法更新指令",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteCommand = (id: string) => {
+  const handleDeleteCommand = async (id: string) => {
     if (!confirm('確認要刪除這個指令嗎？')) return;
 
-    const updatedCommands = commands.filter(cmd => cmd.id !== id);
-    setCommands(updatedCommands);
-    saveToLocalStorage(updatedCommands);
+    try {
+      const { error } = await supabase
+        .from('command_library')
+        .delete()
+        .eq('id', id);
 
-    toast({
-      title: "刪除成功",
-      description: "指令已刪除",
-    });
+      if (error) {
+        throw error;
+      }
+
+      setCommands(prev => prev.filter(cmd => cmd.id !== id));
+
+      toast({
+        title: "刪除成功",
+        description: "指令已刪除",
+      });
+    } catch (error) {
+      console.error('Error deleting command:', error);
+      toast({
+        title: "刪除失敗",
+        description: "無法刪除指令",
+        variant: "destructive"
+      });
+    }
   };
 
   const copyToClipboard = (text: string) => {

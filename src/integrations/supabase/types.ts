@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -215,6 +215,54 @@ export type Database = {
           id?: string
           name?: string
           position?: number
+        }
+        Relationships: []
+      }
+      command_library: {
+        Row: {
+          category: string
+          command: string
+          created_at: string
+          created_by: string | null
+          description: string
+          examples: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          platform: string
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          command: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          examples?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          platform?: string
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          command?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          examples?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          platform?: string
+          tags?: string[] | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2298,13 +2346,13 @@ export type Database = {
     }
     Functions: {
       authenticate_user: {
-        Args: { username_input: string; password_input: string }
+        Args: { password_input: string; username_input: string }
         Returns: {
+          display_name: string
+          role: string
+          success: boolean
           user_id: string
           username: string
-          role: string
-          display_name: string
-          success: boolean
         }[]
       }
       calculate_daily_production_stats: {
@@ -2322,11 +2370,11 @@ export type Database = {
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
+          categories_breakdown: Json
+          high_priority_unread: number
           total_notifications: number
           unread_notifications: number
-          high_priority_unread: number
           urgent_priority_unread: number
-          categories_breakdown: Json
         }[]
       }
       hash_password: {
@@ -2334,7 +2382,7 @@ export type Database = {
         Returns: string
       }
       verify_password: {
-        Args: { password: string; hash: string }
+        Args: { hash: string; password: string }
         Returns: boolean
       }
     }
