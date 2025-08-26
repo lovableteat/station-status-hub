@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eye, Download, Trash2, Image, FileText, File } from "lucide-react";
+import { Eye, Download, Trash2, Image, FileText, File, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -136,9 +136,10 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
     }
   };
 
-  const getFileIcon = (fileType: string) => {
+  const getFileIcon = (fileType: string, fileName: string) => {
     if (fileType.startsWith('image/')) return <Image className="h-4 w-4" />;
     if (fileType === 'application/pdf') return <FileText className="h-4 w-4" />;
+    if (fileName.toLowerCase().endsWith('.msg') || fileType === 'application/vnd.ms-outlook') return <Mail className="h-4 w-4" />;
     return <File className="h-4 w-4" />;
   };
 
@@ -166,7 +167,7 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
           className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {getFileIcon(attachment.file_type)}
+            {getFileIcon(attachment.file_type, attachment.file_name)}
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate" title={attachment.file_name}>{attachment.file_name}</p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
