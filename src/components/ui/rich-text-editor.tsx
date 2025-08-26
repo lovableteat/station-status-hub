@@ -4,6 +4,10 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -18,7 +22,10 @@ import {
   Undo,
   Redo,
   RemoveFormatting,
-  Palette
+  Palette,
+  Table as TableIcon,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { 
   Dialog,
@@ -60,6 +67,23 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
+        },
+      }),
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'table-auto border-collapse border border-border',
+        },
+      }),
+      TableRow,
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'bg-muted font-medium',
+        },
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'border border-border p-2 min-w-[80px]',
         },
       }),
       Image.configure({
@@ -225,6 +249,79 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
+
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Table */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          title="插入表格"
+        >
+          <TableIcon className="h-4 w-4" />
+        </Button>
+
+        {editor.isActive('table') && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addRowBefore().run()}
+              title="在上方插入行"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              title="在下方插入行"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              title="刪除行"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addColumnBefore().run()}
+              title="在左側插入列"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              title="在右側插入列"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              title="刪除列"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              title="刪除表格"
+            >
+              <TableIcon className="h-4 w-4" />
+            </Button>
+          </>
+        )}
 
         <div className="w-px h-6 bg-border mx-1" />
 
@@ -396,6 +493,51 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         }
         .ProseMirror p { margin: 0.5em 0; }
         .ProseMirror ul, .ProseMirror ol { margin: 0.5em 0; padding-left: 1.5em; }
+        .ProseMirror table {
+          border-collapse: collapse !important;
+          table-layout: fixed !important;
+          width: 100% !important;
+          margin: 1em 0 !important;
+          overflow: hidden !important;
+        }
+        .ProseMirror table td, .ProseMirror table th {
+          border: 1px solid hsl(var(--border)) !important;
+          padding: 8px !important;
+          vertical-align: top !important;
+          box-sizing: border-box !important;
+          position: relative !important;
+          min-width: 80px !important;
+        }
+        .ProseMirror table th {
+          background-color: hsl(var(--muted)) !important;
+          font-weight: 600 !important;
+          text-align: left !important;
+        }
+        .ProseMirror table .selectedCell:after {
+          z-index: 2 !important;
+          position: absolute !important;
+          content: "" !important;
+          left: 0 !important;
+          right: 0 !important;
+          top: 0 !important;
+          bottom: 0 !important;
+          background: hsl(var(--primary) / 0.1) !important;
+          pointer-events: none !important;
+        }
+        .ProseMirror table .column-resize-handle {
+          position: absolute !important;
+          right: -2px !important;
+          top: 0 !important;
+          bottom: 0 !important;
+          width: 4px !important;
+          z-index: 20 !important;
+          background-color: hsl(var(--primary)) !important;
+          pointer-events: none !important;
+        }
+        .ProseMirror table.resize-cursor {
+          cursor: ew-resize !important;
+          cursor: col-resize !important;
+        }
         `
       }} />
 
