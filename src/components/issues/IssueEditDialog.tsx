@@ -22,6 +22,9 @@ interface Issue {
   priority: string;
   status: string;
   assigned_to: string;
+  system_id?: string;
+  station_id?: string;
+  test_item_id?: string;
   process_notes?: string;
   solution?: string;
   relate?: string;
@@ -45,6 +48,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     priority: issue.priority,
     status: issue.status,
     assigned_to: issue.assigned_to,
+    system_id: issue.system_id || '',
+    station_id: issue.station_id || '',
+    test_item_id: issue.test_item_id || '',
     process_notes: issue.process_notes || '',
     solution: issue.solution || '',
     relate: issue.relate || '',
@@ -54,6 +60,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
   });
   
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
+  const [systems, setSystems] = useState<Array<{id: string, system_name: string}>>([]);
+  const [stations, setStations] = useState<Array<{id: string, station_name: string}>>([]);
+  const [testItems, setTestItems] = useState<Array<{id: string, item_name: string, station_id: string}>>([]);
   const [mentionedUsers, setMentionedUsers] = useState<any[]>([]);
   const { toast } = useToast();
   const { sendMentionNotifications } = useMentionNotifications();
@@ -61,7 +70,16 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   useEffect(() => {
     loadEngineers();
+    loadSystems();
+    loadStations();
+    loadTestItems();
   }, []);
+
+  useEffect(() => {
+    if (formData.station_id) {
+      loadTestItemsForStation(formData.station_id);
+    }
+  }, [formData.station_id]);
 
   const loadEngineers = async () => {
     try {
@@ -79,6 +97,63 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       setEngineers(data || []);
     } catch (error) {
       console.error('載入工程師列表失敗:', error);
+    }
+  };
+
+  const loadSystems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('test_systems')
+        .select('id, system_name')
+        .order('system_name');
+      
+      if (error) throw error;
+      setSystems(data || []);
+    } catch (error) {
+      console.error('Error loading systems:', error);
+    }
+  };
+
+  const loadStations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('test_flow_stations')
+        .select('id, station_name')
+        .order('station_order');
+      
+      if (error) throw error;
+      setStations(data || []);
+    } catch (error) {
+      console.error('Error loading stations:', error);
+    }
+  };
+
+  const loadTestItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('test_flow_items')
+        .select('id, item_name, station_id')
+        .order('item_order');
+      
+      if (error) throw error;
+      setTestItems(data || []);
+    } catch (error) {
+      console.error('Error loading test items:', error);
+    }
+  };
+
+  const loadTestItemsForStation = async (stationId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('test_flow_items')
+        .select('id, item_name, station_id')
+        .eq('station_id', stationId)
+        .order('item_order');
+      
+      if (error) throw error;
+      setTestItems(data || []);
+    } catch (error) {
+      console.error('Error loading test items for station:', error);
     }
   };
 
@@ -110,6 +185,9 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         priority: formData.priority,
         status: formData.status,
         assigned_to: formData.assigned_to,
+        system_id: (formData.system_id && formData.system_id !== "none") ? formData.system_id : null,
+        station_id: (formData.station_id && formData.station_id !== "none") ? formData.station_id : null,
+        test_item_id: (formData.test_item_id && formData.test_item_id !== "none") ? formData.test_item_id : null,
         process_notes: formData.process_notes.trim() || null,
         solution: formData.solution.trim() || null,
         relate: formData.relate.trim() || null,
@@ -303,6 +381,76 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="system">相關機台</Label>
+              <Select 
+                value={formData.system_id} 
+                onValueChange={(value) => handleInputChange('system_id', value)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇機台" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  {systems.map(system => (
+                    <SelectItem key={system.id} value={system.id}>
+                      {system.system_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="station">相關站點</Label>
+              <Select 
+                value={formData.station_id} 
+                onValueChange={(value) => {
+                  handleInputChange('station_id', value);
+                  handleInputChange('test_item_id', '');
+                }}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇站點" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  {stations.map(station => (
+                    <SelectItem key={station.id} value={station.id}>
+                      {station.station_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="test_item">相關測項</Label>
+              <Select 
+                value={formData.test_item_id} 
+                onValueChange={(value) => handleInputChange('test_item_id', value)}
+                disabled={isSubmitting || !formData.station_id}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇測項" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  {testItems
+                    .filter(item => !formData.station_id || item.station_id === formData.station_id)
+                    .map(item => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.item_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
