@@ -560,7 +560,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
               <Input 
                 type="file" 
                 multiple 
-                accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.exe,.dmg,.msi,.deb,.rpm"
+                accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.exe,.dmg,.msi,.deb,.rpm,.msg"
                 onChange={async (e) => {
                   const inputEl = e.currentTarget;
                   const files = Array.from(inputEl.files || []);
