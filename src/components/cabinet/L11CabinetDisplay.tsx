@@ -1,6 +1,6 @@
 import React, { Suspense, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, Box, RoundedBox } from '@react-three/drei';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Text } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,14 +19,6 @@ interface CabinetRackProps {
 function CabinetRack({ position, label, type, count, color }: CabinetRackProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  
-  useFrame(() => {
-    if (meshRef.current && hovered) {
-      meshRef.current.scale.setScalar(1.05);
-    } else if (meshRef.current) {
-      meshRef.current.scale.setScalar(1);
-    }
-  });
 
   const getColor = () => {
     if (color) return color;
@@ -47,31 +39,29 @@ function CabinetRack({ position, label, type, count, color }: CabinetRackProps) 
     }
   };
 
+  const [width, height, depth] = getSize();
+
   return (
     <group position={position}>
-      <RoundedBox
+      <mesh
         ref={meshRef}
-        args={getSize()}
-        radius={0.02}
-        smoothness={4}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
+        scale={hovered ? 1.05 : 1}
       >
+        <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial color={getColor()} metalness={0.3} roughness={0.4} />
-      </RoundedBox>
+      </mesh>
       
       {/* LED indicators */}
       {Array.from({ length: 4 }).map((_, i) => (
-        <Box
-          key={i}
-          args={[0.05, 0.05, 0.01]}
-          position={[-1.8 + i * 0.3, 0, 1.01]}
-        >
+        <mesh key={i} position={[-1.8 + i * 0.3, 0, 1.01]}>
+          <boxGeometry args={[0.05, 0.05, 0.01]} />
           <meshStandardMaterial 
             color={hovered ? '#22c55e' : '#dc2626'} 
             emissive={hovered ? '#065f46' : '#7f1d1d'}
           />
-        </Box>
+        </mesh>
       ))}
       
       <Text
@@ -94,30 +84,36 @@ function CabinetFrame() {
   return (
     <group>
       {/* Front frame */}
-      <Box args={[4, 12, 0.1]} position={[0, 0, 2.1]}>
+      <mesh position={[0, 0, 2.1]}>
+        <boxGeometry args={[4, 12, 0.1]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
+      </mesh>
       
       {/* Back panel */}
-      <Box args={[4, 12, 0.1]} position={[0, 0, -2.1]}>
+      <mesh position={[0, 0, -2.1]}>
+        <boxGeometry args={[4, 12, 0.1]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
+      </mesh>
       
       {/* Side panels */}
-      <Box args={[0.1, 12, 4]} position={[-2, 0, 0]}>
+      <mesh position={[-2, 0, 0]}>
+        <boxGeometry args={[0.1, 12, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
-      <Box args={[0.1, 12, 4]} position={[2, 0, 0]}>
+      </mesh>
+      <mesh position={[2, 0, 0]}>
+        <boxGeometry args={[0.1, 12, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
+      </mesh>
       
       {/* Top and bottom */}
-      <Box args={[4, 0.1, 4]} position={[0, 6, 0]}>
+      <mesh position={[0, 6, 0]}>
+        <boxGeometry args={[4, 0.1, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
-      <Box args={[4, 0.1, 4]} position={[0, -6, 0]}>
+      </mesh>
+      <mesh position={[0, -6, 0]}>
+        <boxGeometry args={[4, 0.1, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </Box>
+      </mesh>
     </group>
   );
 }
