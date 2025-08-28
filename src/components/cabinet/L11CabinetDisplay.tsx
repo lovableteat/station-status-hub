@@ -1,3 +1,4 @@
+
 import React, { Suspense, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
@@ -6,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RotateCcw } from 'lucide-react';
+import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
 
 interface CabinetRackProps {
   position: [number, number, number];
@@ -22,70 +24,109 @@ function CabinetRack({ position, color, size }: CabinetRackProps) {
   );
 }
 
-function CabinetScene() {
+interface CabinetSceneProps {
+  config: CabinetConfig;
+}
+
+function CabinetScene({ config }: CabinetSceneProps) {
   const frameColor = '#2d3748';
+  const slotHeight = 0.35;
   
-  // Cabinet components positions and colors
-  const components = [
-    // Top switch
-    { position: [0, 5.5, 0] as [number, number, number], color: '#3b82f6', size: [3.8, 0.3, 2] as [number, number, number] },
-    // Power supply
-    { position: [0, 4.8, 0] as [number, number, number], color: '#f59e0b', size: [3.8, 0.4, 2] as [number, number, number] },
-    
-    // 10 Compute trays
-    ...Array.from({ length: 10 }, (_, i) => ({
-      position: [0, 4.1 - (i * 0.35), 0] as [number, number, number],
-      color: '#10b981',
-      size: [3.8, 0.25, 2] as [number, number, number]
-    })),
-    
-    // 9 Switch trays
-    ...Array.from({ length: 9 }, (_, i) => ({
-      position: [0, 0.6 - (i * 0.35), 0] as [number, number, number],
+  // Calculate components based on configuration
+  const components = [];
+  let currentY = 5.5;
+
+  // Top switches
+  for (let i = 0; i < config.topSwitches; i++) {
+    components.push({
+      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: '#3b82f6',
       size: [3.8, 0.3, 2] as [number, number, number]
-    })),
-    
-    // 8 Compute trays
-    ...Array.from({ length: 8 }, (_, i) => ({
-      position: [0, -2.5 - (i * 0.35), 0] as [number, number, number],
+    });
+  }
+  currentY -= config.topSwitches * slotHeight;
+
+  // Power supplies (top)
+  for (let i = 0; i < config.powerSupplies; i++) {
+    components.push({
+      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
+      color: '#f59e0b',
+      size: [3.8, 0.4, 2] as [number, number, number]
+    });
+  }
+  currentY -= config.powerSupplies * 0.4;
+
+  // First compute tray group
+  for (let i = 0; i < config.computeTrays1; i++) {
+    components.push({
+      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: '#10b981',
       size: [3.8, 0.25, 2] as [number, number, number]
-    })),
-    
-    // Bottom power supply
-    { position: [0, -5.3, 0] as [number, number, number], color: '#f59e0b', size: [3.8, 0.4, 2] as [number, number, number] },
-  ];
+    });
+  }
+  currentY -= config.computeTrays1 * slotHeight;
+
+  // Switch trays
+  for (let i = 0; i < config.switchTrays; i++) {
+    components.push({
+      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
+      color: '#3b82f6',
+      size: [3.8, 0.3, 2] as [number, number, number]
+    });
+  }
+  currentY -= config.switchTrays * slotHeight;
+
+  // Second compute tray group
+  for (let i = 0; i < config.computeTrays2; i++) {
+    components.push({
+      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
+      color: '#10b981',
+      size: [3.8, 0.25, 2] as [number, number, number]
+    });
+  }
+  currentY -= config.computeTrays2 * slotHeight;
+
+  // Bottom power supplies
+  for (let i = 0; i < config.bottomPowerSupplies; i++) {
+    components.push({
+      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
+      color: '#f59e0b',
+      size: [3.8, 0.4, 2] as [number, number, number]
+    });
+  }
+
+  // Calculate cabinet height based on components
+  const cabinetHeight = Math.max(12, Math.abs(currentY) + 6);
 
   return (
     <group>
-      {/* Cabinet frame */}
+      {/* Cabinet frame - dynamically sized */}
       <mesh position={[0, 0, 2.1]}>
-        <boxGeometry args={[4, 12, 0.1]} />
+        <boxGeometry args={[4, cabinetHeight, 0.1]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
       
       <mesh position={[0, 0, -2.1]}>
-        <boxGeometry args={[4, 12, 0.1]} />
+        <boxGeometry args={[4, cabinetHeight, 0.1]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
       
       <mesh position={[-2, 0, 0]}>
-        <boxGeometry args={[0.1, 12, 4]} />
+        <boxGeometry args={[0.1, cabinetHeight, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
       
       <mesh position={[2, 0, 0]}>
-        <boxGeometry args={[0.1, 12, 4]} />
+        <boxGeometry args={[0.1, cabinetHeight, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
       
-      <mesh position={[0, 6, 0]}>
+      <mesh position={[0, cabinetHeight/2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
       
-      <mesh position={[0, -6, 0]}>
+      <mesh position={[0, -cabinetHeight/2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
       </mesh>
@@ -121,10 +162,22 @@ function ErrorFallback() {
 
 export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
+  const [config, setConfig] = useState<CabinetConfig>({
+    topSwitches: 1,
+    powerSupplies: 1,
+    computeTrays1: 10,
+    switchTrays: 9,
+    computeTrays2: 8,
+    bottomPowerSupplies: 1
+  });
   
   const handleReset = () => {
     setAutoRotate(true);
   };
+
+  const totalComponents = config.computeTrays1 + config.computeTrays2;
+  const totalSwitches = config.topSwitches + config.switchTrays;
+  const totalPowerSupplies = config.powerSupplies + config.bottomPowerSupplies;
 
   return (
     <div className="p-6 space-y-6">
@@ -132,7 +185,7 @@ export function L11CabinetDisplay() {
         <div>
           <BackButton />
           <h1 className="text-3xl font-bold text-foreground mt-2">L11機櫃展示</h1>
-          <p className="text-muted-foreground">3D機櫃結構展示</p>
+          <p className="text-muted-foreground">3D可組態機櫃結構展示</p>
         </div>
         
         <div className="flex gap-2">
@@ -149,7 +202,7 @@ export function L11CabinetDisplay() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* 3D Display */}
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
@@ -164,7 +217,7 @@ export function L11CabinetDisplay() {
                   style={{ background: 'linear-gradient(to bottom, #1e293b, #0f172a)' }}
                 >
                   <Suspense fallback={null}>
-                    <CabinetScene />
+                    <CabinetScene config={config} />
                     <OrbitControls 
                       autoRotate={autoRotate}
                       autoRotateSpeed={1}
@@ -172,7 +225,7 @@ export function L11CabinetDisplay() {
                       enableZoom={true}
                       enableRotate={true}
                       minDistance={5}
-                      maxDistance={20}
+                      maxDistance={25}
                       onStart={() => setAutoRotate(false)}
                     />
                   </Suspense>
@@ -182,72 +235,81 @@ export function L11CabinetDisplay() {
           </CardContent>
         </Card>
 
-        {/* Information Panel */}
-        <Card>
-          <CardHeader>
-            <CardTitle>機櫃組件說明</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-3 w-3 bg-blue-500 rounded" />
-                <Badge variant="outline">交換機</Badge>
+        {/* Configuration Panel */}
+        <div className="lg:col-span-2 space-y-6">
+          <CabinetConfigurator 
+            config={config} 
+            onConfigChange={setConfig}
+          />
+          
+          {/* Information Panel */}
+          <Card>
+            <CardHeader>
+              <CardTitle>機櫃組件說明</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-3 w-3 bg-blue-500 rounded" />
+                  <Badge variant="outline">交換機</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  網路交換設備，負責資料傳輸
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                網路交換設備，負責資料傳輸
-              </p>
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-3 w-3 bg-emerald-500 rounded" />
-                <Badge variant="outline">運算單元</Badge>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-3 w-3 bg-emerald-500 rounded" />
+                  <Badge variant="outline">運算單元</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  主要處理運算任務的伺服器托盤
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                主要處理運算任務的伺服器托盤
-              </p>
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-3 w-3 bg-amber-500 rounded" />
-                <Badge variant="outline">電源供應</Badge>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-3 w-3 bg-amber-500 rounded" />
+                  <Badge variant="outline">電源供應</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  提供穩定電力供應的冗餘電源
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                提供穩定電力供應的冗餘電源
-              </p>
-            </div>
 
-            <div className="pt-4 border-t">
-              <h4 className="font-semibold mb-2">操作說明</h4>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• 滑鼠拖拽旋轉視角</li>
-                <li>• 滾輪縮放檢視</li>
-                <li>• 自動旋轉展示</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="pt-4 border-t">
+                <h4 className="font-semibold mb-2">操作說明</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• 滑鼠拖拽旋轉視角</li>
+                  <li>• 滾輪縮放檢視</li>
+                  <li>• 左側面板調整配置</li>
+                  <li>• 即時3D預覽更新</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">10</div>
+            <div className="text-2xl font-bold text-blue-600">{totalSwitches}</div>
             <div className="text-sm text-muted-foreground">交換機托盤</div>
           </CardContent>
         </Card>
         
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-emerald-600">18</div>
+            <div className="text-2xl font-bold text-emerald-600">{totalComponents}</div>
             <div className="text-sm text-muted-foreground">運算托盤</div>
           </CardContent>
         </Card>
         
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold text-amber-600">2</div>
+            <div className="text-2xl font-bold text-amber-600">{totalPowerSupplies}</div>
             <div className="text-sm text-muted-foreground">電源供應單元</div>
           </CardContent>
         </Card>
