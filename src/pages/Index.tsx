@@ -21,6 +21,7 @@ import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { BomCenter } from "@/components/bom/BomCenter";
+import { L11CabinetDisplay } from "@/components/cabinet/L11CabinetDisplay";
 
 
 const Index = () => {
@@ -65,6 +66,12 @@ const Index = () => {
         return (
           <PermissionGuard module="dashboard">
             <Dashboard onNavigate={handleNavigation} />
+          </PermissionGuard>
+        );
+      case "l11-cabinet":
+        return (
+          <PermissionGuard module="dashboard">
+            <L11CabinetDisplay />
           </PermissionGuard>
         );
       case "test-tracker":
