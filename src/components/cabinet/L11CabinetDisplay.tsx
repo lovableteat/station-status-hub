@@ -6,7 +6,7 @@ import { BackButton } from '@/components/common/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
 
 interface CabinetRackProps {
@@ -26,9 +26,10 @@ function CabinetRack({ position, color, size }: CabinetRackProps) {
 
 interface CabinetSceneProps {
   config: CabinetConfig;
+  isOpen: boolean;
 }
 
-function CabinetScene({ config }: CabinetSceneProps) {
+function CabinetScene({ config, isOpen }: CabinetSceneProps) {
   const frameColor = '#2d3748';
   const slotHeight = 0.35;
   
@@ -100,25 +101,41 @@ function CabinetScene({ config }: CabinetSceneProps) {
 
   return (
     <group>
-      {/* Cabinet frame - dynamically sized */}
-      <mesh position={[0, 0, 2.1]}>
-        <boxGeometry args={[4, cabinetHeight, 0.1]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </mesh>
-      
-      <mesh position={[0, 0, -2.1]}>
-        <boxGeometry args={[4, cabinetHeight, 0.1]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
-      </mesh>
+      {/* Cabinet frame - conditionally rendered based on isOpen */}
+      {!isOpen && (
+        <>
+          <mesh position={[0, 0, 2.1]}>
+            <boxGeometry args={[4, cabinetHeight, 0.1]} />
+            <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+          </mesh>
+          
+          <mesh position={[0, 0, -2.1]}>
+            <boxGeometry args={[4, cabinetHeight, 0.1]} />
+            <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+          </mesh>
+        </>
+      )}
       
       <mesh position={[-2, 0, 0]}>
         <boxGeometry args={[0.1, cabinetHeight, 4]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+        <meshStandardMaterial 
+          color={frameColor} 
+          metalness={0.6} 
+          roughness={0.2}
+          transparent={isOpen}
+          opacity={isOpen ? 0.3 : 1}
+        />
       </mesh>
       
       <mesh position={[2, 0, 0]}>
         <boxGeometry args={[0.1, cabinetHeight, 4]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+        <meshStandardMaterial 
+          color={frameColor} 
+          metalness={0.6} 
+          roughness={0.2}
+          transparent={isOpen}
+          opacity={isOpen ? 0.3 : 1}
+        />
       </mesh>
       
       <mesh position={[0, cabinetHeight/2, 0]}>
@@ -162,6 +179,7 @@ function ErrorFallback() {
 
 export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<CabinetConfig>({
     topSwitches: 1,
     powerSupplies: 1,
@@ -190,6 +208,14 @@ export function L11CabinetDisplay() {
         
         <div className="flex gap-2">
           <Button
+            variant={isOpen ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            {isOpen ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+            {isOpen ? "關閉機殼" : "打開機殼"}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={handleReset}
@@ -217,7 +243,7 @@ export function L11CabinetDisplay() {
                   style={{ background: 'linear-gradient(to bottom, #1e293b, #0f172a)' }}
                 >
                   <Suspense fallback={null}>
-                    <CabinetScene config={config} />
+                    <CabinetScene config={config} isOpen={isOpen} />
                     <OrbitControls 
                       autoRotate={autoRotate}
                       autoRotateSpeed={1}
