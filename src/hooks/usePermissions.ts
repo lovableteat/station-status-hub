@@ -66,6 +66,8 @@ export function usePermissions() {
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_view');
+      case 'l11-cabinet':
+        return hasPermission('dashboard_view'); // 使用dashboard權限
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_view');
@@ -90,6 +92,8 @@ export function usePermissions() {
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_edit');
+      case 'l11-cabinet':
+        return hasPermission('dashboard_edit'); // 使用dashboard權限
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_edit');
