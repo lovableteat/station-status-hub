@@ -70,7 +70,7 @@ const Index = () => {
         );
       case "l11-cabinet":
         return (
-          <PermissionGuard module="dashboard">
+          <PermissionGuard module="l11-cabinet">
             <L11CabinetDisplay />
           </PermissionGuard>
         );
