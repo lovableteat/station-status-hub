@@ -118,8 +118,11 @@ function CabinetScene({ config, isOpen, onComponentClick }: CabinetSceneProps) {
     });
   }
 
-  // Calculate cabinet height based on components
-  const cabinetHeight = Math.max(12, Math.abs(currentY) + 6);
+  // Calculate cabinet height based on components with proper spacing
+  const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
+  const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
+  const totalSlotHeight = totalSlots * slotHeight;
+  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 4; // Add extra space for frame
 
   return (
     <group>
