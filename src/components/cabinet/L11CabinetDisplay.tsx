@@ -37,61 +37,61 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
   const components = [];
   let currentY = 5.5;
 
-  // Top switches
-  for (let i = 0; i < config.topSwitches; i++) {
+  // Top Of Rack Switch
+  for (let i = 0; i < config.topOfRackSwitch.count; i++) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: '#3b82f6',
+      color: config.topOfRackSwitch.color,
       size: [3.8, 0.3, 2] as [number, number, number]
     });
   }
-  currentY -= config.topSwitches * slotHeight;
+  currentY -= config.topOfRackSwitch.count * slotHeight;
 
   // Power supplies (top)
-  for (let i = 0; i < config.powerSupplies; i++) {
+  for (let i = 0; i < config.topPowerSupplies.count; i++) {
     components.push({
       position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: '#f59e0b',
+      color: config.topPowerSupplies.color,
       size: [3.8, 0.4, 2] as [number, number, number]
     });
   }
-  currentY -= config.powerSupplies * 0.4;
+  currentY -= config.topPowerSupplies.count * 0.4;
 
-  // First compute tray group
-  for (let i = 0; i < config.computeTrays1; i++) {
+  // First compute tray group (10 Compute Trays)
+  for (let i = 0; i < config.computeTrays1.count; i++) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: '#10b981',
+      color: config.computeTrays1.color,
       size: [3.8, 0.25, 2] as [number, number, number]
     });
   }
-  currentY -= config.computeTrays1 * slotHeight;
+  currentY -= config.computeTrays1.count * slotHeight;
 
-  // Switch trays
-  for (let i = 0; i < config.switchTrays; i++) {
+  // Switch trays (9 Switch Trays)
+  for (let i = 0; i < config.switchTrays.count; i++) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: '#3b82f6',
+      color: config.switchTrays.color,
       size: [3.8, 0.3, 2] as [number, number, number]
     });
   }
-  currentY -= config.switchTrays * slotHeight;
+  currentY -= config.switchTrays.count * slotHeight;
 
-  // Second compute tray group
-  for (let i = 0; i < config.computeTrays2; i++) {
+  // Second compute tray group (8 Compute Trays)
+  for (let i = 0; i < config.computeTrays2.count; i++) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: '#10b981',
+      color: config.computeTrays2.color,
       size: [3.8, 0.25, 2] as [number, number, number]
     });
   }
-  currentY -= config.computeTrays2 * slotHeight;
+  currentY -= config.computeTrays2.count * slotHeight;
 
   // Bottom power supplies
-  for (let i = 0; i < config.bottomPowerSupplies; i++) {
+  for (let i = 0; i < config.bottomPowerSupplies.count; i++) {
     components.push({
       position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: '#f59e0b',
+      color: config.bottomPowerSupplies.color,
       size: [3.8, 0.4, 2] as [number, number, number]
     });
   }
@@ -181,21 +181,45 @@ export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<CabinetConfig>({
-    topSwitches: 1,
-    powerSupplies: 1,
-    computeTrays1: 10,
-    switchTrays: 9,
-    computeTrays2: 8,
-    bottomPowerSupplies: 1
+    topOfRackSwitch: { 
+      count: 1, 
+      color: '#3b82f6', 
+      serialNumbers: ['TOR-001'] 
+    },
+    topPowerSupplies: { 
+      count: 1, 
+      color: '#f59e0b', 
+      serialNumbers: ['PSU-001'] 
+    },
+    computeTrays1: { 
+      count: 10, 
+      color: '#10b981', 
+      serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
+    },
+    switchTrays: { 
+      count: 9, 
+      color: '#3b82f6', 
+      serialNumbers: Array.from({length: 9}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+    },
+    computeTrays2: { 
+      count: 8, 
+      color: '#10b981', 
+      serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
+    },
+    bottomPowerSupplies: { 
+      count: 1, 
+      color: '#f59e0b', 
+      serialNumbers: ['PSU-002'] 
+    }
   });
   
   const handleReset = () => {
     setAutoRotate(true);
   };
 
-  const totalComponents = config.computeTrays1 + config.computeTrays2;
-  const totalSwitches = config.topSwitches + config.switchTrays;
-  const totalPowerSupplies = config.powerSupplies + config.bottomPowerSupplies;
+  const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
+  const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
+  const totalPowerSupplies = config.topPowerSupplies.count + config.bottomPowerSupplies.count;
 
   return (
     <div className="p-6 space-y-6">
