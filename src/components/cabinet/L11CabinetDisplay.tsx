@@ -179,7 +179,7 @@ function ErrorFallback() {
 
 export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [config, setConfig] = useState<CabinetConfig>({
     topOfRackSwitch: { 
       count: 1, 
