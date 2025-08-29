@@ -1,6 +1,6 @@
 
 import React, { Suspense, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,16 +8,25 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
+import * as THREE from 'three';
 
 interface CabinetRackProps {
   position: [number, number, number];
   color: string;
   size: [number, number, number];
+  serialNumber: string;
+  componentType: string;
+  onComponentClick: (componentType: string, serialNumber: string) => void;
 }
 
-function CabinetRack({ position, color, size }: CabinetRackProps) {
+function CabinetRack({ position, color, size, serialNumber, componentType, onComponentClick }: CabinetRackProps) {
+  const handleClick = (e: any) => {
+    e.stopPropagation();
+    onComponentClick(componentType, serialNumber);
+  };
+
   return (
-    <mesh position={position}>
+    <mesh position={position} onClick={handleClick}>
       <boxGeometry args={size} />
       <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
     </mesh>
@@ -27,9 +36,10 @@ function CabinetRack({ position, color, size }: CabinetRackProps) {
 interface CabinetSceneProps {
   config: CabinetConfig;
   isOpen: boolean;
+  onComponentClick: (componentType: string, serialNumber: string) => void;
 }
 
-function CabinetScene({ config, isOpen }: CabinetSceneProps) {
+function CabinetScene({ config, isOpen, onComponentClick }: CabinetSceneProps) {
   const frameColor = '#2d3748';
   const slotHeight = 0.35;
   
@@ -42,7 +52,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: config.topOfRackSwitch.color,
-      size: [3.8, 0.3, 2] as [number, number, number]
+      size: [3.8, 0.3, 2] as [number, number, number],
+      serialNumber: config.topOfRackSwitch.serialNumbers[i] || `TOR-${i + 1}`,
+      componentType: 'Top Of Rack Switch'
     });
   }
   currentY -= config.topOfRackSwitch.count * slotHeight;
@@ -52,7 +64,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * 0.4), 0] as [number, number, number],
       color: config.topPowerSupplies.color,
-      size: [3.8, 0.4, 2] as [number, number, number]
+      size: [3.8, 0.4, 2] as [number, number, number],
+      serialNumber: config.topPowerSupplies.serialNumbers[i] || `PSU-T-${i + 1}`,
+      componentType: 'Power Supplies (上)'
     });
   }
   currentY -= config.topPowerSupplies.count * 0.4;
@@ -62,7 +76,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: config.computeTrays1.color,
-      size: [3.8, 0.25, 2] as [number, number, number]
+      size: [3.8, 0.25, 2] as [number, number, number],
+      serialNumber: config.computeTrays1.serialNumbers[i] || `CT1-${i + 1}`,
+      componentType: '10 Compute Trays'
     });
   }
   currentY -= config.computeTrays1.count * slotHeight;
@@ -72,7 +88,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: config.switchTrays.color,
-      size: [3.8, 0.3, 2] as [number, number, number]
+      size: [3.8, 0.3, 2] as [number, number, number],
+      serialNumber: config.switchTrays.serialNumbers[i] || `SW-${i + 1}`,
+      componentType: '9 Switch Trays'
     });
   }
   currentY -= config.switchTrays.count * slotHeight;
@@ -82,7 +100,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
       color: config.computeTrays2.color,
-      size: [3.8, 0.25, 2] as [number, number, number]
+      size: [3.8, 0.25, 2] as [number, number, number],
+      serialNumber: config.computeTrays2.serialNumbers[i] || `CT2-${i + 1}`,
+      componentType: '8 Compute Trays'
     });
   }
   currentY -= config.computeTrays2.count * slotHeight;
@@ -92,7 +112,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
     components.push({
       position: [0, currentY - (i * 0.4), 0] as [number, number, number],
       color: config.bottomPowerSupplies.color,
-      size: [3.8, 0.4, 2] as [number, number, number]
+      size: [3.8, 0.4, 2] as [number, number, number],
+      serialNumber: config.bottomPowerSupplies.serialNumbers[i] || `PSU-B-${i + 1}`,
+      componentType: 'Power Supplies (下)'
     });
   }
 
@@ -155,6 +177,9 @@ function CabinetScene({ config, isOpen }: CabinetSceneProps) {
           position={comp.position}
           color={comp.color}
           size={comp.size}
+          serialNumber={comp.serialNumber}
+          componentType={comp.componentType}
+          onComponentClick={onComponentClick}
         />
       ))}
       
@@ -180,6 +205,7 @@ function ErrorFallback() {
 export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [isOpen, setIsOpen] = useState(true);
+  const [selectedComponent, setSelectedComponent] = useState<{ type: string; sn: string } | null>(null);
   const [config, setConfig] = useState<CabinetConfig>({
     topOfRackSwitch: { 
       count: 1, 
@@ -187,9 +213,9 @@ export function L11CabinetDisplay() {
       serialNumbers: ['TOR-001'] 
     },
     topPowerSupplies: { 
-      count: 1, 
+      count: 4, 
       color: '#f59e0b', 
-      serialNumbers: ['PSU-001'] 
+      serialNumbers: Array.from({length: 4}, (_, i) => `PSU-T-${String(i + 1).padStart(3, '0')}`) 
     },
     computeTrays1: { 
       count: 10, 
@@ -207,14 +233,18 @@ export function L11CabinetDisplay() {
       serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
     },
     bottomPowerSupplies: { 
-      count: 1, 
+      count: 4, 
       color: '#f59e0b', 
-      serialNumbers: ['PSU-002'] 
+      serialNumbers: Array.from({length: 4}, (_, i) => `PSU-B-${String(i + 1).padStart(3, '0')}`) 
     }
   });
   
   const handleReset = () => {
     setAutoRotate(true);
+  };
+
+  const handleComponentClick = (componentType: string, serialNumber: string) => {
+    setSelectedComponent({ type: componentType, sn: serialNumber });
   };
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
@@ -267,7 +297,7 @@ export function L11CabinetDisplay() {
                   style={{ background: 'linear-gradient(to bottom, #1e293b, #0f172a)' }}
                 >
                   <Suspense fallback={null}>
-                    <CabinetScene config={config} isOpen={isOpen} />
+                    <CabinetScene config={config} isOpen={isOpen} onComponentClick={handleComponentClick} />
                     <OrbitControls 
                       autoRotate={autoRotate}
                       autoRotateSpeed={1}
@@ -328,11 +358,30 @@ export function L11CabinetDisplay() {
                 </p>
               </div>
 
+              {selectedComponent && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">選中組件</h4>
+                  <div className="space-y-1">
+                    <p className="text-sm"><span className="font-medium">類型:</span> {selectedComponent.type}</p>
+                    <p className="text-sm"><span className="font-medium">序號:</span> {selectedComponent.sn}</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2" 
+                    onClick={() => setSelectedComponent(null)}
+                  >
+                    清除選擇
+                  </Button>
+                </div>
+              )}
+
               <div className="pt-4 border-t">
                 <h4 className="font-semibold mb-2">操作說明</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li>• 滑鼠拖拽旋轉視角</li>
                   <li>• 滾輪縮放檢視</li>
+                  <li>• 點擊組件檢視SN碼</li>
                   <li>• 左側面板調整配置</li>
                   <li>• 即時3D預覽更新</li>
                 </ul>
