@@ -27,19 +27,73 @@ function CabinetRack({ position, color, size, serialNumber, componentType, isSel
   };
 
   const displayColor = isSelected ? '#ffffff' : color;
-  const emissive = isSelected ? '#666666' : '#000000';
+  const emissive = isSelected ? '#4ade80' : '#000000';
 
   return (
-    <mesh position={position} onClick={handleClick}>
-      <boxGeometry args={size} />
-      <meshStandardMaterial 
-        color={displayColor} 
-        metalness={0.3} 
-        roughness={0.4}
-        emissive={emissive}
-        emissiveIntensity={isSelected ? 0.3 : 0}
-      />
-    </mesh>
+    <group position={position} onClick={handleClick}>
+      {/* Main component body */}
+      <mesh>
+        <boxGeometry args={[size[0] - 0.05, size[1] - 0.02, size[2] - 0.05]} />
+        <meshPhysicalMaterial 
+          color={displayColor}
+          metalness={0.7}
+          roughness={0.2}
+          clearcoat={0.3}
+          clearcoatRoughness={0.1}
+          emissive={emissive}
+          emissiveIntensity={isSelected ? 0.2 : 0}
+          transmission={0.1}
+          thickness={0.5}
+        />
+      </mesh>
+      
+      {/* Front panel with details */}
+      <mesh position={[0, 0, size[2]/2 + 0.01]}>
+        <boxGeometry args={[size[0] - 0.1, size[1] - 0.05, 0.02]} />
+        <meshPhysicalMaterial 
+          color={isSelected ? '#f0f0f0' : '#2a2a2a'}
+          metalness={0.9}
+          roughness={0.1}
+          clearcoat={0.8}
+          emissive={emissive}
+          emissiveIntensity={isSelected ? 0.1 : 0}
+        />
+      </mesh>
+      
+      {/* Status LED indicators */}
+      <mesh position={[size[0]/2 - 0.3, size[1]/2 - 0.1, size[2]/2 + 0.02]}>
+        <sphereGeometry args={[0.02, 8, 8]} />
+        <meshPhysicalMaterial 
+          color={isSelected ? '#00ff00' : '#ff4444'}
+          emissive={isSelected ? '#00ff00' : '#ff0000'}
+          emissiveIntensity={0.8}
+          transparent={true}
+          opacity={0.9}
+        />
+      </mesh>
+      
+      {/* Ventilation grilles */}
+      {Array.from({length: 3}).map((_, i) => (
+        <mesh key={i} position={[size[0]/2 - 0.5 - i * 0.3, 0, size[2]/2 + 0.015]}>
+          <boxGeometry args={[0.15, size[1] - 0.1, 0.005]} />
+          <meshPhysicalMaterial 
+            color="#1a1a1a"
+            metalness={0.8}
+            roughness={0.3}
+          />
+        </mesh>
+      ))}
+      
+      {/* Handle */}
+      <mesh position={[-size[0]/2 + 0.05, 0, size[2]/2 + 0.03]}>
+        <cylinderGeometry args={[0.02, 0.02, size[1] - 0.2, 8]} />
+        <meshPhysicalMaterial 
+          color="#666666"
+          metalness={0.9}
+          roughness={0.2}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -51,7 +105,7 @@ interface CabinetSceneProps {
 }
 
 function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: CabinetSceneProps) {
-  const frameColor = '#2d3748';
+  const frameColor = '#1a1a1a';
   const slotHeight = 0.35;
   
   // Calculate components based on configuration
@@ -137,51 +191,100 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
 
   return (
     <group>
-      {/* Cabinet frame - conditionally rendered based on isOpen */}
+      {/* Enhanced Cabinet frame */}
       {!isOpen && (
         <>
+          {/* Front glass panel */}
           <mesh position={[0, 0, 2.1]}>
-            <boxGeometry args={[4, cabinetHeight, 0.1]} />
-            <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+            <boxGeometry args={[4, cabinetHeight, 0.05]} />
+            <meshPhysicalMaterial 
+              color="#111111"
+              metalness={0.1}
+              roughness={0.02}
+              transmission={0.8}
+              thickness={0.1}
+              clearcoat={1}
+              clearcoatRoughness={0.1}
+              transparent={true}
+              opacity={0.3}
+            />
           </mesh>
           
+          {/* Back panel */}
           <mesh position={[0, 0, -2.1]}>
             <boxGeometry args={[4, cabinetHeight, 0.1]} />
-            <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+            <meshPhysicalMaterial 
+              color={frameColor}
+              metalness={0.8}
+              roughness={0.2}
+              clearcoat={0.5}
+            />
           </mesh>
         </>
       )}
       
+      {/* Side panels with better materials */}
       <mesh position={[-2, 0, 0]}>
         <boxGeometry args={[0.1, cabinetHeight, 4]} />
-        <meshStandardMaterial 
+        <meshPhysicalMaterial 
           color={frameColor} 
-          metalness={0.6} 
-          roughness={0.2}
+          metalness={0.7} 
+          roughness={0.3}
+          clearcoat={0.4}
           transparent={isOpen}
-          opacity={isOpen ? 0.3 : 1}
+          opacity={isOpen ? 0.2 : 1}
         />
       </mesh>
       
       <mesh position={[2, 0, 0]}>
         <boxGeometry args={[0.1, cabinetHeight, 4]} />
-        <meshStandardMaterial 
+        <meshPhysicalMaterial 
           color={frameColor} 
-          metalness={0.6} 
-          roughness={0.2}
+          metalness={0.7} 
+          roughness={0.3}
+          clearcoat={0.4}
           transparent={isOpen}
-          opacity={isOpen ? 0.3 : 1}
+          opacity={isOpen ? 0.2 : 1}
         />
       </mesh>
       
+      {/* Top and bottom panels */}
       <mesh position={[0, cabinetHeight/2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+        <meshPhysicalMaterial 
+          color={frameColor} 
+          metalness={0.8} 
+          roughness={0.2}
+          clearcoat={0.6}
+        />
       </mesh>
       
       <mesh position={[0, -cabinetHeight/2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
-        <meshStandardMaterial color={frameColor} metalness={0.6} roughness={0.2} />
+        <meshPhysicalMaterial 
+          color={frameColor} 
+          metalness={0.8} 
+          roughness={0.2}
+          clearcoat={0.6}
+        />
+      </mesh>
+
+      {/* Rack rails */}
+      <mesh position={[-1.8, 0, 1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+        <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
+      </mesh>
+      <mesh position={[1.8, 0, 1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+        <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
+      </mesh>
+      <mesh position={[-1.8, 0, -1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+        <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
+      </mesh>
+      <mesh position={[1.8, 0, -1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+        <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
 
       {/* Cabinet components */}
@@ -201,10 +304,35 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         );
       })}
       
-      {/* Lighting */}
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <directionalLight position={[-10, -10, -5]} intensity={0.3} />
+      {/* Enhanced lighting setup */}
+      <ambientLight intensity={0.3} color="#f0f8ff" />
+      <directionalLight 
+        position={[10, 10, 5]} 
+        intensity={1.2} 
+        color="#ffffff"
+        castShadow={true}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+      />
+      <directionalLight 
+        position={[-10, -10, -5]} 
+        intensity={0.4} 
+        color="#4a90e2"
+      />
+      <pointLight 
+        position={[0, 0, 3]} 
+        intensity={0.5} 
+        color="#ffffff"
+        distance={15}
+        decay={2}
+      />
+      
+      {/* Rim lighting */}
+      <directionalLight 
+        position={[0, 0, -10]} 
+        intensity={0.6} 
+        color="#64b5f6"
+      />
     </group>
   );
 }
@@ -320,23 +448,35 @@ export function L11CabinetDisplay() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[600px] rounded-lg overflow-hidden border bg-slate-900">
+            <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl">
               <Suspense fallback={<ErrorFallback />}>
                 <Canvas
                   camera={{ position: [8, 3, 8], fov: 50 }}
-                  style={{ background: 'linear-gradient(to bottom, #1e293b, #0f172a)' }}
+                  style={{ 
+                    background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
+                  }}
+                  shadows={true}
+                  gl={{ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance"
+                  }}
                 >
                   <Suspense fallback={null}>
                     <CabinetScene config={config} isOpen={isOpen} selectedComponent={selectedComponent} onComponentClick={handleComponentClick} />
                     <OrbitControls 
                       autoRotate={autoRotate}
-                      autoRotateSpeed={1}
+                      autoRotateSpeed={0.5}
                       enablePan={true}
                       enableZoom={true}
                       enableRotate={true}
-                      minDistance={5}
-                      maxDistance={25}
+                      minDistance={4}
+                      maxDistance={20}
+                      minPolarAngle={0}
+                      maxPolarAngle={Math.PI}
                       onStart={() => setAutoRotate(false)}
+                      enableDamping={true}
+                      dampingFactor={0.05}
                     />
                   </Suspense>
                 </Canvas>
