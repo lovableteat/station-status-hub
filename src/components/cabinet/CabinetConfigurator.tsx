@@ -6,7 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Minus, RotateCcw, Settings, Palette } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Plus, Minus, RotateCcw, Settings, Palette, Monitor, Info } from 'lucide-react';
+import { useUnifiedData } from '@/hooks/useUnifiedData';
 
 export interface ComponentConfig {
   count: number;
@@ -39,6 +41,11 @@ const colorOptions = [
 
 export function CabinetConfigurator({ config, onConfigChange }: CabinetConfiguratorProps) {
   const [activeTab, setActiveTab] = useState('count');
+  const [showSystemSelector, setShowSystemSelector] = useState(false);
+  const [selectedSystemDetails, setSelectedSystemDetails] = useState<any>(null);
+  const [currentEditingComponent, setCurrentEditingComponent] = useState<{key: keyof CabinetConfig, index: number} | null>(null);
+  
+  const { systems } = useUnifiedData();
 
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
     const newCount = Math.max(0, Math.min(20, count));
@@ -88,6 +95,23 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
         serialNumbers: newSerialNumbers
       }
     });
+  };
+
+  const openSystemSelector = (key: keyof CabinetConfig, index: number) => {
+    setCurrentEditingComponent({ key, index });
+    setShowSystemSelector(true);
+  };
+
+  const selectSystem = (system: any) => {
+    if (currentEditingComponent) {
+      updateSerialNumber(currentEditingComponent.key, currentEditingComponent.index, system.serial_number || system.system_name);
+    }
+    setShowSystemSelector(false);
+    setCurrentEditingComponent(null);
+  };
+
+  const showSystemDetails = (system: any) => {
+    setSelectedSystemDetails(system);
   };
 
   const resetToDefault = () => {
@@ -149,7 +173,7 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="count" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               數量
@@ -161,6 +185,10 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
             <TabsTrigger value="serial" className="flex items-center gap-2">
               <Badge className="h-4 w-4" />
               SN碼
+            </TabsTrigger>
+            <TabsTrigger value="systems" className="flex items-center gap-2">
+              <Monitor className="h-4 w-4" />
+              系統清單
             </TabsTrigger>
           </TabsList>
 
@@ -259,20 +287,66 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
                       />
                       {item.label} ({component.count} 個)
                     </Label>
-                    <div className="grid gap-2 max-h-32 overflow-y-auto">
-                      {component.serialNumbers.map((sn, index) => (
-                        <Input
-                          key={index}
-                          value={sn}
-                          onChange={(e) => updateSerialNumber(item.key as keyof CabinetConfig, index, e.target.value)}
-                          placeholder={`SN #${index + 1}`}
-                          className="text-sm"
-                        />
-                      ))}
-                    </div>
+                     <div className="grid gap-2 max-h-32 overflow-y-auto">
+                       {component.serialNumbers.map((sn, index) => (
+                         <div key={index} className="flex gap-2">
+                           <Input
+                             value={sn}
+                             onChange={(e) => updateSerialNumber(item.key as keyof CabinetConfig, index, e.target.value)}
+                             placeholder={`SN #${index + 1}`}
+                             className="text-sm flex-1"
+                           />
+                           <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={() => openSystemSelector(item.key as keyof CabinetConfig, index)}
+                             className="px-2"
+                           >
+                             <Monitor className="h-3 w-3" />
+                           </Button>
+                         </div>
+                       ))}
+                     </div>
                   </div>
                 );
               })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="systems" className="space-y-4">
+            <div className="space-y-2">
+              <Label>系統清單 ({systems.length} 台)</Label>
+              <div className="grid gap-2 max-h-64 overflow-y-auto border rounded-md p-2">
+                {systems.map((system) => (
+                  <div 
+                    key={system.id} 
+                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border"
+                    onClick={() => showSystemDetails(system)}
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{system.system_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        SN: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={system.status === '已完成' ? 'default' : 'secondary'} className="text-xs">
+                        {system.status}
+                      </Badge>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showSystemDetails(system);
+                        }}
+                      >
+                        <Info className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </TabsContent>
         </Tabs>
@@ -291,9 +365,112 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
             <li>• 可調整數量、顏色和SN碼</li>
             <li>• 3D視圖即時更新</li>
             <li>• 每種組件都有數量限制</li>
+            <li>• SN碼可從系統清單中選擇</li>
           </ul>
         </div>
       </CardContent>
+
+      {/* System Selection Dialog */}
+      <Dialog open={showSystemSelector} onOpenChange={setShowSystemSelector}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>選擇系統</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 max-h-96 overflow-y-auto">
+            {systems.map((system) => (
+              <div 
+                key={system.id}
+                className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-md cursor-pointer border"
+                onClick={() => selectSystem(system)}
+              >
+                <div className="flex-1">
+                  <div className="font-medium">{system.system_name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    序列號: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    負責工程師: {system.assigned_engineer || '未分配'} | 當前站點: {system.current_station}
+                  </div>
+                </div>
+                <Badge variant={system.status === '已完成' ? 'default' : 'secondary'}>
+                  {system.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* System Details Dialog */}
+      <Dialog open={!!selectedSystemDetails} onOpenChange={() => setSelectedSystemDetails(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>系統詳細資料</DialogTitle>
+          </DialogHeader>
+          {selectedSystemDetails && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">系統名稱</Label>
+                  <div className="text-sm">{selectedSystemDetails.system_name}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">序列號</Label>
+                  <div className="text-sm">{selectedSystemDetails.serial_number || '未設定'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">型號</Label>
+                  <div className="text-sm">{selectedSystemDetails.model || 'GB300'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">狀態</Label>
+                  <Badge variant={selectedSystemDetails.status === '已完成' ? 'default' : 'secondary'}>
+                    {selectedSystemDetails.status}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">當前站點</Label>
+                  <div className="text-sm">{selectedSystemDetails.current_station}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">整體進度</Label>
+                  <div className="text-sm">{selectedSystemDetails.overall_progress || 0}%</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">負責工程師</Label>
+                  <div className="text-sm">{selectedSystemDetails.assigned_engineer || '未分配'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Ubuntu版本</Label>
+                  <div className="text-sm">{selectedSystemDetails.ubuntu_version || '未設定'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">CUDA版本</Label>
+                  <div className="text-sm">{selectedSystemDetails.cuda_version || '未設定'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">開始時間</Label>
+                  <div className="text-sm">
+                    {selectedSystemDetails.actual_started_at 
+                      ? new Date(selectedSystemDetails.actual_started_at).toLocaleString('zh-TW')
+                      : '未開始'
+                    }
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">完成時間</Label>
+                  <div className="text-sm">
+                    {selectedSystemDetails.actual_completed_at 
+                      ? new Date(selectedSystemDetails.actual_completed_at).toLocaleString('zh-TW')
+                      : '未完成'
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
