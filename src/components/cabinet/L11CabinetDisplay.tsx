@@ -248,8 +248,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      {/* Top and bottom panels */}
-      <mesh position={[0, cabinetHeight/2, 0]}>
+      {/* Top and bottom panels - Adjusted to remove gaps */}
+      <mesh position={[0, cabinetHeight/2 - 0.05, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -259,7 +259,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[0, -cabinetHeight/2, 0]}>
+      <mesh position={[0, -cabinetHeight/2 + 0.05, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -304,27 +304,56 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         );
       })}
       
-      {/* Enhanced lighting setup */}
-      <ambientLight intensity={0.3} color="#f0f8ff" />
+      {/* Enhanced lighting setup - Much brighter for better visibility */}
+      <ambientLight intensity={1.2} color="#f5f5f5" />
       <directionalLight 
         position={[10, 10, 5]} 
-        intensity={1.2} 
+        intensity={2.5} 
         color="#ffffff"
         castShadow={true}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
       <directionalLight 
-        position={[-10, -10, -5]} 
-        intensity={0.4} 
-        color="#4a90e2"
+        position={[-10, 10, 5]} 
+        intensity={1.8} 
+        color="#ffffff"
+      />
+      <directionalLight 
+        position={[0, -10, 5]} 
+        intensity={1.5} 
+        color="#ffffff"
       />
       <pointLight 
-        position={[0, 0, 3]} 
-        intensity={0.5} 
+        position={[0, 0, 8]} 
+        intensity={2.0} 
+        color="#ffffff"
+        distance={20}
+        decay={1.5}
+      />
+      <pointLight 
+        position={[5, 5, 3]} 
+        intensity={1.5} 
         color="#ffffff"
         distance={15}
-        decay={2}
+        decay={1.8}
+      />
+      <pointLight 
+        position={[-5, -5, 3]} 
+        intensity={1.5} 
+        color="#ffffff"
+        distance={15}
+        decay={1.8}
+      />
+      
+      {/* Additional spot lights for cabinet interior */}
+      <spotLight 
+        position={[0, 10, 5]} 
+        target-position={[0, 0, 0]}
+        angle={0.6} 
+        intensity={2.0} 
+        color="#ffffff"
+        penumbra={0.3}
       />
       
       {/* Rim lighting */}
