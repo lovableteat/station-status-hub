@@ -16,19 +16,29 @@ interface CabinetRackProps {
   size: [number, number, number];
   serialNumber: string;
   componentType: string;
+  isSelected: boolean;
   onComponentClick: (componentType: string, serialNumber: string) => void;
 }
 
-function CabinetRack({ position, color, size, serialNumber, componentType, onComponentClick }: CabinetRackProps) {
+function CabinetRack({ position, color, size, serialNumber, componentType, isSelected, onComponentClick }: CabinetRackProps) {
   const handleClick = (e: any) => {
     e.stopPropagation();
     onComponentClick(componentType, serialNumber);
   };
 
+  const displayColor = isSelected ? '#ffffff' : color;
+  const emissive = isSelected ? '#666666' : '#000000';
+
   return (
     <mesh position={position} onClick={handleClick}>
       <boxGeometry args={size} />
-      <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
+      <meshStandardMaterial 
+        color={displayColor} 
+        metalness={0.3} 
+        roughness={0.4}
+        emissive={emissive}
+        emissiveIntensity={isSelected ? 0.3 : 0}
+      />
     </mesh>
   );
 }
@@ -36,10 +46,11 @@ function CabinetRack({ position, color, size, serialNumber, componentType, onCom
 interface CabinetSceneProps {
   config: CabinetConfig;
   isOpen: boolean;
+  selectedComponent: { type: string; sn: string } | null;
   onComponentClick: (componentType: string, serialNumber: string) => void;
 }
 
-function CabinetScene({ config, isOpen, onComponentClick }: CabinetSceneProps) {
+function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: CabinetSceneProps) {
   const frameColor = '#2d3748';
   const slotHeight = 0.35;
   
@@ -122,7 +133,7 @@ function CabinetScene({ config, isOpen, onComponentClick }: CabinetSceneProps) {
   const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
   const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
   const totalSlotHeight = totalSlots * slotHeight;
-  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 4; // Add extra space for frame
+  const cabinetHeight = Math.max(8, totalSlotHeight + totalPowerSupplyHeight + 2); // Minimum height with proper spacing
 
   return (
     <group>
@@ -174,17 +185,21 @@ function CabinetScene({ config, isOpen, onComponentClick }: CabinetSceneProps) {
       </mesh>
 
       {/* Cabinet components */}
-      {components.map((comp, index) => (
-        <CabinetRack
-          key={index}
-          position={comp.position}
-          color={comp.color}
-          size={comp.size}
-          serialNumber={comp.serialNumber}
-          componentType={comp.componentType}
-          onComponentClick={onComponentClick}
-        />
-      ))}
+      {components.map((comp, index) => {
+        const isSelected = selectedComponent?.type === comp.componentType && selectedComponent?.sn === comp.serialNumber;
+        return (
+          <CabinetRack
+            key={index}
+            position={comp.position}
+            color={comp.color}
+            size={comp.size}
+            serialNumber={comp.serialNumber}
+            componentType={comp.componentType}
+            isSelected={isSelected}
+            onComponentClick={onComponentClick}
+          />
+        );
+      })}
       
       {/* Lighting */}
       <ambientLight intensity={0.4} />
@@ -300,7 +315,7 @@ export function L11CabinetDisplay() {
                   style={{ background: 'linear-gradient(to bottom, #1e293b, #0f172a)' }}
                 >
                   <Suspense fallback={null}>
-                    <CabinetScene config={config} isOpen={isOpen} onComponentClick={handleComponentClick} />
+                    <CabinetScene config={config} isOpen={isOpen} selectedComponent={selectedComponent} onComponentClick={handleComponentClick} />
                     <OrbitControls 
                       autoRotate={autoRotate}
                       autoRotateSpeed={1}
