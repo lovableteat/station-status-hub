@@ -1,5 +1,5 @@
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
@@ -224,37 +224,40 @@ export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [isOpen, setIsOpen] = useState(true);
   const [selectedComponent, setSelectedComponent] = useState<{ type: string; sn: string } | null>(null);
-  const [config, setConfig] = useState<CabinetConfig>({
-    topOfRackSwitch: { 
-      count: 1, 
-      color: '#3b82f6', 
-      serialNumbers: ['TOR-001'] 
-    },
-    topPowerSupplies: { 
-      count: 4, 
-      color: '#f59e0b', 
-      serialNumbers: Array.from({length: 4}, (_, i) => `PSU-T-${String(i + 1).padStart(3, '0')}`) 
-    },
-    computeTrays1: { 
-      count: 10, 
-      color: '#10b981', 
-      serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
-    },
-    switchTrays: { 
-      count: 9, 
-      color: '#3b82f6', 
-      serialNumbers: Array.from({length: 9}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
-    },
-    computeTrays2: { 
-      count: 8, 
-      color: '#10b981', 
-      serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
-    },
-    bottomPowerSupplies: { 
-      count: 4, 
-      color: '#f59e0b', 
-      serialNumbers: Array.from({length: 4}, (_, i) => `PSU-B-${String(i + 1).padStart(3, '0')}`) 
-    }
+  const [config, setConfig] = useState<CabinetConfig>(() => {
+    const savedConfig = localStorage.getItem('l11-cabinet-config');
+    return savedConfig ? JSON.parse(savedConfig) : {
+      topOfRackSwitch: { 
+        count: 1, 
+        color: '#3b82f6', 
+        serialNumbers: ['TOR-001'] 
+      },
+      topPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b', 
+        serialNumbers: Array.from({length: 4}, (_, i) => `PSU-T-${String(i + 1).padStart(3, '0')}`) 
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#10b981', 
+        serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
+      },
+      switchTrays: { 
+        count: 9, 
+        color: '#3b82f6', 
+        serialNumbers: Array.from({length: 9}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#10b981', 
+        serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
+      },
+      bottomPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b', 
+        serialNumbers: Array.from({length: 4}, (_, i) => `PSU-B-${String(i + 1).padStart(3, '0')}`) 
+      }
+    };
   });
   
   const handleReset = () => {
@@ -264,6 +267,15 @@ export function L11CabinetDisplay() {
   const handleComponentClick = (componentType: string, serialNumber: string) => {
     setSelectedComponent({ type: componentType, sn: serialNumber });
   };
+
+  const handleConfigChange = (newConfig: CabinetConfig) => {
+    setConfig(newConfig);
+    localStorage.setItem('l11-cabinet-config', JSON.stringify(newConfig));
+  };
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
+  }, [config]);
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
   const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
@@ -330,6 +342,25 @@ export function L11CabinetDisplay() {
                 </Canvas>
               </Suspense>
             </div>
+            
+            {/* Selected Component Display */}
+            {selectedComponent && (
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">選中組件</h4>
+                <div className="space-y-1">
+                  <p className="text-sm"><span className="font-medium">類型:</span> {selectedComponent.type}</p>
+                  <p className="text-sm"><span className="font-medium">序號:</span> {selectedComponent.sn}</p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-2" 
+                  onClick={() => setSelectedComponent(null)}
+                >
+                  清除選擇
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -337,7 +368,7 @@ export function L11CabinetDisplay() {
         <div className="lg:col-span-2 space-y-6">
           <CabinetConfigurator 
             config={config} 
-            onConfigChange={setConfig}
+            onConfigChange={handleConfigChange}
           />
           
           {/* Information Panel */}
@@ -375,24 +406,6 @@ export function L11CabinetDisplay() {
                   提供穩定電力供應的冗餘電源
                 </p>
               </div>
-
-              {selectedComponent && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">選中組件</h4>
-                  <div className="space-y-1">
-                    <p className="text-sm"><span className="font-medium">類型:</span> {selectedComponent.type}</p>
-                    <p className="text-sm"><span className="font-medium">序號:</span> {selectedComponent.sn}</p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="mt-2" 
-                    onClick={() => setSelectedComponent(null)}
-                  >
-                    清除選擇
-                  </Button>
-                </div>
-              )}
 
               <div className="pt-4 border-t">
                 <h4 className="font-semibold mb-2">操作說明</h4>
