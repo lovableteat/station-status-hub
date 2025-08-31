@@ -211,6 +211,10 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   
   // Calculate the bottom position for tight fit
   const lowestComponentY = currentY - config.bottomPowerSupplies.count * 0.4;
+  
+  // Calculate actual cabinet bounds based on component positions
+  const topComponentY = cabinetHeight / 2 - 0.1; // Position of top component
+  const actualCabinetHeight = topComponentY - lowestComponentY + 0.4; // Height from top to bottom component + component thickness
 
   return (
     <group>
@@ -218,8 +222,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       {!isOpen && (
         <>
           {/* Front glass panel */}
-          <mesh position={[0, 0, 2.1]}>
-            <boxGeometry args={[4, cabinetHeight, 0.05]} />
+          <mesh position={[0, (topComponentY + lowestComponentY) / 2, 2.1]}>
+            <boxGeometry args={[4, actualCabinetHeight, 0.05]} />
             <meshPhysicalMaterial 
               color="#111111"
               metalness={0.1}
@@ -234,8 +238,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
           </mesh>
           
           {/* Back panel */}
-          <mesh position={[0, 0, -2.1]}>
-            <boxGeometry args={[4, cabinetHeight, 0.1]} />
+          <mesh position={[0, (topComponentY + lowestComponentY) / 2, -2.1]}>
+            <boxGeometry args={[4, actualCabinetHeight, 0.1]} />
             <meshPhysicalMaterial 
               color={frameColor}
               metalness={0.8}
@@ -247,8 +251,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       )}
       
       {/* Side panels with better materials */}
-      <mesh position={[-2, 0, 0]}>
-        <boxGeometry args={[0.1, cabinetHeight, 4]} />
+      <mesh position={[-2, (topComponentY + lowestComponentY) / 2, 0]}>
+        <boxGeometry args={[0.1, actualCabinetHeight, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
           metalness={0.7} 
@@ -259,8 +263,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[2, 0, 0]}>
-        <boxGeometry args={[0.1, cabinetHeight, 4]} />
+      <mesh position={[2, (topComponentY + lowestComponentY) / 2, 0]}>
+        <boxGeometry args={[0.1, actualCabinetHeight, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
           metalness={0.7} 
@@ -271,8 +275,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      {/* Top and bottom panels - Adjusted to remove gaps */}
-      <mesh position={[0, cabinetHeight/2 - 0.05, 0]}>
+      {/* Top and bottom panels - Adjusted to component bounds */}
+      <mesh position={[0, topComponentY + 0.2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -292,21 +296,21 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
 
-      {/* Rack rails */}
-      <mesh position={[-1.8, 0, 1.8]}>
-        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+      {/* Rack rails - Adjusted to component bounds */}
+      <mesh position={[-1.8, (topComponentY + lowestComponentY) / 2, 1.8]}>
+        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[1.8, 0, 1.8]}>
-        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+      <mesh position={[1.8, (topComponentY + lowestComponentY) / 2, 1.8]}>
+        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[-1.8, 0, -1.8]}>
-        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+      <mesh position={[-1.8, (topComponentY + lowestComponentY) / 2, -1.8]}>
+        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[1.8, 0, -1.8]}>
-        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
+      <mesh position={[1.8, (topComponentY + lowestComponentY) / 2, -1.8]}>
+        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
 
