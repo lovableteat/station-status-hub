@@ -108,9 +108,15 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   const frameColor = '#1a1a1a';
   const slotHeight = 0.35;
   
+  // Calculate total height first
+  const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
+  const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
+  const totalSlotHeight = totalSlots * slotHeight;
+  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 0.5; // Tight fit without extra space
+  
   // Calculate components based on configuration
   const components = [];
-  let currentY = 5.5;
+  let currentY = cabinetHeight / 2 - 0.1; // Start from the very top
 
   // Top Of Rack Switch
   for (let i = 0; i < config.topOfRackSwitch.count; i++) {
@@ -182,12 +188,6 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       componentType: 'Power Supplies (下)'
     });
   }
-
-  // Calculate cabinet height based on components with proper spacing
-  const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
-  const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
-  const totalSlotHeight = totalSlots * slotHeight;
-  const cabinetHeight = Math.max(8, totalSlotHeight + totalPowerSupplyHeight + 2); // Minimum height with proper spacing
 
   return (
     <group>
