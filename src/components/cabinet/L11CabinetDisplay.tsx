@@ -132,7 +132,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
   const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
   const totalSlotHeight = totalSlots * slotHeight;
-  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 0.5; // Tight fit without extra space
+  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 0.2; // Minimal spacing for frame
   
   // Calculate components based on configuration
   const components = [];
@@ -208,6 +208,9 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       componentType: 'Power Supplies (下)'
     });
   }
+  
+  // Calculate the bottom position for tight fit
+  const lowestComponentY = currentY - config.bottomPowerSupplies.count * 0.4;
 
   return (
     <group>
@@ -279,7 +282,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[0, -cabinetHeight/2 + 0.05, 0]}>
+      <mesh position={[0, lowestComponentY - 0.25, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
