@@ -8,7 +8,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
+import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
+
+interface SystemDetails {
+  system_name?: string;
+  model?: string;
+  current_station?: string;
+  status?: string;
+  assigned_engineer?: string;
+  overall_progress?: number;
+  team?: string;
+  bmc_address?: string;
+  ubuntu_version?: string;
+  cuda_version?: string;
+}
+
+interface SelectedComponent {
+  type: string;
+  sn: string;
+  details?: SystemDetails;
+}
 
 interface CabinetRackProps {
   position: [number, number, number];
@@ -380,7 +400,7 @@ function ErrorFallback() {
 export function L11CabinetDisplay() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [isOpen, setIsOpen] = useState(true);
-  const [selectedComponent, setSelectedComponent] = useState<{ type: string; sn: string } | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(null);
   const [config, setConfig] = useState<CabinetConfig>(() => {
     const savedConfig = localStorage.getItem('l11-cabinet-config');
     return savedConfig ? JSON.parse(savedConfig) : {
@@ -421,8 +441,41 @@ export function L11CabinetDisplay() {
     setAutoRotate(true);
   };
 
-  const handleComponentClick = (componentType: string, serialNumber: string) => {
-    setSelectedComponent({ type: componentType, sn: serialNumber });
+  const fetchSystemDetails = async (serialNumber: string): Promise<SystemDetails | undefined> => {
+    try {
+      const { data, error } = await supabase
+        .from('test_systems')
+        .select('*')
+        .eq('serial_number', serialNumber)
+        .single();
+      
+      if (error || !data) return undefined;
+      
+      return {
+        system_name: data.system_name,
+        model: data.model,
+        current_station: data.current_station,
+        status: data.status,
+        assigned_engineer: data.assigned_engineer,
+        overall_progress: data.overall_progress,
+        team: data.team,
+        bmc_address: data.bmc_address,
+        ubuntu_version: data.ubuntu_version,
+        cuda_version: data.cuda_version
+      };
+    } catch (error) {
+      console.error('Error fetching system details:', error);
+      return undefined;
+    }
+  };
+
+  const handleComponentClick = async (componentType: string, serialNumber: string) => {
+    const details = await fetchSystemDetails(serialNumber);
+    setSelectedComponent({ 
+      type: componentType, 
+      sn: serialNumber,
+      details 
+    });
   };
 
   const handleConfigChange = (newConfig: CabinetConfig) => {
@@ -515,15 +568,75 @@ export function L11CabinetDisplay() {
             {/* Selected Component Display */}
             {selectedComponent && (
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">選中組件</h4>
-                <div className="space-y-1">
-                  <p className="text-sm"><span className="font-medium">類型:</span> {selectedComponent.type}</p>
-                  <p className="text-sm"><span className="font-medium">序號:</span> {selectedComponent.sn}</p>
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">選中組件詳細資訊</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="font-medium text-blue-800 dark:text-blue-200">組件類型:</span>
+                    <p className="text-gray-700 dark:text-gray-300">{selectedComponent.type}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
+                    <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.sn}</p>
+                  </div>
+                  {selectedComponent.details && (
+                    <>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">系統名稱:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.system_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">型號:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.model || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">當前工站:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.current_station || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">狀態:</span>
+                        <Badge variant={selectedComponent.details.status === 'Completed' ? 'default' : 'secondary'} className="ml-1">
+                          {selectedComponent.details.status || 'N/A'}
+                        </Badge>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">指派工程師:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.assigned_engineer || '未指派'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">整體進度:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.overall_progress || 0}%</p>
+                      </div>
+                      {selectedComponent.details.team && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">團隊:</span>
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.team}</p>
+                        </div>
+                      )}
+                      {selectedComponent.details.bmc_address && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">BMC地址:</span>
+                          <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.bmc_address}</p>
+                        </div>
+                      )}
+                      {selectedComponent.details.ubuntu_version && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">Ubuntu版本:</span>
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.ubuntu_version}</p>
+                        </div>
+                      )}
+                      {selectedComponent.details.cuda_version && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">CUDA版本:</span>
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.cuda_version}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="mt-2" 
+                  className="mt-3" 
                   onClick={() => setSelectedComponent(null)}
                 >
                   清除選擇
