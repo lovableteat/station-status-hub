@@ -426,12 +426,18 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
 
             <div>
               <Label htmlFor="category">問題分類</Label>
-              <Input
-                id="category"
-                placeholder="請輸入問題分類"
-                value={newIssue.category}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, category: e.target.value }))}
-              />
+              <Select value={newIssue.category} onValueChange={(value) => setNewIssue(prev => ({ ...prev, category: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇問題來源" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="L10">L10</SelectItem>
+                  <SelectItem value="L11">L11</SelectItem>
+                  <SelectItem value="EK7">EK7</SelectItem>
+                  <SelectItem value="其他">其他</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
