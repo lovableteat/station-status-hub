@@ -20,6 +20,7 @@ interface SystemDetails {
   overall_progress?: number;
   team?: string;
   bmc_address?: string;
+  os_mac_address?: string; // NIC MAC Address
   ubuntu_version?: string;
   cuda_version?: string;
 }
@@ -405,9 +406,22 @@ function ErrorFallback() {
 }
 
 export function L11CabinetDisplay() {
-  const [autoRotate, setAutoRotate] = useState(true);
-  const [isOpen, setIsOpen] = useState(true);
-  const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(null);
+  // 從localStorage讀取和保存狀態
+  const [autoRotate, setAutoRotate] = useState(() => {
+    const saved = localStorage.getItem('l11-cabinet-autoRotate');
+    return saved ? JSON.parse(saved) : true;
+  });
+  
+  const [isOpen, setIsOpen] = useState(() => {
+    const saved = localStorage.getItem('l11-cabinet-isOpen');
+    return saved ? JSON.parse(saved) : true;
+  });
+  
+  const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
+    const saved = localStorage.getItem('l11-cabinet-selectedComponent');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
   const [config, setConfig] = useState<CabinetConfig>(() => {
     const savedConfig = localStorage.getItem('l11-cabinet-config');
     return savedConfig ? JSON.parse(savedConfig) : {
@@ -446,6 +460,7 @@ export function L11CabinetDisplay() {
   
   const handleReset = () => {
     setAutoRotate(true);
+    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(true));
   };
 
   const fetchSystemDetails = async (serialNumber: string): Promise<SystemDetails | undefined> => {
@@ -467,6 +482,7 @@ export function L11CabinetDisplay() {
         overall_progress: data.overall_progress,
         team: data.team,
         bmc_address: data.bmc_address,
+        os_mac_address: data.os_mac_address, // NIC MAC Address
         ubuntu_version: data.ubuntu_version,
         cuda_version: data.cuda_version
       };
@@ -478,11 +494,13 @@ export function L11CabinetDisplay() {
 
   const handleComponentClick = async (componentType: string, serialNumber: string) => {
     const details = await fetchSystemDetails(serialNumber);
-    setSelectedComponent({ 
+    const newSelectedComponent = { 
       type: componentType, 
       sn: serialNumber,
       details 
-    });
+    };
+    setSelectedComponent(newSelectedComponent);
+    localStorage.setItem('l11-cabinet-selectedComponent', JSON.stringify(newSelectedComponent));
   };
 
   const handleConfigChange = (newConfig: CabinetConfig) => {
@@ -490,9 +508,28 @@ export function L11CabinetDisplay() {
     localStorage.setItem('l11-cabinet-config', JSON.stringify(newConfig));
   };
 
+  const handleIsOpenChange = (newIsOpen: boolean) => {
+    setIsOpen(newIsOpen);
+    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(newIsOpen));
+  };
+
+  const handleSelectedComponentClear = () => {
+    setSelectedComponent(null);
+    localStorage.removeItem('l11-cabinet-selectedComponent');
+  };
+
+  // 保存狀態到localStorage
   useEffect(() => {
     localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(autoRotate));
+  }, [autoRotate]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(isOpen));
+  }, [isOpen]);
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
   const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
@@ -511,7 +548,7 @@ export function L11CabinetDisplay() {
           <Button
             variant={isOpen ? "default" : "outline"}
             size="sm"
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => handleIsOpenChange(!isOpen)}
           >
             {isOpen ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
             {isOpen ? "關閉機殼" : "打開機殼"}
@@ -625,6 +662,12 @@ export function L11CabinetDisplay() {
                           <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.bmc_address}</p>
                         </div>
                       )}
+                      {selectedComponent.details.os_mac_address && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">NIC MAC地址:</span>
+                          <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.os_mac_address}</p>
+                        </div>
+                      )}
                       {selectedComponent.details.ubuntu_version && (
                         <div>
                           <span className="font-medium text-blue-800 dark:text-blue-200">Ubuntu版本:</span>
@@ -644,7 +687,7 @@ export function L11CabinetDisplay() {
                   variant="outline" 
                   size="sm" 
                   className="mt-3" 
-                  onClick={() => setSelectedComponent(null)}
+                  onClick={handleSelectedComponentClear}
                 >
                   清除選擇
                 </Button>
