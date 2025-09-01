@@ -209,9 +209,21 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       componentType: 'Power Supplies (下)'
     });
   }
+  currentY -= config.bottomPowerSupplies.count * 0.4;
+
+  // SRC units (底下新增兩層)
+  for (let i = 0; i < 2; i++) {
+    components.push({
+      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
+      color: '#8b5cf6', // 紫色代表SRC
+      size: [3.8, 0.35, 2] as [number, number, number],
+      serialNumber: `SRC-${i + 1}`,
+      componentType: 'SRC Units'
+    });
+  }
   
-  // Calculate the bottom position for tight fit
-  const lowestComponentY = currentY - config.bottomPowerSupplies.count * 0.4;
+  // Calculate the bottom position for tight fit (including SRC units)
+  const lowestComponentY = currentY - 2 * 0.4; // 2 SRC units
   
   // Calculate actual cabinet bounds based on component positions
   const topComponentY = cabinetHeight / 2 - 0.1; // Position of top component
@@ -564,6 +576,51 @@ export function L11CabinetDisplay() {
         </div>
       </div>
 
+      {/* 機櫃清單 */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>機櫃組件清單</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <h4 className="font-semibold mb-2 text-blue-600">Top Of Rack Switch</h4>
+              <div className="space-y-1">
+                {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn) => (
+                  <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-2 py-1 rounded">{sn}</div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2 text-green-600">Compute Trays</h4>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {[...config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count),
+                  ...config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count)].map((sn) => (
+                  <div key={sn} className="text-sm font-mono bg-green-50 dark:bg-green-950 px-2 py-1 rounded">{sn}</div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2 text-amber-600">Power Supplies</h4>
+              <div className="space-y-1">
+                {[...config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count),
+                  ...config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count)].map((sn) => (
+                  <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-2 py-1 rounded">{sn}</div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2 text-purple-600">SRC Units</h4>
+              <div className="space-y-1">
+                {Array.from({length: 2}, (_, i) => `SRC-${i + 1}`).map((sn) => (
+                  <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-2 py-1 rounded">{sn}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* 3D Display */}
         <Card className="lg:col-span-2">
@@ -618,10 +675,10 @@ export function L11CabinetDisplay() {
                     <span className="font-medium text-blue-800 dark:text-blue-200">組件類型:</span>
                     <p className="text-gray-700 dark:text-gray-300">{selectedComponent.type}</p>
                   </div>
-                  <div>
-                    <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
-                    <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.sn}</p>
-                  </div>
+                   <div>
+                     <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
+                     <p className="text-yellow-600 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
+                   </div>
                   {selectedComponent.details && (
                     <>
                       <div>
@@ -754,28 +811,6 @@ export function L11CabinetDisplay() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{totalSwitches}</div>
-            <div className="text-sm text-muted-foreground">交換機托盤</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-emerald-600">{totalComponents}</div>
-            <div className="text-sm text-muted-foreground">運算托盤</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-amber-600">{totalPowerSupplies}</div>
-            <div className="text-sm text-muted-foreground">電源供應單元</div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
