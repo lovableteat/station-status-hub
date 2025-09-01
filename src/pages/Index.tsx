@@ -22,6 +22,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { BomCenter } from "@/components/bom/BomCenter";
 import { L11CabinetDisplay } from "@/components/cabinet/L11CabinetDisplay";
+import { CabinetTestTracker } from "@/components/cabinet/CabinetTestTracker";
 
 
 const Index = () => {
@@ -72,6 +73,12 @@ const Index = () => {
         return (
           <PermissionGuard module="l11-cabinet">
             <L11CabinetDisplay />
+          </PermissionGuard>
+        );
+      case "cabinet-tracker":
+        return (
+          <PermissionGuard module="cabinet-tracker">
+            <CabinetTestTracker />
           </PermissionGuard>
         );
       case "test-tracker":
