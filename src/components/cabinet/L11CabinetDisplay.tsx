@@ -132,8 +132,9 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   // Calculate total height first
   const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
   const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
+  const srcUnitsHeight = config.srcUnits.count * 0.4;
   const totalSlotHeight = totalSlots * slotHeight;
-  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + 0.2; // Minimal spacing for frame
+  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + srcUnitsHeight + 0.2; // Minimal spacing for frame
   
   // Calculate components based on configuration
   const components = [];
@@ -211,19 +212,19 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   }
   currentY -= config.bottomPowerSupplies.count * 0.4;
 
-  // SRC units (底下新增兩層)
-  for (let i = 0; i < 2; i++) {
+  // SRC units
+  for (let i = 0; i < config.srcUnits.count; i++) {
     components.push({
       position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: '#8b5cf6', // 紫色代表SRC
+      color: config.srcUnits.color,
       size: [3.8, 0.35, 2] as [number, number, number],
-      serialNumber: `SRC-${i + 1}`,
+      serialNumber: config.srcUnits.serialNumbers[i] || `SRC-${i + 1}`,
       componentType: 'SRC Units'
     });
   }
   
   // Calculate the bottom position for tight fit (including SRC units)
-  const lowestComponentY = currentY - 2 * 0.4; // 2 SRC units
+  const lowestComponentY = currentY - config.srcUnits.count * 0.4;
   
   // Calculate actual cabinet bounds based on component positions
   const topComponentY = cabinetHeight / 2 - 0.1; // Position of top component
@@ -466,6 +467,11 @@ export function L11CabinetDisplay() {
         count: 4, 
         color: '#f59e0b', 
         serialNumbers: Array.from({length: 4}, (_, i) => `PSU-B-${String(i + 1).padStart(3, '0')}`) 
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#8b5cf6', 
+        serialNumbers: Array.from({length: 2}, (_, i) => `SRC-${String(i + 1).padStart(3, '0')}`) 
       }
     };
   });
@@ -546,6 +552,7 @@ export function L11CabinetDisplay() {
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
   const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
   const totalPowerSupplies = config.topPowerSupplies.count + config.bottomPowerSupplies.count;
+  const totalSrcUnits = config.srcUnits.count;
 
   return (
     <div className="p-6 space-y-6">
@@ -553,7 +560,7 @@ export function L11CabinetDisplay() {
         <div>
           <BackButton />
           <h1 className="text-3xl font-bold text-foreground mt-2">L11機櫃展示</h1>
-          <p className="text-muted-foreground">3D可組態機櫃結構展示</p>
+          <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
         
         <div className="flex gap-2">
@@ -576,50 +583,6 @@ export function L11CabinetDisplay() {
         </div>
       </div>
 
-      {/* 機櫃清單 */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>機櫃組件清單</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <h4 className="font-semibold mb-2 text-blue-600">Top Of Rack Switch</h4>
-              <div className="space-y-1">
-                {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn) => (
-                  <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-2 py-1 rounded">{sn}</div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2 text-green-600">Compute Trays</h4>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {[...config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count),
-                  ...config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count)].map((sn) => (
-                  <div key={sn} className="text-sm font-mono bg-green-50 dark:bg-green-950 px-2 py-1 rounded">{sn}</div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2 text-amber-600">Power Supplies</h4>
-              <div className="space-y-1">
-                {[...config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count),
-                  ...config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count)].map((sn) => (
-                  <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-2 py-1 rounded">{sn}</div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2 text-purple-600">SRC Units</h4>
-              <div className="space-y-1">
-                {Array.from({length: 2}, (_, i) => `SRC-${i + 1}`).map((sn) => (
-                  <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-2 py-1 rounded">{sn}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* 3D Display */}
@@ -677,7 +640,7 @@ export function L11CabinetDisplay() {
                   </div>
                    <div>
                      <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
-                     <p className="text-yellow-600 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
+                     <p className="text-yellow-500 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
                    </div>
                   {selectedComponent.details && (
                     <>
@@ -760,56 +723,150 @@ export function L11CabinetDisplay() {
             onConfigChange={handleConfigChange}
           />
           
-          {/* Information Panel */}
-          <Card>
-            <CardHeader>
-              <CardTitle>機櫃組件說明</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-3 w-3 bg-blue-500 rounded" />
-                  <Badge variant="outline">交換機</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  網路交換設備，負責資料傳輸
-                </p>
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-3 w-3 bg-emerald-500 rounded" />
-                  <Badge variant="outline">運算單元</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  主要處理運算任務的伺服器托盤
-                </p>
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-3 w-3 bg-amber-500 rounded" />
-                  <Badge variant="outline">電源供應</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  提供穩定電力供應的冗餘電源
-                </p>
-              </div>
-
-              <div className="pt-4 border-t">
-                <h4 className="font-semibold mb-2">操作說明</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• 滑鼠拖拽旋轉視角</li>
-                  <li>• 滾輪縮放檢視</li>
-                  <li>• 點擊組件檢視SN碼</li>
-                  <li>• 左側面板調整配置</li>
-                  <li>• 即時3D預覽更新</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+      
+      {/* 機櫃組裝清單 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>機櫃組裝清單</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* 網路交換設備 */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-blue-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-blue-600">網路交換設備</h3>
+                <Badge variant="outline">{config.topOfRackSwitch.count + config.switchTrays.count} 台</Badge>
+              </div>
+              <div className="pl-7 space-y-2">
+                <div>
+                  <h4 className="font-medium mb-2">Top Of Rack Switch</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-blue-600 dark:text-blue-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Switch Trays</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.switchTrays.serialNumbers.slice(0, config.switchTrays.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-blue-600 dark:text-blue-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 運算單元 */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-emerald-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-emerald-600">運算單元</h3>
+                <Badge variant="outline">{config.computeTrays1.count + config.computeTrays2.count} 台</Badge>
+              </div>
+              <div className="pl-7 space-y-2">
+                <div>
+                  <h4 className="font-medium mb-2">10 Compute Trays</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-emerald-600 dark:text-emerald-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">8 Compute Trays</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-emerald-600 dark:text-emerald-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 電源供應單元 */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-amber-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-amber-600">電源供應單元</h3>
+                <Badge variant="outline">{config.topPowerSupplies.count + config.bottomPowerSupplies.count} 台</Badge>
+              </div>
+              <div className="pl-7 space-y-2">
+                <div>
+                  <h4 className="font-medium mb-2">Power Supplies (上)</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-amber-600 dark:text-amber-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Power Supplies (下)</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count).map((sn, index) => (
+                      <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border">
+                        <div className="font-medium">#{index + 1}</div>
+                        <div className="text-amber-600 dark:text-amber-400">{sn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SRC單元 */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-purple-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-purple-600">SRC單元</h3>
+                <Badge variant="outline">{config.srcUnits.count} 台</Badge>
+              </div>
+              <div className="pl-7">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {config.srcUnits.serialNumbers.slice(0, config.srcUnits.count).map((sn, index) => (
+                    <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border">
+                      <div className="font-medium">#{index + 1}</div>
+                      <div className="text-purple-600 dark:text-purple-400">{sn}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 總計統計 */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">總組件數量統計：</span>
+                <div className="flex gap-4">
+                  <span>交換機: {totalSwitches}台</span>
+                  <span>運算單元: {totalComponents}台</span>
+                  <span>電源供應: {totalPowerSupplies}台</span>
+                  <span>SRC單元: {totalSrcUnits}台</span>
+                  <span className="font-semibold">總計: {totalSwitches + totalComponents + totalPowerSupplies + totalSrcUnits}台</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
     </div>
   );

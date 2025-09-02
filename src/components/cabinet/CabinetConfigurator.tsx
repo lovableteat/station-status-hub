@@ -23,6 +23,7 @@ export interface CabinetConfig {
   switchTrays: ComponentConfig;
   computeTrays2: ComponentConfig;
   bottomPowerSupplies: ComponentConfig;
+  srcUnits: ComponentConfig;
 }
 
 interface CabinetConfiguratorProps {
@@ -145,6 +146,11 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
         count: 1, 
         color: '#f59e0b', 
         serialNumbers: ['PSU-002'] 
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#8b5cf6', 
+        serialNumbers: ['SRC-001', 'SRC-002'] 
       }
     });
   };
@@ -155,7 +161,8 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
     { key: 'computeTrays1', label: '10 Compute Trays', max: 15 },
     { key: 'switchTrays', label: '9 Switch Trays', max: 12 },
     { key: 'computeTrays2', label: '8 Compute Trays', max: 15 },
-    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 2 }
+    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 2 },
+    { key: 'srcUnits', label: 'SRC Units', max: 5 }
   ];
 
   const totalComponents = Object.values(config).reduce((sum, comp) => sum + comp.count, 0);
