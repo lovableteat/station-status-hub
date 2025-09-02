@@ -431,7 +431,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   <SelectValue placeholder="選擇問題來源" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">無</SelectItem>
+                  <SelectItem value="none">無</SelectItem>
                   <SelectItem value="L10">L10</SelectItem>
                   <SelectItem value="L11">L11</SelectItem>
                   <SelectItem value="EK7">EK7</SelectItem>
