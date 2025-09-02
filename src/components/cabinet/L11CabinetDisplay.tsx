@@ -475,6 +475,23 @@ export function L11CabinetDisplay() {
       }
     };
   });
+
+  // 自動保存狀態到localStorage
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(autoRotate));
+  }, [autoRotate]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(isOpen));
+  }, [isOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-selectedComponent', JSON.stringify(selectedComponent));
+  }, [selectedComponent]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
+  }, [config]);
   
   const handleReset = () => {
     setAutoRotate(true);
@@ -536,18 +553,6 @@ export function L11CabinetDisplay() {
     localStorage.removeItem('l11-cabinet-selectedComponent');
   };
 
-  // 保存狀態到localStorage
-  useEffect(() => {
-    localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
-  }, [config]);
-
-  useEffect(() => {
-    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(autoRotate));
-  }, [autoRotate]);
-
-  useEffect(() => {
-    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(isOpen));
-  }, [isOpen]);
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
   const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
@@ -743,25 +748,41 @@ export function L11CabinetDisplay() {
               <div className="pl-7 space-y-2">
                 <div>
                   <h4 className="font-medium mb-2">Top Of Rack Switch</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-blue-600 dark:text-blue-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('Top Of Rack Switch', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">Switch Trays</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.switchTrays.serialNumbers.slice(0, config.switchTrays.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-blue-600 dark:text-blue-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.switchTrays.serialNumbers.slice(0, config.switchTrays.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('9 Switch Trays', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
               </div>
             </div>
@@ -776,25 +797,41 @@ export function L11CabinetDisplay() {
               <div className="pl-7 space-y-2">
                 <div>
                   <h4 className="font-medium mb-2">10 Compute Trays</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-emerald-600 dark:text-emerald-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('10 Compute Trays', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">8 Compute Trays</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-emerald-600 dark:text-emerald-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('8 Compute Trays', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
               </div>
             </div>
@@ -809,25 +846,41 @@ export function L11CabinetDisplay() {
               <div className="pl-7 space-y-2">
                 <div>
                   <h4 className="font-medium mb-2">Power Supplies (上)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-amber-600 dark:text-amber-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('Power Supplies (上)', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">Power Supplies (下)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count).map((sn, index) => (
-                      <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-amber-600 dark:text-amber-400">{sn}</div>
-                      </div>
-                    ))}
-                  </div>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count).map((sn, index) => (
+                       <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
+                         <div className="font-medium">#{index + 1}</div>
+                         <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
+                         <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           className="mt-1 w-full text-xs h-6"
+                           onClick={() => handleComponentClick('Power Supplies (下)', sn)}
+                         >
+                           選擇機台
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
               </div>
             </div>
@@ -840,14 +893,22 @@ export function L11CabinetDisplay() {
                 <Badge variant="outline">{config.srcUnits.count} 台</Badge>
               </div>
               <div className="pl-7">
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                  {config.srcUnits.serialNumbers.slice(0, config.srcUnits.count).map((sn, index) => (
-                    <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border">
-                      <div className="font-medium">#{index + 1}</div>
-                      <div className="text-purple-600 dark:text-purple-400">{sn}</div>
-                    </div>
-                  ))}
-                </div>
+                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                   {config.srcUnits.serialNumbers.slice(0, config.srcUnits.count).map((sn, index) => (
+                     <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border hover:bg-purple-100 dark:hover:bg-purple-900 cursor-pointer transition-colors">
+                       <div className="font-medium">#{index + 1}</div>
+                       <div className="text-purple-600 dark:text-purple-400 font-bold">{sn}</div>
+                       <Button 
+                         variant="ghost" 
+                         size="sm" 
+                         className="mt-1 w-full text-xs h-6"
+                         onClick={() => handleComponentClick('SRC Units', sn)}
+                       >
+                         選擇機台
+                       </Button>
+                     </div>
+                   ))}
+                 </div>
               </div>
             </div>
 

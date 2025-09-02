@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,12 +41,20 @@ const colorOptions = [
 ];
 
 export function CabinetConfigurator({ config, onConfigChange }: CabinetConfiguratorProps) {
-  const [activeTab, setActiveTab] = useState('count');
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('l11-cabinet-activeTab');
+    return saved || 'count';
+  });
   const [showSystemSelector, setShowSystemSelector] = useState(false);
   const [selectedSystemDetails, setSelectedSystemDetails] = useState<any>(null);
   const [currentEditingComponent, setCurrentEditingComponent] = useState<{key: keyof CabinetConfig, index: number} | null>(null);
   
   const { systems } = useUnifiedData();
+
+  // 保存當前Tab狀態
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-activeTab', activeTab);
+  }, [activeTab]);
 
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
     const newCount = Math.max(0, Math.min(20, count));
