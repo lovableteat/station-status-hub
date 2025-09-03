@@ -36,8 +36,10 @@ export function SystemEditDialog({
     assigned_engineer: assignedEngineer,
     model: model || 'GB300',
     serial_number: serialNumber || '',
+    cabinet: '',
     os_mac_address: '',
     bmc_address: '',
+    old_bmc_address: '',
     bom_90: '',
     ubuntu_version: '',
     cuda_version: '',
@@ -63,7 +65,7 @@ export function SystemEditDialog({
         .from('test_systems')
         .select('*')
         .eq('id', systemId)
-        .single();
+        .maybeSingle();
       
       if (data) {
         setEditValues({
@@ -71,8 +73,10 @@ export function SystemEditDialog({
           assigned_engineer: data.assigned_engineer || '',
           model: data.model || 'GB300',
           serial_number: data.serial_number || '',
+          cabinet: (data as any).cabinet || '',
           os_mac_address: data.os_mac_address || '',
           bmc_address: data.bmc_address || '',
+          old_bmc_address: (data as any).old_bmc_address || '',
           bom_90: data.bom_90 || '',
           ubuntu_version: data.ubuntu_version || '',
           cuda_version: data.cuda_version || '',
@@ -95,8 +99,10 @@ export function SystemEditDialog({
           assigned_engineer: editValues.assigned_engineer,
           model: editValues.model,
           serial_number: editValues.serial_number,
+          cabinet: editValues.cabinet,
           os_mac_address: editValues.os_mac_address,
           bmc_address: editValues.bmc_address,
+          old_bmc_address: editValues.old_bmc_address,
           bom_90: editValues.bom_90,
           ubuntu_version: editValues.ubuntu_version,
           cuda_version: editValues.cuda_version,
@@ -164,6 +170,16 @@ export function SystemEditDialog({
           </div>
 
           <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機櫃</Label>
+            <Input
+              value={editValues.cabinet}
+              onChange={(e) => setEditValues({...editValues, cabinet: e.target.value})}
+              placeholder="請輸入機櫃..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
             <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
             <Input
               value={editValues.model}
@@ -199,6 +215,16 @@ export function SystemEditDialog({
               value={editValues.bmc_address}
               onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
               placeholder="請輸入 BMC Address..."
+              className={isMobile ? "h-12 text-base" : ""}
+            />
+          </div>
+
+          <div>
+            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>舊 BMC Address</Label>
+            <Input
+              value={editValues.old_bmc_address}
+              onChange={(e) => setEditValues({...editValues, old_bmc_address: e.target.value})}
+              placeholder="請輸入舊 BMC Address..."
               className={isMobile ? "h-12 text-base" : ""}
             />
           </div>
