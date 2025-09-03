@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
+import { SystemSelectionDialog } from './SystemSelectionDialog';
+import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
 
@@ -29,6 +31,14 @@ interface SelectedComponent {
   type: string;
   sn: string;
   details?: SystemDetails;
+}
+
+interface ComponentSystemMapping {
+  [key: string]: {
+    systemId: string;
+    systemName: string;
+    serialNumber: string;
+  };
 }
 
 interface CabinetRackProps {
@@ -419,6 +429,18 @@ function ErrorFallback() {
 }
 
 export function L11CabinetDisplay() {
+  // 引入系統資料
+  const { systems } = useUnifiedData();
+  
+  // 創建模擬的系統進度數據
+  const systemProgress = systems.map(system => ({
+    system,
+    progress: system.overall_progress || 0,
+    status: system.status || 'Not Start',
+    test_items_completed: Math.floor((system.overall_progress || 0) / 10),
+    test_items_total: 10
+  }));
+  
   // 從localStorage讀取和保存狀態
   const [autoRotate, setAutoRotate] = useState(() => {
     const saved = localStorage.getItem('l11-cabinet-autoRotate');
@@ -433,6 +455,23 @@ export function L11CabinetDisplay() {
   const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
     const saved = localStorage.getItem('l11-cabinet-selectedComponent');
     return saved ? JSON.parse(saved) : null;
+  });
+
+  // 組件到系統的映射
+  const [componentSystemMapping, setComponentSystemMapping] = useState<ComponentSystemMapping>(() => {
+    const saved = localStorage.getItem('l11-cabinet-componentSystemMapping');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // 系統選擇對話框狀態
+  const [systemSelectionDialog, setSystemSelectionDialog] = useState<{
+    open: boolean;
+    componentType: string;
+    componentSn: string;
+  }>({
+    open: false,
+    componentType: '',
+    componentSn: ''
   });
   
   const [config, setConfig] = useState<CabinetConfig>(() => {
@@ -492,43 +531,42 @@ export function L11CabinetDisplay() {
   useEffect(() => {
     localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(componentSystemMapping));
+  }, [componentSystemMapping]);
   
   const handleReset = () => {
     setAutoRotate(true);
     localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(true));
   };
 
-  const fetchSystemDetails = async (serialNumber: string): Promise<SystemDetails | undefined> => {
-    try {
-      const { data, error } = await supabase
-        .from('test_systems')
-        .select('*')
-        .eq('serial_number', serialNumber)
-        .single();
-      
-      if (error || !data) return undefined;
-      
-      return {
-        system_name: data.system_name,
-        model: data.model,
-        current_station: data.current_station,
-        status: data.status,
-        assigned_engineer: data.assigned_engineer,
-        overall_progress: data.overall_progress,
-        team: data.team,
-        bmc_address: data.bmc_address,
-        os_mac_address: data.os_mac_address, // NIC MAC Address
-        ubuntu_version: data.ubuntu_version,
-        cuda_version: data.cuda_version
-      };
-    } catch (error) {
-      console.error('Error fetching system details:', error);
-      return undefined;
-    }
-  };
-
   const handleComponentClick = async (componentType: string, serialNumber: string) => {
-    const details = await fetchSystemDetails(serialNumber);
+    // 檢查是否有映射的系統
+    const mappingKey = `${componentType}-${serialNumber}`;
+    const mappedSystem = componentSystemMapping[mappingKey];
+    
+    let details: SystemDetails | undefined;
+    if (mappedSystem) {
+      // 如果有映射的系統，使用該系統的資訊
+      const system = systems.find(s => s.id === mappedSystem.systemId);
+      if (system) {
+        details = {
+          system_name: system.system_name,
+          model: system.model,
+          current_station: system.current_station,
+          status: system.status,
+          assigned_engineer: system.assigned_engineer,
+          overall_progress: system.overall_progress,
+          team: 'N/A', // 從新的系統資料結構中沒有team欄位
+          bmc_address: 'N/A',
+          os_mac_address: 'N/A',
+          ubuntu_version: system.ubuntu_version,
+          cuda_version: system.cuda_version
+        };
+      }
+    }
+    
     const newSelectedComponent = { 
       type: componentType, 
       sn: serialNumber,
@@ -551,6 +589,34 @@ export function L11CabinetDisplay() {
   const handleSelectedComponentClear = () => {
     setSelectedComponent(null);
     localStorage.removeItem('l11-cabinet-selectedComponent');
+  };
+
+  // 開啟系統選擇對話框
+  const handleSelectSystem = (componentType: string, componentSn: string) => {
+    setSystemSelectionDialog({
+      open: true,
+      componentType,
+      componentSn
+    });
+  };
+
+  // 選擇系統後的處理
+  const handleSystemSelected = (system: any) => {
+    const mappingKey = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+    const newMapping = {
+      ...componentSystemMapping,
+      [mappingKey]: {
+        systemId: system.id,
+        systemName: system.system_name,
+        serialNumber: system.serial_number || system.system_name
+      }
+    };
+    
+    setComponentSystemMapping(newMapping);
+    localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
+    
+    // 更新選中的組件
+    handleComponentClick(systemSelectionDialog.componentType, systemSelectionDialog.componentSn);
   };
 
 
@@ -753,14 +819,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('Top Of Rack Switch', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`Top Of Rack Switch-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`Top Of Rack Switch-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('Top Of Rack Switch', sn)}
+                            >
+                              {componentSystemMapping[`Top Of Rack Switch-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -772,14 +845,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('9 Switch Trays', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`9 Switch Trays-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`9 Switch Trays-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('9 Switch Trays', sn)}
+                            >
+                              {componentSystemMapping[`9 Switch Trays-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -802,14 +882,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('10 Compute Trays', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`10 Compute Trays-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`10 Compute Trays-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('10 Compute Trays', sn)}
+                            >
+                              {componentSystemMapping[`10 Compute Trays-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -821,14 +908,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('8 Compute Trays', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`8 Compute Trays-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`8 Compute Trays-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('8 Compute Trays', sn)}
+                            >
+                              {componentSystemMapping[`8 Compute Trays-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -851,14 +945,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('Power Supplies (上)', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`Power Supplies (上)-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`Power Supplies (上)-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('Power Supplies (上)', sn)}
+                            >
+                              {componentSystemMapping[`Power Supplies (上)-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -870,14 +971,21 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="mt-1 w-full text-xs h-6"
-                           onClick={() => handleComponentClick('Power Supplies (下)', sn)}
-                         >
-                           選擇機台
-                         </Button>
+                          <div className="mt-1 space-y-1">
+                            {componentSystemMapping[`Power Supplies (下)-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                已配置: {componentSystemMapping[`Power Supplies (下)-${sn}`].systemName}
+                              </div>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs h-6"
+                              onClick={() => handleSelectSystem('Power Supplies (下)', sn)}
+                            >
+                              {componentSystemMapping[`Power Supplies (下)-${sn}`] ? '重新選擇' : '選擇機台'}
+                            </Button>
+                          </div>
                        </div>
                      ))}
                    </div>
@@ -898,14 +1006,21 @@ export function L11CabinetDisplay() {
                      <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border hover:bg-purple-100 dark:hover:bg-purple-900 cursor-pointer transition-colors">
                        <div className="font-medium">#{index + 1}</div>
                        <div className="text-purple-600 dark:text-purple-400 font-bold">{sn}</div>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="mt-1 w-full text-xs h-6"
-                         onClick={() => handleComponentClick('SRC Units', sn)}
-                       >
-                         選擇機台
-                       </Button>
+                        <div className="mt-1 space-y-1">
+                          {componentSystemMapping[`SRC Units-${sn}`] && (
+                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                              已配置: {componentSystemMapping[`SRC Units-${sn}`].systemName}
+                            </div>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-full text-xs h-6"
+                            onClick={() => handleSelectSystem('SRC Units', sn)}
+                          >
+                            {componentSystemMapping[`SRC Units-${sn}`] ? '重新選擇' : '選擇機台'}
+                          </Button>
+                        </div>
                      </div>
                    ))}
                  </div>
@@ -929,6 +1044,16 @@ export function L11CabinetDisplay() {
         </CardContent>
       </Card>
 
+      {/* 系統選擇對話框 */}
+      <SystemSelectionDialog
+        open={systemSelectionDialog.open}
+        onOpenChange={(open) => setSystemSelectionDialog(prev => ({ ...prev, open }))}
+        componentType={systemSelectionDialog.componentType}
+        componentSn={systemSelectionDialog.componentSn}
+        systems={systems}
+        systemProgress={systemProgress}
+        onSystemSelect={handleSystemSelected}
+      />
     </div>
   );
 }
