@@ -1916,12 +1916,14 @@ export type Database = {
           assigned_engineer: string | null
           bmc_address: string | null
           bom_90: string | null
+          cabinet: string | null
           created_at: string
           cuda_version: string | null
           current_station: string | null
           exclude_from_dashboard: boolean | null
           id: string
           model: string | null
+          old_bmc_address: string | null
           os_mac_address: string | null
           overall_progress: number | null
           serial_number: string | null
@@ -1937,12 +1939,14 @@ export type Database = {
           assigned_engineer?: string | null
           bmc_address?: string | null
           bom_90?: string | null
+          cabinet?: string | null
           created_at?: string
           cuda_version?: string | null
           current_station?: string | null
           exclude_from_dashboard?: boolean | null
           id?: string
           model?: string | null
+          old_bmc_address?: string | null
           os_mac_address?: string | null
           overall_progress?: number | null
           serial_number?: string | null
@@ -1958,12 +1962,14 @@ export type Database = {
           assigned_engineer?: string | null
           bmc_address?: string | null
           bom_90?: string | null
+          cabinet?: string | null
           created_at?: string
           cuda_version?: string | null
           current_station?: string | null
           exclude_from_dashboard?: boolean | null
           id?: string
           model?: string | null
+          old_bmc_address?: string | null
           os_mac_address?: string | null
           overall_progress?: number | null
           serial_number?: string | null
