@@ -29,6 +29,16 @@ export interface CabinetConfig {
 interface CabinetConfiguratorProps {
   config: CabinetConfig;
   onConfigChange: (config: CabinetConfig) => void;
+  componentSystemMapping?: ComponentSystemMapping;
+  onComponentSystemMappingChange?: (mapping: ComponentSystemMapping) => void;
+}
+
+interface ComponentSystemMapping {
+  [key: string]: {
+    systemId: string;
+    systemName: string;
+    serialNumber: string;
+  };
 }
 
 const colorOptions = [
@@ -40,7 +50,7 @@ const colorOptions = [
   { value: '#6b7280', label: '灰色', className: 'bg-gray-500' },
 ];
 
-export function CabinetConfigurator({ config, onConfigChange }: CabinetConfiguratorProps) {
+export function CabinetConfigurator({ config, onConfigChange, componentSystemMapping, onComponentSystemMappingChange }: CabinetConfiguratorProps) {
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('l11-cabinet-activeTab');
     return saved || 'count';
@@ -57,7 +67,8 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
   }, [activeTab]);
 
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
-    const newCount = Math.max(0, Math.min(20, count));
+    // Top Of Rack Switch 固定為 2 個
+    const newCount = key === 'topOfRackSwitch' ? 2 : Math.max(0, Math.min(20, count));
     const component = config[key];
     
     // Adjust serial numbers array based on new count
@@ -94,6 +105,7 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
 
   const updateSerialNumber = (key: keyof CabinetConfig, index: number, serialNumber: string) => {
     const component = config[key];
+    const oldSerialNumber = component.serialNumbers[index];
     const newSerialNumbers = [...component.serialNumbers];
     newSerialNumbers[index] = serialNumber;
 
@@ -104,6 +116,37 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
         serialNumbers: newSerialNumbers
       }
     });
+
+    // 同步更新 componentSystemMapping
+    if (componentSystemMapping && onComponentSystemMappingChange) {
+      const componentTypeMap: { [key: string]: string } = {
+        'topOfRackSwitch': 'Top Of Rack Switch',
+        'switchTrays': '9 Switch Trays',
+        'computeTrays1': '10 Compute Trays',
+        'computeTrays2': '8 Compute Trays',
+        'topPowerSupplies': 'Power Supplies (上)',
+        'bottomPowerSupplies': 'Power Supplies (下)',
+        'srcUnits': 'SRC Units'
+      };
+      
+      const componentTypeName = componentTypeMap[key];
+      if (componentTypeName) {
+        const oldMappingKey = `${componentTypeName}-${oldSerialNumber}`;
+        const newMappingKey = `${componentTypeName}-${serialNumber}`;
+        
+        const newMapping = { ...componentSystemMapping };
+        
+        // 如果舊的映射存在，移除它並創建新的映射
+        if (newMapping[oldMappingKey]) {
+          const mappingData = newMapping[oldMappingKey];
+          delete newMapping[oldMappingKey];
+          newMapping[newMappingKey] = mappingData;
+          
+          onComponentSystemMappingChange(newMapping);
+          localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
+        }
+      }
+    }
   };
 
   const openSystemSelector = (key: keyof CabinetConfig, index: number) => {
@@ -126,9 +169,9 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
   const resetToDefault = () => {
     onConfigChange({
       topOfRackSwitch: { 
-        count: 1, 
+        count: 2, 
         color: '#3b82f6', 
-        serialNumbers: ['TOR-001'] 
+        serialNumbers: ['TOR-001', 'TOR-002'] 
       },
       topPowerSupplies: { 
         count: 1, 
@@ -164,7 +207,7 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
   };
 
   const configItems = [
-    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch', max: 3 },
+    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch', max: 2 },
     { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 2 },
     { key: 'computeTrays1', label: '10 Compute Trays', max: 15 },
     { key: 'switchTrays', label: '9 Switch Trays', max: 12 },
@@ -220,32 +263,33 @@ export function CabinetConfigurator({ config, onConfigChange }: CabinetConfigura
                       />
                       {item.label}
                     </Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count - 1)}
-                        disabled={component.count <= 0}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        value={component.count}
-                        onChange={(e) => updateComponentCount(item.key as keyof CabinetConfig, parseInt(e.target.value) || 0)}
-                        className="w-16 text-center"
-                        min="0"
-                        max={item.max}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count + 1)}
-                        disabled={component.count >= item.max}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count - 1)}
+                          disabled={component.count <= 0 || (item.key === 'topOfRackSwitch' && component.count <= 2)}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          value={component.count}
+                          onChange={(e) => updateComponentCount(item.key as keyof CabinetConfig, parseInt(e.target.value) || 0)}
+                          className="w-16 text-center"
+                          min={item.key === 'topOfRackSwitch' ? "2" : "0"}
+                          max={item.max}
+                          disabled={item.key === 'topOfRackSwitch'}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count + 1)}
+                          disabled={component.count >= item.max || (item.key === 'topOfRackSwitch' && component.count >= 2)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
                   </div>
                 );
               })}
