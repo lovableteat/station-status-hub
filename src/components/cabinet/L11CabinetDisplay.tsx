@@ -137,111 +137,80 @@ interface CabinetSceneProps {
 
 function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: CabinetSceneProps) {
   const frameColor = '#1a1a1a';
-  const slotHeight = 0.35;
   
-  // Calculate total height first
-  const totalSlots = config.topOfRackSwitch.count + config.computeTrays1.count + config.switchTrays.count + config.computeTrays2.count;
-  const totalPowerSupplyHeight = (config.topPowerSupplies.count + config.bottomPowerSupplies.count) * 0.4;
-  const srcUnitsHeight = config.srcUnits.count * 0.4;
-  const totalSlotHeight = totalSlots * slotHeight;
-  const cabinetHeight = totalSlotHeight + totalPowerSupplyHeight + srcUnitsHeight + 0.2; // Minimal spacing for frame
+  // 根據圖像重新定義機櫃結構 - 從上到下的實際排列
+  const cabinetStructure = [
+    { type: 'topOfRackSwitch', count: 2, height: 0.25, color: '#d97706' }, // 橙色 Top Of Rack Switch
+    { type: 'computeTrays1', count: 10, height: 0.2, color: '#059669' },   // 綠色 Compute Trays 第一組
+    { type: 'switchTrays', count: 3, height: 0.25, color: '#2563eb' },     // 藍色 Switch Trays
+    { type: 'computeTrays2', count: 8, height: 0.2, color: '#059669' },    // 綠色 Compute Trays 第二組
+    { type: 'topPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies
+    { type: 'bottomPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies
+    { type: 'srcUnits', count: 2, height: 0.25, color: '#7c3aed' }         // 紫色 SRC Units
+  ];
   
-  // Calculate components based on configuration
+  // 計算機櫃總高度
+  const totalHeight = cabinetStructure.reduce((sum, section) => 
+    sum + (config[section.type as keyof CabinetConfig]?.count || section.count) * section.height, 0
+  ) + 0.5; // 添加頂部和底部間距
+  
   const components = [];
-  let currentY = cabinetHeight / 2 - 0.1; // Start from the very top
-
-  // Top Of Rack Switch - 設計成兩層結構
-  for (let i = 0; i < config.topOfRackSwitch.count; i++) {
-    // 第一層放在前面，第二層放在後面，形成前後兩層結構
-    const layerOffset = i === 0 ? 0.6 : -0.6; // 前後分層，間距1.2
-    components.push({
-      position: [0, currentY - (i * 0.1), layerOffset] as [number, number, number], // 減少垂直間距，主要用前後分層
-      color: config.topOfRackSwitch.color,
-      size: [3.8, 0.3, 1.6] as [number, number, number], // 縮小深度以適應分層
-      serialNumber: config.topOfRackSwitch.serialNumbers[i] || `TOR-${i + 1}`,
-      componentType: 'Top Of Rack Switch'
-    });
-  }
-  // 由於採用前後分層，垂直空間占用減少
-  currentY -= Math.max(config.topOfRackSwitch.count * 0.2, slotHeight);
-
-  // Power supplies (top)
-  for (let i = 0; i < config.topPowerSupplies.count; i++) {
-    components.push({
-      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: config.topPowerSupplies.color,
-      size: [3.8, 0.4, 2] as [number, number, number],
-      serialNumber: config.topPowerSupplies.serialNumbers[i] || `PSU-T-${i + 1}`,
-      componentType: 'Power Supplies (上)'
-    });
-  }
-  currentY -= config.topPowerSupplies.count * 0.4;
-
-  // First compute tray group (10 Compute Trays)
-  for (let i = 0; i < config.computeTrays1.count; i++) {
-    components.push({
-      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: config.computeTrays1.color,
-      size: [3.8, 0.25, 2] as [number, number, number],
-      serialNumber: config.computeTrays1.serialNumbers[i] || `CT1-${i + 1}`,
-      componentType: '10 Compute Trays'
-    });
-  }
-  currentY -= config.computeTrays1.count * slotHeight;
-
-  // Switch trays (9 Switch Trays)
-  for (let i = 0; i < config.switchTrays.count; i++) {
-    components.push({
-      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: config.switchTrays.color,
-      size: [3.8, 0.3, 2] as [number, number, number],
-      serialNumber: config.switchTrays.serialNumbers[i] || `SW-${i + 1}`,
-      componentType: '9 Switch Trays'
-    });
-  }
-  currentY -= config.switchTrays.count * slotHeight;
-
-  // Second compute tray group (8 Compute Trays)
-  for (let i = 0; i < config.computeTrays2.count; i++) {
-    components.push({
-      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
-      color: config.computeTrays2.color,
-      size: [3.8, 0.25, 2] as [number, number, number],
-      serialNumber: config.computeTrays2.serialNumbers[i] || `CT2-${i + 1}`,
-      componentType: '8 Compute Trays'
-    });
-  }
-  currentY -= config.computeTrays2.count * slotHeight;
-
-  // Bottom power supplies
-  for (let i = 0; i < config.bottomPowerSupplies.count; i++) {
-    components.push({
-      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: config.bottomPowerSupplies.color,
-      size: [3.8, 0.4, 2] as [number, number, number],
-      serialNumber: config.bottomPowerSupplies.serialNumbers[i] || `PSU-B-${i + 1}`,
-      componentType: 'Power Supplies (下)'
-    });
-  }
-  currentY -= config.bottomPowerSupplies.count * 0.4;
-
-  // SRC units
-  for (let i = 0; i < config.srcUnits.count; i++) {
-    components.push({
-      position: [0, currentY - (i * 0.4), 0] as [number, number, number],
-      color: config.srcUnits.color,
-      size: [3.8, 0.35, 2] as [number, number, number],
-      serialNumber: config.srcUnits.serialNumbers[i] || `SRC-${i + 1}`,
-      componentType: 'SRC Units'
-    });
+  let currentY = totalHeight / 2 - 0.1; // 從頂部開始
+  
+  // 組件類型名稱映射
+  function getComponentTypeName(type: string): string {
+    const typeMap: { [key: string]: string } = {
+      'topOfRackSwitch': 'Top Of Rack Switch',
+      'computeTrays1': '10 Compute Trays',
+      'computeTrays2': '8 Compute Trays', 
+      'switchTrays': '3 Switch Trays',
+      'topPowerSupplies': 'Power Supplies (上)',
+      'bottomPowerSupplies': 'Power Supplies (下)',
+      'srcUnits': 'SRC Units'
+    };
+    return typeMap[type] || type;
   }
   
-  // Calculate the bottom position for tight fit (including SRC units)
-  const lowestComponentY = currentY - config.srcUnits.count * 0.4;
+  // 根據實際結構創建組件
+  cabinetStructure.forEach((section) => {
+    const sectionConfig = config[section.type as keyof CabinetConfig];
+    const actualCount = sectionConfig?.count || section.count;
+    const actualColor = sectionConfig?.color || section.color;
+    
+    for (let i = 0; i < actualCount; i++) {
+      // 特殊處理Top Of Rack Switch的兩層設計
+      if (section.type === 'topOfRackSwitch' && actualCount === 2) {
+        const layerOffset = i === 0 ? 0.7 : -0.7; // 前後分層
+        components.push({
+          position: [0, currentY - (i * 0.1), layerOffset] as [number, number, number],
+          color: actualColor,
+          size: [3.6, section.height, 1.4] as [number, number, number],
+          serialNumber: sectionConfig?.serialNumbers[i] || `TOR-${i + 1}`,
+          componentType: 'Top Of Rack Switch'
+        });
+      } else {
+        components.push({
+          position: [0, currentY - (i * section.height), 0] as [number, number, number],
+          color: actualColor,
+          size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
+          serialNumber: sectionConfig?.serialNumbers[i] || `${section.type.toUpperCase()}-${i + 1}`,
+          componentType: getComponentTypeName(section.type)
+        });
+      }
+    }
+    
+    // 更新當前Y位置
+    if (section.type === 'topOfRackSwitch' && actualCount === 2) {
+      currentY -= section.height; // Top Of Rack Switch只占用一層空間
+    } else {
+      currentY -= actualCount * section.height;
+    }
+  });
   
-  // Calculate actual cabinet bounds based on component positions
-  const topComponentY = cabinetHeight / 2 - 0.1; // Position of top component
-  const actualCabinetHeight = topComponentY - lowestComponentY + 0.4; // Height from top to bottom component + component thickness
+  // 計算實際機櫃邊界
+  const topY = totalHeight / 2 - 0.1;
+  const bottomY = currentY;
+  const cabinetHeight = topY - bottomY + 0.3;
 
   return (
     <group>
@@ -249,8 +218,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       {!isOpen && (
         <>
           {/* Front glass panel */}
-          <mesh position={[0, (topComponentY + lowestComponentY) / 2, 2.1]}>
-            <boxGeometry args={[4, actualCabinetHeight, 0.05]} />
+          <mesh position={[0, (topY + bottomY) / 2, 2.1]}>
+            <boxGeometry args={[4, cabinetHeight, 0.05]} />
             <meshPhysicalMaterial 
               color="#111111"
               metalness={0.1}
@@ -265,8 +234,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
           </mesh>
           
           {/* Back panel */}
-          <mesh position={[0, (topComponentY + lowestComponentY) / 2, -2.1]}>
-            <boxGeometry args={[4, actualCabinetHeight, 0.1]} />
+          <mesh position={[0, (topY + bottomY) / 2, -2.1]}>
+            <boxGeometry args={[4, cabinetHeight, 0.1]} />
             <meshPhysicalMaterial 
               color={frameColor}
               metalness={0.8}
@@ -278,8 +247,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       )}
       
       {/* Side panels with better materials */}
-      <mesh position={[-2, (topComponentY + lowestComponentY) / 2, 0]}>
-        <boxGeometry args={[0.1, actualCabinetHeight, 4]} />
+      <mesh position={[-2, (topY + bottomY) / 2, 0]}>
+        <boxGeometry args={[0.1, cabinetHeight, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
           metalness={0.7} 
@@ -290,8 +259,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[2, (topComponentY + lowestComponentY) / 2, 0]}>
-        <boxGeometry args={[0.1, actualCabinetHeight, 4]} />
+      <mesh position={[2, (topY + bottomY) / 2, 0]}>
+        <boxGeometry args={[0.1, cabinetHeight, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
           metalness={0.7} 
@@ -302,8 +271,8 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      {/* Top and bottom panels - Adjusted to component bounds */}
-      <mesh position={[0, topComponentY + 0.2, 0]}>
+      {/* Top and bottom panels */}
+      <mesh position={[0, topY + 0.2, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -313,7 +282,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[0, lowestComponentY - 0.25, 0]}>
+      <mesh position={[0, bottomY - 0.25, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -323,21 +292,21 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
 
-      {/* Rack rails - Adjusted to component bounds */}
-      <mesh position={[-1.8, (topComponentY + lowestComponentY) / 2, 1.8]}>
-        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
+      {/* Rack rails */}
+      <mesh position={[-1.8, (topY + bottomY) / 2, 1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[1.8, (topComponentY + lowestComponentY) / 2, 1.8]}>
-        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
+      <mesh position={[1.8, (topY + bottomY) / 2, 1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[-1.8, (topComponentY + lowestComponentY) / 2, -1.8]}>
-        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
+      <mesh position={[-1.8, (topY + bottomY) / 2, -1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[1.8, (topComponentY + lowestComponentY) / 2, -1.8]}>
-        <boxGeometry args={[0.05, actualCabinetHeight - 0.2, 0.1]} />
+      <mesh position={[1.8, (topY + bottomY) / 2, -1.8]}>
+        <boxGeometry args={[0.05, cabinetHeight - 0.2, 0.1]} />
         <meshPhysicalMaterial color="#333333" metalness={0.9} roughness={0.1} />
       </mesh>
 
@@ -482,38 +451,38 @@ export function L11CabinetDisplay() {
     return savedConfig ? JSON.parse(savedConfig) : {
       topOfRackSwitch: { 
         count: 2, 
-        color: '#3b82f6', 
+        color: '#d97706', 
         serialNumbers: ['TOR-001', 'TOR-002'] 
       },
       topPowerSupplies: { 
-        count: 4, 
-        color: '#f59e0b', 
-        serialNumbers: Array.from({length: 4}, (_, i) => `PSU-T-${String(i + 1).padStart(3, '0')}`) 
+        count: 2, 
+        color: '#d97706', 
+        serialNumbers: ['PSU-T-001', 'PSU-T-002'] 
       },
       computeTrays1: { 
         count: 10, 
-        color: '#10b981', 
+        color: '#059669', 
         serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
       },
       switchTrays: { 
-        count: 9, 
-        color: '#3b82f6', 
-        serialNumbers: Array.from({length: 9}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+        count: 3, 
+        color: '#2563eb', 
+        serialNumbers: Array.from({length: 3}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
       },
       computeTrays2: { 
         count: 8, 
-        color: '#10b981', 
+        color: '#059669', 
         serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
       },
       bottomPowerSupplies: { 
-        count: 4, 
-        color: '#f59e0b', 
-        serialNumbers: Array.from({length: 4}, (_, i) => `PSU-B-${String(i + 1).padStart(3, '0')}`) 
+        count: 2, 
+        color: '#d97706', 
+        serialNumbers: ['PSU-B-001', 'PSU-B-002'] 
       },
       srcUnits: { 
         count: 2, 
-        color: '#8b5cf6', 
-        serialNumbers: Array.from({length: 2}, (_, i) => `SRC-${String(i + 1).padStart(3, '0')}`) 
+        color: '#7c3aed', 
+        serialNumbers: ['SRC-001', 'SRC-002'] 
       }
     };
   });
@@ -627,7 +596,7 @@ export function L11CabinetDisplay() {
     // 找到對應的配置項目並更新 SN 碼
     let configKey: keyof CabinetConfig | null = null;
     if (componentType === 'Top Of Rack Switch') configKey = 'topOfRackSwitch';
-    else if (componentType === '9 Switch Trays') configKey = 'switchTrays';
+    else if (componentType === '3 Switch Trays') configKey = 'switchTrays';
     else if (componentType === '10 Compute Trays') configKey = 'computeTrays1';
     else if (componentType === '8 Compute Trays') configKey = 'computeTrays2';
     else if (componentType === 'Power Supplies (上)') configKey = 'topPowerSupplies';
@@ -877,22 +846,22 @@ export function L11CabinetDisplay() {
                        <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
-                           <div className="mt-1 space-y-1">
-                             {componentSystemMapping[`9 Switch Trays-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`9 Switch Trays-${sn}`].systemName}</div>
-                                 <div className="text-blue-600 dark:text-blue-400 font-mono">SN: {componentSystemMapping[`9 Switch Trays-${sn}`].serialNumber}</div>
-                               </div>
-                             )}
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('9 Switch Trays', sn)}
-                            >
-                              {componentSystemMapping[`9 Switch Trays-${sn}`] ? '重新選擇' : '選擇機台'}
-                            </Button>
-                          </div>
+                            <div className="mt-1 space-y-1">
+                              {componentSystemMapping[`3 Switch Trays-${sn}`] && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`3 Switch Trays-${sn}`].systemName}</div>
+                                  <div className="text-blue-600 dark:text-blue-400 font-mono">SN: {componentSystemMapping[`3 Switch Trays-${sn}`].serialNumber}</div>
+                                </div>
+                              )}
+                             <Button 
+                               variant="ghost" 
+                               size="sm" 
+                               className="w-full text-xs h-6"
+                               onClick={() => handleSelectSystem('3 Switch Trays', sn)}
+                             >
+                               {componentSystemMapping[`3 Switch Trays-${sn}`] ? '重新選擇' : '選擇機台'}
+                             </Button>
+                           </div>
                        </div>
                      ))}
                    </div>
