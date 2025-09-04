@@ -150,17 +150,20 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
   const components = [];
   let currentY = cabinetHeight / 2 - 0.1; // Start from the very top
 
-  // Top Of Rack Switch
+  // Top Of Rack Switch - 設計成兩層結構
   for (let i = 0; i < config.topOfRackSwitch.count; i++) {
+    // 第一層放在前面，第二層放在後面，形成前後兩層結構
+    const layerOffset = i === 0 ? 0.6 : -0.6; // 前後分層，間距1.2
     components.push({
-      position: [0, currentY - (i * slotHeight), 0] as [number, number, number],
+      position: [0, currentY - (i * 0.1), layerOffset] as [number, number, number], // 減少垂直間距，主要用前後分層
       color: config.topOfRackSwitch.color,
-      size: [3.8, 0.3, 2] as [number, number, number],
+      size: [3.8, 0.3, 1.6] as [number, number, number], // 縮小深度以適應分層
       serialNumber: config.topOfRackSwitch.serialNumbers[i] || `TOR-${i + 1}`,
       componentType: 'Top Of Rack Switch'
     });
   }
-  currentY -= config.topOfRackSwitch.count * slotHeight;
+  // 由於採用前後分層，垂直空間占用減少
+  currentY -= Math.max(config.topOfRackSwitch.count * 0.2, slotHeight);
 
   // Power supplies (top)
   for (let i = 0; i < config.topPowerSupplies.count; i++) {
