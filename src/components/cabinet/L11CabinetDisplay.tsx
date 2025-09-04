@@ -138,14 +138,14 @@ interface CabinetSceneProps {
 function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: CabinetSceneProps) {
   const frameColor = '#1a1a1a';
   
-  // 根據圖像重新定義機櫃結構 - 從上到下的實際排列
+  // 根據圖像重新定義機櫃結構 - 從上到下的實際排列順序
   const cabinetStructure = [
-    { type: 'topOfRackSwitch', count: 2, height: 0.25, color: '#d97706' }, // 橙色 Top Of Rack Switch
-    { type: 'computeTrays1', count: 10, height: 0.2, color: '#059669' },   // 綠色 Compute Trays 第一組
-    { type: 'switchTrays', count: 3, height: 0.25, color: '#2563eb' },     // 藍色 Switch Trays
-    { type: 'computeTrays2', count: 8, height: 0.2, color: '#059669' },    // 綠色 Compute Trays 第二組
-    { type: 'topPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies
-    { type: 'bottomPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies
+    { type: 'topOfRackSwitch', count: 2, height: 0.25, color: '#d97706' }, // 橙色 Top Of Rack Switch (兩層設計)
+    { type: 'topPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies (上)
+    { type: 'computeTrays1', count: 10, height: 0.2, color: '#059669' },   // 綠色 10 Compute Trays
+    { type: 'switchTrays', count: 3, height: 0.25, color: '#2563eb' },     // 藍色 3 Switch Trays
+    { type: 'computeTrays2', count: 8, height: 0.2, color: '#059669' },    // 綠色 8 Compute Trays
+    { type: 'bottomPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies (下)
     { type: 'srcUnits', count: 2, height: 0.25, color: '#7c3aed' }         // 紫色 SRC Units
   ];
   
