@@ -478,9 +478,9 @@ export function L11CabinetDisplay() {
     const savedConfig = localStorage.getItem('l11-cabinet-config');
     return savedConfig ? JSON.parse(savedConfig) : {
       topOfRackSwitch: { 
-        count: 1, 
+        count: 2, 
         color: '#3b82f6', 
-        serialNumbers: ['TOR-001'] 
+        serialNumbers: ['TOR-001', 'TOR-002'] 
       },
       topPowerSupplies: { 
         count: 4, 
@@ -614,6 +614,32 @@ export function L11CabinetDisplay() {
     
     setComponentSystemMapping(newMapping);
     localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
+    
+    // 同步更新機櫃組態設定中的 SN 碼
+    const newConfig = { ...config };
+    const componentType = systemSelectionDialog.componentType;
+    const componentSn = systemSelectionDialog.componentSn;
+    const newSn = system.serial_number || system.system_name;
+    
+    // 找到對應的配置項目並更新 SN 碼
+    let configKey: keyof CabinetConfig | null = null;
+    if (componentType === 'Top Of Rack Switch') configKey = 'topOfRackSwitch';
+    else if (componentType === '9 Switch Trays') configKey = 'switchTrays';
+    else if (componentType === '10 Compute Trays') configKey = 'computeTrays1';
+    else if (componentType === '8 Compute Trays') configKey = 'computeTrays2';
+    else if (componentType === 'Power Supplies (上)') configKey = 'topPowerSupplies';
+    else if (componentType === 'Power Supplies (下)') configKey = 'bottomPowerSupplies';
+    else if (componentType === 'SRC Units') configKey = 'srcUnits';
+    
+    if (configKey) {
+      const componentConfig = newConfig[configKey];
+      const snIndex = componentConfig.serialNumbers.findIndex(sn => sn === componentSn);
+      if (snIndex !== -1) {
+        componentConfig.serialNumbers[snIndex] = newSn;
+        setConfig(newConfig);
+        localStorage.setItem('l11-cabinet-config', JSON.stringify(newConfig));
+      }
+    }
     
     // 更新選中的組件
     handleComponentClick(systemSelectionDialog.componentType, systemSelectionDialog.componentSn);
@@ -792,6 +818,8 @@ export function L11CabinetDisplay() {
           <CabinetConfigurator 
             config={config} 
             onConfigChange={handleConfigChange}
+            componentSystemMapping={componentSystemMapping}
+            onComponentSystemMappingChange={setComponentSystemMapping}
           />
           
         </div>
