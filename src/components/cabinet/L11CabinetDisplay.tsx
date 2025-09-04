@@ -149,10 +149,10 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
     { type: 'srcUnits', count: 2, height: 0.25, color: '#7c3aed' }         // 紫色 SRC Units
   ];
   
-  // 計算機櫃總高度
+  // 計算機櫃總高度 - 緊密排列不留多餘空間
   const totalHeight = cabinetStructure.reduce((sum, section) => 
     sum + (config[section.type as keyof CabinetConfig]?.count || section.count) * section.height, 0
-  ) + 0.5; // 添加頂部和底部間距
+  ) + 0.2; // 只添加最小間距
   
   const components = [];
   let currentY = totalHeight / 2 - 0.1; // 從頂部開始
@@ -178,13 +178,12 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
     const actualColor = sectionConfig?.color || section.color;
     
     for (let i = 0; i < actualCount; i++) {
-      // 特殊處理Top Of Rack Switch的兩層設計
+      // Top Of Rack Switch採用上下兩層設計，不是前後分層
       if (section.type === 'topOfRackSwitch' && actualCount === 2) {
-        const layerOffset = i === 0 ? 0.7 : -0.7; // 前後分層
         components.push({
-          position: [0, currentY - (i * 0.1), layerOffset] as [number, number, number],
+          position: [0, currentY - (i * section.height), 0] as [number, number, number],
           color: actualColor,
-          size: [3.6, section.height, 1.4] as [number, number, number],
+          size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
           serialNumber: sectionConfig?.serialNumbers[i] || `TOR-${i + 1}`,
           componentType: 'Top Of Rack Switch'
         });
@@ -199,18 +198,14 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       }
     }
     
-    // 更新當前Y位置
-    if (section.type === 'topOfRackSwitch' && actualCount === 2) {
-      currentY -= section.height; // Top Of Rack Switch只占用一層空間
-    } else {
-      currentY -= actualCount * section.height;
-    }
+    // 更新當前Y位置 - 所有組件都正常占用垂直空間
+    currentY -= actualCount * section.height;
   });
   
-  // 計算實際機櫃邊界
-  const topY = totalHeight / 2 - 0.1;
-  const bottomY = currentY;
-  const cabinetHeight = topY - bottomY + 0.3;
+  // 計算實際機櫃邊界 - 緊密貼合組件
+  const topY = totalHeight / 2 - 0.05; // 減少頂部間距
+  const bottomY = currentY + 0.05; // 減少底部間距，消除多餘空間
+  const cabinetHeight = topY - bottomY;
 
   return (
     <group>
@@ -272,7 +267,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
       </mesh>
       
       {/* Top and bottom panels */}
-      <mesh position={[0, topY + 0.2, 0]}>
+      <mesh position={[0, topY + 0.05, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
@@ -282,7 +277,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
         />
       </mesh>
       
-      <mesh position={[0, bottomY - 0.25, 0]}>
+      <mesh position={[0, bottomY - 0.05, 0]}>
         <boxGeometry args={[4, 0.1, 4]} />
         <meshPhysicalMaterial 
           color={frameColor} 
