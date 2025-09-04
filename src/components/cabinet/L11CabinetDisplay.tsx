@@ -441,6 +441,44 @@ export function L11CabinetDisplay() {
     componentSn: ''
   });
   
+  // 監聽系統資料變化，同步更新機櫃組裝清單中的序號顯示
+  useEffect(() => {
+    const updateComponentMappingWithLatestSerialNumbers = () => {
+      if (!systems || systems.length === 0) return;
+      
+      const updatedMapping = { ...componentSystemMapping };
+      let hasChanges = false;
+      
+      // 檢查並更新每個映射的序號資料
+      Object.keys(updatedMapping).forEach(key => {
+        const mappingData = updatedMapping[key];
+        // 根據系統ID找到最新的系統資料
+        const currentSystem = systems.find(s => s.id === mappingData.systemId);
+        
+        if (currentSystem) {
+          // 如果系統的序號資料有變更，更新映射
+          const currentSerialNumber = currentSystem.serial_number || currentSystem.system_name;
+          if (mappingData.serialNumber !== currentSerialNumber) {
+            updatedMapping[key] = {
+              ...mappingData,
+              systemName: currentSystem.system_name,
+              serialNumber: currentSerialNumber
+            };
+            hasChanges = true;
+          }
+        }
+      });
+      
+      // 如果有變更，更新狀態和本地存儲
+      if (hasChanges) {
+        setComponentSystemMapping(updatedMapping);
+        localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(updatedMapping));
+      }
+    };
+    
+    updateComponentMappingWithLatestSerialNumbers();
+  }, [systems, componentSystemMapping]);
+  
   const [config, setConfig] = useState<CabinetConfig>(() => {
     const savedConfig = localStorage.getItem('l11-cabinet-config');
     return savedConfig ? JSON.parse(savedConfig) : {
@@ -558,7 +596,7 @@ export function L11CabinetDisplay() {
     localStorage.removeItem('l11-cabinet-selectedComponent');
   };
 
-  // 開啟系統選擇對話框
+  // 處理選擇機台系統
   const handleSelectSystem = (componentType: string, componentSn: string) => {
     setSystemSelectionDialog({
       open: true,
@@ -567,49 +605,28 @@ export function L11CabinetDisplay() {
     });
   };
 
-  // 選擇系統後的處理
-  const handleSystemSelected = (system: any) => {
-    const mappingKey = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+  // 處理系統選擇確認
+  const handleSystemSelection = (system: any) => {
+    const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+    const currentSerialNumber = system.serial_number || system.system_name;
+    
     const newMapping = {
       ...componentSystemMapping,
-      [mappingKey]: {
+      [key]: {
         systemId: system.id,
         systemName: system.system_name,
-        serialNumber: system.serial_number || system.system_name
+        serialNumber: currentSerialNumber
       }
     };
     
     setComponentSystemMapping(newMapping);
     localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
     
-    // 同步更新機櫃組態設定中的 SN 碼
-    const newConfig = { ...config };
-    const componentType = systemSelectionDialog.componentType;
-    const componentSn = systemSelectionDialog.componentSn;
-    const newSn = system.serial_number || system.system_name;
-    
-    // 找到對應的配置項目並更新 SN 碼
-    let configKey: keyof CabinetConfig | null = null;
-    if (componentType === 'Top Of Rack Switch') configKey = 'topOfRackSwitch';
-    else if (componentType === '3 Switch Trays') configKey = 'switchTrays';
-    else if (componentType === '10 Compute Trays') configKey = 'computeTrays1';
-    else if (componentType === '8 Compute Trays') configKey = 'computeTrays2';
-    else if (componentType === 'Power Supplies (上)') configKey = 'topPowerSupplies';
-    else if (componentType === 'Power Supplies (下)') configKey = 'bottomPowerSupplies';
-    else if (componentType === 'SRC Units') configKey = 'srcUnits';
-    
-    if (configKey) {
-      const componentConfig = newConfig[configKey];
-      const snIndex = componentConfig.serialNumbers.findIndex(sn => sn === componentSn);
-      if (snIndex !== -1) {
-        componentConfig.serialNumbers[snIndex] = newSn;
-        setConfig(newConfig);
-        localStorage.setItem('l11-cabinet-config', JSON.stringify(newConfig));
-      }
-    }
-    
-    // 更新選中的組件
-    handleComponentClick(systemSelectionDialog.componentType, systemSelectionDialog.componentSn);
+    setSystemSelectionDialog({
+      open: false,
+      componentType: '',
+      componentSn: ''
+    });
   };
 
 
@@ -816,10 +833,15 @@ export function L11CabinetDisplay() {
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
                            <div className="mt-1 space-y-1">
                              {componentSystemMapping[`Top Of Rack Switch-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`Top Of Rack Switch-${sn}`].systemName}</div>
-                                 <div className="text-blue-600 dark:text-blue-400 font-mono">SN: {componentSystemMapping[`Top Of Rack Switch-${sn}`].serialNumber}</div>
-                               </div>
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`Top Of Rack Switch-${sn}`].systemName}</div>
+                                  <div className="text-blue-600 dark:text-blue-400 font-mono">
+                                    測試追蹤序號: {componentSystemMapping[`Top Of Rack Switch-${sn}`].serialNumber}
+                                  </div>
+                                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                    機櫃組件: {sn}
+                                  </div>
+                                </div>
                              )}
                             <Button 
                               variant="ghost" 
@@ -843,10 +865,15 @@ export function L11CabinetDisplay() {
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
                             <div className="mt-1 space-y-1">
                               {componentSystemMapping[`3 Switch Trays-${sn}`] && (
-                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                  <div>已配置: {componentSystemMapping[`3 Switch Trays-${sn}`].systemName}</div>
-                                  <div className="text-blue-600 dark:text-blue-400 font-mono">SN: {componentSystemMapping[`3 Switch Trays-${sn}`].serialNumber}</div>
-                                </div>
+                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                   <div>已配置: {componentSystemMapping[`3 Switch Trays-${sn}`].systemName}</div>
+                                   <div className="text-blue-600 dark:text-blue-400 font-mono">
+                                     測試追蹤序號: {componentSystemMapping[`3 Switch Trays-${sn}`].serialNumber}
+                                   </div>
+                                   <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                     機櫃組件: {sn}
+                                   </div>
+                                 </div>
                               )}
                              <Button 
                                variant="ghost" 
@@ -881,10 +908,15 @@ export function L11CabinetDisplay() {
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
                            <div className="mt-1 space-y-1">
                              {componentSystemMapping[`10 Compute Trays-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`10 Compute Trays-${sn}`].systemName}</div>
-                                 <div className="text-emerald-600 dark:text-emerald-400 font-mono">SN: {componentSystemMapping[`10 Compute Trays-${sn}`].serialNumber}</div>
-                               </div>
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`10 Compute Trays-${sn}`].systemName}</div>
+                                  <div className="text-emerald-600 dark:text-emerald-400 font-mono">
+                                    測試追蹤序號: {componentSystemMapping[`10 Compute Trays-${sn}`].serialNumber}
+                                  </div>
+                                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                    機櫃組件: {sn}
+                                  </div>
+                                </div>
                              )}
                             <Button 
                               variant="ghost" 
@@ -907,12 +939,17 @@ export function L11CabinetDisplay() {
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
                            <div className="mt-1 space-y-1">
-                             {componentSystemMapping[`8 Compute Trays-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`8 Compute Trays-${sn}`].systemName}</div>
-                                 <div className="text-emerald-600 dark:text-emerald-400 font-mono">SN: {componentSystemMapping[`8 Compute Trays-${sn}`].serialNumber}</div>
-                               </div>
-                             )}
+                              {componentSystemMapping[`8 Compute Trays-${sn}`] && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`8 Compute Trays-${sn}`].systemName}</div>
+                                  <div className="text-emerald-600 dark:text-emerald-400 font-mono">
+                                    測試追蹤序號: {componentSystemMapping[`8 Compute Trays-${sn}`].serialNumber}
+                                  </div>
+                                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                    機櫃組件: {sn}
+                                  </div>
+                                </div>
+                              )}
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -945,12 +982,17 @@ export function L11CabinetDisplay() {
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
                            <div className="mt-1 space-y-1">
-                             {componentSystemMapping[`Power Supplies (上)-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`Power Supplies (上)-${sn}`].systemName}</div>
-                                 <div className="text-amber-600 dark:text-amber-400 font-mono">SN: {componentSystemMapping[`Power Supplies (上)-${sn}`].serialNumber}</div>
-                               </div>
-                             )}
+                              {componentSystemMapping[`Power Supplies (上)-${sn}`] && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`Power Supplies (上)-${sn}`].systemName}</div>
+                                  <div className="text-amber-600 dark:text-amber-400 font-mono">
+                                    測試追蹤序號: {componentSystemMapping[`Power Supplies (上)-${sn}`].serialNumber}
+                                  </div>
+                                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                    機櫃組件: {sn}
+                                  </div>
+                                </div>
+                              )}
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -972,12 +1014,17 @@ export function L11CabinetDisplay() {
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
                            <div className="mt-1 space-y-1">
-                             {componentSystemMapping[`Power Supplies (下)-${sn}`] && (
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>已配置: {componentSystemMapping[`Power Supplies (下)-${sn}`].systemName}</div>
-                                 <div className="text-amber-600 dark:text-amber-400 font-mono">SN: {componentSystemMapping[`Power Supplies (下)-${sn}`].serialNumber}</div>
-                               </div>
-                             )}
+                              {componentSystemMapping[`Power Supplies (下)-${sn}`] && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  <div>已配置: {componentSystemMapping[`Power Supplies (下)-${sn}`].systemName}</div>
+                                  <div className="text-amber-600 dark:text-amber-400 font-mono">
+                                    測試追蹤序號: {componentSystemMapping[`Power Supplies (下)-${sn}`].serialNumber}
+                                  </div>
+                                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                    機櫃組件: {sn}
+                                  </div>
+                                </div>
+                              )}
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -1008,12 +1055,17 @@ export function L11CabinetDisplay() {
                        <div className="font-medium">#{index + 1}</div>
                        <div className="text-purple-600 dark:text-purple-400 font-bold">{sn}</div>
                          <div className="mt-1 space-y-1">
-                           {componentSystemMapping[`SRC Units-${sn}`] && (
-                             <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                               <div>已配置: {componentSystemMapping[`SRC Units-${sn}`].systemName}</div>
-                               <div className="text-purple-600 dark:text-purple-400 font-mono">SN: {componentSystemMapping[`SRC Units-${sn}`].serialNumber}</div>
-                             </div>
-                           )}
+                            {componentSystemMapping[`SRC Units-${sn}`] && (
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                <div>已配置: {componentSystemMapping[`SRC Units-${sn}`].systemName}</div>
+                                <div className="text-purple-600 dark:text-purple-400 font-mono">
+                                  測試追蹤序號: {componentSystemMapping[`SRC Units-${sn}`].serialNumber}
+                                </div>
+                                <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                  機櫃組件: {sn}
+                                </div>
+                              </div>
+                            )}
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -1054,7 +1106,7 @@ export function L11CabinetDisplay() {
         componentSn={systemSelectionDialog.componentSn}
         systems={systems}
         systemProgress={systemProgress}
-        onSystemSelect={handleSystemSelected}
+        onSystemSelect={handleSystemSelection}
       />
     </div>
   );
