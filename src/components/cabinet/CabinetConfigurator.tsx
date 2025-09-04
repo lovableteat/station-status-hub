@@ -121,7 +121,7 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
     if (componentSystemMapping && onComponentSystemMappingChange) {
       const componentTypeMap: { [key: string]: string } = {
         'topOfRackSwitch': 'Top Of Rack Switch',
-        'switchTrays': '9 Switch Trays',
+        'switchTrays': '3 Switch Trays',
         'computeTrays1': '10 Compute Trays',
         'computeTrays2': '8 Compute Trays',
         'topPowerSupplies': 'Power Supplies (上)',
@@ -170,49 +170,49 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
     onConfigChange({
       topOfRackSwitch: { 
         count: 2, 
-        color: '#3b82f6', 
+        color: '#d97706', 
         serialNumbers: ['TOR-001', 'TOR-002'] 
       },
       topPowerSupplies: { 
-        count: 1, 
-        color: '#f59e0b', 
-        serialNumbers: ['PSU-001'] 
+        count: 2, 
+        color: '#d97706', 
+        serialNumbers: ['PSU-T-001', 'PSU-T-002'] 
       },
       computeTrays1: { 
         count: 10, 
-        color: '#10b981', 
+        color: '#059669', 
         serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
       },
       switchTrays: { 
-        count: 9, 
-        color: '#3b82f6', 
-        serialNumbers: Array.from({length: 9}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+        count: 3, 
+        color: '#2563eb', 
+        serialNumbers: Array.from({length: 3}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
       },
       computeTrays2: { 
         count: 8, 
-        color: '#10b981', 
+        color: '#059669', 
         serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
       },
       bottomPowerSupplies: { 
-        count: 1, 
-        color: '#f59e0b', 
-        serialNumbers: ['PSU-002'] 
+        count: 2, 
+        color: '#d97706', 
+        serialNumbers: ['PSU-B-001', 'PSU-B-002'] 
       },
       srcUnits: { 
         count: 2, 
-        color: '#8b5cf6', 
+        color: '#7c3aed', 
         serialNumbers: ['SRC-001', 'SRC-002'] 
       }
     });
   };
 
   const configItems = [
-    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch', max: 2 },
-    { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 2 },
+    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch (兩層設計)', max: 2 },
+    { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 4 },
     { key: 'computeTrays1', label: '10 Compute Trays', max: 15 },
-    { key: 'switchTrays', label: '9 Switch Trays', max: 12 },
+    { key: 'switchTrays', label: '3 Switch Trays', max: 6 },
     { key: 'computeTrays2', label: '8 Compute Trays', max: 15 },
-    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 2 },
+    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 4 },
     { key: 'srcUnits', label: 'SRC Units', max: 5 }
   ];
 
