@@ -16,6 +16,8 @@ import {
   Settings
 } from 'lucide-react';
 import { CabinetCard, CabinetInfo } from './CabinetCard';
+import { CabinetCreateDialog } from './CabinetCreateDialog';
+import { CabinetEditDialog } from './CabinetEditDialog';
 import { BackButton } from '@/components/common/BackButton';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 
@@ -101,6 +103,8 @@ export function CabinetManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [editingCabinet, setEditingCabinet] = useState<CabinetInfo | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
     // 載入機櫃數據
@@ -126,24 +130,36 @@ export function CabinetManagement() {
     planning: cabinets.filter(c => c.status === 'planning').length
   };
 
-  const handleCreateCabinet = () => {
-    // 創建新機櫃邏輯
-    console.log('創建新機櫃');
+  const handleCreateCabinet = (cabinetData: Omit<CabinetInfo, 'id' | 'createdAt' | 'lastUpdated'>) => {
+    const newCabinet: CabinetInfo = {
+      ...cabinetData,
+      id: `cabinet-${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
+    };
+    setCabinets(prev => [...prev, newCabinet]);
+    // TODO: Save to backend
   };
 
   const handleEditCabinet = (cabinet: CabinetInfo) => {
-    // 編輯機櫃邏輯
-    console.log('編輯機櫃:', cabinet);
+    setEditingCabinet(cabinet);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveCabinet = (updatedCabinet: CabinetInfo) => {
+    setCabinets(prev => prev.map(c => c.id === updatedCabinet.id ? updatedCabinet : c));
+    // TODO: Save to backend
   };
 
   const handleDeleteCabinet = (cabinetId: string) => {
-    // 刪除機櫃邏輯
-    console.log('刪除機櫃:', cabinetId);
+    if (confirm('確定要刪除此機櫃嗎？此操作無法撤銷。')) {
+      setCabinets(prev => prev.filter(c => c.id !== cabinetId));
+      // TODO: Delete from backend
+    }
   };
 
   const handleViewDetails = (cabinetId: string) => {
-    // 查看機櫃詳細資訊邏輯
-    console.log('查看機櫃詳細資訊:', cabinetId);
+    window.location.href = `/cabinet/${cabinetId}`;
   };
 
   return (
@@ -156,10 +172,7 @@ export function CabinetManagement() {
           <p className="text-muted-foreground">管理和監控所有機櫃的測試進度與配置狀態</p>
         </div>
         
-        <Button onClick={handleCreateCabinet} size="lg">
-          <Plus className="h-5 w-5 mr-2" />
-          新增機櫃
-        </Button>
+        <CabinetCreateDialog onCreateCabinet={handleCreateCabinet} />
       </div>
 
       {/* 總覽統計 */}
@@ -300,6 +313,14 @@ export function CabinetManagement() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Dialog */}
+      <CabinetEditDialog
+        cabinet={editingCabinet}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onSaveCabinet={handleSaveCabinet}
+      />
     </div>
   );
 }
