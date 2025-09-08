@@ -459,14 +459,8 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
   const [sceneError, setSceneError] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0); // 用於強制重新創建Canvas
   
-  // 機櫃狀態管理 - 不依賴路由參數
-  const [selectedCabinetId, setSelectedCabinetId] = useState(() => {
-    const saved = localStorage.getItem('l11-cabinet-selectedCabinetId');
-    return saved || initialCabinetId || 'cabinet-001';
-  });
-  
-  // 實際使用的機櫃ID
-  const currentCabinetId = selectedCabinetId;
+  // 機櫃狀態管理 - 使用傳入的機櫃ID或默認值
+  const currentCabinetId = initialCabinetId || 'cabinet-001';
   
   // 從localStorage讀取和保存狀態 - 為每個機櫃獨立存儲
   const getStorageKey = useCallback((key: string) => 
@@ -583,17 +577,6 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     updateComponentMappingWithLatestSerialNumbers();
   }, [systems, componentSystemMapping]);
   
-  // Mock cabinet data - 移至獨立的管理組件
-  const getAvailableCabinets = () => [
-    { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-004', name: 'L11-機櫃-B2', location: '廠房B-2樓-南側', model: 'L11', status: 'offline' as const, totalSystems: 29, completedSystems: 8, totalComponents: 29, configuredComponents: 15, assignedEngineers: [], createdAt: '2024-02-05T14:20:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
-  ];
-
-  const mockCabinets = getAvailableCabinets();
-
   // 創建模擬的系統進度數據
   const systemProgress = systems.map(system => ({
     system,
@@ -795,7 +778,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            {currentCabinetId ? mockCabinets.find(c => c.id === currentCabinetId)?.name || `L11機櫃展示 - ${currentCabinetId}` : 'L11機櫃展示'}
+            L11機櫃展示 - {currentCabinetId}
           </h1>
           <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
