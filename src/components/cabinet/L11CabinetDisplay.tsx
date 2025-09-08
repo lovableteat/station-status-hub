@@ -154,7 +154,7 @@ interface CabinetSceneProps {
   onComponentClick: (componentType: string, serialNumber: string) => void;
 }
 
-function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: CabinetSceneProps) {
+function CabinetScene({ config, isOpen, selectedComponent, onComponentClick, componentSystemMapping }: CabinetSceneProps & { componentSystemMapping: ComponentSystemMapping }) {
   const frameColor = '#1a1a1a';
   
   // 根據圖像重新定義機櫃結構 - 從上到下的實際排列順序
@@ -197,24 +197,23 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
     const actualColor = sectionConfig?.color || section.color;
     
     for (let i = 0; i < actualCount; i++) {
-      // Top Of Rack Switch採用上下兩層設計，不是前後分層
-      if (section.type === 'topOfRackSwitch' && actualCount === 2) {
-        components.push({
-          position: [0, currentY - (i * section.height), 0] as [number, number, number],
-          color: actualColor,
-          size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
-          serialNumber: getSerialNumbers(section.type, actualCount)[i] || `TOR-${i + 1}`,
-          componentType: 'Top Of Rack Switch'
-        });
-      } else {
-        components.push({
-          position: [0, currentY - (i * section.height), 0] as [number, number, number],
-          color: actualColor,
-          size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
-          serialNumber: getSerialNumbers(section.type, actualCount)[i] || `${section.type.toUpperCase()}-${i + 1}`,
-          componentType: getComponentTypeName(section.type)
-        });
-      }
+      const componentTypeName = getComponentTypeName(section.type);
+      const defaultSerial = getSerialNumbers(section.type, actualCount)[i] || `${section.type.toUpperCase()}-${i + 1}`;
+      
+      // 檢查是否有映射的系統序列號
+      const mappingKey = `${componentTypeName}-${defaultSerial}`;
+      const mappedSystem = componentSystemMapping[mappingKey];
+      
+      // 使用映射的系統序列號，如果沒有則使用預設序列號
+      const displaySerial = mappedSystem?.serialNumber || defaultSerial;
+      
+      components.push({
+        position: [0, currentY - (i * section.height), 0] as [number, number, number],
+        color: actualColor,
+        size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
+        serialNumber: displaySerial,
+        componentType: componentTypeName
+      });
     }
     
     // 更新當前Y位置 - 所有組件都正常占用垂直空間
@@ -703,7 +702,13 @@ export function L11CabinetDisplay() {
                   }}
                 >
                   <Suspense fallback={null}>
-                    <CabinetScene config={config} isOpen={isOpen} selectedComponent={selectedComponent} onComponentClick={handleComponentClick} />
+                    <CabinetScene 
+                      config={config} 
+                      isOpen={isOpen} 
+                      selectedComponent={selectedComponent} 
+                      onComponentClick={handleComponentClick}
+                      componentSystemMapping={componentSystemMapping}
+                    />
                     <OrbitControls 
                       autoRotate={autoRotate}
                       autoRotateSpeed={0.5}
@@ -835,86 +840,102 @@ export function L11CabinetDisplay() {
                 <Badge variant="outline">
                   {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('Top Of Rack Switch') || key.includes('3 Switch Trays')
-                  ).length} 台已配置
+                  ).length} / {config.topOfRackSwitch.count + config.switchTrays.count} 已配置
                 </Badge>
               </div>
               <div className="pl-7 space-y-2">
                 <div>
-                  <h4 className="font-medium mb-2">Top Of Rack Switch</h4>
+                  <h4 className="font-medium mb-2">Top Of Rack Switch ({config.topOfRackSwitch.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('Top Of Rack Switch'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-blue-600 dark:text-blue-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('Top Of Rack Switch', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     <div className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                       <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('Top Of Rack Switch')).length + 1}</div>
-                       <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="w-full text-xs h-6 mt-1"
-                         onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('Top Of Rack Switch')).length + 1}`)}
-                       >
-                         選擇機台
-                       </Button>
-                     </div>
+                     {Array.from({length: config.topOfRackSwitch.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `Top Of Rack Switch-TOR-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-blue-600 dark:text-blue-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('Top Of Rack Switch', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-tor-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">Switch Trays</h4>
+                  <h4 className="font-medium mb-2">Switch Trays ({config.switchTrays.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('3 Switch Trays'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-blue-600 dark:text-blue-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('3 Switch Trays', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     <div className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                       <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('3 Switch Trays')).length + 1}</div>
-                       <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="w-full text-xs h-6 mt-1"
-                         onClick={() => handleSelectSystem('3 Switch Trays', `SW-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('3 Switch Trays')).length + 1}`)}
-                       >
-                         選擇機台
-                       </Button>
-                     </div>
+                     {Array.from({length: config.switchTrays.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `3 Switch Trays-SW-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-blue-600 dark:text-blue-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('3 Switch Trays', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-sw-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('3 Switch Trays', `SW-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
               </div>
@@ -928,90 +949,102 @@ export function L11CabinetDisplay() {
                 <Badge variant="outline">
                   {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('10 Compute Trays') || key.includes('8 Compute Trays')
-                  ).length} 台已配置
+                  ).length} / {config.computeTrays1.count + config.computeTrays2.count} 已配置
                 </Badge>
               </div>
               <div className="pl-7 space-y-2">
                 <div>
-                  <h4 className="font-medium mb-2">10 Compute Trays</h4>
+                  <h4 className="font-medium mb-2">10 Compute Trays ({config.computeTrays1.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('10 Compute Trays'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('10 Compute Trays', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     {Array.from({ length: Math.max(0, 10 - Object.entries(componentSystemMapping).filter(([key]) => key.includes('10 Compute Trays')).length) }).map((_, index) => (
-                       <div key={`empty-ct1-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                         <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('10 Compute Trays')).length + index + 1}</div>
-                         <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="w-full text-xs h-6 mt-1"
-                           onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('10 Compute Trays')).length + index + 1}`)}
-                         >
-                           選擇機台
-                         </Button>
-                       </div>
-                     ))}
+                     {Array.from({length: config.computeTrays1.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `10 Compute Trays-CT1-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-emerald-600 dark:text-emerald-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('10 Compute Trays', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-ct1-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">8 Compute Trays</h4>
+                  <h4 className="font-medium mb-2">8 Compute Trays ({config.computeTrays2.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('8 Compute Trays'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('8 Compute Trays', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     {Array.from({ length: Math.max(0, 8 - Object.entries(componentSystemMapping).filter(([key]) => key.includes('8 Compute Trays')).length) }).map((_, index) => (
-                       <div key={`empty-ct2-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                         <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('8 Compute Trays')).length + index + 1}</div>
-                         <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="w-full text-xs h-6 mt-1"
-                           onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('8 Compute Trays')).length + index + 1}`)}
-                         >
-                           選擇機台
-                         </Button>
-                       </div>
-                     ))}
+                     {Array.from({length: config.computeTrays2.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `8 Compute Trays-CT2-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-emerald-600 dark:text-emerald-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('8 Compute Trays', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-ct2-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
               </div>
@@ -1025,90 +1058,102 @@ export function L11CabinetDisplay() {
                 <Badge variant="outline">
                   {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('Power Supplies')
-                  ).length} 台已配置
+                  ).length} / {config.topPowerSupplies.count + config.bottomPowerSupplies.count} 已配置
                 </Badge>
               </div>
               <div className="pl-7 space-y-2">
                 <div>
-                  <h4 className="font-medium mb-2">Power Supplies (上)</h4>
+                  <h4 className="font-medium mb-2">Power Supplies (上) ({config.topPowerSupplies.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('Power Supplies (上)'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-amber-600 dark:text-amber-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('Power Supplies (上)', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     {Array.from({ length: Math.max(0, 2 - Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (上)')).length) }).map((_, index) => (
-                       <div key={`empty-psu-top-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                         <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (上)')).length + index + 1}</div>
-                         <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="w-full text-xs h-6 mt-1"
-                           onClick={() => handleSelectSystem('Power Supplies (上)', `PSU-T-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (上)')).length + index + 1}`)}
-                         >
-                           選擇機台
-                         </Button>
-                       </div>
-                     ))}
+                     {Array.from({length: config.topPowerSupplies.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `Power Supplies (上)-PSU-T-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-amber-600 dark:text-amber-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('Power Supplies (上)', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-psu-top-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('Power Supplies (上)', `PSU-T-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">Power Supplies (下)</h4>
+                  <h4 className="font-medium mb-2">Power Supplies (下) ({config.bottomPowerSupplies.count} 層)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Object.entries(componentSystemMapping)
-                       .filter(([key]) => key.includes('Power Supplies (下)'))
-                       .map(([key, mapping], index) => (
-                        <div key={key} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
-                          <div className="font-medium">#{index + 1}</div>
-                          <div className="text-amber-600 dark:text-amber-400 font-bold">{mapping.serialNumber}</div>
-                          <div className="mt-1 space-y-1">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              <div>系統: {mapping.systemName}</div>
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="w-full text-xs h-6"
-                              onClick={() => handleSelectSystem('Power Supplies (下)', mapping.serialNumber)}
-                            >
-                              重新選擇
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                     {/* 添加新系統按鈕 */}
-                     {Array.from({ length: Math.max(0, 2 - Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (下)')).length) }).map((_, index) => (
-                       <div key={`empty-psu-bottom-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                         <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (下)')).length + index + 1}</div>
-                         <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           className="w-full text-xs h-6 mt-1"
-                           onClick={() => handleSelectSystem('Power Supplies (下)', `PSU-B-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('Power Supplies (下)')).length + index + 1}`)}
-                         >
-                           選擇機台
-                         </Button>
-                       </div>
-                     ))}
+                     {Array.from({length: config.bottomPowerSupplies.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `Power Supplies (下)-PSU-B-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-amber-600 dark:text-amber-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('Power Supplies (下)', mapping.serialNumber)}
+                               >
+                                 重新選擇
+                               </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-psu-bottom-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('Power Supplies (下)', `PSU-B-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
               </div>
@@ -1122,69 +1167,76 @@ export function L11CabinetDisplay() {
                 <Badge variant="outline">
                   {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('SRC Units')
-                  ).length} 台已配置
+                  ).length} / {config.srcUnits.count} 已配置
                 </Badge>
               </div>
-              <div className="pl-7">
-                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                   {Object.entries(componentSystemMapping)
-                     .filter(([key]) => key.includes('SRC Units'))
-                     .map(([key, mapping], index) => (
-                      <div key={key} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border hover:bg-purple-100 dark:hover:bg-purple-900 cursor-pointer transition-colors">
-                        <div className="font-medium">#{index + 1}</div>
-                        <div className="text-purple-600 dark:text-purple-400 font-bold">{mapping.serialNumber}</div>
-                        <div className="mt-1 space-y-1">
-                          <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                            <div>系統: {mapping.systemName}</div>
+               <div className="pl-7">
+                 <h4 className="font-medium mb-2">SRC Units ({config.srcUnits.count} 層)</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {Array.from({length: config.srcUnits.count}).map((_, index) => {
+                      const configuredMapping = Object.entries(componentSystemMapping)
+                        .find(([key]) => key === `SRC Units-SRC-${String(index + 1).padStart(3, '0')}`);
+                      
+                      if (configuredMapping) {
+                        const [key, mapping] = configuredMapping;
+                        return (
+                          <div key={key} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border hover:bg-purple-100 dark:hover:bg-purple-900 cursor-pointer transition-colors">
+                            <div className="font-medium">#{index + 1}</div>
+                            <div className="text-purple-600 dark:text-purple-400 font-bold">{mapping.serialNumber}</div>
+                            <div className="mt-1 space-y-1">
+                              <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                <div>系統: {mapping.systemName}</div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-full text-xs h-6"
+                                onClick={() => handleSelectSystem('SRC Units', mapping.serialNumber)}
+                              >
+                                重新選擇
+                              </Button>
+                            </div>
                           </div>
+                        );
+                      }
+
+                      return (
+                        <div key={`empty-src-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                          <div className="font-medium">#{index + 1}</div>
+                          <div className="text-gray-500 dark:text-gray-400">未配置</div>
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="w-full text-xs h-6"
-                            onClick={() => handleSelectSystem('SRC Units', mapping.serialNumber)}
+                            className="w-full text-xs h-6 mt-1"
+                            onClick={() => handleSelectSystem('SRC Units', `SRC-${String(index + 1).padStart(3, '0')}`)}
                           >
-                            重新選擇
+                            選擇機台
                           </Button>
                         </div>
-                      </div>
-                    ))}
-                   {/* 添加新系統按鈕 */}
-                   {Array.from({ length: Math.max(0, 2 - Object.entries(componentSystemMapping).filter(([key]) => key.includes('SRC Units')).length) }).map((_, index) => (
-                     <div key={`empty-src-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                       <div className="font-medium">#{Object.entries(componentSystemMapping).filter(([key]) => key.includes('SRC Units')).length + index + 1}</div>
-                       <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="w-full text-xs h-6 mt-1"
-                         onClick={() => handleSelectSystem('SRC Units', `SRC-${Object.entries(componentSystemMapping).filter(([key]) => key.includes('SRC Units')).length + index + 1}`)}
-                       >
-                         選擇機台
-                       </Button>
-                     </div>
-                   ))}
-                 </div>
-              </div>
+                      );
+                    })}
+                  </div>
+               </div>
             </div>
 
             {/* 總計統計 */}
             <div className="border-t pt-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">總組件數量統計：</span>
+                <span className="font-medium">組件配置統計：</span>
                 <div className="flex gap-4">
                   <span>交換機: {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('Top Of Rack Switch') || key.includes('3 Switch Trays')
-                  ).length}台</span>
+                  ).length} / {config.topOfRackSwitch.count + config.switchTrays.count}</span>
                   <span>運算單元: {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('10 Compute Trays') || key.includes('8 Compute Trays')
-                  ).length}台</span>
+                  ).length} / {config.computeTrays1.count + config.computeTrays2.count}</span>
                   <span>電源供應: {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('Power Supplies')
-                  ).length}台</span>
+                  ).length} / {config.topPowerSupplies.count + config.bottomPowerSupplies.count}</span>
                   <span>SRC單元: {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('SRC Units')
-                  ).length}台</span>
-                  <span className="font-semibold">總計: {Object.keys(componentSystemMapping).length}台</span>
+                  ).length} / {config.srcUnits.count}</span>
+                  <span className="font-semibold">總計: {Object.keys(componentSystemMapping).length} / {Object.values(config).reduce((sum, comp) => sum + comp.count, 0)}</span>
                 </div>
               </div>
             </div>
