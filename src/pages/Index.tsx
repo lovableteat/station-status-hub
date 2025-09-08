@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
@@ -27,9 +26,7 @@ import { CabinetManagement } from "@/components/cabinet/CabinetManagement";
 
 
 const Index = () => {
-  const [searchParams] = useSearchParams();
-  const moduleParam = searchParams.get('module');
-  const [activeModule, setActiveModule] = useState(moduleParam || "dashboard");
+  const [activeModule, setActiveModule] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, login, isLoggedIn } = useUser();
   const { updateCurrentModule } = useUserPresence();
@@ -37,12 +34,6 @@ const Index = () => {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    // Handle URL module parameter
-    if (moduleParam && moduleParam !== activeModule) {
-      setActiveModule(moduleParam);
-      updateCurrentModule(moduleParam);
-    }
-    
     // Listen for navigation events from other components
     const handleNavigationEvent = (event: CustomEvent) => {
       const { module } = event.detail;
@@ -54,7 +45,7 @@ const Index = () => {
     return () => {
       window.removeEventListener('navigate', handleNavigationEvent as EventListener);
     };
-  }, [moduleParam, activeModule, updateCurrentModule]);
+  }, []);
 
   if (!isLoggedIn) {
     return <LoginPage onLogin={login} />;
