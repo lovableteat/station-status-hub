@@ -3,7 +3,7 @@ import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
-import { CabinetSwitcher } from './CabinetSwitcher';
+import { CabinetSelectionManager } from './CabinetSelectionManager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -450,7 +450,7 @@ function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
   );
 }
 
-export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
+export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?: string }) {
   const { systems } = useUnifiedData();
   const navigate = useNavigate();
   const { getAvailableSystems, allocateSystem, deallocateComponent, getCabinetAllocations } = useGlobalSystemAllocation();
@@ -460,8 +460,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   const [sceneError, setSceneError] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0); // 用於強制重新創建Canvas
   
-  // Mock cabinet data - should be replaced with actual data from backend
-  const mockCabinets = [
+  // 機櫃狀態管理 - 不依賴路由參數
+  const [selectedCabinetId, setSelectedCabinetId] = useState(() => {
+    const saved = localStorage.getItem('l11-cabinet-selectedCabinetId');
+    return saved || initialCabinetId || 'cabinet-001';
+  });
+  
+  // Mock cabinet data - 移至獨立的管理組件
+  const getAvailableCabinets = () => [
     { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
     { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
     { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
@@ -469,10 +475,19 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
   ];
 
-  // Cabinet switching functionality
+  const mockCabinets = getAvailableCabinets();
+
+  // Cabinet switching functionality - 不使用導航，直接狀態管理
   const handleCabinetChange = (newCabinetId: string) => {
-    navigate(`/cabinet/${newCabinetId}`);
+    setSelectedCabinetId(newCabinetId);
+    localStorage.setItem('l11-cabinet-selectedCabinetId', newCabinetId);
+    // 重置3D場景避免狀態衝突
+    setCanvasKey(prev => prev + 1);
+    setSceneError(false);
   };
+  
+  // 實際使用的機櫃ID
+  const currentCabinetId = selectedCabinetId;
   
   // 創建模擬的系統進度數據
   const systemProgress = systems.map(system => ({
@@ -484,7 +499,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   }));
   
   // 從localStorage讀取和保存狀態 - 為每個機櫃獨立存儲
-  const getStorageKey = (key: string) => cabinetId ? `${key}-${cabinetId}` : key;
+  const getStorageKey = (key: string) => currentCabinetId ? `${key}-${currentCabinetId}` : key;
   
   const [autoRotate, setAutoRotate] = useState(() => {
     const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
@@ -612,7 +627,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [selectedComponent, cabinetId]);
+  }, [selectedComponent, currentCabinetId]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
@@ -623,7 +638,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [config, cabinetId]);
+  }, [config, currentCabinetId]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
@@ -634,7 +649,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [componentSystemMapping, cabinetId]);
+  }, [componentSystemMapping, currentCabinetId]);
   
   // 添加組件卸載時的清理
   useEffect(() => {
@@ -730,7 +745,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       const canAllocate = allocateSystem(
         system.id,
         system.system_name,
-        cabinetId || 'default',
+        currentCabinetId || 'default',
         systemSelectionDialog.componentType,
         systemSelectionDialog.componentSn
       );
@@ -760,7 +775,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       console.error('Error during system selection:', error);
       alert('系統選擇過程中發生錯誤，請重試');
     }
-  }, [systemSelectionDialog, componentSystemMapping, allocateSystem, cabinetId]);
+  }, [systemSelectionDialog, componentSystemMapping, allocateSystem, currentCabinetId]);
 
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
@@ -770,17 +785,16 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Cabinet Switcher */}
-      <CabinetSwitcher 
-        currentCabinetId={cabinetId}
-        cabinets={mockCabinets}
+      {/* Cabinet Selection Manager */}
+      <CabinetSelectionManager 
+        currentCabinetId={currentCabinetId}
         onCabinetChange={handleCabinetChange}
       />
       
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            {cabinetId ? mockCabinets.find(c => c.id === cabinetId)?.name || `L11機櫃展示 - ${cabinetId}` : 'L11機櫃展示'}
+            {currentCabinetId ? mockCabinets.find(c => c.id === currentCabinetId)?.name || `L11機櫃展示 - ${currentCabinetId}` : 'L11機櫃展示'}
           </h1>
           <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
@@ -1397,7 +1411,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
         onOpenChange={(open) => setSystemSelectionDialog(prev => ({ ...prev, open }))}
         componentType={systemSelectionDialog.componentType}
         componentSn={systemSelectionDialog.componentSn}
-        systems={getAvailableSystems(systems, cabinetId || 'default')}
+        systems={getAvailableSystems(systems, currentCabinetId || 'default')}
         systemProgress={systemProgress}
         onSystemSelect={handleSystemSelection}
       />
