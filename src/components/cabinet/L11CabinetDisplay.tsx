@@ -2,7 +2,6 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { BackButton } from '@/components/common/BackButton';
 import { CabinetSwitcher } from './CabinetSwitcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
