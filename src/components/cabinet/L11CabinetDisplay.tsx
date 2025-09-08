@@ -413,7 +413,7 @@ function ErrorFallback() {
   );
 }
 
-export function L11CabinetDisplay() {
+export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   // 引入系統資料
   const { systems } = useUnifiedData();
   
@@ -426,25 +426,27 @@ export function L11CabinetDisplay() {
     test_items_total: 10
   }));
   
-  // 從localStorage讀取和保存狀態
+  // 從localStorage讀取和保存狀態 - 為每個機櫃獨立存儲
+  const getStorageKey = (key: string) => cabinetId ? `${key}-${cabinetId}` : key;
+  
   const [autoRotate, setAutoRotate] = useState(() => {
-    const saved = localStorage.getItem('l11-cabinet-autoRotate');
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
     return saved ? JSON.parse(saved) : true;
   });
   
   const [isOpen, setIsOpen] = useState(() => {
-    const saved = localStorage.getItem('l11-cabinet-isOpen');
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
     return saved ? JSON.parse(saved) : true;
   });
   
   const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
-    const saved = localStorage.getItem('l11-cabinet-selectedComponent');
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 組件到系統的映射
+  // 組件到系統的映射 - 為每個機櫃獨立存儲
   const [componentSystemMapping, setComponentSystemMapping] = useState<ComponentSystemMapping>(() => {
-    const saved = localStorage.getItem('l11-cabinet-componentSystemMapping');
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
     return saved ? JSON.parse(saved) : {};
   });
 
@@ -488,17 +490,17 @@ export function L11CabinetDisplay() {
       });
       
       // 如果有變更，更新狀態和本地存儲
-      if (hasChanges) {
-        setComponentSystemMapping(updatedMapping);
-        localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(updatedMapping));
-      }
+        if (hasChanges) {
+          setComponentSystemMapping(updatedMapping);
+          localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(updatedMapping));
+        }
     };
     
     updateComponentMappingWithLatestSerialNumbers();
   }, [systems, componentSystemMapping]);
   
   const [config, setConfig] = useState<CabinetConfig>(() => {
-    const savedConfig = localStorage.getItem('l11-cabinet-config');
+    const savedConfig = localStorage.getItem(getStorageKey('l11-cabinet-config'));
     return savedConfig ? JSON.parse(savedConfig) : {
       topOfRackSwitch: { 
         count: 2, 
@@ -532,30 +534,30 @@ export function L11CabinetDisplay() {
   });
 
 
-  // 自動保存狀態到localStorage
+  // 自動保存狀態到localStorage - 使用機櫃ID特定的key
   useEffect(() => {
-    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(autoRotate));
+    localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(autoRotate));
   }, [autoRotate]);
 
   useEffect(() => {
-    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(isOpen));
+    localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(isOpen));
   }, [isOpen]);
 
   useEffect(() => {
-    localStorage.setItem('l11-cabinet-selectedComponent', JSON.stringify(selectedComponent));
+    localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
   }, [selectedComponent]);
 
   useEffect(() => {
-    localStorage.setItem('l11-cabinet-config', JSON.stringify(config));
+    localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
   }, [config]);
 
   useEffect(() => {
-    localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(componentSystemMapping));
+    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
   }, [componentSystemMapping]);
   
   const handleReset = () => {
     setAutoRotate(true);
-    localStorage.setItem('l11-cabinet-autoRotate', JSON.stringify(true));
+    localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(true));
   };
 
   const handleComponentClick = async (componentType: string, serialNumber: string) => {
@@ -590,22 +592,22 @@ export function L11CabinetDisplay() {
       details 
     };
     setSelectedComponent(newSelectedComponent);
-    localStorage.setItem('l11-cabinet-selectedComponent', JSON.stringify(newSelectedComponent));
+    localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(newSelectedComponent));
   };
 
   const handleConfigChange = (newConfig: CabinetConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('l11-cabinet-config', JSON.stringify(newConfig));
+    localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(newConfig));
   };
 
   const handleIsOpenChange = (newIsOpen: boolean) => {
     setIsOpen(newIsOpen);
-    localStorage.setItem('l11-cabinet-isOpen', JSON.stringify(newIsOpen));
+    localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(newIsOpen));
   };
 
   const handleSelectedComponentClear = () => {
     setSelectedComponent(null);
-    localStorage.removeItem('l11-cabinet-selectedComponent');
+    localStorage.removeItem(getStorageKey('l11-cabinet-selectedComponent'));
   };
 
   // 處理選擇機台系統
@@ -633,7 +635,7 @@ export function L11CabinetDisplay() {
     };
     
     setComponentSystemMapping(newMapping);
-    localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
+    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(newMapping));
     
     setSystemSelectionDialog({
       open: false,
@@ -653,7 +655,9 @@ export function L11CabinetDisplay() {
       <div className="flex items-center justify-between">
         <div>
           <BackButton />
-          <h1 className="text-3xl font-bold text-foreground mt-2">L11機櫃展示</h1>
+          <h1 className="text-3xl font-bold text-foreground mt-2">
+            {cabinetId ? `L11機櫃展示 - ${cabinetId}` : 'L11機櫃展示'}
+          </h1>
           <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
         
