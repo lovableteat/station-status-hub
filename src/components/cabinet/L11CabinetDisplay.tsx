@@ -3,7 +3,6 @@ import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
-import { CabinetSelectionManager } from './CabinetSelectionManager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -595,15 +594,6 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
 
   const mockCabinets = getAvailableCabinets();
 
-  // Cabinet switching functionality - 不使用導航，直接狀態管理
-  const handleCabinetChange = (newCabinetId: string) => {
-    setSelectedCabinetId(newCabinetId);
-    localStorage.setItem('l11-cabinet-selectedCabinetId', newCabinetId);
-    // 重置3D場景避免狀態衝突
-    setCanvasKey(prev => prev + 1);
-    setSceneError(false);
-  };
-  
   // 創建模擬的系統進度數據
   const systemProgress = systems.map(system => ({
     system,
@@ -802,12 +792,6 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
 
   return (
     <div className="p-6 space-y-6">
-      {/* Cabinet Selection Manager */}
-      <CabinetSelectionManager 
-        currentCabinetId={currentCabinetId}
-        onCabinetChange={handleCabinetChange}
-      />
-      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
