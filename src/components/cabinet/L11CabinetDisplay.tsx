@@ -11,6 +11,7 @@ import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
 import { SystemSelectionDialog } from './SystemSelectionDialog';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
+import { useGlobalSystemAllocation } from '@/hooks/useGlobalSystemAllocation';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
 import { useNavigate } from 'react-router-dom';
@@ -418,6 +419,7 @@ function ErrorFallback() {
 export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   const { systems } = useUnifiedData();
   const navigate = useNavigate();
+  const { getAvailableSystems, allocateSystem, deallocateComponent, getCabinetAllocations } = useGlobalSystemAllocation();
   
   // Mock cabinet data - should be replaced with actual data from backend
   const mockCabinets = [
@@ -559,17 +561,27 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(isOpen));
   }, [isOpen]);
 
+  // 使用防抖機制優化localStorage同步
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
-  }, [selectedComponent]);
+    const debounced = setTimeout(() => {
+      localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
+    }, 300);
+    return () => clearTimeout(debounced);
+  }, [selectedComponent, cabinetId]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
-  }, [config]);
+    const debounced = setTimeout(() => {
+      localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
+    }, 300);
+    return () => clearTimeout(debounced);
+  }, [config, cabinetId]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
-  }, [componentSystemMapping]);
+    const debounced = setTimeout(() => {
+      localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
+    }, 300);
+    return () => clearTimeout(debounced);
+  }, [componentSystemMapping, cabinetId]);
   
   const handleReset = () => {
     setAutoRotate(true);
@@ -638,8 +650,21 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   // 處理系統選擇確認
   const handleSystemSelection = (system: any) => {
     const currentSerialNumber = system.serial_number || system.system_name;
-    // 使用組件序列號作為key的後半部分，而不是系統序列號
     const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+    
+    // 檢查全域分配
+    const canAllocate = allocateSystem(
+      system.id,
+      system.system_name,
+      cabinetId || 'default',
+      systemSelectionDialog.componentType,
+      systemSelectionDialog.componentSn
+    );
+    
+    if (!canAllocate) {
+      alert('該系統已分配到其他機櫃，無法重複分配');
+      return;
+    }
     
     const newMapping = {
       ...componentSystemMapping,
@@ -651,7 +676,6 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     };
     
     setComponentSystemMapping(newMapping);
-    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(newMapping));
     
     setSystemSelectionDialog({
       open: false,
@@ -888,14 +912,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Top Of Rack Switch', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -935,14 +959,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('3 Switch Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('3 Switch Trays', `SW-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -997,14 +1021,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('10 Compute Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1044,14 +1068,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('8 Compute Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1106,14 +1130,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Power Supplies (上)', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Power Supplies (上)', `PSU-T-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1153,14 +1177,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Power Supplies (下)', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Power Supplies (下)', `PSU-B-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1214,14 +1238,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                 <div>系統: {mapping.systemName}</div>
                               </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="w-full text-xs h-6"
-                                onClick={() => handleSelectSystem('SRC Units', mapping.serialNumber)}
-                              >
-                                重新選擇
-                              </Button>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('SRC Units', `SRC-${String(index + 1).padStart(3, '0')}`)}
+                               >
+                                 重新選擇
+                               </Button>
                             </div>
                           </div>
                         );
@@ -1277,7 +1301,7 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
         onOpenChange={(open) => setSystemSelectionDialog(prev => ({ ...prev, open }))}
         componentType={systemSelectionDialog.componentType}
         componentSn={systemSelectionDialog.componentSn}
-        systems={systems}
+        systems={getAvailableSystems(systems, cabinetId || 'default')}
         systemProgress={systemProgress}
         onSystemSelect={handleSystemSelection}
       />
