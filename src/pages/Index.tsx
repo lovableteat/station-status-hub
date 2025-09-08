@@ -19,7 +19,6 @@ import { RealtimeNotifications } from "@/components/common/RealtimeNotifications
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { usePermissions } from "@/hooks/usePermissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { BomCenter } from "@/components/bom/BomCenter";
@@ -35,35 +34,19 @@ const Index = () => {
   const { user, login, isLoggedIn } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { isUpdating } = useUnifiedData();
-  const { canViewModule } = usePermissions();
   const isMobile = useIsMobile();
 
   useEffect(() => {
     // Handle URL module parameter
     if (moduleParam && moduleParam !== activeModule) {
-      // 檢查是否有權限訪問該模組
-      if (canViewModule(moduleParam)) {
-        setActiveModule(moduleParam);
-        updateCurrentModule(moduleParam);
-      } else {
-        // 沒有權限時保持在當前模組或跳轉到dashboard
-        console.warn(`No permission to access module: ${moduleParam}`);
-        if (activeModule === moduleParam) {
-          setActiveModule('dashboard');
-          updateCurrentModule('dashboard');
-        }
-      }
+      setActiveModule(moduleParam);
+      updateCurrentModule(moduleParam);
     }
     
     // Listen for navigation events from other components
     const handleNavigationEvent = (event: CustomEvent) => {
       const { module } = event.detail;
-      if (canViewModule(module)) {
-        setActiveModule(module);
-        updateCurrentModule(module);
-      } else {
-        console.warn(`No permission to navigate to module: ${module}`);
-      }
+      setActiveModule(module);
     };
 
     window.addEventListener('navigate', handleNavigationEvent as EventListener);
@@ -71,19 +54,13 @@ const Index = () => {
     return () => {
       window.removeEventListener('navigate', handleNavigationEvent as EventListener);
     };
-  }, [moduleParam, activeModule, updateCurrentModule, canViewModule]);
+  }, [moduleParam, activeModule, updateCurrentModule]);
 
   if (!isLoggedIn) {
     return <LoginPage onLogin={login} />;
   }
 
   const handleNavigation = (module: string, params?: any) => {
-    // 檢查權限
-    if (!canViewModule(module)) {
-      console.warn(`No permission to navigate to module: ${module}`);
-      return;
-    }
-    
     setActiveModule(module);
     updateCurrentModule(module); // Update user presence
     // Close sidebar on mobile after navigation
@@ -190,12 +167,6 @@ const Index = () => {
         <Sidebar 
           activeModule={activeModule} 
           onModuleChange={(module) => {
-            // 檢查權限
-            if (!canViewModule(module)) {
-              console.warn(`No permission to navigate to module: ${module}`);
-              return;
-            }
-            
             setActiveModule(module);
             updateCurrentModule(module); // Update user presence
             if (isMobile) setSidebarOpen(false);
