@@ -18,6 +18,7 @@ import {
 import { CabinetCard, CabinetInfo } from './CabinetCard';
 import { CabinetCreateDialog } from './CabinetCreateDialog';
 import { CabinetEditDialog } from './CabinetEditDialog';
+import { BackButton } from '@/components/common/BackButton';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useNavigate } from 'react-router-dom';
 
@@ -168,7 +169,8 @@ export function CabinetManagement() {
       {/* 標題區域 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">GB300機櫃測試追蹤</h1>
+          <BackButton />
+          <h1 className="text-3xl font-bold text-foreground mt-2">GB300機櫃測試追蹤</h1>
           <p className="text-muted-foreground">管理和監控所有機櫃的測試進度與配置狀態</p>
         </div>
         
