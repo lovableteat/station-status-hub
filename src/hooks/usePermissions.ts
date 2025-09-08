@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 export type Permission = 
   | 'dashboard_view' | 'dashboard_edit'
   | 'test_tracker_view' | 'test_tracker_edit'
+  | 'l11_cabinet_view' | 'l11_cabinet_edit'
+  | 'cabinet_tracker_view' | 'cabinet_tracker_edit'
   | 'issues_view' | 'issues_edit'
   | 'production_view' | 'production_edit'
   | 'data_center_view' | 'data_center_edit'
@@ -63,13 +65,18 @@ export function usePermissions() {
   };
 
   const canViewModule = (module: string): boolean => {
+    // 超級管理員和管理員有所有權限
+    if (user?.role === 'super_admin' || user?.role === 'admin') {
+      return true;
+    }
+    
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_view');
       case 'l11-cabinet':
-        return hasPermission('dashboard_view'); // 使用dashboard權限
+        return hasPermission('l11_cabinet_view');
       case 'cabinet-tracker':
-        return hasPermission('test_tracker_view'); // GB300機櫃測試追蹤使用test_tracker權限
+        return hasPermission('cabinet_tracker_view');
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_view');
@@ -91,13 +98,18 @@ export function usePermissions() {
   };
 
   const canEditModule = (module: string): boolean => {
+    // 超級管理員和管理員有所有權限
+    if (user?.role === 'super_admin' || user?.role === 'admin') {
+      return true;
+    }
+    
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_edit');
       case 'l11-cabinet':
-        return hasPermission('dashboard_edit'); // 使用dashboard權限
+        return hasPermission('l11_cabinet_edit');
       case 'cabinet-tracker':
-        return hasPermission('test_tracker_edit'); // GB300機櫃測試追蹤使用test_tracker權限
+        return hasPermission('cabinet_tracker_edit');
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_edit');
