@@ -467,66 +467,86 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     currentCabinetId ? `${key}-${currentCabinetId}` : key
   , [currentCabinetId]);
   
+  // 默認配置
+  const getDefaultConfig = (): CabinetConfig => ({
+    topOfRackSwitch: { 
+      count: 2, 
+      color: '#d97706'
+    },
+    topPowerSupplies: { 
+      count: 2, 
+      color: '#d97706'
+    },
+    computeTrays1: { 
+      count: 10, 
+      color: '#059669'
+    },
+    switchTrays: { 
+      count: 3, 
+      color: '#2563eb'
+    },
+    computeTrays2: { 
+      count: 8, 
+      color: '#059669'
+    },
+    bottomPowerSupplies: { 
+      count: 2, 
+      color: '#d97706'
+    },
+    srcUnits: { 
+      count: 2, 
+      color: '#7c3aed'
+    }
+  });
+
+  // 從localStorage讀取指定機櫃的配置
+  const loadCabinetConfig = useCallback((cabinetId: string): CabinetConfig => {
+    const savedConfig = localStorage.getItem(`l11-cabinet-config-${cabinetId}`);
+    return savedConfig ? JSON.parse(savedConfig) : getDefaultConfig();
+  }, []);
+
   const [config, setConfig] = useState<CabinetConfig>(() => {
-    // 使用默認的機櫃ID來讀取初始配置
-    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
-    const savedConfig = localStorage.getItem(`l11-cabinet-config-${defaultCabinetId}`);
-    return savedConfig ? JSON.parse(savedConfig) : {
-      topOfRackSwitch: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      topPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      computeTrays1: { 
-        count: 10, 
-        color: '#059669'
-      },
-      switchTrays: { 
-        count: 3, 
-        color: '#2563eb'
-      },
-      computeTrays2: { 
-        count: 8, 
-        color: '#059669'
-      },
-      bottomPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      srcUnits: { 
-        count: 2, 
-        color: '#7c3aed'
-      }
-    };
+    return loadCabinetConfig(currentCabinetId);
   });
   
   const [autoRotate, setAutoRotate] = useState(() => {
-    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
-    const saved = localStorage.getItem(`l11-cabinet-autoRotate-${defaultCabinetId}`);
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
     return saved ? JSON.parse(saved) : true;
   });
   
   const [isOpen, setIsOpen] = useState(() => {
-    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
-    const saved = localStorage.getItem(`l11-cabinet-isOpen-${defaultCabinetId}`);
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
     return saved ? JSON.parse(saved) : true;
   });
   
   const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
-    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
-    const saved = localStorage.getItem(`l11-cabinet-selectedComponent-${defaultCabinetId}`);
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
     return saved ? JSON.parse(saved) : null;
   });
 
   // 組件到系統的映射 - 為每個機櫃獨立存儲
   const [componentSystemMapping, setComponentSystemMapping] = useState<ComponentSystemMapping>(() => {
-    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
-    const saved = localStorage.getItem(`l11-cabinet-componentSystemMapping-${defaultCabinetId}`);
+    const saved = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
     return saved ? JSON.parse(saved) : {};
   });
+
+  // 當機櫃ID改變時，重新載入所有配置
+  useEffect(() => {
+    const newConfig = loadCabinetConfig(currentCabinetId);
+    setConfig(newConfig);
+    
+    const newAutoRotate = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
+    setAutoRotate(newAutoRotate ? JSON.parse(newAutoRotate) : true);
+    
+    const newIsOpen = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
+    setIsOpen(newIsOpen ? JSON.parse(newIsOpen) : true);
+    
+    const newSelectedComponent = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
+    setSelectedComponent(newSelectedComponent ? JSON.parse(newSelectedComponent) : null);
+    
+    const newComponentSystemMapping = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
+    setComponentSystemMapping(newComponentSystemMapping ? JSON.parse(newComponentSystemMapping) : {});
+  }, [currentCabinetId, loadCabinetConfig, getStorageKey]);
 
   // 系統選擇對話框狀態
   const [systemSelectionDialog, setSystemSelectionDialog] = useState<{
@@ -575,7 +595,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     };
     
     updateComponentMappingWithLatestSerialNumbers();
-  }, [systems, componentSystemMapping]);
+  }, [systems, componentSystemMapping, getStorageKey]);
   
   // 創建模擬的系統進度數據
   const systemProgress = systems.map(system => ({
@@ -590,11 +610,11 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
   // 自動保存狀態到localStorage - 使用機櫃ID特定的key
   useEffect(() => {
     localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(autoRotate));
-  }, [autoRotate]);
+  }, [autoRotate, getStorageKey]);
 
   useEffect(() => {
     localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(isOpen));
-  }, [isOpen]);
+  }, [isOpen, getStorageKey]);
 
   // 使用防抖機制優化localStorage同步，並添加錯誤處理
   useEffect(() => {
@@ -608,7 +628,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [selectedComponent, currentCabinetId]);
+  }, [selectedComponent, getStorageKey]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
@@ -619,7 +639,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [config, currentCabinetId]);
+  }, [config, getStorageKey]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
@@ -630,7 +650,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       }
     }, 300);
     return () => clearTimeout(debounced);
-  }, [componentSystemMapping, currentCabinetId]);
+  }, [componentSystemMapping, getStorageKey]);
   
   // 添加組件卸載時的清理
   useEffect(() => {
