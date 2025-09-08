@@ -13,6 +13,25 @@ import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
 
+// 生成序號的函數
+const generateSerialNumbers = (prefix: string, count: number): string[] => {
+  return Array.from({length: count}, (_, i) => `${prefix}-${String(i + 1).padStart(3, '0')}`);
+};
+
+// 根據組件類型獲取序號列表
+const getSerialNumbers = (componentType: string, count: number): string[] => {
+  const prefixMap: { [key: string]: string } = {
+    'topOfRackSwitch': 'TOR',
+    'switchTrays': 'SW',
+    'computeTrays1': 'CT1',
+    'computeTrays2': 'CT2',
+    'topPowerSupplies': 'PSU-T',
+    'bottomPowerSupplies': 'PSU-B',
+    'srcUnits': 'SRC'
+  };
+  return generateSerialNumbers(prefixMap[componentType] || componentType.toUpperCase(), count);
+};
+
 interface SystemDetails {
   system_name?: string;
   model?: string;
@@ -184,7 +203,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
           position: [0, currentY - (i * section.height), 0] as [number, number, number],
           color: actualColor,
           size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
-          serialNumber: sectionConfig?.serialNumbers[i] || `TOR-${i + 1}`,
+          serialNumber: getSerialNumbers(section.type, actualCount)[i] || `TOR-${i + 1}`,
           componentType: 'Top Of Rack Switch'
         });
       } else {
@@ -192,7 +211,7 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick }: C
           position: [0, currentY - (i * section.height), 0] as [number, number, number],
           color: actualColor,
           size: [3.8, section.height - 0.02, 1.8] as [number, number, number],
-          serialNumber: sectionConfig?.serialNumbers[i] || `${section.type.toUpperCase()}-${i + 1}`,
+          serialNumber: getSerialNumbers(section.type, actualCount)[i] || `${section.type.toUpperCase()}-${i + 1}`,
           componentType: getComponentTypeName(section.type)
         });
       }
@@ -484,41 +503,35 @@ export function L11CabinetDisplay() {
     return savedConfig ? JSON.parse(savedConfig) : {
       topOfRackSwitch: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['TOR-001', 'TOR-002'] 
+        color: '#d97706'
       },
       topPowerSupplies: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['PSU-T-001', 'PSU-T-002'] 
+        color: '#d97706'
       },
       computeTrays1: { 
         count: 10, 
-        color: '#059669', 
-        serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
+        color: '#059669'
       },
       switchTrays: { 
         count: 3, 
-        color: '#2563eb', 
-        serialNumbers: Array.from({length: 3}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+        color: '#2563eb'
       },
       computeTrays2: { 
         count: 8, 
-        color: '#059669', 
-        serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
+        color: '#059669'
       },
       bottomPowerSupplies: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['PSU-B-001', 'PSU-B-002'] 
+        color: '#d97706'
       },
       srcUnits: { 
         count: 2, 
-        color: '#7c3aed', 
-        serialNumbers: ['SRC-001', 'SRC-002'] 
+        color: '#7c3aed'
       }
     };
   });
+
 
   // 自動保存狀態到localStorage
   useEffect(() => {
@@ -802,8 +815,6 @@ export function L11CabinetDisplay() {
           <CabinetConfigurator 
             config={config} 
             onConfigChange={handleConfigChange}
-            componentSystemMapping={componentSystemMapping}
-            onComponentSystemMappingChange={setComponentSystemMapping}
           />
           
         </div>
@@ -827,7 +838,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">Top Of Rack Switch</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.topOfRackSwitch.serialNumbers.slice(0, config.topOfRackSwitch.count).map((sn, index) => (
+                     {getSerialNumbers('topOfRackSwitch', config.topOfRackSwitch.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
@@ -859,7 +870,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">Switch Trays</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.switchTrays.serialNumbers.slice(0, config.switchTrays.count).map((sn, index) => (
+                     {getSerialNumbers('switchTrays', config.switchTrays.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-blue-600 dark:text-blue-400 font-bold">{sn}</div>
@@ -902,7 +913,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">10 Compute Trays</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.computeTrays1.serialNumbers.slice(0, config.computeTrays1.count).map((sn, index) => (
+                     {getSerialNumbers('computeTrays1', config.computeTrays1.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
@@ -934,7 +945,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">8 Compute Trays</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.computeTrays2.serialNumbers.slice(0, config.computeTrays2.count).map((sn, index) => (
+                     {getSerialNumbers('computeTrays2', config.computeTrays2.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-emerald-600 dark:text-emerald-400 font-bold">{sn}</div>
@@ -977,7 +988,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">Power Supplies (上)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.topPowerSupplies.serialNumbers.slice(0, config.topPowerSupplies.count).map((sn, index) => (
+                     {getSerialNumbers('topPowerSupplies', config.topPowerSupplies.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
@@ -1009,7 +1020,7 @@ export function L11CabinetDisplay() {
                 <div>
                   <h4 className="font-medium mb-2">Power Supplies (下)</h4>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {config.bottomPowerSupplies.serialNumbers.slice(0, config.bottomPowerSupplies.count).map((sn, index) => (
+                     {getSerialNumbers('bottomPowerSupplies', config.bottomPowerSupplies.count).map((sn, index) => (
                        <div key={sn} className="text-sm font-mono bg-amber-50 dark:bg-amber-950 px-3 py-2 rounded border hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer transition-colors">
                          <div className="font-medium">#{index + 1}</div>
                          <div className="text-amber-600 dark:text-amber-400 font-bold">{sn}</div>
@@ -1050,7 +1061,7 @@ export function L11CabinetDisplay() {
               </div>
               <div className="pl-7">
                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                   {config.srcUnits.serialNumbers.slice(0, config.srcUnits.count).map((sn, index) => (
+                   {getSerialNumbers('srcUnits', config.srcUnits.count).map((sn, index) => (
                      <div key={sn} className="text-sm font-mono bg-purple-50 dark:bg-purple-950 px-3 py-2 rounded border hover:bg-purple-100 dark:hover:bg-purple-900 cursor-pointer transition-colors">
                        <div className="font-medium">#{index + 1}</div>
                        <div className="text-purple-600 dark:text-purple-400 font-bold">{sn}</div>
