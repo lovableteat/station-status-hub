@@ -30,7 +30,6 @@ interface SidebarProps {
 const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
   { id: "l11-cabinet", label: "L11機櫃展示", icon: BarChart3, description: "3D機櫃結構" },
-  { id: "cabinet-tracker", label: "GB300機櫃測試追蹤", icon: Database, description: "機櫃總管理" },
   { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
   { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
