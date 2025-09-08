@@ -34,9 +34,6 @@ interface SystemSelectionDialogProps {
   systems: UnifiedSystem[];
   systemProgress: SystemProgressInfo[];
   onSystemSelect: (system: UnifiedSystem) => void;
-  excludeAllocatedSystems?: boolean;
-  currentCabinetId?: string;
-  isSystemAllocated?: (systemId: string) => boolean;
 }
 
 function getStatusColor(status: string): string {
@@ -56,27 +53,15 @@ export function SystemSelectionDialog({
   componentSn,
   systems,
   systemProgress,
-  onSystemSelect,
-  excludeAllocatedSystems = true,
-  currentCabinetId,
-  isSystemAllocated
+  onSystemSelect
 }: SystemSelectionDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredSystems = systems.filter(system => {
-    // 基本搜尋過濾
-    const matchesSearch = system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (system.serial_number && system.serial_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (system.assigned_engineer && system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // 如果啟用排除已分配的系統，且有分配檢查函數
-    if (excludeAllocatedSystems && isSystemAllocated) {
-      const isAllocated = isSystemAllocated(system.id);
-      return matchesSearch && !isAllocated;
-    }
-    
-    return matchesSearch;
-  });
+  const filteredSystems = systems.filter(system =>
+    system.system_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (system.serial_number && system.serial_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (system.assigned_engineer && system.assigned_engineer.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const handleSystemSelect = (system: UnifiedSystem) => {
     onSystemSelect(system);
@@ -109,28 +94,23 @@ export function SystemSelectionDialog({
                 const progressInfo = systemProgress.find(p => p.system.id === system.id);
                 
                 return (
-                   <div
-                     key={system.id}
-                     className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                     onClick={() => handleSystemSelect(system)}
-                   >
-                     <div className="flex items-center justify-between mb-2">
-                       <div className="flex items-center gap-3">
-                         <div className={`h-3 w-3 rounded-full ${getStatusColor(system.status)}`} />
-                         <h4 className="font-semibold">{system.system_name}</h4>
-                         <Badge variant="outline" className="text-xs">
-                           {system.model || 'GB300'}
-                         </Badge>
-                         {isSystemAllocated && isSystemAllocated(system.id) && (
-                           <Badge variant="destructive" className="text-xs">
-                             已分配
-                           </Badge>
-                         )}
-                       </div>
-                       <Badge variant={system.status === 'Completed' ? 'default' : 'secondary'}>
-                         {system.status}
-                       </Badge>
-                     </div>
+                  <div
+                    key={system.id}
+                    className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                    onClick={() => handleSystemSelect(system)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-3 w-3 rounded-full ${getStatusColor(system.status)}`} />
+                        <h4 className="font-semibold">{system.system_name}</h4>
+                        <Badge variant="outline" className="text-xs">
+                          {system.model || 'GB300'}
+                        </Badge>
+                      </div>
+                      <Badge variant={system.status === 'Completed' ? 'default' : 'secondary'}>
+                        {system.status}
+                      </Badge>
+                    </div>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-muted-foreground">
                       <div>
