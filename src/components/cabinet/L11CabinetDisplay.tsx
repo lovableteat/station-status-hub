@@ -1,5 +1,5 @@
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
@@ -158,6 +158,30 @@ interface CabinetSceneProps {
 }
 
 function CabinetScene({ config, isOpen, selectedComponent, onComponentClick, componentSystemMapping }: CabinetSceneProps & { componentSystemMapping: ComponentSystemMapping }) {
+  const { gl, scene } = useThree();
+  
+  // 清理函數
+  useEffect(() => {
+    return () => {
+      // 清理Three.js資源
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry?.dispose();
+          if (object.material) {
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else {
+              object.material.dispose();
+            }
+          }
+        }
+      });
+      
+      // 清理渲染器資源
+      gl.dispose();
+    };
+  }, [gl, scene]);
+
   const frameColor = '#1a1a1a';
   
   // 根據圖像重新定義機櫃結構 - 從上到下的實際排列順序
@@ -405,12 +429,22 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick, com
   );
 }
 
-function ErrorFallback() {
+function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="h-[600px] rounded-lg border bg-slate-900 flex items-center justify-center">
-      <div className="text-white text-center">
+      <div className="text-white text-center space-y-4">
         <h3 className="text-lg font-semibold mb-2">3D顯示載入失敗</h3>
-        <p className="text-sm text-slate-400">請重新整理頁面或聯繫系統管理員</p>
+        <p className="text-sm text-slate-400">可能是由於瀏覽器兼容性或內存不足造成</p>
+        <div className="flex gap-2 justify-center">
+          {onRetry && (
+            <Button onClick={onRetry} variant="outline" size="sm">
+              重新載入
+            </Button>
+          )}
+          <Button onClick={() => window.location.reload()} variant="default" size="sm">
+            重新整理頁面
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -420,6 +454,11 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
   const { systems } = useUnifiedData();
   const navigate = useNavigate();
   const { getAvailableSystems, allocateSystem, deallocateComponent, getCabinetAllocations } = useGlobalSystemAllocation();
+  
+  // 使用ref來防止內存洩漏和狀態循環
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [sceneError, setSceneError] = useState(false);
+  const [canvasKey, setCanvasKey] = useState(0); // 用於強制重新創建Canvas
   
   // Mock cabinet data - should be replaced with actual data from backend
   const mockCabinets = [
@@ -561,32 +600,66 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(isOpen));
   }, [isOpen]);
 
-  // 使用防抖機制優化localStorage同步
+  // 使用防抖機制優化localStorage同步，並添加錯誤處理
   useEffect(() => {
+    if (!selectedComponent) return;
+    
     const debounced = setTimeout(() => {
-      localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
+      try {
+        localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
+      } catch (error) {
+        console.warn('Failed to save selectedComponent to localStorage:', error);
+      }
     }, 300);
     return () => clearTimeout(debounced);
   }, [selectedComponent, cabinetId]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
-      localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
+      try {
+        localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
+      } catch (error) {
+        console.warn('Failed to save config to localStorage:', error);
+      }
     }, 300);
     return () => clearTimeout(debounced);
   }, [config, cabinetId]);
 
   useEffect(() => {
     const debounced = setTimeout(() => {
-      localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
+      try {
+        localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
+      } catch (error) {
+        console.warn('Failed to save componentSystemMapping to localStorage:', error);
+      }
     }, 300);
     return () => clearTimeout(debounced);
   }, [componentSystemMapping, cabinetId]);
   
-  const handleReset = () => {
-    setAutoRotate(true);
-    localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(true));
-  };
+  // 添加組件卸載時的清理
+  useEffect(() => {
+    return () => {
+      // 清理任何可能存在的定時器或監聽器
+      setSceneError(false);
+    };
+  }, []);
+  
+  const handleReset = useCallback(() => {
+    try {
+      setAutoRotate(true);
+      localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(true));
+      // 重置3D場景錯誤狀態
+      setSceneError(false);
+      setCanvasKey(prev => prev + 1); // 強制重新創建Canvas
+    } catch (error) {
+      console.error('Error during reset:', error);
+    }
+  }, [getStorageKey]);
+
+  const handleRetryScene = useCallback(() => {
+    setSceneError(false);
+    setCanvasKey(prev => prev + 1);
+  }, []);
 
   const handleComponentClick = async (componentType: string, serialNumber: string) => {
     // 檢查是否有映射的系統
@@ -647,42 +720,47 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     });
   };
 
-  // 處理系統選擇確認
-  const handleSystemSelection = (system: any) => {
-    const currentSerialNumber = system.serial_number || system.system_name;
-    const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
-    
-    // 檢查全域分配
-    const canAllocate = allocateSystem(
-      system.id,
-      system.system_name,
-      cabinetId || 'default',
-      systemSelectionDialog.componentType,
-      systemSelectionDialog.componentSn
-    );
-    
-    if (!canAllocate) {
-      alert('該系統已分配到其他機櫃，無法重複分配');
-      return;
-    }
-    
-    const newMapping = {
-      ...componentSystemMapping,
-      [key]: {
-        systemId: system.id,
-        systemName: system.system_name,
-        serialNumber: currentSerialNumber
+  // 處理系統選擇確認，添加錯誤處理
+  const handleSystemSelection = useCallback((system: any) => {
+    try {
+      const currentSerialNumber = system.serial_number || system.system_name;
+      const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+      
+      // 檢查全域分配
+      const canAllocate = allocateSystem(
+        system.id,
+        system.system_name,
+        cabinetId || 'default',
+        systemSelectionDialog.componentType,
+        systemSelectionDialog.componentSn
+      );
+      
+      if (!canAllocate) {
+        alert('該系統已分配到其他機櫃，無法重複分配');
+        return;
       }
-    };
-    
-    setComponentSystemMapping(newMapping);
-    
-    setSystemSelectionDialog({
-      open: false,
-      componentType: '',
-      componentSn: ''
-    });
-  };
+      
+      const newMapping = {
+        ...componentSystemMapping,
+        [key]: {
+          systemId: system.id,
+          systemName: system.system_name,
+          serialNumber: currentSerialNumber
+        }
+      };
+      
+      setComponentSystemMapping(newMapping);
+      
+      setSystemSelectionDialog({
+        open: false,
+        componentType: '',
+        componentSn: ''
+      });
+    } catch (error) {
+      console.error('Error during system selection:', error);
+      alert('系統選擇過程中發生錯誤，請重試');
+    }
+  }, [systemSelectionDialog, componentSystemMapping, allocateSystem, cabinetId]);
 
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
@@ -738,45 +816,63 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl">
-              <Suspense fallback={<ErrorFallback />}>
-                <Canvas
-                  camera={{ position: [8, 3, 8], fov: 50 }}
-                  style={{ 
-                    background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
-                  }}
-                  shadows={true}
-                  gl={{ 
-                    antialias: true, 
-                    alpha: true,
-                    powerPreference: "high-performance"
-                  }}
-                >
-                  <Suspense fallback={null}>
-                    <CabinetScene 
-                      config={config} 
-                      isOpen={isOpen} 
-                      selectedComponent={selectedComponent} 
-                      onComponentClick={handleComponentClick}
-                      componentSystemMapping={componentSystemMapping}
-                    />
-                    <OrbitControls 
-                      autoRotate={autoRotate}
-                      autoRotateSpeed={0.5}
-                      enablePan={true}
-                      enableZoom={true}
-                      enableRotate={true}
-                      minDistance={4}
-                      maxDistance={20}
-                      minPolarAngle={0}
-                      maxPolarAngle={Math.PI}
-                      onStart={() => setAutoRotate(false)}
-                      enableDamping={true}
-                      dampingFactor={0.05}
-                    />
-                  </Suspense>
-                </Canvas>
-              </Suspense>
+            <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl" ref={canvasRef}>
+              {sceneError ? (
+                <ErrorFallback onRetry={handleRetryScene} />
+              ) : (
+                <Suspense fallback={<ErrorFallback />}>
+                  <Canvas
+                    key={canvasKey}
+                    camera={{ position: [8, 3, 8], fov: 50 }}
+                    style={{ 
+                      background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
+                    }}
+                    shadows={true}
+                    gl={{ 
+                      antialias: true, 
+                      alpha: true,
+                      powerPreference: "high-performance"
+                    }}
+                    onCreated={(state) => {
+                      // 設置錯誤處理
+                      state.gl.domElement.addEventListener('webglcontextlost', (e) => {
+                        console.warn('WebGL context lost, attempting to restore...');
+                        e.preventDefault();
+                        setSceneError(true);
+                      });
+                      
+                      state.gl.domElement.addEventListener('webglcontextrestored', () => {
+                        console.log('WebGL context restored');
+                        setSceneError(false);
+                      });
+                    }}
+                  >
+                    <Suspense fallback={null}>
+                      <CabinetScene 
+                        config={config} 
+                        isOpen={isOpen} 
+                        selectedComponent={selectedComponent} 
+                        onComponentClick={handleComponentClick}
+                        componentSystemMapping={componentSystemMapping}
+                      />
+                      <OrbitControls 
+                        autoRotate={autoRotate}
+                        autoRotateSpeed={0.5}
+                        enablePan={true}
+                        enableZoom={true}
+                        enableRotate={true}
+                        minDistance={4}
+                        maxDistance={20}
+                        minPolarAngle={0}
+                        maxPolarAngle={Math.PI}
+                        onStart={() => setAutoRotate(false)}
+                        enableDamping={true}
+                        dampingFactor={0.05}
+                      />
+                    </Suspense>
+                  </Canvas>
+                </Suspense>
+              )}
             </div>
             
             {/* Selected Component Display */}
