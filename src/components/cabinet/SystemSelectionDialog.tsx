@@ -115,7 +115,7 @@ export function SystemSelectionDialog({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-muted-foreground">
                       <div>
                         <span className="font-medium">序列號:</span>
-                        <p className="text-foreground font-mono">
+                        <p className="text-yellow-500 font-mono font-bold">
                           {system.serial_number || 'N/A'}
                         </p>
                       </div>
