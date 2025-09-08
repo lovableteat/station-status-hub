@@ -1,18 +1,21 @@
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { CabinetSwitcher } from './CabinetSwitcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { RotateCcw, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
 import { SystemSelectionDialog } from './SystemSelectionDialog';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
+import { useGlobalSystemAllocation } from '@/hooks/useGlobalSystemAllocation';
+import { CabinetErrorBoundary } from './CabinetErrorBoundary';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
 import { useNavigate } from 'react-router-dom';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // 生成序號的函數
 const generateSerialNumbers = (prefix: string, count: number): string[] => {
@@ -415,13 +418,17 @@ function ErrorFallback() {
 }
 
 export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
-  const { systems } = useUnifiedData();
+  const { systems, isLoading } = useUnifiedData();
+  const globalAllocation = useGlobalSystemAllocation();
   const navigate = useNavigate();
+  
+  // 錯誤狀態管理
+  const [error, setError] = useState<string | null>(null);
   
   // Mock cabinet data - should be replaced with actual data from backend
   const mockCabinets = [
     { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陈工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
     { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
     { id: 'cabinet-004', name: 'L11-機櫃-B2', location: '廠房B-2樓-南側', model: 'L11', status: 'offline' as const, totalSystems: 29, completedSystems: 8, totalComponents: 29, configuredComponents: 15, assignedEngineers: [], createdAt: '2024-02-05T14:20:00Z', lastUpdated: new Date().toISOString() },
     { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
@@ -432,37 +439,66 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     navigate(`/cabinet/${newCabinetId}`);
   };
   
-  // 創建模擬的系統進度數據
-  const systemProgress = systems.map(system => ({
+  // 創建模擬的系統進度數據  
+  const systemProgress = useMemo(() => systems.map(system => ({
     system,
     progress: system.overall_progress || 0,
     status: system.status || 'Not Start',
     test_items_completed: Math.floor((system.overall_progress || 0) / 10),
     test_items_total: 10
-  }));
+  })), [systems]);
   
   // 從localStorage讀取和保存狀態 - 為每個機櫃獨立存儲
-  const getStorageKey = (key: string) => cabinetId ? `${key}-${cabinetId}` : key;
+  const getStorageKey = useCallback((key: string) => cabinetId ? `${key}-${cabinetId}` : key, [cabinetId]);
+  
+  // 防抖的localStorage保存函數
+  const debouncedSave = useCallback((key: string, value: any) => {
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem(getStorageKey(key), JSON.stringify(value));
+      } catch (error) {
+        console.error('Failed to save to localStorage:', error);
+        setError('保存配置失敗，請重試');
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [getStorageKey]);
   
   const [autoRotate, setAutoRotate] = useState(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
-    return saved ? JSON.parse(saved) : true;
+    try {
+      const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
   });
   
   const [isOpen, setIsOpen] = useState(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
-    return saved ? JSON.parse(saved) : true;
+    try {
+      const saved = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
   });
   
   const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   // 組件到系統的映射 - 為每個機櫃獨立存儲
   const [componentSystemMapping, setComponentSystemMapping] = useState<ComponentSystemMapping>(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
-    return saved ? JSON.parse(saved) : {};
+    try {
+      const saved = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
   });
 
   // 系統選擇對話框狀態
@@ -476,11 +512,11 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
     componentSn: ''
   });
   
-  // 監聽系統資料變化，同步更新機櫃組裝清單中的序號顯示
+  // 優化的useEffect - 移除可能導致循環更新的依賴項
   useEffect(() => {
+    if (!systems || systems.length === 0) return;
+    
     const updateComponentMappingWithLatestSerialNumbers = () => {
-      if (!systems || systems.length === 0) return;
-      
       const updatedMapping = { ...componentSystemMapping };
       let hasChanges = false;
       
@@ -504,125 +540,166 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
         }
       });
       
-      // 如果有變更，更新狀態和本地存儲
-        if (hasChanges) {
-          setComponentSystemMapping(updatedMapping);
-          localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(updatedMapping));
-        }
+      // 如果有變更，更新狀態並保存
+      if (hasChanges) {
+        setComponentSystemMapping(updatedMapping);
+        debouncedSave('l11-cabinet-componentSystemMapping', updatedMapping);
+      }
     };
     
     updateComponentMappingWithLatestSerialNumbers();
-  }, [systems, componentSystemMapping]);
+  }, [systems, debouncedSave]); // 移除 componentSystemMapping 依賴項避免循環
   
   const [config, setConfig] = useState<CabinetConfig>(() => {
-    const savedConfig = localStorage.getItem(getStorageKey('l11-cabinet-config'));
-    return savedConfig ? JSON.parse(savedConfig) : {
-      topOfRackSwitch: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      topPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      computeTrays1: { 
-        count: 10, 
-        color: '#059669'
-      },
-      switchTrays: { 
-        count: 3, 
-        color: '#2563eb'
-      },
-      computeTrays2: { 
-        count: 8, 
-        color: '#059669'
-      },
-      bottomPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      srcUnits: { 
-        count: 2, 
-        color: '#7c3aed'
-      }
-    };
+    try {
+      const savedConfig = localStorage.getItem(getStorageKey('l11-cabinet-config'));
+      return savedConfig ? JSON.parse(savedConfig) : {
+        topOfRackSwitch: { 
+          count: 2, 
+          color: '#d97706'
+        },
+        topPowerSupplies: { 
+          count: 2, 
+          color: '#d97706'
+        },
+        computeTrays1: { 
+          count: 10, 
+          color: '#059669'
+        },
+        switchTrays: { 
+          count: 3, 
+          color: '#2563eb'
+        },
+        computeTrays2: { 
+          count: 8, 
+          color: '#059669'
+        },
+        bottomPowerSupplies: { 
+          count: 2, 
+          color: '#d97706'
+        },
+        srcUnits: { 
+          count: 2, 
+          color: '#7c3aed'
+        }
+      };
+    } catch {
+      return {
+        topOfRackSwitch: { count: 2, color: '#d97706' },
+        topPowerSupplies: { count: 2, color: '#d97706' },
+        computeTrays1: { count: 10, color: '#059669' },
+        switchTrays: { count: 3, color: '#2563eb' },
+        computeTrays2: { count: 8, color: '#059669' },
+        bottomPowerSupplies: { count: 2, color: '#d97706' },
+        srcUnits: { count: 2, color: '#7c3aed' }
+      };
+    }
   });
 
 
-  // 自動保存狀態到localStorage - 使用機櫃ID特定的key
+  // 優化的自動保存狀態到localStorage - 使用防抖
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(autoRotate));
-  }, [autoRotate]);
+    const cleanup = debouncedSave('l11-cabinet-autoRotate', autoRotate);
+    return cleanup;
+  }, [autoRotate, debouncedSave]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(isOpen));
-  }, [isOpen]);
+    const cleanup = debouncedSave('l11-cabinet-isOpen', isOpen);
+    return cleanup;
+  }, [isOpen, debouncedSave]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(selectedComponent));
-  }, [selectedComponent]);
+    const cleanup = debouncedSave('l11-cabinet-selectedComponent', selectedComponent);
+    return cleanup;
+  }, [selectedComponent, debouncedSave]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(config));
-  }, [config]);
+    const cleanup = debouncedSave('l11-cabinet-config', config);
+    return cleanup;
+  }, [config, debouncedSave]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(componentSystemMapping));
-  }, [componentSystemMapping]);
+    const cleanup = debouncedSave('l11-cabinet-componentSystemMapping', componentSystemMapping);
+    return cleanup;
+  }, [componentSystemMapping, debouncedSave]);
+  
   
   const handleReset = () => {
-    setAutoRotate(true);
-    localStorage.setItem(getStorageKey('l11-cabinet-autoRotate'), JSON.stringify(true));
+    try {
+      setAutoRotate(true);
+      debouncedSave('l11-cabinet-autoRotate', true);
+      setError(null);
+    } catch (error) {
+      setError('重置失敗，請重試');
+    }
   };
 
   const handleComponentClick = async (componentType: string, serialNumber: string) => {
-    // 檢查是否有映射的系統
-    const mappingKey = `${componentType}-${serialNumber}`;
-    const mappedSystem = componentSystemMapping[mappingKey];
-    
-    let details: SystemDetails | undefined;
-    if (mappedSystem) {
-      // 如果有映射的系統，使用該系統的資訊
-      const system = systems.find(s => s.id === mappedSystem.systemId);
-      if (system) {
-        details = {
-          system_name: system.system_name,
-          model: system.model,
-          current_station: system.current_station,
-          status: system.status,
-          assigned_engineer: system.assigned_engineer,
-          overall_progress: system.overall_progress,
-          team: 'N/A', // 從新的系統資料結構中沒有team欄位
-          bmc_address: 'N/A',
-          os_mac_address: 'N/A',
-          ubuntu_version: system.ubuntu_version,
-          cuda_version: system.cuda_version
-        };
+    try {
+      // 檢查是否有映射的系統
+      const mappingKey = `${componentType}-${serialNumber}`;
+      const mappedSystem = componentSystemMapping[mappingKey];
+      
+      let details: SystemDetails | undefined;
+      if (mappedSystem) {
+        // 如果有映射的系統，使用該系統的資訊
+        const system = systems.find(s => s.id === mappedSystem.systemId);
+        if (system) {
+          details = {
+            system_name: system.system_name,
+            model: system.model,
+            current_station: system.current_station,
+            status: system.status,
+            assigned_engineer: system.assigned_engineer,
+            overall_progress: system.overall_progress,
+            team: 'N/A', // 從新的系統資料結構中沒有team欄位
+            bmc_address: 'N/A',
+            os_mac_address: 'N/A',
+            ubuntu_version: system.ubuntu_version,
+            cuda_version: system.cuda_version
+          };
+        }
       }
+      
+      const newSelectedComponent = { 
+        type: componentType, 
+        sn: serialNumber,
+        details 
+      };
+      setSelectedComponent(newSelectedComponent);
+      setError(null);
+    } catch (error) {
+      console.error('Error handling component click:', error);
+      setError('選擇組件時發生錯誤');
     }
-    
-    const newSelectedComponent = { 
-      type: componentType, 
-      sn: serialNumber,
-      details 
-    };
-    setSelectedComponent(newSelectedComponent);
-    localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(newSelectedComponent));
   };
 
   const handleConfigChange = (newConfig: CabinetConfig) => {
-    setConfig(newConfig);
-    localStorage.setItem(getStorageKey('l11-cabinet-config'), JSON.stringify(newConfig));
+    try {
+      setConfig(newConfig);
+      setError(null);
+    } catch (error) {
+      setError('配置更新失敗');
+    }
   };
 
   const handleIsOpenChange = (newIsOpen: boolean) => {
-    setIsOpen(newIsOpen);
-    localStorage.setItem(getStorageKey('l11-cabinet-isOpen'), JSON.stringify(newIsOpen));
+    try {
+      setIsOpen(newIsOpen);
+      setError(null);
+    } catch (error) {
+      setError('機殼狀態更新失敗');
+    }
   };
 
   const handleSelectedComponentClear = () => {
-    setSelectedComponent(null);
-    localStorage.removeItem(getStorageKey('l11-cabinet-selectedComponent'));
+    try {
+      setSelectedComponent(null);
+      localStorage.removeItem(getStorageKey('l11-cabinet-selectedComponent'));
+      setError(null);
+    } catch (error) {
+      setError('清除選擇失敗');
+    }
   };
 
   // 處理選擇機台系統
@@ -632,41 +709,124 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
       componentType,
       componentSn
     });
+    setError(null);
   };
 
-  // 處理系統選擇確認
+  // 處理系統選擇確認 - 集成全域分配管理
   const handleSystemSelection = (system: any) => {
-    const currentSerialNumber = system.serial_number || system.system_name;
-    // 使用組件序列號作為key的後半部分，而不是系統序列號
-    const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
-    
-    const newMapping = {
-      ...componentSystemMapping,
-      [key]: {
-        systemId: system.id,
-        systemName: system.system_name,
-        serialNumber: currentSerialNumber
+    try {
+      if (!cabinetId) {
+        setError('機櫃ID無效');
+        return;
       }
-    };
-    
-    setComponentSystemMapping(newMapping);
-    localStorage.setItem(getStorageKey('l11-cabinet-componentSystemMapping'), JSON.stringify(newMapping));
-    
-    setSystemSelectionDialog({
-      open: false,
-      componentType: '',
-      componentSn: ''
-    });
+
+      const currentSerialNumber = system.serial_number || system.system_name;
+      // 使用組件序列號作為key的後半部分，而不是系統序列號
+      const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+      
+      // 檢查是否已被其他機櫃分配
+      if (globalAllocation.isSystemAllocated(system.id, cabinetId)) {
+        const allocation = globalAllocation.getSystemAllocation(system.id);
+        if (allocation) {
+          setError(`系統 ${system.system_name} 已被機櫃 ${allocation.cabinetId} 使用`);
+          return;
+        }
+      }
+      
+      // 更新全域分配
+      globalAllocation.allocateSystem(system.id, cabinetId, key);
+      
+      const newMapping = {
+        ...componentSystemMapping,
+        [key]: {
+          systemId: system.id,
+          systemName: system.system_name,
+          serialNumber: currentSerialNumber
+        }
+      };
+      
+      setComponentSystemMapping(newMapping);
+      
+      setSystemSelectionDialog({
+        open: false,
+        componentType: '',
+        componentSn: ''
+      });
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error selecting system:', error);
+      setError('系統選擇失敗，請重試');
+    }
   };
 
+  // 處理系統取消分配
+  const handleSystemDeallocation = (componentType: string, componentSn: string) => {
+    try {
+      if (!cabinetId) return;
+
+      const key = `${componentType}-${componentSn}`;
+      const mapping = componentSystemMapping[key];
+      
+      if (mapping) {
+        // 從全域分配中移除
+        globalAllocation.deallocateSystem(mapping.systemId, cabinetId);
+        
+        // 從本地映射中移除
+        const newMapping = { ...componentSystemMapping };
+        delete newMapping[key];
+        setComponentSystemMapping(newMapping);
+      }
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error deallocating system:', error);
+      setError('取消分配失敗');
+    }
+  };
+
+  // 檢查系統是否已分配給其他機櫃
+  const checkSystemAllocation = useCallback((systemId: string) => {
+    if (!cabinetId) return false;
+    return globalAllocation.isSystemAllocated(systemId, cabinetId);
+  }, [globalAllocation, cabinetId]);
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
   const totalSwitches = config.topOfRackSwitch.count + config.switchTrays.count;
   const totalPowerSupplies = config.topPowerSupplies.count + config.bottomPowerSupplies.count;
   const totalSrcUnits = config.srcUnits.count;
 
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">載入機櫃資料中...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
+      {/* 錯誤警告 */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-2" 
+              onClick={() => setError(null)}
+            >
+              關閉
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       {/* Cabinet Switcher */}
       <CabinetSwitcher 
         currentCabinetId={cabinetId}
@@ -713,46 +873,48 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl">
-              <Suspense fallback={<ErrorFallback />}>
-                <Canvas
-                  camera={{ position: [8, 3, 8], fov: 50 }}
-                  style={{ 
-                    background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
-                  }}
-                  shadows={true}
-                  gl={{ 
-                    antialias: true, 
-                    alpha: true,
-                    powerPreference: "high-performance"
-                  }}
-                >
-                  <Suspense fallback={null}>
-                    <CabinetScene 
-                      config={config} 
-                      isOpen={isOpen} 
-                      selectedComponent={selectedComponent} 
-                      onComponentClick={handleComponentClick}
-                      componentSystemMapping={componentSystemMapping}
-                    />
-                    <OrbitControls 
-                      autoRotate={autoRotate}
-                      autoRotateSpeed={0.5}
-                      enablePan={true}
-                      enableZoom={true}
-                      enableRotate={true}
-                      minDistance={4}
-                      maxDistance={20}
-                      minPolarAngle={0}
-                      maxPolarAngle={Math.PI}
-                      onStart={() => setAutoRotate(false)}
-                      enableDamping={true}
-                      dampingFactor={0.05}
-                    />
-                  </Suspense>
-                </Canvas>
-              </Suspense>
-            </div>
+            <CabinetErrorBoundary>
+              <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl">
+                <Suspense fallback={<ErrorFallback />}>
+                  <Canvas
+                    camera={{ position: [8, 3, 8], fov: 50 }}
+                    style={{ 
+                      background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
+                    }}
+                    shadows={true}
+                    gl={{ 
+                      antialias: true, 
+                      alpha: true,
+                      powerPreference: "high-performance"
+                    }}
+                  >
+                    <Suspense fallback={null}>
+                      <CabinetScene 
+                        config={config} 
+                        isOpen={isOpen} 
+                        selectedComponent={selectedComponent} 
+                        onComponentClick={handleComponentClick}
+                        componentSystemMapping={componentSystemMapping}
+                      />
+                      <OrbitControls 
+                        autoRotate={autoRotate}
+                        autoRotateSpeed={0.5}
+                        enablePan={true}
+                        enableZoom={true}
+                        enableRotate={true}
+                        minDistance={4}
+                        maxDistance={20}
+                        minPolarAngle={0}
+                        maxPolarAngle={Math.PI}
+                        onStart={() => setAutoRotate(false)}
+                        enableDamping={true}
+                        dampingFactor={0.05}
+                      />
+                    </Suspense>
+                  </Canvas>
+                </Suspense>
+              </div>
+            </CabinetErrorBoundary>
             
             {/* Selected Component Display */}
             {selectedComponent && (
@@ -887,14 +1049,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Top Of Rack Switch', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -934,14 +1096,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('3 Switch Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('3 Switch Trays', `SW-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -996,14 +1158,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('10 Compute Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1043,14 +1205,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('8 Compute Trays', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1105,14 +1267,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Power Supplies (上)', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Power Supplies (上)', `PSU-T-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1152,14 +1314,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
                                </div>
-                               <Button 
-                                 variant="ghost" 
-                                 size="sm" 
-                                 className="w-full text-xs h-6"
-                                 onClick={() => handleSelectSystem('Power Supplies (下)', mapping.serialNumber)}
-                               >
-                                 重新選擇
-                               </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Power Supplies (下)', `PSU-B-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
                              </div>
                            </div>
                          );
@@ -1213,14 +1375,14 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                 <div>系統: {mapping.systemName}</div>
                               </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="w-full text-xs h-6"
-                                onClick={() => handleSelectSystem('SRC Units', mapping.serialNumber)}
-                              >
-                                重新選擇
-                              </Button>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="w-full text-xs h-6"
+                                 onClick={() => handleSelectSystem('SRC Units', `SRC-${String(index + 1).padStart(3, '0')}`)}
+                               >
+                                 重新選擇
+                               </Button>
                             </div>
                           </div>
                         );
@@ -1279,6 +1441,9 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
         systems={systems}
         systemProgress={systemProgress}
         onSystemSelect={handleSystemSelection}
+        excludeAllocatedSystems={true}
+        currentCabinetId={cabinetId}
+        isSystemAllocated={checkSystemAllocation}
       />
     </div>
   );
