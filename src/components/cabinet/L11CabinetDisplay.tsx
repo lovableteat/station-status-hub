@@ -3,6 +3,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BackButton } from '@/components/common/BackButton';
+import { CabinetSwitcher } from './CabinetSwitcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { SystemSelectionDialog } from './SystemSelectionDialog';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
+import { useNavigate } from 'react-router-dom';
 
 // 生成序號的函數
 const generateSerialNumbers = (prefix: string, count: number): string[] => {
@@ -414,8 +416,22 @@ function ErrorFallback() {
 }
 
 export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
-  // 引入系統資料
   const { systems } = useUnifiedData();
+  const navigate = useNavigate();
+  
+  // Mock cabinet data - should be replaced with actual data from backend
+  const mockCabinets = [
+    { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-004', name: 'L11-機櫃-B2', location: '廠房B-2樓-南側', model: 'L11', status: 'offline' as const, totalSystems: 29, completedSystems: 8, totalComponents: 29, configuredComponents: 15, assignedEngineers: [], createdAt: '2024-02-05T14:20:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
+  ];
+
+  // Cabinet switching functionality
+  const handleCabinetChange = (newCabinetId: string) => {
+    navigate(`/cabinet/${newCabinetId}`);
+  };
   
   // 創建模擬的系統進度數據
   const systemProgress = systems.map(system => ({
@@ -652,11 +668,17 @@ export function L11CabinetDisplay({ cabinetId }: { cabinetId?: string }) {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Cabinet Switcher */}
+      <CabinetSwitcher 
+        currentCabinetId={cabinetId}
+        cabinets={mockCabinets}
+        onCabinetChange={handleCabinetChange}
+      />
+      
       <div className="flex items-center justify-between">
         <div>
-          <BackButton />
-          <h1 className="text-3xl font-bold text-foreground mt-2">
-            {cabinetId ? `L11機櫃展示 - ${cabinetId}` : 'L11機櫃展示'}
+          <h1 className="text-3xl font-bold text-foreground">
+            {cabinetId ? mockCabinets.find(c => c.id === cabinetId)?.name || `L11機櫃展示 - ${cabinetId}` : 'L11機櫃展示'}
           </h1>
           <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
