@@ -13,7 +13,6 @@ import { useUnifiedData } from '@/hooks/useUnifiedData';
 export interface ComponentConfig {
   count: number;
   color: string;
-  serialNumbers: string[];
 }
 
 export interface CabinetConfig {
@@ -26,20 +25,6 @@ export interface CabinetConfig {
   srcUnits: ComponentConfig;
 }
 
-interface CabinetConfiguratorProps {
-  config: CabinetConfig;
-  onConfigChange: (config: CabinetConfig) => void;
-  componentSystemMapping?: ComponentSystemMapping;
-  onComponentSystemMappingChange?: (mapping: ComponentSystemMapping) => void;
-}
-
-interface ComponentSystemMapping {
-  [key: string]: {
-    systemId: string;
-    systemName: string;
-    serialNumber: string;
-  };
-}
 
 const colorOptions = [
   { value: '#3b82f6', label: '藍色', className: 'bg-blue-500' },
@@ -50,14 +35,16 @@ const colorOptions = [
   { value: '#6b7280', label: '灰色', className: 'bg-gray-500' },
 ];
 
-export function CabinetConfigurator({ config, onConfigChange, componentSystemMapping, onComponentSystemMappingChange }: CabinetConfiguratorProps) {
+export function CabinetConfigurator({ config, onConfigChange }: { 
+  config: CabinetConfig; 
+  onConfigChange: (config: CabinetConfig) => void;
+}) {
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('l11-cabinet-activeTab');
     return saved || 'count';
   });
   const [showSystemSelector, setShowSystemSelector] = useState(false);
   const [selectedSystemDetails, setSelectedSystemDetails] = useState<any>(null);
-  const [currentEditingComponent, setCurrentEditingComponent] = useState<{key: keyof CabinetConfig, index: number} | null>(null);
   
   const { systems } = useUnifiedData();
 
@@ -69,26 +56,12 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
     // Top Of Rack Switch 固定為 2 個
     const newCount = key === 'topOfRackSwitch' ? 2 : Math.max(0, Math.min(20, count));
-    const component = config[key];
     
-    // Adjust serial numbers array based on new count
-    let newSerialNumbers = [...component.serialNumbers];
-    if (newCount > newSerialNumbers.length) {
-      // Add new serial numbers
-      for (let i = newSerialNumbers.length; i < newCount; i++) {
-        newSerialNumbers.push(`${key.toUpperCase()}-${String(i + 1).padStart(3, '0')}`);
-      }
-    } else if (newCount < newSerialNumbers.length) {
-      // Remove excess serial numbers
-      newSerialNumbers = newSerialNumbers.slice(0, newCount);
-    }
-
     onConfigChange({
       ...config,
       [key]: {
-        ...component,
-        count: newCount,
-        serialNumbers: newSerialNumbers
+        ...config[key],
+        count: newCount
       }
     });
   };
@@ -103,64 +76,6 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
     });
   };
 
-  const updateSerialNumber = (key: keyof CabinetConfig, index: number, serialNumber: string) => {
-    const component = config[key];
-    const oldSerialNumber = component.serialNumbers[index];
-    const newSerialNumbers = [...component.serialNumbers];
-    newSerialNumbers[index] = serialNumber;
-
-    onConfigChange({
-      ...config,
-      [key]: {
-        ...component,
-        serialNumbers: newSerialNumbers
-      }
-    });
-
-    // 同步更新 componentSystemMapping
-    if (componentSystemMapping && onComponentSystemMappingChange) {
-      const componentTypeMap: { [key: string]: string } = {
-        'topOfRackSwitch': 'Top Of Rack Switch',
-        'switchTrays': '3 Switch Trays',
-        'computeTrays1': '10 Compute Trays',
-        'computeTrays2': '8 Compute Trays',
-        'topPowerSupplies': 'Power Supplies (上)',
-        'bottomPowerSupplies': 'Power Supplies (下)',
-        'srcUnits': 'SRC Units'
-      };
-      
-      const componentTypeName = componentTypeMap[key];
-      if (componentTypeName) {
-        const oldMappingKey = `${componentTypeName}-${oldSerialNumber}`;
-        const newMappingKey = `${componentTypeName}-${serialNumber}`;
-        
-        const newMapping = { ...componentSystemMapping };
-        
-        // 如果舊的映射存在，移除它並創建新的映射
-        if (newMapping[oldMappingKey]) {
-          const mappingData = newMapping[oldMappingKey];
-          delete newMapping[oldMappingKey];
-          newMapping[newMappingKey] = mappingData;
-          
-          onComponentSystemMappingChange(newMapping);
-          localStorage.setItem('l11-cabinet-componentSystemMapping', JSON.stringify(newMapping));
-        }
-      }
-    }
-  };
-
-  const openSystemSelector = (key: keyof CabinetConfig, index: number) => {
-    setCurrentEditingComponent({ key, index });
-    setShowSystemSelector(true);
-  };
-
-  const selectSystem = (system: any) => {
-    if (currentEditingComponent) {
-      updateSerialNumber(currentEditingComponent.key, currentEditingComponent.index, system.serial_number || system.system_name);
-    }
-    setShowSystemSelector(false);
-    setCurrentEditingComponent(null);
-  };
 
   const showSystemDetails = (system: any) => {
     setSelectedSystemDetails(system);
@@ -170,38 +85,31 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
     onConfigChange({
       topOfRackSwitch: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['TOR-001', 'TOR-002'] 
+        color: '#d97706'
       },
       topPowerSupplies: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['PSU-T-001', 'PSU-T-002'] 
+        color: '#d97706'
       },
       computeTrays1: { 
         count: 10, 
-        color: '#059669', 
-        serialNumbers: Array.from({length: 10}, (_, i) => `CT1-${String(i + 1).padStart(3, '0')}`) 
+        color: '#059669'
       },
       switchTrays: { 
         count: 3, 
-        color: '#2563eb', 
-        serialNumbers: Array.from({length: 3}, (_, i) => `SW-${String(i + 1).padStart(3, '0')}`) 
+        color: '#2563eb'
       },
       computeTrays2: { 
         count: 8, 
-        color: '#059669', 
-        serialNumbers: Array.from({length: 8}, (_, i) => `CT2-${String(i + 1).padStart(3, '0')}`) 
+        color: '#059669'
       },
       bottomPowerSupplies: { 
         count: 2, 
-        color: '#d97706', 
-        serialNumbers: ['PSU-B-001', 'PSU-B-002'] 
+        color: '#d97706'
       },
       srcUnits: { 
         count: 2, 
-        color: '#7c3aed', 
-        serialNumbers: ['SRC-001', 'SRC-002'] 
+        color: '#7c3aed'
       }
     });
   };
@@ -231,7 +139,7 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="count" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               數量
@@ -239,10 +147,6 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
             <TabsTrigger value="color" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               顏色
-            </TabsTrigger>
-            <TabsTrigger value="serial" className="flex items-center gap-2">
-              <Badge className="h-4 w-4" />
-              SN碼
             </TabsTrigger>
             <TabsTrigger value="systems" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
@@ -333,44 +237,6 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
             </div>
           </TabsContent>
 
-          <TabsContent value="serial" className="space-y-4">
-            <div className="grid gap-4">
-              {configItems.map((item) => {
-                const component = config[item.key as keyof CabinetConfig];
-                return (
-                  <div key={item.key} className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <div 
-                        className="h-3 w-3 rounded" 
-                        style={{ backgroundColor: component.color }}
-                      />
-                      {item.label} ({component.count} 個)
-                    </Label>
-                     <div className="grid gap-2 max-h-32 overflow-y-auto">
-                       {component.serialNumbers.map((sn, index) => (
-                         <div key={index} className="flex gap-2">
-                           <Input
-                             value={sn}
-                             onChange={(e) => updateSerialNumber(item.key as keyof CabinetConfig, index, e.target.value)}
-                             placeholder={`SN #${index + 1}`}
-                             className="text-sm flex-1"
-                           />
-                           <Button
-                             variant="outline"
-                             size="sm"
-                             onClick={() => openSystemSelector(item.key as keyof CabinetConfig, index)}
-                             className="px-2"
-                           >
-                             <Monitor className="h-3 w-3" />
-                           </Button>
-                         </div>
-                       ))}
-                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </TabsContent>
 
           <TabsContent value="systems" className="space-y-4">
             <div className="space-y-2">
@@ -419,12 +285,12 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
 
         <div className="pt-2">
           <h4 className="font-semibold mb-2 text-sm">配置說明</h4>
-          <ul className="text-xs text-muted-foreground space-y-1">
+            <ul className="text-xs text-muted-foreground space-y-1">
             <li>• 根據實際機櫃架構設計</li>
-            <li>• 可調整數量、顏色和SN碼</li>
+            <li>• 可調整數量和顏色</li>
             <li>• 3D視圖即時更新</li>
             <li>• 每種組件都有數量限制</li>
-            <li>• SN碼可從系統清單中選擇</li>
+            <li>• SN碼統一在機櫃組裝清單中設定</li>
           </ul>
         </div>
       </CardContent>
@@ -440,7 +306,7 @@ export function CabinetConfigurator({ config, onConfigChange, componentSystemMap
               <div 
                 key={system.id}
                 className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-md cursor-pointer border"
-                onClick={() => selectSystem(system)}
+                onClick={() => showSystemDetails(system)}
               >
                 <div className="flex-1">
                   <div className="font-medium">{system.system_name}</div>
