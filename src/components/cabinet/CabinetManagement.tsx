@@ -20,6 +20,7 @@ import { CabinetCreateDialog } from './CabinetCreateDialog';
 import { CabinetEditDialog } from './CabinetEditDialog';
 import { BackButton } from '@/components/common/BackButton';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
+import { useNavigate } from 'react-router-dom';
 
 // 模擬機櫃數據
 const generateMockCabinets = (): CabinetInfo[] => {
@@ -99,6 +100,7 @@ const generateMockCabinets = (): CabinetInfo[] => {
 
 export function CabinetManagement() {
   const { systems } = useUnifiedData();
+  const navigate = useNavigate();
   const [cabinets, setCabinets] = useState<CabinetInfo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -159,7 +161,7 @@ export function CabinetManagement() {
   };
 
   const handleViewDetails = (cabinetId: string) => {
-    window.location.href = `/cabinet/${cabinetId}`;
+    navigate(`/cabinet/${cabinetId}`);
   };
 
   return (
