@@ -466,59 +466,72 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     return saved || initialCabinetId || 'cabinet-001';
   });
   
-  // Mock cabinet data - 移至獨立的管理組件
-  const getAvailableCabinets = () => [
-    { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-004', name: 'L11-機櫃-B2', location: '廠房B-2樓-南側', model: 'L11', status: 'offline' as const, totalSystems: 29, completedSystems: 8, totalComponents: 29, configuredComponents: 15, assignedEngineers: [], createdAt: '2024-02-05T14:20:00Z', lastUpdated: new Date().toISOString() },
-    { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
-  ];
-
-  const mockCabinets = getAvailableCabinets();
-
-  // Cabinet switching functionality - 不使用導航，直接狀態管理
-  const handleCabinetChange = (newCabinetId: string) => {
-    setSelectedCabinetId(newCabinetId);
-    localStorage.setItem('l11-cabinet-selectedCabinetId', newCabinetId);
-    // 重置3D場景避免狀態衝突
-    setCanvasKey(prev => prev + 1);
-    setSceneError(false);
-  };
-  
   // 實際使用的機櫃ID
   const currentCabinetId = selectedCabinetId;
   
-  // 創建模擬的系統進度數據
-  const systemProgress = systems.map(system => ({
-    system,
-    progress: system.overall_progress || 0,
-    status: system.status || 'Not Start',
-    test_items_completed: Math.floor((system.overall_progress || 0) / 10),
-    test_items_total: 10
-  }));
-  
   // 從localStorage讀取和保存狀態 - 為每個機櫃獨立存儲
-  const getStorageKey = (key: string) => currentCabinetId ? `${key}-${currentCabinetId}` : key;
+  const getStorageKey = useCallback((key: string) => 
+    currentCabinetId ? `${key}-${currentCabinetId}` : key
+  , [currentCabinetId]);
+  
+  const [config, setConfig] = useState<CabinetConfig>(() => {
+    // 使用默認的機櫃ID來讀取初始配置
+    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
+    const savedConfig = localStorage.getItem(`l11-cabinet-config-${defaultCabinetId}`);
+    return savedConfig ? JSON.parse(savedConfig) : {
+      topOfRackSwitch: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      topPowerSupplies: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#059669'
+      },
+      switchTrays: { 
+        count: 3, 
+        color: '#2563eb'
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#059669'
+      },
+      bottomPowerSupplies: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#7c3aed'
+      }
+    };
+  });
   
   const [autoRotate, setAutoRotate] = useState(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-autoRotate'));
+    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
+    const saved = localStorage.getItem(`l11-cabinet-autoRotate-${defaultCabinetId}`);
     return saved ? JSON.parse(saved) : true;
   });
   
   const [isOpen, setIsOpen] = useState(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-isOpen'));
+    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
+    const saved = localStorage.getItem(`l11-cabinet-isOpen-${defaultCabinetId}`);
     return saved ? JSON.parse(saved) : true;
   });
   
   const [selectedComponent, setSelectedComponent] = useState<SelectedComponent | null>(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-selectedComponent'));
+    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
+    const saved = localStorage.getItem(`l11-cabinet-selectedComponent-${defaultCabinetId}`);
     return saved ? JSON.parse(saved) : null;
   });
 
   // 組件到系統的映射 - 為每個機櫃獨立存儲
   const [componentSystemMapping, setComponentSystemMapping] = useState<ComponentSystemMapping>(() => {
-    const saved = localStorage.getItem(getStorageKey('l11-cabinet-componentSystemMapping'));
+    const defaultCabinetId = localStorage.getItem('l11-cabinet-selectedCabinetId') || initialCabinetId || 'cabinet-001';
+    const saved = localStorage.getItem(`l11-cabinet-componentSystemMapping-${defaultCabinetId}`);
     return saved ? JSON.parse(saved) : {};
   });
 
@@ -571,39 +584,34 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     updateComponentMappingWithLatestSerialNumbers();
   }, [systems, componentSystemMapping]);
   
-  const [config, setConfig] = useState<CabinetConfig>(() => {
-    const savedConfig = localStorage.getItem(getStorageKey('l11-cabinet-config'));
-    return savedConfig ? JSON.parse(savedConfig) : {
-      topOfRackSwitch: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      topPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      computeTrays1: { 
-        count: 10, 
-        color: '#059669'
-      },
-      switchTrays: { 
-        count: 3, 
-        color: '#2563eb'
-      },
-      computeTrays2: { 
-        count: 8, 
-        color: '#059669'
-      },
-      bottomPowerSupplies: { 
-        count: 2, 
-        color: '#d97706'
-      },
-      srcUnits: { 
-        count: 2, 
-        color: '#7c3aed'
-      }
-    };
-  });
+  // Mock cabinet data - 移至獨立的管理組件
+  const getAvailableCabinets = () => [
+    { id: 'cabinet-001', name: 'L11-機櫃-A1', location: '廠房A-1樓-東側', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 18, totalComponents: 29, configuredComponents: 25, assignedEngineers: ['張工程師', '李工程師'], createdAt: '2024-01-15T08:00:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-002', name: 'L11-機櫃-A2', location: '廠房A-1樓-西側', model: 'L11', status: 'maintenance' as const, totalSystems: 29, completedSystems: 12, totalComponents: 29, configuredComponents: 20, assignedEngineers: ['陳工程師', '林工程師'], createdAt: '2024-01-20T09:30:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-003', name: 'L11-機櫃-B1', location: '廠房B-2樓-北側', model: 'L11', status: 'planning' as const, totalSystems: 29, completedSystems: 0, totalComponents: 29, configuredComponents: 8, assignedEngineers: ['黃工程師'], createdAt: '2024-02-01T10:15:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-004', name: 'L11-機櫃-B2', location: '廠房B-2樓-南側', model: 'L11', status: 'offline' as const, totalSystems: 29, completedSystems: 8, totalComponents: 29, configuredComponents: 15, assignedEngineers: [], createdAt: '2024-02-05T14:20:00Z', lastUpdated: new Date().toISOString() },
+    { id: 'cabinet-005', name: 'L11-機櫃-C1', location: '廠房C-3樓-中央', model: 'L11', status: 'active' as const, totalSystems: 29, completedSystems: 29, totalComponents: 29, configuredComponents: 29, assignedEngineers: ['劉工程師', '吳工程師'], createdAt: '2024-01-10T07:45:00Z', lastUpdated: new Date().toISOString() }
+  ];
+
+  const mockCabinets = getAvailableCabinets();
+
+  // Cabinet switching functionality - 不使用導航，直接狀態管理
+  const handleCabinetChange = (newCabinetId: string) => {
+    setSelectedCabinetId(newCabinetId);
+    localStorage.setItem('l11-cabinet-selectedCabinetId', newCabinetId);
+    // 重置3D場景避免狀態衝突
+    setCanvasKey(prev => prev + 1);
+    setSceneError(false);
+  };
+  
+  // 創建模擬的系統進度數據
+  const systemProgress = systems.map(system => ({
+    system,
+    progress: system.overall_progress || 0,
+    status: system.status || 'Not Start',
+    test_items_completed: Math.floor((system.overall_progress || 0) / 10),
+    test_items_total: 10
+  }));
 
 
   // 自動保存狀態到localStorage - 使用機櫃ID特定的key
@@ -671,7 +679,16 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     }
   }, [getStorageKey]);
 
-  const handleRetryScene = useCallback(() => {
+  // 改進錯誤處理，當Canvas無法載入時顯示簡化版本
+  const [canvasError, setCanvasError] = useState(false);
+  
+  const handleCanvasError = useCallback(() => {
+    console.warn('Canvas failed to initialize, showing fallback');
+    setCanvasError(true);
+  }, []);
+  
+  const handleRetryCanvas = useCallback(() => {
+    setCanvasError(false);
     setSceneError(false);
     setCanvasKey(prev => prev + 1);
   }, []);
@@ -831,12 +848,12 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
           </CardHeader>
           <CardContent>
             <div className="h-[600px] rounded-lg overflow-hidden border bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl" ref={canvasRef}>
-              {sceneError ? (
-                <ErrorFallback onRetry={handleRetryScene} />
+              {sceneError || canvasError ? (
+                <ErrorFallback onRetry={handleRetryCanvas} />
               ) : (
-                <Suspense fallback={<ErrorFallback />}>
+                <Suspense fallback={<div className="h-full flex items-center justify-center text-white">載入中...</div>}>
                   <Canvas
-                    key={canvasKey}
+                    key={`canvas-${canvasKey}-${currentCabinetId}`}
                     camera={{ position: [8, 3, 8], fov: 50 }}
                     style={{ 
                       background: 'radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%)',
@@ -845,20 +862,32 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                     gl={{ 
                       antialias: true, 
                       alpha: true,
-                      powerPreference: "high-performance"
+                      powerPreference: "high-performance",
+                      failIfMajorPerformanceCaveat: false
                     }}
                     onCreated={(state) => {
-                      // 設置錯誤處理
-                      state.gl.domElement.addEventListener('webglcontextlost', (e) => {
-                        console.warn('WebGL context lost, attempting to restore...');
-                        e.preventDefault();
-                        setSceneError(true);
-                      });
-                      
-                      state.gl.domElement.addEventListener('webglcontextrestored', () => {
-                        console.log('WebGL context restored');
-                        setSceneError(false);
-                      });
+                      try {
+                        // 設置錯誤處理
+                        state.gl.domElement.addEventListener('webglcontextlost', (e) => {
+                          console.warn('WebGL context lost, attempting to restore...');
+                          e.preventDefault();
+                          setSceneError(true);
+                        });
+                        
+                        state.gl.domElement.addEventListener('webglcontextrestored', () => {
+                          console.log('WebGL context restored');
+                          setSceneError(false);
+                        });
+                        
+                        console.log('Canvas initialized successfully');
+                      } catch (error) {
+                        console.error('Error setting up canvas:', error);
+                        handleCanvasError();
+                      }
+                    }}
+                    onError={(error) => {
+                      console.error('Canvas error:', error);
+                      handleCanvasError();
                     }}
                   >
                     <Suspense fallback={null}>
