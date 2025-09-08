@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TestTracker } from "@/components/test-tracker/TestTracker";
-import { CabinetErrorBoundary } from '@/components/cabinet/CabinetErrorBoundary';
+import { TestTrackerErrorBoundary } from '@/components/test-tracker/TestTrackerErrorBoundary';
 import { useUserPresence } from '@/hooks/useUserPresence';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -36,9 +36,9 @@ export default function TestTrackerPage() {
           "flex-1 overflow-auto",
           isMobile && "pt-14"
         )}>
-          <CabinetErrorBoundary fallbackTitle="測試追蹤頁面錯誤">
+          <TestTrackerErrorBoundary fallbackTitle="GB300 測試追蹤錯誤">
             <TestTracker />
-          </CabinetErrorBoundary>
+          </TestTrackerErrorBoundary>
         </main>
       </div>
     </div>
