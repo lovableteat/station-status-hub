@@ -997,6 +997,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
           <CabinetConfigurator 
             config={config} 
             onConfigChange={handleConfigChange}
+            cabinetId={currentCabinetId}
           />
           
         </div>
