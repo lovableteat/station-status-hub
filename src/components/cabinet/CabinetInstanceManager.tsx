@@ -132,9 +132,32 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     return matchesSearch && matchesStatus;
   });
 
-  // 計算機櫃進度 - 基於已配置組件數量
+  // 計算機櫃進度 - 基於組裝清單中已配置的機台數量
   const calculateCabinetProgress = (cabinet: CabinetInstance) => {
-    return Math.round((cabinet.configuredComponents / cabinet.totalComponents) * 100);
+    // 從localStorage讀取機櫃的組裝清單分配情況
+    const allocationsKey = `global-system-allocations`;
+    const savedAllocations = localStorage.getItem(allocationsKey);
+    const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+    
+    // 計算該機櫃已分配的機台數量
+    const cabinetAllocations = allocations.filter((allocation: any) => allocation.cabinetId === cabinet.id);
+    const allocatedSystemCount = cabinetAllocations.length;
+    
+    // 從機櫃配置讀取總組件數量作為滿配標準
+    const configKey = `l11-cabinet-config-${cabinet.id}`;
+    const savedConfig = localStorage.getItem(configKey);
+    const config = savedConfig ? JSON.parse(savedConfig) : null;
+    
+    // 計算總組件數量（組裝清單中的總配置數量）
+    const totalComponents = config ? 
+      Object.values(config).reduce((sum: number, comp: any) => sum + (comp.count || 0), 0) : 
+      cabinet.totalComponents;
+    
+    // 確保totalComponents是有效數字，避免除零錯誤
+    const validTotalComponents = Math.max(1, Number(totalComponents) || 1);
+    
+    // 進度 = 已分配機台數量 / 總組件數量 * 100
+    return Math.min(100, Math.round((allocatedSystemCount / validTotalComponents) * 100));
   };
 
   const handleCabinetSelect = (cabinetId: string) => {
