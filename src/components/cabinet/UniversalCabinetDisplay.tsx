@@ -61,7 +61,7 @@ export function UniversalCabinetDisplay({ initialCabinetType = 'l11', initialCab
   );
   const [selectedCabinetInstance, setSelectedCabinetInstance] = useState<CabinetInstance | null>(null);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
-  const [showHomepage, setShowHomepage] = useState(true);
+  const [showHomepage, setShowHomepage] = useState(false); // 預設顯示機櫃實例管理
   const [viewMode, setViewMode] = useState<'instance' | 'type'>('instance');
 
   const handleCabinetTypeChange = (config: CabinetTypeConfig) => {
@@ -168,6 +168,49 @@ export function UniversalCabinetDisplay({ initialCabinetType = 'l11', initialCab
 
   if (showHomepage) {
     return renderHomepage();
+  }
+
+  // 預設顯示機櫃實例管理頁面
+  if (!showTypeSelector && !selectedCabinetInstance) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">機櫃管理中心</h1>
+            <p className="text-muted-foreground">選擇並管理不同型號的機櫃</p>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="default"
+              onClick={() => setViewMode('instance')}
+            >
+              機櫃實例管理
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setViewMode('type');
+                setShowTypeSelector(true);
+              }}
+            >
+              機櫃型號管理
+            </Button>
+          </div>
+        </div>
+
+        <CabinetInstanceManager 
+          currentCabinetId={selectedCabinetInstance?.id}
+          onCabinetSelect={(instance) => {
+            setSelectedCabinetInstance(instance);
+            const typeConfig = CABINET_TYPE_CONFIGS.find(c => c.model === instance.model);
+            if (typeConfig) {
+              setSelectedCabinetType(typeConfig);
+            }
+          }}
+        />
+      </div>
+    );
   }
 
   if (showTypeSelector) {
