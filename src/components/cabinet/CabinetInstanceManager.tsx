@@ -15,8 +15,10 @@ import {
   Settings,
   Search,
   Grid3X3,
-  List
+  List,
+  Edit
 } from 'lucide-react';
+import { CabinetEditDialog } from './CabinetEditDialog';
 
 // 機櫃實例介面
 export interface CabinetInstance {
@@ -87,7 +89,7 @@ interface CabinetInstanceManagerProps {
 }
 
 export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: CabinetInstanceManagerProps) {
-  const [cabinets] = useState<CabinetInstance[]>(() => {
+  const [cabinets, setCabinets] = useState<CabinetInstance[]>(() => {
     // 從localStorage讀取或生成新資料
     const saved = localStorage.getItem('cabinet-instances');
     return saved ? JSON.parse(saved) : generateCabinetInstances();
@@ -97,11 +99,30 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCabinet, setSelectedCabinet] = useState<string>(currentCabinetId || 'cabinet-001');
+  const [editingCabinet, setEditingCabinet] = useState<CabinetInstance | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // 保存機櫃資料到localStorage
   useEffect(() => {
     localStorage.setItem('cabinet-instances', JSON.stringify(cabinets));
   }, [cabinets]);
+
+  // 編輯機櫃
+  const handleEditCabinet = (cabinet: CabinetInstance) => {
+    setEditingCabinet(cabinet);
+    setIsEditDialogOpen(true);
+  };
+
+  // 保存編輯的機櫃
+  const handleSaveCabinet = (updatedCabinet: CabinetInstance) => {
+    setCabinets(prevCabinets => 
+      prevCabinets.map(cabinet => 
+        cabinet.id === updatedCabinet.id ? updatedCabinet : cabinet
+      )
+    );
+    setIsEditDialogOpen(false);
+    setEditingCabinet(null);
+  };
 
   // 篩選機櫃
   const filteredCabinets = cabinets.filter(cabinet => {
@@ -110,6 +131,11 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     const matchesStatus = statusFilter === 'all' || cabinet.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // 計算機櫃進度 - 基於已配置組件數量
+  const calculateCabinetProgress = (cabinet: CabinetInstance) => {
+    return Math.round((cabinet.configuredComponents / cabinet.totalComponents) * 100);
+  };
 
   const handleCabinetSelect = (cabinetId: string) => {
     setSelectedCabinet(cabinetId);
@@ -244,7 +270,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
         }>
           {filteredCabinets.map((cabinet) => {
             const isSelected = cabinet.id === selectedCabinet;
-            const progressPercent = Math.round((cabinet.completedSystems / cabinet.totalSystems) * 100);
+            const progressPercent = calculateCabinetProgress(cabinet);
             
             return (
               <Card
@@ -276,10 +302,24 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                           <Activity className="h-3 w-3" />
                           <span>進度: {progressPercent}%</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          <span className="truncate">{cabinet.assignedEngineers.join(', ')}</span>
-                        </div>
+                         <div className="flex items-center gap-1">
+                           <Users className="h-3 w-3" />
+                           <span className="truncate">{cabinet.assignedEngineers.join(', ')}</span>
+                         </div>
+                         <div className="flex gap-1 mt-2">
+                           <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="h-6 text-xs flex-1"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleEditCabinet(cabinet);
+                             }}
+                           >
+                             <Edit className="h-3 w-3 mr-1" />
+                             編輯
+                           </Button>
+                         </div>
                       </div>
                       
                       {/* 進度條 */}
@@ -308,9 +348,23 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                       </div>
                     </div>
                     
-                    <div className="text-xs text-muted-foreground">
-                      {cabinet.assignedEngineers.join(', ')}
-                    </div>
+                     <div className="flex items-center gap-2">
+                       <div className="text-xs text-muted-foreground">
+                         {cabinet.assignedEngineers.join(', ')}
+                       </div>
+                       <Button 
+                         variant="outline" 
+                         size="sm" 
+                         className="h-6 text-xs"
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           handleEditCabinet(cabinet);
+                         }}
+                       >
+                         <Edit className="h-3 w-3 mr-1" />
+                         編輯
+                       </Button>
+                     </div>
                   </div>
                 )}
               </Card>
@@ -325,6 +379,14 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
           </div>
         )}
       </CardContent>
+
+      {/* 編輯對話框 */}
+      <CabinetEditDialog 
+        cabinet={editingCabinet}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSave={handleSaveCabinet}
+      />
     </Card>
   );
 }
