@@ -138,6 +138,9 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
   };
 
   const handleCabinetSelect = (cabinetId: string) => {
+    // 防止重複選擇造成的不必要更新
+    if (selectedCabinet === cabinetId) return;
+    
     setSelectedCabinet(cabinetId);
     const cabinet = cabinets.find(c => c.id === cabinetId);
     if (cabinet) {
@@ -238,7 +241,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span>{currentCabinet.location}</span>
@@ -248,12 +251,12 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                   <span>{currentCabinet.completedSystems}/{currentCabinet.totalSystems} 系統</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  <span>{currentCabinet.configuredComponents}/{currentCabinet.totalComponents} 組件</span>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                  <span>{currentCabinet.completedSystems}/{currentCabinet.totalSystems} 系統</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>{currentCabinet.assignedEngineers.join(', ')}</span>
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <span>{currentCabinet.configuredComponents}/{currentCabinet.totalComponents} 組件</span>
                 </div>
               </div>
             </CardContent>
@@ -278,7 +281,10 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                 className={`cursor-pointer transition-all hover:shadow-md ${
                   isSelected ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
                 } ${viewMode === 'list' ? 'p-3' : ''}`}
-                onClick={() => handleCabinetSelect(cabinet.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCabinetSelect(cabinet.id);
+                }}
               >
                 {viewMode === 'grid' ? (
                   <CardContent className="p-4">
@@ -302,10 +308,6 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                           <Activity className="h-3 w-3" />
                           <span>進度: {progressPercent}%</span>
                         </div>
-                         <div className="flex items-center gap-1">
-                           <Users className="h-3 w-3" />
-                           <span className="truncate">{cabinet.assignedEngineers.join(', ')}</span>
-                         </div>
                          <div className="flex gap-1 mt-2">
                            <Button 
                              variant="outline" 
@@ -347,11 +349,8 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                         {progressPercent}% 完成
                       </div>
                     </div>
-                    
+                     
                      <div className="flex items-center gap-2">
-                       <div className="text-xs text-muted-foreground">
-                         {cabinet.assignedEngineers.join(', ')}
-                       </div>
                        <Button 
                          variant="outline" 
                          size="sm" 
