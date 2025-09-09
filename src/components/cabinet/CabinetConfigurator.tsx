@@ -35,9 +35,10 @@ const colorOptions = [
   { value: '#6b7280', label: '灰色', className: 'bg-gray-500' },
 ];
 
-export function CabinetConfigurator({ config, onConfigChange }: { 
+export function CabinetConfigurator({ config, onConfigChange, cabinetId }: { 
   config: CabinetConfig; 
   onConfigChange: (config: CabinetConfig) => void;
+  cabinetId?: string;
 }) {
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('l11-cabinet-activeTab');
@@ -240,23 +241,45 @@ export function CabinetConfigurator({ config, onConfigChange }: {
 
           <TabsContent value="systems" className="space-y-4">
             <div className="space-y-2">
-              <Label>系統清單 ({systems.length} 台)</Label>
+              <Label>可用系統清單 ({systems.filter(system => {
+                // 檢查系統是否已被分配到其他機櫃
+                const allocationsKey = `global-system-allocations`;
+                const savedAllocations = localStorage.getItem(allocationsKey);
+                const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+                const allocation = allocations.find((a: any) => a.systemId === system.id);
+                return !allocation; // 只顯示未分配的系統
+              }).length} 台可選)</Label>
+              <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded border">
+                注意：已分配到機櫃的機台將不會顯示在此清單中，以避免重複分配
+              </div>
               <div className="grid gap-2 max-h-64 overflow-y-auto border rounded-md p-2">
-                {systems.map((system) => (
+                {systems
+                  .filter(system => {
+                    // 過濾掉已分配到其他機櫃的系統
+                    const allocationsKey = `global-system-allocations`;
+                    const savedAllocations = localStorage.getItem(allocationsKey);
+                    const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+                    const allocation = allocations.find((a: any) => a.systemId === system.id);
+                    return !allocation;
+                  })
+                  .map((system) => (
                   <div 
                     key={system.id} 
-                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border"
+                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border bg-green-50"
                     onClick={() => showSystemDetails(system)}
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-sm">{system.system_name}</div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                        {system.system_name}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         SN: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={system.status === '已完成' ? 'default' : 'secondary'} className="text-xs">
-                        {system.status}
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-700">
+                        可選用
                       </Badge>
                       <Button 
                         variant="ghost" 
@@ -271,6 +294,17 @@ export function CabinetConfigurator({ config, onConfigChange }: {
                     </div>
                   </div>
                 ))}
+                {systems.filter(system => {
+                  const allocationsKey = `global-system-allocations`;
+                  const savedAllocations = localStorage.getItem(allocationsKey);
+                  const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+                  const allocation = allocations.find((a: any) => a.systemId === system.id);
+                  return !allocation;
+                }).length === 0 && (
+                  <div className="text-center py-4 text-muted-foreground text-sm">
+                    所有系統都已分配到機櫃中
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -278,8 +312,38 @@ export function CabinetConfigurator({ config, onConfigChange }: {
         
         <div className="pt-4 border-t">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">總組件數</span>
+            <span className="text-sm font-medium">總組件配置數</span>
             <Badge variant="secondary">{totalComponents}</Badge>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-sm font-medium">已分配機台數</span>
+            <Badge variant="default">
+              {(() => {
+                // 從localStorage讀取當前機櫃的分配情況
+                const allocationsKey = `global-system-allocations`;
+                const savedAllocations = localStorage.getItem(allocationsKey);
+                const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+                const currentCabinetAllocations = allocations.filter((a: any) => 
+                  a.cabinetId === (cabinetId || 'default')
+                );
+                return currentCabinetAllocations.length;
+              })()}
+            </Badge>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-sm text-muted-foreground">配置進度</span>
+            <Badge variant="outline">
+              {(() => {
+                const allocationsKey = `global-system-allocations`;
+                const savedAllocations = localStorage.getItem(allocationsKey);
+                const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
+                const currentCabinetAllocations = allocations.filter((a: any) => 
+                  a.cabinetId === (cabinetId || 'default')
+                );
+                const progress = Math.min(100, Math.round((currentCabinetAllocations.length / totalComponents) * 100));
+                return `${progress}%`;
+              })()}
+            </Badge>
           </div>
         </div>
 
