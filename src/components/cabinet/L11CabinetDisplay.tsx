@@ -798,7 +798,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            L11機櫃展示 - {currentCabinetId}
+            機櫃管理中心 - {currentCabinetId}
           </h1>
           <p className="text-muted-foreground">3D可組態機櫃結構展示與切換</p>
         </div>
