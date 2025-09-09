@@ -70,10 +70,13 @@ export function UniversalCabinetDisplay({ initialCabinetType = 'l11', initialCab
   };
 
   const handleCabinetInstanceSelect = (instance: CabinetInstance) => {
+    // 防止重複選擇
+    if (selectedCabinetInstance?.id === instance.id) return;
+    
     setSelectedCabinetInstance(instance);
     // 根據機櫃實例設定對應的類型
     const typeConfig = CABINET_TYPE_CONFIGS.find(c => c.model === instance.model);
-    if (typeConfig) {
+    if (typeConfig && typeConfig.id !== selectedCabinetType.id) {
       setSelectedCabinetType(typeConfig);
     }
   };
