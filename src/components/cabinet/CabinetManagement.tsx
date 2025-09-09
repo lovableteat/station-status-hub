@@ -321,7 +321,7 @@ export function CabinetManagement() {
         cabinet={editingCabinet}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
-        onSaveCabinet={handleSaveCabinet}
+        onSave={handleSaveCabinet}
       />
     </div>
   );
