@@ -128,28 +128,28 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   const totalComponents = Object.values(config).reduce((sum, comp) => sum + comp.count, 0);
 
   return (
-    <Card className="bg-slate-900 border-slate-700">
-      <CardHeader className="bg-slate-800 border-b border-slate-700">
+    <Card className="bg-card border-border">
+      <CardHeader className="bg-muted border-b border-border">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-slate-100">機櫃組態設定</CardTitle>
-          <Button variant="outline" size="sm" onClick={resetToDefault} className="border-slate-600 text-slate-200 hover:bg-slate-700">
+          <CardTitle className="text-foreground">機櫃組態設定</CardTitle>
+          <Button variant="outline" size="sm" onClick={resetToDefault}>
             <RotateCcw className="h-4 w-4 mr-2" />
             重置預設
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 bg-slate-900">
+      <CardContent className="space-y-4 bg-card">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-800 border-slate-600">
-            <TabsTrigger value="count" className="flex items-center gap-2 text-slate-200 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="count" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               數量
             </TabsTrigger>
-            <TabsTrigger value="color" className="flex items-center gap-2 text-slate-200 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+            <TabsTrigger value="color" className="flex items-center gap-2">
               <Palette className="h-4 w-4" />
               顏色
             </TabsTrigger>
-            <TabsTrigger value="systems" className="flex items-center gap-2 text-slate-200 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+            <TabsTrigger value="systems" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
               系統清單
             </TabsTrigger>
@@ -161,7 +161,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const component = config[item.key as keyof CabinetConfig];
                 return (
                   <div key={item.key} className="space-y-2">
-                    <Label className="flex items-center gap-2 text-slate-200">
+                    <Label className="flex items-center gap-2 text-foreground">
                       <div 
                         className="h-3 w-3 rounded" 
                         style={{ backgroundColor: component.color }}
@@ -174,7 +174,6 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count - 1)}
                           disabled={component.count <= 0 || (item.key === 'topOfRackSwitch' && component.count <= 2)}
-                          className="border-slate-600 text-slate-200 hover:bg-slate-700"
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -182,7 +181,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           type="number"
                           value={component.count}
                           onChange={(e) => updateComponentCount(item.key as keyof CabinetConfig, parseInt(e.target.value) || 0)}
-                          className="w-16 text-center bg-slate-800 border-slate-600 text-slate-100"
+                          className="w-16 text-center"
                           min={item.key === 'topOfRackSwitch' ? "2" : "0"}
                           max={item.max}
                           disabled={item.key === 'topOfRackSwitch'}
@@ -192,7 +191,6 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count + 1)}
                           disabled={component.count >= item.max || (item.key === 'topOfRackSwitch' && component.count >= 2)}
-                          className="border-slate-600 text-slate-200 hover:bg-slate-700"
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -209,7 +207,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const component = config[item.key as keyof CabinetConfig];
                 return (
                   <div key={item.key} className="space-y-2">
-                    <Label className="flex items-center gap-2 text-slate-200">
+                    <Label className="flex items-center gap-2 text-foreground">
                       <div 
                         className="h-3 w-3 rounded" 
                         style={{ backgroundColor: component.color }}
@@ -220,12 +218,12 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                       value={component.color}
                       onValueChange={(color) => updateComponentColor(item.key as keyof CabinetConfig, color)}
                     >
-                      <SelectTrigger className="w-full bg-slate-800 border-slate-600 text-slate-100">
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectContent>
                         {colorOptions.map((color) => (
-                          <SelectItem key={color.value} value={color.value} className="text-slate-100 hover:bg-slate-700">
+                          <SelectItem key={color.value} value={color.value}>
                             <div className="flex items-center gap-2">
                               <div className={`h-3 w-3 rounded ${color.className}`} />
                               {color.label}
@@ -243,7 +241,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
 
           <TabsContent value="systems" className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label className="text-slate-200">可用系統清單 ({systems.filter(system => {
+              <Label className="text-foreground">可用系統清單 ({systems.filter(system => {
                 // 檢查系統是否已被分配到其他機櫃
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
@@ -251,10 +249,10 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocation = allocations.find((a: any) => a.systemId === system.id);
                 return !allocation; // 只顯示未分配的系統
               }).length} 台可選)</Label>
-              <div className="text-xs text-yellow-200 bg-yellow-900/30 border border-yellow-700 p-2 rounded">
+              <div className="text-xs text-warning-foreground bg-warning/20 border border-warning p-2 rounded">
                 注意：已分配到機櫃的機台將不會顯示在此清單中，以避免重複分配
               </div>
-              <div className="grid gap-2 max-h-64 overflow-y-auto border border-slate-600 rounded-md p-2 bg-slate-800">
+              <div className="grid gap-2 max-h-64 overflow-y-auto border border-border rounded-md p-2 bg-muted">
                 {systems
                   .filter(system => {
                     // 過濾掉已分配到其他機櫃的系統
@@ -267,26 +265,25 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   .map((system) => (
                   <div 
                     key={system.id} 
-                    className="flex items-center justify-between p-2 hover:bg-slate-700 rounded-md cursor-pointer border border-slate-600 bg-emerald-900/30"
+                    className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer border border-border bg-success/10"
                     onClick={() => showSystemDetails(system)}
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-sm flex items-center gap-2 text-slate-100">
-                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+                      <div className="font-medium text-sm flex items-center gap-2 text-foreground">
+                        <div className="h-2 w-2 bg-success rounded-full"></div>
                         {system.system_name}
                       </div>
-                      <div className="text-xs text-slate-300">
+                      <div className="text-xs text-muted-foreground">
                         SN: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs border-green-400 text-green-300 bg-green-900/30">
+                      <Badge variant="outline" className="text-xs border-success text-success-foreground bg-success/20">
                         可選用
                       </Badge>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-slate-300 hover:bg-slate-600"
                         onClick={(e) => {
                           e.stopPropagation();
                           showSystemDetails(system);
@@ -304,7 +301,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   const allocation = allocations.find((a: any) => a.systemId === system.id);
                   return !allocation;
                 }).length === 0 && (
-                  <div className="text-center py-4 text-slate-400 text-sm">
+                  <div className="text-center py-4 text-muted-foreground text-sm">
                     所有系統都已分配到機櫃中
                   </div>
                 )}
@@ -313,14 +310,14 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
           </TabsContent>
         </Tabs>
         
-        <div className="pt-4 border-t border-slate-600">
+        <div className="pt-4 border-t border-border">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-200">總組件配置數</span>
-            <Badge variant="secondary" className="bg-slate-700 text-slate-200">{totalComponents}</Badge>
+            <span className="text-sm font-medium text-foreground">總組件配置數</span>
+            <Badge variant="secondary">{totalComponents}</Badge>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-sm font-medium text-slate-200">已分配機台數</span>
-            <Badge variant="default" className="bg-blue-600">
+            <span className="text-sm font-medium text-foreground">已分配機台數</span>
+            <Badge variant="default">
               {(() => {
                 // 從localStorage讀取當前機櫃的分配情況
                 const allocationsKey = `global-system-allocations`;
@@ -334,8 +331,8 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
             </Badge>
           </div>
           <div className="flex items-center justify-between mt-1">
-            <span className="text-sm text-slate-300">配置進度</span>
-            <Badge variant="outline" className="border-slate-600 text-slate-200">
+            <span className="text-sm text-muted-foreground">配置進度</span>
+            <Badge variant="outline">
               {(() => {
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
@@ -351,8 +348,8 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
         </div>
 
         <div className="pt-2">
-          <h4 className="font-semibold mb-2 text-sm text-slate-200">配置說明</h4>
-            <ul className="text-xs text-slate-400 space-y-1">
+          <h4 className="font-semibold mb-2 text-sm text-foreground">配置說明</h4>
+            <ul className="text-xs text-muted-foreground space-y-1">
             <li>• 根據實際機櫃架構設計</li>
             <li>• 可調整數量和顏色</li>
             <li>• 3D視圖即時更新</li>
@@ -364,27 +361,27 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
 
       {/* System Selection Dialog */}
       <Dialog open={showSystemSelector} onOpenChange={setShowSystemSelector}>
-        <DialogContent className="max-w-2xl bg-slate-900 border-slate-700">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-slate-100">選擇系統</DialogTitle>
+            <DialogTitle>選擇系統</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 max-h-96 overflow-y-auto">
             {systems.map((system) => (
               <div 
                 key={system.id}
-                className="flex items-center justify-between p-3 hover:bg-slate-700 rounded-md cursor-pointer border border-slate-600 bg-slate-800"
+                className="flex items-center justify-between p-3 hover:bg-accent rounded-md cursor-pointer border border-border"
                 onClick={() => showSystemDetails(system)}
               >
                 <div className="flex-1">
-                  <div className="font-medium text-slate-100">{system.system_name}</div>
-                  <div className="text-sm text-slate-300">
+                  <div className="font-medium text-foreground">{system.system_name}</div>
+                  <div className="text-sm text-muted-foreground">
                     序列號: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-muted-foreground">
                     負責工程師: {system.assigned_engineer || '未分配'} | 當前站點: {system.current_station}
                   </div>
                 </div>
-                <Badge variant={system.status === '已完成' ? 'default' : 'secondary'} className="bg-slate-700 text-slate-200">
+                <Badge variant={system.status === '已完成' ? 'default' : 'secondary'}>
                   {system.status}
                 </Badge>
               </div>
@@ -395,54 +392,54 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
 
       {/* System Details Dialog */}
       <Dialog open={!!selectedSystemDetails} onOpenChange={() => setSelectedSystemDetails(null)}>
-        <DialogContent className="max-w-2xl bg-slate-900 border-slate-700">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-slate-100">系統詳細資料</DialogTitle>
+            <DialogTitle>系統詳細資料</DialogTitle>
           </DialogHeader>
           {selectedSystemDetails && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">系統名稱</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.system_name}</div>
+                  <Label className="text-sm font-medium text-foreground">系統名稱</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.system_name}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">序列號</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.serial_number || '未設定'}</div>
+                  <Label className="text-sm font-medium text-foreground">序列號</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.serial_number || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">型號</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.model || 'GB300'}</div>
+                  <Label className="text-sm font-medium text-foreground">型號</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.model || 'GB300'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">狀態</Label>
-                  <Badge variant={selectedSystemDetails.status === '已完成' ? 'default' : 'secondary'} className="bg-slate-700 text-slate-200">
+                  <Label className="text-sm font-medium text-foreground">狀態</Label>
+                  <Badge variant={selectedSystemDetails.status === '已完成' ? 'default' : 'secondary'}>
                     {selectedSystemDetails.status}
                   </Badge>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">當前站點</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.current_station}</div>
+                  <Label className="text-sm font-medium text-foreground">當前站點</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.current_station}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">整體進度</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.overall_progress || 0}%</div>
+                  <Label className="text-sm font-medium text-foreground">整體進度</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.overall_progress || 0}%</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">負責工程師</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.assigned_engineer || '未分配'}</div>
+                  <Label className="text-sm font-medium text-foreground">負責工程師</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.assigned_engineer || '未分配'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">Ubuntu版本</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.ubuntu_version || '未設定'}</div>
+                  <Label className="text-sm font-medium text-foreground">Ubuntu版本</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.ubuntu_version || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">CUDA版本</Label>
-                  <div className="text-sm text-slate-100">{selectedSystemDetails.cuda_version || '未設定'}</div>
+                  <Label className="text-sm font-medium text-foreground">CUDA版本</Label>
+                  <div className="text-sm text-foreground">{selectedSystemDetails.cuda_version || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">開始時間</Label>
-                  <div className="text-sm text-slate-100">
+                  <Label className="text-sm font-medium text-foreground">開始時間</Label>
+                  <div className="text-sm text-foreground">
                     {selectedSystemDetails.actual_started_at 
                       ? new Date(selectedSystemDetails.actual_started_at).toLocaleString('zh-TW')
                       : '未開始'
@@ -450,8 +447,8 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-slate-200">完成時間</Label>
-                  <div className="text-sm text-slate-100">
+                  <Label className="text-sm font-medium text-foreground">完成時間</Label>
+                  <div className="text-sm text-foreground">
                     {selectedSystemDetails.actual_completed_at 
                       ? new Date(selectedSystemDetails.actual_completed_at).toLocaleString('zh-TW')
                       : '未完成'
