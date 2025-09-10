@@ -1470,7 +1470,9 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
         onOpenChange={(open) => setSystemSelectionDialog(prev => ({ ...prev, open }))}
         componentType={systemSelectionDialog.componentType}
         componentSn={systemSelectionDialog.componentSn}
-        systems={getAvailableSystems(systems, currentCabinetId || 'default')}
+        systems={getAvailableSystems(systems, currentCabinetId || 'default').filter(system => 
+          !Object.values(componentSystemMapping).some(mapping => mapping.systemId === system.id)
+        )}
         systemProgress={systemProgress}
         onSystemSelect={handleSystemSelection}
       />
