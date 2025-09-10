@@ -41,7 +41,41 @@ export interface CabinetInstance {
 const generateCabinetInstances = (): CabinetInstance[] => {
   const statuses: CabinetInstance['status'][] = ['active', 'maintenance', 'offline', 'planning'];
 
-  return Array.from({ length: 16 }, (_, index) => {
+  // 統一的機櫃組態預設配置
+  const getDefaultCabinetConfig = () => {
+    return {
+      topOfRackSwitch: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      },
+      topPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#10b981'  // 綠色
+      },
+      switchTrays: { 
+        count: 9, 
+        color: '#3b82f6'  // 藍色
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#10b981'  // 綠色
+      },
+      bottomPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      }
+    };
+  };
+
+  const instances = Array.from({ length: 16 }, (_, index) => {
     const cabinetNumber = String(index + 1).padStart(3, '0');
     const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
     const totalSystems = 29; // L11機櫃標準配置
@@ -49,8 +83,14 @@ const generateCabinetInstances = (): CabinetInstance[] => {
       Math.floor(Math.random() * totalSystems) + 10 : 
       Math.floor(Math.random() * 10);
     
+    const cabinetId = `cabinet-${cabinetNumber}`;
+    
+    // 自動為每台機櫃套用統一預設配置
+    const defaultConfig = getDefaultCabinetConfig();
+    localStorage.setItem(`l11-cabinet-config-${cabinetId}`, JSON.stringify(defaultConfig));
+    
     return {
-      id: `cabinet-${cabinetNumber}`,
+      id: cabinetId,
       name: `L11-機櫃-${cabinetNumber}`,
       model: 'L11',
       location: 'TY2', // 預設廠房位置
@@ -65,6 +105,8 @@ const generateCabinetInstances = (): CabinetInstance[] => {
       notes: Math.random() > 0.7 ? `機櫃 ${cabinetNumber} 的特殊配置說明` : undefined
     };
   });
+
+  return instances;
 };
 
 interface CabinetInstanceManagerProps {
