@@ -265,7 +265,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   .map((system) => (
                   <div 
                     key={system.id} 
-                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border bg-green-50"
+                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border bg-muted"
                     onClick={() => showSystemDetails(system)}
                   >
                     <div className="flex-1">
