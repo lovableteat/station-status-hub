@@ -90,6 +90,27 @@ export function SystemSelectionDialog({
           {/* 系統清單 */}
           <ScrollArea className="h-[400px]">
             <div className="space-y-2">
+              {/* 添加"甚麼都不選"選項 */}
+              <div
+                className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors bg-muted"
+                onClick={() => {
+                  onSystemSelect(null as any); // 傳遞null表示不選擇任何系統
+                  onOpenChange(false);
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-3 w-3 rounded-full bg-gray-400" />
+                    <h4 className="font-semibold text-muted-foreground">甚麼都不選</h4>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    清除設定
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  取消當前組件的系統分配
+                </p>
+              </div>
               {filteredSystems.map((system) => {
                 const progressInfo = systemProgress.find(p => p.system.id === system.id);
                 

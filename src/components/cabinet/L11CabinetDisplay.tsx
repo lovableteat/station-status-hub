@@ -742,6 +742,9 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     };
     setSelectedComponent(newSelectedComponent);
     localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(newSelectedComponent));
+    
+    // 自動打開組件詳細資訊對話框
+    setComponentDetailDialog(true);
   };
 
   const handleConfigChange = (newConfig: CabinetConfig) => {
@@ -768,11 +771,34 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     });
   };
 
-  // 處理系統選擇確認，添加錯誤處理
+  // 處理系統選擇確認，添加錯誤處理和支援清除設定
   const handleSystemSelection = useCallback((system: any) => {
     try {
-      const currentSerialNumber = system.serial_number || system.system_name;
       const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
+      
+      // 如果選擇null（甚麼都不選），則清除該組件的分配
+      if (system === null || system === undefined) {
+        // 先從全域分配中移除
+        deallocateComponent(
+          systemSelectionDialog.componentType,
+          systemSelectionDialog.componentSn,
+          currentCabinetId || 'default'
+        );
+        
+        // 從本地映射中移除
+        const newMapping = { ...componentSystemMapping };
+        delete newMapping[key];
+        setComponentSystemMapping(newMapping);
+        
+        setSystemSelectionDialog({
+          open: false,
+          componentType: '',
+          componentSn: ''
+        });
+        return;
+      }
+      
+      const currentSerialNumber = system.serial_number || system.system_name;
       
       // 檢查全域分配
       const canAllocate = allocateSystem(
@@ -808,7 +834,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       console.error('Error during system selection:', error);
       alert('系統選擇過程中發生錯誤，請重試');
     }
-  }, [systemSelectionDialog, componentSystemMapping, allocateSystem, currentCabinetId]);
+  }, [systemSelectionDialog, componentSystemMapping, allocateSystem, deallocateComponent, currentCabinetId]);
 
 
   const totalComponents = config.computeTrays1.count + config.computeTrays2.count;
