@@ -14,6 +14,7 @@ import { useGlobalSystemAllocation } from '@/hooks/useGlobalSystemAllocation';
 import { supabase } from '@/integrations/supabase/client';
 import * as THREE from 'three';
 import { useNavigate } from 'react-router-dom';
+import { CabinetAssemblyManualInput } from './CabinetAssemblyManualInput';
 
 // 生成序號的函數
 const generateSerialNumbers = (prefix: string, count: number): string[] => {
@@ -193,13 +194,13 @@ function CabinetScene({ config, isOpen, selectedComponent, onComponentClick, com
   
   // 根據圖像重新定義機櫃結構 - 從上到下的實際排列順序
   const cabinetStructure = [
-    { type: 'topOfRackSwitch', count: 2, height: 0.25, color: '#d97706' }, // 橙色 Top Of Rack Switch (兩層設計)
-    { type: 'topPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies (上)
-    { type: 'computeTrays1', count: 10, height: 0.2, color: '#059669' },   // 綠色 10 Compute Trays
-    { type: 'switchTrays', count: 3, height: 0.25, color: '#2563eb' },     // 藍色 3 Switch Trays
-    { type: 'computeTrays2', count: 8, height: 0.2, color: '#059669' },    // 綠色 8 Compute Trays
-    { type: 'bottomPowerSupplies', count: 2, height: 0.3, color: '#d97706' }, // 橙色 Power Supplies (下)
-    { type: 'srcUnits', count: 2, height: 0.25, color: '#7c3aed' }         // 紫色 SRC Units
+    { type: 'topOfRackSwitch', count: 1, height: 0.25, color: '#8b5cf6' }, // 紫色 Top Of Rack Switch (高層設計)
+    { type: 'topPowerSupplies', count: 2, height: 0.3, color: '#f59e0b' }, // 橙色 Power Supplies (上)
+    { type: 'computeTrays1', count: 10, height: 0.2, color: '#10b981' },   // 綠色 10 Compute Trays
+    { type: 'switchTrays', count: 3, height: 0.25, color: '#3b82f6' },     // 藍色 3 Switch Trays
+    { type: 'computeTrays2', count: 8, height: 0.2, color: '#10b981' },    // 綠色 8 Compute Trays
+    { type: 'bottomPowerSupplies', count: 2, height: 0.3, color: '#f59e0b' }, // 橙色 Power Supplies (下)
+    { type: 'srcUnits', count: 2, height: 0.25, color: '#8b5cf6' }         // 紫色 SRC Units
   ];
   
   // 計算機櫃總高度 - 緊密排列不留多餘空間
@@ -481,35 +482,35 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     if (globalDefault) {
       return JSON.parse(globalDefault);
     }
-    // 如果沒有全域預設，返回硬編碼預設
+    // 根據圖片更新預設配置
     return {
       topOfRackSwitch: { 
-        count: 2, 
-        color: '#d97706'
+        count: 1, 
+        color: '#8b5cf6'  // 紫色
       },
       topPowerSupplies: { 
         count: 2, 
-        color: '#d97706'
+        color: '#f59e0b'  // 橙色
       },
       computeTrays1: { 
         count: 10, 
-        color: '#059669'
+        color: '#10b981'  // 綠色
       },
       switchTrays: { 
         count: 3, 
-        color: '#2563eb'
+        color: '#3b82f6'  // 藍色
       },
       computeTrays2: { 
         count: 8, 
-        color: '#059669'
+        color: '#10b981'  // 綠色
       },
       bottomPowerSupplies: { 
         count: 2, 
-        color: '#d97706'
+        color: '#f59e0b'  // 橙色
       },
       srcUnits: { 
         count: 2, 
-        color: '#7c3aed'
+        color: '#8b5cf6'  // 紫色
       }
     };
   };
@@ -1154,116 +1155,72 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {/* 網路交換設備 */}
+            {/* 網路交換設備 - 手動輸入SN和MAC */}
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-4 w-4 bg-blue-500 rounded"></div>
                 <h3 className="text-lg font-semibold text-blue-600">網路交換設備</h3>
-                <Badge variant="outline">
-                  {Object.keys(componentSystemMapping).filter(key => 
-                    key.includes('Top Of Rack Switch') || key.includes('3 Switch Trays')
-                  ).length} / {config.topOfRackSwitch.count + config.switchTrays.count} 已配置
-                </Badge>
               </div>
-              <div className="pl-7 space-y-2">
-                <div>
-                  <h4 className="font-medium mb-2">Top Of Rack Switch ({config.topOfRackSwitch.count} 層)</h4>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Array.from({length: config.topOfRackSwitch.count}).map((_, index) => {
-                       const configuredMapping = Object.entries(componentSystemMapping)
-                         .find(([key]) => key === `Top Of Rack Switch-TOR-${String(index + 1).padStart(3, '0')}`);
-                       
-                       if (configuredMapping) {
-                         const [key, mapping] = configuredMapping;
-                         return (
-                           <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
-                             <div className="font-medium">#{index + 1}</div>
-                              <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
-                             <div className="mt-1 space-y-1">
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>系統: {mapping.systemName}</div>
-                               </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="w-full text-xs h-6"
-                                  onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${String(index + 1).padStart(3, '0')}`)}
-                                >
-                                  重新選擇
-                                </Button>
-                             </div>
-                           </div>
-                         );
-                       }
-
-                       return (
-                         <div key={`empty-tor-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                           <div className="font-medium">#{index + 1}</div>
-                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                           <Button 
-                             variant="ghost" 
-                             size="sm" 
-                             className="w-full text-xs h-6 mt-1"
-                             onClick={() => handleSelectSystem('Top Of Rack Switch', `TOR-${String(index + 1).padStart(3, '0')}`)}
-                           >
-                             選擇機台
-                           </Button>
-                         </div>
-                       );
-                     })}
-                   </div>
-                </div>
-                <div>
-                  <h4 className="font-medium mb-2">Switch Trays ({config.switchTrays.count} 層)</h4>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Array.from({length: config.switchTrays.count}).map((_, index) => {
-                       const configuredMapping = Object.entries(componentSystemMapping)
-                         .find(([key]) => key === `3 Switch Trays-SW-${String(index + 1).padStart(3, '0')}`);
-                       
-                       if (configuredMapping) {
-                         const [key, mapping] = configuredMapping;
-                         return (
-                           <div key={key} className="text-sm font-mono bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded border hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer transition-colors">
-                             <div className="font-medium">#{index + 1}</div>
-                             <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
-                             <div className="mt-1 space-y-1">
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>系統: {mapping.systemName}</div>
-                               </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="w-full text-xs h-6"
-                                  onClick={() => handleSelectSystem('3 Switch Trays', `SW-${String(index + 1).padStart(3, '0')}`)}
-                                >
-                                  重新選擇
-                                </Button>
-                             </div>
-                           </div>
-                         );
-                       }
-
-                       return (
-                         <div key={`empty-sw-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                           <div className="font-medium">#{index + 1}</div>
-                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                           <Button 
-                             variant="ghost" 
-                             size="sm" 
-                             className="w-full text-xs h-6 mt-1"
-                             onClick={() => handleSelectSystem('3 Switch Trays', `SW-${String(index + 1).padStart(3, '0')}`)}
-                           >
-                             選擇機台
-                           </Button>
-                         </div>
-                       );
-                     })}
-                   </div>
-                </div>
+              <div className="pl-7 space-y-4">
+                <CabinetAssemblyManualInput
+                  componentType="topOfRackSwitch"
+                  componentName="Top Of Rack Switch (高層設計)"
+                  count={config.topOfRackSwitch.count}
+                  color={config.topOfRackSwitch.color}
+                  cabinetId={currentCabinetId}
+                />
+                <CabinetAssemblyManualInput
+                  componentType="switchTrays"
+                  componentName="Switch Trays"
+                  count={config.switchTrays.count}
+                  color={config.switchTrays.color}
+                  cabinetId={currentCabinetId}
+                />
               </div>
             </div>
 
-            {/* 運算單元 */}
+            {/* 電源供應單元 - 手動輸入SN和MAC */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-amber-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-amber-600">電源供應單元</h3>
+              </div>
+              <div className="pl-7 space-y-4">
+                <CabinetAssemblyManualInput
+                  componentType="topPowerSupplies"
+                  componentName="Power Supplies (上)"
+                  count={config.topPowerSupplies.count}
+                  color={config.topPowerSupplies.color}
+                  cabinetId={currentCabinetId}
+                />
+                <CabinetAssemblyManualInput
+                  componentType="bottomPowerSupplies"
+                  componentName="Power Supplies (下)"
+                  count={config.bottomPowerSupplies.count}
+                  color={config.bottomPowerSupplies.color}
+                  cabinetId={currentCabinetId}
+                />
+              </div>
+            </div>
+
+            {/* SRC單元 - 手動輸入SN和MAC */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-violet-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-violet-600">SRC單元</h3>
+              </div>
+              <div className="pl-7">
+                <CabinetAssemblyManualInput
+                  componentType="srcUnits"
+                  componentName="SRC Units"
+                  count={config.srcUnits.count}
+                  color={config.srcUnits.color}
+                  cabinetId={currentCabinetId}
+                />
+              </div>
+            </div>
+
+            {/* 運算單元 - 只有運算單元可以選擇機台 */}
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-4 w-4 bg-emerald-500 rounded"></div>
@@ -1334,7 +1291,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                          return (
                            <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
                              <div className="font-medium">#{index + 1}</div>
-                             <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
+                              <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
                              <div className="mt-1 space-y-1">
                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                  <div>系統: {mapping.systemName}</div>
