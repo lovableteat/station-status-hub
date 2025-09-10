@@ -693,19 +693,19 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     
     let details: SystemDetails | undefined;
     if (mappedSystem) {
-      // 如果有映射的系統，使用該系統的資訊
+      // 如果有映射的系統，使用該系統的完整資訊
       const system = systems.find(s => s.id === mappedSystem.systemId);
       if (system) {
         details = {
           system_name: system.system_name,
-          model: system.model,
+          model: system.model || 'GB300',
           current_station: system.current_station,
           status: system.status,
           assigned_engineer: system.assigned_engineer,
           overall_progress: system.overall_progress,
-          team: 'N/A', // 從新的系統資料結構中沒有team欄位
-          bmc_address: 'N/A',
-          os_mac_address: 'N/A',
+          team: '未設定', // 該欄位在系統中不存在
+          bmc_address: '未設定', // 該欄位在系統中不存在
+          os_mac_address: '未設定', // 該欄位在系統中不存在
           ubuntu_version: system.ubuntu_version,
           cuda_version: system.cuda_version
         };
