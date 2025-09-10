@@ -55,8 +55,8 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   }, [activeTab]);
 
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
-    // Top Of Rack Switch 固定為 2 個
-    const newCount = key === 'topOfRackSwitch' ? 2 : Math.max(0, Math.min(20, count));
+    // Top Of Rack Switch 固定為 1 個
+    const newCount = key === 'topOfRackSwitch' ? 1 : Math.max(0, Math.min(20, count));
     
     onConfigChange({
       ...config,
@@ -88,35 +88,35 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
     if (globalDefault) {
       return JSON.parse(globalDefault);
     }
-    // 如果沒有全域預設，返回硬編碼預設
+  // 根據圖片更新預設配置
     return {
       topOfRackSwitch: { 
-        count: 2, 
-        color: '#d97706'
+        count: 1, 
+        color: '#8b5cf6'  // 紫色
       },
       topPowerSupplies: { 
         count: 2, 
-        color: '#d97706'
+        color: '#f59e0b'  // 橙色
       },
       computeTrays1: { 
         count: 10, 
-        color: '#059669'
+        color: '#10b981'  // 綠色
       },
       switchTrays: { 
         count: 3, 
-        color: '#2563eb'
+        color: '#3b82f6'  // 藍色
       },
       computeTrays2: { 
         count: 8, 
-        color: '#059669'
+        color: '#10b981'  // 綠色
       },
       bottomPowerSupplies: { 
         count: 2, 
-        color: '#d97706'
+        color: '#f59e0b'  // 橙色
       },
       srcUnits: { 
         count: 2, 
-        color: '#7c3aed'
+        color: '#8b5cf6'  // 紫色
       }
     };
   };
@@ -146,7 +146,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   };
 
   const configItems = [
-    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch (兩層設計)', max: 2 },
+    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch (高層設計)', max: 1 },
     { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 4 },
     { key: 'computeTrays1', label: '10 Compute Trays', max: 15 },
     { key: 'switchTrays', label: '3 Switch Trays', max: 6 },
@@ -211,7 +211,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           variant="outline"
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count - 1)}
-                          disabled={component.count <= 0 || (item.key === 'topOfRackSwitch' && component.count <= 2)}
+                          disabled={component.count <= 0 || (item.key === 'topOfRackSwitch' && component.count <= 1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -220,7 +220,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           value={component.count}
                           onChange={(e) => updateComponentCount(item.key as keyof CabinetConfig, parseInt(e.target.value) || 0)}
                           className="w-16 text-center"
-                          min={item.key === 'topOfRackSwitch' ? "2" : "0"}
+                          min={item.key === 'topOfRackSwitch' ? "1" : "0"}
                           max={item.max}
                           disabled={item.key === 'topOfRackSwitch'}
                         />
@@ -228,7 +228,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           variant="outline"
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count + 1)}
-                          disabled={component.count >= item.max || (item.key === 'topOfRackSwitch' && component.count >= 2)}
+                          disabled={component.count >= item.max || (item.key === 'topOfRackSwitch' && component.count >= 1)}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
