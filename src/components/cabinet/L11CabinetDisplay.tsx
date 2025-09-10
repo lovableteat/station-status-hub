@@ -1155,6 +1155,115 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
+            {/* 運算單元 - 只有運算單元可以選擇機台 */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-4 w-4 bg-emerald-500 rounded"></div>
+                <h3 className="text-lg font-semibold text-emerald-600">運算單元</h3>
+                <Badge variant="outline">
+                  {Object.keys(componentSystemMapping).filter(key => 
+                    key.includes('Compute Trays-CT1') || key.includes('Compute Trays-CT2')
+                  ).length} / {config.computeTrays1.count + config.computeTrays2.count} 已配置
+                </Badge>
+              </div>
+              <div className="pl-7 space-y-2">
+                <div>
+                  <h4 className="font-medium mb-2">Compute Trays ({config.computeTrays1.count} 層)</h4>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {Array.from({length: config.computeTrays1.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `Compute Trays-CT1-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                              <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-ct1-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
+                   </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Compute Trays ({config.computeTrays2.count} 層)</h4>
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                     {Array.from({length: config.computeTrays2.count}).map((_, index) => {
+                       const configuredMapping = Object.entries(componentSystemMapping)
+                         .find(([key]) => key === `Compute Trays-CT2-${String(index + 1).padStart(3, '0')}`);
+                       
+                       if (configuredMapping) {
+                         const [key, mapping] = configuredMapping;
+                         return (
+                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
+                             <div className="font-medium">#{index + 1}</div>
+                             <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
+                             <div className="mt-1 space-y-1">
+                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                 <div>系統: {mapping.systemName}</div>
+                               </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full text-xs h-6"
+                                  onClick={() => handleSelectSystem('Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
+                                >
+                                  重新選擇
+                                </Button>
+                             </div>
+                           </div>
+                         );
+                       }
+
+                       return (
+                         <div key={`empty-ct2-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
+                           <div className="font-medium">#{index + 1}</div>
+                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
+                           <Button 
+                             variant="ghost" 
+                             size="sm" 
+                             className="w-full text-xs h-6 mt-1"
+                             onClick={() => handleSelectSystem('Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
+                           >
+                             選擇機台
+                           </Button>
+                         </div>
+                       );
+                     })}
+                   </div>
+                </div>
+              </div>
+            </div>
+
             {/* 網路交換設備 - 手動輸入SN和MAC */}
             <div>
               <div className="flex items-center gap-3 mb-3">
@@ -1179,157 +1288,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
               </div>
             </div>
 
-            {/* 電源供應單元 - 手動輸入SN和MAC */}
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-4 w-4 bg-amber-500 rounded"></div>
-                <h3 className="text-lg font-semibold text-amber-600">電源供應單元</h3>
-              </div>
-              <div className="pl-7 space-y-4">
-                <CabinetAssemblyManualInput
-                  componentType="topPowerSupplies"
-                  componentName="Power Supplies (上)"
-                  count={config.topPowerSupplies.count}
-                  color={config.topPowerSupplies.color}
-                  cabinetId={currentCabinetId}
-                />
-                <CabinetAssemblyManualInput
-                  componentType="bottomPowerSupplies"
-                  componentName="Power Supplies (下)"
-                  count={config.bottomPowerSupplies.count}
-                  color={config.bottomPowerSupplies.color}
-                  cabinetId={currentCabinetId}
-                />
-              </div>
-            </div>
-
-            {/* SRC單元 - 手動輸入SN和MAC */}
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-4 w-4 bg-violet-500 rounded"></div>
-                <h3 className="text-lg font-semibold text-violet-600">SRC單元</h3>
-              </div>
-              <div className="pl-7">
-                <CabinetAssemblyManualInput
-                  componentType="srcUnits"
-                  componentName="SRC Units"
-                  count={config.srcUnits.count}
-                  color={config.srcUnits.color}
-                  cabinetId={currentCabinetId}
-                />
-              </div>
-            </div>
-
-            {/* 運算單元 - 只有運算單元可以選擇機台 */}
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-4 w-4 bg-emerald-500 rounded"></div>
-                <h3 className="text-lg font-semibold text-emerald-600">運算單元</h3>
-                <Badge variant="outline">
-                  {Object.keys(componentSystemMapping).filter(key => 
-                    key.includes('10 Compute Trays') || key.includes('8 Compute Trays')
-                  ).length} / {config.computeTrays1.count + config.computeTrays2.count} 已配置
-                </Badge>
-              </div>
-              <div className="pl-7 space-y-2">
-                <div>
-                  <h4 className="font-medium mb-2">10 Compute Trays ({config.computeTrays1.count} 層)</h4>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Array.from({length: config.computeTrays1.count}).map((_, index) => {
-                       const configuredMapping = Object.entries(componentSystemMapping)
-                         .find(([key]) => key === `10 Compute Trays-CT1-${String(index + 1).padStart(3, '0')}`);
-                       
-                       if (configuredMapping) {
-                         const [key, mapping] = configuredMapping;
-                         return (
-                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
-                             <div className="font-medium">#{index + 1}</div>
-                              <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
-                             <div className="mt-1 space-y-1">
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>系統: {mapping.systemName}</div>
-                               </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="w-full text-xs h-6"
-                                  onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
-                                >
-                                  重新選擇
-                                </Button>
-                             </div>
-                           </div>
-                         );
-                       }
-
-                       return (
-                         <div key={`empty-ct1-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                           <div className="font-medium">#{index + 1}</div>
-                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                           <Button 
-                             variant="ghost" 
-                             size="sm" 
-                             className="w-full text-xs h-6 mt-1"
-                             onClick={() => handleSelectSystem('10 Compute Trays', `CT1-${String(index + 1).padStart(3, '0')}`)}
-                           >
-                             選擇機台
-                           </Button>
-                         </div>
-                       );
-                     })}
-                   </div>
-                </div>
-                <div>
-                  <h4 className="font-medium mb-2">8 Compute Trays ({config.computeTrays2.count} 層)</h4>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                     {Array.from({length: config.computeTrays2.count}).map((_, index) => {
-                       const configuredMapping = Object.entries(componentSystemMapping)
-                         .find(([key]) => key === `8 Compute Trays-CT2-${String(index + 1).padStart(3, '0')}`);
-                       
-                       if (configuredMapping) {
-                         const [key, mapping] = configuredMapping;
-                         return (
-                           <div key={key} className="text-sm font-mono bg-emerald-50 dark:bg-emerald-950 px-3 py-2 rounded border hover:bg-emerald-100 dark:hover:bg-emerald-900 cursor-pointer transition-colors">
-                             <div className="font-medium">#{index + 1}</div>
-                              <div className="text-yellow-500 dark:text-yellow-400 font-bold">{mapping.serialNumber}</div>
-                             <div className="mt-1 space-y-1">
-                               <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                 <div>系統: {mapping.systemName}</div>
-                               </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="w-full text-xs h-6"
-                                  onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
-                                >
-                                  重新選擇
-                                </Button>
-                             </div>
-                           </div>
-                         );
-                       }
-
-                       return (
-                         <div key={`empty-ct2-${index}`} className="text-sm font-mono bg-gray-50 dark:bg-gray-950 px-3 py-2 rounded border border-dashed hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors">
-                           <div className="font-medium">#{index + 1}</div>
-                           <div className="text-gray-500 dark:text-gray-400">未配置</div>
-                           <Button 
-                             variant="ghost" 
-                             size="sm" 
-                             className="w-full text-xs h-6 mt-1"
-                             onClick={() => handleSelectSystem('8 Compute Trays', `CT2-${String(index + 1).padStart(3, '0')}`)}
-                           >
-                             選擇機台
-                           </Button>
-                         </div>
-                       );
-                     })}
-                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 電源供應單元 */}
+            {/* 電源供應單元 - 選擇機台 */}
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-4 w-4 bg-amber-500 rounded"></div>
@@ -1438,7 +1397,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
               </div>
             </div>
 
-            {/* SRC單元 */}
+            {/* SRC單元 - 選擇機台 */}
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-4 w-4 bg-purple-500 rounded"></div>
@@ -1503,12 +1462,12 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">組件配置統計：</span>
                 <div className="flex gap-4">
-                  <span>交換機: {Object.keys(componentSystemMapping).filter(key => 
-                    key.includes('Top Of Rack Switch') || key.includes('3 Switch Trays')
-                  ).length} / {config.topOfRackSwitch.count + config.switchTrays.count}</span>
-                  <span>運算單元: {Object.keys(componentSystemMapping).filter(key => 
-                    key.includes('10 Compute Trays') || key.includes('8 Compute Trays')
-                  ).length} / {config.computeTrays1.count + config.computeTrays2.count}</span>
+                   <span>交換機: {Object.keys(componentSystemMapping).filter(key => 
+                     key.includes('Top Of Rack Switch') || key.includes('Switch Trays')
+                   ).length} / {config.topOfRackSwitch.count + config.switchTrays.count}</span>
+                   <span>運算單元: {Object.keys(componentSystemMapping).filter(key => 
+                     key.includes('Compute Trays-CT1') || key.includes('Compute Trays-CT2')
+                   ).length} / {config.computeTrays1.count + config.computeTrays2.count}</span>
                   <span>電源供應: {Object.keys(componentSystemMapping).filter(key => 
                     key.includes('Power Supplies')
                   ).length} / {config.topPowerSupplies.count + config.bottomPowerSupplies.count}</span>
