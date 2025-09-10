@@ -82,8 +82,14 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
     setSelectedSystemDetails(system);
   };
 
-  const resetToDefault = () => {
-    onConfigChange({
+  // 讀取全域預設配置
+  const getGlobalDefaultConfig = (): CabinetConfig => {
+    const globalDefault = localStorage.getItem('l11-cabinet-global-default-config');
+    if (globalDefault) {
+      return JSON.parse(globalDefault);
+    }
+    // 如果沒有全域預設，返回硬編碼預設
+    return {
       topOfRackSwitch: { 
         count: 2, 
         color: '#d97706'
@@ -112,7 +118,31 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
         count: 2, 
         color: '#7c3aed'
       }
-    });
+    };
+  };
+
+  const resetToDefault = () => {
+    onConfigChange(getGlobalDefaultConfig());
+  };
+
+  // 檢查當前配置是否使用了全域預設
+  const isUsingGlobalDefault = () => {
+    const globalDefault = localStorage.getItem('l11-cabinet-global-default-config');
+    return globalDefault !== null;
+  };
+
+  // 將當前配置設為全域預設
+  const setAsGlobalDefault = () => {
+    const confirmed = window.confirm('確定要將當前機櫃配置設為所有機台的預設配置嗎？');
+    if (!confirmed) return;
+
+    try {
+      localStorage.setItem('l11-cabinet-global-default-config', JSON.stringify(config));
+      alert('已成功將當前配置設為全域預設配置！');
+    } catch (error) {
+      console.error('設定全域預設配置時發生錯誤:', error);
+      alert('設定失敗，請重試');
+    }
   };
 
   const configItems = [
@@ -132,10 +162,18 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>機櫃組態設定</CardTitle>
-          <Button variant="outline" size="sm" onClick={resetToDefault}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            重置預設
-          </Button>
+          <div className="flex gap-2">
+            {cabinetId === 'L11-機櫃-001' && (
+              <Button variant="default" size="sm" onClick={setAsGlobalDefault}>
+                <Settings className="h-4 w-4 mr-2" />
+                設為預設
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={resetToDefault}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              重置預設
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

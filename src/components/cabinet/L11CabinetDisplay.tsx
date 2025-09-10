@@ -467,37 +467,47 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     currentCabinetId ? `${key}-${currentCabinetId}` : key
   , [currentCabinetId]);
   
-  // 默認配置
-  const getDefaultConfig = (): CabinetConfig => ({
-    topOfRackSwitch: { 
-      count: 2, 
-      color: '#d97706'
-    },
-    topPowerSupplies: { 
-      count: 2, 
-      color: '#d97706'
-    },
-    computeTrays1: { 
-      count: 10, 
-      color: '#059669'
-    },
-    switchTrays: { 
-      count: 3, 
-      color: '#2563eb'
-    },
-    computeTrays2: { 
-      count: 8, 
-      color: '#059669'
-    },
-    bottomPowerSupplies: { 
-      count: 2, 
-      color: '#d97706'
-    },
-    srcUnits: { 
-      count: 2, 
-      color: '#7c3aed'
+  // 讀取全域預設配置
+  const getGlobalDefaultConfig = (): CabinetConfig => {
+    const globalDefault = localStorage.getItem('l11-cabinet-global-default-config');
+    if (globalDefault) {
+      return JSON.parse(globalDefault);
     }
-  });
+    // 如果沒有全域預設，返回硬編碼預設
+    return {
+      topOfRackSwitch: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      topPowerSupplies: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#059669'
+      },
+      switchTrays: { 
+        count: 3, 
+        color: '#2563eb'
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#059669'
+      },
+      bottomPowerSupplies: { 
+        count: 2, 
+        color: '#d97706'
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#7c3aed'
+      }
+    };
+  };
+
+  // 默認配置
+  const getDefaultConfig = (): CabinetConfig => getGlobalDefaultConfig();
 
   // 從localStorage讀取指定機櫃的配置
   const loadCabinetConfig = useCallback((cabinetId: string): CabinetConfig => {
