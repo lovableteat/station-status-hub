@@ -39,19 +39,6 @@ export interface CabinetInstance {
 
 // 生成16台機櫃的預設資料
 const generateCabinetInstances = (): CabinetInstance[] => {
-  const locations = [
-    '廠房A-1樓-東側', '廠房A-1樓-西側', '廠房A-2樓-東側', '廠房A-2樓-西側',
-    '廠房B-1樓-北側', '廠房B-1樓-南側', '廠房B-2樓-北側', '廠房B-2樓-南側',
-    '廠房C-1樓-中央', '廠房C-2樓-中央', '廠房C-3樓-中央', '廠房C-地下室',
-    '廠房D-1樓-入口', '廠房D-2樓-辦公', '廠房E-實驗室', '廠房F-測試區'
-  ];
-  
-  const engineers = [
-    '張工程師', '李工程師', '王工程師', '陳工程師', '林工程師', 
-    '黃工程師', '吳工程師', '劉工程師', '蔡工程師', '許工程師',
-    '鄭工程師', '謝工程師', '楊工程師', '周工程師', '徐工程師'
-  ];
-
   const statuses: CabinetInstance['status'][] = ['active', 'maintenance', 'offline', 'planning'];
 
   return Array.from({ length: 16 }, (_, index) => {
@@ -66,16 +53,13 @@ const generateCabinetInstances = (): CabinetInstance[] => {
       id: `cabinet-${cabinetNumber}`,
       name: `L11-機櫃-${cabinetNumber}`,
       model: 'L11',
-      location: locations[index],
+      location: 'TY2', // 預設廠房位置
       status: randomStatus,
       totalSystems,
       completedSystems,
       totalComponents: 29,
       configuredComponents: Math.floor(Math.random() * 29) + 15,
-      assignedEngineers: [
-        engineers[Math.floor(Math.random() * engineers.length)],
-        engineers[Math.floor(Math.random() * engineers.length)]
-      ].filter((engineer, idx, arr) => arr.indexOf(engineer) === idx), // 去重
+      assignedEngineers: [], // 預設無指派工程師
       createdAt: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toISOString(),
       lastUpdated: new Date().toISOString(),
       notes: Math.random() > 0.7 ? `機櫃 ${cabinetNumber} 的特殊配置說明` : undefined
@@ -98,7 +82,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedCabinet, setSelectedCabinet] = useState<string>(currentCabinetId || 'cabinet-001');
+  const [selectedCabinet, setSelectedCabinet] = useState<string>(currentCabinetId || '');
   const [editingCabinet, setEditingCabinet] = useState<CabinetInstance | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
