@@ -108,9 +108,33 @@ export function CabinetManagement() {
   const [editingCabinet, setEditingCabinet] = useState<CabinetInfo | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
+  // 從localStorage載入機櫃數據
+  const loadCabinetsFromStorage = (): CabinetInfo[] => {
+    try {
+      const savedCabinets = localStorage.getItem('cabinet-management-data');
+      if (savedCabinets) {
+        return JSON.parse(savedCabinets);
+      }
+    } catch (error) {
+      console.warn('Failed to load cabinets from localStorage:', error);
+    }
+    // 如果沒有保存的數據，使用默認數據
+    return generateMockCabinets();
+  };
+
+  // 保存機櫃數據到localStorage
+  const saveCabinetsToStorage = (cabinetsData: CabinetInfo[]) => {
+    try {
+      localStorage.setItem('cabinet-management-data', JSON.stringify(cabinetsData));
+    } catch (error) {
+      console.warn('Failed to save cabinets to localStorage:', error);
+    }
+  };
+
   useEffect(() => {
     // 載入機櫃數據
-    setCabinets(generateMockCabinets());
+    const loadedCabinets = loadCabinetsFromStorage();
+    setCabinets(loadedCabinets);
   }, []);
 
   const filteredCabinets = cabinets.filter(cabinet => {
@@ -139,8 +163,9 @@ export function CabinetManagement() {
       createdAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString()
     };
-    setCabinets(prev => [...prev, newCabinet]);
-    // TODO: Save to backend
+    const updatedCabinets = [...cabinets, newCabinet];
+    setCabinets(updatedCabinets);
+    saveCabinetsToStorage(updatedCabinets);
   };
 
   const handleEditCabinet = (cabinet: CabinetInfo) => {
@@ -149,14 +174,23 @@ export function CabinetManagement() {
   };
 
   const handleSaveCabinet = (updatedCabinet: CabinetInfo) => {
-    setCabinets(prev => prev.map(c => c.id === updatedCabinet.id ? updatedCabinet : c));
-    // TODO: Save to backend
+    const updatedCabinets = cabinets.map(c => c.id === updatedCabinet.id ? updatedCabinet : c);
+    setCabinets(updatedCabinets);
+    saveCabinetsToStorage(updatedCabinets);
   };
 
   const handleDeleteCabinet = (cabinetId: string) => {
     if (confirm('確定要刪除此機櫃嗎？此操作無法撤銷。')) {
-      setCabinets(prev => prev.filter(c => c.id !== cabinetId));
-      // TODO: Delete from backend
+      const updatedCabinets = cabinets.filter(c => c.id !== cabinetId);
+      setCabinets(updatedCabinets);
+      saveCabinetsToStorage(updatedCabinets);
+      
+      // 同時清理該機櫃的相關數據
+      localStorage.removeItem(`l11-cabinet-config-${cabinetId}`);
+      localStorage.removeItem(`l11-cabinet-componentSystemMapping-${cabinetId}`);
+      localStorage.removeItem(`l11-cabinet-autoRotate-${cabinetId}`);
+      localStorage.removeItem(`l11-cabinet-isOpen-${cabinetId}`);
+      localStorage.removeItem(`l11-cabinet-selectedComponent-${cabinetId}`);
     }
   };
 
