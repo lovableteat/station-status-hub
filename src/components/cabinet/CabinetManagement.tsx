@@ -108,6 +108,40 @@ export function CabinetManagement() {
   const [editingCabinet, setEditingCabinet] = useState<CabinetInfo | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
+  // 統一的機櫃組態預設配置
+  const getDefaultCabinetConfig = () => {
+    return {
+      topOfRackSwitch: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      },
+      topPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#10b981'  // 綠色
+      },
+      switchTrays: { 
+        count: 9, 
+        color: '#3b82f6'  // 藍色
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#10b981'  // 綠色
+      },
+      bottomPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      }
+    };
+  };
+
   // 從localStorage載入機櫃數據
   const loadCabinetsFromStorage = (): CabinetInfo[] => {
     try {
@@ -163,9 +197,37 @@ export function CabinetManagement() {
       createdAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString()
     };
+    
+    // 自動為新機櫃套用統一的組態預設配置
+    const defaultConfig = getDefaultCabinetConfig();
+    localStorage.setItem(`l11-cabinet-config-${newCabinet.id}`, JSON.stringify(defaultConfig));
+    
     const updatedCabinets = [...cabinets, newCabinet];
     setCabinets(updatedCabinets);
     saveCabinetsToStorage(updatedCabinets);
+  };
+
+  // 為所有機櫃套用統一預設配置的功能
+  const applyDefaultConfigToAllCabinets = () => {
+    const confirmed = window.confirm('確定要為所有機櫃套用統一的組態預設配置嗎？這將覆蓋現有的機櫃配置。');
+    if (!confirmed) return;
+
+    const defaultConfig = getDefaultCabinetConfig();
+    let updatedCount = 0;
+
+    // 為所有機櫃套用預設配置
+    cabinets.forEach(cabinet => {
+      localStorage.setItem(`l11-cabinet-config-${cabinet.id}`, JSON.stringify(defaultConfig));
+      updatedCount++;
+    });
+
+    // 為16台標準機櫃也套用配置
+    for (let i = 1; i <= 16; i++) {
+      const cabinetId = `cabinet-${String(i).padStart(3, '0')}`;
+      localStorage.setItem(`l11-cabinet-config-${cabinetId}`, JSON.stringify(defaultConfig));
+    }
+
+    alert(`已成功為 ${updatedCount} 台機櫃 + 16台標準機櫃套用統一的組態預設配置！`);
   };
 
   const handleEditCabinet = (cabinet: CabinetInfo) => {
@@ -208,7 +270,13 @@ export function CabinetManagement() {
           <p className="text-muted-foreground">管理和監控所有機櫃的測試進度與配置狀態</p>
         </div>
         
-        <CabinetCreateDialog onCreateCabinet={handleCreateCabinet} />
+        <div className="flex gap-2">
+          <Button variant="default" size="sm" onClick={applyDefaultConfigToAllCabinets}>
+            <Settings className="h-4 w-4 mr-2" />
+            統一預設配置
+          </Button>
+          <CabinetCreateDialog onCreateCabinet={handleCreateCabinet} />
+        </div>
       </div>
 
       {/* 總覽統計 */}
