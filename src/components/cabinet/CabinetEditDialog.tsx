@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { CabinetInstance } from './CabinetInstanceManager';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CabinetEditDialogProps {
   cabinet: CabinetInstance | null;
@@ -16,10 +17,33 @@ interface CabinetEditDialogProps {
 
 export function CabinetEditDialog({ cabinet, open, onOpenChange, onSave }: CabinetEditDialogProps) {
   const [formData, setFormData] = useState<CabinetInstance | null>(cabinet);
+  const [engineers, setEngineers] = useState<{id: string, name: string}[]>([]);
 
   useEffect(() => {
     setFormData(cabinet);
   }, [cabinet]);
+
+  useEffect(() => {
+    if (open) {
+      loadEngineers();
+    }
+  }, [open]);
+
+  const loadEngineers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('engineers')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      if (data) setEngineers(data);
+    } catch (error) {
+      console.error('Failed to load engineers:', error);
+      setEngineers([]);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,16 +182,26 @@ export function CabinetEditDialog({ cabinet, open, onOpenChange, onSave }: Cabin
 
             {/* 工程師分配 */}
             <div className="space-y-2">
-              <Label htmlFor="engineers">指派工程師 (用逗號分隔)</Label>
-              <Input
-                id="engineers"
-                value={formData.assignedEngineers.join(', ')}
-                onChange={(e) => setFormData({
+              <Label htmlFor="engineers">指派工程師</Label>
+              <Select 
+                value={formData.assignedEngineers[0] || ""} 
+                onValueChange={(value) => setFormData({
                   ...formData, 
-                  assignedEngineers: e.target.value.split(',').map(s => s.trim()).filter(s => s.length > 0)
+                  assignedEngineers: value ? [value] : []
                 })}
-                placeholder="例如：張工程師, 李工程師"
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇工程師（預設無）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">無指派</SelectItem>
+                  {engineers.map((engineer) => (
+                    <SelectItem key={engineer.id} value={engineer.name}>
+                      {engineer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* 備註 */}

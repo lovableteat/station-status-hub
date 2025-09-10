@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import { CabinetInfo } from './CabinetCard';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CabinetCreateDialogProps {
   onCreateCabinet: (cabinet: Omit<CabinetInfo, 'id' | 'createdAt' | 'lastUpdated'>) => void;
@@ -14,9 +15,10 @@ interface CabinetCreateDialogProps {
 
 export function CabinetCreateDialog({ onCreateCabinet }: CabinetCreateDialogProps) {
   const [open, setOpen] = useState(false);
+  const [engineers, setEngineers] = useState<{id: string, name: string}[]>([]);
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
+    location: 'TY2', // 預設廠房位置
     model: 'L11',
     status: 'planning' as const,
     totalSystems: 29,
@@ -27,13 +29,35 @@ export function CabinetCreateDialog({ onCreateCabinet }: CabinetCreateDialogProp
     description: ''
   });
 
+  useEffect(() => {
+    if (open) {
+      loadEngineers();
+    }
+  }, [open]);
+
+  const loadEngineers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('engineers')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      if (data) setEngineers(data);
+    } catch (error) {
+      console.error('Failed to load engineers:', error);
+      setEngineers([]);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onCreateCabinet(formData);
     setOpen(false);
     setFormData({
       name: '',
-      location: '',
+      location: 'TY2', // 預設廠房位置
       model: 'L11',
       status: 'planning',
       totalSystems: 29,
@@ -70,14 +94,38 @@ export function CabinetCreateDialog({ onCreateCabinet }: CabinetCreateDialogProp
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="location">位置 *</Label>
+            <Label htmlFor="location">廠房位置 *</Label>
             <Input
               id="location"
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="例：廠房A-1樓-東側"
+              placeholder="例：TY2"
               required
             />
+          </div>
+
+          {/* 工程師指派 */}
+          <div className="space-y-2">
+            <Label htmlFor="engineer">指派工程師</Label>
+            <Select 
+              value={formData.assignedEngineers[0] || ""} 
+              onValueChange={(value) => setFormData({
+                ...formData, 
+                assignedEngineers: value ? [value] : []
+              })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="選擇工程師（預設無）" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">無指派</SelectItem>
+                {engineers.map((engineer) => (
+                  <SelectItem key={engineer.id} value={engineer.name}>
+                    {engineer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
