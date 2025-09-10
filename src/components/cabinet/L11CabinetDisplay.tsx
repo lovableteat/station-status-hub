@@ -36,16 +36,24 @@ const getSerialNumbers = (componentType: string, count: number): string[] => {
 
 interface SystemDetails {
   system_name?: string;
+  serial_number?: string;
   model?: string;
   current_station?: string;
   status?: string;
   assigned_engineer?: string;
   overall_progress?: number;
   team?: string;
+  cabinet?: string;
+  bom_90?: string;
   bmc_address?: string;
+  old_bmc_address?: string;
   os_mac_address?: string; // NIC MAC Address
   ubuntu_version?: string;
   cuda_version?: string;
+  created_at?: string;
+  updated_at?: string;
+  actual_started_at?: string;
+  actual_completed_at?: string;
 }
 
 interface SelectedComponent {
@@ -950,20 +958,29 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
             {selectedComponent && (
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
                 <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">選中組件詳細資訊</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                   <div>
                     <span className="font-medium text-blue-800 dark:text-blue-200">組件類型:</span>
                     <p className="text-gray-700 dark:text-gray-300">{selectedComponent.type}</p>
                   </div>
-                    <div>
-                     <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
-                     <p className="text-yellow-500 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
-                   </div>
-                  {selectedComponent.details && (
+                  <div>
+                    <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
+                    <p className="text-yellow-500 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800 dark:text-blue-200">機櫃位置:</span>
+                    <p className="text-gray-700 dark:text-gray-300">{currentCabinetId || '未指定'}</p>
+                  </div>
+                  
+                  {selectedComponent.details ? (
                     <>
                       <div>
                         <span className="font-medium text-blue-800 dark:text-blue-200">系統名稱:</span>
                         <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.system_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">系統序號:</span>
+                        <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.serial_number || 'N/A'}</p>
                       </div>
                       <div>
                         <span className="font-medium text-blue-800 dark:text-blue-200">型號:</span>
@@ -980,12 +997,20 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                         </Badge>
                       </div>
                       <div>
-                        <span className="font-medium text-blue-800 dark:text-blue-200">指派工程師:</span>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.assigned_engineer || '未指派'}</p>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">整體進度:</span>
+                        <div className="flex items-center gap-2">
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.overall_progress || 0}%</p>
+                          <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${selectedComponent.details.overall_progress || 0}%` }}
+                            ></div>
+                          </div>
+                        </div>
                       </div>
                       <div>
-                        <span className="font-medium text-blue-800 dark:text-blue-200">整體進度:</span>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.overall_progress || 0}%</p>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">指派工程師:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.assigned_engineer || '未指派'}</p>
                       </div>
                       {selectedComponent.details.team && (
                         <div>
@@ -993,10 +1018,28 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                           <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.team}</p>
                         </div>
                       )}
+                      {selectedComponent.details.cabinet && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">所屬機櫃:</span>
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.cabinet}</p>
+                        </div>
+                      )}
+                      {selectedComponent.details.bom_90 && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">BOM-90:</span>
+                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.bom_90}</p>
+                        </div>
+                      )}
                       {selectedComponent.details.bmc_address && (
                         <div>
                           <span className="font-medium text-blue-800 dark:text-blue-200">BMC地址:</span>
                           <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.bmc_address}</p>
+                        </div>
+                      )}
+                      {selectedComponent.details.old_bmc_address && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">舊BMC地址:</span>
+                          <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.old_bmc_address}</p>
                         </div>
                       )}
                       {selectedComponent.details.os_mac_address && (
@@ -1017,17 +1060,66 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                           <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.cuda_version}</p>
                         </div>
                       )}
+                      {selectedComponent.details.created_at && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">建立時間:</span>
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {new Date(selectedComponent.details.created_at).toLocaleString('zh-TW')}
+                          </p>
+                        </div>
+                      )}
+                      {selectedComponent.details.updated_at && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">更新時間:</span>
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {new Date(selectedComponent.details.updated_at).toLocaleString('zh-TW')}
+                          </p>
+                        </div>
+                      )}
+                      {selectedComponent.details.actual_started_at && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">實際開始時間:</span>
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {new Date(selectedComponent.details.actual_started_at).toLocaleString('zh-TW')}
+                          </p>
+                        </div>
+                      )}
+                      {selectedComponent.details.actual_completed_at && (
+                        <div>
+                          <span className="font-medium text-blue-800 dark:text-blue-200">實際完成時間:</span>
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {new Date(selectedComponent.details.actual_completed_at).toLocaleString('zh-TW')}
+                          </p>
+                        </div>
+                      )}
                     </>
+                  ) : (
+                    <div className="lg:col-span-3">
+                      <span className="text-amber-600 dark:text-amber-400">尚未分配系統</span>
+                    </div>
                   )}
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-3" 
-                  onClick={handleSelectedComponentClear}
-                >
-                  清除選擇
-                </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSelectedComponentClear}
+                  >
+                    清除選擇
+                  </Button>
+                  {selectedComponent.details && (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => {
+                        // 導航到測試追蹤頁面並聚焦該系統
+                        window.open(`/test-tracker?focus=${selectedComponent.details?.system_name}`, '_blank');
+                      }}
+                    >
+                      查看測試進度
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
