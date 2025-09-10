@@ -128,18 +128,18 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   const totalComponents = Object.values(config).reduce((sum, comp) => sum + comp.count, 0);
 
   return (
-    <Card className="bg-card border-border">
-      <CardHeader className="bg-muted border-b border-border">
+    <Card>
+      <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-foreground">機櫃組態設定</CardTitle>
+          <CardTitle>機櫃組態設定</CardTitle>
           <Button variant="outline" size="sm" onClick={resetToDefault}>
             <RotateCcw className="h-4 w-4 mr-2" />
             重置預設
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 bg-card">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <CardContent className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="count" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -155,13 +155,13 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="count" className="space-y-4 mt-4">
+          <TabsContent value="count" className="space-y-4">
             <div className="grid gap-4">
               {configItems.map((item) => {
                 const component = config[item.key as keyof CabinetConfig];
                 return (
                   <div key={item.key} className="space-y-2">
-                    <Label className="flex items-center gap-2 text-foreground">
+                    <Label className="flex items-center gap-2">
                       <div 
                         className="h-3 w-3 rounded" 
                         style={{ backgroundColor: component.color }}
@@ -201,13 +201,13 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
             </div>
           </TabsContent>
 
-          <TabsContent value="color" className="space-y-4 mt-4">
+          <TabsContent value="color" className="space-y-4">
             <div className="grid gap-4">
               {configItems.map((item) => {
                 const component = config[item.key as keyof CabinetConfig];
                 return (
                   <div key={item.key} className="space-y-2">
-                    <Label className="flex items-center gap-2 text-foreground">
+                    <Label className="flex items-center gap-2">
                       <div 
                         className="h-3 w-3 rounded" 
                         style={{ backgroundColor: component.color }}
@@ -239,9 +239,9 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
           </TabsContent>
 
 
-          <TabsContent value="systems" className="space-y-4 mt-4">
+          <TabsContent value="systems" className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-foreground">可用系統清單 ({systems.filter(system => {
+              <Label>可用系統清單 ({systems.filter(system => {
                 // 檢查系統是否已被分配到其他機櫃
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
@@ -249,10 +249,10 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocation = allocations.find((a: any) => a.systemId === system.id);
                 return !allocation; // 只顯示未分配的系統
               }).length} 台可選)</Label>
-              <div className="text-xs text-warning-foreground bg-warning/20 border border-warning p-2 rounded">
+              <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded border">
                 注意：已分配到機櫃的機台將不會顯示在此清單中，以避免重複分配
               </div>
-              <div className="grid gap-2 max-h-64 overflow-y-auto border border-border rounded-md p-2 bg-muted">
+              <div className="grid gap-2 max-h-64 overflow-y-auto border rounded-md p-2">
                 {systems
                   .filter(system => {
                     // 過濾掉已分配到其他機櫃的系統
@@ -265,12 +265,12 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   .map((system) => (
                   <div 
                     key={system.id} 
-                    className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer border border-border bg-muted"
+                    className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md cursor-pointer border bg-green-50"
                     onClick={() => showSystemDetails(system)}
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-sm flex items-center gap-2 text-foreground">
-                        <div className="h-2 w-2 bg-success rounded-full"></div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
                         {system.system_name}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -278,7 +278,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs border-success text-success bg-success/20">
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-700">
                         可選用
                       </Badge>
                       <Button 
@@ -310,13 +310,13 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
           </TabsContent>
         </Tabs>
         
-        <div className="pt-4 border-t border-border">
+        <div className="pt-4 border-t">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">總組件配置數</span>
+            <span className="text-sm font-medium">總組件配置數</span>
             <Badge variant="secondary">{totalComponents}</Badge>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-sm font-medium text-foreground">已分配機台數</span>
+            <span className="text-sm font-medium">已分配機台數</span>
             <Badge variant="default">
               {(() => {
                 // 從localStorage讀取當前機櫃的分配情況
@@ -348,7 +348,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
         </div>
 
         <div className="pt-2">
-          <h4 className="font-semibold mb-2 text-sm text-foreground">配置說明</h4>
+          <h4 className="font-semibold mb-2 text-sm">配置說明</h4>
             <ul className="text-xs text-muted-foreground space-y-1">
             <li>• 根據實際機櫃架構設計</li>
             <li>• 可調整數量和顏色</li>
@@ -369,11 +369,11 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
             {systems.map((system) => (
               <div 
                 key={system.id}
-                className="flex items-center justify-between p-3 hover:bg-accent rounded-md cursor-pointer border border-border"
+                className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-md cursor-pointer border"
                 onClick={() => showSystemDetails(system)}
               >
                 <div className="flex-1">
-                  <div className="font-medium text-foreground">{system.system_name}</div>
+                  <div className="font-medium">{system.system_name}</div>
                   <div className="text-sm text-muted-foreground">
                     序列號: {system.serial_number || '未設定'} | 型號: {system.model || 'GB300'}
                   </div>
@@ -400,46 +400,46 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">系統名稱</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.system_name}</div>
+                  <Label className="text-sm font-medium">系統名稱</Label>
+                  <div className="text-sm">{selectedSystemDetails.system_name}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">序列號</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.serial_number || '未設定'}</div>
+                  <Label className="text-sm font-medium">序列號</Label>
+                  <div className="text-sm">{selectedSystemDetails.serial_number || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">型號</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.model || 'GB300'}</div>
+                  <Label className="text-sm font-medium">型號</Label>
+                  <div className="text-sm">{selectedSystemDetails.model || 'GB300'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">狀態</Label>
+                  <Label className="text-sm font-medium">狀態</Label>
                   <Badge variant={selectedSystemDetails.status === '已完成' ? 'default' : 'secondary'}>
                     {selectedSystemDetails.status}
                   </Badge>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">當前站點</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.current_station}</div>
+                  <Label className="text-sm font-medium">當前站點</Label>
+                  <div className="text-sm">{selectedSystemDetails.current_station}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">整體進度</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.overall_progress || 0}%</div>
+                  <Label className="text-sm font-medium">整體進度</Label>
+                  <div className="text-sm">{selectedSystemDetails.overall_progress || 0}%</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">負責工程師</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.assigned_engineer || '未分配'}</div>
+                  <Label className="text-sm font-medium">負責工程師</Label>
+                  <div className="text-sm">{selectedSystemDetails.assigned_engineer || '未分配'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">Ubuntu版本</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.ubuntu_version || '未設定'}</div>
+                  <Label className="text-sm font-medium">Ubuntu版本</Label>
+                  <div className="text-sm">{selectedSystemDetails.ubuntu_version || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">CUDA版本</Label>
-                  <div className="text-sm text-foreground">{selectedSystemDetails.cuda_version || '未設定'}</div>
+                  <Label className="text-sm font-medium">CUDA版本</Label>
+                  <div className="text-sm">{selectedSystemDetails.cuda_version || '未設定'}</div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">開始時間</Label>
-                  <div className="text-sm text-foreground">
+                  <Label className="text-sm font-medium">開始時間</Label>
+                  <div className="text-sm">
                     {selectedSystemDetails.actual_started_at 
                       ? new Date(selectedSystemDetails.actual_started_at).toLocaleString('zh-TW')
                       : '未開始'
@@ -447,8 +447,8 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-foreground">完成時間</Label>
-                  <div className="text-sm text-foreground">
+                  <Label className="text-sm font-medium">完成時間</Label>
+                  <div className="text-sm">
                     {selectedSystemDetails.actual_completed_at 
                       ? new Date(selectedSystemDetails.actual_completed_at).toLocaleString('zh-TW')
                       : '未完成'
