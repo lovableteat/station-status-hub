@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { CabinetConfigurator, CabinetConfig } from './CabinetConfigurator';
 import { SystemSelectionDialog } from './SystemSelectionDialog';
+import { ComponentDetailDialog } from './ComponentDetailDialog';
 import { useUnifiedData } from '@/hooks/useUnifiedData';
 import { useGlobalSystemAllocation } from '@/hooks/useGlobalSystemAllocation';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,15 +44,20 @@ interface SystemDetails {
   overall_progress?: number;
   team?: string;
   bmc_address?: string;
-  os_mac_address?: string; // NIC MAC Address
+  os_mac_address?: string;
   ubuntu_version?: string;
   cuda_version?: string;
+  serial_number?: string;
+  cabinet?: string;
+  old_bmc_address?: string;
+  bom_90?: string;
 }
 
 interface SelectedComponent {
   type: string;
   sn: string;
   details?: SystemDetails;
+  systemId?: string;
 }
 
 interface ComponentSystemMapping {
@@ -559,6 +565,9 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     componentSn: ''
   });
   
+  // 組件詳細資訊對話框狀態
+  const [componentDetailDialog, setComponentDetailDialog] = useState(false);
+  
   // 監聽系統資料變化，同步更新機櫃組裝清單中的序號顯示
   useEffect(() => {
     const updateComponentMappingWithLatestSerialNumbers = () => {
@@ -696,26 +705,40 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       // 如果有映射的系統，使用該系統的資訊
       const system = systems.find(s => s.id === mappedSystem.systemId);
       if (system) {
-        details = {
-          system_name: system.system_name,
-          model: system.model,
-          current_station: system.current_station,
-          status: system.status,
-          assigned_engineer: system.assigned_engineer,
-          overall_progress: system.overall_progress,
-          team: 'N/A', // 從新的系統資料結構中沒有team欄位
-          bmc_address: 'N/A',
-          os_mac_address: 'N/A',
-          ubuntu_version: system.ubuntu_version,
-          cuda_version: system.cuda_version
-        };
+        // 從數據庫獲取完整的系統詳細資訊
+        const { data: systemData } = await supabase
+          .from('test_systems')
+          .select('*')
+          .eq('id', system.id)
+          .single();
+          
+        if (systemData) {
+          details = {
+            system_name: systemData.system_name,
+            model: systemData.model,
+            current_station: systemData.current_station,
+            status: systemData.status,
+            assigned_engineer: systemData.assigned_engineer,
+            overall_progress: systemData.overall_progress,
+            team: systemData.team || 'N/A',
+            bmc_address: systemData.bmc_address || 'N/A',
+            os_mac_address: systemData.os_mac_address || 'N/A',
+            ubuntu_version: systemData.ubuntu_version,
+            cuda_version: systemData.cuda_version,
+            serial_number: systemData.serial_number,
+            cabinet: systemData.cabinet,
+            old_bmc_address: systemData.old_bmc_address,
+            bom_90: systemData.bom_90
+          };
+        }
       }
     }
     
     const newSelectedComponent = { 
       type: componentType, 
       sn: serialNumber,
-      details 
+      details,
+      systemId: mappedSystem?.systemId
     };
     setSelectedComponent(newSelectedComponent);
     localStorage.setItem(getStorageKey('l11-cabinet-selectedComponent'), JSON.stringify(newSelectedComponent));
@@ -905,19 +928,28 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
               )}
             </div>
             
-            {/* Selected Component Display */}
+            {/* Selected Component Display - Enhanced */}
             {selectedComponent && (
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">選中組件詳細資訊</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100">選中組件詳細資訊</h4>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setComponentDetailDialog(true)}
+                  >
+                    查看詳細資訊
+                  </Button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="font-medium text-blue-800 dark:text-blue-200">組件類型:</span>
                     <p className="text-gray-700 dark:text-gray-300">{selectedComponent.type}</p>
                   </div>
-                    <div>
-                     <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
-                     <p className="text-yellow-500 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
-                   </div>
+                  <div>
+                    <span className="font-medium text-blue-800 dark:text-blue-200">序列號:</span>
+                    <p className="text-yellow-500 dark:text-yellow-400 font-mono font-bold">{selectedComponent.sn}</p>
+                  </div>
                   {selectedComponent.details && (
                     <>
                       <div>
@@ -925,68 +957,58 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
                         <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.system_name || 'N/A'}</p>
                       </div>
                       <div>
-                        <span className="font-medium text-blue-800 dark:text-blue-200">型號:</span>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.model || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-blue-800 dark:text-blue-200">當前工站:</span>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.current_station || 'N/A'}</p>
-                      </div>
-                      <div>
                         <span className="font-medium text-blue-800 dark:text-blue-200">狀態:</span>
-                        <Badge variant={selectedComponent.details.status === 'Completed' ? 'default' : 'secondary'} className="ml-1">
+                        <Badge variant={selectedComponent.details.status === 'Done' ? 'default' : 'secondary'} className="ml-1">
                           {selectedComponent.details.status || 'N/A'}
                         </Badge>
                       </div>
                       <div>
-                        <span className="font-medium text-blue-800 dark:text-blue-200">指派工程師:</span>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.assigned_engineer || '未指派'}</p>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">NIC MAC Address:</span>
+                        <p className="text-gray-700 dark:text-gray-300 font-mono text-xs">
+                          {selectedComponent.details.os_mac_address !== 'N/A' && selectedComponent.details.os_mac_address ? 
+                            selectedComponent.details.os_mac_address : 
+                            <span className="text-muted-foreground">未設定</span>
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">BMC Address:</span>
+                        <p className="text-gray-700 dark:text-gray-300 font-mono text-xs">
+                          {selectedComponent.details.bmc_address !== 'N/A' && selectedComponent.details.bmc_address ? 
+                            selectedComponent.details.bmc_address : 
+                            <span className="text-muted-foreground">未設定</span>
+                          }
+                        </p>
                       </div>
                       <div>
                         <span className="font-medium text-blue-800 dark:text-blue-200">整體進度:</span>
                         <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.overall_progress || 0}%</p>
                       </div>
-                      {selectedComponent.details.team && (
-                        <div>
-                          <span className="font-medium text-blue-800 dark:text-blue-200">團隊:</span>
-                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.team}</p>
-                        </div>
-                      )}
-                      {selectedComponent.details.bmc_address && (
-                        <div>
-                          <span className="font-medium text-blue-800 dark:text-blue-200">BMC地址:</span>
-                          <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.bmc_address}</p>
-                        </div>
-                      )}
-                      {selectedComponent.details.os_mac_address && (
-                        <div>
-                          <span className="font-medium text-blue-800 dark:text-blue-200">NIC MAC地址:</span>
-                          <p className="text-gray-700 dark:text-gray-300 font-mono">{selectedComponent.details.os_mac_address}</p>
-                        </div>
-                      )}
-                      {selectedComponent.details.ubuntu_version && (
-                        <div>
-                          <span className="font-medium text-blue-800 dark:text-blue-200">Ubuntu版本:</span>
-                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.ubuntu_version}</p>
-                        </div>
-                      )}
-                      {selectedComponent.details.cuda_version && (
-                        <div>
-                          <span className="font-medium text-blue-800 dark:text-blue-200">CUDA版本:</span>
-                          <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.cuda_version}</p>
-                        </div>
-                      )}
+                      <div>
+                        <span className="font-medium text-blue-800 dark:text-blue-200">指派工程師:</span>
+                        <p className="text-gray-700 dark:text-gray-300">{selectedComponent.details.assigned_engineer || '未指派'}</p>
+                      </div>
                     </>
                   )}
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-3" 
-                  onClick={handleSelectedComponentClear}
-                >
-                  清除選擇
-                </Button>
+                <div className="flex gap-2 mt-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSelectedComponentClear}
+                  >
+                    清除選擇
+                  </Button>
+                   {selectedComponent.systemId && (
+                     <Button 
+                       variant="default" 
+                       size="sm"
+                       onClick={() => setComponentDetailDialog(true)}
+                     >
+                       編輯系統資料
+                     </Button>
+                   )}
+                </div>
               </div>
             )}
           </CardContent>
@@ -1431,6 +1453,17 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
         systems={getAvailableSystems(systems, currentCabinetId || 'default')}
         systemProgress={systemProgress}
         onSystemSelect={handleSystemSelection}
+      />
+
+      {/* 組件詳細資訊對話框 */}
+      <ComponentDetailDialog
+        component={selectedComponent}
+        open={componentDetailDialog}
+        onOpenChange={setComponentDetailDialog}
+        onUpdate={() => {
+          // 重新載入資料以更新顯示
+          window.location.reload();
+        }}
       />
     </div>
   );
