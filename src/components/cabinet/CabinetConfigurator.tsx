@@ -265,7 +265,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   .map((system) => (
                   <div 
                     key={system.id} 
-                    className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer border border-border bg-success/10"
+                    className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer border border-border bg-muted"
                     onClick={() => showSystemDetails(system)}
                   >
                     <div className="flex-1">
@@ -278,7 +278,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs border-success text-success-foreground bg-success/20">
+                      <Badge variant="outline" className="text-xs border-success text-success bg-success/20">
                         可選用
                       </Badge>
                       <Button 
