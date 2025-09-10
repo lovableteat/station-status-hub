@@ -55,8 +55,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   }, [activeTab]);
 
   const updateComponentCount = (key: keyof CabinetConfig, count: number) => {
-    // Top Of Rack Switch 固定為 1 個
-    const newCount = key === 'topOfRackSwitch' ? 1 : Math.max(0, Math.min(20, count));
+    const newCount = Math.max(0, Math.min(20, count));
     
     onConfigChange({
       ...config,
@@ -82,20 +81,20 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
     setSelectedSystemDetails(system);
   };
 
-  // 讀取全域預設配置
+  // 讀取全域預設配置 - GB300型號
   const getGlobalDefaultConfig = (): CabinetConfig => {
     const globalDefault = localStorage.getItem('l11-cabinet-global-default-config');
     if (globalDefault) {
       return JSON.parse(globalDefault);
     }
-  // 根據圖片更新預設配置
+  // GB300 預設配置
     return {
       topOfRackSwitch: { 
-        count: 1, 
+        count: 2, 
         color: '#8b5cf6'  // 紫色
       },
       topPowerSupplies: { 
-        count: 2, 
+        count: 4, 
         color: '#f59e0b'  // 橙色
       },
       computeTrays1: { 
@@ -103,7 +102,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
         color: '#10b981'  // 綠色
       },
       switchTrays: { 
-        count: 3, 
+        count: 9, 
         color: '#3b82f6'  // 藍色
       },
       computeTrays2: { 
@@ -146,13 +145,13 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   };
 
   const configItems = [
-    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch (高層設計)', max: 1 },
-    { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 4 },
-    { key: 'computeTrays1', label: '10 Compute Trays', max: 15 },
-    { key: 'switchTrays', label: '3 Switch Trays', max: 6 },
-    { key: 'computeTrays2', label: '8 Compute Trays', max: 15 },
-    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 4 },
-    { key: 'srcUnits', label: 'SRC Units', max: 5 }
+    { key: 'topOfRackSwitch', label: 'Top Of Rack Switch (高層設計)', max: 10 },
+    { key: 'topPowerSupplies', label: 'Power Supplies (上)', max: 10 },
+    { key: 'computeTrays1', label: 'Compute Trays', max: 15 },
+    { key: 'switchTrays', label: 'Switch Trays', max: 15 },
+    { key: 'computeTrays2', label: 'Compute Trays', max: 15 },
+    { key: 'bottomPowerSupplies', label: 'Power Supplies (下)', max: 10 },
+    { key: 'srcUnits', label: 'SRC Units', max: 10 }
   ];
 
   const totalComponents = Object.values(config).reduce((sum, comp) => sum + comp.count, 0);
@@ -211,7 +210,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           variant="outline"
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count - 1)}
-                          disabled={component.count <= 0 || (item.key === 'topOfRackSwitch' && component.count <= 1)}
+                          disabled={component.count <= 0}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -220,15 +219,14 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                           value={component.count}
                           onChange={(e) => updateComponentCount(item.key as keyof CabinetConfig, parseInt(e.target.value) || 0)}
                           className="w-16 text-center"
-                          min={item.key === 'topOfRackSwitch' ? "1" : "0"}
+                          min="0"
                           max={item.max}
-                          disabled={item.key === 'topOfRackSwitch'}
                         />
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateComponentCount(item.key as keyof CabinetConfig, component.count + 1)}
-                          disabled={component.count >= item.max || (item.key === 'topOfRackSwitch' && component.count >= 1)}
+                          disabled={component.count >= item.max}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
