@@ -452,7 +452,7 @@ function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
 export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?: string }) {
   const { systems } = useUnifiedData();
   const navigate = useNavigate();
-  const { getAvailableSystems, allocateSystem, deallocateComponent, getCabinetAllocations } = useGlobalSystemAllocation();
+  const { getAvailableSystems, allocateSystem, deallocateComponent, deallocateSystem, getCabinetAllocations } = useGlobalSystemAllocation();
   
   // 使用ref來防止內存洩漏和狀態循環
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -745,6 +745,37 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
     });
   };
 
+  // 處理全清除系統映射
+  const handleClearAllSystemMappings = useCallback(() => {
+    if (Object.keys(componentSystemMapping).length === 0) {
+      alert('目前沒有已配置的系統需要清除');
+      return;
+    }
+
+    const confirmed = window.confirm('確定要清除所有已配置的系統映射嗎？此操作不可復原。');
+    if (!confirmed) return;
+
+    try {
+      // 清除全域分配
+      Object.entries(componentSystemMapping).forEach(([key, mapping]) => {
+        deallocateSystem(mapping.systemId, currentCabinetId || 'default');
+      });
+
+      // 清除本地映射
+      setComponentSystemMapping({});
+      localStorage.removeItem(getStorageKey('l11-cabinet-componentSystemMapping'));
+
+      // 清除選中的組件
+      setSelectedComponent(null);
+      localStorage.removeItem(getStorageKey('l11-cabinet-selectedComponent'));
+
+      alert('已成功清除所有系統映射');
+    } catch (error) {
+      console.error('清除系統映射時發生錯誤:', error);
+      alert('清除失敗，請重試');
+    }
+  }, [componentSystemMapping, currentCabinetId, deallocateSystem, getStorageKey]);
+
   // 處理系統選擇確認，添加錯誤處理
   const handleSystemSelection = useCallback((system: any) => {
     try {
@@ -1006,7 +1037,18 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
       {/* 機櫃組裝清單 */}
       <Card>
         <CardHeader>
-          <CardTitle>機櫃組裝清單</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>機櫃組裝清單</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearAllSystemMappings}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              全清除選擇
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
