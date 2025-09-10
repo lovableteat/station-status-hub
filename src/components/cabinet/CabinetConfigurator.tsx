@@ -110,7 +110,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
         color: '#10b981'  // 綠色
       },
       bottomPowerSupplies: { 
-        count: 4, 
+        count: 2, 
         color: '#f59e0b'  // 橙色
       },
       srcUnits: { 
