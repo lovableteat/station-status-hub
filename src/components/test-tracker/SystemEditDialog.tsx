@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -158,160 +159,162 @@ export function SystemEditDialog({
         <MobileDialogHeader>
           <MobileDialogTitle>編輯系統資料</MobileDialogTitle>
         </MobileDialogHeader>
-        <div className={cn("space-y-4", isMobile && "space-y-6")}>
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機台編號</Label>
-            <Input
-              value={editValues.system_name}
-              onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
-              placeholder="請輸入機台編號..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+        <ScrollArea className="max-h-[70vh] overflow-y-auto pr-4">
+          <div className={cn("space-y-4", isMobile && "space-y-6")}>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機台編號</Label>
+              <Input
+                value={editValues.system_name}
+                onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
+                placeholder="請輸入機台編號..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機櫃</Label>
-            <Input
-              value={editValues.cabinet}
-              onChange={(e) => setEditValues({...editValues, cabinet: e.target.value})}
-              placeholder="請輸入機櫃..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機櫃</Label>
+              <Input
+                value={editValues.cabinet}
+                onChange={(e) => setEditValues({...editValues, cabinet: e.target.value})}
+                placeholder="請輸入機櫃..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
-            <Input
-              value={editValues.model}
-              onChange={(e) => setEditValues({...editValues, model: e.target.value})}
-              placeholder="請輸入型號..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
+              <Input
+                value={editValues.model}
+                onChange={(e) => setEditValues({...editValues, model: e.target.value})}
+                placeholder="請輸入型號..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>序號</Label>
-            <Input
-              value={editValues.serial_number}
-              onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
-              placeholder="請輸入序號..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>序號</Label>
+              <Input
+                value={editValues.serial_number}
+                onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
+                placeholder="請輸入序號..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>NIC MAC Address</Label>
-            <Input
-              value={editValues.os_mac_address}
-              onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
-              placeholder="請輸入 NIC MAC Address..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>NIC MAC Address</Label>
+              <Input
+                value={editValues.os_mac_address}
+                onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
+                placeholder="請輸入 NIC MAC Address..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>BMC Address</Label>
-            <Input
-              value={editValues.bmc_address}
-              onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
-              placeholder="請輸入 BMC Address..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>BMC Address</Label>
+              <Input
+                value={editValues.bmc_address}
+                onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
+                placeholder="請輸入 BMC Address..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>舊 BMC Address</Label>
-            <Input
-              value={editValues.old_bmc_address}
-              onChange={(e) => setEditValues({...editValues, old_bmc_address: e.target.value})}
-              placeholder="請輸入舊 BMC Address..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>舊 BMC Address</Label>
+              <Input
+                value={editValues.old_bmc_address}
+                onChange={(e) => setEditValues({...editValues, old_bmc_address: e.target.value})}
+                placeholder="請輸入舊 BMC Address..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>90BOM</Label>
-            <Input
-              value={editValues.bom_90}
-              onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
-              placeholder="請輸入 90BOM..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>90BOM</Label>
+              <Input
+                value={editValues.bom_90}
+                onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
+                placeholder="請輸入 90BOM..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>Ubuntu 版本</Label>
-            <Input
-              value={editValues.ubuntu_version}
-              onChange={(e) => setEditValues({...editValues, ubuntu_version: e.target.value})}
-              placeholder="例如：22.04、20.04"
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>Ubuntu 版本</Label>
+              <Input
+                value={editValues.ubuntu_version}
+                onChange={(e) => setEditValues({...editValues, ubuntu_version: e.target.value})}
+                placeholder="例如：22.04、20.04"
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>CUDA 版本</Label>
-            <Input
-              value={editValues.cuda_version}
-              onChange={(e) => setEditValues({...editValues, cuda_version: e.target.value})}
-              placeholder="例如：12.2、11.8"
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>CUDA 版本</Label>
+              <Input
+                value={editValues.cuda_version}
+                onChange={(e) => setEditValues({...editValues, cuda_version: e.target.value})}
+                placeholder="例如：12.2、11.8"
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
 
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>是否列入系統儀表板統計資料</Label>
-            <Select 
-              value={editValues.exclude_from_dashboard ? "false" : "true"} 
-              onValueChange={(value) => setEditValues({...editValues, exclude_from_dashboard: value === "false"})}
-            >
-              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="true" className={isMobile ? "h-12 text-base" : ""}>
-                  ✅ 是（預設）
-                </SelectItem>
-                <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
-                  ❌ 否（排除）
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>位置</Label>
-            <Input
-              value={editValues.team}
-              onChange={(e) => setEditValues({...editValues, team: e.target.value})}
-              placeholder="請輸入機台位置..."
-              className={isMobile ? "h-12 text-base" : ""}
-            />
-          </div>
-
-          <div>
-            <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
-            <Select 
-              value={editValues.assigned_engineer} 
-              onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
-            >
-              <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                <SelectValue placeholder="請選擇負責工程師..." />
-              </SelectTrigger>
-              <SelectContent>
-                {engineers.map(engineer => (
-                  <SelectItem 
-                    key={engineer.id} 
-                    value={engineer.name}
-                    className={isMobile ? "h-12 text-base" : ""}
-                  >
-                    {engineer.name}
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>是否列入系統儀表板統計資料</Label>
+              <Select 
+                value={editValues.exclude_from_dashboard ? "false" : "true"} 
+                onValueChange={(value) => setEditValues({...editValues, exclude_from_dashboard: value === "false"})}
+              >
+                <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true" className={isMobile ? "h-12 text-base" : ""}>
+                    ✅ 是（預設）
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
+                    ❌ 否（排除）
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>位置</Label>
+              <Input
+                value={editValues.team}
+                onChange={(e) => setEditValues({...editValues, team: e.target.value})}
+                placeholder="請輸入機台位置..."
+                className={isMobile ? "h-12 text-base" : ""}
+              />
+            </div>
+
+            <div>
+              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
+              <Select 
+                value={editValues.assigned_engineer} 
+                onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
+              >
+                <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
+                  <SelectValue placeholder="請選擇負責工程師..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {engineers.map(engineer => (
+                    <SelectItem 
+                      key={engineer.id} 
+                      value={engineer.name}
+                      className={isMobile ? "h-12 text-base" : ""}
+                    >
+                      {engineer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
+        </ScrollArea>
         <MobileDialogFooter>
           <Button 
             variant="outline" 
