@@ -17,10 +17,12 @@ import {
   Grid3X3,
   List,
   Edit,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { CabinetEditDialog } from './CabinetEditDialog';
 import { CabinetCreateDialog } from './CabinetCreateDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 // 機櫃實例介面
 export interface CabinetInstance {
@@ -163,6 +165,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     };
   };
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingCabinet, setDeletingCabinet] = useState<CabinetInstance | null>(null);
 
   // 保存機櫃資料到localStorage
   useEffect(() => {
@@ -200,6 +203,31 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     localStorage.setItem(`l11-cabinet-config-${newCabinet.id}`, JSON.stringify(defaultConfig));
     
     setCabinets(prevCabinets => [...prevCabinets, newCabinet]);
+  };
+
+  // 刪除機櫃
+  const handleDeleteCabinet = (cabinet: CabinetInstance) => {
+    // 防止刪除當前選中的機櫃時造成錯誤
+    if (selectedCabinet === cabinet.id) {
+      setSelectedCabinet('');
+    }
+    
+    // 刪除機櫃及其相關資料
+    setCabinets(prevCabinets => prevCabinets.filter(c => c.id !== cabinet.id));
+    
+    // 清理相關的localStorage資料
+    localStorage.removeItem(`l11-cabinet-config-${cabinet.id}`);
+    
+    // 清理全域系統分配中該機櫃的記錄
+    const allocationsKey = 'global-system-allocations';
+    const savedAllocations = localStorage.getItem(allocationsKey);
+    if (savedAllocations) {
+      const allocations = JSON.parse(savedAllocations);
+      const filteredAllocations = allocations.filter((allocation: any) => allocation.cabinetId !== cabinet.id);
+      localStorage.setItem(allocationsKey, JSON.stringify(filteredAllocations));
+    }
+    
+    setDeletingCabinet(null);
   };
 
   // 篩選機櫃
@@ -439,6 +467,21 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                              <Edit className="h-3 w-3 mr-1" />
                              編輯
                            </Button>
+                           <AlertDialog>
+                             <AlertDialogTrigger asChild>
+                               <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 className="h-6 text-xs px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   setDeletingCabinet(cabinet);
+                                 }}
+                               >
+                                 <Trash2 className="h-3 w-3" />
+                               </Button>
+                             </AlertDialogTrigger>
+                           </AlertDialog>
                          </div>
                       </div>
                       
@@ -468,20 +511,36 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
                       </div>
                     </div>
                      
-                     <div className="flex items-center gap-2">
-                       <Button 
-                         variant="outline" 
-                         size="sm" 
-                         className="h-6 text-xs"
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           handleEditCabinet(cabinet);
-                         }}
-                       >
-                         <Edit className="h-3 w-3 mr-1" />
-                         編輯
-                       </Button>
-                     </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-6 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditCabinet(cabinet);
+                          }}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          編輯
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-6 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingCabinet(cabinet);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              刪除
+                            </Button>
+                          </AlertDialogTrigger>
+                        </AlertDialog>
+                      </div>
                   </div>
                 )}
               </Card>
@@ -504,6 +563,31 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
         onOpenChange={setIsEditDialogOpen}
         onSave={handleSaveCabinet}
       />
+
+      {/* 刪除確認對話框 */}
+      {deletingCabinet && (
+        <AlertDialog open={!!deletingCabinet} onOpenChange={() => setDeletingCabinet(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>確認刪除機櫃</AlertDialogTitle>
+              <AlertDialogDescription>
+                您確定要刪除機櫃 <span className="font-semibold">{deletingCabinet.name}</span> 嗎？
+                <br />
+                <span className="text-destructive">此操作無法復原，將會刪除所有相關配置資料。</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={() => handleDeleteCabinet(deletingCabinet)}
+              >
+                確認刪除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </Card>
   );
 }
