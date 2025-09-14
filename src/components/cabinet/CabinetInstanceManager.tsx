@@ -16,9 +16,11 @@ import {
   Search,
   Grid3X3,
   List,
-  Edit
+  Edit,
+  Plus
 } from 'lucide-react';
 import { CabinetEditDialog } from './CabinetEditDialog';
+import { CabinetCreateDialog } from './CabinetCreateDialog';
 
 // 機櫃實例介面
 export interface CabinetInstance {
@@ -126,6 +128,40 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCabinet, setSelectedCabinet] = useState<string>(currentCabinetId || '');
   const [editingCabinet, setEditingCabinet] = useState<CabinetInstance | null>(null);
+
+  // 統一的機櫃組態預設配置
+  const getDefaultCabinetConfig = () => {
+    return {
+      topOfRackSwitch: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      },
+      topPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      computeTrays1: { 
+        count: 10, 
+        color: '#10b981'  // 綠色
+      },
+      switchTrays: { 
+        count: 9, 
+        color: '#3b82f6'  // 藍色
+      },
+      computeTrays2: { 
+        count: 8, 
+        color: '#10b981'  // 綠色
+      },
+      bottomPowerSupplies: { 
+        count: 4, 
+        color: '#f59e0b'  // 橙色
+      },
+      srcUnits: { 
+        count: 2, 
+        color: '#8b5cf6'  // 紫色
+      }
+    };
+  };
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // 保存機櫃資料到localStorage
@@ -148,6 +184,22 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     );
     setIsEditDialogOpen(false);
     setEditingCabinet(null);
+  };
+
+  // 新增機櫃
+  const handleCreateCabinet = (cabinetData: Omit<CabinetInstance, 'id' | 'createdAt' | 'lastUpdated'>) => {
+    const newCabinet: CabinetInstance = {
+      ...cabinetData,
+      id: `cabinet-${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // 自動為新機櫃套用統一的組態預設配置
+    const defaultConfig = getDefaultCabinetConfig();
+    localStorage.setItem(`l11-cabinet-config-${newCabinet.id}`, JSON.stringify(defaultConfig));
+    
+    setCabinets(prevCabinets => [...prevCabinets, newCabinet]);
   };
 
   // 篩選機櫃
@@ -225,9 +277,26 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
-            機櫃管理中心 ({filteredCabinets.length}/16)
+            機櫃管理中心 ({filteredCabinets.length}/{cabinets.length})
           </CardTitle>
           <div className="flex items-center gap-2">
+            <CabinetCreateDialog 
+              onCreateCabinet={(cabinetData) => {
+                // 轉換數據格式來匹配CabinetInstance介面
+                const instanceData = {
+                  name: cabinetData.name,
+                  model: cabinetData.model,
+                  location: cabinetData.location,
+                  status: cabinetData.status,
+                  totalSystems: cabinetData.totalSystems,
+                  completedSystems: cabinetData.completedSystems,
+                  totalComponents: cabinetData.totalComponents,
+                  configuredComponents: cabinetData.configuredComponents,
+                  assignedEngineers: cabinetData.assignedEngineers
+                };
+                handleCreateCabinet(instanceData);
+              }} 
+            />
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="sm"
