@@ -108,7 +108,7 @@ export function CabinetCreateDialog({ onCreateCabinet }: CabinetCreateDialogProp
           <div className="space-y-2">
             <Label htmlFor="engineer">指派工程師</Label>
             <Select 
-              value={formData.assignedEngineers[0] || "none"} 
+              value={formData.assignedEngineers[0]?.trim() || "none"} 
               onValueChange={(value) => setFormData({
                 ...formData, 
                 assignedEngineers: value === "none" ? [] : [value]
