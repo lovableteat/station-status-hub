@@ -28,23 +28,31 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
         <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="color-scheme" content="light" />
           <title>問題追蹤報告</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
+            html, body { background: #ffffff; }
+            body { font-family: Arial, sans-serif; margin: 20px; color: #111827; }
+            *, th, td, p, h1, h2, h3, h4, h5, h6, span, div, strong, em { color: #111827; }
             .header { text-align: center; margin-bottom: 30px; }
             .summary { background: #f5f5f5; padding: 15px; margin-bottom: 20px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             th { background-color: #f2f2f2; }
-            .priority-critical { color: #dc2626; font-weight: bold; }
-            .priority-high { color: #ea580c; font-weight: bold; }
-            .priority-medium { color: #ca8a04; font-weight: bold; }
-            .priority-low { color: #65a30d; font-weight: bold; }
-            .status-open { color: #dc2626; }
-            .status-in_progress { color: #ca8a04; }
-            .status-resolved { color: #16a34a; }
+            .priority-critical { color: #b91c1c; font-weight: bold; }
+            .priority-high { color: #c2410c; font-weight: bold; }
+            .priority-medium { color: #a16207; font-weight: bold; }
+            .priority-low { color: #15803d; font-weight: bold; }
+            .status-open { color: #b91c1c; }
+            .status-in_progress { color: #a16207; }
+            .status-resolved { color: #15803d; }
             .status-closed { color: #374151; }
             .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #374151; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
           </style>
         </head>
         <body>
