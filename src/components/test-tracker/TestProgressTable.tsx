@@ -148,8 +148,8 @@ export function TestProgressTable({
           stations={stations}
           items={items}
           progress={progress}
-          onSystemUpdate={onSystemUpdate}
-        />
+            onSystemUpdate={() => onSystemUpdate()}
+          />
         
         <div className="flex justify-between items-center">
           <SystemManager onSystemUpdate={onSystemUpdate} />
