@@ -21,6 +21,7 @@ interface Issue {
   created_at: string;
   updated_at: string;
   system_name?: string;
+  serial_number?: string;
   station_name?: string;
   test_item_name?: string;
 }
@@ -130,7 +131,9 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
                   {issue.system_name && (
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">系統名稱</label>
-                      <p className="mt-1 text-sm">{issue.system_name}</p>
+                      <p className="mt-1 text-sm">
+                        {issue.system_name}{issue.serial_number ? ` (${issue.serial_number})` : ''}
+                      </p>
                     </div>
                   )}
                   {issue.station_name && (
