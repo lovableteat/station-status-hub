@@ -264,9 +264,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                 </TableHead>
                 <TableHead className="w-[100px]">系統</TableHead>
                 <TableHead className="w-[100px]">站點</TableHead>
-                <TableHead className="w-[120px]">相關項目</TableHead>
                 <TableHead className="w-[120px]">問題分類</TableHead>
-                <TableHead className="w-[120px]">標籤</TableHead>
                 <TableHead className="w-[80px]">附件</TableHead>
                 <TableHead className="w-[120px]">
                   <Button variant="ghost" onClick={() => handleSort('created_at')}>
@@ -345,31 +343,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
-                      {issue.relate || '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm text-muted-foreground">
                       {issue.category || '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {issue.tags && issue.tags.length > 0 ? (
-                        issue.tags.slice(0, 2).map((tag, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            <Tag className="h-3 w-3 mr-1" />
-                            {tag}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
-                      {issue.tags && issue.tags.length > 2 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{issue.tags.length - 2}
-                        </Badge>
-                      )}
                     </div>
                   </TableCell>
                   <TableCell>
