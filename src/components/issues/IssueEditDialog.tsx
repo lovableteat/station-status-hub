@@ -301,12 +301,6 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   return (
     <div className="space-y-6 p-1">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">編輯問題</h3>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 左側：基本資訊 */}
