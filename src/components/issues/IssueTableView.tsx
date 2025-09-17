@@ -319,7 +319,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-2 text-sm justify-start"
+                        className="h-8 px-2 text-sm justify-start text-foreground"
                         onClick={() => setInlineEditingAssignee(issue.id)}
                       >
                         <UserPlus className="h-3 w-3 mr-1" />
@@ -328,7 +328,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-foreground">
                       {issue.system_name ? (
                         issue.serial_number ? 
                           `${issue.system_name} (${issue.serial_number})` : 
@@ -337,12 +337,12 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-foreground">
                       {issue.station_name || '-'}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-foreground">
                       {issue.category || '-'}
                     </div>
                   </TableCell>
