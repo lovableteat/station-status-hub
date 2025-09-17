@@ -1,16 +1,16 @@
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Settings } from "lucide-react";
+import { Plus, Trash2, Settings, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface SystemManagerProps {
-  onSystemUpdate: () => void;
+  onSystemUpdate: (newSystemId?: string) => void;
 }
 
 export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
@@ -19,6 +19,8 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
   const [newSystemEngineer, setNewSystemEngineer] = useState("");
   const [newSystemSerial, setNewSystemSerial] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [creationProgress, setCreationProgress] = useState(0);
+  const retryCountRef = useRef(0);
   const { toast } = useToast();
 
   const handleAddSystem = async () => {
@@ -31,48 +33,91 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
       return;
     }
 
-    try {
-      setIsAdding(true);
-      
-      const { error } = await supabase
-        .from('test_systems')
-        .insert({
+    const maxRetries = 3;
+    
+    const attemptCreateSystem = async (): Promise<string | null> => {
+      try {
+        setIsAdding(true);
+        setCreationProgress(25);
+
+        // 樂觀更新 - 先顯示進度指示器
+        const tempSystemData = {
           system_name: newSystemName.trim(),
           assigned_engineer: newSystemEngineer.trim() || null,
           serial_number: newSystemSerial.trim() || null,
           status: 'Not Start',
           overall_progress: 0,
-          current_station: 'Station 0'
+          current_station: '未開始'
+        };
+
+        setCreationProgress(50);
+
+        const { data, error } = await supabase
+          .from('test_systems')
+          .insert(tempSystemData)
+          .select('id')
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        setCreationProgress(75);
+
+        // 返回新建系統的ID用於增量更新
+        const newSystemId = data.id;
+
+        setCreationProgress(100);
+
+        toast({
+          title: "新增成功",
+          description: `機台 ${newSystemName} 已成功新增`,
         });
 
-      if (error) {
-        console.error('Error adding system:', error);
+        // 重置表單
+        setNewSystemName("");
+        setNewSystemEngineer("");
+        setNewSystemSerial("");
+        setIsAddDialogOpen(false);
+        setCreationProgress(0);
+        
+        // 觸發增量更新，傳入新系統ID
+        onSystemUpdate(newSystemId);
+        
+        return newSystemId;
+      } catch (error) {
+        console.error('系統創建失敗:', error);
         throw error;
       }
+    };
 
-      toast({
-        title: "新增成功",
-        description: `機台 ${newSystemName} 已成功新增`,
-      });
-
-      // 重置表單
-      setNewSystemName("");
-      setNewSystemEngineer("");
-      setNewSystemSerial("");
-      setIsAddDialogOpen(false);
-      
-      // 更新資料
-      onSystemUpdate();
-    } catch (error) {
-      console.error('Error adding system:', error);
-      toast({
-        title: "新增失敗",
-        description: "無法新增機台，請重試",
-        variant: "destructive"
-      });
-    } finally {
-      setIsAdding(false);
+    // 實施重試機制
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await attemptCreateSystem();
+        if (result) {
+          retryCountRef.current = 0;
+          return;
+        }
+      } catch (error) {
+        retryCountRef.current = attempt + 1;
+        
+        if (attempt === maxRetries) {
+          toast({
+            title: "新增失敗",
+            description: `無法新增機台，已嘗試 ${maxRetries + 1} 次。請檢查網路連接後重試`,
+            variant: "destructive"
+          });
+          break;
+        } else {
+          // 短暫延遲後重試
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
     }
+    
+    setIsAdding(false);
+    setCreationProgress(0);
   };
 
   const handleDeleteSystem = async (systemId: string, systemName: string) => {
@@ -160,8 +205,16 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
               <Button 
                 onClick={handleAddSystem}
                 disabled={isAdding}
+                className="min-w-[120px]"
               >
-                {isAdding ? "新增中..." : "新增機台"}
+                {isAdding ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{creationProgress < 100 ? `${creationProgress}%` : "完成中"}</span>
+                  </div>
+                ) : (
+                  "新增機台"
+                )}
               </Button>
             </div>
           </div>
