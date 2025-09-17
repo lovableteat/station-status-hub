@@ -3,11 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, X } from "lucide-react";
+import { Plus, Upload, X, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface NewIssue {
   title: string;
@@ -71,6 +71,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
   const [systems, setSystems] = useState<TestSystem[]>([]);
   const [stations, setStations] = useState<TestStation[]>([]);
   const [testItems, setTestItems] = useState<TestItem[]>([]);
+  const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
 
   const { toast } = useToast();
 
@@ -79,6 +80,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
       loadSystems();
       loadStations();
       loadTestItems();
+      loadEngineers();
     }
   }, [isOpen]);
 
@@ -127,6 +129,25 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
       setTestItems(data || []);
     } catch (error) {
       console.error('Error loading test items:', error);
+    }
+  };
+
+  const loadEngineers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('engineers')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) {
+        console.error('載入工程師列表錯誤:', error);
+        return;
+      }
+      
+      setEngineers(data || []);
+    } catch (error) {
+      console.error('載入工程師列表失敗:', error);
     }
   };
 
@@ -297,9 +318,10 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
           <DialogTitle>新增問題</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 左側：基本資訊 */}
+          <div className="lg:col-span-2 space-y-4">
+            <div>
               <Label htmlFor="title">問題標題 *</Label>
               <Input
                 id="title"
@@ -308,163 +330,175 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                 onChange={(e) => setNewIssue(prev => ({ ...prev, title: e.target.value }))}
               />
             </div>
-            
-            <div className="col-span-2">
-              <Label htmlFor="description">問題描述 *</Label>
-              <Textarea
-                id="description"
-                placeholder="請詳細描述問題..."
-                value={newIssue.description}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, description: e.target.value }))}
-                rows={4}
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="priority">優先級</Label>
+                <Select value={newIssue.priority} onValueChange={(value) => setNewIssue(prev => ({ ...prev, priority: value as any }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">低</SelectItem>
+                    <SelectItem value="medium">中</SelectItem>
+                    <SelectItem value="high">高</SelectItem>
+                    <SelectItem value="critical">緊急</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="status">狀態</Label>
+                <Select value={newIssue.status} onValueChange={(value) => setNewIssue(prev => ({ ...prev, status: value as any }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">開啟</SelectItem>
+                    <SelectItem value="in_progress">處理中</SelectItem>
+                    <SelectItem value="resolved">已解決</SelectItem>
+                    <SelectItem value="closed">已關閉</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>
-              <Label htmlFor="priority">優先級</Label>
-              <Select value={newIssue.priority} onValueChange={(value) => setNewIssue(prev => ({ ...prev, priority: value as any }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇優先級" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">低</SelectItem>
-                  <SelectItem value="medium">中</SelectItem>
-                  <SelectItem value="high">高</SelectItem>
-                  <SelectItem value="critical">緊急</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="status">狀態</Label>
-              <Select value={newIssue.status} onValueChange={(value) => setNewIssue(prev => ({ ...prev, status: value as any }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇狀態" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">開啟</SelectItem>
-                  <SelectItem value="in_progress">處理中</SelectItem>
-                  <SelectItem value="resolved">已解決</SelectItem>
-                  <SelectItem value="closed">已關閉</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="assigned_to">指派給</Label>
-              <Input
-                id="assigned_to"
-                placeholder="負責人姓名"
-                value={newIssue.assigned_to}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, assigned_to: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="system">相關機台</Label>
-              <Select value={newIssue.system_id} onValueChange={(value) => setNewIssue(prev => ({ ...prev, system_id: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇機台" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">無</SelectItem>
-                  {systems.map(system => (
-                    <SelectItem key={system.id} value={system.id}>
-                      {system.system_name}{system.serial_number ? ` (${system.serial_number})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="station">相關站點</Label>
-              <Select value={newIssue.station_id} onValueChange={(value) => setNewIssue(prev => ({ ...prev, station_id: value, test_item_id: "" }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇站點" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">無</SelectItem>
-                  {stations.map(station => (
-                    <SelectItem key={station.id} value={station.id}>
-                      {station.station_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="test_item">相關測項</Label>
+              <Label htmlFor="assigned_to">負責人</Label>
               <Select 
-                value={newIssue.test_item_id} 
-                onValueChange={(value) => setNewIssue(prev => ({ ...prev, test_item_id: value }))}
-                disabled={!newIssue.station_id}
+                value={newIssue.assigned_to} 
+                onValueChange={(value) => setNewIssue(prev => ({ ...prev, assigned_to: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="選擇測項" />
+                  <SelectValue placeholder="請選擇負責人..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">無</SelectItem>
-                  {filteredTestItems.map(item => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.item_name}
+                  <SelectItem value="unassigned">未指派</SelectItem>
+                  {engineers.map(engineer => (
+                    <SelectItem key={engineer.id} value={engineer.name}>
+                      {engineer.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="relate">相關項目</Label>
-              <Input
-                id="relate"
-                placeholder="請輸入相關項目"
-                value={newIssue.relate}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, relate: e.target.value }))}
-              />
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="system">相關機台</Label>
+                <Select value={newIssue.system_id} onValueChange={(value) => setNewIssue(prev => ({ ...prev, system_id: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇機台" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    {systems.map(system => (
+                      <SelectItem key={system.id} value={system.id}>
+                        {system.system_name}{system.serial_number ? ` (${system.serial_number})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="station">相關站點</Label>
+                <Select value={newIssue.station_id} onValueChange={(value) => setNewIssue(prev => ({ ...prev, station_id: value, test_item_id: "" }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇站點" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    {stations.map(station => (
+                      <SelectItem key={station.id} value={station.id}>
+                        {station.station_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="test_item">相關測項</Label>
+                <Select 
+                  value={newIssue.test_item_id} 
+                  onValueChange={(value) => setNewIssue(prev => ({ ...prev, test_item_id: value }))}
+                  disabled={!newIssue.station_id}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇測項" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    {filteredTestItems.map(item => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.item_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="relate">相關項目</Label>
+                <Input
+                  id="relate"
+                  placeholder="請輸入相關項目..."
+                  value={newIssue.relate}
+                  onChange={(e) => setNewIssue(prev => ({ ...prev, relate: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="category">問題分類</Label>
+                <Input
+                  id="category"
+                  placeholder="請輸入問題分類..."
+                  value={newIssue.category}
+                  onChange={(e) => setNewIssue(prev => ({ ...prev, category: e.target.value }))}
+                />
+              </div>
             </div>
 
             <div>
-              <Label htmlFor="category">問題分類</Label>
-              <Select value={newIssue.category} onValueChange={(value) => setNewIssue(prev => ({ ...prev, category: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="選擇問題來源" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">無</SelectItem>
-                  <SelectItem value="L10">L10</SelectItem>
-                  <SelectItem value="L11">L11</SelectItem>
-                  <SelectItem value="EK7">EK7</SelectItem>
-                  <SelectItem value="其他">其他</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="description">問題描述 *</Label>
+              <RichTextEditor
+                content={newIssue.description}
+                onChange={(content) => setNewIssue(prev => ({ ...prev, description: content }))}
+                placeholder="請詳細描述問題..."
+                className="min-h-[120px]"
+                disableImageUpload={true}
+              />
             </div>
 
             <div>
               <Label htmlFor="process_notes">處理過程</Label>
-              <Textarea
-                id="process_notes"
-                placeholder="請記錄處理過程..."
-                value={newIssue.process_notes}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, process_notes: e.target.value }))}
-                rows={3}
+              <RichTextEditor
+                content={newIssue.process_notes}
+                onChange={(content) => setNewIssue(prev => ({ ...prev, process_notes: content }))}
+                placeholder="請記錄詳細的處理過程，包含：&#10;1. 問題分析與診斷&#10;2. 解決方案制定&#10;3. 實施步驟記錄&#10;4. 測試驗證結果&#10;5. 後續追蹤事項"
+                className="min-h-[100px]"
+                disableImageUpload={true}
               />
             </div>
 
             <div>
               <Label htmlFor="solution">解決方案</Label>
-              <Textarea
-                id="solution"
+              <RichTextEditor
+                content={newIssue.solution}
+                onChange={(content) => setNewIssue(prev => ({ ...prev, solution: content }))}
                 placeholder="請記錄解決方案..."
-                value={newIssue.solution}
-                onChange={(e) => setNewIssue(prev => ({ ...prev, solution: e.target.value }))}
-                rows={3}
+                className="min-h-[100px]"
+                disableImageUpload={true}
               />
             </div>
+          </div>
 
-            {/* 照片上傳區域 */}
-            <div className="col-span-2">
+          {/* 右側：附件管理 */}
+          <div className="space-y-4">
+            <div>
               <Label>上傳照片</Label>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -485,9 +519,9 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                     onChange={handleFileSelect}
                     className="hidden"
                   />
-                  <span className="text-sm text-muted-foreground">
-                    支援 JPG, PNG, GIF 格式
-                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  支援 JPG, PNG, GIF 格式
                 </div>
 
                 {selectedFiles.length > 0 && (
@@ -517,16 +551,17 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                 )}
               </div>
             </div>
-
-            <div className="col-span-2 flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading}>
-                取消
-              </Button>
-              <Button onClick={createIssue} disabled={!newIssue.title || !newIssue.description || isLoading}>
-                {isLoading ? "建立中..." : "建立問題"}
-              </Button>
-            </div>
           </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading}>
+            取消
+          </Button>
+          <Button onClick={createIssue} disabled={!newIssue.title || !newIssue.description || isLoading}>
+            <Save className="h-4 w-4 mr-2" />
+            {isLoading ? "建立中..." : "建立問題"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
