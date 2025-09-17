@@ -62,6 +62,14 @@ export function TestProgressTable({
   const isMobile = useIsMobile();
   const { toast } = useToast();
   
+  // 檢查序號是否重複的函數
+  const isDuplicateSerialNumber = (serialNumber: string, currentSystemId: string) => {
+    if (!serialNumber) return false;
+    return filteredSystems.some(system => 
+      system.serial_number === serialNumber && system.id !== currentSystemId
+    );
+  };
+  
   // Show all stations ordered by station_order
   const filteredStations = stations.sort((a, b) => a.station_order - b.station_order);
 
@@ -233,7 +241,12 @@ export function TestProgressTable({
                       {system.system_name}
                     </button>
                   </div>
-                  <div className="flex items-center text-sm text-muted-foreground">
+                  <div className={cn(
+                    "flex items-center text-sm",
+                    system.serial_number && isDuplicateSerialNumber(system.serial_number, system.id)
+                      ? "text-destructive font-medium"
+                      : "text-muted-foreground"
+                  )}>
                     {system.serial_number || '-'}
                   </div>
                   <div>
