@@ -48,225 +48,121 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
             /* 基礎顏色與列印最佳化 */
             html, body { background: #ffffff !important; }
             body { font-family: Arial, sans-serif; margin: 20px; color: #111827 !important; line-height: 1.4; }
-            /* 強制所有元素字體為深色，覆蓋描述中的內嵌白色樣式 */
+            /* 強制所有元素字體為深色，覆蓋內嵌白色樣式 */
             *, th, td, p, h1, h2, h3, h4, h5, h6, span, div, strong, em { color: #111827 !important; -webkit-text-fill-color: #111827 !important; }
             [style*="color"] { color: #111827 !important; -webkit-text-fill-color: #111827 !important; }
-            a { color: #111827 !important; text-decoration: underline; }
             
             /* 標題區域 */
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #374151; padding-bottom: 15px; }
-            .header h1 { font-size: 24px; margin: 0 0 10px 0; }
-            .header p { font-size: 14px; margin: 0; }
+            .header h1 { font-size: 24px; margin: 0 0 10px 0; font-weight: bold; }
+            .header p { font-size: 14px; margin: 0; color: #6b7280 !important; }
             
-            /* 統計摘要區域 */
-            .summary { background: #f8f9fa !important; padding: 20px; margin-bottom: 25px; border-left: 4px solid #374151; }
-            .summary h2 { font-size: 18px; margin: 0 0 15px 0; }
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-            .stat-item { display: flex; justify-content: space-between; padding: 5px 0; }
-            .stat-label { font-weight: bold; }
-            .stat-value { font-weight: bold; }
-            
-            /* 問題詳細區域 */
-            .issues-detailed { margin-bottom: 30px; }
-            .issues-detailed h2 { font-size: 20px; margin: 0 0 20px 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-            
-            /* 問題卡片 */
-            .issue-card { border: 1px solid #ddd; margin-bottom: 25px; page-break-inside: avoid; background: #fafafa !important; }
-            .issue-header { background: #e9ecef !important; padding: 15px; border-bottom: 1px solid #ddd; }
-            .issue-title { font-size: 16px; font-weight: bold; margin: 0 0 8px 0; }
-            .issue-meta { display: flex; gap: 10px; font-size: 14px; }
-            
-            /* 問題資訊 */
-            .issue-info { padding: 15px; background: #ffffff !important; }
-            .info-row { display: flex; padding: 3px 0; }
-            .info-label { font-weight: bold; min-width: 80px; margin-right: 10px; }
-            .info-value { flex: 1; }
-            
-            /* 問題內容 */
-            .issue-content { padding: 15px; background: #ffffff !important; }
-            .content-section { margin-bottom: 15px; }
-            .content-title { font-size: 14px; font-weight: bold; margin: 0 0 8px 0; color: #374151 !important; }
-            .content-text { 
-              font-size: 12px; 
-              line-height: 1.5; 
-              padding: 10px; 
-              background: #f8f9fa !important; 
-              border-left: 3px solid #dee2e6; 
-              white-space: pre-wrap; 
-              word-break: break-word; 
+            /* 表格樣式 */
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 20px; 
+              font-size: 12px;
             }
+            th { 
+              background-color: #f3f4f6 !important; 
+              border: 1px solid #d1d5db; 
+              padding: 12px 8px; 
+              text-align: left; 
+              font-weight: bold;
+              vertical-align: top;
+            }
+            td { 
+              border: 1px solid #d1d5db; 
+              padding: 10px 8px; 
+              text-align: left; 
+              vertical-align: top; 
+              word-break: break-word; 
+              white-space: pre-wrap;
+              line-height: 1.4;
+            }
+            tr:nth-child(even) { background-color: #f9fafb !important; }
+            tr:hover { background-color: #f3f4f6 !important; }
             
             /* 優先級和狀態顏色 */
-            .priority-critical { color: #b91c1c !important; font-weight: bold; }
-            .priority-high { color: #c2410c !important; font-weight: bold; }
-            .priority-medium { color: #a16207 !important; font-weight: bold; }
-            .priority-low { color: #15803d !important; font-weight: bold; }
-            .status-open { color: #b91c1c !important; font-weight: bold; }
-            .status-in_progress { color: #a16207 !important; font-weight: bold; }
-            .status-resolved { color: #15803d !important; font-weight: bold; }
-            .status-closed { color: #374151 !important; font-weight: bold; }
-            
-            /* 頁尾 */
-            .footer { 
-              margin-top: 30px; 
-              text-align: center; 
-              font-size: 12px; 
-              color: #374151 !important; 
-              border-top: 1px solid #ddd; 
-              padding-top: 15px; 
-            }
+            .priority-critical { color: #dc2626 !important; font-weight: bold; }
+            .priority-high { color: #ea580c !important; font-weight: bold; }
+            .priority-medium { color: #d97706 !important; font-weight: bold; }
+            .priority-low { color: #16a34a !important; font-weight: bold; }
+            .status-open { color: #dc2626 !important; font-weight: bold; }
+            .status-in_progress { color: #d97706 !important; font-weight: bold; }
+            .status-resolved { color: #16a34a !important; font-weight: bold; }
+            .status-closed { color: #6b7280 !important; font-weight: bold; }
             
             /* 列印優化 */
             @media print { 
               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .issue-card { page-break-inside: avoid; }
+              table { page-break-inside: avoid; }
+              tr { page-break-inside: avoid; }
             }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>問題追蹤詳細報告</h1>
-            <p>生成時間: ${new Date().toLocaleString('zh-TW')}</p>
+            <h1>問題追蹤報告</h1>
+            <p>生成時間: ${new Date().toLocaleString('zh-TW')} | 共 ${issues.length} 個問題</p>
           </div>
           
-          <div class="summary">
-            <h2>統計摘要</h2>
-            <div class="stats-grid">
-              <div class="stat-item">
-                <span class="stat-label">總問題數量:</span>
-                <span class="stat-value">${issues.length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">開啟問題:</span>
-                <span class="stat-value">${issues.filter(i => i.status === 'open').length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">處理中問題:</span>
-                <span class="stat-value">${issues.filter(i => i.status === 'in_progress').length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">已解決問題:</span>
-                <span class="stat-value">${issues.filter(i => i.status === 'resolved').length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">已關閉問題:</span>
-                <span class="stat-value">${issues.filter(i => i.status === 'closed').length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">緊急問題:</span>
-                <span class="stat-value priority-critical">${issues.filter(i => i.priority === 'critical').length}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">高優先級問題:</span>
-                <span class="stat-value priority-high">${issues.filter(i => i.priority === 'high').length}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="issues-detailed">
-            <h2>問題詳細清單</h2>
-            ${issues.map((issue, index) => {
-              const getPriorityText = (priority: string) => {
-                switch (priority) {
-                  case 'critical': return '緊急';
-                  case 'high': return '高';
-                  case 'medium': return '中';
-                  case 'low': return '低';
-                  default: return priority;
-                }
-              };
-              
-              const getStatusText = (status: string) => {
-                switch (status) {
-                  case 'open': return '開啟';
-                  case 'in_progress': return '處理中';
-                  case 'resolved': return '已解決';
-                  case 'closed': return '已關閉';
-                  default: return status;
-                }
-              };
-              
-              const stripHtml = (html: string) => {
-                if (!html) return '';
-                return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-              };
-              
-              return `
-                <div class="issue-card">
-                  <div class="issue-header">
-                    <h3 class="issue-title">${index + 1}. ${issue.title}</h3>
-                    <div class="issue-meta">
-                      <span class="priority-${issue.priority}">[${getPriorityText(issue.priority)}]</span>
-                      <span class="status-${issue.status}">[${getStatusText(issue.status)}]</span>
-                    </div>
-                  </div>
-                  
-                  <div class="issue-info">
-                    <div class="info-row">
-                      <span class="info-label">系統:</span>
-                      <span class="info-value">${issue.system_name || '-'}${issue.serial_number ? ` (${issue.serial_number})` : ''}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">測試站:</span>
-                      <span class="info-value">${issue.station_name || '-'}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">測試項目:</span>
-                      <span class="info-value">${issue.test_item_name || '-'}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">負責人:</span>
-                      <span class="info-value">${issue.assigned_to || '-'}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">問題分類:</span>
-                      <span class="info-value">${issue.category || '-'}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">建立時間:</span>
-                      <span class="info-value">${new Date(issue.created_at).toLocaleString('zh-TW')}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">更新時間:</span>
-                      <span class="info-value">${new Date(issue.updated_at).toLocaleString('zh-TW')}</span>
-                    </div>
-                  </div>
-                  
-                  <div class="issue-content">
-                    <div class="content-section">
-                      <h4 class="content-title">問題描述</h4>
-                      <div class="content-text">${stripHtml(issue.description || '無描述')}</div>
-                    </div>
-                    
-                    ${issue.process_notes ? `
-                      <div class="content-section">
-                        <h4 class="content-title">處理過程</h4>
-                        <div class="content-text">${stripHtml(issue.process_notes)}</div>
-                      </div>
-                    ` : ''}
-                    
-                    ${issue.solution ? `
-                      <div class="content-section">
-                        <h4 class="content-title">解決方案</h4>
-                        <div class="content-text">${stripHtml(issue.solution)}</div>
-                      </div>
-                    ` : ''}
-                    
-                    ${issue.relate ? `
-                      <div class="content-section">
-                        <h4 class="content-title">相關資訊</h4>
-                        <div class="content-text">${stripHtml(issue.relate)}</div>
-                      </div>
-                    ` : ''}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-          
-          <div class="footer">
-            <p>此報告由問題追蹤系統自動生成 | 共 ${issues.length} 個問題</p>
-          </div>
+          <table>
+            <thead>
+              <tr>
+                <th width="20%">問題標題</th>
+                <th width="20%">描述</th>
+                <th width="20%">處理過程</th>
+                <th width="15%">解決方案</th>
+                <th width="8%">優先級</th>
+                <th width="8%">狀態</th>
+                <th width="7%">負責人</th>
+                <th width="12%">建立時間</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${issues.map(issue => {
+                const getPriorityText = (priority: string) => {
+                  switch (priority) {
+                    case 'critical': return '緊急';
+                    case 'high': return '高';
+                    case 'medium': return '中';
+                    case 'low': return '低';
+                    default: return priority;
+                  }
+                };
+                
+                const getStatusText = (status: string) => {
+                  switch (status) {
+                    case 'open': return '開啟';
+                    case 'in_progress': return '處理中';
+                    case 'resolved': return '已解決';
+                    case 'closed': return '已關閉';
+                    default: return status;
+                  }
+                };
+                
+                const stripHtml = (html: string) => {
+                  if (!html) return '';
+                  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+                };
+                
+                return `
+                  <tr>
+                    <td><strong>${issue.title}</strong></td>
+                    <td>${stripHtml(issue.description || '-')}</td>
+                    <td>${stripHtml(issue.process_notes || '-')}</td>
+                    <td>${stripHtml(issue.solution || '-')}</td>
+                    <td class="priority-${issue.priority}">${getPriorityText(issue.priority)}</td>
+                    <td class="status-${issue.status}">${getStatusText(issue.status)}</td>
+                    <td>${issue.assigned_to || '-'}</td>
+                    <td>${new Date(issue.created_at).toLocaleDateString('zh-TW')}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
         </body>
         </html>
       `;
