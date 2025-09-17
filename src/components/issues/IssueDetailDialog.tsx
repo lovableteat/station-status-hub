@@ -165,38 +165,13 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
             </div>
           </div>
 
-          {/* 相關項目、分類和標籤 */}
-          {(issue.relate || issue.category || (issue.tags && issue.tags.length > 0)) && (
+          {/* 問題分類 */}
+          {issue.category && (
             <>
               <Separator />
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {issue.relate && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">相關項目</label>
-                      <p className="mt-1 text-sm">{issue.relate}</p>
-                    </div>
-                  )}
-                  {issue.category && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">問題分類</label>
-                      <p className="mt-1 text-sm">{issue.category}</p>
-                    </div>
-                  )}
-                </div>
-                {issue.tags && issue.tags.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">標籤</label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {issue.tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          <Tag className="h-3 w-3 mr-1" />
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">問題分類</label>
+                <p className="mt-1 text-sm">{issue.category}</p>
               </div>
             </>
           )}
