@@ -174,7 +174,7 @@ export function TestProgressTable({
   }
 
   // Desktop table view
-  const gridColumns = `140px 100px repeat(${filteredStations.length}, 200px) 140px`;
+  const gridColumns = `140px 100px 100px repeat(${filteredStations.length}, 200px) 140px`;
 
   return (
     <Card>
@@ -201,6 +201,7 @@ export function TestProgressTable({
             {/* Header Row */}
             <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
+              <div className="font-semibold">序號</div>
               <div className="font-semibold">當前站點</div>
               {filteredStations.map(station => (
                 <div key={station.id} className="font-semibold text-center">
@@ -231,6 +232,9 @@ export function TestProgressTable({
                     >
                       {system.system_name}
                     </button>
+                  </div>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    {system.serial_number || '-'}
                   </div>
                   <div>
                     <StationStatusSelector
