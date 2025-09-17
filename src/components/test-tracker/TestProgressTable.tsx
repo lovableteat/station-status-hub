@@ -10,6 +10,7 @@ import { SystemEditDialog } from "./SystemEditDialog";
 import { StationStatusSelector } from "./StationStatusSelector";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { SystemManager, SystemDeleteButton } from "./SystemManager";
+import { SystemCompleteButton } from "./SystemCompleteButton";
 import { SystemResetDialog } from "./SystemResetDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -160,7 +161,7 @@ export function TestProgressTable({
           <MobileSystemCard
             key={system.id}
             system={system}
-            stations={filteredStations}
+            stations={stations}
             items={items}
             progress={progress}
             getProgressForSystemItem={getProgressForSystemItem}
@@ -297,7 +298,14 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-wrap">
+                    <SystemCompleteButton
+                      systemId={system.id}
+                      systemName={system.system_name}
+                      stations={stations}
+                      items={items}
+                      onSystemUpdate={onSystemUpdate}
+                    />
                     <SystemEditDialog
                       systemId={system.id}
                       systemName={system.system_name}
