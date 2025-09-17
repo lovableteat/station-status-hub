@@ -31,6 +31,7 @@ interface IssueCreateDialogProps {
 interface TestSystem {
   id: string;
   system_name: string;
+  serial_number?: string;
 }
 
 interface TestStation {
@@ -91,7 +92,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
     try {
       const { data, error } = await supabase
         .from('test_systems')
-        .select('id, system_name')
+        .select('id, system_name, serial_number')
         .order('system_name');
       
       if (error) throw error;
@@ -369,7 +370,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
                   <SelectItem value="none">無</SelectItem>
                   {systems.map(system => (
                     <SelectItem key={system.id} value={system.id}>
-                      {system.system_name}
+                      {system.system_name}{system.serial_number ? ` (${system.serial_number})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
