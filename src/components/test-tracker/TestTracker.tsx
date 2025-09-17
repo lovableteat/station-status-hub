@@ -149,7 +149,7 @@ export function TestTracker() {
 
         if (error) throw error;
 
-        await loadData();
+        handleSystemUpdate();
         
         toast({
           title: "Deleted",
@@ -164,6 +164,10 @@ export function TestTracker() {
         variant: "destructive"
       });
     }
+  };
+
+  const handleSystemUpdate = (newSystemId?: string) => {
+    loadData(newSystemId);
   };
 
   const getStatusColor = (status: string) => {
@@ -263,7 +267,7 @@ export function TestTracker() {
             handleSaveProgress={handleSaveProgress}
             handleDeleteProgress={handleDeleteProgress}
             getStatusColor={getStatusColor}
-            onSystemUpdate={loadData}
+            onSystemUpdate={handleSystemUpdate}
           />
         </div>
       ) : (

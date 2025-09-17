@@ -193,11 +193,11 @@ export function useUnifiedData() {
     []
   );
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (systemIdToOptimize?: string) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       
-      // Load all data in parallel
+      // 批量載入資料，減少資料庫查詢次數
       const [systemsRes, stationsRes, itemsRes, progressRes, contentsRes] = await Promise.all([
         supabase.from('test_systems').select('*').order('system_name'),
         supabase.from('test_flow_stations').select('*').order('station_order'),
@@ -212,14 +212,14 @@ export function useUnifiedData() {
       if (progressRes.data) setProgress(progressRes.data);
       if (contentsRes.data) setStationContents(contentsRes.data);
 
-      setIsLoading(false);
     } catch (error) {
-      console.error('Error loading unified data:', error);
+      console.error('載入統一資料錯誤:', error);
       toast({
         title: "載入失敗",
         description: "無法載入系統資料",
         variant: "destructive"
       });
+    } finally {
       setIsLoading(false);
     }
   }, [toast]);
@@ -237,8 +237,9 @@ export function useUnifiedData() {
         p.item_id === itemId
       );
 
+      let result;
       if (existingProgress) {
-        await supabase
+        result = await supabase
           .from('test_progress')
           .update({
             ...updates,
@@ -246,7 +247,7 @@ export function useUnifiedData() {
           })
           .eq('id', existingProgress.id);
       } else {
-        await supabase
+        result = await supabase
           .from('test_progress')
           .insert({
             system_id: systemId,
@@ -257,76 +258,33 @@ export function useUnifiedData() {
           });
       }
 
-      // 立即重新載入資料以確保UI更新
-      await loadAllData();
-      
+      if (result.error) {
+        throw result.error;
+      }
+
+      // 不立即重新載入整個資料集，讓實時更新處理
       return true;
     } catch (error) {
-      console.error('Error updating progress:', error);
+      console.error('進度更新錯誤:', error);
       return false;
     }
-  }, [progress, loadAllData, user]);
+  }, [progress, user]);
 
   useEffect(() => {
     loadAllData();
     
-    // Set up real-time updates with incremental updates for better performance
+    // 設置實時更新，減少日誌輸出
     const channel = supabase
       .channel('unified_data_changes')
-      // Core tables with incremental updates
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, (payload) => {
-        console.log('test_systems changed:', payload.eventType);
-        updateSystems(payload);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, (payload) => {
-        console.log('test_progress changed:', payload.eventType);
-        updateProgressData(payload);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, (payload) => {
-        console.log('test_flow_stations changed:', payload.eventType);
-        updateStations(payload);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, (payload) => {
-        console.log('test_flow_items changed:', payload.eventType);
-        updateTestItems(payload);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_contents' }, (payload) => {
-        console.log('station_contents changed:', payload.eventType);
-        updateStationContents(payload);
-      })
-      // New tables for enhanced real-time experience
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_users' }, () => {
-        console.log('system_users changed, showing update indicator...');
-        setIsUpdating(true);
-        setTimeout(() => setIsUpdating(false), 1000);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_production_stats' }, () => {
-        console.log('daily_production_stats changed, showing update indicator...');
-        setIsUpdating(true);
-        setTimeout(() => setIsUpdating(false), 1000);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
-        console.log('announcements changed, showing update indicator...');
-        setIsUpdating(true);
-        setTimeout(() => setIsUpdating(false), 1000);
-      })
-      // Fallback to full reload for complex related changes
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, () => {
-        console.log('issues changed, using debounced reload...');
-        debouncedReload();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issue_attachments' }, () => {
-        console.log('issue_attachments changed, using debounced reload...');
-        debouncedReload();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_records' }, () => {
-        console.log('station_time_records changed, using debounced reload...');
-        debouncedReload();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_analytics' }, () => {
-        console.log('station_time_analytics changed, using debounced reload...');
-        debouncedReload();
-      })
+      // 核心表格使用增量更新
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, updateSystems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, updateProgressData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, updateStations)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, updateTestItems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_contents' }, updateStationContents)
+      // 其他表格使用防抖重載
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_records' }, debouncedReload)
       .subscribe();
 
     return () => {
