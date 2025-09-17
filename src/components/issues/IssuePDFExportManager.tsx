@@ -33,26 +33,30 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
           <meta name="color-scheme" content="light" />
           <title>問題追蹤報告</title>
           <style>
-            html, body { background: #ffffff; }
-            body { font-family: Arial, sans-serif; margin: 20px; color: #111827; }
-            *, th, td, p, h1, h2, h3, h4, h5, h6, span, div, strong, em { color: #111827; }
+            /* 基礎顏色與列印最佳化 */
+            html, body { background: #ffffff !important; }
+            body { font-family: Arial, sans-serif; margin: 20px; color: #111827 !important; }
+            /* 強制所有元素字體為深色，覆蓋描述中的內嵌白色樣式 */
+            *, th, td, p, h1, h2, h3, h4, h5, h6, span, div, strong, em { color: #111827 !important; -webkit-text-fill-color: #111827 !important; }
+            [style*="color"] { color: #111827 !important; -webkit-text-fill-color: #111827 !important; }
+            a { color: #111827 !important; text-decoration: underline; }
             .header { text-align: center; margin-bottom: 30px; }
-            .summary { background: #f5f5f5; padding: 15px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .priority-critical { color: #b91c1c; font-weight: bold; }
-            .priority-high { color: #c2410c; font-weight: bold; }
-            .priority-medium { color: #a16207; font-weight: bold; }
-            .priority-low { color: #15803d; font-weight: bold; }
-            .status-open { color: #b91c1c; }
-            .status-in_progress { color: #a16207; }
-            .status-resolved { color: #15803d; }
-            .status-closed { color: #374151; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #374151; }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
+            .summary { background: #f5f5f5 !important; padding: 15px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+            th { background-color: #f2f2f2 !important; }
+            td { word-break: break-word; white-space: pre-wrap; }
+            /* 保留等級和狀態可讀顏色（仍為深色系） */
+            .priority-critical { color: #b91c1c !important; font-weight: bold; }
+            .priority-high { color: #c2410c !important; font-weight: bold; }
+            .priority-medium { color: #a16207 !important; font-weight: bold; }
+            .priority-low { color: #15803d !important; font-weight: bold; }
+            .status-open { color: #b91c1c !important; }
+            .status-in_progress { color: #a16207 !important; }
+            .status-resolved { color: #15803d !important; }
+            .status-closed { color: #374151 !important; }
+            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #374151 !important; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
           </style>
         </head>
         <body>
@@ -135,14 +139,23 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
       // 創建新視窗並寫入 HTML 內容
       const printWindow = window.open('', '_blank');
       if (printWindow) {
+        printWindow.document.open();
         printWindow.document.write(htmlContent);
         printWindow.document.close();
-        printWindow.focus();
-        
-        // 等待內容載入後列印
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
+
+        const tryPrint = () => {
+          try {
+            printWindow.focus();
+            printWindow.print();
+          } catch {}
+        };
+
+        if (printWindow.document.readyState === 'complete') {
+          tryPrint();
+        } else {
+          printWindow.addEventListener('load', tryPrint, { once: true });
+          setTimeout(tryPrint, 600);
+        }
         
         toast({
           title: "PDF 準備完成",
