@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemResetDialog } from "./SystemResetDialog";
 import { SystemDeleteButton } from "./SystemManager";
+import { SystemCompleteButton } from "./SystemCompleteButton";
 import { StationStatusSelector } from "./StationStatusSelector";
 import { MobileProgressInput } from "./MobileProgressInput";
 import { ProgressEditDialog } from "./ProgressEditDialog";
@@ -20,7 +21,7 @@ interface MobileSystemCardProps {
   progress: TestProgress[];
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
   getStatusColor: (status: string) => string;
-  onSystemUpdate: () => void;
+  onSystemUpdate: (newSystemId?: string) => void;
 }
 
 export function MobileSystemCard({
@@ -118,7 +119,14 @@ export function MobileSystemCard({
               {system.system_name}
             </button>
           </CardTitle>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
+            <SystemCompleteButton
+              systemId={system.id}
+              systemName={system.system_name}
+              stations={stations}
+              items={items}
+              onSystemUpdate={onSystemUpdate}
+            />
             <SystemEditDialog
               systemId={system.id}
               systemName={system.system_name}
