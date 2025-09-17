@@ -43,8 +43,8 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
             .status-open { color: #dc2626; }
             .status-in_progress { color: #ca8a04; }
             .status-resolved { color: #16a34a; }
-            .status-closed { color: #6b7280; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            .status-closed { color: #374151; }
+            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #374151; }
           </style>
         </head>
         <body>
