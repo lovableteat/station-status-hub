@@ -41,6 +41,7 @@ interface Issue {
   process_notes?: string;
   solution?: string;
   system_name?: string;
+  serial_number?: string;
   assigned_engineer?: string;
   station_name?: string;
   station_order?: number;
@@ -104,7 +105,8 @@ export function IssueTracker() {
           *,
           test_systems!issues_system_id_fkey (
             system_name,
-            assigned_engineer
+            assigned_engineer,
+            serial_number
           ),
           test_flow_stations!issues_station_id_fkey (
             station_name,
@@ -133,6 +135,7 @@ export function IssueTracker() {
             status: (issue.status || 'open') as "open" | "in_progress" | "resolved" | "closed",
             assigned_to: issue.assigned_to || '',
             system_name: issue.test_systems?.system_name,
+            serial_number: issue.test_systems?.serial_number,
             assigned_engineer: issue.test_systems?.assigned_engineer,
             station_name: issue.test_flow_stations?.station_name,
             station_order: issue.test_flow_stations?.station_order,
@@ -297,7 +300,7 @@ export function IssueTracker() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {issue.system_name && (
                 <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs">
-                  {issue.system_name}
+                  {issue.system_name}{issue.serial_number ? ` (${issue.serial_number})` : ''}
                 </span>
               )}
               {issue.station_name && (

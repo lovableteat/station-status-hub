@@ -26,6 +26,7 @@ interface Issue {
   station_id?: string;
   test_item_id?: string;
   system_name?: string;
+  serial_number?: string;
   station_name?: string;
   test_item_name?: string;
   relate?: string;
@@ -330,7 +331,11 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-muted-foreground">
-                      {issue.system_name || '-'}
+                      {issue.system_name ? (
+                        issue.serial_number ? 
+                          `${issue.system_name} (${issue.serial_number})` : 
+                          issue.system_name
+                      ) : '-'}
                     </div>
                   </TableCell>
                   <TableCell>

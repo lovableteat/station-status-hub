@@ -60,7 +60,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
   });
   
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
-  const [systems, setSystems] = useState<Array<{id: string, system_name: string}>>([]);
+  const [systems, setSystems] = useState<Array<{id: string, system_name: string, serial_number?: string}>>([]);
   const [stations, setStations] = useState<Array<{id: string, station_name: string}>>([]);
   const [testItems, setTestItems] = useState<Array<{id: string, item_name: string, station_id: string}>>([]);
   const [mentionedUsers, setMentionedUsers] = useState<any[]>([]);
@@ -104,7 +104,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     try {
       const { data, error } = await supabase
         .from('test_systems')
-        .select('id, system_name')
+        .select('id, system_name, serial_number')
         .order('system_name');
       
       if (error) throw error;
@@ -398,7 +398,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
                   <SelectItem value="none">無</SelectItem>
                   {systems.map(system => (
                     <SelectItem key={system.id} value={system.id}>
-                      {system.system_name}
+                      {system.system_name}{system.serial_number ? ` (${system.serial_number})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
