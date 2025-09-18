@@ -1,11 +1,18 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 export function ApiDocumentation() {
   const baseUrl = "https://rfppeuzuoxtqkpbwehbq.supabase.co/functions/v1/api";
+  const [testApiKey, setTestApiKey] = useState("");
+  const [selectedEndpoint, setSelectedEndpoint] = useState("/stats");
+  const [testResponse, setTestResponse] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -13,6 +20,50 @@ export function ApiDocumentation() {
       toast.success('已複製到剪貼簿');
     } catch (error) {
       toast.error('複製失敗');
+    }
+  };
+
+  const testApi = async () => {
+    if (!testApiKey.trim()) {
+      toast.error('請輸入 API 金鑰');
+      return;
+    }
+
+    setIsLoading(true);
+    setTestResponse(null);
+
+    try {
+      const response = await fetch(`${baseUrl}${selectedEndpoint}`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': testApiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      setTestResponse({
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        data: data
+      });
+
+      if (response.ok) {
+        toast.success('API 測試成功！');
+      } else {
+        toast.error('API 測試失敗');
+      }
+    } catch (error) {
+      setTestResponse({
+        status: 0,
+        statusText: 'Network Error',
+        data: { error: error instanceof Error ? error.message : '網路錯誤' }
+      });
+      toast.error('測試失敗：網路錯誤');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -75,6 +126,76 @@ curl -H "x-api-key: ak_your_api_key_here" \\
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>API 測試工具</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            直接在此測試您的 API 金鑰和端點
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">API 金鑰</label>
+                <Input
+                  type="password"
+                  placeholder="輸入您的 API 金鑰（ak_...）"
+                  value={testApiKey}
+                  onChange={(e) => setTestApiKey(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">選擇端點</label>
+                <Select value={selectedEndpoint} onValueChange={setSelectedEndpoint}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="/stats">GET /stats</SelectItem>
+                    <SelectItem value="/issues">GET /issues</SelectItem>
+                    <SelectItem value="/test-systems">GET /test-systems</SelectItem>
+                    <SelectItem value="/test-progress">GET /test-progress</SelectItem>
+                    <SelectItem value="/docs">GET /docs</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button onClick={testApi} disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                測試 API
+              </Button>
+              <code className="text-sm bg-muted px-2 py-1 rounded">
+                GET {baseUrl}{selectedEndpoint}
+              </code>
+            </div>
+
+            {testResponse && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Badge variant={testResponse.status >= 200 && testResponse.status < 300 ? "default" : "destructive"}>
+                    {testResponse.status} {testResponse.statusText}
+                  </Badge>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium mb-2">回應內容：</h4>
+                  <pre className="p-4 bg-muted rounded text-sm overflow-x-auto">
+                    <code>{JSON.stringify(testResponse.data, null, 2)}</code>
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>連接步驟指南</CardTitle>
