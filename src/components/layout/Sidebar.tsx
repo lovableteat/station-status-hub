@@ -16,7 +16,8 @@ import {
   FileText,
   Users,
   LogOut,
-  User
+  User,
+  Key
 } from "lucide-react";
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ const navigationItems = [
   { id: "bom-center", label: "比對中心", icon: Workflow, description: "比對工具" },
   { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
   { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
+  { id: "api-management", label: "API 金鑰管理", icon: Key, description: "外部存取控制" },
 ];
 
 export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
