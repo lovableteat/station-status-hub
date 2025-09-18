@@ -2463,6 +2463,10 @@ export type Database = {
         | "admin_edit"
         | "comparison_view"
         | "comparison_edit"
+        | "l11_cabinet_view"
+        | "l11_cabinet_edit"
+        | "api_management_view"
+        | "api_management_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2607,6 +2611,10 @@ export const Constants = {
         "admin_edit",
         "comparison_view",
         "comparison_edit",
+        "l11_cabinet_view",
+        "l11_cabinet_edit",
+        "api_management_view",
+        "api_management_edit",
       ],
     },
   },
