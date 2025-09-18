@@ -8,6 +8,7 @@ import { UserProvider } from "@/components/auth/UserContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import TestTrackerPage from "./pages/TestTrackerPage";
+import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/test-tracker" element={<TestTrackerPage />} />
+              <Route path="/api-management" element={<ApiManagementPage />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

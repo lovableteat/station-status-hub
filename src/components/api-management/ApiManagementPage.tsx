@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiKeyManagement } from "./ApiKeyManagement";
 import { ApiDocumentation } from "./ApiDocumentation";
-import { Key, FileText } from "lucide-react";
+import { ApiDataPreview } from "./ApiDataPreview";
+import { Key, FileText, Database } from "lucide-react";
 
 export function ApiManagementPage() {
   return (
@@ -20,6 +21,10 @@ export function ApiManagementPage() {
             <Key className="h-4 w-4" />
             金鑰管理
           </TabsTrigger>
+          <TabsTrigger value="preview" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            數據預覽
+          </TabsTrigger>
           <TabsTrigger value="docs" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             API 文檔
@@ -28,6 +33,10 @@ export function ApiManagementPage() {
 
         <TabsContent value="keys" className="space-y-6">
           <ApiKeyManagement />
+        </TabsContent>
+
+        <TabsContent value="preview" className="space-y-6">
+          <ApiDataPreview />
         </TabsContent>
 
         <TabsContent value="docs" className="space-y-6">
