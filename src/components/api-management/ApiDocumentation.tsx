@@ -77,6 +77,72 @@ curl -H "x-api-key: ak_your_api_key_here" \\
     <div className="space-y-6">
       <Card>
         <CardHeader>
+          <CardTitle>連接步驟指南</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            按照以下步驟連接到您的生產管理系統 API
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <h4 className="font-medium">第一步：獲取 API 金鑰</h4>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground ml-4">
+                <li>點擊左側導航欄中的「API 金鑰管理」</li>
+                <li>切換到「金鑰管理」標籤</li>
+                <li>點擊「建立新金鑰」按鈕</li>
+                <li>填寫金鑰名稱和描述</li>
+                <li>選擇所需的權限（讀取/寫入）</li>
+                <li>點擊「建立」按鈕</li>
+                <li>複製生成的 API 金鑰（格式：ak_...）</li>
+              </ol>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-medium">第二步：測試連接</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                使用以下 curl 命令測試您的 API 金鑰：
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 bg-muted rounded text-sm">
+                  curl -H "x-api-key: 您的金鑰" {baseUrl}/stats
+                </code>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => copyToClipboard(`curl -H "x-api-key: 您的金鑰" ${baseUrl}/stats`)}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-medium">第三步：整合到您的應用程式</h4>
+              <p className="text-sm text-muted-foreground">
+                在每個 API 請求的標頭中加入您的金鑰：
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
+                <li>標頭名稱：<code className="bg-muted px-1 rounded">x-api-key</code></li>
+                <li>標頭值：您的 API 金鑰</li>
+                <li>內容類型：<code className="bg-muted px-1 rounded">application/json</code></li>
+              </ul>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-medium">注意事項</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
+                <li>請妥善保管您的 API 金鑰，不要在公開場所分享</li>
+                <li>如果金鑰洩露，請立即停用並建立新的金鑰</li>
+                <li>可以在金鑰管理頁面查看使用統計和管理金鑰狀態</li>
+                <li>每個 API 請求都會記錄使用次數和最後使用時間</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>API 文檔</CardTitle>
           <p className="text-sm text-muted-foreground">
             使用以下端點來存取您的生產管理系統資料
