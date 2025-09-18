@@ -11,7 +11,8 @@ export type Permission =
   | 'data_center_view' | 'data_center_edit'
   | 'tools_view' | 'tools_edit'
   | 'admin_view' | 'admin_edit'
-  | 'comparison_view' | 'comparison_edit';
+  | 'comparison_view' | 'comparison_edit'
+  | 'api_management_view' | 'api_management_edit';
 
 export function usePermissions() {
   const { user } = useUser();
@@ -87,6 +88,8 @@ export function usePermissions() {
         return hasPermission('tools_view');
       case 'bom-center':
         return hasPermission('comparison_view');
+      case 'api-management':
+        return hasPermission('api_management_view');
       case 'users':
         return hasPermission('admin_view');
       default:
@@ -118,6 +121,8 @@ export function usePermissions() {
         return hasPermission('tools_edit');
       case 'bom-center':
         return hasPermission('comparison_edit');
+      case 'api-management':
+        return hasPermission('api_management_edit');
       case 'users':
         return hasPermission('admin_edit');
       default:
