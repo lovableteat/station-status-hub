@@ -24,16 +24,34 @@ serve(async (req) => {
     const method = req.method
     const apiKey = req.headers.get('x-api-key')
 
-    // API Key validation (簡單驗證，你可以後續改進)
-    if (!apiKey || apiKey !== Deno.env.get('API_ACCESS_KEY')) {
+    // API Key validation using new system
+    const { data: validationResult, error: validationError } = await supabaseClient
+      .rpc('validate_and_update_api_key', { key_to_check: apiKey });
+    
+    if (validationError) {
+      console.log('API key validation error:', validationError);
       return new Response(
-        JSON.stringify({ error: '未授權：需要有效的API金鑰' }),
+        JSON.stringify({ error: 'API key validation failed' }),
         { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
-      )
+      );
     }
+    
+    if (!validationResult?.valid) {
+      console.log('Invalid API key');
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired API key' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log(`API key validated for: ${validationResult.key_name} (Usage: ${validationResult.usage_count})`);
+    const keyPermissions = validationResult.permissions;
 
     // Route handling
     switch (true) {
