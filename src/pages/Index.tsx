@@ -9,6 +9,7 @@ import { DataCenter } from "@/components/data-center/DataCenter";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
+import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
@@ -120,6 +121,12 @@ const Index = () => {
         return (
           <PermissionGuard module="users">
             <AdminPanel />
+          </PermissionGuard>
+        );
+      case "api-management":
+        return (
+          <PermissionGuard module="api-management">
+            <ApiManagementPage />
           </PermissionGuard>
         );
       default:
