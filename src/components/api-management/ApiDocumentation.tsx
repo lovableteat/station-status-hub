@@ -99,20 +99,80 @@ curl -H "x-api-key: ak_your_api_key_here" \\
 
             <div className="space-y-3">
               <h4 className="font-medium">第二步：測試連接</h4>
-              <p className="text-sm text-muted-foreground mb-2">
-                使用以下 curl 命令測試您的 API 金鑰：
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-muted rounded text-sm">
-                  curl -H "x-api-key: 您的金鑰" {baseUrl}/stats
-                </code>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => copyToClipboard(`curl -H "x-api-key: 您的金鑰" ${baseUrl}/stats`)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    1. 使用 curl 命令測試（替換 YOUR_API_KEY 為實際金鑰）：
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <code className="flex-1 p-2 bg-muted rounded text-sm">
+                      curl -H "x-api-key: YOUR_API_KEY" {baseUrl}/stats
+                    </code>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => copyToClipboard(`curl -H "x-api-key: YOUR_API_KEY" ${baseUrl}/stats`)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    2. 使用瀏覽器開發者工具測試：
+                  </p>
+                  <pre className="p-3 bg-muted rounded text-sm overflow-x-auto">
+                    <code>{`fetch('${baseUrl}/stats', {
+  headers: {
+    'x-api-key': 'YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error('Error:', error));`}</code>
+                  </pre>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    3. 使用 Postman 或其他 API 工具：
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
+                    <li>URL: <code className="bg-muted px-1 rounded">{baseUrl}/stats</code></li>
+                    <li>方法: GET</li>
+                    <li>標頭: x-api-key = YOUR_API_KEY</li>
+                    <li>標頭: Content-Type = application/json</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>成功回應範例：</strong>
+                  </p>
+                  <pre className="mt-2 p-2 bg-white rounded text-xs">
+                    <code>{`{
+  "success": true,
+  "data": {
+    "totalIssues": 25,
+    "totalSystems": 150,
+    "completedSystems": 120
+  }
+}`}</code>
+                  </pre>
+                </div>
+
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    <strong>錯誤回應範例：</strong>
+                  </p>
+                  <pre className="mt-2 p-2 bg-white rounded text-xs">
+                    <code>{`{
+  "error": "Invalid or expired API key"
+}`}</code>
+                  </pre>
+                </div>
               </div>
             </div>
 
