@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -183,6 +183,9 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
             <Shield className="h-5 w-5" />
             設定 {username} 的頁面權限
           </DialogTitle>
+          <DialogDescription>
+            設定使用者可以存取的系統模組權限。勾選相應的權限項目並點擊儲存。
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 max-h-[60vh] overflow-y-auto">
