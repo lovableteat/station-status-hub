@@ -51,6 +51,20 @@ const PERMISSION_GROUPS = {
       { key: 'data_center_edit', label: '編輯資料中心' }
     ]
   },
+  'l11_cabinet': {
+    name: '機櫃管理中心',
+    permissions: [
+      { key: 'l11_cabinet_view', label: '檢視機櫃管理中心' },
+      { key: 'l11_cabinet_edit', label: '編輯機櫃管理中心' }
+    ]
+  },
+  'api_management': {
+    name: 'API 管理',
+    permissions: [
+      { key: 'api_management_view', label: '檢視 API 管理' },
+      { key: 'api_management_edit', label: '編輯 API 管理' }
+    ]
+  },
   'comparison_center': {
     name: '比對中心',
     permissions: [
