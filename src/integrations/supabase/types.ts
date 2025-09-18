@@ -44,6 +44,51 @@ export type Database = {
         }
         Relationships: []
       }
+      api_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          key_name: string
+          last_used_at: string | null
+          permissions: Json
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_name: string
+          last_used_at?: string | null
+          permissions?: Json
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_name?: string
+          last_used_at?: string | null
+          permissions?: Json
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       bug_attachments: {
         Row: {
           bug_id: string | null
@@ -2373,6 +2418,10 @@ export type Database = {
         Args: { p_system_id: string }
         Returns: undefined
       }
+      generate_api_key: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
@@ -2386,6 +2435,10 @@ export type Database = {
       hash_password: {
         Args: { password: string }
         Returns: string
+      }
+      validate_and_update_api_key: {
+        Args: { key_to_check: string }
+        Returns: Json
       }
       verify_password: {
         Args: { hash: string; password: string }
