@@ -2543,6 +2543,8 @@ export type Database = {
         | "l11_cabinet_edit"
         | "api_management_view"
         | "api_management_edit"
+        | "troubleshooting_view"
+        | "troubleshooting_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2691,6 +2693,8 @@ export const Constants = {
         "l11_cabinet_edit",
         "api_management_view",
         "api_management_edit",
+        "troubleshooting_view",
+        "troubleshooting_edit",
       ],
     },
   },
