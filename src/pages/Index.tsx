@@ -111,12 +111,6 @@ const Index = () => {
             <ToolsManagement />
           </PermissionGuard>
         );
-      case "bom-center":
-        return (
-          <PermissionGuard module="bom-center">
-            <BomCenter />
-          </PermissionGuard>
-        );
       case "users":
         return (
           <PermissionGuard module="users">
