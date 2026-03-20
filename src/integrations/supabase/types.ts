@@ -2406,22 +2406,10 @@ export type Database = {
           username: string
         }[]
       }
-      calculate_daily_production_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_notifications: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      delete_test_system: {
-        Args: { p_system_id: string }
-        Returns: undefined
-      }
-      generate_api_key: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      calculate_daily_production_stats: { Args: never; Returns: undefined }
+      cleanup_old_notifications: { Args: never; Returns: undefined }
+      delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
+      generate_api_key: { Args: never; Returns: string }
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
@@ -2432,10 +2420,7 @@ export type Database = {
           urgent_priority_unread: number
         }[]
       }
-      hash_password: {
-        Args: { password: string }
-        Returns: string
-      }
+      hash_password: { Args: { password: string }; Returns: string }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
         Returns: Json
