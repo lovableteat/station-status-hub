@@ -16,7 +16,8 @@ import {
   Users,
   LogOut,
   User,
-  Key
+  Key,
+  SearchX
 } from "lucide-react";
 
 interface SidebarProps {
