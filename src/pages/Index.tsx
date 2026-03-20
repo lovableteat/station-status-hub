@@ -112,6 +112,12 @@ const Index = () => {
             <ToolsManagement />
           </PermissionGuard>
         );
+      case "troubleshooting":
+        return (
+          <PermissionGuard module="troubleshooting">
+            <TroubleshootingPage />
+          </PermissionGuard>
+        );
       case "users":
         return (
           <PermissionGuard module="users">
