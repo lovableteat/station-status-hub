@@ -12,7 +12,8 @@ export type Permission =
   | 'tools_view' | 'tools_edit'
   | 'admin_view' | 'admin_edit'
   | 'comparison_view' | 'comparison_edit'
-  | 'api_management_view' | 'api_management_edit';
+  | 'api_management_view' | 'api_management_edit'
+  | 'troubleshooting_view' | 'troubleshooting_edit';
 
 export function usePermissions() {
   const { user } = useUser();
@@ -90,6 +91,8 @@ export function usePermissions() {
         return hasPermission('comparison_view');
       case 'api-management':
         return hasPermission('api_management_view');
+      case 'troubleshooting':
+        return hasPermission('troubleshooting_view');
       case 'users':
         return hasPermission('admin_view');
       default:
@@ -123,6 +126,8 @@ export function usePermissions() {
         return hasPermission('comparison_edit');
       case 'api-management':
         return hasPermission('api_management_edit');
+      case 'troubleshooting':
+        return hasPermission('troubleshooting_edit');
       case 'users':
         return hasPermission('admin_edit');
       default:

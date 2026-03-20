@@ -2083,6 +2083,97 @@ export type Database = {
         }
         Relationships: []
       }
+      troubleshooting_records: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          issue_category: string | null
+          issue_type: string
+          occurred_at: string
+          reported_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          root_cause: string | null
+          severity: string
+          solution: string | null
+          station_id: string | null
+          status: string
+          system_id: string | null
+          tags: string[] | null
+          test_item_id: string | null
+          time_to_resolve_hours: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          issue_category?: string | null
+          issue_type?: string
+          occurred_at?: string
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          root_cause?: string | null
+          severity?: string
+          solution?: string | null
+          station_id?: string | null
+          status?: string
+          system_id?: string | null
+          tags?: string[] | null
+          test_item_id?: string | null
+          time_to_resolve_hours?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          issue_category?: string | null
+          issue_type?: string
+          occurred_at?: string
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          root_cause?: string | null
+          severity?: string
+          solution?: string | null
+          station_id?: string | null
+          status?: string
+          system_id?: string | null
+          tags?: string[] | null
+          test_item_id?: string | null
+          time_to_resolve_hours?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "troubleshooting_records_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troubleshooting_records_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troubleshooting_records_test_item_id_fkey"
+            columns: ["test_item_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_mentions: {
         Row: {
           content_id: string
@@ -2452,6 +2543,8 @@ export type Database = {
         | "l11_cabinet_edit"
         | "api_management_view"
         | "api_management_edit"
+        | "troubleshooting_view"
+        | "troubleshooting_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2600,6 +2693,8 @@ export const Constants = {
         "l11_cabinet_edit",
         "api_management_view",
         "api_management_edit",
+        "troubleshooting_view",
+        "troubleshooting_edit",
       ],
     },
   },

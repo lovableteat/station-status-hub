@@ -10,6 +10,7 @@ import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
+import { TroubleshootingPage } from "@/components/troubleshooting/TroubleshootingPage";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
@@ -109,6 +110,12 @@ const Index = () => {
         return (
           <PermissionGuard module="tools">
             <ToolsManagement />
+          </PermissionGuard>
+        );
+      case "troubleshooting":
+        return (
+          <PermissionGuard module="troubleshooting">
+            <TroubleshootingPage />
           </PermissionGuard>
         );
       case "users":
