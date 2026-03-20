@@ -7,7 +7,6 @@ import {
   BarChart3,
   Database,
   Monitor,
-  Workflow,
   AlertTriangle,
   Wrench,
   Menu,
