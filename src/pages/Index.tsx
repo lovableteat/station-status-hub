@@ -21,7 +21,7 @@ import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { BomCenter } from "@/components/bom/BomCenter";
+
 import { UniversalCabinetDisplay } from "@/components/cabinet/UniversalCabinetDisplay";
 
 
