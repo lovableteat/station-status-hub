@@ -2,19 +2,29 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ]
+permissions:
+  contents: write
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
       - name: Install and Build
         run: |
-          npm install
+          # 🌟 關鍵修正：加上 --legacy-peer-deps 告訴 GitHub 忽略零件版本衝突，強行組裝
+          npm install --legacy-peer-deps 
           npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
