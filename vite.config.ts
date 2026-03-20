@@ -3,10 +3,9 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // 🌟 加入下面這行，解決 GitHub Pages 網址路徑問題
-  base: './', 
+  // 🌟 關鍵：這裡必須是您的 GitHub 專案名稱，前後都要加斜線
+  base: '/station-status-hub/', 
   server: {
     host: "::",
     port: 8080,
