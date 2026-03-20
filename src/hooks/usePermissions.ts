@@ -91,6 +91,8 @@ export function usePermissions() {
         return hasPermission('comparison_view');
       case 'api-management':
         return hasPermission('api_management_view');
+      case 'troubleshooting':
+        return hasPermission('troubleshooting_view');
       case 'users':
         return hasPermission('admin_view');
       default:
