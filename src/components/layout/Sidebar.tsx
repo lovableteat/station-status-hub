@@ -30,17 +30,15 @@ interface SidebarProps {
 
 const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
-  { id: "l11-cabinet", label: "機櫃管理中心", icon: BarChart3, description: "3D機櫃結構" },
   { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
   { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
   { id: "troubleshooting", label: "Troubleshooting", icon: SearchX, description: "問題統計分析" },
-  
   { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
   { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
-  { id: "api-management", label: "API 金鑰管理", icon: Key, description: "外部存取控制" },
+  { id: "l11-cabinet", label: "機櫃管理中心", icon: BarChart3, description: "3D機櫃結構" },
 ];
 
 export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
