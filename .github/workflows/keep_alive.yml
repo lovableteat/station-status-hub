@@ -2,17 +2,16 @@ name: Supabase Keep Alive
 
 on:
   schedule:
-    # 🌟 設定每 3 天的凌晨 0 點自動執行一次（Cron 語法）
-    - cron: '0 0 */3 * *'
-  workflow_dispatch: # 🌟 允許您手動按按鈕測試
+    - cron: '0 0 */3 * *' # 每 3 天跑一次
+  workflow_dispatch: # 允許手動測試
 
 jobs:
   ping_supabase:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase API
+      - name: Force Database Activity
         run: |
-          # 🌟 透過 curl 發送一個微小的請求給 Supabase
-          curl -X GET "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/" \
+          # 🌟 重點：加上 apikey 與查詢指令，去翻動剛才建好的 keep_alive_check 表
+          curl -X GET "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/keep_alive_check?select=*" \
           -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
           -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}"
