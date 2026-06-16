@@ -163,11 +163,12 @@ export function IssueTracker() {
     let filtered = issues;
 
     if (searchTerm) {
+      const q = searchTerm.toLowerCase();
       filtered = filtered.filter(issue =>
-        issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.system_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        issue.station_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        issue.description?.toLowerCase().includes(q) ||
+        issue.system_name?.toLowerCase().includes(q) ||
+        issue.station_name?.toLowerCase().includes(q) ||
+        issue.category?.toLowerCase().includes(q)
       );
     }
 
