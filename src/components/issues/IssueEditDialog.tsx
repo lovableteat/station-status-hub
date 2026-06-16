@@ -183,6 +183,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
         title: formData.title.trim(),
         description: formData.description.trim(),
         priority: formData.priority,
+        priority_manual: true,
         status: formData.status,
         assigned_to: formData.assigned_to,
         system_id: (formData.system_id && formData.system_id !== "none") ? formData.system_id : null,
