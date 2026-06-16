@@ -104,7 +104,9 @@ export function CodeComparisonTool() {
       const cur = result[i];
       const next = result[i + 1];
       if (cur && next && cur.type === 'remove' && next.type === 'add') {
-        const parts = diffWords(cur.oldText || '', next.newText || '', { ignoreWhitespace });
+        const parts = ignoreWhitespace
+          ? diffWords(cur.oldText || '', next.newText || '')
+          : diffWords(cur.oldText || '', next.newText || '');
         merged.push({ type: 'modify', oldNumber: cur.oldNumber, newNumber: next.newNumber, oldText: cur.oldText, newText: next.newText, parts });
         modified++;
         i++; // skip next
