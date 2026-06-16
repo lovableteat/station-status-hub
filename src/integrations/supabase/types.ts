@@ -725,6 +725,7 @@ export type Database = {
           id: string
           mentioned_users: string[] | null
           priority: string
+          priority_manual: boolean
           process_notes: string | null
           relate: string | null
           solution: string | null
@@ -744,6 +745,7 @@ export type Database = {
           id?: string
           mentioned_users?: string[] | null
           priority?: string
+          priority_manual?: boolean
           process_notes?: string | null
           relate?: string | null
           solution?: string | null
@@ -763,6 +765,7 @@ export type Database = {
           id?: string
           mentioned_users?: string[] | null
           priority?: string
+          priority_manual?: boolean
           process_notes?: string | null
           relate?: string | null
           solution?: string | null
@@ -2185,6 +2188,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ui_table_preferences: {
+        Row: {
+          column_order: Json
+          created_at: string
+          id: string
+          table_key: string
+          updated_at: string
+        }
+        Insert: {
+          column_order?: Json
+          created_at?: string
+          id?: string
+          table_key: string
+          updated_at?: string
+        }
+        Update: {
+          column_order?: Json
+          created_at?: string
+          id?: string
+          table_key?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_mentions: {
         Row: {
