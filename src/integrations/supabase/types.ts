@@ -798,6 +798,18 @@ export type Database = {
           },
         ]
       }
+      keep_alive_check: {
+        Row: {
+          id: number | null
+        }
+        Insert: {
+          id?: number | null
+        }
+        Update: {
+          id?: number | null
+        }
+        Relationships: []
+      }
       login_audit: {
         Row: {
           display_name: string | null
