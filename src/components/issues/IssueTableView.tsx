@@ -70,7 +70,6 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
   "fail_log",
   "priority",
   "status",
-  "assigned_to",
   "station",
   "category",
   "attachments",
@@ -88,29 +87,32 @@ const COLUMN_META: Record<ColumnKey, { label: string; width: string; sortable?: 
   category: { label: "問題分類", width: "w-[120px]" },
   attachments: { label: "附件", width: "w-[80px]" },
   created_at: { label: "建立時間", width: "w-[120px]", sortable: "created_at" },
-  actions: { label: "操作", width: "w-[100px]" },
+  actions: { label: "操作", width: "w-[148px]" },
 };
+
+const ACTION_BUTTON_CLASS =
+  "h-8 border-border/80 bg-secondary/70 px-2.5 text-xs text-foreground/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10 hover:text-primary hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px";
 
 const PRIORITY_STYLES: Record<IssuePriority, { trigger: string; rank: string; itemDot: string }> = {
   critical: {
-    trigger: "border-red-500/45 bg-red-500/20 text-red-700 hover:bg-red-500/25 dark:border-red-400/55 dark:bg-red-500/25 dark:text-red-100 dark:hover:bg-red-500/30",
+    trigger: "border-red-400/60 bg-red-500/20 text-red-100 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] hover:border-red-300/75 hover:bg-red-500/30",
     rank: "P1",
     itemDot: "bg-red-500",
   },
   high: {
-    trigger: "border-orange-500/35 bg-orange-500/15 text-orange-700 hover:bg-orange-500/20 dark:border-orange-400/45 dark:bg-orange-500/20 dark:text-orange-100 dark:hover:bg-orange-500/25",
+    trigger: "border-orange-400/55 bg-orange-500/20 text-orange-100 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] hover:border-orange-300/70 hover:bg-orange-500/25",
     rank: "P2",
     itemDot: "bg-orange-500",
   },
   medium: {
-    trigger: "border-yellow-500/35 bg-yellow-500/15 text-yellow-700 hover:bg-yellow-500/20 dark:border-yellow-400/40 dark:bg-yellow-500/15 dark:text-yellow-100 dark:hover:bg-yellow-500/20",
+    trigger: "border-amber-400/50 bg-amber-500/15 text-amber-100 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] hover:border-amber-300/65 hover:bg-amber-500/20",
     rank: "P3",
-    itemDot: "bg-yellow-500",
+    itemDot: "bg-amber-500",
   },
   low: {
-    trigger: "border-emerald-500/35 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-100 dark:hover:bg-emerald-500/20",
+    trigger: "border-primary/45 bg-primary/15 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] hover:border-primary/70 hover:bg-primary/20",
     rank: "P4",
-    itemDot: "bg-emerald-500",
+    itemDot: "bg-primary",
   },
 };
 
@@ -128,6 +130,8 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState<Issue['attachments']>([]);
   const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
+  const [draggingColumn, setDraggingColumn] = useState<ColumnKey | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<ColumnKey | null>(null);
   const dragSrcRef = useRef<ColumnKey | null>(null);
   const { toast } = useToast();
   const { sendMentionNotifications } = useMentionNotifications();
@@ -167,7 +171,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
       await supabase
         .from('ui_table_preferences')
         .upsert(
-          { table_key: TABLE_KEY, column_order: order as any, updated_at: new Date().toISOString() },
+          { table_key: TABLE_KEY, column_order: order, updated_at: new Date().toISOString() },
           { onConflict: 'table_key' }
         );
     } catch (e) {
@@ -177,11 +181,14 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
 
   const handleDragStart = (key: ColumnKey) => {
     dragSrcRef.current = key;
+    setDraggingColumn(key);
   };
 
   const handleDrop = (targetKey: ColumnKey) => {
     const src = dragSrcRef.current;
     dragSrcRef.current = null;
+    setDraggingColumn(null);
+    setDragOverColumn(null);
     if (!src || src === targetKey) return;
     const next = [...columnOrder];
     const srcIdx = next.indexOf(src);
@@ -191,6 +198,12 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     next.splice(tgtIdx, 0, src);
     setColumnOrder(next);
     persistOrder(next);
+  };
+
+  const handleDragEnd = () => {
+    dragSrcRef.current = null;
+    setDraggingColumn(null);
+    setDragOverColumn(null);
   };
 
   const handleSort = (key: keyof Issue) => {
@@ -213,10 +226,8 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     const arr = [...issuesWithEffective];
     if (!sortConfig) return arr;
     return arr.sort((a, b) => {
-      const aValue =
-        sortConfig.key === 'priority' ? a.effectivePriority : (a as any)[sortConfig.key];
-      const bValue =
-        sortConfig.key === 'priority' ? b.effectivePriority : (b as any)[sortConfig.key];
+      const aValue = sortConfig.key === 'priority' ? a.effectivePriority : a[sortConfig.key];
+      const bValue = sortConfig.key === 'priority' ? b.effectivePriority : b[sortConfig.key];
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
@@ -297,10 +308,10 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "open": return "bg-destructive/10 text-destructive";
-      case "in_progress": return "bg-blue-500/10 text-blue-700 dark:text-blue-400";
+      case "open": return "border-destructive/40 bg-destructive/15 text-red-100";
+      case "in_progress": return "border-amber-400/35 bg-amber-500/15 text-amber-100";
       case "resolved":
-      case "closed": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      case "closed": return "border-primary/35 bg-primary/15 text-primary";
       default: return "bg-muted text-muted-foreground";
     }
   };
@@ -351,7 +362,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
           >
             <SelectTrigger
               className={cn(
-                "h-7 w-[104px] justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold shadow-none transition-colors [&>svg]:ml-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-65",
+                "h-8 w-[108px] justify-center gap-1.5 rounded-xl border px-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px [&>svg]:ml-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-75",
                 getPriorityColor(issue.effectivePriority)
               )}
             >
@@ -438,11 +449,13 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
       case "actions":
         return (
           <div className="flex gap-1">
-            <Button variant="ghost" size="sm" onClick={() => handleView(issue)} className="h-8 w-8 p-0" title="查看">
+            <Button variant="outline" size="sm" onClick={() => handleView(issue)} className={ACTION_BUTTON_CLASS} title="查看">
               <Eye className="h-4 w-4" />
+              查看
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleEdit(issue)} className="h-8 w-8 p-0" title="編輯">
+            <Button variant="outline" size="sm" onClick={() => handleEdit(issue)} className={ACTION_BUTTON_CLASS} title="編輯">
               <Edit className="h-4 w-4" />
+              編輯
             </Button>
           </div>
         );
@@ -450,10 +463,13 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-primary/15 bg-card/90">
+      <CardHeader className="bg-secondary/25">
         <div className="flex items-center justify-between">
-          <CardTitle>問題列表（可拖曳欄位調整順序）</CardTitle>
+          <div>
+            <CardTitle>問題列表（可拖曳欄位調整順序）</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">拖曳表頭可調整欄位順序，操作按鈕支援 hover 回饋。</p>
+          </div>
           <div className="flex items-center gap-2">
             <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
               <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
@@ -478,20 +494,30 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                   return (
                     <TableHead
                       key={key}
-                      className={`${meta.width} cursor-move select-none`}
+                      className={cn(
+                        meta.width,
+                        "group select-none transition-all duration-200",
+                        draggingColumn === key && "bg-primary/10 text-primary",
+                        dragOverColumn === key && "bg-primary/15 text-primary ring-1 ring-inset ring-primary/35"
+                      )}
                       draggable
                       onDragStart={() => handleDragStart(key)}
-                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverColumn(key);
+                      }}
+                      onDragLeave={() => setDragOverColumn(null)}
                       onDrop={() => handleDrop(key)}
                     >
-                      <div className="flex items-center gap-1">
-                        <GripVertical className="h-3 w-3 text-muted-foreground" />
+                      <div className="flex items-center gap-2 rounded-xl border border-transparent px-2 py-1.5 transition-all duration-200 group-hover:cursor-grab group-hover:border-primary/25 group-hover:bg-primary/10 group-hover:text-primary group-active:cursor-grabbing">
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
                         {meta.sortable ? (
-                          <Button variant="ghost" className="h-7 px-1" onClick={() => handleSort(meta.sortable!)}>
+                          <Button variant="ghost" className="h-7 px-1 text-foreground/80 hover:text-primary" onClick={() => handleSort(meta.sortable!)}>
                             {meta.label} <ArrowUpDown className="ml-1 h-3 w-3" />
                           </Button>
                         ) : (
-                          <span className="text-sm font-medium">{meta.label}</span>
+                          <span className="text-sm font-semibold">{meta.label}</span>
                         )}
                       </div>
                     </TableHead>

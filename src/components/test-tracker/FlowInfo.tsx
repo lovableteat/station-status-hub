@@ -114,15 +114,8 @@ export function FlowInfo() {
     return <Settings className="h-5 w-5" />;
   };
 
-  const getStationColor = (stationOrder: number) => {
-    const colors = [
-      'bg-primary/10 text-primary border-primary/30',
-      'bg-indigo-500/10 text-indigo-200 border-indigo-400/25',
-      'bg-amber-500/10 text-amber-200 border-amber-400/25',
-      'bg-violet-500/10 text-violet-200 border-violet-400/25',
-      'bg-rose-500/10 text-rose-200 border-rose-400/25'
-    ];
-    return colors[stationOrder] || colors[0];
+  const getStationColor = (_stationOrder: number) => {
+    return "border-border/75 bg-secondary/55 text-foreground";
   };
 
   const handleSaveStation = async () => {
@@ -277,11 +270,11 @@ export function FlowInfo() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="overflow-hidden rounded-3xl border border-primary/15 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--secondary)/0.92)_48%,hsl(var(--background))_100%)] p-6 shadow-[0_24px_70px_-48px_hsl(220_50%_2%/0.95)]">
+      <div className="overflow-hidden rounded-3xl border border-border/75 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--secondary)/0.94)_55%,hsl(var(--background))_100%)] p-6 shadow-[0_24px_70px_-48px_hsl(220_50%_2%/0.95)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-3 border-primary/25 bg-primary/10 px-3 py-1 text-primary">
-              L10 Flow Control
+            <Badge variant="outline" className="mb-3 border-primary/30 bg-primary/10 px-3 py-1 text-primary">
+              L10 流程控制
             </Badge>
             <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">GB300 L10 測試流程說明</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
@@ -340,7 +333,7 @@ export function FlowInfo() {
               <p className="mt-1 text-sm text-muted-foreground">依站點順序呈現 L10 測試路徑與預估工時。</p>
             </div>
             <Badge variant="outline" className="w-fit border-primary/25 bg-primary/10 px-3 py-1 text-primary">
-              {stations.length} stations
+              {stations.length} 個站點
             </Badge>
           </div>
         </CardHeader>
@@ -351,13 +344,13 @@ export function FlowInfo() {
               {stations.map((station, index) => (
                 <div
                   key={station.id}
-                  className={`relative rounded-2xl border p-4 shadow-[0_16px_40px_-32px_hsl(220_50%_2%/0.9)] backdrop-blur transition-all duration-200 ease-out hover:-translate-y-1 hover:border-primary/45 hover:shadow-[0_22px_48px_-34px_hsl(var(--primary)/0.65)] ${getStationColor(station.station_order)}`}
+                  className={`relative rounded-2xl border p-4 shadow-[0_16px_40px_-32px_hsl(220_50%_2%/0.9)] backdrop-blur transition-all duration-200 ease-out hover:-translate-y-1 hover:border-primary/40 hover:bg-secondary/70 hover:shadow-[0_22px_48px_-34px_hsl(var(--primary)/0.55)] ${getStationColor(station.station_order)}`}
                 >
                   <div className="mb-4 flex items-center justify-between">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-current/25 bg-background/40">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                       {getStationIcon(station.station_name)}
                     </div>
-                    <span className="rounded-full border border-current/20 bg-background/35 px-2.5 py-1 text-xs font-semibold">
+                    <span className="rounded-full border border-border/70 bg-background/35 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                       #{index + 1}
                     </span>
                   </div>
@@ -395,10 +388,10 @@ export function FlowInfo() {
               key={station.id}
               className="overflow-hidden border-border/70 bg-card/90 transition-all duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-[0_24px_64px_-44px_hsl(var(--primary)/0.55)]"
             >
-              <CardHeader className={`${getStationColor(station.station_order)} border-b border-current/15`}>
+              <CardHeader className={`${getStationColor(station.station_order)} border-b border-border/70`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-current/25 bg-background/35">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                       {getStationIcon(station.station_name)}
                     </div>
                     <div>
@@ -415,7 +408,7 @@ export function FlowInfo() {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Badge variant="outline" className="border-current/20 bg-background/40">
+                    <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
                       <Clock className="h-3 w-3 mr-1" />
                       {getCalculatedStationHours(station.id)}h
                     </Badge>
