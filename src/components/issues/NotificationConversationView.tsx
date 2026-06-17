@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { MessageSquare, Clock, CheckCircle, User } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useUser } from '@/components/auth/UserContext';
 
 interface NotificationConversationViewProps {
@@ -22,7 +23,7 @@ interface ConversationData {
     sender_id: string;
     recipient_id: string;
     status: string;
-    metadata?: any;
+    metadata?: Json;
   };
   replies: Array<{
     id: string;
@@ -130,10 +131,10 @@ export function NotificationConversationView({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-500';
-      case 'replied': return 'bg-blue-500';
-      case 'confirmed': case 'closed': return 'bg-green-500';
-      default: return 'bg-gray-500';
+      case 'pending': return 'border-amber-400/45 bg-amber-500/15 text-amber-100';
+      case 'replied': return 'border-primary/35 bg-primary/15 text-primary';
+      case 'confirmed': case 'closed': return 'border-primary/40 bg-primary/20 text-primary';
+      default: return 'border-border/70 bg-secondary/70 text-muted-foreground';
     }
   };
 
@@ -184,8 +185,8 @@ export function NotificationConversationView({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-border/75 bg-card/90">
+      <CardHeader className="bg-secondary/25">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
           標註對話 ({conversations.length})
@@ -202,8 +203,8 @@ export function NotificationConversationView({
               return (
                 <div key={notification.id} className="space-y-3">
                   {/* 原始標註 */}
-                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                    <div className="p-2 bg-primary text-primary-foreground rounded-full">
+                  <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-secondary/45 p-3">
+                    <div className="rounded-full border border-primary/20 bg-primary/10 p-2 text-primary">
                       <User className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
@@ -212,7 +213,7 @@ export function NotificationConversationView({
                           <span className="font-medium text-sm">{senderName}</span>
                           <span className="text-muted-foreground text-xs">標註了</span>
                           <span className="font-medium text-sm">{recipientName}</span>
-                          <Badge variant="outline" className={`text-xs ${getStatusColor(notification.status)} text-white border-0`}>
+                          <Badge variant="outline" className={`text-xs ${getStatusColor(notification.status)}`}>
                             {getStatusText(notification.status)}
                           </Badge>
                         </div>
@@ -233,8 +234,8 @@ export function NotificationConversationView({
                     const replyerName = users[reply.sender_id]?.displayName || 'Unknown';
                     
                     return (
-                      <div key={reply.id} className="flex items-start gap-3 p-3 ml-6 bg-background border rounded-lg">
-                        <div className="p-2 bg-secondary text-secondary-foreground rounded-full">
+                      <div key={reply.id} className="ml-6 flex items-start gap-3 rounded-xl border border-border/70 bg-background/75 p-3">
+                        <div className="rounded-full border border-border/70 bg-secondary/75 p-2 text-secondary-foreground">
                           <MessageSquare className="h-4 w-4" />
                         </div>
                         <div className="flex-1">
@@ -247,7 +248,7 @@ export function NotificationConversationView({
                                  reply.reply_type === 'progress' ? '進行中' : '有問題'}
                               </Badge>
                               {reply.status === 'confirmed' && (
-                                <Badge variant="outline" className="text-xs bg-green-500 text-white border-0">
+                                <Badge variant="outline" className="border-primary/35 bg-primary/15 text-xs text-primary">
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   已確認
                                 </Badge>
@@ -260,7 +261,7 @@ export function NotificationConversationView({
                           </div>
                           <p className="text-sm mt-1">{reply.content}</p>
                           {reply.confirmed_at && (
-                            <p className="text-xs text-green-600 mt-1">
+                            <p className="mt-1 text-xs text-primary">
                               ✓ 於 {formatTime(reply.confirmed_at)} 確認完成
                             </p>
                           )}
