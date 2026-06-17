@@ -413,12 +413,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         );
       case "station":
         return (
-          <div className={cn(
-            "inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold",
-            getStationStyle(issue.station_name)
-          )}>
-            {issue.station_name || '-'}
-          </div>
+          <div className="text-sm">{issue.station_name || '-'}</div>
         );
       case "category":
         return <div className="text-sm">{issue.category || '-'}</div>;
