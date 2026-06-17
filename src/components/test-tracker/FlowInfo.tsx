@@ -327,12 +327,12 @@ export function FlowInfo() {
       {/* Overview Timeline */}
       <Card className="overflow-hidden border-primary/15 bg-card/90">
         <CardHeader className="bg-secondary/35">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex flex-col items-center gap-2 text-center sm:min-h-10 sm:justify-center">
             <div>
               <CardTitle>測試流程總覽</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">依站點順序呈現 L10 測試路徑與預估工時。</p>
             </div>
-            <Badge variant="outline" className="w-fit border-primary/25 bg-primary/10 px-3 py-1 text-primary">
+            <Badge variant="outline" className="w-fit border-primary/25 bg-primary/10 px-3 py-1 text-primary sm:absolute sm:right-0 sm:top-1/2 sm:-translate-y-1/2">
               {stations.length} 個站點
             </Badge>
           </div>
@@ -340,7 +340,7 @@ export function FlowInfo() {
         <CardContent>
           <div className="relative">
             <div className="absolute left-6 right-6 top-8 hidden h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent xl:block" />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {stations.map((station, index) => (
                 <div
                   key={station.id}
