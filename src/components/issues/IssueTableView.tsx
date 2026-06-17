@@ -114,21 +114,6 @@ const PRIORITY_STYLES: Record<IssuePriority, { trigger: string; rank: string; it
   },
 };
 
-const STATION_STYLES = [
-  "border-amber-500/40 bg-amber-950 text-amber-200",
-  "border-emerald-500/40 bg-emerald-950 text-emerald-200",
-  "border-red-500/40 bg-red-950 text-red-200",
-];
-
-function getStationStyle(name: string) {
-  if (!name) return "border-slate-500/30 bg-slate-900 text-slate-300";
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const idx = Math.abs(hash) % STATION_STYLES.length;
-  return STATION_STYLES[idx];
-}
 
 export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
