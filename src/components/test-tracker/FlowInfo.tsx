@@ -56,6 +56,10 @@ const stationThemes = [
     badge: "border-blue-200/35 bg-blue-400/20 text-blue-100",
     accent: "text-blue-200",
     rail: "from-blue-300/80 via-blue-400/45 to-transparent",
+    contentPanel: "border-blue-200/65 bg-blue-500/15 shadow-[0_0_0_1px_hsl(213_94%_68%/0.22),0_28px_80px_-48px_hsl(213_94%_68%/0.95)]",
+    contentIcon: "border-blue-100/50 bg-blue-300/25 text-blue-50",
+    contentBadge: "border-blue-100/50 bg-blue-300/20 text-blue-50",
+    contentBar: "from-blue-300/95 via-blue-400/70 to-transparent",
   },
   {
     shell: "border-amber-300/45 bg-amber-500/15 text-amber-50 hover:border-amber-200/65 hover:bg-amber-500/20",
@@ -63,6 +67,10 @@ const stationThemes = [
     badge: "border-amber-200/35 bg-amber-400/20 text-amber-100",
     accent: "text-amber-200",
     rail: "from-amber-300/80 via-amber-400/45 to-transparent",
+    contentPanel: "border-amber-200/65 bg-amber-500/15 shadow-[0_0_0_1px_hsl(43_96%_56%/0.22),0_28px_80px_-48px_hsl(43_96%_56%/0.95)]",
+    contentIcon: "border-amber-100/50 bg-amber-300/25 text-amber-50",
+    contentBadge: "border-amber-100/50 bg-amber-300/20 text-amber-50",
+    contentBar: "from-amber-300/95 via-amber-400/70 to-transparent",
   },
   {
     shell: "border-rose-300/45 bg-rose-500/15 text-rose-50 hover:border-rose-200/65 hover:bg-rose-500/20",
@@ -70,6 +78,10 @@ const stationThemes = [
     badge: "border-rose-200/35 bg-rose-400/20 text-rose-100",
     accent: "text-rose-200",
     rail: "from-rose-300/80 via-rose-400/45 to-transparent",
+    contentPanel: "border-rose-200/65 bg-rose-500/15 shadow-[0_0_0_1px_hsl(351_95%_71%/0.22),0_28px_80px_-48px_hsl(351_95%_71%/0.95)]",
+    contentIcon: "border-rose-100/50 bg-rose-300/25 text-rose-50",
+    contentBadge: "border-rose-100/50 bg-rose-300/20 text-rose-50",
+    contentBar: "from-rose-300/95 via-rose-400/70 to-transparent",
   },
   {
     shell: "border-violet-300/45 bg-violet-500/15 text-violet-50 hover:border-violet-200/65 hover:bg-violet-500/20",
@@ -77,6 +89,10 @@ const stationThemes = [
     badge: "border-violet-200/35 bg-violet-400/20 text-violet-100",
     accent: "text-violet-200",
     rail: "from-violet-300/80 via-violet-400/45 to-transparent",
+    contentPanel: "border-violet-200/65 bg-violet-500/15 shadow-[0_0_0_1px_hsl(250_95%_76%/0.22),0_28px_80px_-48px_hsl(250_95%_76%/0.95)]",
+    contentIcon: "border-violet-100/50 bg-violet-300/25 text-violet-50",
+    contentBadge: "border-violet-100/50 bg-violet-300/20 text-violet-50",
+    contentBar: "from-violet-300/95 via-violet-400/70 to-transparent",
   },
 ];
 
@@ -567,23 +583,39 @@ export function FlowInfo() {
             </div>
 
             {selectedStation && (
-              <div className="border-t border-slate-500/35 bg-slate-900/25 p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-rose-200/30 bg-rose-400/15 text-rose-100">
-                    <Layers className="h-5 w-5" />
+              <div
+                key={selectedStation.id}
+                className={`border-t p-5 animate-in fade-in-0 slide-in-from-top-2 duration-300 ${selectedStationTheme.contentPanel}`}
+              >
+                <div className={`mb-4 h-1.5 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${selectedStationTheme.contentIcon}`}>
+                      <Layers className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-slate-50">流程內容管理</h3>
+                        <Badge variant="outline" className={selectedStationTheme.contentBadge}>
+                          目前顯示 Station {selectedStationIndex + 1}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-slate-300">目前只展開 {selectedStation.station_name} 的內容。</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-50">流程內容管理</h3>
-                    <p className="text-sm text-slate-300">目前只展開 {selectedStation.station_name} 的內容。</p>
-                  </div>
+                  <Badge variant="outline" className={`${selectedStationTheme.contentBadge} px-3 py-1.5 text-sm`}>
+                    已切換至 {selectedStation.station_name}
+                  </Badge>
                 </div>
-                <div className="max-h-[430px] overflow-y-auto pr-1 [&>div]:border-slate-500/45 [&>div]:bg-slate-800/80">
-                  <StationContentManager
-                    stationId={selectedStation.id}
-                    stationName={selectedStation.station_name}
-                    contents={selectedStationContents}
-                    onUpdate={loadData}
-                  />
+                <div className="rounded-3xl border border-white/15 bg-slate-900/35 p-3 ring-1 ring-white/10">
+                  <div className="max-h-[430px] overflow-y-auto pr-1 [&>div]:border-slate-400/45 [&>div]:bg-slate-800/85">
+                    <StationContentManager
+                      stationId={selectedStation.id}
+                      stationName={selectedStation.station_name}
+                      contents={selectedStationContents}
+                      onUpdate={loadData}
+                    />
+                  </div>
                 </div>
               </div>
             )}
