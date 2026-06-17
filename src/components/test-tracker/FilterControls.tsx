@@ -24,22 +24,22 @@ export function FilterControls({
   engineers,
 }: FilterControlsProps) {
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex gap-4">
+    <Card className="border-primary/15 bg-card/90 shadow-[0_18px_48px_-38px_hsl(220_50%_2%/0.9)]">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row">
           <div className="flex-1">
             <div className="relative">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/85" />
               <Input
                 placeholder="搜尋機台編號或負責人..."
-                className="pl-10"
+                className="h-12 border-primary/25 bg-secondary/80 pl-11 text-sm focus-visible:border-primary/80"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
               />
             </div>
           </div>
           <Select value={filterEngineer} onValueChange={setFilterEngineer}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="h-12 w-full border-border/90 bg-secondary/80 lg:w-52">
               <SelectValue placeholder="選擇工程師" />
             </SelectTrigger>
             <SelectContent>
@@ -50,7 +50,7 @@ export function FilterControls({
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="h-12 w-full border-border/90 bg-secondary/80 lg:w-52">
               <SelectValue placeholder="選擇狀態" />
             </SelectTrigger>
             <SelectContent>
