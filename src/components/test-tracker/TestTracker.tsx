@@ -9,7 +9,6 @@ import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
 import { PDFExportDialog } from "./pdf/PDFExportDialog";
-import { TestItemStatusReport } from "./TestItemStatusReport";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +28,9 @@ interface TestProgress {
   completed_at?: string;
 }
 
+type ProgressUpdates = Pick<TestProgress, "status" | "progress_percent" | "notes"> &
+  Partial<Pick<TestProgress, "started_at" | "completed_at">>;
+
 export function TestTracker() {
   const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,7 +38,6 @@ export function TestTracker() {
   const [filterStatus, setFilterStatus] = useState("");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
-  const [showStatusReport, setShowStatusReport] = useState(false);
   const [editValues, setEditValues] = useState<{
     status: string;
     progress_percent: number;
@@ -78,7 +79,7 @@ export function TestTracker() {
       const currentTime = new Date().toISOString();
       
       // 準備更新數據
-      const updates: any = {
+      const updates: ProgressUpdates = {
         status: editValues.status,
         progress_percent: editValues.progress_percent,
         notes: editValues.notes
@@ -235,50 +236,25 @@ export function TestTracker() {
         engineers={engineers}
       />
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b">
-        <button 
-          className={`px-4 py-2 font-medium ${!showStatusReport ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          onClick={() => setShowStatusReport(false)}
-        >
-          測試進度表
-        </button>
-        <button 
-          className={`px-4 py-2 font-medium ${showStatusReport ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          onClick={() => setShowStatusReport(true)}
-        >
-          測項狀態報表
-        </button>
-      </div>
-
       {/* Content */}
-      {!showStatusReport ? (
-        <div data-testtracker-table>
-          <TestProgressTable
-            filteredSystems={filteredSystems}
-            stations={stations}
-            items={items}
-            progress={progress}
-            editingProgress={editingProgress}
-            setEditingProgress={setEditingProgress}
-            editValues={editValues}
-            setEditValues={setEditValues}
-            getProgressForSystemItem={getProgressForSystemItem}
-            handleEditProgress={handleEditProgress}
-            handleSaveProgress={handleSaveProgress}
-            handleDeleteProgress={handleDeleteProgress}
-            getStatusColor={getStatusColor}
-            onSystemUpdate={handleSystemUpdate}
-          />
-        </div>
-      ) : (
-        <TestItemStatusReport
-          systems={filteredSystems}
+      <div data-testtracker-table>
+        <TestProgressTable
+          filteredSystems={filteredSystems}
           stations={stations}
           items={items}
           progress={progress}
+          editingProgress={editingProgress}
+          setEditingProgress={setEditingProgress}
+          editValues={editValues}
+          setEditValues={setEditValues}
+          getProgressForSystemItem={getProgressForSystemItem}
+          handleEditProgress={handleEditProgress}
+          handleSaveProgress={handleSaveProgress}
+          handleDeleteProgress={handleDeleteProgress}
+          getStatusColor={getStatusColor}
+          onSystemUpdate={handleSystemUpdate}
         />
-      )}
+      </div>
 
       {/* PDF Exporter Dialog */}
       <PDFExportDialog
