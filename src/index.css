@@ -55,7 +55,7 @@ All colors MUST be HSL for proper theming support.
     --chart-5: 271 91% 65%;
     
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 70%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(194 95% 56%));
     --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 46%));
     --gradient-warning: linear-gradient(135deg, hsl(45 93% 47%), hsl(45 93% 57%));
     --gradient-danger: linear-gradient(135deg, hsl(0 84% 60%), hsl(0 84% 70%));
@@ -64,7 +64,7 @@ All colors MUST be HSL for proper theming support.
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
-    --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.3);
+    --shadow-glow: 0 16px 42px -24px hsl(217 91% 60% / 0.95), 0 0 22px hsl(194 95% 56% / 0.22);
 
     /* Today marker */
     --today-line: hsl(0 84% 60%);
@@ -91,7 +91,7 @@ All colors MUST be HSL for proper theming support.
     /* Dark mode colors - optimized for testing system */
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 224 71% 6%;
+    --card: 224 62% 7%;
     --card-foreground: 210 40% 98%;
     --popover: 224 71% 6%;
     --popover-foreground: 210 40% 98%;
@@ -105,8 +105,8 @@ All colors MUST be HSL for proper theming support.
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 218 32% 19%;
+    --input: 218 32% 19%;
     --ring: 217 91% 60%;
     
     /* Dark mode status colors */
@@ -127,13 +127,13 @@ All colors MUST be HSL for proper theming support.
     --station-complete: 142 76% 46%;
     
     /* Dark mode gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(194 95% 52%));
     --gradient-success: linear-gradient(135deg, hsl(142 76% 46%), hsl(142 76% 36%));
     --gradient-warning: linear-gradient(135deg, hsl(45 93% 58%), hsl(45 93% 48%));
     --gradient-danger: linear-gradient(135deg, hsl(0 84% 60%), hsl(0 84% 50%));
     
     /* Dark mode shadows */
-    --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.5);
+    --shadow-glow: 0 16px 42px -24px hsl(217 91% 60% / 0.95), 0 0 28px hsl(194 95% 52% / 0.28);
     --today-glow: 0 0 15px hsl(0 84% 60% / 0.6);
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -152,6 +152,15 @@ All colors MUST be HSL for proper theming support.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.13), transparent 34rem),
+      radial-gradient(circle at bottom right, hsl(var(--success) / 0.09), transparent 30rem);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
   }
 }
