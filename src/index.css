@@ -8,55 +8,55 @@ All colors MUST be HSL for proper theming support.
 
 @layer base {
   :root {
-    /* Deep Navy + Mint palette */
-    --background: 215 63% 7%;
-    --foreground: 214 100% 95%;
-    --card: 216 53% 12%;
-    --card-foreground: 214 100% 95%;
-    --popover: 216 52% 13%;
-    --popover-foreground: 214 100% 95%;
-    --primary: 171 77% 64%;
-    --primary-foreground: 215 63% 7%;
-    --secondary: 216 51% 15%;
-    --secondary-foreground: 214 100% 95%;
-    --muted: 216 51% 15%;
-    --muted-foreground: 214 27% 65%;
-    --accent: 216 51% 15%;
-    --accent-foreground: 169 84% 78%;
+    /* Matte Navy + Cobalt palette */
+    --background: 222 47% 7%;
+    --foreground: 218 38% 94%;
+    --card: 221 36% 12%;
+    --card-foreground: 218 38% 94%;
+    --popover: 221 34% 13%;
+    --popover-foreground: 218 38% 94%;
+    --primary: 221 83% 63%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 220 28% 17%;
+    --secondary-foreground: 218 38% 94%;
+    --muted: 220 28% 17%;
+    --muted-foreground: 218 18% 68%;
+    --accent: 220 28% 17%;
+    --accent-foreground: 221 92% 76%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 63% 7%;
     --border: 215 37% 21%;
     --input: 215 37% 21%;
-    --ring: 171 77% 64%;
+    --ring: 221 83% 63%;
     --radius: 0.75rem;
 
     /* Status colors for testing system */
-    --success: 158 64% 52%;
-    --success-foreground: 215 63% 7%;
+    --success: 221 70% 58%;
+    --success-foreground: 222 47% 7%;
     --warning: 43 96% 56%;
     --warning-foreground: 215 63% 7%;
     --danger: 351 95% 71%;
     --danger-foreground: 215 63% 7%;
-    --info: 213 94% 68%;
-    --info-foreground: 215 63% 7%;
+    --info: 214 86% 66%;
+    --info-foreground: 222 47% 7%;
     
     /* Station status colors */
-    --station-idle: 216 51% 15%;
-    --station-working: 171 77% 64%;
+    --station-idle: 220 28% 17%;
+    --station-working: 221 83% 63%;
     --station-warning: 43 96% 56%;
     --station-error: 351 95% 71%;
-    --station-complete: 158 64% 52%;
+    --station-complete: 221 70% 58%;
     
     /* Chart colors */
-    --chart-1: 171 77% 64%;
-    --chart-2: 213 94% 68%;
-    --chart-3: 158 64% 52%;
+    --chart-1: 221 83% 63%;
+    --chart-2: 214 86% 66%;
+    --chart-3: 245 58% 66%;
     --chart-4: 43 96% 56%;
     --chart-5: 351 95% 71%;
     
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(171 77% 64%), hsl(213 94% 68%));
-    --gradient-success: linear-gradient(135deg, hsl(158 64% 52%), hsl(169 84% 78%));
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 63%), hsl(245 58% 66%));
+    --gradient-success: linear-gradient(135deg, hsl(221 70% 58%), hsl(214 86% 66%));
     --gradient-warning: linear-gradient(135deg, hsl(43 96% 56%), hsl(32 95% 60%));
     --gradient-danger: linear-gradient(135deg, hsl(351 95% 71%), hsl(358 78% 62%));
     
@@ -64,85 +64,85 @@ All colors MUST be HSL for proper theming support.
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
-    --shadow-glow: 0 16px 42px -24px hsl(171 77% 64% / 0.95), 0 0 30px hsl(171 77% 64% / 0.24);
+    --shadow-glow: 0 14px 34px -26px hsl(221 83% 63% / 0.75), 0 0 18px hsl(221 83% 63% / 0.14);
 
     /* Today marker */
-    --today-line: hsl(171 77% 64%);
-    --today-glow: 0 0 15px hsl(171 77% 64% / 0.4);
+    --today-line: hsl(221 83% 63%);
+    --today-glow: 0 0 14px hsl(221 83% 63% / 0.32);
 
-    --sidebar-background: 215 63% 7%;
+    --sidebar-background: 222 47% 7%;
 
-    --sidebar-foreground: 214 100% 95%;
+    --sidebar-foreground: 218 38% 94%;
 
-    --sidebar-primary: 171 77% 64%;
+    --sidebar-primary: 221 83% 63%;
 
-    --sidebar-primary-foreground: 215 63% 7%;
+    --sidebar-primary-foreground: 222 47% 7%;
 
-    --sidebar-accent: 216 51% 15%;
+    --sidebar-accent: 220 28% 17%;
 
-    --sidebar-accent-foreground: 169 84% 78%;
+    --sidebar-accent-foreground: 221 92% 76%;
 
-    --sidebar-border: 215 37% 21%;
+    --sidebar-border: 220 22% 25%;
 
-    --sidebar-ring: 171 77% 64%;
+    --sidebar-ring: 221 83% 63%;
   }
 
   .dark {
-    /* Dark mode colors - Deep Navy + Mint */
-    --background: 215 68% 6%;
-    --foreground: 214 100% 95%;
-    --card: 216 54% 10%;
-    --card-foreground: 214 100% 95%;
-    --popover: 216 54% 11%;
-    --popover-foreground: 214 100% 95%;
-    --primary: 171 77% 64%;
-    --primary-foreground: 215 68% 6%;
-    --secondary: 216 50% 13%;
-    --secondary-foreground: 214 100% 95%;
-    --muted: 216 50% 13%;
-    --muted-foreground: 214 27% 65%;
-    --accent: 216 50% 13%;
-    --accent-foreground: 169 84% 78%;
+    /* Dark mode colors - Matte Navy + Cobalt */
+    --background: 222 50% 6%;
+    --foreground: 218 38% 94%;
+    --card: 221 38% 10%;
+    --card-foreground: 218 38% 94%;
+    --popover: 221 36% 11%;
+    --popover-foreground: 218 38% 94%;
+    --primary: 221 83% 63%;
+    --primary-foreground: 222 50% 6%;
+    --secondary: 220 29% 15%;
+    --secondary-foreground: 218 38% 94%;
+    --muted: 220 29% 15%;
+    --muted-foreground: 218 18% 68%;
+    --accent: 220 29% 15%;
+    --accent-foreground: 221 92% 76%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 68% 6%;
     --border: 215 36% 20%;
     --input: 215 36% 20%;
-    --ring: 171 77% 64%;
+    --ring: 221 83% 63%;
     
     /* Dark mode status colors */
-    --success: 158 64% 52%;
-    --success-foreground: 215 68% 6%;
+    --success: 221 70% 58%;
+    --success-foreground: 222 50% 6%;
     --warning: 43 96% 56%;
     --warning-foreground: 215 68% 6%;
     --danger: 351 95% 71%;
     --danger-foreground: 215 68% 6%;
-    --info: 213 94% 68%;
-    --info-foreground: 215 68% 6%;
+    --info: 214 86% 66%;
+    --info-foreground: 222 50% 6%;
     
     /* Dark mode station colors */
-    --station-idle: 216 50% 13%;
-    --station-working: 171 77% 64%;
+    --station-idle: 220 29% 15%;
+    --station-working: 221 83% 63%;
     --station-warning: 43 96% 56%;
     --station-error: 351 95% 71%;
-    --station-complete: 158 64% 52%;
+    --station-complete: 221 70% 58%;
     
     /* Dark mode gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(171 77% 64%), hsl(213 94% 68%));
-    --gradient-success: linear-gradient(135deg, hsl(158 64% 52%), hsl(169 84% 78%));
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 63%), hsl(245 58% 66%));
+    --gradient-success: linear-gradient(135deg, hsl(221 70% 58%), hsl(214 86% 66%));
     --gradient-warning: linear-gradient(135deg, hsl(43 96% 56%), hsl(32 95% 60%));
     --gradient-danger: linear-gradient(135deg, hsl(351 95% 71%), hsl(358 78% 62%));
     
     /* Dark mode shadows */
-    --shadow-glow: 0 16px 42px -24px hsl(171 77% 64% / 0.95), 0 0 30px hsl(171 77% 64% / 0.28);
-    --today-glow: 0 0 15px hsl(171 77% 64% / 0.6);
-    --sidebar-background: 215 68% 6%;
-    --sidebar-foreground: 214 100% 95%;
-    --sidebar-primary: 171 77% 64%;
-    --sidebar-primary-foreground: 215 68% 6%;
-    --sidebar-accent: 216 50% 13%;
-    --sidebar-accent-foreground: 169 84% 78%;
-    --sidebar-border: 215 36% 20%;
-    --sidebar-ring: 171 77% 64%;
+    --shadow-glow: 0 14px 34px -26px hsl(221 83% 63% / 0.75), 0 0 18px hsl(221 83% 63% / 0.16);
+    --today-glow: 0 0 14px hsl(221 83% 63% / 0.4);
+    --sidebar-background: 222 50% 6%;
+    --sidebar-foreground: 218 38% 94%;
+    --sidebar-primary: 221 83% 63%;
+    --sidebar-primary-foreground: 222 50% 6%;
+    --sidebar-accent: 220 29% 15%;
+    --sidebar-accent-foreground: 221 92% 76%;
+    --sidebar-border: 220 23% 23%;
+    --sidebar-ring: 221 83% 63%;
   }
 }
 
@@ -154,13 +154,13 @@ All colors MUST be HSL for proper theming support.
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(circle at top left, hsl(var(--primary) / 0.14), transparent 34rem),
-      radial-gradient(circle at bottom right, hsl(var(--info) / 0.1), transparent 30rem);
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.08), transparent 36rem),
+      radial-gradient(circle at bottom right, hsl(245 58% 66% / 0.07), transparent 32rem);
     background-attachment: fixed;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.28);
+    background: hsl(var(--primary) / 0.24);
     color: hsl(var(--foreground));
   }
 }
