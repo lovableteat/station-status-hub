@@ -41,11 +41,20 @@ interface StationContent {
   station_id: string;
 }
 
+const flowButtonClass =
+  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-22px_hsl(var(--primary)/0.8)] active:translate-y-px";
+
+const flowGhostButtonClass =
+  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px";
+
+const flowDangerButtonClass =
+  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive hover:shadow-[0_12px_24px_-20px_hsl(var(--destructive)/0.7)] active:translate-y-px";
+
 export function FlowInfo() {
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
   const [stationContents, setStationContents] = useState<StationContent[]>([]);
-  const [systems, setSystems] = useState<any[]>([]);
+  const [systems, setSystems] = useState<unknown[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<TestStation | null>(null);
@@ -107,11 +116,11 @@ export function FlowInfo() {
 
   const getStationColor = (stationOrder: number) => {
     const colors = [
-      'bg-blue-500/10 text-blue-700 border-blue-200',
-      'bg-green-500/10 text-green-700 border-green-200', 
-      'bg-orange-500/10 text-orange-700 border-orange-200',
-      'bg-purple-500/10 text-purple-700 border-purple-200',
-      'bg-red-500/10 text-red-700 border-red-200'
+      'bg-primary/10 text-primary border-primary/30',
+      'bg-indigo-500/10 text-indigo-200 border-indigo-400/25',
+      'bg-amber-500/10 text-amber-200 border-amber-400/25',
+      'bg-violet-500/10 text-violet-200 border-violet-400/25',
+      'bg-rose-500/10 text-rose-200 border-rose-400/25'
     ];
     return colors[stationOrder] || colors[0];
   };
@@ -266,67 +275,111 @@ export function FlowInfo() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">GB300 L10 測試流程說明</h1>
-          <p className="text-muted-foreground">各測試站點詳細流程說明與所需設備清單</p>
+      <div className="overflow-hidden rounded-3xl border border-primary/15 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--secondary)/0.92)_48%,hsl(var(--background))_100%)] p-6 shadow-[0_24px_70px_-48px_hsl(220_50%_2%/0.95)]">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Badge variant="outline" className="mb-3 border-primary/25 bg-primary/10 px-3 py-1 text-primary">
+              L10 Flow Control
+            </Badge>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">GB300 L10 測試流程說明</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
+              各測試站點詳細流程說明與所需設備清單，快速確認站點順序、測項時間與管理入口。
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
+                <Monitor className="mr-1 h-3.5 w-3.5" />
+                {stations.length} 個站點
+              </Badge>
+              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
+                <Settings className="mr-1 h-3.5 w-3.5" />
+                {items.length} 個測項
+              </Badge>
+              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
+                <Clock className="mr-1 h-3.5 w-3.5" />
+                單機 {totalHours.toFixed(1)}h
+              </Badge>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setActiveTab("manage")}
+            className={`h-11 border-primary/25 bg-secondary/75 px-5 hover:border-primary/55 hover:bg-primary/10 hover:text-primary ${flowButtonClass}`}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            管理流程
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setActiveTab("manage")}
-        >
-          <Edit className="h-4 w-4 mr-2" />
-          管理流程
-        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">流程總覽</TabsTrigger>
-          <TabsTrigger value="manage">管理測試項目</TabsTrigger>
+        <TabsList className="grid w-full max-w-md grid-cols-2 rounded-2xl border border-border/70 bg-card/80 p-1 shadow-sm">
+          <TabsTrigger
+            value="overview"
+            className="rounded-xl transition-all duration-200 hover:bg-primary/10 hover:text-primary data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            流程總覽
+          </TabsTrigger>
+          <TabsTrigger
+            value="manage"
+            className="rounded-xl transition-all duration-200 hover:bg-primary/10 hover:text-primary data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            管理測試項目
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
 
       {/* Overview Timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>測試流程總覽</CardTitle>
+      <Card className="overflow-hidden border-primary/15 bg-card/90">
+        <CardHeader className="bg-secondary/35">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>測試流程總覽</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">依站點順序呈現 L10 測試路徑與預估工時。</p>
+            </div>
+            <Badge variant="outline" className="w-fit border-primary/25 bg-primary/10 px-3 py-1 text-primary">
+              {stations.length} stations
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-6">
-            {stations.map((station, index) => (
-              <div key={station.id} className="flex flex-col items-center flex-1">
-                <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${getStationColor(station.station_order)}`}>
-                  {getStationIcon(station.station_name)}
+          <div className="relative">
+            <div className="absolute left-6 right-6 top-8 hidden h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent xl:block" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {stations.map((station, index) => (
+                <div
+                  key={station.id}
+                  className={`relative rounded-2xl border p-4 shadow-[0_16px_40px_-32px_hsl(220_50%_2%/0.9)] backdrop-blur transition-all duration-200 ease-out hover:-translate-y-1 hover:border-primary/45 hover:shadow-[0_22px_48px_-34px_hsl(var(--primary)/0.65)] ${getStationColor(station.station_order)}`}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-current/25 bg-background/40">
+                      {getStationIcon(station.station_name)}
+                    </div>
+                    <span className="rounded-full border border-current/20 bg-background/35 px-2.5 py-1 text-xs font-semibold">
+                      #{index + 1}
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">{station.station_name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{getCalculatedStationHours(station.id)}h estimated</div>
                 </div>
-                <div className="text-sm font-medium mt-2">{station.station_name}</div>
-                <div className="text-xs text-muted-foreground">{getCalculatedStationHours(station.id)}h</div>
-                {index < stations.length - 1 && (
-                  <div className="absolute h-0.5 bg-border" style={{
-                    left: `${(index + 1) * (100 / stations.length)}%`,
-                    width: `${100 / stations.length}%`,
-                    top: '24px'
-                  }} />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">{totalSystems}</div>
-              <div className="text-sm text-muted-foreground">測試系統總數</div>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
+              <div className="text-3xl font-bold text-primary">{totalSystems}</div>
+              <div className="mt-1 text-sm text-muted-foreground">測試系統總數</div>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">{totalHours.toFixed(1)}h</div>
-              <div className="text-sm text-muted-foreground">單機總測試時間</div>
+            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
+              <div className="text-3xl font-bold text-primary">{totalHours.toFixed(1)}h</div>
+              <div className="mt-1 text-sm text-muted-foreground">單機總測試時間</div>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <div className="text-2xl font-bold text-primary">{getEstimatedDays()}</div>
-              <div className="text-sm text-muted-foreground">預計完成天數</div>
+            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
+              <div className="text-3xl font-bold text-primary">{getEstimatedDays()}</div>
+              <div className="mt-1 text-sm text-muted-foreground">預計完成天數</div>
             </div>
           </div>
         </CardContent>
@@ -338,11 +391,16 @@ export function FlowInfo() {
           const stationItems = items.filter(item => item.station_id === station.id);
           
           return (
-            <Card key={station.id} className="overflow-hidden">
-              <CardHeader className={`${getStationColor(station.station_order)} border-b`}>
+            <Card
+              key={station.id}
+              className="overflow-hidden border-border/70 bg-card/90 transition-all duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-[0_24px_64px_-44px_hsl(var(--primary)/0.55)]"
+            >
+              <CardHeader className={`${getStationColor(station.station_order)} border-b border-current/15`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {getStationIcon(station.station_name)}
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-current/25 bg-background/35">
+                      {getStationIcon(station.station_name)}
+                    </div>
                     <div>
                       <CardTitle className="text-xl">{station.station_name}</CardTitle>
                       <p className="text-sm opacity-90">{station.description}</p>
@@ -353,11 +411,11 @@ export function FlowInfo() {
                       variant="ghost"
                       size="sm"
                       onClick={() => openEditStationDialog(station)}
-                      className="opacity-70 hover:opacity-100"
+                      className={`opacity-75 hover:opacity-100 ${flowGhostButtonClass}`}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Badge variant="outline" className="bg-white/80">
+                    <Badge variant="outline" className="border-current/20 bg-background/40">
                       <Clock className="h-3 w-3 mr-1" />
                       {getCalculatedStationHours(station.id)}h
                     </Badge>
@@ -375,10 +433,13 @@ export function FlowInfo() {
                     </h4>
                     <div className="space-y-3">
                       {stationItems.map((item) => (
-                        <div key={item.id} className="border rounded-lg p-3">
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-border/70 bg-secondary/35 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-secondary/55"
+                        >
                           <div className="flex items-center justify-between mb-2">
                             <h5 className="font-medium">{item.item_name}</h5>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-xs text-primary">
                               {item.estimated_minutes}min
                             </Badge>
                           </div>
@@ -396,6 +457,7 @@ export function FlowInfo() {
                          variant="ghost" 
                          size="sm"
                          onClick={() => setActiveTab("content")}
+                         className={flowGhostButtonClass}
                        >
                          <Plus className="h-4 w-4 mr-1" />
                          管理內容
@@ -421,14 +483,14 @@ export function FlowInfo() {
 
         <TabsContent value="manage" className="space-y-6">
           {/* Station Management Section */}
-          <Card>
-            <CardHeader>
+          <Card className="border-primary/15 bg-card/90">
+            <CardHeader className="bg-secondary/30">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
                   站點管理
                 </CardTitle>
-                <Button onClick={handleAddNewStation}>
+                <Button onClick={handleAddNewStation} className={flowButtonClass}>
                   <Plus className="h-4 w-4 mr-2" />
                   新增站點
                 </Button>
@@ -454,12 +516,17 @@ export function FlowInfo() {
                       <TableCell>{station.estimated_hours || 0} 小時</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditNewStation(station)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditNewStation(station)}
+                            className={flowGhostButtonClass}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" className={flowDangerButtonClass}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -471,8 +538,11 @@ export function FlowInfo() {
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteNewStation(station.id)}>
+                                <AlertDialogCancel className={flowButtonClass}>取消</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteNewStation(station.id)}
+                                  className={flowDangerButtonClass}
+                                >
                                   刪除
                                 </AlertDialogAction>
                               </AlertDialogFooter>
@@ -526,10 +596,14 @@ export function FlowInfo() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsStationDialogOpen(false)}
+                className={flowButtonClass}
+              >
                 取消
               </Button>
-              <Button onClick={handleSaveStation}>
+              <Button onClick={handleSaveStation} className={flowButtonClass}>
                 <Save className="h-4 w-4 mr-2" />
                 儲存
               </Button>
@@ -581,10 +655,14 @@ export function FlowInfo() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsNewStationDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsNewStationDialogOpen(false)}
+                className={flowButtonClass}
+              >
                 取消
               </Button>
-              <Button onClick={handleSaveNewStation}>
+              <Button onClick={handleSaveNewStation} className={flowButtonClass}>
                 <Save className="h-4 w-4 mr-2" />
                 儲存
               </Button>
