@@ -665,13 +665,11 @@ export function FlowInfo() {
             </CardContent>
           </Card>
 
-          <div className="rounded-[2rem] border border-violet-200/25 bg-slate-800/85 p-4">
-            <TestItemManager
-              stations={stations}
-              items={items}
-              onDataChange={loadData}
-            />
-          </div>
+          <TestItemManager
+            stations={stations}
+            items={items}
+            onDataChange={loadData}
+          />
         </TabsContent>
       </Tabs>
 
