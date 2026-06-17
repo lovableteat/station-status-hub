@@ -250,11 +250,16 @@ export function TestProgressTable({
                     {system.serial_number || '-'}
                   </div>
                   <div>
-                    <StationStatusSelector
-                      systemId={system.id}
-                      currentStatus={system.current_station || '未開始'}
-                      onUpdate={onSystemUpdate}
-                    />
+                    {(() => {
+                      const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
+                      const variant = result.status === '已完成' ? 'default' : result.status === '進行中' ? 'secondary' : 'outline';
+                      const cls = result.status === '已完成'
+                        ? 'bg-success text-success-foreground'
+                        : result.status === '進行中'
+                          ? 'bg-warning text-warning-foreground'
+                          : 'bg-muted text-muted-foreground';
+                      return <Badge className={cn('h-8 px-3 flex items-center justify-center w-24', cls)}>{result.status}</Badge>;
+                    })()}
                   </div>
                   
                   {filteredStations.map(station => {
