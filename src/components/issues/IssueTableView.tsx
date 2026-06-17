@@ -412,7 +412,10 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         );
       case "station":
         return (
-          <div className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-violet-500/35 bg-violet-500/15 px-2 text-xs font-semibold text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/15 dark:text-violet-100">
+          <div className={cn(
+            "inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold",
+            getStationStyle(issue.station_name)
+          )}>
             {issue.station_name || '-'}
           </div>
         );
