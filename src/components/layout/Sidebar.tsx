@@ -30,7 +30,7 @@ interface SidebarProps {
 
 const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
-  { id: "test-tracker", label: "GB300 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
+  { id: "test-tracker", label: "L10 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
   { id: "flow-info", label: "測試流程說明", icon: FileText, description: "各站流程說明" },
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
