@@ -252,13 +252,12 @@ export function TestProgressTable({
                   <div>
                     {(() => {
                       const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
-                      const variant = result.status === '已完成' ? 'default' : result.status === '進行中' ? 'secondary' : 'outline';
                       const cls = result.status === '已完成'
-                        ? 'bg-success text-success-foreground'
+                        ? 'border-emerald-500/40 bg-emerald-950 text-emerald-200'
                         : result.status === '進行中'
-                          ? 'bg-warning text-warning-foreground'
-                          : 'bg-muted text-muted-foreground';
-                      return <Badge className={cn('h-8 px-3 flex items-center justify-center w-24', cls)}>{result.status}</Badge>;
+                          ? 'border-amber-500/40 bg-amber-950 text-amber-200'
+                          : 'border-slate-500/30 bg-slate-900 text-slate-300';
+                      return <Badge className={cn('h-8 px-3 flex items-center justify-center w-24 border', cls)}>{result.status}</Badge>;
                     })()}
                   </div>
                   
