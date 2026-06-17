@@ -2,13 +2,12 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Clock, Monitor, Cpu, HardDrive, Zap, Settings, Edit, Plus, Save, X, Trash2 } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, Cpu, Gauge, HardDrive, Layers, ListChecks, Monitor, Route, Settings, Edit, Plus, Save, Trash2, Zap } from "lucide-react";
 import { TestItemManager } from "./TestItemManager";
 import { StationContentManager } from "./StationContentManager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -50,12 +49,44 @@ const flowGhostButtonClass =
 const flowDangerButtonClass =
   "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive hover:shadow-[0_12px_24px_-20px_hsl(var(--destructive)/0.7)] active:translate-y-px";
 
+const stationThemes = [
+  {
+    shell: "border-blue-300/45 bg-blue-500/15 text-blue-50 hover:border-blue-200/65 hover:bg-blue-500/20",
+    icon: "border-blue-200/35 bg-blue-400/20 text-blue-100",
+    badge: "border-blue-200/35 bg-blue-400/20 text-blue-100",
+    accent: "text-blue-200",
+    rail: "from-blue-300/80 via-blue-400/45 to-transparent",
+  },
+  {
+    shell: "border-amber-300/45 bg-amber-500/15 text-amber-50 hover:border-amber-200/65 hover:bg-amber-500/20",
+    icon: "border-amber-200/35 bg-amber-400/20 text-amber-100",
+    badge: "border-amber-200/35 bg-amber-400/20 text-amber-100",
+    accent: "text-amber-200",
+    rail: "from-amber-300/80 via-amber-400/45 to-transparent",
+  },
+  {
+    shell: "border-rose-300/45 bg-rose-500/15 text-rose-50 hover:border-rose-200/65 hover:bg-rose-500/20",
+    icon: "border-rose-200/35 bg-rose-400/20 text-rose-100",
+    badge: "border-rose-200/35 bg-rose-400/20 text-rose-100",
+    accent: "text-rose-200",
+    rail: "from-rose-300/80 via-rose-400/45 to-transparent",
+  },
+  {
+    shell: "border-violet-300/45 bg-violet-500/15 text-violet-50 hover:border-violet-200/65 hover:bg-violet-500/20",
+    icon: "border-violet-200/35 bg-violet-400/20 text-violet-100",
+    badge: "border-violet-200/35 bg-violet-400/20 text-violet-100",
+    accent: "text-violet-200",
+    rail: "from-violet-300/80 via-violet-400/45 to-transparent",
+  },
+];
+
 export function FlowInfo() {
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
   const [stationContents, setStationContents] = useState<StationContent[]>([]);
   const [systems, setSystems] = useState<unknown[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<TestStation | null>(null);
   const [stationFormData, setStationFormData] = useState({
@@ -79,6 +110,17 @@ export function FlowInfo() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (stations.length === 0) {
+      setSelectedStationId(null);
+      return;
+    }
+
+    if (!selectedStationId || !stations.some((station) => station.id === selectedStationId)) {
+      setSelectedStationId(stations[0].id);
+    }
+  }, [stations, selectedStationId]);
 
   const loadData = async () => {
     try {
@@ -114,8 +156,8 @@ export function FlowInfo() {
     return <Settings className="h-5 w-5" />;
   };
 
-  const getStationColor = (_stationOrder: number) => {
-    return "border-border/75 bg-secondary/55 text-foreground";
+  const getStationTheme = (index: number) => {
+    return stationThemes[index % stationThemes.length];
   };
 
   const handleSaveStation = async () => {
@@ -267,223 +309,296 @@ export function FlowInfo() {
     return Math.floor(8 / bottleneckHours) || 1;
   };
 
+  const selectedStation = stations.find((station) => station.id === selectedStationId) || stations[0];
+  const selectedStationIndex = selectedStation ? stations.findIndex((station) => station.id === selectedStation.id) : -1;
+  const selectedStationTheme = getStationTheme(Math.max(selectedStationIndex, 0));
+  const selectedStationItems = selectedStation
+    ? items
+        .filter((item) => item.station_id === selectedStation.id)
+        .sort((a, b) => a.item_order - b.item_order)
+    : [];
+  const selectedStationContents = selectedStation
+    ? stationContents.filter((content) => content.station_id === selectedStation.id)
+    : [];
+
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      {/* Header */}
-      <div className="overflow-hidden rounded-3xl border border-border/75 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--secondary)/0.94)_55%,hsl(var(--background))_100%)] p-6 shadow-[0_24px_70px_-48px_hsl(220_50%_2%/0.95)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-5 p-4 sm:p-6">
+      <div className="overflow-hidden rounded-[2rem] border border-blue-200/25 bg-[radial-gradient(circle_at_12%_18%,hsl(221_83%_63%/0.24),transparent_34%),linear-gradient(135deg,hsl(222_32%_18%)_0%,hsl(220_30%_15%)_48%,hsl(224_42%_11%)_100%)] p-5 shadow-[0_28px_80px_-48px_hsl(220_50%_2%/0.95)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-3 border-primary/30 bg-primary/10 px-3 py-1 text-primary">
-              L10 流程控制
+            <Badge variant="outline" className="mb-3 border-blue-200/35 bg-blue-400/15 px-3 py-1 text-blue-100">
+              <Route className="mr-1 h-3.5 w-3.5" />
+              L10 Flow Cockpit
             </Badge>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">GB300 L10 測試流程說明</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-              各測試站點詳細流程說明與所需設備清單，快速確認站點順序、測項時間與管理入口。
+            <h1 className="text-3xl font-bold tracking-tight text-slate-50 sm:text-4xl">GB300 L10 測試流程說明</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-300 sm:text-base">
+              改成一屏掌握站點、工時與測項；點選站點即可查看詳細內容，不需要一路往下滑找資料。
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
-                <Monitor className="mr-1 h-3.5 w-3.5" />
-                {stations.length} 個站點
-              </Badge>
-              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
-                <Settings className="mr-1 h-3.5 w-3.5" />
-                {items.length} 個測項
-              </Badge>
-              <Badge variant="secondary" className="border border-border/70 bg-secondary/80 px-3 py-1">
-                <Clock className="mr-1 h-3.5 w-3.5" />
-                單機 {totalHours.toFixed(1)}h
-              </Badge>
-            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setActiveTab("manage")}
-            className={`h-11 border-primary/25 bg-secondary/75 px-5 hover:border-primary/55 hover:bg-primary/10 hover:text-primary ${flowButtonClass}`}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            管理流程
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setActiveTab("overview")}
+              className={`h-11 border-blue-200/35 bg-blue-400/15 px-5 text-blue-50 hover:border-blue-100/60 hover:bg-blue-400/25 ${flowButtonClass}`}
+            >
+              <Route className="mr-2 h-4 w-4" />
+              查看流程
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setActiveTab("manage")}
+              className={`h-11 border-amber-200/35 bg-amber-400/15 px-5 text-amber-50 hover:border-amber-100/60 hover:bg-amber-400/25 ${flowButtonClass}`}
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              管理流程
+            </Button>
+          </div>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2 rounded-2xl border border-border/70 bg-card/80 p-1 shadow-sm">
+        <TabsList className="grid w-full max-w-md grid-cols-2 rounded-2xl border border-slate-500/45 bg-slate-800/80 p-1 shadow-sm">
           <TabsTrigger
             value="overview"
-            className="rounded-xl transition-all duration-200 hover:bg-primary/10 hover:text-primary data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+            className="rounded-xl transition-all duration-200 hover:bg-blue-400/15 hover:text-blue-100 data-[state=active]:bg-blue-400/20 data-[state=active]:text-blue-50 data-[state=active]:shadow-sm"
           >
             流程總覽
           </TabsTrigger>
           <TabsTrigger
             value="manage"
-            className="rounded-xl transition-all duration-200 hover:bg-primary/10 hover:text-primary data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+            className="rounded-xl transition-all duration-200 hover:bg-amber-400/15 hover:text-amber-100 data-[state=active]:bg-amber-400/20 data-[state=active]:text-amber-50 data-[state=active]:shadow-sm"
           >
             管理測試項目
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-
-      {/* Overview Timeline */}
-      <Card className="overflow-hidden border-primary/15 bg-card/90">
-        <CardHeader className="bg-secondary/35">
-          <div className="relative flex flex-col items-center gap-2 text-center sm:min-h-10 sm:justify-center">
-            <div>
-              <CardTitle>測試流程總覽</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">依站點順序呈現 L10 測試路徑與預估工時。</p>
-            </div>
-            <Badge variant="outline" className="w-fit border-primary/25 bg-primary/10 px-3 py-1 text-primary sm:absolute sm:right-0 sm:top-1/2 sm:-translate-y-1/2">
-              {stations.length} 個站點
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <div className="absolute left-6 right-6 top-8 hidden h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent xl:block" />
-            <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {stations.map((station, index) => (
-                <div
-                  key={station.id}
-                  className={`relative rounded-2xl border p-4 shadow-[0_16px_40px_-32px_hsl(220_50%_2%/0.9)] backdrop-blur transition-all duration-200 ease-out hover:-translate-y-1 hover:border-primary/40 hover:bg-secondary/70 hover:shadow-[0_22px_48px_-34px_hsl(var(--primary)/0.55)] ${getStationColor(station.station_order)}`}
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                      {getStationIcon(station.station_name)}
-                    </div>
-                    <span className="rounded-full border border-border/70 bg-background/35 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                      #{index + 1}
-                    </span>
-                  </div>
-                  <div className="text-sm font-semibold text-foreground">{station.station_name}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{getCalculatedStationHours(station.id)}h estimated</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
-              <div className="text-3xl font-bold text-primary">{totalSystems}</div>
-              <div className="mt-1 text-sm text-muted-foreground">測試系統總數</div>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
-              <div className="text-3xl font-bold text-primary">{totalHours.toFixed(1)}h</div>
-              <div className="mt-1 text-sm text-muted-foreground">單機總測試時間</div>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-secondary/45 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/65 hover:shadow-[0_18px_36px_-30px_hsl(var(--primary)/0.65)]">
-              <div className="text-3xl font-bold text-primary">{getEstimatedDays()}</div>
-              <div className="mt-1 text-sm text-muted-foreground">預計完成天數</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Detailed Station Information - Remove hardcoded details */}
-      <div className="space-y-6">
-        {stations.map((station) => {
-          const stationItems = items.filter(item => item.station_id === station.id);
-          
-          return (
-            <Card
-              key={station.id}
-              className="overflow-hidden border-border/70 bg-card/90 transition-all duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-[0_24px_64px_-44px_hsl(var(--primary)/0.55)]"
-            >
-              <CardHeader className={`${getStationColor(station.station_order)} border-b border-border/70`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                      {getStationIcon(station.station_name)}
+        <TabsContent value="overview" className="mt-5 space-y-5">
+          <section className="overflow-hidden rounded-[2rem] border border-slate-500/45 bg-slate-800/85 shadow-[0_22px_70px_-44px_hsl(220_50%_2%/0.9)]">
+            <div className="border-b border-slate-500/35 bg-slate-700/55 p-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-blue-200/30 bg-blue-400/15 text-blue-100">
+                      <Layers className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl">{station.station_name}</CardTitle>
-                      <p className="text-sm opacity-90">{station.description}</p>
+                      <h2 className="text-2xl font-semibold text-slate-50">測試流程總覽</h2>
+                      <p className="mt-1 text-sm text-slate-300">站點、工時、測項與流程內容集中在同一個工作區。</p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditStationDialog(station)}
-                      className={`opacity-75 hover:opacity-100 ${flowGhostButtonClass}`}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {getCalculatedStationHours(station.id)}h
-                    </Badge>
                   </div>
                 </div>
-              </CardHeader>
-              
-              <CardContent className="pt-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Left Column - Test Items */}
-                  <div>
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      測試項目
-                    </h4>
-                    <div className="space-y-3">
-                      {stationItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-border/70 bg-secondary/35 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-secondary/55"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="font-medium">{item.item_name}</h5>
-                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-xs text-primary">
-                              {item.estimated_minutes}min
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                        </div>
-                      ))}
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:min-w-[680px]">
+                  <div className="rounded-2xl border border-blue-200/30 bg-blue-500/15 p-4">
+                    <Monitor className="mb-3 h-4 w-4 text-blue-100" />
+                    <div className="text-2xl font-bold text-blue-50">{totalSystems}</div>
+                    <div className="text-xs text-blue-100/75">測試系統</div>
+                  </div>
+                  <div className="rounded-2xl border border-violet-200/30 bg-violet-500/15 p-4">
+                    <ListChecks className="mb-3 h-4 w-4 text-violet-100" />
+                    <div className="text-2xl font-bold text-violet-50">{items.length}</div>
+                    <div className="text-xs text-violet-100/75">測試項目</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200/30 bg-amber-500/15 p-4">
+                    <Clock className="mb-3 h-4 w-4 text-amber-100" />
+                    <div className="text-2xl font-bold text-amber-50">{totalHours.toFixed(1)}h</div>
+                    <div className="text-xs text-amber-100/75">單機總時數</div>
+                  </div>
+                  <div className="rounded-2xl border border-rose-200/30 bg-rose-500/15 p-4">
+                    <CalendarDays className="mb-3 h-4 w-4 text-rose-100" />
+                    <div className="text-2xl font-bold text-rose-50">{getEstimatedDays()}</div>
+                    <div className="text-xs text-rose-100/75">預計天數</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
+              <div className="space-y-5">
+                <div className="rounded-3xl border border-slate-500/40 bg-slate-900/35 p-4">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-50">站點路徑</h3>
+                      <p className="text-sm text-slate-300">點選站點，右側會切換成該站的測項與流程內容。</p>
                     </div>
+                    <Badge variant="outline" className="w-fit border-blue-200/30 bg-blue-400/15 px-3 py-1 text-blue-100">
+                      {stations.length} 個站點
+                    </Badge>
                   </div>
 
-                   {/* Right Column - Station Details from station_contents */}
-                   <div>
-                     <h4 className="font-semibold mb-4 flex items-center justify-between">
-                       站點詳細資訊
-                       <Button 
-                         variant="ghost" 
-                         size="sm"
-                         onClick={() => setActiveTab("content")}
-                         className={flowGhostButtonClass}
-                       >
-                         <Plus className="h-4 w-4 mr-1" />
-                         管理內容
-                       </Button>
-                     </h4>
-                     
-                     {/* Station Content Manager */}
-                     <StationContentManager
-                       stationId={station.id}
-                       stationName={station.station_name}
-                       contents={stationContents.filter(c => c.station_id === station.id)}
-                       onUpdate={loadData}
-                     />
-                   </div>
-                 </div>
-               </CardContent>
-             </Card>
-           );
-         })}
-       </div>
+                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
+                    {stations.map((station, index) => {
+                      const theme = getStationTheme(index);
+                      const isSelected = selectedStation?.id === station.id;
+                      const stationItemCount = items.filter((item) => item.station_id === station.id).length;
 
+                      return (
+                        <button
+                          key={station.id}
+                          type="button"
+                          onClick={() => setSelectedStationId(station.id)}
+                          className={`group relative min-h-[168px] rounded-3xl border p-4 text-left shadow-[0_20px_42px_-34px_hsl(220_50%_2%/0.9)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_28px_58px_-38px_hsl(220_50%_2%/0.95)] ${theme.shell} ${isSelected ? "ring-2 ring-blue-100/55" : ""}`}
+                        >
+                          <div className={`mb-5 h-1.5 rounded-full bg-gradient-to-r ${theme.rail}`} />
+                          <div className="flex items-start justify-between gap-3">
+                            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${theme.icon}`}>
+                              {getStationIcon(station.station_name)}
+                            </div>
+                            <Badge variant="outline" className={`text-xs ${theme.badge}`}>
+                              #{index + 1}
+                            </Badge>
+                          </div>
+                          <div className="mt-5">
+                            <div className="line-clamp-2 text-base font-semibold text-slate-50">{station.station_name}</div>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                              <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-slate-200">
+                                {getCalculatedStationHours(station.id)}h
+                              </span>
+                              <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-slate-200">
+                                {stationItemCount} 測項
+                              </span>
+                            </div>
+                          </div>
+                          <ArrowRight className={`absolute bottom-4 right-4 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1 ${theme.accent}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-3xl border border-blue-200/30 bg-blue-500/15 p-5">
+                    <Gauge className="mb-3 h-5 w-5 text-blue-100" />
+                    <div className="text-2xl font-bold text-blue-50">{getDailyThroughput()}</div>
+                    <div className="text-sm text-blue-100/75">預估日產能</div>
+                  </div>
+                  <div className="rounded-3xl border border-amber-200/30 bg-amber-500/15 p-5">
+                    <Clock className="mb-3 h-5 w-5 text-amber-100" />
+                    <div className="text-2xl font-bold text-amber-50">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
+                    <div className="text-sm text-amber-100/75">瓶頸站點工時</div>
+                  </div>
+                  <div className="rounded-3xl border border-violet-200/30 bg-violet-500/15 p-5">
+                    <Route className="mb-3 h-5 w-5 text-violet-100" />
+                    <div className="text-2xl font-bold text-violet-50">{selectedStationIndex + 1 || "-"}</div>
+                    <div className="text-sm text-violet-100/75">目前查看站點</div>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="space-y-5">
+                {selectedStation ? (
+                  <>
+                    <div className={`rounded-3xl border p-5 ${selectedStationTheme.shell}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${selectedStationTheme.icon}`}>
+                            {getStationIcon(selectedStation.station_name)}
+                          </div>
+                          <div>
+                            <Badge variant="outline" className={`mb-2 ${selectedStationTheme.badge}`}>
+                              Station {selectedStationIndex + 1}
+                            </Badge>
+                            <h3 className="text-xl font-semibold text-slate-50">{selectedStation.station_name}</h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-200/85">
+                              {selectedStation.description || "尚未填寫站點描述。"}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditStationDialog(selectedStation)}
+                          className={`shrink-0 border-white/20 bg-white/10 text-slate-50 hover:bg-white/15 ${flowGhostButtonClass}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                          <div className="text-xs text-slate-300">站點工時</div>
+                          <div className="mt-1 text-xl font-bold text-slate-50">{getCalculatedStationHours(selectedStation.id)}h</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                          <div className="text-xs text-slate-300">測項數量</div>
+                          <div className="mt-1 text-xl font-bold text-slate-50">{selectedStationItems.length}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-500/45 bg-slate-700/55 p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-slate-50">測試項目</h3>
+                          <p className="text-sm text-slate-300">只顯示目前站點，避免整頁拉太長。</p>
+                        </div>
+                        <Badge variant="outline" className="border-violet-200/30 bg-violet-400/15 text-violet-100">
+                          {selectedStationItems.length} items
+                        </Badge>
+                      </div>
+                      <div className="max-h-[330px] space-y-3 overflow-y-auto pr-1">
+                        {selectedStationItems.length > 0 ? (
+                          selectedStationItems.map((item) => (
+                            <div key={item.id} className="rounded-2xl border border-slate-500/40 bg-slate-800/75 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-slate-50">{item.item_name}</div>
+                                  <p className="mt-1 text-xs leading-5 text-slate-300">{item.description || "尚未填寫測項描述。"}</p>
+                                </div>
+                                <Badge variant="outline" className="shrink-0 border-amber-200/30 bg-amber-400/15 text-xs text-amber-100">
+                                  {item.estimated_minutes}min
+                                </Badge>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-slate-500/45 bg-slate-800/55 p-6 text-center text-sm text-slate-300">
+                            此站點尚未新增測試項目。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-500/45 bg-slate-800/70 p-8 text-center text-slate-300">
+                    尚未建立站點資料。
+                  </div>
+                )}
+              </aside>
+            </div>
+
+            {selectedStation && (
+              <div className="border-t border-slate-500/35 bg-slate-900/25 p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-rose-200/30 bg-rose-400/15 text-rose-100">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-50">流程內容管理</h3>
+                    <p className="text-sm text-slate-300">目前只展開 {selectedStation.station_name} 的內容。</p>
+                  </div>
+                </div>
+                <div className="max-h-[430px] overflow-y-auto pr-1 [&>div]:border-slate-500/45 [&>div]:bg-slate-800/80">
+                  <StationContentManager
+                    stationId={selectedStation.id}
+                    stationName={selectedStation.station_name}
+                    contents={selectedStationContents}
+                    onUpdate={loadData}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
         </TabsContent>
 
-        <TabsContent value="manage" className="space-y-6">
-          {/* Station Management Section */}
-          <Card className="border-primary/15 bg-card/90">
-            <CardHeader className="bg-secondary/30">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
+        <TabsContent value="manage" className="mt-5 space-y-5">
+          <Card className="overflow-hidden border-amber-200/25 bg-slate-800/85">
+            <CardHeader className="bg-amber-500/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="flex items-center gap-2 text-slate-50">
+                  <Settings className="h-5 w-5 text-amber-100" />
                   站點管理
                 </CardTitle>
-                <Button onClick={handleAddNewStation} className={flowButtonClass}>
+                <Button onClick={handleAddNewStation} className={`bg-amber-400/20 text-amber-50 hover:bg-amber-400/30 ${flowButtonClass}`}>
                   <Plus className="h-4 w-4 mr-2" />
                   新增站點
                 </Button>
@@ -550,12 +665,13 @@ export function FlowInfo() {
             </CardContent>
           </Card>
 
-          {/* Test Items Management Section */}
-          <TestItemManager 
-            stations={stations} 
-            items={items} 
-            onDataChange={loadData}
-          />
+          <div className="rounded-[2rem] border border-violet-200/25 bg-slate-800/85 p-4">
+            <TestItemManager
+              stations={stations}
+              items={items}
+              onDataChange={loadData}
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
