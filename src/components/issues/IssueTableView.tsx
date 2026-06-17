@@ -114,21 +114,6 @@ const PRIORITY_STYLES: Record<IssuePriority, { trigger: string; rank: string; it
   },
 };
 
-const STATION_STYLES = [
-  "border-amber-500/40 bg-amber-950 text-amber-200",
-  "border-emerald-500/40 bg-emerald-950 text-emerald-200",
-  "border-red-500/40 bg-red-950 text-red-200",
-];
-
-function getStationStyle(name: string) {
-  if (!name) return "border-slate-500/30 bg-slate-900 text-slate-300";
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const idx = Math.abs(hash) % STATION_STYLES.length;
-  return STATION_STYLES[idx];
-}
 
 export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
@@ -428,12 +413,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         );
       case "station":
         return (
-          <div className={cn(
-            "inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold",
-            getStationStyle(issue.station_name)
-          )}>
-            {issue.station_name || '-'}
-          </div>
+          <div className="text-sm">{issue.station_name || '-'}</div>
         );
       case "category":
         return <div className="text-sm">{issue.category || '-'}</div>;
