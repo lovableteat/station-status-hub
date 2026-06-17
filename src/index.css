@@ -11,22 +11,22 @@ All colors MUST be HSL for proper theming support.
     /* Matte Navy + Cobalt palette */
     --background: 222 47% 7%;
     --foreground: 218 38% 94%;
-    --card: 221 36% 12%;
+    --card: 221 36% 13%;
     --card-foreground: 218 38% 94%;
     --popover: 221 34% 13%;
     --popover-foreground: 218 38% 94%;
     --primary: 221 83% 63%;
     --primary-foreground: 222 47% 7%;
-    --secondary: 220 28% 17%;
+    --secondary: 220 28% 18%;
     --secondary-foreground: 218 38% 94%;
-    --muted: 220 28% 17%;
-    --muted-foreground: 218 18% 68%;
-    --accent: 220 28% 17%;
+    --muted: 220 28% 18%;
+    --muted-foreground: 218 22% 78%;
+    --accent: 220 28% 18%;
     --accent-foreground: 221 92% 76%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 63% 7%;
-    --border: 215 37% 21%;
-    --input: 215 37% 21%;
+    --border: 218 28% 29%;
+    --input: 218 28% 32%;
     --ring: 221 83% 63%;
     --radius: 0.75rem;
 
@@ -82,7 +82,7 @@ All colors MUST be HSL for proper theming support.
 
     --sidebar-accent-foreground: 221 92% 76%;
 
-    --sidebar-border: 220 22% 25%;
+    --sidebar-border: 220 22% 30%;
 
     --sidebar-ring: 221 83% 63%;
   }
@@ -91,22 +91,22 @@ All colors MUST be HSL for proper theming support.
     /* Dark mode colors - Matte Navy + Cobalt */
     --background: 222 50% 6%;
     --foreground: 218 38% 94%;
-    --card: 221 38% 10%;
+    --card: 221 38% 12%;
     --card-foreground: 218 38% 94%;
     --popover: 221 36% 11%;
     --popover-foreground: 218 38% 94%;
     --primary: 221 83% 63%;
     --primary-foreground: 222 50% 6%;
-    --secondary: 220 29% 15%;
+    --secondary: 220 29% 17%;
     --secondary-foreground: 218 38% 94%;
-    --muted: 220 29% 15%;
-    --muted-foreground: 218 18% 68%;
-    --accent: 220 29% 15%;
+    --muted: 220 29% 17%;
+    --muted-foreground: 218 22% 78%;
+    --accent: 220 29% 17%;
     --accent-foreground: 221 92% 76%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 68% 6%;
-    --border: 215 36% 20%;
-    --input: 215 36% 20%;
+    --border: 218 27% 28%;
+    --input: 218 27% 31%;
     --ring: 221 83% 63%;
     
     /* Dark mode status colors */
@@ -141,7 +141,7 @@ All colors MUST be HSL for proper theming support.
     --sidebar-primary-foreground: 222 50% 6%;
     --sidebar-accent: 220 29% 15%;
     --sidebar-accent-foreground: 221 92% 76%;
-    --sidebar-border: 220 23% 23%;
+    --sidebar-border: 220 23% 29%;
     --sidebar-ring: 221 83% 63%;
   }
 }

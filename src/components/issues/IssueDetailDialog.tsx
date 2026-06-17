@@ -36,20 +36,20 @@ interface IssueDetailDialogProps {
 export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetailDialogProps) {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "critical": return "bg-destructive text-destructive-foreground";
-      case "high": return "bg-red-500/10 text-red-700 dark:text-red-400";
-      case "medium": return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
-      case "low": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      case "critical": return "border-red-400/60 bg-red-500/20 text-red-100";
+      case "high": return "border-orange-400/55 bg-orange-500/20 text-orange-100";
+      case "medium": return "border-amber-400/50 bg-amber-500/15 text-amber-100";
+      case "low": return "border-primary/45 bg-primary/15 text-primary";
       default: return "bg-muted text-muted-foreground";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "open": return "bg-destructive/10 text-destructive";
-      case "in_progress": return "bg-blue-500/10 text-blue-700 dark:text-blue-400";
+      case "open": return "border-destructive/40 bg-destructive/15 text-red-100";
+      case "in_progress": return "border-amber-400/35 bg-amber-500/15 text-amber-100";
       case "resolved":
-      case "closed": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      case "closed": return "border-primary/35 bg-primary/15 text-primary";
       default: return "bg-muted text-muted-foreground";
     }
   };
@@ -198,7 +198,7 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
               <Separator />
               <div>
                 <label className="text-sm font-medium text-muted-foreground">解決方案</label>
-                <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800">
+                <div className="mt-2 rounded-md border border-primary/20 bg-primary/10 p-3">
                   <div 
                     className="text-sm prose prose-sm max-w-none dark:prose-invert"
                     dangerouslySetInnerHTML={{ __html: issue.solution }}
