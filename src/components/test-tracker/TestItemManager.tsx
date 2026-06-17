@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TestStation {
@@ -183,12 +183,16 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">測試項目管理</h3>
+    <Card className="overflow-hidden border-violet-200/25 bg-slate-800/85">
+      <CardHeader className="bg-violet-500/10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2 text-slate-50">
+            <ListChecks className="h-5 w-5 text-violet-100" />
+            測試項目管理
+          </CardTitle>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openAddDialog}>
+            <Button onClick={openAddDialog} className="bg-violet-400/20 text-violet-50 hover:bg-violet-400/30">
               <Plus className="h-4 w-4 mr-2" />
               新增測試項目
             </Button>
@@ -265,8 +269,10 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+        </div>
+      </CardHeader>
 
+      <CardContent>
       <div className="space-y-4">
         {stations
           .sort((a, b) => a.station_order - b.station_order)
@@ -277,27 +283,27 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
             const isExpanded = expandedStations.has(station.id);
             
             return (
-              <Card key={station.id} className="overflow-hidden">
+              <Card key={station.id} className="overflow-hidden border-slate-500/45 bg-slate-900/35">
                 <Collapsible 
                   open={isExpanded} 
                   onOpenChange={() => toggleStationExpanded(station.id)}
                 >
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <CardHeader className="cursor-pointer border-b-0 bg-slate-800/65 transition-colors hover:bg-violet-500/10">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
+                            <ChevronDown className="h-4 w-4 text-violet-100" />
                           ) : (
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4 text-violet-100" />
                           )}
-                          <CardTitle className="text-lg">{station.station_name}</CardTitle>
+                          <CardTitle className="text-lg text-slate-50">{station.station_name}</CardTitle>
                         </div>
                         <div className="flex items-center gap-4">
-                          <Badge variant="secondary" className="text-sm">
+                          <Badge variant="secondary" className="border border-violet-200/25 bg-violet-400/15 text-sm text-violet-100">
                             {itemsCount} 個項目
                           </Badge>
-                          <Badge variant="outline" className="text-sm">
+                          <Badge variant="outline" className="border-slate-400/35 bg-slate-700/70 text-sm text-slate-200">
                             {Math.round(totalMinutes / 60 * 10) / 10}小時
                           </Badge>
                         </div>
@@ -309,24 +315,24 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                     <CardContent className="pt-0">
                       <div className="space-y-3">
                         {stationItems.length === 0 ? (
-                          <p className="text-muted-foreground text-center py-8">
+                          <p className="text-center text-slate-300 py-8">
                             此站點尚無測試項目
                           </p>
                         ) : (
                           stationItems.map(item => (
-                            <div key={item.id} className="border rounded-lg p-4 bg-muted/20">
+                            <div key={item.id} className="rounded-2xl border border-slate-500/40 bg-slate-800/70 p-4">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
-                                    <h4 className="font-medium">{item.item_name}</h4>
-                                    <Badge variant="outline" className="text-xs">
+                                    <h4 className="font-medium text-slate-50">{item.item_name}</h4>
+                                    <Badge variant="outline" className="border-violet-200/25 bg-violet-400/15 text-xs text-violet-100">
                                       順序 {item.item_order}
                                     </Badge>
-                                    <Badge variant="secondary" className="text-xs">
+                                    <Badge variant="secondary" className="border border-blue-200/25 bg-blue-400/15 text-xs text-blue-100">
                                       {item.estimated_minutes || 30} 分鐘
                                     </Badge>
                                   </div>
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="text-sm text-slate-300">
                                     {item.description || '無描述'}
                                   </p>
                                 </div>
@@ -335,6 +341,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                                     variant="ghost" 
                                     size="sm"
                                     onClick={() => openEditDialog(item)}
+                                    className="hover:bg-violet-400/15 hover:text-violet-100"
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -342,6 +349,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                                     variant="ghost" 
                                     size="sm"
                                     onClick={() => handleDelete(item.id)}
+                                    className="hover:bg-destructive/10 hover:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -359,6 +367,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
           })
         }
       </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
