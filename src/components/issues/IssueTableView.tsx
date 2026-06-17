@@ -90,6 +90,17 @@ const COLUMN_META: Record<ColumnKey, { label: string; width: string; sortable?: 
   actions: { label: "操作", width: "w-[148px]" },
 };
 
+const CENTERED_COLUMNS: ColumnKey[] = [
+  "priority",
+  "status",
+  "assigned_to",
+  "station",
+  "category",
+  "attachments",
+  "created_at",
+  "actions",
+];
+
 const ACTION_BUTTON_CLASS =
   "h-8 border-border/80 bg-secondary/70 px-2.5 text-xs text-foreground/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10 hover:text-primary hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px";
 
@@ -336,6 +347,8 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     }
   };
 
+  const isCenteredColumn = (key: ColumnKey) => CENTERED_COLUMNS.includes(key);
+
   const renderCell = (key: ColumnKey, issue: Issue & { effectivePriority: IssuePriority }) => {
     switch (key) {
       case "system":
@@ -356,54 +369,58 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         );
       case "priority":
         return (
-          <Select
-            value={issue.effectivePriority}
-            onValueChange={(v) => handleInlinePriorityChange(issue.id, v as IssuePriority)}
-          >
-            <SelectTrigger
-              className={cn(
-                "h-8 w-[108px] justify-center gap-1.5 rounded-xl border px-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px [&>svg]:ml-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-75",
-                getPriorityColor(issue.effectivePriority)
-              )}
+          <div className="flex justify-center">
+            <Select
+              value={issue.effectivePriority}
+              onValueChange={(v) => handleInlinePriorityChange(issue.id, v as IssuePriority)}
             >
-              <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-current">
-                {PRIORITY_STYLES[issue.effectivePriority].rank}
-              </span>
-              <span className="leading-none">{getPriorityText(issue.effectivePriority)}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="low">
-                <span className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.low.itemDot)} />
-                  <span>{getPriorityText("low")}</span>
+              <SelectTrigger
+                className={cn(
+                  "h-8 w-[108px] justify-center gap-1.5 rounded-xl border px-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px [&>svg]:ml-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-75",
+                  getPriorityColor(issue.effectivePriority)
+                )}
+              >
+                <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-current">
+                  {PRIORITY_STYLES[issue.effectivePriority].rank}
                 </span>
-              </SelectItem>
-              <SelectItem value="medium">
-                <span className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.medium.itemDot)} />
-                  <span>{getPriorityText("medium")}</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="high">
-                <span className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.high.itemDot)} />
-                  <span>{getPriorityText("high")}</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="critical">
-                <span className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.critical.itemDot)} />
-                  <span>{getPriorityText("critical")}</span>
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+                <span className="leading-none">{getPriorityText(issue.effectivePriority)}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">
+                  <span className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.low.itemDot)} />
+                    <span>{getPriorityText("low")}</span>
+                  </span>
+                </SelectItem>
+                <SelectItem value="medium">
+                  <span className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.medium.itemDot)} />
+                    <span>{getPriorityText("medium")}</span>
+                  </span>
+                </SelectItem>
+                <SelectItem value="high">
+                  <span className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.high.itemDot)} />
+                    <span>{getPriorityText("high")}</span>
+                  </span>
+                </SelectItem>
+                <SelectItem value="critical">
+                  <span className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.critical.itemDot)} />
+                    <span>{getPriorityText("critical")}</span>
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         );
       case "status":
         return (
-          <Badge variant="outline" className={getStatusColor(issue.status)}>
-            {getStatusText(issue.status)}
-          </Badge>
+          <div className="flex justify-center">
+            <Badge variant="outline" className={getStatusColor(issue.status)}>
+              {getStatusText(issue.status)}
+            </Badge>
+          </div>
         );
       case "assigned_to":
         return inlineEditingAssignee === issue.id ? (
@@ -424,31 +441,35 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
         );
       case "station":
         return (
-          <div className="text-sm">{issue.station_name || '-'}</div>
+          <div className="text-center text-sm">{issue.station_name || '-'}</div>
         );
       case "category":
-        return <div className="text-sm">{issue.category || '-'}</div>;
+        return <div className="text-center text-sm">{issue.category || '-'}</div>;
       case "attachments":
-        return issue.attachments && issue.attachments.length > 0 ? (
-          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => {
-            setAttachmentPreview(issue.attachments || []);
-            setAttachmentDialogOpen(true);
-          }}>
-            <ImageIcon className="h-4 w-4 mr-1" />
-            <span className="text-xs">{issue.attachments.length}</span>
-          </Button>
-        ) : (
-          <span className="text-muted-foreground text-xs">-</span>
+        return (
+          <div className="flex justify-center">
+            {issue.attachments && issue.attachments.length > 0 ? (
+              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => {
+                setAttachmentPreview(issue.attachments || []);
+                setAttachmentDialogOpen(true);
+              }}>
+                <ImageIcon className="h-4 w-4 mr-1" />
+                <span className="text-xs">{issue.attachments.length}</span>
+              </Button>
+            ) : (
+              <span className="text-muted-foreground text-xs">-</span>
+            )}
+          </div>
         );
       case "created_at":
         return (
-          <div className="text-xs text-muted-foreground">
+          <div className="text-center text-xs text-muted-foreground">
             {new Date(issue.created_at).toLocaleDateString('zh-TW')}
           </div>
         );
       case "actions":
         return (
-          <div className="flex gap-1">
+          <div className="flex justify-center gap-1">
             <Button variant="outline" size="sm" onClick={() => handleView(issue)} className={ACTION_BUTTON_CLASS} title="查看">
               <Eye className="h-4 w-4" />
               查看
@@ -497,6 +518,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                       className={cn(
                         meta.width,
                         "group select-none transition-all duration-200",
+                        isCenteredColumn(key) && "text-center",
                         draggingColumn === key && "bg-primary/10 text-primary",
                         dragOverColumn === key && "bg-primary/15 text-primary ring-1 ring-inset ring-primary/35"
                       )}
@@ -510,7 +532,12 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                       onDragLeave={() => setDragOverColumn(null)}
                       onDrop={() => handleDrop(key)}
                     >
-                      <div className="flex items-center gap-2 rounded-xl border border-transparent px-2 py-1.5 transition-all duration-200 group-hover:cursor-grab group-hover:border-primary/25 group-hover:bg-primary/10 group-hover:text-primary group-active:cursor-grabbing">
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl border border-transparent px-2 py-1.5 transition-all duration-200 group-hover:cursor-grab group-hover:border-primary/25 group-hover:bg-primary/10 group-hover:text-primary group-active:cursor-grabbing",
+                          isCenteredColumn(key) && "justify-center"
+                        )}
+                      >
                         <GripVertical className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
                         {meta.sortable ? (
                           <Button variant="ghost" className="h-7 px-1 text-foreground/80 hover:text-primary" onClick={() => handleSort(meta.sortable!)}>
@@ -529,7 +556,12 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
               {paginatedIssues.map((issue) => (
                 <TableRow key={issue.id}>
                   {columnOrder.map((key) => (
-                    <TableCell key={key}>{renderCell(key, issue)}</TableCell>
+                    <TableCell
+                      key={key}
+                      className={cn(isCenteredColumn(key) && "text-center")}
+                    >
+                      {renderCell(key, issue)}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))}
