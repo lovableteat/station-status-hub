@@ -17,7 +17,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-xl border border-border/75 bg-background/70 px-3 py-2 text-sm shadow-sm ring-offset-background backdrop-blur placeholder:text-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-xl border border-input/95 bg-secondary/70 px-3 py-2 text-sm text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04),0_10px_28px_-24px_hsl(220_50%_2%/0.9)] ring-offset-background backdrop-blur placeholder:text-muted-foreground transition-all duration-200 hover:border-primary/35 hover:bg-secondary/90 focus:border-primary/70 focus:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring/35 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className
     )}
     {...props}
@@ -112,9 +112,9 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => {
+>(({ className, children, value, disabled, ...props }, ref) => {
   // Coerce empty or missing value to a safe non-empty string to satisfy Radix Select
-  const rawValue = (props as any).value as string | undefined
+  const rawValue = value
   const isEmpty = !rawValue || rawValue.trim() === ""
   const childText = typeof children === "string" ? children : ""
   const safeValue = isEmpty
@@ -122,7 +122,6 @@ const SelectItem = React.forwardRef<
     : rawValue!
 
   if (isEmpty) {
-    // eslint-disable-next-line no-console
     console.warn(
       "[UI SelectItem] Empty value detected; coerced to non-empty to avoid Radix runtime error.",
       { childText }
@@ -133,7 +132,7 @@ const SelectItem = React.forwardRef<
     <SelectPrimitive.Item
       ref={ref}
       {...props}
-      disabled={props.disabled ?? isEmpty}
+      disabled={disabled ?? isEmpty}
       value={safeValue}
       className={cn(
         "relative flex w-full cursor-default select-none items-center rounded-lg py-2 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-primary/10 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
