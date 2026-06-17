@@ -16,9 +16,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from "react";
 import { SystemStatusCalculator, TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 import { SystemStatusUpdater } from "./SystemStatusUpdater";
+
+interface ProgressEditValues {
+  status: string;
+  progress_percent: number;
+  notes: string;
+  started_at?: string;
+  completed_at?: string;
+}
 
 interface TestProgressTableProps {
   filteredSystems: TestSystem[];
@@ -27,14 +35,8 @@ interface TestProgressTableProps {
   progress: TestProgress[];
   editingProgress: string | null;
   setEditingProgress: (key: string | null) => void;
-  editValues: {
-    status: string;
-    progress_percent: number;
-    notes: string;
-    started_at?: string;
-    completed_at?: string;
-  };
-  setEditValues: (values: any) => void;
+  editValues: ProgressEditValues;
+  setEditValues: Dispatch<SetStateAction<ProgressEditValues>>;
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
   handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
   handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;
@@ -249,7 +251,7 @@ export function TestProgressTable({
                   )}>
                     {system.serial_number || '-'}
                   </div>
-                  <div>
+                  <div className="flex h-full items-center justify-center">
                     {(() => {
                       const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
                       const cls = result.status === '已完成'
