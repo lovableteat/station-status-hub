@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowUpDown, Edit, ImageIcon, Eye, UserPlus, GripVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { IssueEditDialog } from "./IssueEditDialog";
 import { IssueDetailDialog } from "./IssueDetailDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -80,7 +81,7 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
 const COLUMN_META: Record<ColumnKey, { label: string; width: string; sortable?: keyof Issue }> = {
   system: { label: "系統", width: "w-[140px]" },
   fail_log: { label: "Fail Log", width: "w-[320px]" },
-  priority: { label: "優先級", width: "w-[100px]", sortable: "priority" },
+  priority: { label: "優先級", width: "w-[118px]", sortable: "priority" },
   status: { label: "狀態", width: "w-[100px]", sortable: "status" },
   assigned_to: { label: "負責人", width: "w-[140px]", sortable: "assigned_to" },
   station: { label: "站點", width: "w-[120px]" },
@@ -88,6 +89,29 @@ const COLUMN_META: Record<ColumnKey, { label: string; width: string; sortable?: 
   attachments: { label: "附件", width: "w-[80px]" },
   created_at: { label: "建立時間", width: "w-[120px]", sortable: "created_at" },
   actions: { label: "操作", width: "w-[100px]" },
+};
+
+const PRIORITY_STYLES: Record<IssuePriority, { trigger: string; rank: string; itemDot: string }> = {
+  critical: {
+    trigger: "border-red-500/45 bg-red-500/20 text-red-700 hover:bg-red-500/25 dark:border-red-400/55 dark:bg-red-500/25 dark:text-red-100 dark:hover:bg-red-500/30",
+    rank: "P1",
+    itemDot: "bg-red-500",
+  },
+  high: {
+    trigger: "border-orange-500/35 bg-orange-500/15 text-orange-700 hover:bg-orange-500/20 dark:border-orange-400/45 dark:bg-orange-500/20 dark:text-orange-100 dark:hover:bg-orange-500/25",
+    rank: "P2",
+    itemDot: "bg-orange-500",
+  },
+  medium: {
+    trigger: "border-yellow-500/35 bg-yellow-500/15 text-yellow-700 hover:bg-yellow-500/20 dark:border-yellow-400/40 dark:bg-yellow-500/15 dark:text-yellow-100 dark:hover:bg-yellow-500/20",
+    rank: "P3",
+    itemDot: "bg-yellow-500",
+  },
+  low: {
+    trigger: "border-emerald-500/35 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-100 dark:hover:bg-emerald-500/20",
+    rank: "P4",
+    itemDot: "bg-emerald-500",
+  },
 };
 
 export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
@@ -174,7 +198,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     setSortConfig({ key, direction });
   };
 
-  // 自動計算優先級（除非手動鎖定）
+  // 計算有效優先級（除非手動鎖定）
   const issuesWithEffective = useMemo(
     () =>
       issues.map(i => ({
@@ -264,13 +288,10 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   };
 
   const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "critical": return "bg-destructive text-destructive-foreground";
-      case "high": return "bg-red-500/10 text-red-700 dark:text-red-400";
-      case "medium": return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
-      case "low": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-      default: return "bg-muted text-muted-foreground";
-    }
+    return (
+      PRIORITY_STYLES[priority as IssuePriority]?.trigger ??
+      "border-border bg-muted text-muted-foreground hover:bg-muted/80"
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -327,17 +348,42 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
             value={issue.effectivePriority}
             onValueChange={(v) => handleInlinePriorityChange(issue.id, v as IssuePriority)}
           >
-            <SelectTrigger className="h-8 w-24 px-2 border-0 shadow-none bg-transparent">
-              <Badge variant="outline" className={getPriorityColor(issue.effectivePriority)}>
-                {getPriorityText(issue.effectivePriority)}
-                {!issue.priority_manual && <span className="ml-1 text-[10px] opacity-60">自動</span>}
-              </Badge>
+            <SelectTrigger
+              className={cn(
+                "h-7 w-[104px] justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold shadow-none transition-colors [&>svg]:ml-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-65",
+                getPriorityColor(issue.effectivePriority)
+              )}
+            >
+              <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-current">
+                {PRIORITY_STYLES[issue.effectivePriority].rank}
+              </span>
+              <span className="leading-none">{getPriorityText(issue.effectivePriority)}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">低</SelectItem>
-              <SelectItem value="medium">中</SelectItem>
-              <SelectItem value="high">高</SelectItem>
-              <SelectItem value="critical">緊急</SelectItem>
+              <SelectItem value="low">
+                <span className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.low.itemDot)} />
+                  <span>{getPriorityText("low")}</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="medium">
+                <span className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.medium.itemDot)} />
+                  <span>{getPriorityText("medium")}</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="high">
+                <span className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.high.itemDot)} />
+                  <span>{getPriorityText("high")}</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="critical">
+                <span className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", PRIORITY_STYLES.critical.itemDot)} />
+                  <span>{getPriorityText("critical")}</span>
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
         );
