@@ -110,9 +110,13 @@ export function SystemStatusUpdater({
               needsUpdate = true;
             }
           }
-          else if (statusResult.overallProgress === 0 && system.current_station === '未開始') {
+          else if (statusResult.overallProgress === 0) {
             if (system.status !== 'Not Start') {
               updatedFields.status = 'Not Start';
+              needsUpdate = true;
+            }
+            if (system.current_station !== '未開始') {
+              updatedFields.current_station = '未開始';
               needsUpdate = true;
             }
           }
