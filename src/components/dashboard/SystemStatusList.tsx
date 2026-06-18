@@ -20,6 +20,7 @@ interface SystemStatusListProps {
 
 export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   const { systems, progress, stations, testItems } = useUnifiedData();
+  const visibleSystems = systems.filter(system => !system.exclude_from_dashboard);
 
   // 計算系統在 Station 0-4 的整體進度 - 根據完成幾站來計算
   const calculateSystemOverallProgress = (systemId: string) => {
@@ -96,16 +97,16 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="overflow-hidden border-amber-300/30">
+      <CardHeader className="bg-amber-400/[0.05]">
+        <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
           <Activity className="h-5 w-5" />
           所有機台即時狀況
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {systems.map(system => {
+          {visibleSystems.map(system => {
             // 使用新的進度計算邏輯 - 根據 Station 0-4 完成幾站來計算
             const progressPercent = calculateSystemOverallProgress(system.id);
 
@@ -188,7 +189,7 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
           })}
         </div>
 
-        {systems.length === 0 && (
+        {visibleSystems.length === 0 && (
           <div className="text-center py-8">
             <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">沒有系統資料</h3>

@@ -31,10 +31,10 @@ const PERMISSION_GROUPS = {
     ]
   },
   'issues': {
-    name: '問題追蹤',
+    name: '問題追蹤與報告',
     permissions: [
-      { key: 'issues_view', label: '檢視問題追蹤' },
-      { key: 'issues_edit', label: '編輯問題追蹤' }
+      { key: 'issues_view', label: '檢視問題追蹤與統計' },
+      { key: 'issues_edit', label: '編輯問題追蹤與統計' }
     ]
   },
   'production': {
@@ -49,13 +49,6 @@ const PERMISSION_GROUPS = {
     permissions: [
       { key: 'data_center_view', label: '檢視資料中心' },
       { key: 'data_center_edit', label: '編輯資料中心' }
-    ]
-  },
-  'l11_cabinet': {
-    name: '機櫃管理中心',
-    permissions: [
-      { key: 'l11_cabinet_view', label: '檢視機櫃管理中心' },
-      { key: 'l11_cabinet_edit', label: '編輯機櫃管理中心' }
     ]
   },
   'api_management': {

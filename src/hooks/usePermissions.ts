@@ -5,15 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 export type Permission = 
   | 'dashboard_view' | 'dashboard_edit'
   | 'test_tracker_view' | 'test_tracker_edit'
-  | 'l11_cabinet_view' | 'l11_cabinet_edit'
   | 'issues_view' | 'issues_edit'
   | 'production_view' | 'production_edit'
   | 'data_center_view' | 'data_center_edit'
   | 'tools_view' | 'tools_edit'
   | 'admin_view' | 'admin_edit'
   | 'comparison_view' | 'comparison_edit'
-  | 'api_management_view' | 'api_management_edit'
-  | 'troubleshooting_view' | 'troubleshooting_edit';
+  | 'api_management_view' | 'api_management_edit';
 
 export function usePermissions() {
   const { user } = useUser();
@@ -74,8 +72,6 @@ export function usePermissions() {
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_view');
-      case 'l11-cabinet':
-        return hasPermission('l11_cabinet_view');
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_view');
@@ -91,8 +87,6 @@ export function usePermissions() {
         return hasPermission('comparison_view');
       case 'api-management':
         return hasPermission('api_management_view');
-      case 'troubleshooting':
-        return hasPermission('troubleshooting_view');
       case 'users':
         return hasPermission('admin_view');
       default:
@@ -109,8 +103,6 @@ export function usePermissions() {
     switch (module) {
       case 'dashboard':
         return hasPermission('dashboard_edit');
-      case 'l11-cabinet':
-        return hasPermission('l11_cabinet_edit');
       case 'test-tracker':
       case 'flow-info':
         return hasPermission('test_tracker_edit');
@@ -126,8 +118,6 @@ export function usePermissions() {
         return hasPermission('comparison_edit');
       case 'api-management':
         return hasPermission('api_management_edit');
-      case 'troubleshooting':
-        return hasPermission('troubleshooting_edit');
       case 'users':
         return hasPermission('admin_edit');
       default:

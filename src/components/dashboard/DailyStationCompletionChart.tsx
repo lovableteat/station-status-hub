@@ -169,9 +169,9 @@ export function DailyStationCompletionChart() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="overflow-hidden border-violet-300/30">
+      <CardHeader className="bg-violet-400/[0.05]">
+        <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
           <TrendingUp className="h-5 w-5" />
           每站每日完成數量趨勢
           <div className="ml-auto flex items-center gap-2">
