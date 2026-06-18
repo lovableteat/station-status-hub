@@ -2,10 +2,19 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Save, X, Trash2, FileText } from "lucide-react";
+import { Plus, Edit, Save, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -59,14 +68,46 @@ export function StationContentManager({
   onUpdate 
 }: StationContentManagerProps) {
   const { toast } = useToast();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [newContent, setNewContent] = useState({ title: '', content: '' });
-  const [editValues, setEditValues] = useState({ title: '', content: '' });
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingContent, setEditingContent] = useState<StationContent | null>(null);
+  const [formValues, setFormValues] = useState({ title: "", content: "" });
   const activeTheme = theme ?? defaultTheme;
+  const isEditing = Boolean(editingContent);
+  const sortedContents = [...contents].sort((a, b) => a.order_num - b.order_num);
 
-  const handleAdd = async () => {
-    if (!newContent.title.trim()) {
+  const resetForm = () => {
+    setFormValues({ title: "", content: "" });
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingContent(null);
+    resetForm();
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      closeEditor();
+      return;
+    }
+
+    setIsEditorOpen(true);
+  };
+
+  const openAddDialog = () => {
+    setEditingContent(null);
+    resetForm();
+    setIsEditorOpen(true);
+  };
+
+  const openEditDialog = (content: StationContent) => {
+    setEditingContent(content);
+    setFormValues({ title: content.title, content: content.content });
+    setIsEditorOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!formValues.title.trim()) {
       toast({
         title: "請填寫標題",
         variant: "destructive"
@@ -75,73 +116,47 @@ export function StationContentManager({
     }
 
     try {
-      const maxOrder = contents.length > 0 ? Math.max(...contents.map(c => c.order_num)) : 0;
-      
-      const { error } = await supabase
-        .from('station_contents')
-        .insert({
-          station_id: stationId,
-          title: newContent.title.trim(),
-          content: newContent.content.trim(),
-          order_num: maxOrder + 1
+      if (editingContent) {
+        const { error } = await supabase
+          .from("station_contents")
+          .update({
+            title: formValues.title.trim(),
+            content: formValues.content.trim()
+          })
+          .eq("id", editingContent.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "更新成功",
+          description: "流程內容已更新"
         });
+      } else {
+        const maxOrder = contents.length > 0 ? Math.max(...contents.map((content) => content.order_num)) : 0;
 
-      if (error) throw error;
+        const { error } = await supabase
+          .from("station_contents")
+          .insert({
+            station_id: stationId,
+            title: formValues.title.trim(),
+            content: formValues.content.trim(),
+            order_num: maxOrder + 1
+          });
 
-      setNewContent({ title: '', content: '' });
-      setShowAddForm(false);
+        if (error) throw error;
+
+        toast({
+          title: "新增成功",
+          description: "流程內容已新增"
+        });
+      }
+
+      closeEditor();
       onUpdate();
-      
-      toast({
-        title: "新增成功",
-        description: "流程內容已新增"
-      });
     } catch (error) {
-      console.error('Error adding content:', error);
+      console.error("Error saving content:", error);
       toast({
-        title: "新增失敗",
-        description: "請稍後再試",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEdit = (content: StationContent) => {
-    setEditingId(content.id);
-    setEditValues({ title: content.title, content: content.content });
-  };
-
-  const handleSave = async (id: string) => {
-    if (!editValues.title.trim()) {
-      toast({
-        title: "請填寫標題",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('station_contents')
-        .update({
-          title: editValues.title.trim(),
-          content: editValues.content.trim()
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setEditingId(null);
-      onUpdate();
-      
-      toast({
-        title: "更新成功",
-        description: "流程內容已更新"
-      });
-    } catch (error) {
-      console.error('Error updating content:', error);
-      toast({
-        title: "更新失敗",
+        title: isEditing ? "更新失敗" : "新增失敗",
         description: "請稍後再試",
         variant: "destructive"
       });
@@ -189,7 +204,7 @@ export function StationContentManager({
             </div>
           </CardTitle>
           <Button
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={openAddDialog}
             variant="outline"
             size="sm"
             className={cn("text-sm shadow-sm", activeTheme.contentButton)}
@@ -200,46 +215,6 @@ export function StationContentManager({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Add Form */}
-        {showAddForm && (
-          <Card className={cn("border-dashed", activeTheme.contentForm)}>
-            <CardContent className="p-4 space-y-3">
-              <Input
-                placeholder="標題"
-                value={newContent.title}
-                onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
-                className="text-sm"
-              />
-              <Textarea
-                placeholder="內容描述"
-                value={newContent.content}
-                onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-                rows={3}
-                className="text-sm"
-              />
-              <div className="flex gap-2">
-                <Button onClick={handleAdd} variant="outline" size="sm" className={cn("text-sm shadow-sm", activeTheme.contentButton)}>
-                  <Save className="h-3 w-3 mr-1" />
-                  儲存
-                </Button>
-                <Button 
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setNewContent({ title: '', content: '' });
-                  }} 
-                  variant="outline" 
-                  size="sm"
-                  className={cn("text-sm", activeTheme.contentButtonGhost)}
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  取消
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Content List */}
         <div className="space-y-3">
           {contents.length === 0 ? (
             <div className={cn("rounded-2xl border p-8 text-center text-muted-foreground", activeTheme.contentEmpty)}>
@@ -248,81 +223,132 @@ export function StationContentManager({
               <p className="mt-1 text-sm">點擊上方「新增內容」開始建立</p>
             </div>
           ) : (
-            contents
-              .sort((a, b) => a.order_num - b.order_num)
-              .map((content, index) => (
+            sortedContents.map((content, index) => (
                 <Card key={content.id} className={cn("relative transition-colors", activeTheme.contentCard)}>
                   <CardContent className="p-4">
-                    {editingId === content.id ? (
-                      <div className="space-y-3">
-                        <Input
-                          value={editValues.title}
-                          onChange={(e) => setEditValues({ ...editValues, title: e.target.value })}
-                          className="text-sm font-medium"
-                        />
-                        <Textarea
-                          value={editValues.content}
-                          onChange={(e) => setEditValues({ ...editValues, content: e.target.value })}
-                          rows={3}
-                          className="text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <Button onClick={() => handleSave(content.id)} variant="outline" size="sm" className={cn("text-sm shadow-sm", activeTheme.contentButton)}>
-                            <Save className="h-3 w-3 mr-1" />
-                            儲存
-                          </Button>
-                          <Button 
-                            onClick={() => setEditingId(null)} 
-                            variant="outline" 
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
+                            {index + 1}
+                          </Badge>
+                          <h4 className="truncate text-sm font-medium">{content.title}</h4>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            onClick={() => openEditDialog(content)}
+                            variant="outline"
                             size="sm"
-                            className={cn("text-sm", activeTheme.contentButtonGhost)}
+                            className={cn("h-8 w-8 p-0", activeTheme.contentButtonGhost)}
+                            title={`編輯 ${content.title}`}
                           >
-                            <X className="h-3 w-3 mr-1" />
-                            取消
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            onClick={() => handleDelete(content.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            title={`刪除 ${content.title}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
-                              {index + 1}
-                            </Badge>
-                            <h4 className="text-sm font-medium">{content.title}</h4>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              onClick={() => handleEdit(content)}
-                              variant="outline"
-                              size="sm"
-                              className={cn("h-8 w-8 p-0", activeTheme.contentButtonGhost)}
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDelete(content.id)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        {content.content && (
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                            {content.content}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      {content.content && (
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {content.content}
+                        </p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))
           )}
         </div>
       </CardContent>
+
+      <Dialog open={isEditorOpen} onOpenChange={handleDialogChange}>
+        <DialogContent className={cn("overflow-hidden border p-0 sm:max-w-2xl", activeTheme.contentPanel)}>
+          <DialogHeader className={cn("border-b px-6 py-5", activeTheme.contentHeader)}>
+            <div className="flex items-start gap-3">
+              <span className={cn("mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border", activeTheme.contentIcon)}>
+                {isEditing ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              </span>
+              <div className="space-y-1">
+                <DialogTitle className="text-left text-xl text-foreground">
+                  {isEditing ? `編輯 ${stationName} 流程內容` : `新增 ${stationName} 流程內容`}
+                </DialogTitle>
+                <DialogDescription className="text-left text-sm text-muted-foreground">
+                  {isEditing
+                    ? "原本資料已自動帶入，你可以在視窗內完整檢視後再修改。"
+                    : "在這裡新增新的流程段落，儲存後會直接更新到目前站點。"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 py-5">
+            {editingContent && (
+              <div className={cn("rounded-2xl border px-4 py-3", activeTheme.contentSurface)}>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
+                    段落 {editingContent.order_num}
+                  </Badge>
+                  <span className="text-muted-foreground">目前正在編輯</span>
+                  <span className="font-medium text-foreground">{editingContent.title}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="station-content-title">標題</Label>
+              <Input
+                id="station-content-title"
+                placeholder="請輸入流程段落標題"
+                value={formValues.title}
+                onChange={(e) => setFormValues({ ...formValues, title: e.target.value })}
+                className="h-11 text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="station-content-body">內容描述</Label>
+                <span className="text-xs text-muted-foreground">{formValues.content.length} 字元</span>
+              </div>
+              <Textarea
+                id="station-content-body"
+                placeholder="請輸入詳細流程內容"
+                value={formValues.content}
+                onChange={(e) => setFormValues({ ...formValues, content: e.target.value })}
+                rows={12}
+                className="min-h-[320px] resize-y text-sm leading-7"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className={cn("border-t px-6 py-4", activeTheme.contentHeader)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeEditor}
+              className={cn("w-full sm:w-auto", activeTheme.contentButtonGhost)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSubmit}
+              className={cn("w-full sm:w-auto shadow-sm", activeTheme.contentButton)}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {isEditing ? "儲存變更" : "新增內容"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
