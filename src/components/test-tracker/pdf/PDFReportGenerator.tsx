@@ -2,7 +2,7 @@ import { PDFSystemData, PDFStatsData, PDFProgressCalculator } from "./PDFProgres
 
 export class PDFReportGenerator {
   static generateHTML(systemsData: PDFSystemData[], stats: PDFStatsData): string {
-    const reportTitle = "GB300 L10 測試進度追蹤報告";
+    const reportTitle = "L10 測試進度追蹤報告";
     const generateTime = new Date().toLocaleString('zh-TW');
 
     return `
@@ -307,7 +307,7 @@ export class PDFReportGenerator {
   private static generateFooter(): string {
     return `
       <div class="footer">
-        <p><strong>🔧 GB300 L10 測試管理系統</strong></p>
+        <p><strong>🔧 L10 測試管理系統</strong></p>
         <p>此報告由系統自動生成，包含所有測試系統的詳細進度信息</p>
         <p>如有疑問請聯繫系統管理員</p>
       </div>
