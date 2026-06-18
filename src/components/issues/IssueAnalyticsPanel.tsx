@@ -26,6 +26,7 @@ export function IssueAnalyticsPanel({ issues }: IssueAnalyticsPanelProps) {
 
     return { open, inProgress, resolved, critical, resolutionRate };
   }, [issues]);
+
   const insights = useMemo(() => {
     const summarize = (values: Array<string | undefined>, fallback: string) => {
       const counts = values.reduce<Record<string, number>>((acc, value) => {
@@ -40,9 +41,14 @@ export function IssueAnalyticsPanel({ issues }: IssueAnalyticsPanelProps) {
       };
     };
 
+    const pendingCount = issues.filter(issue => issue.status === "open" || issue.status === "in_progress").length;
+    const pendingRate = issues.length > 0 ? Math.round((pendingCount / issues.length) * 100) : 0;
+
     return {
       topCategory: summarize(issues.map(issue => issue.category), "未分類"),
       topStation: summarize(issues.map(issue => issue.station_name), "未指定站點"),
+      pendingCount,
+      pendingRate,
     };
   }, [issues]);
 
@@ -112,15 +118,15 @@ export function IssueAnalyticsPanel({ issues }: IssueAnalyticsPanelProps) {
         <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <p className="text-sm font-medium text-primary">已整合 Troubleshooting 統計</p>
-            <h3 className="text-xl font-semibold text-foreground">同一頁完成填報、分析與工廠報告整理</h3>
+            <h3 className="text-xl font-semibold text-foreground">先看重點，再看排行，不用自己猜圖表</h3>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              目前可以直接用這裡的問題資料做趨勢分析，並搭配上方的「匯出工廠報告」整理給工廠端。
+              目前這頁會先把最重要的結論整理出來，下面的排行卡則會直接顯示件數與占比，方便你整理給工廠端。
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-primary/25 bg-background/40 p-4 backdrop-blur">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">最高頻分類</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">最多問題分類</p>
               <p className="mt-2 text-lg font-semibold text-foreground">{insights.topCategory.label}</p>
               <p className="mt-1 text-sm text-muted-foreground">{insights.topCategory.count} 件問題</p>
             </div>
@@ -128,6 +134,11 @@ export function IssueAnalyticsPanel({ issues }: IssueAnalyticsPanelProps) {
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">最常發生站點</p>
               <p className="mt-2 text-lg font-semibold text-foreground">{insights.topStation.label}</p>
               <p className="mt-1 text-sm text-muted-foreground">{insights.topStation.count} 件問題</p>
+            </div>
+            <div className="rounded-2xl border border-primary/25 bg-background/40 p-4 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">待追蹤比例</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{insights.pendingRate}%</p>
+              <p className="mt-1 text-sm text-muted-foreground">{insights.pendingCount} 件仍在追蹤</p>
             </div>
           </div>
         </CardContent>
