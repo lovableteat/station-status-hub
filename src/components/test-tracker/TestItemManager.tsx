@@ -300,10 +300,10 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                           <CardTitle className="text-lg text-slate-50">{station.station_name}</CardTitle>
                         </div>
                         <div className="flex items-center gap-4">
-                          <Badge variant="secondary" className="border border-violet-200/25 bg-violet-400/15 text-sm text-violet-100">
+                          <Badge variant="secondary" className="border border-violet-200/25 bg-violet-400/15 text-xs text-violet-100">
                             {itemsCount} 個項目
                           </Badge>
-                          <Badge variant="outline" className="border-slate-400/35 bg-slate-700/70 text-sm text-slate-200">
+                          <Badge variant="outline" className="border-slate-400/35 bg-slate-700/70 text-xs text-slate-200">
                             {Math.round(totalMinutes / 60 * 10) / 10}小時
                           </Badge>
                         </div>
@@ -324,7 +324,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
-                                    <h4 className="font-medium text-slate-50">{item.item_name}</h4>
+                                    <h4 className="text-sm font-semibold text-slate-50">{item.item_name}</h4>
                                     <Badge variant="outline" className="border-violet-200/25 bg-violet-400/15 text-xs text-violet-100">
                                       順序 {item.item_order}
                                     </Badge>
