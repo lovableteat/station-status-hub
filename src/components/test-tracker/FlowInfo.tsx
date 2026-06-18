@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { BackButton } from "@/components/common/BackButton";
 
 interface TestStation {
   id: string;
@@ -51,48 +52,48 @@ const flowDangerButtonClass =
 
 const stationThemes = [
   {
-    shell: "border-blue-300/45 bg-blue-500/15 text-blue-50 hover:border-blue-200/65 hover:bg-blue-500/20",
-    icon: "border-blue-200/35 bg-blue-400/20 text-blue-100",
-    badge: "border-blue-200/35 bg-blue-400/20 text-blue-100",
-    accent: "text-blue-200",
-    rail: "from-blue-300/80 via-blue-400/45 to-transparent",
-    contentPanel: "border-blue-200/65 bg-blue-500/15 shadow-[0_0_0_1px_hsl(213_94%_68%/0.22),0_28px_80px_-48px_hsl(213_94%_68%/0.95)]",
-    contentIcon: "border-blue-100/50 bg-blue-300/25 text-blue-50",
-    contentBadge: "border-blue-100/50 bg-blue-300/20 text-blue-50",
-    contentBar: "from-blue-300/95 via-blue-400/70 to-transparent",
+    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
+    icon: "border-primary/30 bg-primary/10 text-primary",
+    badge: "border-primary/30 bg-primary/10 text-primary",
+    accent: "text-primary",
+    rail: "from-primary via-primary/55 to-transparent",
+    contentPanel: "border-border/70 bg-card/90",
+    contentIcon: "border-primary/30 bg-primary/10 text-primary",
+    contentBadge: "border-primary/30 bg-primary/10 text-primary",
+    contentBar: "from-primary via-primary/55 to-transparent",
   },
   {
-    shell: "border-amber-300/45 bg-amber-500/15 text-amber-50 hover:border-amber-200/65 hover:bg-amber-500/20",
-    icon: "border-amber-200/35 bg-amber-400/20 text-amber-100",
-    badge: "border-amber-200/35 bg-amber-400/20 text-amber-100",
-    accent: "text-amber-200",
-    rail: "from-amber-300/80 via-amber-400/45 to-transparent",
-    contentPanel: "border-amber-200/65 bg-amber-500/15 shadow-[0_0_0_1px_hsl(43_96%_56%/0.22),0_28px_80px_-48px_hsl(43_96%_56%/0.95)]",
-    contentIcon: "border-amber-100/50 bg-amber-300/25 text-amber-50",
-    contentBadge: "border-amber-100/50 bg-amber-300/20 text-amber-50",
-    contentBar: "from-amber-300/95 via-amber-400/70 to-transparent",
+    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
+    icon: "border-primary/30 bg-primary/10 text-primary",
+    badge: "border-primary/30 bg-primary/10 text-primary",
+    accent: "text-primary",
+    rail: "from-primary via-primary/55 to-transparent",
+    contentPanel: "border-border/70 bg-card/90",
+    contentIcon: "border-primary/30 bg-primary/10 text-primary",
+    contentBadge: "border-primary/30 bg-primary/10 text-primary",
+    contentBar: "from-primary via-primary/55 to-transparent",
   },
   {
-    shell: "border-rose-300/45 bg-rose-500/15 text-rose-50 hover:border-rose-200/65 hover:bg-rose-500/20",
-    icon: "border-rose-200/35 bg-rose-400/20 text-rose-100",
-    badge: "border-rose-200/35 bg-rose-400/20 text-rose-100",
-    accent: "text-rose-200",
-    rail: "from-rose-300/80 via-rose-400/45 to-transparent",
-    contentPanel: "border-rose-200/65 bg-rose-500/15 shadow-[0_0_0_1px_hsl(351_95%_71%/0.22),0_28px_80px_-48px_hsl(351_95%_71%/0.95)]",
-    contentIcon: "border-rose-100/50 bg-rose-300/25 text-rose-50",
-    contentBadge: "border-rose-100/50 bg-rose-300/20 text-rose-50",
-    contentBar: "from-rose-300/95 via-rose-400/70 to-transparent",
+    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
+    icon: "border-primary/30 bg-primary/10 text-primary",
+    badge: "border-primary/30 bg-primary/10 text-primary",
+    accent: "text-primary",
+    rail: "from-primary via-primary/55 to-transparent",
+    contentPanel: "border-border/70 bg-card/90",
+    contentIcon: "border-primary/30 bg-primary/10 text-primary",
+    contentBadge: "border-primary/30 bg-primary/10 text-primary",
+    contentBar: "from-primary via-primary/55 to-transparent",
   },
   {
-    shell: "border-violet-300/45 bg-violet-500/15 text-violet-50 hover:border-violet-200/65 hover:bg-violet-500/20",
-    icon: "border-violet-200/35 bg-violet-400/20 text-violet-100",
-    badge: "border-violet-200/35 bg-violet-400/20 text-violet-100",
-    accent: "text-violet-200",
-    rail: "from-violet-300/80 via-violet-400/45 to-transparent",
-    contentPanel: "border-violet-200/65 bg-violet-500/15 shadow-[0_0_0_1px_hsl(250_95%_76%/0.22),0_28px_80px_-48px_hsl(250_95%_76%/0.95)]",
-    contentIcon: "border-violet-100/50 bg-violet-300/25 text-violet-50",
-    contentBadge: "border-violet-100/50 bg-violet-300/20 text-violet-50",
-    contentBar: "from-violet-300/95 via-violet-400/70 to-transparent",
+    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
+    icon: "border-primary/30 bg-primary/10 text-primary",
+    badge: "border-primary/30 bg-primary/10 text-primary",
+    accent: "text-primary",
+    rail: "from-primary via-primary/55 to-transparent",
+    contentPanel: "border-border/70 bg-card/90",
+    contentIcon: "border-primary/30 bg-primary/10 text-primary",
+    contentBadge: "border-primary/30 bg-primary/10 text-primary",
+    contentBar: "from-primary via-primary/55 to-transparent",
   },
 ];
 
@@ -338,91 +339,82 @@ export function FlowInfo() {
     : [];
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
-      <div className="overflow-hidden rounded-[2rem] border border-blue-200/25 bg-[radial-gradient(circle_at_12%_18%,hsl(221_83%_63%/0.24),transparent_34%),linear-gradient(135deg,hsl(222_32%_18%)_0%,hsl(220_30%_15%)_48%,hsl(224_42%_11%)_100%)] p-5 shadow-[0_28px_80px_-48px_hsl(220_50%_2%/0.95)] sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-3 border-blue-200/35 bg-blue-400/15 px-3 py-1 text-blue-100">
-              <Route className="mr-1 h-3.5 w-3.5" />
-              L10 Flow Cockpit
-            </Badge>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-50 sm:text-4xl">GB300 L10 測試流程說明</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-300 sm:text-base">
-              改成一屏掌握站點、工時與測項；點選站點即可查看詳細內容，不需要一路往下滑找資料。
-            </p>
+    <div className="space-y-6 p-6 animate-fade-in">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4">
+          <BackButton />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">GB300 L10 測試流程說明</h1>
+            <p className="mt-1 text-muted-foreground">集中查看站點路徑、測試項目與流程內容</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setActiveTab("overview")}
-              className={`h-11 border-blue-200/35 bg-blue-400/15 px-5 text-blue-50 hover:border-blue-100/60 hover:bg-blue-400/25 ${flowButtonClass}`}
-            >
-              <Route className="mr-2 h-4 w-4" />
-              查看流程
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setActiveTab("manage")}
-              className={`h-11 border-amber-200/35 bg-amber-400/15 px-5 text-amber-50 hover:border-amber-100/60 hover:bg-amber-400/25 ${flowButtonClass}`}
-            >
-              <Edit className="mr-2 h-4 w-4" />
-              管理流程
-            </Button>
-          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={activeTab === "overview" ? "default" : "outline"}
+            onClick={() => setActiveTab("overview")}
+            className={flowButtonClass}
+          >
+            <Route className="h-4 w-4" />
+            查看流程
+          </Button>
+          <Button
+            variant={activeTab === "manage" ? "default" : "outline"}
+            onClick={() => setActiveTab("manage")}
+            className={flowButtonClass}
+          >
+            <Edit className="h-4 w-4" />
+            管理流程
+          </Button>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2 rounded-2xl border border-slate-500/45 bg-slate-800/80 p-1 shadow-sm">
-          <TabsTrigger
-            value="overview"
-            className="rounded-xl transition-all duration-200 hover:bg-blue-400/15 hover:text-blue-100 data-[state=active]:bg-blue-400/20 data-[state=active]:text-blue-50 data-[state=active]:shadow-sm"
-          >
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="overview">
+            <Route className="mr-2 h-4 w-4" />
             流程總覽
           </TabsTrigger>
-          <TabsTrigger
-            value="manage"
-            className="rounded-xl transition-all duration-200 hover:bg-amber-400/15 hover:text-amber-100 data-[state=active]:bg-amber-400/20 data-[state=active]:text-amber-50 data-[state=active]:shadow-sm"
-          >
+          <TabsTrigger value="manage">
+            <Settings className="mr-2 h-4 w-4" />
             管理測試項目
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-5 space-y-5">
-          <section className="overflow-hidden rounded-[2rem] border border-slate-500/45 bg-slate-800/85 shadow-[0_22px_70px_-44px_hsl(220_50%_2%/0.9)]">
-            <div className="border-b border-slate-500/35 bg-slate-700/55 p-5">
+          <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/85 shadow-[0_18px_55px_-38px_hsl(220_50%_2%/0.75)]">
+            <div className="border-b border-border/55 bg-secondary/35 p-5 sm:p-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-blue-200/30 bg-blue-400/15 text-blue-100">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
                       <Layers className="h-5 w-5" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-semibold text-slate-50">測試流程總覽</h2>
-                      <p className="mt-1 text-sm text-slate-300">站點、工時、測項與流程內容集中在同一個工作區。</p>
+                      <h2 className="text-xl font-semibold text-foreground sm:text-2xl">測試流程總覽</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">站點、工時、測項與流程內容集中在同一個工作區。</p>
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:min-w-[680px]">
-                  <div className="rounded-2xl border border-blue-200/30 bg-blue-500/15 p-4">
-                    <Monitor className="mb-3 h-4 w-4 text-blue-100" />
-                    <div className="text-2xl font-bold text-blue-50">{totalSystems}</div>
-                    <div className="text-xs text-blue-100/75">測試系統</div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
+                    <Monitor className="mb-3 h-4 w-4 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{totalSystems}</div>
+                    <div className="text-xs text-muted-foreground">測試系統</div>
                   </div>
-                  <div className="rounded-2xl border border-violet-200/30 bg-violet-500/15 p-4">
-                    <ListChecks className="mb-3 h-4 w-4 text-violet-100" />
-                    <div className="text-2xl font-bold text-violet-50">{items.length}</div>
-                    <div className="text-xs text-violet-100/75">測試項目</div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
+                    <ListChecks className="mb-3 h-4 w-4 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{items.length}</div>
+                    <div className="text-xs text-muted-foreground">測試項目</div>
                   </div>
-                  <div className="rounded-2xl border border-amber-200/30 bg-amber-500/15 p-4">
-                    <Clock className="mb-3 h-4 w-4 text-amber-100" />
-                    <div className="text-2xl font-bold text-amber-50">{totalHours.toFixed(1)}h</div>
-                    <div className="text-xs text-amber-100/75">單機總時數</div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
+                    <Clock className="mb-3 h-4 w-4 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{totalHours.toFixed(1)}h</div>
+                    <div className="text-xs text-muted-foreground">單機總時數</div>
                   </div>
-                  <div className="rounded-2xl border border-rose-200/30 bg-rose-500/15 p-4">
-                    <CalendarDays className="mb-3 h-4 w-4 text-rose-100" />
-                    <div className="text-2xl font-bold text-rose-50">{getEstimatedDays()}</div>
-                    <div className="text-xs text-rose-100/75">預計天數</div>
+                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
+                    <CalendarDays className="mb-3 h-4 w-4 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{getEstimatedDays()}</div>
+                    <div className="text-xs text-muted-foreground">預計天數</div>
                   </div>
                 </div>
               </div>
@@ -430,13 +422,13 @@ export function FlowInfo() {
 
             <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
               <div className="space-y-5">
-                <div className="rounded-3xl border border-slate-500/40 bg-slate-900/35 p-4">
+                <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-50">站點路徑</h3>
-                      <p className="text-sm text-slate-300">點選站點，右側會切換成該站的測項與流程內容。</p>
+                      <h3 className="text-lg font-semibold text-foreground">站點路徑</h3>
+                      <p className="text-sm text-muted-foreground">點選站點，右側會切換成該站的測項與流程內容。</p>
                     </div>
-                    <Badge variant="outline" className="w-fit border-blue-200/30 bg-blue-400/15 px-3 py-1 text-blue-100">
+                    <Badge variant="outline" className="w-fit border-primary/30 bg-primary/10 px-3 py-1 text-primary">
                       {stations.length} 個站點
                     </Badge>
                   </div>
@@ -452,24 +444,24 @@ export function FlowInfo() {
                           key={station.id}
                           type="button"
                           onClick={() => setSelectedStationId(station.id)}
-                          className={`group relative min-h-[168px] rounded-3xl border p-4 text-left shadow-[0_20px_42px_-34px_hsl(220_50%_2%/0.9)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_28px_58px_-38px_hsl(220_50%_2%/0.95)] ${theme.shell} ${isSelected ? "ring-2 ring-blue-100/55" : ""}`}
+                          className={`group relative min-h-[152px] rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_hsl(var(--primary)/0.55)] ${theme.shell} ${isSelected ? "border-primary/70 bg-primary/10 ring-2 ring-primary/25" : ""}`}
                         >
-                          <div className={`mb-5 h-1.5 rounded-full bg-gradient-to-r ${theme.rail}`} />
+                          <div className={`mb-4 h-1 rounded-full bg-gradient-to-r ${theme.rail}`} />
                           <div className="flex items-start justify-between gap-3">
-                            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${theme.icon}`}>
+                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${theme.icon}`}>
                               {getStationIcon(station.station_name)}
                             </div>
                             <Badge variant="outline" className={`text-xs ${theme.badge}`}>
                               #{index + 1}
                             </Badge>
                           </div>
-                          <div className="mt-5">
-                            <div className="line-clamp-2 text-base font-semibold text-slate-50">{station.station_name}</div>
+                          <div className="mt-4">
+                            <div className="line-clamp-2 text-base font-semibold text-foreground">{station.station_name}</div>
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                              <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-slate-200">
+                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
                                 {getCalculatedStationHours(station.id)}h
                               </span>
-                              <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-slate-200">
+                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
                                 {stationItemCount} 測項
                               </span>
                             </div>
@@ -482,20 +474,20 @@ export function FlowInfo() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-3xl border border-blue-200/30 bg-blue-500/15 p-5">
-                    <Gauge className="mb-3 h-5 w-5 text-blue-100" />
-                    <div className="text-2xl font-bold text-blue-50">{getDailyThroughput()}</div>
-                    <div className="text-sm text-blue-100/75">預估日產能</div>
+                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
+                    <Gauge className="mb-3 h-5 w-5 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{getDailyThroughput()}</div>
+                    <div className="text-sm text-muted-foreground">預估日產能</div>
                   </div>
-                  <div className="rounded-3xl border border-amber-200/30 bg-amber-500/15 p-5">
-                    <Clock className="mb-3 h-5 w-5 text-amber-100" />
-                    <div className="text-2xl font-bold text-amber-50">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
-                    <div className="text-sm text-amber-100/75">瓶頸站點工時</div>
+                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
+                    <Clock className="mb-3 h-5 w-5 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
+                    <div className="text-sm text-muted-foreground">瓶頸站點工時</div>
                   </div>
-                  <div className="rounded-3xl border border-violet-200/30 bg-violet-500/15 p-5">
-                    <Route className="mb-3 h-5 w-5 text-violet-100" />
-                    <div className="text-2xl font-bold text-violet-50">{selectedStationIndex + 1 || "-"}</div>
-                    <div className="text-sm text-violet-100/75">目前查看站點</div>
+                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
+                    <Route className="mb-3 h-5 w-5 text-primary" />
+                    <div className="text-2xl font-bold text-foreground">{selectedStationIndex + 1 || "-"}</div>
+                    <div className="text-sm text-muted-foreground">目前查看站點</div>
                   </div>
                 </div>
               </div>
@@ -503,18 +495,18 @@ export function FlowInfo() {
               <aside className="space-y-5">
                 {selectedStation ? (
                   <>
-                    <div className={`rounded-3xl border p-5 ${selectedStationTheme.shell}`}>
+                    <div className={`rounded-2xl border p-5 ${selectedStationTheme.shell}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
-                          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${selectedStationTheme.icon}`}>
+                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedStationTheme.icon}`}>
                             {getStationIcon(selectedStation.station_name)}
                           </div>
                           <div>
                             <Badge variant="outline" className={`mb-2 ${selectedStationTheme.badge}`}>
                               Station {selectedStationIndex + 1}
                             </Badge>
-                            <h3 className="text-xl font-semibold text-slate-50">{selectedStation.station_name}</h3>
-                            <p className="mt-2 text-sm leading-6 text-slate-200/85">
+                            <h3 className="text-xl font-semibold text-foreground">{selectedStation.station_name}</h3>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
                               {selectedStation.description || "尚未填寫站點描述。"}
                             </p>
                           </div>
@@ -523,51 +515,51 @@ export function FlowInfo() {
                           variant="outline"
                           size="sm"
                           onClick={() => openEditStationDialog(selectedStation)}
-                          className={`shrink-0 border-white/20 bg-white/10 text-slate-50 hover:bg-white/15 ${flowGhostButtonClass}`}
+                          className={`shrink-0 ${flowGhostButtonClass}`}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                       </div>
 
                       <div className="mt-5 grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
-                          <div className="text-xs text-slate-300">站點工時</div>
-                          <div className="mt-1 text-xl font-bold text-slate-50">{getCalculatedStationHours(selectedStation.id)}h</div>
+                        <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
+                          <div className="text-xs text-muted-foreground">站點工時</div>
+                          <div className="mt-1 text-xl font-bold text-foreground">{getCalculatedStationHours(selectedStation.id)}h</div>
                         </div>
-                        <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
-                          <div className="text-xs text-slate-300">測項數量</div>
-                          <div className="mt-1 text-xl font-bold text-slate-50">{selectedStationItems.length}</div>
+                        <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
+                          <div className="text-xs text-muted-foreground">測項數量</div>
+                          <div className="mt-1 text-xl font-bold text-foreground">{selectedStationItems.length}</div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-500/45 bg-slate-700/55 p-5">
+                    <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-50">測試項目</h3>
-                          <p className="text-sm text-slate-300">只顯示目前站點，避免整頁拉太長。</p>
+                          <h3 className="text-lg font-semibold text-foreground">測試項目</h3>
+                          <p className="text-sm text-muted-foreground">只顯示目前站點，避免整頁拉太長。</p>
                         </div>
-                        <Badge variant="outline" className="border-violet-200/30 bg-violet-400/15 text-violet-100">
+                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                           {selectedStationItems.length} items
                         </Badge>
                       </div>
                       <div className="max-h-[330px] space-y-3 overflow-y-auto pr-1">
                         {selectedStationItems.length > 0 ? (
                           selectedStationItems.map((item) => (
-                            <div key={item.id} className="rounded-2xl border border-slate-500/40 bg-slate-800/75 p-3">
+                            <div key={item.id} className="rounded-xl border border-border/70 bg-card/70 p-3 transition-colors hover:border-primary/35 hover:bg-primary/[0.04]">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <div className="text-sm font-semibold text-slate-50">{item.item_name}</div>
-                                  <p className="mt-1 text-xs leading-5 text-slate-300">{item.description || "尚未填寫測項描述。"}</p>
+                                  <div className="text-sm font-semibold text-foreground">{item.item_name}</div>
+                                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description || "尚未填寫測項描述。"}</p>
                                 </div>
-                                <Badge variant="outline" className="shrink-0 border-amber-200/30 bg-amber-400/15 text-xs text-amber-100">
+                                <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-xs text-primary">
                                   {item.estimated_minutes}min
                                 </Badge>
                               </div>
                             </div>
                           ))
                         ) : (
-                          <div className="rounded-2xl border border-dashed border-slate-500/45 bg-slate-800/55 p-6 text-center text-sm text-slate-300">
+                          <div className="rounded-xl border border-dashed border-border bg-background/35 p-6 text-center text-sm text-muted-foreground">
                             此站點尚未新增測試項目。
                           </div>
                         )}
@@ -575,7 +567,7 @@ export function FlowInfo() {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-3xl border border-dashed border-slate-500/45 bg-slate-800/70 p-8 text-center text-slate-300">
+                  <div className="rounded-2xl border border-dashed border-border bg-card/70 p-8 text-center text-muted-foreground">
                     尚未建立站點資料。
                   </div>
                 )}
@@ -587,28 +579,28 @@ export function FlowInfo() {
                 key={selectedStation.id}
                 className={`border-t p-5 animate-in fade-in-0 slide-in-from-top-2 duration-300 ${selectedStationTheme.contentPanel}`}
               >
-                <div className={`mb-4 h-1.5 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
+                <div className={`mb-4 h-1 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${selectedStationTheme.contentIcon}`}>
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl border ${selectedStationTheme.contentIcon}`}>
                       <Layers className="h-5 w-5" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-slate-50">流程內容管理</h3>
+                        <h3 className="text-lg font-semibold text-foreground">流程內容管理</h3>
                         <Badge variant="outline" className={selectedStationTheme.contentBadge}>
                           目前顯示 Station {selectedStationIndex + 1}
                         </Badge>
                       </div>
-                      <p className="text-sm text-slate-300">目前只展開 {selectedStation.station_name} 的內容。</p>
+                      <p className="text-sm text-muted-foreground">目前只展開 {selectedStation.station_name} 的內容。</p>
                     </div>
                   </div>
                   <Badge variant="outline" className={`${selectedStationTheme.contentBadge} px-3 py-1.5 text-sm`}>
                     已切換至 {selectedStation.station_name}
                   </Badge>
                 </div>
-                <div className="rounded-3xl border border-white/15 bg-slate-900/35 p-3 ring-1 ring-white/10">
-                  <div className="max-h-[430px] overflow-y-auto pr-1 [&>div]:border-slate-400/45 [&>div]:bg-slate-800/85">
+                <div className="rounded-2xl border border-border/70 bg-background/35 p-3">
+                  <div className="max-h-[430px] overflow-y-auto pr-1">
                     <StationContentManager
                       stationId={selectedStation.id}
                       stationName={selectedStation.station_name}
@@ -623,14 +615,14 @@ export function FlowInfo() {
         </TabsContent>
 
         <TabsContent value="manage" className="mt-5 space-y-5">
-          <Card className="overflow-hidden border-amber-200/25 bg-slate-800/85">
-            <CardHeader className="bg-amber-500/10">
+          <Card className="overflow-hidden">
+            <CardHeader className="bg-secondary/30">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="flex items-center gap-2 text-slate-50">
-                  <Settings className="h-5 w-5 text-amber-100" />
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-primary" />
                   站點管理
                 </CardTitle>
-                <Button onClick={handleAddNewStation} className={`bg-amber-400/20 text-amber-50 hover:bg-amber-400/30 ${flowButtonClass}`}>
+                <Button onClick={handleAddNewStation} className={flowButtonClass}>
                   <Plus className="h-4 w-4 mr-2" />
                   新增站點
                 </Button>
