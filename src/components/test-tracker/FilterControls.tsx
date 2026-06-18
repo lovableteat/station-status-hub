@@ -1,4 +1,4 @@
-import { Search, Download } from "lucide-react";
+import { Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,9 +58,6 @@ export function FilterControls({
               <SelectItem value="未開始">未開始</SelectItem>
               <SelectItem value="進行中">進行中</SelectItem>
               <SelectItem value="已完成">已完成</SelectItem>
-              <SelectItem value="Not Start">Not Start</SelectItem>
-              <SelectItem value="On-going">On-going</SelectItem>
-              <SelectItem value="Done">Done</SelectItem>
             </SelectContent>
           </Select>
         </div>
