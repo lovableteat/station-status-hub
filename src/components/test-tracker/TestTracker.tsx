@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Download, FileText } from "lucide-react";
@@ -34,8 +34,8 @@ type ProgressUpdates = Pick<TestProgress, "status" | "progress_percent" | "notes
 export function TestTracker() {
   const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterEngineer, setFilterEngineer] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterEngineer, setFilterEngineer] = useState("all-engineers");
+  const [filterStatus, setFilterStatus] = useState("all-status");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [editValues, setEditValues] = useState<{
@@ -180,19 +180,67 @@ export function TestTracker() {
     }
   };
 
-  const filteredSystems = systems.filter(system => {
-    const matchesSearch = system.system_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         system.assigned_engineer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         system.current_station?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         system.serial_number?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesEngineer = !filterEngineer || filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
-    const matchesStatus = !filterStatus || filterStatus === "all-status" || 
-                         system.status === filterStatus || 
-                         system.current_station === filterStatus;
-    return matchesSearch && matchesEngineer && matchesStatus;
-  });
+  const normalizeSystemStatus = (system: {
+    status?: string | null;
+    current_station?: string | null;
+    overall_progress?: number | null;
+  }) => {
+    const rawStatus = system.status ?? "";
+    const currentStation = system.current_station ?? "";
+    const overallProgress = system.overall_progress ?? 0;
 
-  const engineers = [...new Set(systems.map(s => s.assigned_engineer))];
+    if (
+      rawStatus === "Done" ||
+      rawStatus === "已完成" ||
+      currentStation === "已完成" ||
+      overallProgress === 100
+    ) {
+      return "已完成";
+    }
+
+    if (
+      rawStatus === "On-going" ||
+      rawStatus === "進行中" ||
+      currentStation === "進行中" ||
+      overallProgress > 0
+    ) {
+      return "進行中";
+    }
+
+    return "未開始";
+  };
+
+  const filteredSystems = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+
+    return systems.filter(system => {
+      const displayStatus = normalizeSystemStatus(system);
+      const matchesSearch =
+        !keyword ||
+        system.system_name?.toLowerCase().includes(keyword) ||
+        system.assigned_engineer?.toLowerCase().includes(keyword) ||
+        system.current_station?.toLowerCase().includes(keyword) ||
+        system.serial_number?.toLowerCase().includes(keyword) ||
+        displayStatus.includes(keyword);
+
+      const matchesEngineer =
+        filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
+      const matchesStatus =
+        filterStatus === "all-status" || displayStatus === filterStatus;
+
+      return matchesSearch && matchesEngineer && matchesStatus;
+    });
+  }, [systems, searchTerm, filterEngineer, filterStatus]);
+
+  const engineers = useMemo(
+    () =>
+      [...new Set(
+        systems
+          .map(system => system.assigned_engineer)
+          .filter((engineer): engineer is string => Boolean(engineer?.trim()))
+      )].sort((a, b) => a.localeCompare(b, "zh-Hant")),
+    [systems]
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -200,7 +248,7 @@ export function TestTracker() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
-          <p className="text-muted-foreground">系統測試進度管理 - 40 台機器測試狀態</p>
+          <p className="text-muted-foreground">系統測試進度管理 - {systems.length} 台機器測試狀態</p>
         </div>
         <div className="flex gap-2">
           <ExportManager 
