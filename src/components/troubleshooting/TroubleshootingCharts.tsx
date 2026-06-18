@@ -1,9 +1,8 @@
-import React, { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
-} from "recharts";
+import { useMemo, type ComponentType } from "react";
+import { BarChart3, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface TroubleshootingRecord {
   id: string;
@@ -23,95 +22,282 @@ interface Props {
   records: TroubleshootingRecord[];
 }
 
-const CHART_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(217 91% 50%)',
-  'hsl(142 76% 46%)',
-  'hsl(45 93% 57%)',
+interface RankedItem {
+  label: string;
+  count: number;
+  percent: number;
+  badgeClass: string;
+  barClass: string;
+}
+
+interface BreakdownItem {
+  label: string;
+  count: number;
+  percent: number;
+  hint: string;
+  dotClass: string;
+  barClass: string;
+}
+
+const RANK_TONES = [
+  {
+    badgeClass: "border-sky-300/35 bg-sky-300/[0.16] text-sky-100",
+    barClass: "bg-sky-300/90",
+  },
+  {
+    badgeClass: "border-indigo-300/35 bg-indigo-300/[0.16] text-indigo-100",
+    barClass: "bg-indigo-300/90",
+  },
+  {
+    badgeClass: "border-violet-300/35 bg-violet-300/[0.16] text-violet-100",
+    barClass: "bg-violet-300/90",
+  },
+  {
+    badgeClass: "border-cyan-300/35 bg-cyan-300/[0.16] text-cyan-100",
+    barClass: "bg-cyan-300/90",
+  },
+  {
+    badgeClass: "border-amber-300/35 bg-amber-300/[0.16] text-amber-100",
+    barClass: "bg-amber-300/90",
+  },
+  {
+    badgeClass: "border-emerald-300/35 bg-emerald-300/[0.16] text-emerald-100",
+    barClass: "bg-emerald-300/90",
+  },
 ];
 
+const toPercent = (count: number, total: number) => (total > 0 ? Math.round((count / total) * 100) : 0);
+
+const buildRankedItems = (
+  labels: Array<string | undefined>,
+  fallback: string,
+  total: number
+): RankedItem[] => {
+  const counts = labels.reduce<Record<string, number>>((acc, label) => {
+    const key = label?.trim() || fallback;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, count], index) => ({
+      label,
+      count,
+      percent: toPercent(count, total),
+      badgeClass: RANK_TONES[index % RANK_TONES.length].badgeClass,
+      barClass: RANK_TONES[index % RANK_TONES.length].barClass,
+    }));
+};
+
+function RankedBarCard({
+  title,
+  description,
+  icon: Icon,
+  items,
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  items: RankedItem[];
+}) {
+  return (
+    <Card className="border-border/70 bg-[linear-gradient(180deg,hsl(var(--card)/0.96),hsl(var(--secondary)/0.34))]">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+            <Icon className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle className="text-lg">{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-2xl border border-border/60 bg-background/30 px-4 py-3 text-xs text-muted-foreground">
+          長條越長代表件數越多，右側數字同時顯示件數與占比。
+        </div>
+
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div key={`${title}-${item.label}`} className="rounded-2xl border border-border/60 bg-background/25 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn("shrink-0 text-xs", item.badgeClass)}>
+                      #{index + 1}
+                    </Badge>
+                    <p className="truncate text-sm font-medium text-foreground" title={item.label}>
+                      {item.label}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.count} 件，占全部 {item.percent}%
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-base font-semibold text-foreground">{item.count}</p>
+                  <p className="text-xs text-muted-foreground">{item.percent}%</p>
+                </div>
+              </div>
+
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-secondary/70">
+                <div
+                  className={cn("h-full rounded-full", item.barClass)}
+                  style={{
+                    width: `${item.percent}%`,
+                    minWidth: item.count > 0 ? "14px" : "0px",
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BreakdownCard({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: BreakdownItem[];
+}) {
+  return (
+    <Card className="border-border/70 bg-[linear-gradient(180deg,hsl(var(--card)/0.96),hsl(var(--secondary)/0.24))]">
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.map((item) => (
+          <div key={`${title}-${item.label}`} className="rounded-2xl border border-border/60 bg-background/25 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", item.dotClass)} />
+                <span className="text-sm font-medium text-foreground">{item.label}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-base font-semibold text-foreground">{item.count} 件</p>
+                <p className="text-xs text-muted-foreground">{item.percent}%</p>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>{item.hint}</span>
+              <span>占全部 {item.percent}%</span>
+            </div>
+            <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-secondary/70">
+              <div
+                className={cn("h-full rounded-full", item.barClass)}
+                style={{
+                  width: `${item.percent}%`,
+                  minWidth: item.count > 0 ? "14px" : "0px",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function TroubleshootingCharts({ records }: Props) {
-  // Issue type distribution
-  const typeData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    records.forEach(r => {
-      const issueType = r.issue_type || r.category || '未分類';
-      counts[issueType] = (counts[issueType] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([type, count]) => ({
-        type,
+  const total = records.length;
+
+  const typeData = useMemo(
+    () => buildRankedItems(records.map((r) => r.issue_type || r.category), "未分類", total),
+    [records, total]
+  );
+
+  const stationData = useMemo(
+    () => buildRankedItems(records.map((r) => r.station_name), "未指定站點", total),
+    [records, total]
+  );
+
+  const statusData = useMemo<BreakdownItem[]>(() => {
+    const pending = records.filter((r) => r.status === "open").length;
+    const processing = records.filter((r) => r.status === "investigating" || r.status === "in_progress").length;
+    const resolved = records.filter((r) => r.status === "resolved" || r.status === "closed").length;
+
+    return [
+      {
+        label: "待處理",
+        count: pending,
+        percent: toPercent(pending, total),
+        hint: "尚未安排或尚未開始處理",
+        dotClass: "bg-rose-300",
+        barClass: "bg-rose-300/90",
+      },
+      {
+        label: "處理中",
+        count: processing,
+        percent: toPercent(processing, total),
+        hint: "工程師正在追查、驗證或改善",
+        dotClass: "bg-amber-300",
+        barClass: "bg-amber-300/90",
+      },
+      {
+        label: "已結案",
+        count: resolved,
+        percent: toPercent(resolved, total),
+        hint: "已解決或已完成關閉",
+        dotClass: "bg-emerald-300",
+        barClass: "bg-emerald-300/90",
+      },
+    ];
+  }, [records, total]);
+
+  const priorityData = useMemo<BreakdownItem[]>(() => {
+    const priorityOrder = [
+      {
+        key: "critical",
+        label: "緊急",
+        hint: "需優先處理、立即追蹤",
+        dotClass: "bg-fuchsia-300",
+        barClass: "bg-fuchsia-300/90",
+      },
+      {
+        key: "high",
+        label: "高",
+        hint: "影響明顯，應優先排程",
+        dotClass: "bg-sky-300",
+        barClass: "bg-sky-300/90",
+      },
+      {
+        key: "medium",
+        label: "中",
+        hint: "可安排在正常改善節奏",
+        dotClass: "bg-indigo-300",
+        barClass: "bg-indigo-300/90",
+      },
+      {
+        key: "low",
+        label: "低",
+        hint: "影響較小，可併案處理",
+        dotClass: "bg-teal-300",
+        barClass: "bg-teal-300/90",
+      },
+    ];
+
+    return priorityOrder.map((item) => {
+      const count = records.filter((record) => (record.priority || record.severity || "medium") === item.key).length;
+      return {
+        label: item.label,
         count,
-        percentage: records.length > 0 ? ((count / records.length) * 100).toFixed(1) : '0',
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [records]);
-
-  // Severity distribution
-  const severityData = useMemo(() => {
-    const labels: Record<string, string> = {
-      critical: '嚴重', high: '高', medium: '中', low: '低'
-    };
-    const colors: Record<string, string> = {
-      critical: 'hsl(var(--chart-4))',
-      high: 'hsl(0 84% 70%)',
-      medium: 'hsl(var(--chart-3))',
-      low: 'hsl(var(--chart-2))',
-    };
-    const counts: Record<string, number> = {};
-    records.forEach(r => {
-      const severity = r.severity || r.priority || 'medium';
-      counts[severity] = (counts[severity] || 0) + 1;
+        percent: toPercent(count, total),
+        hint: item.hint,
+        dotClass: item.dotClass,
+        barClass: item.barClass,
+      };
     });
-    return Object.entries(counts).map(([key, value]) => ({
-      name: labels[key] || key,
-      value,
-      color: colors[key] || 'hsl(var(--chart-1))',
-    }));
-  }, [records]);
-
-  // Status distribution
-  const statusData = useMemo(() => {
-    const labels: Record<string, string> = {
-      open: '待處理', investigating: '處理中', in_progress: '處理中', resolved: '已解決', closed: '已關閉'
-    };
-    const colors: Record<string, string> = {
-      open: 'hsl(var(--danger))',
-      investigating: 'hsl(var(--warning))',
-      in_progress: 'hsl(var(--warning))',
-      resolved: 'hsl(var(--success))',
-      closed: 'hsl(var(--muted-foreground))',
-    };
-    const counts: Record<string, number> = {};
-    records.forEach(r => {
-      counts[r.status] = (counts[r.status] || 0) + 1;
-    });
-    return Object.entries(counts).map(([key, value]) => ({
-      name: labels[key] || key,
-      value,
-      color: colors[key] || 'hsl(var(--chart-1))',
-    }));
-  }, [records]);
-
-  // Category distribution
-  const categoryData = useMemo(() => {
-    const labels: Record<string, string> = {
-      hardware: '硬體', software: '軟體', network: '網路', power: '電源', other: '其他'
-    };
-    const counts: Record<string, number> = {};
-    records.forEach(r => {
-      const cat = r.station_name || r.issue_category || '其他';
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return Object.entries(counts).map(([key, value]) => ({
-      name: labels[key] || key,
-      count: value,
-    }));
-  }, [records]);
+  }, [records, total]);
 
   if (records.length === 0) {
     return (
@@ -124,123 +310,66 @@ export function TroubleshootingCharts({ records }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Issue Type Bar Chart */}
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base sm:text-base">問題類型分佈</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={typeData} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis type="category" dataKey="type" tick={{ fontSize: 12 }} width={100} />
-                <Tooltip
-                  formatter={(value: number, name: string) => [`${value} 次`, '發生次數']}
-                  labelFormatter={(label) => `問題類型: ${label}`}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
+    <div className="space-y-6">
+      <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--card)/0.96),hsl(var(--primary)/0.08)_60%,hsl(var(--card)/0.94))]">
+        <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-primary">統計讀法</p>
+            <h3 className="text-xl font-semibold text-foreground">先看高頻問題，再看集中站點，最後看處理進度</h3>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              這份統計已經改成報表式呈現，每張卡都會直接顯示件數與占比，不需要再自己猜圖表代表什麼。
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-primary/20 bg-background/40 p-4 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">最多問題類型</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{typeData[0]?.label || "未分類"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{typeData[0]?.count || 0} 件</p>
+            </div>
+            <div className="rounded-2xl border border-primary/20 bg-background/40 p-4 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">最常發生站點</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{stationData[0]?.label || "未指定站點"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{stationData[0]?.count || 0} 件</p>
+            </div>
+            <div className="rounded-2xl border border-primary/20 bg-background/40 p-4 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">待追蹤案件</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{statusData[0].count + statusData[1].count} 件</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                占全部 {toPercent(statusData[0].count + statusData[1].count, total)}%
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Severity Pie Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-base">優先級分佈</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={severityData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  dataKey="value"
-                  isAnimationActive={false}
-                >
-                  {severityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => [`${value} 件`, '數量']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <RankedBarCard
+          title="問題類型排行"
+          description="直接看哪一類問題最常重複發生"
+          icon={BarChart3}
+          items={typeData}
+        />
+        <RankedBarCard
+          title="問題站點排行"
+          description="直接看問題最集中出現在哪些站別"
+          icon={MapPin}
+          items={stationData}
+        />
+      </div>
 
-      {/* Status Pie Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-base">處理狀態分佈</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  dataKey="value"
-                  isAnimationActive={false}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => [`${value} 件`, '數量']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Category Bar Chart */}
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base sm:text-base">發生站點統計</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  formatter={(value: number) => [`${value} 次`, '數量']}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <BreakdownCard
+          title="處理狀態一覽"
+          description="看目前還有多少案件待追蹤、多少已經結案"
+          items={statusData}
+        />
+        <BreakdownCard
+          title="優先級一覽"
+          description="看工廠現在最需要先處理哪一層級的問題"
+          items={priorityData}
+        />
+      </div>
     </div>
   );
 }
