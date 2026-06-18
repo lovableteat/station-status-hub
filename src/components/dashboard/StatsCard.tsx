@@ -26,10 +26,10 @@ export function StatsCard({
 }: StatsCardProps) {
   const variantStyles = {
     default: "border-border",
-    success: "border-success bg-gradient-to-br from-success/10 to-success/5 text-foreground",
-    warning: "border-warning bg-gradient-to-br from-warning/10 to-warning/5 text-foreground", 
-    danger: "border-danger bg-gradient-to-br from-danger/10 to-danger/5 text-foreground",
-    info: "border-info bg-gradient-to-br from-info/10 to-info/5 text-foreground"
+    success: "border-primary/35 bg-gradient-to-br from-primary/10 to-primary/[0.03] text-foreground",
+    warning: "border-amber-300/35 bg-gradient-to-br from-amber-400/10 to-amber-400/[0.03] text-foreground",
+    danger: "border-rose-300/35 bg-gradient-to-br from-rose-400/10 to-rose-400/[0.03] text-foreground",
+    info: "border-blue-300/35 bg-gradient-to-br from-blue-400/10 to-blue-400/[0.03] text-foreground"
   };
 
   return (
@@ -39,7 +39,7 @@ export function StatsCard({
       className
     )}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium opacity-90">
+        <CardTitle className="text-sm font-medium opacity-90 sm:text-sm">
           {title}
         </CardTitle>
         <div className="opacity-70">

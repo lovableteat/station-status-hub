@@ -87,9 +87,9 @@ export function StationAverageTimeChart() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="overflow-hidden border-primary/35">
+      <CardHeader className="bg-primary/[0.05]">
+        <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
           <Clock className="h-5 w-5" />
           各站平均處理時間分析
         </CardTitle>
