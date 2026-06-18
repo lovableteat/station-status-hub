@@ -7,12 +7,16 @@ import {
 
 interface TroubleshootingRecord {
   id: string;
-  issue_type: string;
-  issue_category: string;
-  severity: string;
+  issue_type?: string;
+  issue_category?: string;
+  severity?: string;
+  priority?: string;
+  category?: string;
+  station_name?: string;
   status: string;
-  occurred_at: string;
-  time_to_resolve_hours: number | null;
+  occurred_at?: string;
+  created_at?: string;
+  time_to_resolve_hours?: number | null;
 }
 
 interface Props {
@@ -35,7 +39,8 @@ export function TroubleshootingCharts({ records }: Props) {
   const typeData = useMemo(() => {
     const counts: Record<string, number> = {};
     records.forEach(r => {
-      counts[r.issue_type] = (counts[r.issue_type] || 0) + 1;
+      const issueType = r.issue_type || r.category || '未分類';
+      counts[issueType] = (counts[issueType] || 0) + 1;
     });
     return Object.entries(counts)
       .map(([type, count]) => ({
@@ -59,7 +64,8 @@ export function TroubleshootingCharts({ records }: Props) {
     };
     const counts: Record<string, number> = {};
     records.forEach(r => {
-      counts[r.severity] = (counts[r.severity] || 0) + 1;
+      const severity = r.severity || r.priority || 'medium';
+      counts[severity] = (counts[severity] || 0) + 1;
     });
     return Object.entries(counts).map(([key, value]) => ({
       name: labels[key] || key,
@@ -71,11 +77,12 @@ export function TroubleshootingCharts({ records }: Props) {
   // Status distribution
   const statusData = useMemo(() => {
     const labels: Record<string, string> = {
-      open: '待處理', investigating: '處理中', resolved: '已解決', closed: '已關閉'
+      open: '待處理', investigating: '處理中', in_progress: '處理中', resolved: '已解決', closed: '已關閉'
     };
     const colors: Record<string, string> = {
       open: 'hsl(var(--danger))',
       investigating: 'hsl(var(--warning))',
+      in_progress: 'hsl(var(--warning))',
       resolved: 'hsl(var(--success))',
       closed: 'hsl(var(--muted-foreground))',
     };
@@ -97,7 +104,7 @@ export function TroubleshootingCharts({ records }: Props) {
     };
     const counts: Record<string, number> = {};
     records.forEach(r => {
-      const cat = r.issue_category || 'other';
+      const cat = r.station_name || r.issue_category || '其他';
       counts[cat] = (counts[cat] || 0) + 1;
     });
     return Object.entries(counts).map(([key, value]) => ({
@@ -110,7 +117,7 @@ export function TroubleshootingCharts({ records }: Props) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
-          尚無故障排除記錄，請新增第一筆記錄
+          尚無問題記錄，請先新增第一筆問題
         </CardContent>
       </Card>
     );
@@ -121,7 +128,7 @@ export function TroubleshootingCharts({ records }: Props) {
       {/* Issue Type Bar Chart */}
       <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base">問題類型分佈</CardTitle>
+          <CardTitle className="text-base sm:text-base">問題類型分佈</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-80">
@@ -139,7 +146,7 @@ export function TroubleshootingCharts({ records }: Props) {
                     borderRadius: '8px',
                   }}
                 />
-                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -149,7 +156,7 @@ export function TroubleshootingCharts({ records }: Props) {
       {/* Severity Pie Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">嚴重度分佈</CardTitle>
+          <CardTitle className="text-base sm:text-base">優先級分佈</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64">
@@ -163,6 +170,7 @@ export function TroubleshootingCharts({ records }: Props) {
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
                   dataKey="value"
+                  isAnimationActive={false}
                 >
                   {severityData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -179,7 +187,7 @@ export function TroubleshootingCharts({ records }: Props) {
       {/* Status Pie Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">處理狀態分佈</CardTitle>
+          <CardTitle className="text-base sm:text-base">處理狀態分佈</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64">
@@ -193,6 +201,7 @@ export function TroubleshootingCharts({ records }: Props) {
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
                   dataKey="value"
+                  isAnimationActive={false}
                 >
                   {statusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -209,7 +218,7 @@ export function TroubleshootingCharts({ records }: Props) {
       {/* Category Bar Chart */}
       <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base">問題分類統計</CardTitle>
+          <CardTitle className="text-base sm:text-base">發生站點統計</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64">
@@ -226,7 +235,7 @@ export function TroubleshootingCharts({ records }: Props) {
                     borderRadius: '8px',
                   }}
                 />
-                <Bar dataKey="count" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>

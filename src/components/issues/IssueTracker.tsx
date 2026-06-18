@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,11 +18,14 @@ import {
   Eye,
   Download,
   Edit,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3,
+  ListChecks
 } from "lucide-react";
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
+import { IssueAnalyticsPanel } from "./IssueAnalyticsPanel";
 import { BackButton } from "@/components/common/BackButton";
 
 interface Issue {
@@ -65,6 +69,7 @@ export function IssueTracker() {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState("list");
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const { toast } = useToast();
 
@@ -378,7 +383,7 @@ export function IssueTracker() {
           <BackButton />
           <div>
             <h1 className="text-3xl font-bold">問題追蹤</h1>
-            <p className="text-muted-foreground">管理和追蹤測試過程中的問題</p>
+            <p className="text-muted-foreground">問題填報、處理追蹤、統計分析與工廠報告</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -387,47 +392,65 @@ export function IssueTracker() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex-1 min-w-[200px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="搜尋問題..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+      <Tabs value={activeView} onValueChange={setActiveView}>
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="list">
+            <ListChecks className="mr-2 h-4 w-4" />
+            問題列表
+          </TabsTrigger>
+          <TabsTrigger value="analytics">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            統計與報告
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="mt-5 space-y-6">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border/70 bg-card/70 p-4">
+            <div className="min-w-[200px] flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="搜尋問題..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="優先級篩選" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部優先級</SelectItem>
+                <SelectItem value="high">高</SelectItem>
+                <SelectItem value="medium">中</SelectItem>
+                <SelectItem value="low">低</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="優先級篩選" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部優先級</SelectItem>
-            <SelectItem value="high">高</SelectItem>
-            <SelectItem value="medium">中</SelectItem>
-            <SelectItem value="low">低</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
-      {/* Main Content */}
-      <IssueTableView issues={filteredIssues} onUpdate={loadIssues} />
+          <IssueTableView issues={filteredIssues} onUpdate={loadIssues} />
 
-      {filteredIssues.length === 0 && (
-        <div className="text-center py-12">
-          <Bug className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">沒有找到問題</h3>
-          <p className="text-muted-foreground">
-            {searchTerm || priorityFilter !== "all"
-              ? "請調整篩選條件或建立新問題"
-              : "還沒有任何問題記錄，點擊上方按鈕新增問題"
-            }
-          </p>
-        </div>
-      )}
+          {filteredIssues.length === 0 && (
+            <div className="py-12 text-center">
+              <Bug className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h3 className="mb-2 text-lg font-medium">沒有找到問題</h3>
+              <p className="text-muted-foreground">
+                {searchTerm || priorityFilter !== "all"
+                  ? "請調整篩選條件或建立新問題"
+                  : "還沒有任何問題記錄，點擊上方按鈕新增問題"
+                }
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-5">
+          <IssueAnalyticsPanel issues={issues} />
+        </TabsContent>
+      </Tabs>
 
       {/* Image Preview Dialog */}
       <Dialog open={showImagePreview} onOpenChange={setShowImagePreview}>
