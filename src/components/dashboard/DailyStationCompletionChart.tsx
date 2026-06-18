@@ -20,6 +20,7 @@ export function DailyStationCompletionChart() {
   const [chartData, setChartData] = useState<DailyStationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [days, setDays] = useState<number>(7);
+  const sortedStations = [...stations].sort((a, b) => a.station_order - b.station_order);
 
   // 站點顏色映射
   const stationColors = [
@@ -127,7 +128,7 @@ export function DailyStationCompletionChart() {
         const dayData: DailyStationData = { date: displayDate };
         
         // 為每個站點添加該日完成數量
-        stations.forEach(station => {
+        sortedStations.forEach(station => {
           const stationData = processedData[dateStr]?.[station.station_name];
           dayData[station.station_name] = stationData ? stationData.size : 0;
         });
@@ -155,19 +156,35 @@ export function DailyStationCompletionChart() {
   // 自訂 Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const visiblePayload = payload
+        .filter((entry: any) => Number(entry.value) > 0)
+        .sort((a: any, b: any) => Number(b.value) - Number(a.value));
+
       return (
-        <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
-          <p className="font-medium text-popover-foreground">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {entry.dataKey}: {entry.value} 台完成
-            </p>
-          ))}
+        <div className="min-w-[220px] rounded-2xl border border-border/70 bg-popover/95 p-3 shadow-2xl backdrop-blur">
+          <p className="text-sm font-semibold text-popover-foreground">{label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">當日各站完成台數</p>
+          <div className="mt-3 space-y-2">
+            {(visiblePayload.length > 0 ? visiblePayload : payload).map((entry: any, index: number) => (
+              <div key={index} className="flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <span className="text-popover-foreground">{entry.dataKey}</span>
+                </div>
+                <span className="font-medium text-popover-foreground">{entry.value} 台</span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
     return null;
   };
+
+  const chartHeight = Math.max(360, chartData.length * 54);
 
   return (
     <Card className="overflow-hidden rounded-[30px] border border-violet-300/20 bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))] shadow-[0_24px_60px_-48px_hsl(245_58%_66%/0.45)]">
@@ -214,42 +231,53 @@ export function DailyStationCompletionChart() {
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        <div className="h-80">
+        <div className="mb-4 rounded-2xl border border-violet-300/12 bg-background/25 px-4 py-3 text-sm text-muted-foreground">
+          每一列代表一天，橫條越長表示該站在當天完成的機台數越多。
+        </div>
+
+        <div className="h-[430px] overflow-y-auto pr-2">
           {isLoading ? (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex h-full items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                data={chartData} 
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  tick={{ fontSize: 12 }}
-                  label={{ value: '完成台數', angle: -90, position: 'insideLeft' }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                {stations
-                  .sort((a, b) => a.station_order - b.station_order)
-                  .map((station, index) => (
-                    <Bar 
+            <div style={{ height: `${chartHeight}px` }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 12, right: 30, left: 8, bottom: 12 }}
+                  barCategoryGap="26%"
+                  barGap={4}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} className="opacity-25" />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tick={{ fontSize: 12 }}
+                    label={{ value: '完成台數', position: 'insideBottomRight', offset: -4 }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                    width={58}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend />
+                  {sortedStations.map((station, index) => (
+                    <Bar
                       key={station.id}
-                      dataKey={station.station_name} 
+                      dataKey={station.station_name}
                       fill={stationColors[index % stationColors.length]}
-                      radius={[2, 2, 0, 0]}
+                      radius={[0, 6, 6, 0]}
                     />
                   ))}
-              </BarChart>
-            </ResponsiveContainer>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <TrendingUp className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>目前沒有可用的完成數據</p>
@@ -262,9 +290,7 @@ export function DailyStationCompletionChart() {
         {/* 統計摘要 */}
         {chartData.length > 0 && (
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {stations
-              .sort((a, b) => a.station_order - b.station_order)
-              .map((station, index) => {
+            {sortedStations.map((station, index) => {
                 const todayData = chartData[chartData.length - 1];
                 const todayCount = (todayData[station.station_name] as number) || 0;
                 const weekTotal = chartData.reduce((sum, day) => 
