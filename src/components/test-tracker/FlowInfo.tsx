@@ -459,7 +459,7 @@ export function FlowInfo() {
                           key={station.id}
                           type="button"
                           onClick={() => setSelectedStationId(station.id)}
-                          className={`group relative flex min-h-[168px] flex-col rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_hsl(var(--primary)/0.55)] ${theme.shell} ${isSelected ? "border-primary/70 bg-primary/10 ring-2 ring-primary/25" : ""}`}
+                          className={`group relative flex min-h-[168px] flex-col rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_rgba(0,0,0,0.5)] ${theme.shell} ${isSelected ? theme.selected : ""}`}
                         >
                           <div className={`mb-4 h-1 rounded-full bg-gradient-to-r ${theme.rail}`} />
                           <div className="flex items-start justify-between gap-3">
@@ -473,10 +473,10 @@ export function FlowInfo() {
                           <div className="mt-4 flex flex-1 flex-col pr-5">
                             <div className="line-clamp-2 min-h-12 text-base font-semibold leading-6 text-foreground">{station.station_name}</div>
                             <div className="mt-auto flex flex-wrap gap-2 pt-3 text-sm">
-                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
+                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
                                 {getCalculatedStationHours(station.id)}h
                               </span>
-                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
+                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
                                 {stationItemCount} 測項
                               </span>
                             </div>
