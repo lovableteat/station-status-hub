@@ -186,7 +186,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
     <Card className="overflow-hidden border-violet-200/25 bg-slate-800/85">
       <CardHeader className="bg-violet-500/10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2 text-slate-50">
+          <CardTitle className="flex items-center gap-2 text-xl text-slate-50 sm:text-xl">
             <ListChecks className="h-5 w-5 text-violet-100" />
             測試項目管理
           </CardTitle>
@@ -289,7 +289,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                   onOpenChange={() => toggleStationExpanded(station.id)}
                 >
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer border-b-0 bg-slate-800/65 transition-colors hover:bg-violet-500/10">
+                    <CardHeader className="cursor-pointer border-b-0 bg-slate-800/65 p-4 transition-colors hover:bg-violet-500/10 sm:p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {isExpanded ? (
@@ -297,7 +297,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
                           ) : (
                             <ChevronRight className="h-4 w-4 text-violet-100" />
                           )}
-                          <CardTitle className="text-lg text-slate-50">{station.station_name}</CardTitle>
+                          <CardTitle className="text-base text-slate-50 sm:text-base">{station.station_name}</CardTitle>
                         </div>
                         <div className="flex items-center gap-4">
                           <Badge variant="secondary" className="border border-violet-200/25 bg-violet-400/15 text-xs text-violet-100">
