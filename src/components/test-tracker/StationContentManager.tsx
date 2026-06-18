@@ -149,7 +149,7 @@ export function StationContentManager({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-lg">
             <FileText className="h-5 w-5" />
             {stationName} - 流程內容管理
           </CardTitle>
