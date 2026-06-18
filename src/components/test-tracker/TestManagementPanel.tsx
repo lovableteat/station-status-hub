@@ -21,8 +21,8 @@ export function TestManagementPanel() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">GB300 L10 測試流程說明</h1>
-          <p className="text-base text-muted-foreground">站點管理、測試項目管理</p>
+          <h1 className="text-2xl font-bold">L10 測試流程設定</h1>
+          <p className="text-base text-muted-foreground">站點設定、測試項目設定</p>
         </div>
       </div>
 
