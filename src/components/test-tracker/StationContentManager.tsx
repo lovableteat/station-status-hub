@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Save, X, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface StationContent {
   id: string;
@@ -16,17 +17,45 @@ interface StationContent {
   order_num: number;
 }
 
+interface StationContentTheme {
+  contentPanel: string;
+  contentHeader: string;
+  contentSurface: string;
+  contentForm: string;
+  contentCard: string;
+  contentEmpty: string;
+  contentButton: string;
+  contentButtonGhost: string;
+  contentIcon: string;
+  contentBadge: string;
+}
+
 interface StationContentManagerProps {
   stationId: string;
   stationName: string;
   contents: StationContent[];
+  theme?: StationContentTheme;
   onUpdate: () => void;
 }
+
+const defaultTheme: StationContentTheme = {
+  contentPanel: "border-border/70 bg-card/95",
+  contentHeader: "border-border/70 bg-background/35",
+  contentSurface: "border-border/70 bg-background/35",
+  contentForm: "border-border/70 bg-background/35",
+  contentCard: "border-border/70 bg-card/85 hover:border-primary/25 hover:bg-primary/[0.03]",
+  contentEmpty: "border-border/70 bg-background/25",
+  contentButton: "border-primary/25 bg-primary/15 text-primary hover:bg-primary/22",
+  contentButtonGhost: "border-border/70 bg-background/55 text-foreground hover:bg-secondary/80",
+  contentIcon: "border-primary/25 bg-primary/10 text-primary",
+  contentBadge: "border-primary/25 bg-primary/10 text-primary",
+};
 
 export function StationContentManager({ 
   stationId, 
   stationName, 
   contents, 
+  theme,
   onUpdate 
 }: StationContentManagerProps) {
   const { toast } = useToast();
@@ -34,6 +63,7 @@ export function StationContentManager({
   const [newContent, setNewContent] = useState({ title: '', content: '' });
   const [editValues, setEditValues] = useState({ title: '', content: '' });
   const [showAddForm, setShowAddForm] = useState(false);
+  const activeTheme = theme ?? defaultTheme;
 
   const handleAdd = async () => {
     if (!newContent.title.trim()) {
@@ -146,17 +176,23 @@ export function StationContentManager({
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={activeTheme.contentPanel}>
+      <CardHeader className={cn("border-b", activeTheme.contentHeader)}>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-lg">
-            <FileText className="h-5 w-5" />
-            {stationName} - 流程內容管理
+          <CardTitle className="flex items-center gap-3 text-lg sm:text-lg">
+            <span className={cn("flex h-10 w-10 items-center justify-center rounded-xl border", activeTheme.contentIcon)}>
+              <FileText className="h-5 w-5" />
+            </span>
+            <div className="flex flex-col">
+              <span>{stationName} - 流程內容管理</span>
+              <span className="text-sm font-normal text-muted-foreground">{contents.length} 個流程段落</span>
+            </div>
           </CardTitle>
           <Button
             onClick={() => setShowAddForm(!showAddForm)}
+            variant="outline"
             size="sm"
-            className="text-sm"
+            className={cn("text-sm shadow-sm", activeTheme.contentButton)}
           >
             <Plus className="h-4 w-4 mr-2" />
             新增內容
@@ -166,7 +202,7 @@ export function StationContentManager({
       <CardContent className="space-y-4">
         {/* Add Form */}
         {showAddForm && (
-          <Card className="border-dashed">
+          <Card className={cn("border-dashed", activeTheme.contentForm)}>
             <CardContent className="p-4 space-y-3">
               <Input
                 placeholder="標題"
@@ -182,7 +218,7 @@ export function StationContentManager({
                 className="text-sm"
               />
               <div className="flex gap-2">
-                <Button onClick={handleAdd} size="sm" className="text-sm">
+                <Button onClick={handleAdd} variant="outline" size="sm" className={cn("text-sm shadow-sm", activeTheme.contentButton)}>
                   <Save className="h-3 w-3 mr-1" />
                   儲存
                 </Button>
@@ -193,7 +229,7 @@ export function StationContentManager({
                   }} 
                   variant="outline" 
                   size="sm"
-                  className="text-sm"
+                  className={cn("text-sm", activeTheme.contentButtonGhost)}
                 >
                   <X className="h-3 w-3 mr-1" />
                   取消
@@ -206,7 +242,7 @@ export function StationContentManager({
         {/* Content List */}
         <div className="space-y-3">
           {contents.length === 0 ? (
-            <div className="text-center p-8 text-muted-foreground">
+            <div className={cn("rounded-2xl border p-8 text-center text-muted-foreground", activeTheme.contentEmpty)}>
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm">尚未新增任何流程內容</p>
               <p className="mt-1 text-sm">點擊上方「新增內容」開始建立</p>
@@ -215,7 +251,7 @@ export function StationContentManager({
             contents
               .sort((a, b) => a.order_num - b.order_num)
               .map((content, index) => (
-                <Card key={content.id} className="relative">
+                <Card key={content.id} className={cn("relative transition-colors", activeTheme.contentCard)}>
                   <CardContent className="p-4">
                     {editingId === content.id ? (
                       <div className="space-y-3">
@@ -231,7 +267,7 @@ export function StationContentManager({
                           className="text-sm"
                         />
                         <div className="flex gap-2">
-                          <Button onClick={() => handleSave(content.id)} size="sm" className="text-sm">
+                          <Button onClick={() => handleSave(content.id)} variant="outline" size="sm" className={cn("text-sm shadow-sm", activeTheme.contentButton)}>
                             <Save className="h-3 w-3 mr-1" />
                             儲存
                           </Button>
@@ -239,7 +275,7 @@ export function StationContentManager({
                             onClick={() => setEditingId(null)} 
                             variant="outline" 
                             size="sm"
-                            className="text-sm"
+                            className={cn("text-sm", activeTheme.contentButtonGhost)}
                           >
                             <X className="h-3 w-3 mr-1" />
                             取消
@@ -250,7 +286,7 @@ export function StationContentManager({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
                               {index + 1}
                             </Badge>
                             <h4 className="text-sm font-medium">{content.title}</h4>
@@ -258,9 +294,9 @@ export function StationContentManager({
                           <div className="flex gap-1">
                             <Button
                               onClick={() => handleEdit(content)}
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="h-8 w-8 p-0"
+                              className={cn("h-8 w-8 p-0", activeTheme.contentButtonGhost)}
                             >
                               <Edit className="h-3 w-3" />
                             </Button>

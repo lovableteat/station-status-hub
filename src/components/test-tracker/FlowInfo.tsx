@@ -59,7 +59,14 @@ const stationThemes = [
     pill: "border-blue-500/20 bg-blue-950/30 text-blue-200/80",
     accent: "text-blue-400",
     rail: "from-blue-500 via-blue-400/50 to-transparent",
-    contentPanel: "border-border/70 bg-card/90",
+    contentPanel: "border-blue-300/28 bg-gradient-to-br from-slate-950/95 via-slate-900/92 to-blue-950/20 shadow-[0_18px_55px_-38px_rgba(59,130,246,0.42)]",
+    contentHeader: "border-blue-300/18 bg-blue-400/[0.06]",
+    contentSurface: "border-blue-300/14 bg-slate-950/32",
+    contentForm: "border-blue-300/18 bg-blue-950/[0.08]",
+    contentCard: "border-blue-300/18 bg-blue-950/[0.08] hover:border-blue-300/30 hover:bg-blue-950/[0.14]",
+    contentEmpty: "border-blue-300/14 bg-blue-950/[0.05]",
+    contentButton: "border-blue-300/25 bg-blue-400/[0.14] text-blue-50 hover:bg-blue-400/[0.22]",
+    contentButtonGhost: "border-blue-300/18 bg-slate-900/60 text-blue-100 hover:bg-blue-950/35 hover:text-blue-50",
     contentIcon: "border-blue-500/30 bg-blue-950/40 text-blue-300",
     contentBadge: "border-blue-500/30 bg-blue-950/40 text-blue-300",
     contentBar: "from-blue-500 via-blue-400/50 to-transparent",
@@ -72,7 +79,14 @@ const stationThemes = [
     pill: "border-indigo-500/20 bg-indigo-950/30 text-indigo-200/80",
     accent: "text-indigo-400",
     rail: "from-indigo-500 via-indigo-400/50 to-transparent",
-    contentPanel: "border-border/70 bg-card/90",
+    contentPanel: "border-indigo-300/28 bg-gradient-to-br from-slate-950/95 via-slate-900/92 to-indigo-950/20 shadow-[0_18px_55px_-38px_rgba(99,102,241,0.42)]",
+    contentHeader: "border-indigo-300/18 bg-indigo-400/[0.06]",
+    contentSurface: "border-indigo-300/14 bg-slate-950/32",
+    contentForm: "border-indigo-300/18 bg-indigo-950/[0.08]",
+    contentCard: "border-indigo-300/18 bg-indigo-950/[0.08] hover:border-indigo-300/30 hover:bg-indigo-950/[0.14]",
+    contentEmpty: "border-indigo-300/14 bg-indigo-950/[0.05]",
+    contentButton: "border-indigo-300/25 bg-indigo-400/[0.14] text-indigo-50 hover:bg-indigo-400/[0.22]",
+    contentButtonGhost: "border-indigo-300/18 bg-slate-900/60 text-indigo-100 hover:bg-indigo-950/35 hover:text-indigo-50",
     contentIcon: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
     contentBadge: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
     contentBar: "from-indigo-500 via-indigo-400/50 to-transparent",
@@ -85,7 +99,14 @@ const stationThemes = [
     pill: "border-violet-500/20 bg-violet-950/30 text-violet-200/80",
     accent: "text-violet-400",
     rail: "from-violet-500 via-violet-400/50 to-transparent",
-    contentPanel: "border-border/70 bg-card/90",
+    contentPanel: "border-violet-300/28 bg-gradient-to-br from-slate-950/95 via-slate-900/92 to-violet-950/20 shadow-[0_18px_55px_-38px_rgba(139,92,246,0.42)]",
+    contentHeader: "border-violet-300/18 bg-violet-400/[0.06]",
+    contentSurface: "border-violet-300/14 bg-slate-950/32",
+    contentForm: "border-violet-300/18 bg-violet-950/[0.08]",
+    contentCard: "border-violet-300/18 bg-violet-950/[0.08] hover:border-violet-300/30 hover:bg-violet-950/[0.14]",
+    contentEmpty: "border-violet-300/14 bg-violet-950/[0.05]",
+    contentButton: "border-violet-300/25 bg-violet-400/[0.14] text-violet-50 hover:bg-violet-400/[0.22]",
+    contentButtonGhost: "border-violet-300/18 bg-slate-900/60 text-violet-100 hover:bg-violet-950/35 hover:text-violet-50",
     contentIcon: "border-violet-500/30 bg-violet-950/40 text-violet-300",
     contentBadge: "border-violet-500/30 bg-violet-950/40 text-violet-300",
     contentBar: "from-violet-500 via-violet-400/50 to-transparent",
@@ -98,7 +119,14 @@ const stationThemes = [
     pill: "border-cyan-500/20 bg-cyan-950/30 text-cyan-200/80",
     accent: "text-cyan-400",
     rail: "from-cyan-500 via-cyan-400/50 to-transparent",
-    contentPanel: "border-border/70 bg-card/90",
+    contentPanel: "border-cyan-300/28 bg-gradient-to-br from-slate-950/95 via-slate-900/92 to-cyan-950/20 shadow-[0_18px_55px_-38px_rgba(6,182,212,0.42)]",
+    contentHeader: "border-cyan-300/18 bg-cyan-400/[0.06]",
+    contentSurface: "border-cyan-300/14 bg-slate-950/32",
+    contentForm: "border-cyan-300/18 bg-cyan-950/[0.08]",
+    contentCard: "border-cyan-300/18 bg-cyan-950/[0.08] hover:border-cyan-300/30 hover:bg-cyan-950/[0.14]",
+    contentEmpty: "border-cyan-300/14 bg-cyan-950/[0.05]",
+    contentButton: "border-cyan-300/25 bg-cyan-400/[0.14] text-cyan-50 hover:bg-cyan-400/[0.22]",
+    contentButtonGhost: "border-cyan-300/18 bg-slate-900/60 text-cyan-100 hover:bg-cyan-950/35 hover:text-cyan-50",
     contentIcon: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
     contentBadge: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
     contentBar: "from-cyan-500 via-cyan-400/50 to-transparent",
@@ -593,34 +621,36 @@ export function FlowInfo() {
           {selectedStation && (
             <section
               key={selectedStation.id}
-              className="overflow-hidden rounded-2xl border border-amber-300/35 bg-card/85 shadow-[0_18px_55px_-38px_hsl(43_96%_56%/0.42)] animate-in fade-in-0 slide-in-from-top-2 duration-300"
+              className={`animate-in fade-in-0 slide-in-from-top-2 overflow-hidden rounded-2xl border duration-300 ${selectedStationTheme.contentPanel}`}
             >
-              <div className="flex flex-col gap-3 border-b border-amber-300/20 bg-amber-400/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className={`flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${selectedStationTheme.contentHeader}`}>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/35 bg-amber-400/10 text-amber-200">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${selectedStationTheme.contentIcon}`}>
                     <Layers className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-xl font-semibold text-foreground">流程內容管理</h2>
-                      <Badge variant="outline" className="border-amber-300/35 bg-amber-400/10 text-xs text-amber-200">
+                      <Badge variant="outline" className={`text-xs ${selectedStationTheme.contentBadge}`}>
                         Station {selectedStationIndex + 1}
                       </Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">目前顯示 {selectedStation.station_name} 的流程內容。</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="w-fit border-amber-300/35 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-200">
+                <Badge variant="outline" className={`w-fit px-3 py-1.5 text-xs ${selectedStationTheme.contentBadge}`}>
                   已切換至 {selectedStation.station_name}
                 </Badge>
               </div>
               <div className="p-5 sm:p-6">
-                <div className="rounded-2xl border border-border/70 bg-background/35 p-3">
+                <div className={`rounded-2xl border p-3 ${selectedStationTheme.contentSurface}`}>
+                  <div className={`mb-3 h-1 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
                   <div className="max-h-[430px] overflow-y-auto pr-1">
                     <StationContentManager
                       stationId={selectedStation.id}
                       stationName={selectedStation.station_name}
                       contents={selectedStationContents}
+                      theme={selectedStationTheme}
                       onUpdate={loadData}
                     />
                   </div>
