@@ -1,11 +1,11 @@
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Settings, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,6 +19,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
   const [newSystemEngineer, setNewSystemEngineer] = useState("");
   const [newSystemSerial, setNewSystemSerial] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [creationProgress, setCreationProgress] = useState(0);
   const retryCountRef = useRef(0);
   const { toast } = useToast();
@@ -145,6 +146,82 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
     }
   };
 
+  const handleDeleteAllSystems = async () => {
+    try {
+      setIsDeletingAll(true);
+
+      const { data: systemsToDelete, error: fetchError } = await supabase
+        .from('test_systems')
+        .select('id, system_name')
+        .order('system_name');
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (!systemsToDelete || systemsToDelete.length === 0) {
+        toast({
+          title: "目前沒有機台",
+          description: "資料庫內沒有可刪除的機台資料"
+        });
+        return;
+      }
+
+      let deletedCount = 0;
+      const failedSystems: string[] = [];
+      const batchSize = 8;
+
+      for (let i = 0; i < systemsToDelete.length; i += batchSize) {
+        const batch = systemsToDelete.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(
+          batch.map((system) =>
+            supabase.rpc('delete_test_system', { p_system_id: system.id })
+          )
+        );
+
+        batchResults.forEach((result, index) => {
+          const system = batch[index];
+
+          if (result.status === "fulfilled" && !result.value.error) {
+            deletedCount += 1;
+            return;
+          }
+
+          failedSystems.push(system.system_name);
+          console.error(
+            `Bulk delete failed for ${system.system_name}:`,
+            result.status === "fulfilled" ? result.value.error : result.reason
+          );
+        });
+      }
+
+      onSystemUpdate();
+
+      if (failedSystems.length === 0) {
+        toast({
+          title: "已清空所有機台",
+          description: `共刪除 ${deletedCount} 台機台與其相關問題、進度、附件資料`
+        });
+        return;
+      }
+
+      toast({
+        title: "部分機台刪除失敗",
+        description: `已刪除 ${deletedCount} 台，失敗 ${failedSystems.length} 台：${failedSystems.slice(0, 3).join("、")}${failedSystems.length > 3 ? "..." : ""}`,
+        variant: "destructive"
+      });
+    } catch (error) {
+      console.error('Error deleting all systems:', error);
+      toast({
+        title: "刪除全部機台失敗",
+        description: "無法完成批次刪除，請稍後重試或聯絡管理員",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   return (
     <div className="flex gap-2">
       {/* 新增機台對話框 */}
@@ -221,7 +298,46 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
         </DialogContent>
       </Dialog>
 
-      {/* 刪除機台功能 - 這個會在每個機台行中顯示 */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="outline"
+            disabled={isDeletingAll}
+            className="h-11 rounded-xl border-red-400/35 bg-red-500/[0.08] px-5 text-sm font-semibold text-red-100 shadow-sm hover:bg-red-500/[0.16] hover:text-white"
+          >
+            <Trash2 className="mr-2 h-4 w-4 shrink-0" />
+            {isDeletingAll ? "刪除全部機台中..." : "刪除全部機台"}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">確認刪除所有機台</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="space-y-2">
+                <p>這會清空目前 L10 測試追蹤中的全部機台資料，適合換專案前重新開始。</p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>刪除所有機台基本資料</li>
+                  <li>刪除所有測試進度、站點時間與稽核記錄</li>
+                  <li>刪除該機台相關問題追蹤、附件與排除設定</li>
+                </ul>
+                <p className="font-medium text-red-600">
+                  此操作無法復原，請確認現在真的要清空全部機台。
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAll}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAllSystems}
+              disabled={isDeletingAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAll ? "刪除中..." : "確認刪除全部機台"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
