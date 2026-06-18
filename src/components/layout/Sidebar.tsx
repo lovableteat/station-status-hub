@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
 import {
-  BarChart3,
   Database,
   Monitor,
   AlertTriangle,
@@ -15,9 +14,7 @@ import {
   FileText,
   Users,
   LogOut,
-  User,
-  Key,
-  SearchX
+  User
 } from "lucide-react";
 
 interface SidebarProps {
@@ -35,10 +32,8 @@ const navigationItems = [
   { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
   { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
-  { id: "troubleshooting", label: "Troubleshooting", icon: SearchX, description: "問題統計分析" },
   { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
   { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
-  { id: "l11-cabinet", label: "機櫃管理中心", icon: BarChart3, description: "3D機櫃結構" },
 ];
 
 export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
