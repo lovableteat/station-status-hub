@@ -138,7 +138,7 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
   };
 
   const downloadAsPDF = (data: any[]) => {
-    let content = "GB300 L10 測試追蹤報表\n";
+    let content = "L10 測試追蹤報表\n";
     content += `匯出時間: ${new Date().toLocaleString('zh-TW')}\n\n`;
     content += "機台編號\t當前站點\t狀態\tStation 0 - 工廠組裝\tStation 1 - 開機\tStation 2 - FW\tStation 3 - Pega_diag\n";
     
@@ -163,7 +163,7 @@ export function ExportManager({ systems, stations, progress }: ExportManagerProp
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>匯出 GB300 L10 測試追蹤報表</DialogTitle>
+          <DialogTitle>匯出 L10 測試追蹤報表</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>

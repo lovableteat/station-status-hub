@@ -247,7 +247,7 @@ export function TestTracker() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">GB300 L10 測試追蹤</h1>
+          <h1 className="text-3xl font-bold">L10 測試追蹤</h1>
           <p className="text-muted-foreground">系統測試進度管理 - {systems.length} 台機器測試狀態</p>
         </div>
         <div className="flex gap-2">

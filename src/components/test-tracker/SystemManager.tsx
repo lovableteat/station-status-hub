@@ -150,8 +150,8 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
       {/* 新增機台對話框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
+          <Button variant="outline" className="h-11 rounded-xl px-5 text-sm font-semibold shadow-sm">
+            <Plus className="mr-2 h-4 w-4 shrink-0" />
             新增機台
           </Button>
         </DialogTrigger>
