@@ -5,6 +5,7 @@ import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
@@ -169,14 +170,28 @@ export function DailyStationCompletionChart() {
   };
 
   return (
-    <Card className="overflow-hidden border-violet-300/30">
-      <CardHeader className="bg-violet-400/[0.05]">
-        <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
-          <TrendingUp className="h-5 w-5" />
-          每站每日完成數量趨勢
-          <div className="ml-auto flex items-center gap-2">
+    <Card className="overflow-hidden rounded-[30px] border border-violet-300/20 bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))] shadow-[0_24px_60px_-48px_hsl(245_58%_66%/0.45)]">
+      <CardHeader className="border-b border-border/70 bg-[linear-gradient(180deg,hsl(245_58%_66%/0.10),transparent)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-violet-200/70">每日產出</p>
+            <CardTitle className="mt-3 flex items-center gap-2 text-2xl font-semibold sm:text-2xl">
+              <TrendingUp className="h-5 w-5" />
+              每站每日完成數量趨勢
+            </CardTitle>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              以更容易掃視的方式看每天各站完成量，快速辨認哪一站正在拉高或拖慢節奏。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="rounded-full border border-violet-300/18 bg-background/35 px-4 py-2 text-sm text-violet-100">
+              追蹤 {days} 天
+            </Badge>
+            <Badge variant="secondary" className="rounded-full border border-white/10 bg-background/35 px-4 py-2 text-sm text-foreground">
+              站點 {stations.length}
+            </Badge>
             <Select value={days.toString()} onValueChange={(value) => setDays(Number(value))}>
-              <SelectTrigger className="w-24">
+              <SelectTrigger className="h-10 w-24 rounded-2xl border-white/10 bg-background/35">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -190,14 +205,15 @@ export function DailyStationCompletionChart() {
               size="sm" 
               onClick={loadDailyStationData}
               disabled={isLoading}
+              className="h-10 rounded-2xl border-white/10 bg-background/35 px-4 hover:bg-primary/10"
             >
               <Calendar className="h-4 w-4 mr-1" />
               {isLoading ? "載入中..." : "重新整理"}
             </Button>
           </div>
-        </CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <div className="h-80">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -258,16 +274,25 @@ export function DailyStationCompletionChart() {
                 return (
                   <div 
                     key={station.id} 
-                    className="text-center p-3 bg-muted/30 rounded-lg border"
+                    className="rounded-[24px] border border-violet-300/12 bg-[linear-gradient(180deg,hsl(245_58%_66%/0.10),hsl(var(--background)/0.06))] p-4 text-left shadow-[0_16px_38px_-32px_hsl(245_58%_66%/0.42)]"
                   >
-                    <div 
-                      className="w-4 h-4 rounded mx-auto mb-1" 
-                      style={{ backgroundColor: stationColors[index % stationColors.length] }}
-                    ></div>
-                    <p className="font-medium text-sm">{station.station_name}</p>
-                    <p className="text-lg font-bold text-primary">{todayCount}</p>
-                    <p className="text-xs text-muted-foreground">今日完成</p>
-                    <p className="text-xs text-muted-foreground">{days}天總計: {weekTotal}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-violet-100/70">站點</p>
+                        <p className="mt-3 font-medium text-sm leading-6">{station.station_name}</p>
+                      </div>
+                      <div 
+                        className="h-4 w-4 rounded-full ring-4 ring-background/40" 
+                        style={{ backgroundColor: stationColors[index % stationColors.length] }}
+                      />
+                    </div>
+                    <div className="mt-4 flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-3xl font-semibold text-primary">{todayCount}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">今日完成</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{days}天總計 {weekTotal}</p>
+                    </div>
                   </div>
                 );
               })}
