@@ -52,48 +52,56 @@ const flowDangerButtonClass =
 
 const stationThemes = [
   {
-    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
-    icon: "border-primary/30 bg-primary/10 text-primary",
-    badge: "border-primary/30 bg-primary/10 text-primary",
-    accent: "text-primary",
-    rail: "from-primary via-primary/55 to-transparent",
+    shell: "border-blue-500/20 bg-slate-900/60 text-foreground hover:border-blue-500/40 hover:bg-blue-950/20",
+    selected: "border-blue-400/50 bg-blue-950/30 ring-2 ring-blue-500/20 shadow-[0_0_28px_-8px_rgba(59,130,246,0.3)]",
+    icon: "border-blue-500/30 bg-blue-950/40 text-blue-300",
+    badge: "border-blue-500/30 bg-blue-950/40 text-blue-300",
+    pill: "border-blue-500/20 bg-blue-950/30 text-blue-200/80",
+    accent: "text-blue-400",
+    rail: "from-blue-500 via-blue-400/50 to-transparent",
     contentPanel: "border-border/70 bg-card/90",
-    contentIcon: "border-primary/30 bg-primary/10 text-primary",
-    contentBadge: "border-primary/30 bg-primary/10 text-primary",
-    contentBar: "from-primary via-primary/55 to-transparent",
+    contentIcon: "border-blue-500/30 bg-blue-950/40 text-blue-300",
+    contentBadge: "border-blue-500/30 bg-blue-950/40 text-blue-300",
+    contentBar: "from-blue-500 via-blue-400/50 to-transparent",
   },
   {
-    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
-    icon: "border-primary/30 bg-primary/10 text-primary",
-    badge: "border-primary/30 bg-primary/10 text-primary",
-    accent: "text-primary",
-    rail: "from-primary via-primary/55 to-transparent",
+    shell: "border-indigo-500/20 bg-slate-900/60 text-foreground hover:border-indigo-500/40 hover:bg-indigo-950/20",
+    selected: "border-indigo-400/50 bg-indigo-950/30 ring-2 ring-indigo-500/20 shadow-[0_0_28px_-8px_rgba(99,102,241,0.3)]",
+    icon: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
+    badge: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
+    pill: "border-indigo-500/20 bg-indigo-950/30 text-indigo-200/80",
+    accent: "text-indigo-400",
+    rail: "from-indigo-500 via-indigo-400/50 to-transparent",
     contentPanel: "border-border/70 bg-card/90",
-    contentIcon: "border-primary/30 bg-primary/10 text-primary",
-    contentBadge: "border-primary/30 bg-primary/10 text-primary",
-    contentBar: "from-primary via-primary/55 to-transparent",
+    contentIcon: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
+    contentBadge: "border-indigo-500/30 bg-indigo-950/40 text-indigo-300",
+    contentBar: "from-indigo-500 via-indigo-400/50 to-transparent",
   },
   {
-    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
-    icon: "border-primary/30 bg-primary/10 text-primary",
-    badge: "border-primary/30 bg-primary/10 text-primary",
-    accent: "text-primary",
-    rail: "from-primary via-primary/55 to-transparent",
+    shell: "border-violet-500/20 bg-slate-900/60 text-foreground hover:border-violet-500/40 hover:bg-violet-950/20",
+    selected: "border-violet-400/50 bg-violet-950/30 ring-2 ring-violet-500/20 shadow-[0_0_28px_-8px_rgba(139,92,246,0.3)]",
+    icon: "border-violet-500/30 bg-violet-950/40 text-violet-300",
+    badge: "border-violet-500/30 bg-violet-950/40 text-violet-300",
+    pill: "border-violet-500/20 bg-violet-950/30 text-violet-200/80",
+    accent: "text-violet-400",
+    rail: "from-violet-500 via-violet-400/50 to-transparent",
     contentPanel: "border-border/70 bg-card/90",
-    contentIcon: "border-primary/30 bg-primary/10 text-primary",
-    contentBadge: "border-primary/30 bg-primary/10 text-primary",
-    contentBar: "from-primary via-primary/55 to-transparent",
+    contentIcon: "border-violet-500/30 bg-violet-950/40 text-violet-300",
+    contentBadge: "border-violet-500/30 bg-violet-950/40 text-violet-300",
+    contentBar: "from-violet-500 via-violet-400/50 to-transparent",
   },
   {
-    shell: "border-border/80 bg-card text-foreground hover:border-primary/55 hover:bg-primary/[0.06]",
-    icon: "border-primary/30 bg-primary/10 text-primary",
-    badge: "border-primary/30 bg-primary/10 text-primary",
-    accent: "text-primary",
-    rail: "from-primary via-primary/55 to-transparent",
+    shell: "border-cyan-500/20 bg-slate-900/60 text-foreground hover:border-cyan-500/40 hover:bg-cyan-950/20",
+    selected: "border-cyan-400/50 bg-cyan-950/30 ring-2 ring-cyan-500/20 shadow-[0_0_28px_-8px_rgba(6,182,212,0.3)]",
+    icon: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
+    badge: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
+    pill: "border-cyan-500/20 bg-cyan-950/30 text-cyan-200/80",
+    accent: "text-cyan-400",
+    rail: "from-cyan-500 via-cyan-400/50 to-transparent",
     contentPanel: "border-border/70 bg-card/90",
-    contentIcon: "border-primary/30 bg-primary/10 text-primary",
-    contentBadge: "border-primary/30 bg-primary/10 text-primary",
-    contentBar: "from-primary via-primary/55 to-transparent",
+    contentIcon: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
+    contentBadge: "border-cyan-500/30 bg-cyan-950/40 text-cyan-300",
+    contentBar: "from-cyan-500 via-cyan-400/50 to-transparent",
   },
 ];
 
@@ -451,7 +459,7 @@ export function FlowInfo() {
                           key={station.id}
                           type="button"
                           onClick={() => setSelectedStationId(station.id)}
-                          className={`group relative flex min-h-[168px] flex-col rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_hsl(var(--primary)/0.55)] ${theme.shell} ${isSelected ? "border-primary/70 bg-primary/10 ring-2 ring-primary/25" : ""}`}
+                          className={`group relative flex min-h-[168px] flex-col rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_rgba(0,0,0,0.5)] ${theme.shell} ${isSelected ? theme.selected : ""}`}
                         >
                           <div className={`mb-4 h-1 rounded-full bg-gradient-to-r ${theme.rail}`} />
                           <div className="flex items-start justify-between gap-3">
@@ -465,10 +473,10 @@ export function FlowInfo() {
                           <div className="mt-4 flex flex-1 flex-col pr-5">
                             <div className="line-clamp-2 min-h-12 text-base font-semibold leading-6 text-foreground">{station.station_name}</div>
                             <div className="mt-auto flex flex-wrap gap-2 pt-3 text-sm">
-                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
+                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
                                 {getCalculatedStationHours(station.id)}h
                               </span>
-                              <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
+                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
                                 {stationItemCount} 測項
                               </span>
                             </div>
