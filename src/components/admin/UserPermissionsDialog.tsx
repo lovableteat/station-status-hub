@@ -24,7 +24,7 @@ const PERMISSION_GROUPS = {
     ]
   },
   'test_tracker': {
-    name: 'GB300 L10 測試追蹤',
+    name: 'L10 測試追蹤',
     permissions: [
       { key: 'test_tracker_view', label: '檢視測試追蹤' },
       { key: 'test_tracker_edit', label: '編輯測試追蹤' }
