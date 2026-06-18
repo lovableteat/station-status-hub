@@ -352,7 +352,7 @@ export function FlowInfo() {
         <div className="flex items-center gap-4">
           <BackButton />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">GB300 L10 測試流程說明</h1>
+            <h1 className="text-3xl font-bold tracking-tight">L10 測試流程設定</h1>
             <p className="mt-1 text-muted-foreground">集中查看站點路徑、測試項目與流程內容</p>
           </div>
         </div>
