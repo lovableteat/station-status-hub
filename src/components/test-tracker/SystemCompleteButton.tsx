@@ -181,14 +181,14 @@ export function SystemCompleteButton({
           {isMobile ? "一鍵完成" : "完成"}
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent className="border-slate-700/80 bg-slate-950/95 text-slate-50 shadow-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>確認一鍵完成機台測試</AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2">
+          <AlertDialogTitle className="text-slate-50">確認一鍵完成機台測試</AlertDialogTitle>
+          <AlertDialogDescription className="space-y-3 text-slate-300">
             <p>您確定要將機台 <strong>"{systemName}"</strong> 的所有測試進度設為完成嗎？</p>
-            <div className="text-sm bg-warning/10 p-3 rounded border">
-              <p className="font-medium text-warning-foreground">⚠️ 注意：</p>
-              <ul className="list-disc list-inside text-warning-foreground/80 mt-1 space-y-1">
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.10] p-3 text-sm text-amber-50">
+              <p className="font-semibold text-amber-100">⚠️ 注意事項</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-50/90 marker:text-amber-200">
                 <li>此操作將所有Station 0-4的測試項目標記為100%完成</li>
                 <li>會自動設定開始和完成時間為當前時間</li>
                 <li>此操作無法復原，請謹慎使用</li>
@@ -197,7 +197,9 @@ export function SystemCompleteButton({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isCompleting}>取消</AlertDialogCancel>
+          <AlertDialogCancel disabled={isCompleting} className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 hover:text-white">
+            取消
+          </AlertDialogCancel>
           <AlertDialogAction 
             onClick={handleCompleteSystem}
             disabled={isCompleting}

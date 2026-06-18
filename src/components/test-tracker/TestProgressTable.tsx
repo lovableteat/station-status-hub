@@ -184,9 +184,9 @@ export function TestProgressTable({
   }
 
   // Desktop table view
-  const stationColumnWidth = 240;
-  const gridColumns = `150px 112px 132px repeat(${filteredStations.length}, minmax(${stationColumnWidth}px, 1fr)) 220px`;
-  const minTableWidth = 150 + 112 + 132 + filteredStations.length * stationColumnWidth + 220;
+  const stationColumnWidth = 216;
+  const gridColumns = `132px 96px 116px repeat(${filteredStations.length}, minmax(${stationColumnWidth}px, 1fr)) 208px`;
+  const minTableWidth = 132 + 96 + 116 + filteredStations.length * stationColumnWidth + 208;
 
   return (
     <Card>
@@ -211,12 +211,12 @@ export function TestProgressTable({
         <div className="overflow-x-auto">
           <div style={{ minWidth: `${minTableWidth}px` }}>
             {/* Header Row */}
-            <div className="grid gap-3 rounded-t-lg border-b bg-muted/50 p-4" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="grid gap-2.5 rounded-t-lg border-b bg-muted/50 p-3.5" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">序號</div>
-              <div className="font-semibold">當前狀態</div>
+              <div className="text-center font-semibold">當前狀態</div>
               {filteredStations.map(station => (
-                <div key={station.id} className="px-2 text-center font-semibold">
+                <div key={station.id} className="px-1.5 text-center font-semibold">
                   {station.station_name}
                 </div>
               ))}
@@ -226,7 +226,7 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => {
               return (
-                <div key={system.id} className="grid items-start gap-3 border-b p-4 hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className="grid items-start gap-2.5 border-b p-3.5 hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center">
                     <button 
                       className="cursor-pointer text-left text-sm font-medium leading-relaxed text-primary hover:underline break-all"
@@ -253,7 +253,7 @@ export function TestProgressTable({
                   )}>
                     {system.serial_number || '-'}
                   </div>
-                  <div className="flex h-full items-center justify-center">
+                  <div className="flex h-full items-center justify-center text-center">
                     {(() => {
                       const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
                       const cls = result.status === '已完成'
@@ -261,7 +261,7 @@ export function TestProgressTable({
                         : result.status === '進行中'
                           ? 'border-blue-300/30 bg-blue-400/[0.12] text-blue-50 shadow-[0_14px_36px_-28px_hsl(221_100%_68%/0.85)]'
                           : 'border-slate-400/20 bg-slate-400/[0.08] text-slate-300';
-                      return <Badge className={cn('flex h-9 min-w-[92px] items-center justify-center rounded-xl border px-3 font-medium', cls)}>{result.status}</Badge>;
+                      return <Badge className={cn('mx-auto flex h-9 min-w-[92px] items-center justify-center rounded-xl border px-3 font-medium', cls)}>{result.status}</Badge>;
                     })()}
                   </div>
                   
@@ -286,7 +286,7 @@ export function TestProgressTable({
                     const processingTime = calculateManualProcessingTime(system.id, station.id);
 
                     return (
-                      <div key={station.id} className="px-2">
+                      <div key={station.id} className="px-1.5">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs">
                             <span>進度: {overallPercent}%</span>
