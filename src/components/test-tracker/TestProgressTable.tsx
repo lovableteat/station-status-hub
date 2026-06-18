@@ -185,8 +185,8 @@ export function TestProgressTable({
 
   // Desktop table view
   const stationColumnWidth = 240;
-  const gridColumns = `180px 140px 150px repeat(${filteredStations.length}, minmax(${stationColumnWidth}px, 1fr)) 220px`;
-  const minTableWidth = 180 + 140 + 150 + filteredStations.length * stationColumnWidth + 220;
+  const gridColumns = `150px 112px 132px repeat(${filteredStations.length}, minmax(${stationColumnWidth}px, 1fr)) 220px`;
+  const minTableWidth = 150 + 112 + 132 + filteredStations.length * stationColumnWidth + 220;
 
   return (
     <Card>
@@ -214,7 +214,7 @@ export function TestProgressTable({
             <div className="grid gap-3 rounded-t-lg border-b bg-muted/50 p-4" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">序號</div>
-              <div className="font-semibold">當前站點</div>
+              <div className="font-semibold">當前狀態</div>
               {filteredStations.map(station => (
                 <div key={station.id} className="px-2 text-center font-semibold">
                   {station.station_name}
@@ -257,11 +257,11 @@ export function TestProgressTable({
                     {(() => {
                       const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
                       const cls = result.status === '已完成'
-                        ? 'border-emerald-500/40 bg-emerald-950 text-emerald-200'
+                        ? 'border-cyan-300/30 bg-cyan-400/[0.10] text-cyan-100 shadow-[0_14px_36px_-28px_hsl(190_95%_65%/0.85)]'
                         : result.status === '進行中'
-                          ? 'border-amber-500/40 bg-amber-950 text-amber-200'
-                          : 'border-slate-500/30 bg-slate-900 text-slate-300';
-                      return <Badge className={cn('h-8 px-3 flex items-center justify-center w-24 border', cls)}>{result.status}</Badge>;
+                          ? 'border-blue-300/30 bg-blue-400/[0.12] text-blue-50 shadow-[0_14px_36px_-28px_hsl(221_100%_68%/0.85)]'
+                          : 'border-slate-400/20 bg-slate-400/[0.08] text-slate-300';
+                      return <Badge className={cn('flex h-9 min-w-[92px] items-center justify-center rounded-xl border px-3 font-medium', cls)}>{result.status}</Badge>;
                     })()}
                   </div>
                   
