@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,6 +35,36 @@ interface DateFilter {
   filter_type: 'estimated_start' | 'estimated_end' | 'actual_completed';
 }
 
+function calculateAverageTimesFromSystems(systemData: SystemStationTime[]) {
+  const stationGroups: Record<string, number[]> = {};
+
+  systemData.forEach(data => {
+    if (data.total_duration <= 0) return;
+    if (!stationGroups[data.station_name]) stationGroups[data.station_name] = [];
+    stationGroups[data.station_name].push(data.total_duration);
+  });
+
+  const averages: StationAverageTime[] = Object.entries(stationGroups).map(([stationName, durations]) => {
+    const totalHours = durations.reduce((sum, hours) => sum + hours, 0);
+    const averageHours = totalHours / durations.length;
+
+    return {
+      station_name: stationName,
+      average_hours: Number(averageHours.toFixed(2)),
+      total_records: durations.length,
+      total_hours_sum: Number(totalHours.toFixed(2)),
+      calculation_details: `${totalHours.toFixed(2)} 小時 ÷ ${durations.length} 台機台 (各測項時間加總)`
+    };
+  });
+
+  const getStationOrder = (name: string) => {
+    const match = name.match(/Station\s*(\d+)/i);
+    return match ? parseInt(match[1]) : 999;
+  };
+
+  return averages.sort((a, b) => getStationOrder(a.station_name) - getStationOrder(b.station_name));
+}
+
 export function useStationTimeAnalytics() {
   const [stationTimeRecords, setStationTimeRecords] = useState<StationTimeRecord[]>([]);
   const [averageTimes, setAverageTimes] = useState<StationAverageTime[]>([]);
@@ -42,7 +72,7 @@ export function useStationTimeAnalytics() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const loadStationTimeRecords = async (dateFilter?: DateFilter) => {
+  const loadStationTimeRecords = useCallback(async (dateFilter?: DateFilter) => {
     try {
       setIsLoading(true);
       
@@ -85,7 +115,19 @@ export function useStationTimeAnalytics() {
         }
       }
 
-      const { data: systems, error: systemError } = await systemQuery;
+      // 系統、站點與排除設定彼此獨立，平行載入可省下多次網路往返。
+      const [systemResult, stationResult, exclusionResult] = await Promise.all([
+        systemQuery,
+        supabase
+          .from('test_flow_stations')
+          .select('id,station_name,station_order')
+          .order('station_order'),
+        supabase
+          .from('dashboard_item_exclusions')
+          .select('system_id,item_id')
+      ]);
+
+      const { data: systems, error: systemError } = systemResult;
       
       if (systemError) {
         console.error('Error loading systems:', systemError);
@@ -103,131 +145,100 @@ export function useStationTimeAnalytics() {
         return;
       }
 
-      // 取得所有站點資訊
-      const { data: stations, error: stationError } = await supabase
-        .from('test_flow_stations')
-        .select('*')
-        .order('station_order');
+      const { data: stations, error: stationError } = stationResult;
 
       if (stationError) {
         console.error('Error loading stations:', stationError);
         return;
       }
 
-      // 取得每台機台要排除的測項對照
-      const { data: exclusions, error: exclusionError } = await supabase
-        .from('dashboard_item_exclusions')
-        .select('system_id,item_id');
+      const { data: exclusions, error: exclusionError } = exclusionResult;
 
       if (exclusionError) {
         console.error('Error loading exclusions:', exclusionError);
       }
       const excludedMap = new Map<string, Set<string>>();
-      (exclusions || []).forEach((e: any) => {
+      (exclusions || []).forEach(e => {
         if (!excludedMap.has(e.system_id)) excludedMap.set(e.system_id, new Set());
         excludedMap.get(e.system_id)!.add(e.item_id);
       });
 
-      // 計算每個系統在每個站的總時長
-      const systemStationData: SystemStationTime[] = [];
-      
-      for (const system of systems) {
-        for (const station of stations || []) {
-          // 取得該系統在該站的所有測項進度
-          const { data: progress, error: progressError } = await supabase
-            .from('test_progress')
-            .select('*')
-            .eq('system_id', system.id)
-            .eq('station_id', station.id)
-            .eq('status', 'Done')
-            .not('started_at', 'is', null)
-            .not('completed_at', 'is', null);
+      // 批次取得所有機台的完成進度，並分頁避開 Supabase 單次回傳筆數上限。
+      const progressRecords: Array<{
+        system_id: string;
+        station_id: string;
+        item_id: string;
+        started_at: string;
+        completed_at: string;
+      }> = [];
+      const systemIds = systems.map(system => system.id);
+      const pageSize = 1000;
+      let page = 0;
 
-          if (progressError) {
-            console.error('Error loading progress:', progressError);
-            continue;
-          }
+      while (true) {
+        const { data: progressPage, error: progressError } = await supabase
+          .from('test_progress')
+          .select('system_id,station_id,item_id,started_at,completed_at')
+          .in('system_id', systemIds)
+          .eq('status', 'Done')
+          .not('started_at', 'is', null)
+          .not('completed_at', 'is', null)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-          if (progress && progress.length > 0) {
-            // 計算該站別下所有測項的實際執行時間加總
-            let stationTotalHours = 0;
-            
-            const excludedSet = excludedMap.get(system.id) || new Set<string>();
-            progress.forEach(item => {
-              if (excludedSet.has(item.item_id)) return; // 排除指定測項
-              const startTime = new Date(item.started_at!).getTime();
-              const endTime = new Date(item.completed_at!).getTime();
-              const itemDuration = (endTime - startTime) / (1000 * 60 * 60);
-              if (itemDuration > 0) stationTotalHours += itemDuration;
-            });
-            
-            // 只有當站別總時間大於0時才加入統計
-            if (stationTotalHours > 0) {
-              systemStationData.push({
-                system_id: system.id,
-                system_name: system.system_name,
-                station_id: station.id,
-                station_name: station.station_name,
-                total_duration: stationTotalHours
-              });
-            }
-          }
+        if (progressError) {
+          console.error('Error loading progress:', progressError);
+          return;
         }
+
+        progressRecords.push(...(progressPage || []));
+        if (!progressPage || progressPage.length < pageSize) break;
+        page += 1;
       }
 
+      const durationBySystemStation = new Map<string, number>();
+
+      progressRecords.forEach(item => {
+        if (excludedMap.get(item.system_id)?.has(item.item_id)) return;
+
+        const startTime = new Date(item.started_at!).getTime();
+        const endTime = new Date(item.completed_at!).getTime();
+        const itemDuration = (endTime - startTime) / (1000 * 60 * 60);
+        if (itemDuration <= 0) return;
+
+        const key = `${item.system_id}:${item.station_id}`;
+        durationBySystemStation.set(key, (durationBySystemStation.get(key) || 0) + itemDuration);
+      });
+
+      // 維持原本的機台、站點排列與統計規則，只改成讀取已彙整的結果。
+      const systemStationData: SystemStationTime[] = [];
+      systems.forEach(system => {
+        (stations || []).forEach(station => {
+          const totalDuration = durationBySystemStation.get(`${system.id}:${station.id}`) || 0;
+          if (totalDuration <= 0) return;
+
+          systemStationData.push({
+            system_id: system.id,
+            system_name: system.system_name,
+            station_id: station.id,
+            station_name: station.station_name,
+            total_duration: totalDuration
+          });
+        });
+      });
+
       setSystemStationTimes(systemStationData);
-      calculateAverageTimesFromSystems(systemStationData);
+      setAverageTimes(calculateAverageTimesFromSystems(systemStationData));
       
     } catch (error) {
       console.error('Error in loadStationTimeRecords:', error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const calculateAverageTimesFromSystems = (systemData: SystemStationTime[]) => {
-    // 按站點分組計算平均處理時間
-    const stationGroups: { [key: string]: number[] } = {};
-    
-    systemData.forEach(data => {
-      if (data.total_duration > 0) {
-        if (!stationGroups[data.station_name]) {
-          stationGroups[data.station_name] = [];
-        }
-        stationGroups[data.station_name].push(data.total_duration);
-      }
-    });
-
-    // 計算各站的平均處理時間
-    const averages: StationAverageTime[] = Object.entries(stationGroups).map(([stationName, durations]) => {
-      const totalHours = durations.reduce((sum, h) => sum + h, 0);
-      const averageHours = totalHours / durations.length;
-      const calculationDetail = `${totalHours.toFixed(2)} 小時 ÷ ${durations.length} 台機台 (各測項時間加總)`;
-      
-      return {
-        station_name: stationName,
-        average_hours: Number(averageHours.toFixed(2)),
-        total_records: durations.length,
-        total_hours_sum: Number(totalHours.toFixed(2)),
-        calculation_details: calculationDetail
-      };
-    });
-
-    // 按站點順序排序
-    averages.sort((a, b) => {
-      const getStationOrder = (name: string) => {
-        const match = name.match(/Station\s*(\d+)/i);
-        return match ? parseInt(match[1]) : 999;
-      };
-      return getStationOrder(a.station_name) - getStationOrder(b.station_name);
-    });
-
-    setAverageTimes(averages);
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadStationTimeRecords();
-  }, []);
+  }, [loadStationTimeRecords]);
 
   return {
     stationTimeRecords,
