@@ -113,7 +113,7 @@ export function StationAverageTimeChart() {
       <CardContent className="pt-6">
         {/* 移除時間範圍篩選功能 */}
 
-        {/* 圖表區域 - 垂直長條圖 */}
+        {/* 圖表區域 - 橫向長條圖 */}
         <div className="h-96">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -123,25 +123,26 @@ export function StationAverageTimeChart() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={chartData} 
-                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                layout="vertical"
+                margin={{ top: 20, right: 30, left: 40, bottom: 20 }}
               >
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={true} />
                 <XAxis 
-                  dataKey="station"
+                  type="number"
                   tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
+                  label={{ value: '時間 (小時)', position: 'insideBottom', offset: -10 }}
                 />
                 <YAxis 
+                  type="category"
+                  dataKey="station"
                   tick={{ fontSize: 12 }}
-                  label={{ value: '時間 (小時)', angle: -90, position: 'insideLeft' }}
+                  width={140}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
                   dataKey="actualTime" 
                   fill="hsl(var(--primary))"
-                  radius={[4, 4, 0, 0]}
+                  radius={[0, 4, 4, 0]}
                   isAnimationActive={false}
                 />
               </BarChart>
