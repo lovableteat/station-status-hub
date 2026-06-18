@@ -390,7 +390,7 @@ export function FlowInfo() {
                       <Layers className="h-5 w-5" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold text-foreground sm:text-2xl">測試流程總覽</h2>
+                      <h2 className="text-xl font-semibold text-foreground">測試流程總覽</h2>
                       <p className="mt-1 text-sm text-muted-foreground">站點、工時、測項與流程內容集中在同一個工作區。</p>
                     </div>
                   </div>
@@ -398,23 +398,23 @@ export function FlowInfo() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:min-w-[680px]">
                   <div className="rounded-xl border border-border/70 bg-background/55 p-4">
                     <Monitor className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{totalSystems}</div>
-                    <div className="text-xs text-muted-foreground">測試系統</div>
+                    <div className="text-lg font-bold text-foreground">{totalSystems}</div>
+                    <div className="text-sm text-muted-foreground">測試系統</div>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/55 p-4">
                     <ListChecks className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{items.length}</div>
-                    <div className="text-xs text-muted-foreground">測試項目</div>
+                    <div className="text-lg font-bold text-foreground">{items.length}</div>
+                    <div className="text-sm text-muted-foreground">測試項目</div>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/55 p-4">
                     <Clock className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{totalHours.toFixed(1)}h</div>
-                    <div className="text-xs text-muted-foreground">單機總時數</div>
+                    <div className="text-lg font-bold text-foreground">{totalHours.toFixed(1)}h</div>
+                    <div className="text-sm text-muted-foreground">單機總時數</div>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/55 p-4">
                     <CalendarDays className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{getEstimatedDays()}</div>
-                    <div className="text-xs text-muted-foreground">預計天數</div>
+                    <div className="text-lg font-bold text-foreground">{getEstimatedDays()}</div>
+                    <div className="text-sm text-muted-foreground">預計天數</div>
                   </div>
                 </div>
               </div>
@@ -432,7 +432,7 @@ export function FlowInfo() {
                   <p className="mt-1 text-sm text-muted-foreground">點選站點，右側會同步切換站點資訊與測試項目。</p>
                 </div>
               </div>
-              <Badge variant="outline" className="w-fit border-primary/30 bg-primary/10 px-3 py-1 text-primary">
+              <Badge variant="outline" className="w-fit border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
                 {stations.length} 個站點
               </Badge>
             </div>
@@ -464,7 +464,7 @@ export function FlowInfo() {
                           </div>
                           <div className="mt-4 flex flex-1 flex-col pr-5">
                             <div className="line-clamp-2 min-h-12 text-base font-semibold leading-6 text-foreground">{station.station_name}</div>
-                            <div className="mt-auto flex flex-wrap gap-2 pt-3 text-xs">
+                            <div className="mt-auto flex flex-wrap gap-2 pt-3 text-sm">
                               <span className="rounded-full border border-border/75 bg-secondary/70 px-2.5 py-1 text-muted-foreground">
                                 {getCalculatedStationHours(station.id)}h
                               </span>
@@ -483,17 +483,17 @@ export function FlowInfo() {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
                     <Gauge className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{getDailyThroughput()}</div>
+                    <div className="text-lg font-bold text-foreground">{getDailyThroughput()}</div>
                     <div className="text-sm text-muted-foreground">預估日產能</div>
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
                     <Clock className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
+                    <div className="text-lg font-bold text-foreground">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
                     <div className="text-sm text-muted-foreground">瓶頸站點工時</div>
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
                     <Route className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-2xl font-bold text-foreground">{selectedStationIndex + 1 || "-"}</div>
+                    <div className="text-lg font-bold text-foreground">{selectedStationIndex + 1 || "-"}</div>
                     <div className="text-sm text-muted-foreground">目前查看站點</div>
                   </div>
                 </div>
@@ -512,7 +512,7 @@ export function FlowInfo() {
                             <Badge variant="outline" className={`mb-2 ${selectedStationTheme.badge}`}>
                               Station {selectedStationIndex + 1}
                             </Badge>
-                            <h3 className="text-xl font-semibold text-foreground">{selectedStation.station_name}</h3>
+                            <h3 className="text-lg font-semibold text-foreground">{selectedStation.station_name}</h3>
                             <p className="mt-2 text-sm leading-6 text-muted-foreground">
                               {selectedStation.description || "尚未填寫站點描述。"}
                             </p>
@@ -530,12 +530,12 @@ export function FlowInfo() {
 
                       <div className="mt-5 grid grid-cols-2 gap-3">
                         <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
-                          <div className="text-xs text-muted-foreground">站點工時</div>
-                          <div className="mt-1 text-xl font-bold text-foreground">{getCalculatedStationHours(selectedStation.id)}h</div>
+                          <div className="text-sm text-muted-foreground">站點工時</div>
+                          <div className="mt-1 text-lg font-bold text-foreground">{getCalculatedStationHours(selectedStation.id)}h</div>
                         </div>
                         <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
-                          <div className="text-xs text-muted-foreground">測項數量</div>
-                          <div className="mt-1 text-xl font-bold text-foreground">{selectedStationItems.length}</div>
+                          <div className="text-sm text-muted-foreground">測項數量</div>
+                          <div className="mt-1 text-lg font-bold text-foreground">{selectedStationItems.length}</div>
                         </div>
                       </div>
                     </div>
@@ -557,7 +557,7 @@ export function FlowInfo() {
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <div className="text-sm font-semibold text-foreground">{item.item_name}</div>
-                                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description || "尚未填寫測項描述。"}</p>
+                                  <p className="mt-1 text-sm leading-5 text-muted-foreground">{item.description || "尚未填寫測項描述。"}</p>
                                 </div>
                                 <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-xs text-primary">
                                   {item.estimated_minutes}min
@@ -595,14 +595,14 @@ export function FlowInfo() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-xl font-semibold text-foreground">流程內容管理</h2>
-                      <Badge variant="outline" className="border-amber-300/35 bg-amber-400/10 text-amber-200">
+                      <Badge variant="outline" className="border-amber-300/35 bg-amber-400/10 text-xs text-amber-200">
                         Station {selectedStationIndex + 1}
                       </Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">目前顯示 {selectedStation.station_name} 的流程內容。</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="w-fit border-amber-300/35 bg-amber-400/10 px-3 py-1.5 text-amber-200">
+                <Badge variant="outline" className="w-fit border-amber-300/35 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-200">
                   已切換至 {selectedStation.station_name}
                 </Badge>
               </div>

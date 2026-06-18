@@ -209,7 +209,7 @@ export function StationContentManager({
             <div className="text-center p-8 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm">尚未新增任何流程內容</p>
-              <p className="text-xs mt-1">點擊上方「新增內容」開始建立</p>
+              <p className="mt-1 text-sm">點擊上方「新增內容」開始建立</p>
             </div>
           ) : (
             contents
