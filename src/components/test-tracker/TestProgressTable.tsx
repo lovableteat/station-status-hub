@@ -184,14 +184,16 @@ export function TestProgressTable({
   }
 
   // Desktop table view
-  const gridColumns = `140px 100px 100px repeat(${filteredStations.length}, 200px) 140px`;
+  const stationColumnWidth = 240;
+  const gridColumns = `180px 140px 150px repeat(${filteredStations.length}, minmax(${stationColumnWidth}px, 1fr)) 220px`;
+  const minTableWidth = 180 + 140 + 150 + filteredStations.length * stationColumnWidth + 220;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle>測試進度表 - 手動計時版</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <SystemManager onSystemUpdate={onSystemUpdate} />
             <BulkResetDialog onReset={onSystemUpdate} />
           </div>
@@ -207,14 +209,14 @@ export function TestProgressTable({
         />
         
         <div className="overflow-x-auto">
-          <div className="min-w-[1400px]">
+          <div style={{ minWidth: `${minTableWidth}px` }}>
             {/* Header Row */}
-            <div className="grid gap-2 p-3 bg-muted/50 rounded-t-lg border-b" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="grid gap-3 rounded-t-lg border-b bg-muted/50 p-4" style={{ gridTemplateColumns: gridColumns }}>
               <div className="font-semibold">機台編號</div>
               <div className="font-semibold">序號</div>
               <div className="font-semibold">當前站點</div>
               {filteredStations.map(station => (
-                <div key={station.id} className="font-semibold text-center">
+                <div key={station.id} className="px-2 text-center font-semibold">
                   {station.station_name}
                 </div>
               ))}
@@ -224,10 +226,10 @@ export function TestProgressTable({
             {/* Data Rows */}
             {filteredSystems.map(system => {
               return (
-                <div key={system.id} className="grid gap-2 p-3 border-b hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
+                <div key={system.id} className="grid items-start gap-3 border-b p-4 hover:bg-muted/25" style={{ gridTemplateColumns: gridColumns }}>
                   <div className="flex items-center">
                     <button 
-                      className="font-medium text-primary hover:underline cursor-pointer text-left text-sm"
+                      className="cursor-pointer text-left text-sm font-medium leading-relaxed text-primary hover:underline break-all"
                       onClick={() => {
                         const currentUrl = new URL(window.location.href);
                         currentUrl.searchParams.set('system', system.system_name);
@@ -284,7 +286,7 @@ export function TestProgressTable({
                     const processingTime = calculateManualProcessingTime(system.id, station.id);
 
                     return (
-                      <div key={station.id} className="px-1">
+                      <div key={station.id} className="px-2">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-xs">
                             <span>進度: {overallPercent}%</span>
@@ -321,7 +323,7 @@ export function TestProgressTable({
                     );
                   })}
                   
-                  <div className="flex gap-1 flex-wrap">
+                  <div className="flex flex-wrap items-start gap-2">
                     <SystemCompleteButton
                       systemId={system.id}
                       systemName={system.system_name}
