@@ -10,7 +10,6 @@ import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
-import { TroubleshootingPage } from "@/components/troubleshooting/TroubleshootingPage";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
@@ -22,9 +21,6 @@ import { useUserPresence } from "@/hooks/useUserPresence";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-
-import { UniversalCabinetDisplay } from "@/components/cabinet/UniversalCabinetDisplay";
-
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState("dashboard");
@@ -70,12 +66,6 @@ const Index = () => {
             <Dashboard onNavigate={handleNavigation} />
           </PermissionGuard>
         );
-      case "l11-cabinet":
-        return (
-          <PermissionGuard module="l11-cabinet">
-            <UniversalCabinetDisplay />
-          </PermissionGuard>
-        );
       case "test-tracker":
         return (
           <PermissionGuard module="test-tracker">
@@ -110,12 +100,6 @@ const Index = () => {
         return (
           <PermissionGuard module="tools">
             <ToolsManagement />
-          </PermissionGuard>
-        );
-      case "troubleshooting":
-        return (
-          <PermissionGuard module="troubleshooting">
-            <TroubleshootingPage />
           </PermissionGuard>
         );
       case "users":

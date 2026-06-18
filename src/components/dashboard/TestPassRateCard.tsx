@@ -16,6 +16,7 @@ interface PassRateMetrics {
 
 export function TestPassRateCard() {
   const { systems, progress, stations, testItems, isLoading } = useUnifiedData();
+  const visibleSystems = systems.filter(system => !system.exclude_from_dashboard);
   const [metrics, setMetrics] = useState({
     totalUnits: 0,
     completedUnits: 0,
@@ -77,19 +78,28 @@ export function TestPassRateCard() {
     if (!isLoading) {
       calculateMetrics();
     }
-  }, [systems, progress, stations, testItems, isLoading]);
+  }, [visibleSystems, progress, stations, testItems, isLoading]);
 
   const calculateMetrics = () => {
-    if (!systems.length) return;
+    if (!visibleSystems.length) {
+      setMetrics({
+        totalUnits: 0,
+        completedUnits: 0,
+        passRate: 0,
+        ongoingUnits: 0,
+        notStartedUnits: 0
+      });
+      return;
+    }
 
-    const totalUnits = systems.length;
+    const totalUnits = visibleSystems.length;
     
     // Count based on current station status logic
     let completedUnits = 0;
     let ongoingUnits = 0;
     let notStartedUnits = 0;
     
-    systems.forEach(system => {
+    visibleSystems.forEach(system => {
       const status = getCurrentStationStatus(system.id);
       
       if (status === '已完成') {
@@ -121,7 +131,7 @@ export function TestPassRateCard() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="border-primary/35 bg-primary/[0.05]">
         <CardContent className="p-6">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-muted rounded w-1/3"></div>
@@ -136,9 +146,9 @@ export function TestPassRateCard() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* 總體通過率 */}
-      <Card>
+      <Card className="border-amber-300/30 bg-amber-400/[0.05]">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">測試通過率</CardTitle>
+          <CardTitle className="text-sm font-medium sm:text-sm">測試通過率</CardTitle>
           <Target className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
@@ -161,7 +171,7 @@ export function TestPassRateCard() {
       {/* 統計摘要 - 基於當前站點欄位 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">統計摘要</CardTitle>
+          <CardTitle className="text-sm font-medium sm:text-sm">統計摘要</CardTitle>
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>

@@ -36,6 +36,16 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
 
   const generatePDF = () => {
     try {
+      const openCount = issues.filter(issue => issue.status === 'open').length;
+      const inProgressCount = issues.filter(issue => issue.status === 'in_progress').length;
+      const resolvedCount = issues.filter(issue => issue.status === 'resolved' || issue.status === 'closed').length;
+      const resolutionRate = issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : 0;
+      const categoryCounts = issues.reduce<Record<string, number>>((counts, issue) => {
+        const category = issue.category || '未分類';
+        counts[category] = (counts[category] || 0) + 1;
+        return counts;
+      }, {});
+
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -56,6 +66,12 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #374151; padding-bottom: 15px; }
             .header h1 { font-size: 24px; margin: 0 0 10px 0; font-weight: bold; }
             .header p { font-size: 14px; margin: 0; color: #6b7280 !important; }
+
+            .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 0 0 24px; }
+            .summary-card { border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; background: #f8fafc !important; }
+            .summary-card span { display: block; color: #6b7280 !important; font-size: 11px; margin-bottom: 4px; }
+            .summary-card strong { font-size: 20px; color: #111827 !important; }
+            .section-title { margin: 22px 0 10px; font-size: 16px; font-weight: bold; }
             
             /* 表格樣式 */
             table { 
@@ -104,9 +120,35 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
         </head>
         <body>
           <div class="header">
-            <h1>問題追蹤報告</h1>
+            <h1>工廠問題追蹤與統計報告</h1>
             <p>生成時間: ${new Date().toLocaleString('zh-TW')} | 共 ${issues.length} 個問題</p>
           </div>
+
+          <div class="summary">
+            <div class="summary-card"><span>問題總數</span><strong>${issues.length}</strong></div>
+            <div class="summary-card"><span>待處理</span><strong>${openCount}</strong></div>
+            <div class="summary-card"><span>處理中</span><strong>${inProgressCount}</strong></div>
+            <div class="summary-card"><span>已解決／關閉</span><strong>${resolvedCount}</strong></div>
+            <div class="summary-card"><span>解決率</span><strong>${resolutionRate}%</strong></div>
+          </div>
+
+          <div class="section-title">問題分類摘要</div>
+          <table>
+            <thead><tr><th>問題分類</th><th>數量</th><th>占比</th></tr></thead>
+            <tbody>
+              ${Object.entries(categoryCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, count]) => `
+                  <tr>
+                    <td>${category}</td>
+                    <td>${count}</td>
+                    <td>${issues.length > 0 ? ((count / issues.length) * 100).toFixed(1) : '0.0'}%</td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+
+          <div class="section-title">問題明細</div>
           
           <table>
             <thead>
@@ -207,7 +249,7 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
   return (
     <Button variant="outline" onClick={generatePDF}>
       <FileText className="h-4 w-4 mr-2" />
-      匯出 PDF 報告
+      匯出工廠報告
     </Button>
   );
 }
