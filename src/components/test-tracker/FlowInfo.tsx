@@ -626,7 +626,7 @@ export function FlowInfo() {
           <Card className="overflow-hidden">
             <CardHeader className="bg-secondary/30">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
                   <Settings className="h-5 w-5 text-primary" />
                   站點管理
                 </CardTitle>
@@ -637,7 +637,7 @@ export function FlowInfo() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="[&_td]:text-sm [&_th]:text-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead>站點名稱</TableHead>
