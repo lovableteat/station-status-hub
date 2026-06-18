@@ -87,14 +87,30 @@ export function StationAverageTimeChart() {
   };
 
   return (
-    <Card className="overflow-hidden border-primary/35">
-      <CardHeader className="bg-primary/[0.05]">
-        <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
-          <Clock className="h-5 w-5" />
-          各站平均處理時間分析
-        </CardTitle>
+    <Card className="overflow-hidden rounded-[30px] border border-primary/22 bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))] shadow-[0_24px_60px_-48px_hsl(var(--primary)/0.45)]">
+      <CardHeader className="border-b border-border/70 bg-[linear-gradient(180deg,hsl(var(--primary)/0.08),transparent)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary/75">節拍分析</p>
+            <CardTitle className="mt-3 flex items-center gap-2 text-2xl font-semibold sm:text-2xl">
+              <Clock className="h-5 w-5" />
+              各站平均處理時間分析
+            </CardTitle>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              把每個站點的平均處理節奏、樣本數與詳細計算過程放在同一個視覺區塊中。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full border border-primary/20 bg-background/35 px-4 py-2 text-sm text-primary">
+              站點 {chartData.length}
+            </Badge>
+            <Badge variant="secondary" className="rounded-full border border-white/10 bg-background/35 px-4 py-2 text-sm text-foreground">
+              明細 {systemStationTimes.length}
+            </Badge>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         {/* 移除時間範圍篩選功能 */}
 
         {/* 圖表區域 - 垂直長條圖 */}
@@ -145,14 +161,20 @@ export function StationAverageTimeChart() {
         {chartData.length > 0 && (
           <div className="mt-6 space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">各站點處理時間統計</h3>
+              <h3 className="mb-4 text-lg font-semibold">各站點處理時間統計</h3>
               <div className={`grid grid-cols-1 gap-4 ${chartData.length <= 3 ? 'md:grid-cols-3' : chartData.length <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
                 {chartData.map((data, index) => (
-                  <div key={index} className="text-center p-4 bg-muted/30 rounded-lg border space-y-2">
-                    <p className="font-medium text-sm">{data.station}</p>
-                    <p className="text-2xl font-bold text-primary">{data.actualTime}</p>
-                    <p className="text-xs text-muted-foreground">小時</p>
-                    <p className="text-xs text-muted-foreground">{data.sampleCount} 台機台</p>
+                  <div
+                    key={index}
+                    className="rounded-[24px] border border-primary/14 bg-[linear-gradient(180deg,hsl(var(--primary)/0.10),hsl(var(--background)/0.08))] p-4 text-left shadow-[0_16px_38px_-32px_hsl(var(--primary)/0.5)]"
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-primary/70">站點</p>
+                    <p className="mt-3 font-medium text-sm leading-6">{data.station}</p>
+                    <div className="mt-4 flex items-end justify-between gap-3">
+                      <p className="text-3xl font-semibold text-primary">{data.actualTime}</p>
+                      <p className="text-xs text-muted-foreground">小時</p>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">{data.sampleCount} 台機台</p>
                   </div>
                 ))}
               </div>
