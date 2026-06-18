@@ -75,8 +75,8 @@ export function BulkResetDialog({ onReset }: BulkResetDialogProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-white border-red-600">
-          <RotateCcw className="h-4 w-4 mr-2" />
+        <Button variant="destructive" className="h-11 rounded-xl border-red-600 bg-red-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-red-700">
+          <RotateCcw className="mr-2 h-4 w-4 shrink-0" />
           重置所有進度
         </Button>
       </AlertDialogTrigger>
