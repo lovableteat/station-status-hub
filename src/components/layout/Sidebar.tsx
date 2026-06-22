@@ -75,17 +75,18 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
       {/* Sidebar */}
       <div
         className={cn(
-          "h-screen bg-card border-r border-border transition-all duration-300 flex flex-col",
+          "border-r border-border bg-card transition-all duration-300 flex flex-col overflow-hidden",
           // Mobile styles
           isMobile && [
-            "fixed top-0 left-0 z-40 lg:relative",
+            "fixed left-0 top-14 bottom-0 z-40 lg:relative",
             isVisible ? "translate-x-0" : "-translate-x-full",
             "w-64"
           ],
           // Desktop styles
-          !isMobile && (isCompact ? "w-16" : "w-64"),
-          // Add top margin on mobile to account for header
-          isMobile && "mt-14 lg:mt-0"
+          !isMobile && [
+            "sticky top-0 self-start h-screen",
+            isCompact ? "w-16" : "w-64"
+          ]
         )}
       >
         {/* Header - Hidden on mobile as we have separate mobile header */}
@@ -111,7 +112,7 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 p-2">
+        <nav className="flex-1 overflow-y-auto p-2">
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
