@@ -244,7 +244,6 @@ export function ProgressEditDialog({
                           type="datetime-local"
                           value={editValues.started_at ? formatDateTime(editValues.started_at) : ''}
                           onChange={(e) => setEditValues({...editValues, started_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
-                          className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
                       <div>
@@ -254,7 +253,6 @@ export function ProgressEditDialog({
                           type="datetime-local"
                           value={editValues.completed_at ? formatDateTime(editValues.completed_at) : ''}
                           onChange={(e) => setEditValues({...editValues, completed_at: e.target.value ? new Date(e.target.value).toISOString() : ''})}
-                          className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert-0 [&::-webkit-calendar-picker-indicator]:sepia [&::-webkit-calendar-picker-indicator]:saturate-[1000%] [&::-webkit-calendar-picker-indicator]:hue-rotate-[30deg]"
                         />
                       </div>
                     </div>
