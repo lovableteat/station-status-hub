@@ -295,12 +295,7 @@ export function StationContentManager({
                               </h5>
                             </div>
                           </div>
-                          <div className="space-y-3 px-4 py-4">
-                            <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-3.5 py-2.5">
-                              <p className="text-[11px] font-medium tracking-[0.12em] text-slate-300/82">
-                                完整內容
-                              </p>
-                            </div>
+                          <div className="px-4 py-4">
                             <p className="whitespace-pre-wrap text-[13px] leading-6 text-slate-100/92">
                               {fullContent}
                             </p>
