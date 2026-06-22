@@ -1,32 +1,39 @@
-
 import { useState } from "react";
-import { StatsCard } from "./StatsCard";
-import { SystemStatusList } from "./SystemStatusList";
-import { StationOverview } from "./StationOverview";
-import { TestPassRateCard } from "./TestPassRateCard";
-import { StationAverageTimeChart } from "./StationAverageTimeChart";
-import { DailyStationCompletionChart } from "./DailyStationCompletionChart";
-import { ExportDialog } from "@/components/production/ExportDialog";
-import { BackButton } from "@/components/common/BackButton";
-import { useUnifiedData } from "@/hooks/useUnifiedData";
 import {
   AlertTriangle,
-  TrendingUp,
   Download,
-  LayoutDashboard,
+  FileCode2,
   Gauge,
+  LayoutDashboard,
+  Loader2,
   Radar,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
+import { useUser } from "@/components/auth/UserContext";
+import { BackButton } from "@/components/common/BackButton";
+import { ExportDialog } from "@/components/production/ExportDialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { useUnifiedData } from "@/hooks/useUnifiedData";
+import { exportSiteArchiveHtml } from "@/utils/siteArchiveExport";
+
+import { DailyStationCompletionChart } from "./DailyStationCompletionChart";
+import { StationAverageTimeChart } from "./StationAverageTimeChart";
+import { StationOverview } from "./StationOverview";
+import { StatsCard } from "./StatsCard";
+import { SystemStatusList } from "./SystemStatusList";
+import { TestPassRateCard } from "./TestPassRateCard";
 
 interface DashboardProps {
   onNavigate?: (module: string, params?: any) => void;
@@ -38,14 +45,20 @@ interface DashboardSectionProps {
   description: string;
 }
 
-function DashboardSection({ eyebrow, title, description }: DashboardSectionProps) {
+function DashboardSection({
+  eyebrow,
+  title,
+  description,
+}: DashboardSectionProps) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary/75">
           {eyebrow}
         </p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+          {title}
+        </h2>
       </div>
       <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
     </div>
@@ -53,66 +66,118 @@ function DashboardSection({ eyebrow, title, description }: DashboardSectionProps
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { systems, progress, stations, testItems } = useUnifiedData();
+  const { systems, progress, stations, testItems, stationContents } =
+    useUnifiedData();
+  const { user } = useUser();
+  const { toast } = useToast();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [isArchiveExporting, setIsArchiveExporting] = useState(false);
 
-  // 排除設定為不列入統計的系統
-  const filteredSystems = systems.filter(system => !system.exclude_from_dashboard);
+  const filteredSystems = systems.filter(
+    (system) => !system.exclude_from_dashboard
+  );
   const totalSystems = filteredSystems.length;
-  
-  // 基於系統狀態與整體進度統計
-  const completedSystems = filteredSystems.filter(system => system.overall_progress === 100 || system.status === 'Done').length;
-  const ongoingSystems = filteredSystems.filter(system => (system.overall_progress > 0 && system.overall_progress < 100) || system.status === 'On-going').length;
-  const notStartedSystems = filteredSystems.filter(system => system.overall_progress === 0 || system.status === 'Not Start').length;
-  
-  const completionRate = totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
+  const completedSystems = filteredSystems.filter(
+    (system) =>
+      system.overall_progress === 100 || system.status === "Done"
+  ).length;
+  const ongoingSystems = filteredSystems.filter(
+    (system) =>
+      (system.overall_progress > 0 && system.overall_progress < 100) ||
+      system.status === "On-going"
+  ).length;
+  const notStartedSystems = filteredSystems.filter(
+    (system) =>
+      system.overall_progress === 0 || system.status === "Not Start"
+  ).length;
+
+  const completionRate =
+    totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
+
   const headerStats = [
     {
       label: "納入統計",
       value: `${totalSystems} 台`,
-      className: "border-primary/35 bg-primary/12 text-primary"
+      className: "border-primary/35 bg-primary/12 text-primary",
     },
     {
       label: "已完成",
       value: `${completedSystems} 台`,
-      className: "border-emerald-300/30 bg-emerald-400/12 text-emerald-200"
+      className: "border-emerald-300/30 bg-emerald-400/12 text-emerald-200",
     },
     {
       label: "完成率",
       value: `${completionRate}%`,
-      className: "border-amber-300/30 bg-amber-400/12 text-amber-200"
-    }
+      className: "border-amber-300/30 bg-amber-400/12 text-amber-200",
+    },
   ];
+
   const heroSignals = [
     {
       title: "即時追蹤",
       value: `${ongoingSystems} 台`,
-      description: "系統正在測試流程中",
+      description: "目前仍在流程中的機台數量。",
       icon: Radar,
       tone: "border-sky-300/20 bg-sky-400/[0.08] text-sky-100",
     },
     {
-      title: "品質狀態",
+      title: "完成進度",
       value: `${completedSystems} / ${totalSystems}`,
-      description: "目前已完成的系統數量",
+      description: "已經結束整體測試流程的機台。",
       icon: ShieldCheck,
       tone: "border-emerald-300/20 bg-emerald-400/[0.08] text-emerald-100",
     },
     {
-      title: "待補處理",
+      title: "待啟動",
       value: `${notStartedSystems} 台`,
-      description: "尚未開始的測試系統",
+      description: "尚未開始、可優先排程的機台。",
       icon: Sparkles,
       tone: "border-amber-300/20 bg-amber-400/[0.08] text-amber-100",
     },
   ];
-  
+
+  const handleArchiveExport = async () => {
+    if (isArchiveExporting) return;
+
+    try {
+      setIsArchiveExporting(true);
+
+      const { warnings } = await exportSiteArchiveHtml({
+        systems,
+        stations,
+        testItems,
+        progress,
+        stationContents,
+        exportedBy: user?.username,
+      });
+
+      toast({
+        title: "HTML 封存已匯出",
+        description: warnings.length
+          ? `整站封存已下載，但有 ${warnings.length} 個區塊未完整納入。`
+          : "整站 HTML 封存已下載，可作為專案結束後的離線保存版本。",
+      });
+    } catch (error) {
+      console.error("Site archive export failed:", error);
+      toast({
+        title: "HTML 封存匯出失敗",
+        description:
+          error instanceof Error
+            ? error.message
+            : "無法產生整站 HTML 封存，請稍後再試。",
+        variant: "destructive",
+      });
+    } finally {
+      setIsArchiveExporting(false);
+    }
+  };
+
   return (
-    <div className="space-y-8 p-4 animate-fade-in sm:p-6" data-dashboard-content>
-      {/* Header */}
+    <div className="animate-fade-in space-y-8 p-4 sm:p-6" data-dashboard-content>
       <div className="relative overflow-hidden rounded-[32px] border border-primary/20 bg-[linear-gradient(135deg,hsl(224_36%_16%),hsl(224_29%_13%)_42%,hsl(229_38%_18%)_100%)] shadow-[0_36px_100px_-60px_hsl(var(--primary)/0.9)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.26),transparent_22%),radial-gradient(circle_at_85%_18%,hsl(189_80%_55%/0.16),transparent_18%),linear-gradient(120deg,transparent_0%,hsl(0_0%_100%/0.025)_48%,transparent_52%)]" />
-        <div className="pointer-events-none absolute inset-y-0 right-[18%] w-px bg-gradient-to-b from-transparent via-white/10 to-transparent lg:block hidden" />
+        <div className="pointer-events-none absolute inset-y-0 right-[18%] hidden w-px bg-gradient-to-b from-transparent via-white/10 to-transparent lg:block" />
+
         <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
@@ -136,8 +201,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     系統儀表板
                   </h1>
                   <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-                    用更清楚的節奏與層次查看整體測試進度、站點效率與系統即時狀態，
-                    讓每天的工廠決策更快更穩。
+                    用來快速查看整體測試進度、站點狀態與完工比例。現在也可以直接從這裡匯出整站
+                    HTML 封存，讓每個專案結束時都能保留一份舊網站快照。
                   </p>
                 </div>
               </div>
@@ -150,7 +215,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     className={`gap-2 rounded-full px-4 py-2 text-xs font-medium shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)] ${stat.className}`}
                   >
                     <span className="opacity-70">{stat.label}</span>
-                    <span className="font-semibold text-foreground">{stat.value}</span>
+                    <span className="font-semibold text-foreground">
+                      {stat.value}
+                    </span>
                   </Badge>
                 ))}
               </div>
@@ -159,6 +226,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <div className="grid gap-3 sm:grid-cols-3">
               {heroSignals.map((signal) => {
                 const Icon = signal.icon;
+
                 return (
                   <div
                     key={signal.title}
@@ -166,14 +234,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-current/70">{signal.title}</p>
-                        <p className="mt-3 text-2xl font-semibold text-foreground">{signal.value}</p>
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-current/70">
+                          {signal.title}
+                        </p>
+                        <p className="mt-3 text-2xl font-semibold text-foreground">
+                          {signal.value}
+                        </p>
                       </div>
                       <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-current/20 bg-background/25 text-current">
                         <Icon className="h-5 w-5" />
                       </div>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-current/75">{signal.description}</p>
+                    <p className="mt-3 text-sm leading-6 text-current/75">
+                      {signal.description}
+                    </p>
                   </div>
                 );
               })}
@@ -187,15 +261,32 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <Button
                     variant="outline"
                     className="h-11 rounded-2xl border-primary/25 bg-background/45 px-5 backdrop-blur hover:bg-primary/10"
+                    disabled={isArchiveExporting}
                   >
-                    <Download className="mr-2 h-4 w-4" />
-                    匯出選項
+                    {isArchiveExporting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    {isArchiveExporting ? "封存匯出中..." : "匯出選項"}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
                     <Download className="mr-2 h-4 w-4" />
                     匯出資料報表
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleArchiveExport}
+                    disabled={isArchiveExporting}
+                  >
+                    {isArchiveExporting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileCode2 className="mr-2 h-4 w-4" />
+                    )}
+                    匯出整站 HTML 封存
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -207,7 +298,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary/75">
                     Operations Pulse
                   </p>
-                  <h3 className="mt-2 text-xl font-semibold text-foreground">今日監控重點</h3>
+                  <h3 className="mt-2 text-xl font-semibold text-foreground">
+                    即時節奏
+                  </h3>
                 </div>
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
                   <Gauge className="h-5 w-5" />
@@ -217,8 +310,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <div className="mt-5 space-y-3">
                 <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">完成進度</span>
-                    <span className="text-lg font-semibold text-foreground">{completionRate}%</span>
+                    <span className="text-sm text-muted-foreground">
+                      完成比例
+                    </span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {completionRate}%
+                    </span>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/55">
                     <div
@@ -230,17 +327,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">進行中</p>
-                    <p className="mt-3 text-3xl font-semibold text-foreground">{ongoingSystems}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      進行中
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-foreground">
+                      {ongoingSystems}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">未開始</p>
-                    <p className="mt-3 text-3xl font-semibold text-foreground">{notStartedSystems}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      未開始
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-foreground">
+                      {notStartedSystems}
+                    </p>
                   </div>
                 </div>
 
                 <p className="rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.05] px-4 py-3 text-sm leading-6 text-muted-foreground">
-                  把整體進度、待補處理量與完成率集中在同一個控制面板，方便現場快速掃視。
+                  如果你要做專案結案封存，建議直接從右上角選單匯出整站 HTML。
+                  下載後的檔案可離線打開，方便後續回顧、交接與比對不同專案版本。
                 </p>
               </div>
             </div>
@@ -248,33 +354,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </div>
       </div>
 
-      {/* Station Overview */}
       <DashboardSection
         eyebrow="Overview"
-        title="核心總覽"
-        description="把總量、測試工時、目標與站點一次排開，先掌握今日節奏，再往下看品質與效率。"
+        title="站點總覽"
+        description="快速查看目前站點數量、每日目標與整體測試佈局，作為當前專案的基礎摘要。"
       />
       <StationOverview />
 
-      {/* Test Pass Rate Metrics */}
       <DashboardSection
         eyebrow="Quality"
-        title="品質與節奏"
-        description="用更聚焦的視覺呈現通過率、進行中系統與整體完成狀態，方便快速掃描。"
+        title="通過率與品質"
+        description="用統一視角追蹤目前測試通過比例與達成狀況，方便評估整體品質成熟度。"
       />
       <TestPassRateCard />
 
-      {/* Key Performance Indicators - 移除活躍工程師板塊 */}
       <div className="grid gap-4 md:grid-cols-2">
         <StatsCard
-          title="進行中系統"
+          title="進行中機台"
           value={`${ongoingSystems}`}
           icon={<AlertTriangle className="h-4 w-4" />}
-          description={`${notStartedSystems}個未開始待處理`}
+          description={`${notStartedSystems} 台尚未開始`}
           variant={ongoingSystems > 0 ? "warning" : "success"}
         />
         <StatsCard
-          title="系統完成狀況"
+          title="系統完成概況"
           value={`${completedSystems}/${totalSystems}`}
           icon={<TrendingUp className="h-4 w-4" />}
           description={`完成率 ${completionRate}%`}
@@ -282,26 +385,22 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         />
       </div>
 
-      {/* Station Average Time Chart */}
       <DashboardSection
         eyebrow="Analysis"
-        title="工站分析"
-        description="從處理時間與每日完成趨勢觀察各站節奏，快速找出瓶頸與異常波動。"
+        title="站點平均時間"
+        description="觀察各站平均耗時與瓶頸位置，幫助你判斷哪一段流程最值得優先優化。"
       />
       <StationAverageTimeChart />
 
-      {/* Daily Station Completion Chart */}
       <DailyStationCompletionChart />
 
-      {/* System Status List */}
       <DashboardSection
         eyebrow="Live"
-        title="即時作業"
-        description="保留原本的系統狀態邏輯，只把資訊卡改得更清楚，讓現場查看時更直觀。"
+        title="系統狀態清單"
+        description="用清單方式查看每台機台目前進度與站點位置，方便在儀表板中直接追蹤現場狀況。"
       />
       <SystemStatusList onNavigate={onNavigate} />
 
-      {/* Export Dialogs */}
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
