@@ -1,12 +1,12 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { MobileDialog, MobileDialogContent, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MobileDialog, MobileDialogContent, MobileDialogDescription, MobileDialogHeader, MobileDialogTitle, MobileDialogTrigger, MobileDialogFooter } from "@/components/ui/mobile-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit, Save, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Edit, Save, X, Server, Network, Settings2, MapPin, UserRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -50,6 +50,22 @@ export function SystemEditDialog({
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const panelClass =
+    "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.82))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+  const sectionClass =
+    "rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(15,23,42,0.62))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  const fieldLabelClass = cn(
+    "mb-2 block text-sm font-medium text-slate-100",
+    isMobile && "text-base"
+  );
+  const inputClass = cn(
+    "h-11 rounded-2xl border-white/10 bg-slate-900/55 text-slate-50 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-sky-300/40",
+    isMobile && "h-12 text-base"
+  );
+  const selectTriggerClass = cn(
+    "h-11 rounded-2xl border-white/10 bg-slate-900/55 text-slate-50 focus:ring-1 focus:ring-sky-300/40",
+    isMobile && "h-12 text-base"
+  );
 
   useEffect(() => {
     const loadEngineers = async () => {
@@ -155,178 +171,250 @@ export function SystemEditDialog({
           </Button>
         )}
       </MobileDialogTrigger>
-      <MobileDialogContent>
-        <MobileDialogHeader>
-          <MobileDialogTitle>編輯系統資料</MobileDialogTitle>
-        </MobileDialogHeader>
-        <ScrollArea className="max-h-[70vh] overflow-y-auto pr-4">
-          <div className={cn("space-y-4", isMobile && "space-y-6")}>
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機台編號</Label>
-              <Input
-                value={editValues.system_name}
-                onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
-                placeholder="請輸入機台編號..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
+      <MobileDialogContent className={cn(
+        "border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.96),rgba(15,23,42,0.95))] p-0 text-slate-50",
+        isMobile
+          ? "rounded-t-[28px]"
+          : "sm:max-w-[min(94vw,74rem)] sm:max-h-[92vh] sm:overflow-y-auto sm:rounded-[30px]"
+      )}>
+        <MobileDialogHeader className="space-y-4 border-b border-white/8 px-6 py-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/16 bg-sky-300/[0.08] px-3 py-1 text-xs font-medium tracking-[0.16em] text-sky-100/90">
+                <Server className="h-3.5 w-3.5" />
+                SYSTEM EDITOR
+              </div>
+              <div className="space-y-2">
+                <MobileDialogTitle className={cn("text-left text-3xl font-semibold tracking-tight", isMobile && "text-2xl")}>
+                  編輯系統資料
+                </MobileDialogTitle>
+                <MobileDialogDescription className="max-w-2xl text-left text-sm text-slate-300/78">
+                  將機台識別、網路位址與軟體設定分開整理，避免不同類型資料混在一起。
+                </MobileDialogDescription>
+              </div>
             </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>機櫃</Label>
-              <Input
-                value={editValues.cabinet}
-                onChange={(e) => setEditValues({...editValues, cabinet: e.target.value})}
-                placeholder="請輸入機櫃..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>型號</Label>
-              <Input
-                value={editValues.model}
-                onChange={(e) => setEditValues({...editValues, model: e.target.value})}
-                placeholder="請輸入型號..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>序號</Label>
-              <Input
-                value={editValues.serial_number}
-                onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
-                placeholder="請輸入序號..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>NIC MAC Address</Label>
-              <Input
-                value={editValues.os_mac_address}
-                onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
-                placeholder="請輸入 NIC MAC Address..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>BMC Address</Label>
-              <Input
-                value={editValues.bmc_address}
-                onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
-                placeholder="請輸入 BMC Address..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>舊 BMC Address</Label>
-              <Input
-                value={editValues.old_bmc_address}
-                onChange={(e) => setEditValues({...editValues, old_bmc_address: e.target.value})}
-                placeholder="請輸入舊 BMC Address..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>90BOM</Label>
-              <Input
-                value={editValues.bom_90}
-                onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
-                placeholder="請輸入 90BOM..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>Ubuntu 版本</Label>
-              <Input
-                value={editValues.ubuntu_version}
-                onChange={(e) => setEditValues({...editValues, ubuntu_version: e.target.value})}
-                placeholder="例如：22.04、20.04"
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>CUDA 版本</Label>
-              <Input
-                value={editValues.cuda_version}
-                onChange={(e) => setEditValues({...editValues, cuda_version: e.target.value})}
-                placeholder="例如：12.2、11.8"
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>是否列入系統儀表板統計資料</Label>
-              <Select 
-                value={editValues.exclude_from_dashboard ? "false" : "true"} 
-                onValueChange={(value) => setEditValues({...editValues, exclude_from_dashboard: value === "false"})}
-              >
-                <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="true" className={isMobile ? "h-12 text-base" : ""}>
-                    ✅ 是（預設）
-                  </SelectItem>
-                  <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
-                    ❌ 否（排除）
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>位置</Label>
-              <Input
-                value={editValues.team}
-                onChange={(e) => setEditValues({...editValues, team: e.target.value})}
-                placeholder="請輸入機台位置..."
-                className={isMobile ? "h-12 text-base" : ""}
-              />
-            </div>
-
-            <div>
-              <Label className={isMobile ? "text-base font-medium mb-2 block" : ""}>負責工程師</Label>
-              <Select 
-                value={editValues.assigned_engineer} 
-                onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
-              >
-                <SelectTrigger className={isMobile ? "h-12 text-base" : ""}>
-                  <SelectValue placeholder="請選擇負責工程師..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {engineers.map(engineer => (
-                    <SelectItem 
-                      key={engineer.id} 
-                      value={engineer.name}
-                      className={isMobile ? "h-12 text-base" : ""}
-                    >
-                      {engineer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-100">
+                {editValues.model || "GB300"}
+              </Badge>
+              <Badge className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-100">
+                {editValues.system_name || "未命名機台"}
+              </Badge>
+              {editValues.assigned_engineer && (
+                <Badge className="rounded-full border border-sky-300/16 bg-sky-300/[0.08] px-3 py-1 text-xs text-sky-100">
+                  {editValues.assigned_engineer}
+                </Badge>
+              )}
             </div>
           </div>
-        </ScrollArea>
-        <MobileDialogFooter>
+        </MobileDialogHeader>
+        <div className="space-y-5 px-6 py-6">
+          <div className={cn(panelClass, "p-4 sm:p-5")}>
+            <div className="grid gap-5 lg:grid-cols-12">
+              <section className={cn(sectionClass, "lg:col-span-7")}>
+                <div className="mb-5 flex items-start gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-300/16 bg-sky-300/[0.08] text-sky-100">
+                    <Server className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold text-slate-50">基本資料</h3>
+                    <p className="text-sm text-slate-300/72">先整理機台識別、位置與負責人，這些是最常一起查看的欄位。</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label className={fieldLabelClass}>機台編號</Label>
+                    <Input
+                      value={editValues.system_name}
+                      onChange={(e) => setEditValues({...editValues, system_name: e.target.value})}
+                      placeholder="請輸入機台編號..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <Label className={fieldLabelClass}>型號</Label>
+                    <Input
+                      value={editValues.model}
+                      onChange={(e) => setEditValues({...editValues, model: e.target.value})}
+                      placeholder="請輸入型號..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <Label className={fieldLabelClass}>序號</Label>
+                    <Input
+                      value={editValues.serial_number}
+                      onChange={(e) => setEditValues({...editValues, serial_number: e.target.value})}
+                      placeholder="請輸入序號..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <Label className={fieldLabelClass}>機櫃</Label>
+                    <Input
+                      value={editValues.cabinet}
+                      onChange={(e) => setEditValues({...editValues, cabinet: e.target.value})}
+                      placeholder="請輸入機櫃..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <Label className={fieldLabelClass}>位置</Label>
+                    <Input
+                      value={editValues.team}
+                      onChange={(e) => setEditValues({...editValues, team: e.target.value})}
+                      placeholder="請輸入機台位置..."
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <Label className={fieldLabelClass}>負責工程師</Label>
+                    <Select 
+                      value={editValues.assigned_engineer} 
+                      onValueChange={(value) => setEditValues({...editValues, assigned_engineer: value})}
+                    >
+                      <SelectTrigger className={selectTriggerClass}>
+                        <SelectValue placeholder="請選擇負責工程師..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {engineers.map(engineer => (
+                          <SelectItem 
+                            key={engineer.id} 
+                            value={engineer.name}
+                            className={isMobile ? "h-12 text-base" : ""}
+                          >
+                            {engineer.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </section>
+
+              <div className="space-y-5 lg:col-span-5">
+                <section className={sectionClass}>
+                  <div className="mb-5 flex items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-300/16 bg-violet-300/[0.08] text-violet-100">
+                      <Network className="h-5 w-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold text-slate-50">網路與位址</h3>
+                      <p className="text-sm text-slate-300/72">把 NIC、BMC 與舊位址集中在同一區，找資料時不會跳來跳去。</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4">
+                    <div>
+                      <Label className={fieldLabelClass}>NIC MAC Address</Label>
+                      <Input
+                        value={editValues.os_mac_address}
+                        onChange={(e) => setEditValues({...editValues, os_mac_address: e.target.value})}
+                        placeholder="請輸入 NIC MAC Address..."
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>BMC Address</Label>
+                      <Input
+                        value={editValues.bmc_address}
+                        onChange={(e) => setEditValues({...editValues, bmc_address: e.target.value})}
+                        placeholder="請輸入 BMC Address..."
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>舊 BMC Address</Label>
+                      <Input
+                        value={editValues.old_bmc_address}
+                        onChange={(e) => setEditValues({...editValues, old_bmc_address: e.target.value})}
+                        placeholder="請輸入舊 BMC Address..."
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className={sectionClass}>
+                  <div className="mb-5 flex items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300/16 bg-emerald-300/[0.08] text-emerald-100">
+                      <Settings2 className="h-5 w-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold text-slate-50">軟體與管理</h3>
+                      <p className="text-sm text-slate-300/72">把版本、BOM 與儀表板統計設定放在一起，方便集中修改。</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <Label className={fieldLabelClass}>90BOM</Label>
+                      <Input
+                        value={editValues.bom_90}
+                        onChange={(e) => setEditValues({...editValues, bom_90: e.target.value})}
+                        placeholder="請輸入 90BOM..."
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>Ubuntu 版本</Label>
+                      <Input
+                        value={editValues.ubuntu_version}
+                        onChange={(e) => setEditValues({...editValues, ubuntu_version: e.target.value})}
+                        placeholder="例如：22.04、20.04"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>CUDA 版本</Label>
+                      <Input
+                        value={editValues.cuda_version}
+                        onChange={(e) => setEditValues({...editValues, cuda_version: e.target.value})}
+                        placeholder="例如：12.2、11.8"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>系統儀表板統計</Label>
+                      <Select 
+                        value={editValues.exclude_from_dashboard ? "false" : "true"} 
+                        onValueChange={(value) => setEditValues({...editValues, exclude_from_dashboard: value === "false"})}
+                      >
+                        <SelectTrigger className={selectTriggerClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true" className={isMobile ? "h-12 text-base" : ""}>
+                            ✅ 列入統計
+                          </SelectItem>
+                          <SelectItem value="false" className={isMobile ? "h-12 text-base" : ""}>
+                            ❌ 不列入統計
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+        <MobileDialogFooter className="border-t border-white/8 bg-slate-950/70 px-6 py-4 backdrop-blur-xl">
           <Button 
             variant="outline" 
             onClick={() => setIsOpen(false)}
-            className={isMobile ? "h-12 text-base font-medium" : ""}
+            className={cn(
+              "rounded-2xl border-white/10 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08]",
+              isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
+            )}
           >
             <X className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
             取消
           </Button>
           <Button 
             onClick={handleSave}
-            className={isMobile ? "h-12 text-base font-medium" : ""}
+            className={cn(
+              "rounded-2xl bg-[linear-gradient(135deg,rgba(96,165,250,0.92),rgba(99,102,241,0.9))] text-slate-950 shadow-[0_18px_38px_-24px_rgba(96,165,250,0.72)] hover:brightness-110",
+              isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
+            )}
           >
             <Save className={isMobile ? "h-4 w-4 mr-2" : "h-3 w-3 mr-2"} />
             儲存
