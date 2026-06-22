@@ -257,7 +257,7 @@ export function TestProgressTable({
                     {(() => {
                       const result = SystemStatusCalculator.calculateSystemStatus(system, stations, items, progress);
                       const cls = result.status === '已完成'
-                        ? 'border-cyan-300/30 bg-cyan-400/[0.10] text-cyan-100 shadow-[0_14px_36px_-28px_hsl(190_95%_65%/0.85)]'
+                        ? 'border-emerald-300/40 bg-emerald-400/[0.18] text-emerald-50 shadow-[0_16px_40px_-28px_hsl(158_100%_62%/0.95)]'
                         : result.status === '進行中'
                           ? 'border-blue-300/30 bg-blue-400/[0.12] text-blue-50 shadow-[0_14px_36px_-28px_hsl(221_100%_68%/0.85)]'
                           : 'border-slate-400/20 bg-slate-400/[0.08] text-slate-300';
