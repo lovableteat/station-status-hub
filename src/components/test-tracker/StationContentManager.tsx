@@ -241,41 +241,42 @@ export function StationContentManager({
                                 </Badge>
                                 <h4 className="truncate text-sm font-medium">{content.title}</h4>
                               </div>
-                              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">
                                 {fullContent}
                               </p>
-                              <div className="mt-3 inline-flex rounded-full border border-amber-300/14 bg-amber-300/[0.10] px-2.5 py-1 text-[11px] text-amber-100/75">
+                              <div className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300/78">
                                 移入查看完整內容
                               </div>
                             </div>
                           </HoverCardTrigger>
                           <HoverCardContent
-                            side="top"
+                            side="right"
                             align="start"
+                            sideOffset={14}
                             className={cn(
-                              "w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-amber-300/24 bg-[linear-gradient(180deg,rgba(96,58,26,0.84),rgba(60,36,19,0.82))] p-0 text-amber-50 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.78)] backdrop-blur-2xl"
+                              "w-[min(30rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(17,24,39,0.84))] p-0 text-slate-100 shadow-[0_28px_72px_-34px_rgba(2,6,23,0.82)] backdrop-blur-2xl"
                             )}
                           >
-                            <div className="border-b border-amber-200/12 bg-amber-100/[0.06] px-5 py-4">
+                            <div className={cn("border-b border-white/8 px-4 py-3", activeTheme.contentHeader)}>
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="border-amber-300/28 bg-amber-300/[0.14] px-2.5 text-xs font-medium text-amber-50"
+                                  className={cn("px-2 py-0.5 text-[11px] font-medium", activeTheme.contentBadge)}
                                 >
                                   段落 {index + 1}
                                 </Badge>
-                                <h5 className="text-sm font-semibold tracking-[0.01em] text-amber-50 [text-shadow:0_1px_0_rgba(0,0,0,0.3)]">
+                                <h5 className="text-[13px] font-semibold tracking-[0.01em] text-slate-50">
                                   {content.title}
                                 </h5>
                               </div>
                             </div>
-                            <div className="space-y-3 px-5 py-5">
-                              <div className="rounded-2xl border border-amber-200/12 bg-black/10 px-4 py-3">
-                                <p className="text-xs font-medium tracking-[0.14em] text-amber-200/78">
+                            <div className="space-y-3 px-4 py-4">
+                              <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-3.5 py-2.5">
+                                <p className="text-[11px] font-medium tracking-[0.12em] text-slate-300/82">
                                   完整內容
                                 </p>
                               </div>
-                              <p className="whitespace-pre-wrap text-[15px] font-medium leading-7 text-amber-50/95 [text-shadow:0_1px_0_rgba(0,0,0,0.18)]">
+                              <p className="whitespace-pre-wrap text-[13px] leading-6 text-slate-100/92">
                                 {fullContent}
                               </p>
                             </div>
