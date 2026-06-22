@@ -163,6 +163,51 @@ All colors MUST be HSL for proper theming support.
     background: hsl(var(--primary) / 0.24);
     color: hsl(var(--foreground));
   }
+
+  :is(
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"]
+  )::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.92;
+    filter:
+      invert(88%)
+      sepia(14%)
+      saturate(1450%)
+      hue-rotate(182deg)
+      brightness(108%)
+      contrast(95%);
+  }
+
+  :is(
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"]
+  ):hover::-webkit-calendar-picker-indicator,
+  :is(
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"]
+  ):focus::-webkit-calendar-picker-indicator {
+    opacity: 1;
+    filter:
+      invert(90%)
+      sepia(18%)
+      saturate(1800%)
+      hue-rotate(180deg)
+      brightness(112%)
+      contrast(100%);
+  }
+
+  .lucide-calendar,
+  .lucide-calendar-days {
+    color: hsl(214 95% 75%);
+    filter: drop-shadow(0 0 10px hsl(214 95% 75% / 0.12));
+  }
 }
 
 @layer components {
