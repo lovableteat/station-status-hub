@@ -13,7 +13,6 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Save, Trash2, FileText } from "lucide-react";
@@ -235,44 +234,49 @@ export function StationContentManager({
                       <div className="flex items-start justify-between gap-3">
                         <HoverCard openDelay={120} closeDelay={80}>
                           <HoverCardTrigger asChild>
-                            <div className="min-w-0 flex-1 cursor-pointer rounded-xl border border-transparent px-1 py-1 transition-colors duration-200 hover:border-white/10 hover:bg-white/[0.03]">
+                            <div className="min-w-0 flex-1 cursor-pointer rounded-2xl border border-transparent px-2 py-2 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.04]">
                               <div className="flex min-w-0 items-center gap-2">
                                 <Badge variant="outline" className={cn("shrink-0 text-xs", activeTheme.contentBadge)}>
                                   {index + 1}
                                 </Badge>
                                 <h4 className="truncate text-sm font-medium">{content.title}</h4>
                               </div>
-                              <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                                 {fullContent}
                               </p>
-                              <p className="mt-2 text-xs text-muted-foreground/80">
-                                滑鼠移入可查看完整內容
-                              </p>
+                              <div className="mt-3 inline-flex rounded-full border border-sky-100/10 bg-sky-200/[0.08] px-2.5 py-1 text-[11px] text-slate-300/80">
+                                移入查看完整內容
+                              </div>
                             </div>
                           </HoverCardTrigger>
                           <HoverCardContent
                             side="top"
                             align="start"
                             className={cn(
-                              "w-[min(36rem,calc(100vw-2rem))] overflow-hidden border p-0 shadow-2xl backdrop-blur-md",
-                              activeTheme.contentPanel
+                              "w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200/75 bg-[linear-gradient(180deg,rgba(248,250,252,0.98),rgba(240,249,255,0.95))] p-0 text-slate-800 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)] backdrop-blur-xl"
                             )}
                           >
-                            <div className={cn("border-b px-4 py-3", activeTheme.contentHeader)}>
+                            <div className="border-b border-slate-200/80 bg-white/70 px-5 py-4">
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
+                                <Badge
+                                  variant="outline"
+                                  className="border-sky-200 bg-sky-100 px-2.5 text-xs font-medium text-sky-700"
+                                >
                                   段落 {index + 1}
                                 </Badge>
-                                <h5 className="text-sm font-semibold text-foreground">{content.title}</h5>
+                                <h5 className="text-sm font-semibold text-slate-800">{content.title}</h5>
                               </div>
                             </div>
-                            <ScrollArea className="max-h-[320px]">
-                              <div className="px-4 py-4">
-                                <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
-                                  {fullContent}
+                            <div className="space-y-3 px-5 py-5">
+                              <div className="rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3">
+                                <p className="text-xs font-medium tracking-[0.18em] text-slate-500">
+                                  完整內容
                                 </p>
                               </div>
-                            </ScrollArea>
+                              <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                                {fullContent}
+                              </p>
+                            </div>
                           </HoverCardContent>
                         </HoverCard>
                         <div className="flex shrink-0 gap-1">
