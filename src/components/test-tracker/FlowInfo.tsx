@@ -646,7 +646,7 @@ export function FlowInfo() {
               <div className="p-5 sm:p-6">
                 <div className={`rounded-2xl border p-3 ${selectedStationTheme.contentSurface}`}>
                   <div className={`mb-3 h-1 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
-                  <div className="max-h-[430px] overflow-y-auto pr-1">
+                  <div className="overflow-visible">
                     <StationContentManager
                       stationId={selectedStation.id}
                       stationName={selectedStation.station_name}
