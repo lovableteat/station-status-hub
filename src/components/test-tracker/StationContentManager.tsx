@@ -244,7 +244,7 @@ export function StationContentManager({
                               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                                 {fullContent}
                               </p>
-                              <div className="mt-3 inline-flex rounded-full border border-sky-100/10 bg-sky-200/[0.08] px-2.5 py-1 text-[11px] text-slate-300/80">
+                              <div className="mt-3 inline-flex rounded-full border border-amber-200/10 bg-amber-300/[0.08] px-2.5 py-1 text-[11px] text-slate-300/80">
                                 移入查看完整內容
                               </div>
                             </div>
@@ -253,27 +253,27 @@ export function StationContentManager({
                             side="top"
                             align="start"
                             className={cn(
-                              "w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200/75 bg-[linear-gradient(180deg,rgba(248,250,252,0.98),rgba(240,249,255,0.95))] p-0 text-slate-800 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)] backdrop-blur-xl"
+                              "w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-amber-200/75 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,237,213,0.96))] p-0 text-slate-800 shadow-[0_28px_70px_-34px_rgba(180,83,9,0.38)] backdrop-blur-xl"
                             )}
                           >
-                            <div className="border-b border-slate-200/80 bg-white/70 px-5 py-4">
+                            <div className="border-b border-amber-200/80 bg-white/55 px-5 py-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="border-sky-200 bg-sky-100 px-2.5 text-xs font-medium text-sky-700"
+                                  className="border-amber-300 bg-amber-100 px-2.5 text-xs font-medium text-amber-700"
                                 >
                                   段落 {index + 1}
                                 </Badge>
-                                <h5 className="text-sm font-semibold text-slate-800">{content.title}</h5>
+                                <h5 className="text-sm font-semibold text-amber-950">{content.title}</h5>
                               </div>
                             </div>
                             <div className="space-y-3 px-5 py-5">
-                              <div className="rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3">
-                                <p className="text-xs font-medium tracking-[0.18em] text-slate-500">
+                              <div className="rounded-2xl border border-amber-200/70 bg-white/75 px-4 py-3">
+                                <p className="text-xs font-medium tracking-[0.18em] text-amber-700/80">
                                   完整內容
                                 </p>
                               </div>
-                              <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                              <p className="whitespace-pre-wrap text-sm leading-7 text-amber-950/90">
                                 {fullContent}
                               </p>
                             </div>
