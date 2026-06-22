@@ -9,7 +9,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-2xl border border-border/70 bg-card/85 text-card-foreground shadow-[0_18px_55px_-38px_hsl(220_50%_2%/0.75)] backdrop-blur supports-[backdrop-filter]:bg-card/75",
+      "panel-surface rounded-2xl bg-card/85 text-card-foreground backdrop-blur supports-[backdrop-filter]:bg-card/75",
       className
     )}
     {...props}
@@ -23,7 +23,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 border-b border-border/55 p-5 sm:p-6", className)}
+    className={cn("flex flex-col space-y-1.5 border-b border-primary/10 p-5 sm:p-6", className)}
     {...props}
   />
 ))
@@ -70,7 +70,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex items-center border-t border-border/55 p-5 sm:p-6", className)}
+    className={cn("flex items-center border-t border-primary/10 p-5 sm:p-6", className)}
     {...props}
   />
 ))
