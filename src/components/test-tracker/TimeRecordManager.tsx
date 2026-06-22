@@ -186,7 +186,6 @@ export function TimeRecordManager({
               value={startedAt}
               onChange={(e) => handleStartTimeChange(e.target.value)}
               disabled={isUpdating}
-              className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:contrast-100"
             />
           </div>
           
@@ -198,7 +197,6 @@ export function TimeRecordManager({
               value={completedAt}
               onChange={(e) => handleCompletedTimeChange(e.target.value)}
               disabled={isUpdating}
-              className="[&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:contrast-100"
             />
           </div>
           
