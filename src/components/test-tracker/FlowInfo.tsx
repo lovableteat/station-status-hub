@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/common/BackButton";
+import { cn } from "@/lib/utils";
 
 interface TestStation {
   id: string;
@@ -668,7 +669,7 @@ export function FlowInfo() {
                   <Settings className="h-5 w-5 text-primary" />
                   站點管理
                 </CardTitle>
-                <Button onClick={handleAddNewStation} className={flowButtonClass}>
+                <Button onClick={handleAddNewStation} className={cn(flowButtonClass, "bg-gradient-to-r from-amber-500 to-amber-600 text-amber-950 border border-amber-400/50 shadow-[0_14px_30px_-18px_rgba(245,158,11,0.9)] hover:from-amber-400 hover:to-amber-500 hover:border-amber-300/60 hover:shadow-[0_14px_34px_-18px_rgba(245,158,11,0.75)]")}>
                   <Plus className="h-4 w-4 mr-2" />
                   新增站點
                 </Button>
