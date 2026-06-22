@@ -10,11 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Edit, Save, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -224,17 +225,56 @@ export function StationContentManager({
               <p className="mt-1 text-sm">點擊上方「新增內容」開始建立</p>
             </div>
           ) : (
-            sortedContents.map((content, index) => (
+            sortedContents.map((content, index) => {
+              const fullContent = content.content?.trim() || "尚未填寫流程內容";
+
+              return (
                 <Card key={content.id} className={cn("relative transition-colors", activeTheme.contentCard)}>
                   <CardContent className="p-4">
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
-                            {index + 1}
-                          </Badge>
-                          <h4 className="truncate text-sm font-medium">{content.title}</h4>
-                        </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <HoverCard openDelay={120} closeDelay={80}>
+                          <HoverCardTrigger asChild>
+                            <div className="min-w-0 flex-1 cursor-pointer rounded-xl border border-transparent px-1 py-1 transition-colors duration-200 hover:border-white/10 hover:bg-white/[0.03]">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Badge variant="outline" className={cn("shrink-0 text-xs", activeTheme.contentBadge)}>
+                                  {index + 1}
+                                </Badge>
+                                <h4 className="truncate text-sm font-medium">{content.title}</h4>
+                              </div>
+                              <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                                {fullContent}
+                              </p>
+                              <p className="mt-2 text-xs text-muted-foreground/80">
+                                滑鼠移入可查看完整內容
+                              </p>
+                            </div>
+                          </HoverCardTrigger>
+                          <HoverCardContent
+                            side="top"
+                            align="start"
+                            className={cn(
+                              "w-[min(36rem,calc(100vw-2rem))] overflow-hidden border p-0 shadow-2xl backdrop-blur-md",
+                              activeTheme.contentPanel
+                            )}
+                          >
+                            <div className={cn("border-b px-4 py-3", activeTheme.contentHeader)}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className={cn("text-xs", activeTheme.contentBadge)}>
+                                  段落 {index + 1}
+                                </Badge>
+                                <h5 className="text-sm font-semibold text-foreground">{content.title}</h5>
+                              </div>
+                            </div>
+                            <ScrollArea className="max-h-[320px]">
+                              <div className="px-4 py-4">
+                                <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
+                                  {fullContent}
+                                </p>
+                              </div>
+                            </ScrollArea>
+                          </HoverCardContent>
+                        </HoverCard>
                         <div className="flex shrink-0 gap-1">
                           <Button
                             onClick={() => openEditDialog(content)}
@@ -256,22 +296,11 @@ export function StationContentManager({
                           </Button>
                         </div>
                       </div>
-                      {content.content && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-2 cursor-help">
-                              {content.content}
-                            </p>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-sm whitespace-pre-wrap text-xs">
-                            {content.content}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
-              ))
+              );
+            })
           )}
         </div>
       </CardContent>
