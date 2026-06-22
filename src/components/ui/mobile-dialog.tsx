@@ -39,7 +39,7 @@ const MobileDialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed z-50 grid w-full gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          "panel-surface-floating fixed z-50 grid w-full gap-4 bg-background/96 text-foreground duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 supports-[backdrop-filter]:bg-background/86",
           // Mobile: Full screen bottom sheet
           isMobile ? [
             "bottom-0 left-0 right-0 top-auto rounded-t-2xl p-6",
