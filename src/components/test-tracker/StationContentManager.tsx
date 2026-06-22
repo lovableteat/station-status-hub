@@ -230,58 +230,19 @@ export function StationContentManager({
               return (
                 <Card key={content.id} className={cn("relative transition-colors", activeTheme.contentCard)}>
                   <CardContent className="p-4">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-start justify-between gap-3">
-                        <HoverCard openDelay={120} closeDelay={80}>
-                          <HoverCardTrigger asChild>
-                            <div className="min-w-0 flex-1 cursor-pointer rounded-2xl border border-transparent px-2 py-2 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.04]">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Badge variant="outline" className={cn("shrink-0 text-xs", activeTheme.contentBadge)}>
-                                  {index + 1}
-                                </Badge>
-                                <h4 className="truncate text-sm font-medium">{content.title}</h4>
-                              </div>
-                              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">
-                                {fullContent}
-                              </p>
-                              <div className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300/78">
-                                移入查看完整內容
-                              </div>
-                            </div>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            side="right"
-                            align="start"
-                            sideOffset={14}
-                            className={cn(
-                              "w-[min(30rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(17,24,39,0.84))] p-0 text-slate-100 shadow-[0_28px_72px_-34px_rgba(2,6,23,0.82)] backdrop-blur-2xl"
-                            )}
-                          >
-                            <div className={cn("border-b border-white/8 px-4 py-3", activeTheme.contentHeader)}>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={cn("px-2 py-0.5 text-[11px] font-medium", activeTheme.contentBadge)}
-                                >
-                                  段落 {index + 1}
-                                </Badge>
-                                <h5 className="text-[13px] font-semibold tracking-[0.01em] text-slate-50">
-                                  {content.title}
-                                </h5>
-                              </div>
-                            </div>
-                            <div className="space-y-3 px-4 py-4">
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-3.5 py-2.5">
-                                <p className="text-[11px] font-medium tracking-[0.12em] text-slate-300/82">
-                                  完整內容
-                                </p>
-                              </div>
-                              <p className="whitespace-pre-wrap text-[13px] leading-6 text-slate-100/92">
-                                {fullContent}
-                              </p>
-                            </div>
-                          </HoverCardContent>
-                        </HoverCard>
+                        <div className="min-w-0 flex-1 rounded-2xl border border-transparent px-2 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Badge variant="outline" className={cn("shrink-0 text-xs", activeTheme.contentBadge)}>
+                              {index + 1}
+                            </Badge>
+                            <h4 className="truncate text-sm font-medium">{content.title}</h4>
+                          </div>
+                          <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">
+                            {fullContent}
+                          </p>
+                        </div>
                         <div className="flex shrink-0 gap-1">
                           <Button
                             onClick={() => openEditDialog(content)}
@@ -303,6 +264,49 @@ export function StationContentManager({
                           </Button>
                         </div>
                       </div>
+                      <HoverCard openDelay={120} closeDelay={90}>
+                        <HoverCardTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300/78 transition-colors duration-200 hover:border-primary/20 hover:bg-primary/[0.08] hover:text-slate-100"
+                          >
+                            移入查看完整內容
+                          </button>
+                        </HoverCardTrigger>
+                        <HoverCardContent
+                          side="right"
+                          align="start"
+                          sideOffset={12}
+                          className={cn(
+                            "w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 p-0 text-slate-100 shadow-[0_28px_72px_-34px_rgba(2,6,23,0.82)] backdrop-blur-2xl",
+                            activeTheme.contentPanel
+                          )}
+                        >
+                          <div className={cn("border-b border-white/8 px-4 py-3", activeTheme.contentHeader)}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={cn("px-2 py-0.5 text-[11px] font-medium", activeTheme.contentBadge)}
+                              >
+                                段落 {index + 1}
+                              </Badge>
+                              <h5 className="text-[13px] font-semibold tracking-[0.01em] text-slate-50">
+                                {content.title}
+                              </h5>
+                            </div>
+                          </div>
+                          <div className="space-y-3 px-4 py-4">
+                            <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-3.5 py-2.5">
+                              <p className="text-[11px] font-medium tracking-[0.12em] text-slate-300/82">
+                                完整內容
+                              </p>
+                            </div>
+                            <p className="whitespace-pre-wrap text-[13px] leading-6 text-slate-100/92">
+                              {fullContent}
+                            </p>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
                     </div>
                   </CardContent>
                 </Card>
