@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Edit, Save, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -256,9 +257,16 @@ export function StationContentManager({
                         </div>
                       </div>
                       {content.content && (
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                          {content.content}
-                        </p>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-2 cursor-help">
+                              {content.content}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-sm whitespace-pre-wrap text-xs">
+                            {content.content}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   </CardContent>
