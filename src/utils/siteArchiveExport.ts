@@ -14,9 +14,34 @@ interface SnapshotModule {
 
 interface SnapshotPage {
   id: string;
+  moduleId: string;
   label: string;
   navHtml: string;
   mainHtml: string;
+}
+
+interface SnapshotModuleRecord {
+  id: string;
+  label: string;
+  defaultStateId: string;
+}
+
+interface TabActionStep {
+  groupIndex: number;
+  triggerIndex: number;
+  label: string;
+}
+
+interface DraftStateTransition extends TabActionStep {
+  nextStateKey: string;
+}
+
+interface CapturedSnapshotState {
+  key: string;
+  moduleId: string;
+  label: string;
+  root: HTMLElement;
+  transitions: DraftStateTransition[];
 }
 
 const SNAPSHOT_MODULES: SnapshotModule[] = [
@@ -386,25 +411,144 @@ const normalizeSnapshotDom = (root: HTMLElement, visibleModules: SnapshotModule[
   });
 };
 
-const waitForModuleToRender = async (moduleId: string) => {
+const isLiveElementVisible = (element: HTMLElement) => {
+  if (element.hidden) return false;
+
+  const style = window.getComputedStyle(element);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0"
+  ) {
+    return false;
+  }
+
+  return element.getClientRects().length > 0;
+};
+
+const isSnapshotElementVisible = (element: HTMLElement) => {
+  if (element.hidden) return false;
+  if (element.getAttribute("aria-hidden") === "true") return false;
+
+  let current: HTMLElement | null = element;
+
+  while (current) {
+    if (current.hidden) return false;
+    if (current.getAttribute("aria-hidden") === "true") return false;
+    current = current.parentElement;
+  }
+
+  return true;
+};
+
+const getTabTriggerLabel = (trigger: HTMLElement) =>
+  trigger.textContent?.replace(/\s+/g, " ").trim() || "未命名分頁";
+
+const getVisibleTabGroups = (
+  root: ParentNode,
+  visibilityStrategy: (element: HTMLElement) => boolean
+) =>
+  Array.from(root.querySelectorAll<HTMLElement>('[role="tablist"]')).filter(
+    visibilityStrategy
+  );
+
+const getVisibleTabTriggers = (
+  group: HTMLElement,
+  visibilityStrategy: (element: HTMLElement) => boolean
+) =>
+  Array.from(group.querySelectorAll<HTMLButtonElement>('[role="tab"]')).filter(
+    visibilityStrategy
+  );
+
+const getLiveTabActions = () => {
+  const main = findMainElement();
+  const groups = getVisibleTabGroups(main, isLiveElementVisible);
+
+  return groups.flatMap((group, groupIndex) =>
+    getVisibleTabTriggers(group, isLiveElementVisible)
+      .map((trigger, triggerIndex) => ({
+        groupIndex,
+        triggerIndex,
+        label: getTabTriggerLabel(trigger),
+        active:
+          trigger.getAttribute("data-state") === "active" ||
+          trigger.getAttribute("aria-selected") === "true",
+      }))
+      .filter((action) => !action.active)
+      .map(({ active, ...action }) => action)
+  );
+};
+
+const buildLiveStateKey = (moduleId: string) => {
+  const main = findMainElement();
+  const groups = getVisibleTabGroups(main, isLiveElementVisible);
+
+  if (!groups.length) {
+    return `${moduleId}::default`;
+  }
+
+  return `${moduleId}::${groups
+    .map((group, groupIndex) => {
+      const triggers = getVisibleTabTriggers(group, isLiveElementVisible);
+      const activeIndex = triggers.findIndex(
+        (trigger) =>
+          trigger.getAttribute("data-state") === "active" ||
+          trigger.getAttribute("aria-selected") === "true"
+      );
+
+      return `${groupIndex}:${triggers
+        .map((trigger) => getTabTriggerLabel(trigger))
+        .join(">")}#${activeIndex}`;
+    })
+    .join("|")}`;
+};
+
+const serializeTabPath = (path: TabActionStep[]) =>
+  path.map((step) => `${step.groupIndex}.${step.triggerIndex}`).join("|");
+
+const annotateTabTransitions = (
+  root: HTMLElement,
+  transitions: DraftStateTransition[],
+  stateIdByKey: Map<string, string>
+) => {
+  const main = root.querySelector("main");
+  if (!main) return;
+
+  const groups = getVisibleTabGroups(main, isSnapshotElementVisible);
+
+  transitions.forEach((transition) => {
+    const group = groups[transition.groupIndex];
+    if (!group) return;
+
+    const triggers = getVisibleTabTriggers(group, isSnapshotElementVisible);
+    const trigger = triggers[transition.triggerIndex];
+    const nextStateId = stateIdByKey.get(transition.nextStateKey);
+
+    if (!trigger || !nextStateId) return;
+
+    trigger.setAttribute("data-archive-state-target", nextStateId);
+    trigger.setAttribute("type", "button");
+  });
+};
+
+const waitForMainToStabilize = async (label: string) => {
   const main = findMainElement();
   const startedAt = performance.now();
   let lastMarkup = main.innerHTML;
   let stableSince = performance.now();
 
-  await wait(220);
+  await wait(180);
   await nextPaint(2);
 
-  while (performance.now() - startedAt < 7000) {
-    await wait(140);
+  while (performance.now() - startedAt < 5000) {
+    await wait(110);
     await nextPaint(1);
 
     const nextMarkup = main.innerHTML;
     const hasSpinner = Boolean(main.querySelector(".animate-spin"));
-    const moduleHeadingVisible = main.textContent?.trim().length;
 
-    if (nextMarkup === lastMarkup && !hasSpinner && moduleHeadingVisible) {
-      if (performance.now() - stableSince >= 420) {
+    if (nextMarkup === lastMarkup && !hasSpinner) {
+      if (performance.now() - stableSince >= 320) {
         return;
       }
     } else {
@@ -413,7 +557,7 @@ const waitForModuleToRender = async (moduleId: string) => {
     }
   }
 
-  console.warn(`Timed out while waiting for module snapshot: ${moduleId}`);
+  console.warn(`Timed out while waiting for content to stabilize: ${label}`);
 };
 
 const navigateToModule = async (moduleId: string) => {
@@ -423,19 +567,123 @@ const navigateToModule = async (moduleId: string) => {
     })
   );
 
-  await waitForModuleToRender(moduleId);
+  await waitForMainToStabilize(`module:${moduleId}`);
 };
 
-const captureModulePages = async (visibleModules: SnapshotModule[]) => {
-  const pages: SnapshotPage[] = [];
+const replayTabPath = async (moduleId: string, path: TabActionStep[]) => {
+  if (!path.length) return;
 
-  for (const module of visibleModules) {
+  for (const step of path) {
+    const main = findMainElement();
+    const groups = getVisibleTabGroups(main, isLiveElementVisible);
+    const group = groups[step.groupIndex];
+
+    if (!group) {
+      throw new Error(`找不到模組 ${moduleId} 的第 ${step.groupIndex + 1} 個分頁群組。`);
+    }
+
+    const triggers = getVisibleTabTriggers(group, isLiveElementVisible);
+    const trigger = triggers[step.triggerIndex];
+
+    if (!trigger) {
+      throw new Error(
+        `找不到模組 ${moduleId} 的分頁「${step.label}」，請重新整理後再匯出一次。`
+      );
+    }
+
+    const isActive =
+      trigger.getAttribute("data-state") === "active" ||
+      trigger.getAttribute("aria-selected") === "true";
+
+    if (isActive) continue;
+
+    trigger.click();
+    await waitForMainToStabilize(`tab:${moduleId}:${step.label}`);
+  }
+};
+
+const exploreModuleStates = async (
+  module: SnapshotModule,
+  visibleModules: SnapshotModule[]
+) => {
+  const capturedStates: CapturedSnapshotState[] = [];
+  const visitedStateKeys = new Set<string>();
+  const queuedPaths = new Set<string>([""]);
+  const queue: TabActionStep[][] = [[]];
+  let defaultStateKey = `${module.id}::default`;
+
+  while (queue.length) {
+    const path = queue.shift() || [];
+
     await navigateToModule(module.id);
+    await replayTabPath(module.id, path);
+
+    const stateKey = buildLiveStateKey(module.id);
+    if (path.length === 0) {
+      defaultStateKey = stateKey;
+    }
+
+    if (visitedStateKeys.has(stateKey)) {
+      continue;
+    }
+
+    visitedStateKeys.add(stateKey);
 
     const shell = findAppShell();
     const snapshotRoot = shell.cloneNode(true) as HTMLElement;
-
     normalizeSnapshotDom(snapshotRoot, visibleModules);
+
+    const actions = getLiveTabActions();
+    const transitions: DraftStateTransition[] = [];
+
+    for (const action of actions) {
+      const nextPath = [...path, action];
+
+      await navigateToModule(module.id);
+      await replayTabPath(module.id, nextPath);
+
+      const nextStateKey = buildLiveStateKey(module.id);
+      transitions.push({
+        ...action,
+        nextStateKey,
+      });
+
+      const nextPathKey = serializeTabPath(nextPath);
+      if (!visitedStateKeys.has(nextStateKey) && !queuedPaths.has(nextPathKey)) {
+        queue.push(nextPath);
+        queuedPaths.add(nextPathKey);
+      }
+    }
+
+    capturedStates.push({
+      key: stateKey,
+      moduleId: module.id,
+      label: module.label,
+      root: snapshotRoot,
+      transitions,
+    });
+  }
+
+  return {
+    defaultStateKey,
+    states: capturedStates,
+  };
+};
+
+const finalizeCapturedStates = (
+  capturedStates: CapturedSnapshotState[],
+  visibleModules: SnapshotModule[]
+) => {
+  const stateIdByKey = new Map<string, string>();
+
+  capturedStates.forEach((state, index) => {
+    stateIdByKey.set(state.key, `${state.moduleId}__${index}`);
+  });
+
+  const pages: SnapshotPage[] = capturedStates.map((state) => {
+    const snapshotRoot = state.root.cloneNode(true) as HTMLElement;
+    normalizeSnapshotDom(snapshotRoot, visibleModules);
+    annotateTabTransitions(snapshotRoot, state.transitions, stateIdByKey);
 
     const nav = snapshotRoot.querySelector("nav");
     const main = snapshotRoot.querySelector("main");
@@ -444,15 +692,46 @@ const captureModulePages = async (visibleModules: SnapshotModule[]) => {
       throw new Error("整站快照缺少左側欄或主內容區塊，請重新整理網站後再試一次。");
     }
 
-    pages.push({
-      id: module.id,
-      label: module.label,
+    return {
+      id: stateIdByKey.get(state.key) || state.key,
+      moduleId: state.moduleId,
+      label: state.label,
       navHtml: nav.innerHTML,
       mainHtml: main.innerHTML,
+    };
+  });
+
+  return { pages, stateIdByKey };
+};
+
+const captureModulePages = async (visibleModules: SnapshotModule[]) => {
+  const capturedStates: CapturedSnapshotState[] = [];
+  const modules: SnapshotModuleRecord[] = [];
+
+  for (const module of visibleModules) {
+    const explored = await exploreModuleStates(module, visibleModules);
+    capturedStates.push(...explored.states);
+
+    modules.push({
+      id: module.id,
+      label: module.label,
+      defaultStateId: explored.defaultStateKey,
     });
   }
 
-  return pages;
+  const { pages, stateIdByKey } = finalizeCapturedStates(
+    capturedStates,
+    visibleModules
+  );
+
+  return {
+    pages,
+    modules: modules.map((module) => ({
+      ...module,
+      defaultStateId:
+        stateIdByKey.get(module.defaultStateId) || module.defaultStateId,
+    })),
+  };
 };
 
 const captureShellTemplate = (visibleModules: SnapshotModule[]) => {
@@ -477,6 +756,7 @@ const captureShellTemplate = (visibleModules: SnapshotModule[]) => {
 
 const buildArchiveHtml = ({
   pages,
+  modules,
   shellHtml,
   styles,
   exportedAt,
@@ -484,6 +764,7 @@ const buildArchiveHtml = ({
   currentModule,
 }: {
   pages: SnapshotPage[];
+  modules: SnapshotModuleRecord[];
   shellHtml: string;
   styles: string;
   exportedAt: string;
@@ -496,6 +777,7 @@ const buildArchiveHtml = ({
   const snapshotPayload = JSON.stringify(
     {
       defaultModule: currentModule,
+      modules,
       pages,
     },
     null,
@@ -508,7 +790,7 @@ const buildArchiveHtml = ({
       exportedAt,
       exportedBy: exportedBy || null,
       source: window.location.href,
-      modules: pages.map((page) => ({
+      modules: modules.map((page) => ({
         id: page.id,
         label: page.label,
       })),
@@ -540,27 +822,49 @@ const buildArchiveHtml = ({
         const payloadElement = document.getElementById("station-status-hub-archive-snapshots");
         const payload = payloadElement ? JSON.parse(payloadElement.textContent || "{}") : {};
         const pages = Array.isArray(payload.pages) ? payload.pages : [];
+        const modules = Array.isArray(payload.modules) ? payload.modules : [];
         const pageMap = new Map(pages.map((page) => [page.id, page]));
+        const moduleDefaults = new Map(modules.map((module) => [module.id, module.defaultStateId]));
         const defaultModule = payload.defaultModule || ${JSON.stringify(currentModule)};
         const navHost = document.querySelector("[data-archive-nav-host]");
         const mainHost = document.querySelector("[data-archive-main-host]");
+        let currentStateId = moduleDefaults.get(defaultModule) || pages[0]?.id;
 
-        function showModule(moduleId) {
-          const nextModule = pageMap.has(moduleId) ? moduleId : defaultModule;
-          const nextPage = pageMap.get(nextModule) || pages[0];
+        function renderState(stateId, options) {
+          const nextPage = pageMap.get(stateId) || pages[0];
           if (!nextPage || !navHost || !mainHost) return;
 
           navHost.innerHTML = nextPage.navHtml;
           mainHost.innerHTML = nextPage.mainHtml;
+          currentStateId = nextPage.id;
 
-          window.scrollTo({ top: 0, behavior: "auto" });
+          if (!options || options.scroll !== false) {
+            window.scrollTo({ top: 0, behavior: "auto" });
+          }
+        }
 
+        function showModule(moduleId) {
+          const nextModule = moduleDefaults.has(moduleId) ? moduleId : defaultModule;
+          const nextStateId = moduleDefaults.get(nextModule) || currentStateId || pages[0]?.id;
+          if (!nextStateId) return;
+
+          renderState(nextStateId);
           if (window.location.hash !== "#" + nextModule) {
             history.replaceState(null, "", "#" + nextModule);
           }
         }
 
         document.addEventListener("click", function (event) {
+          const stateTrigger = event.target.closest("[data-archive-state-target]");
+          if (stateTrigger) {
+            event.preventDefault();
+            const nextStateId = stateTrigger.getAttribute("data-archive-state-target");
+            if (!nextStateId) return;
+
+            renderState(nextStateId, { scroll: false });
+            return;
+          }
+
           const trigger = event.target.closest("[data-archive-nav]");
           if (!trigger) return;
 
@@ -615,7 +919,7 @@ export async function exportSiteArchiveHtml({
   const currentModule = detectCurrentModule();
 
   try {
-    const [styles, pages] = await Promise.all([
+    const [styles, snapshotData] = await Promise.all([
       collectDocumentStyles(),
       captureModulePages(visibleModules),
     ]);
@@ -624,7 +928,8 @@ export async function exportSiteArchiveHtml({
     const shellHtml = captureShellTemplate(visibleModules);
 
     const html = buildArchiveHtml({
-      pages,
+      pages: snapshotData.pages,
+      modules: snapshotData.modules,
       shellHtml,
       styles,
       exportedAt: new Date().toISOString(),
