@@ -225,16 +225,36 @@ const collectDocumentStyles = async () => {
 };
 
 const findAppShell = () => {
-  const shell = document.querySelector("#root > *") as HTMLElement | null;
-  if (!shell) {
-    throw new Error("找不到目前網站畫面，無法建立整站快照。");
+  const root = document.getElementById("root");
+  if (!root) {
+    throw new Error("找不到網站根節點，無法建立整站快照。");
   }
 
-  return shell;
+  const directShell = Array.from(root.children).find((element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    return Boolean(element.querySelector("nav")) && Boolean(element.querySelector("main"));
+  });
+
+  if (directShell instanceof HTMLElement) {
+    return directShell;
+  }
+
+  const main = root.querySelector("main") as HTMLElement | null;
+  let candidate = main?.parentElement || null;
+
+  while (candidate && candidate !== root) {
+    if (candidate.querySelector("nav") && candidate.querySelector("main")) {
+      return candidate;
+    }
+
+    candidate = candidate.parentElement;
+  }
+
+  throw new Error("找不到完整網站骨架，無法建立整站快照。");
 };
 
 const findMainElement = () => {
-  const main = document.querySelector("#root main") as HTMLElement | null;
+  const main = findAppShell().querySelector("main") as HTMLElement | null;
   if (!main) {
     throw new Error("找不到目前網站主內容區塊，無法建立整站快照。");
   }
