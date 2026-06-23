@@ -78,22 +78,22 @@ export function ProgressEditDialog({
 
   const getPanelAccentClasses = (status?: string, editing = false, index = 0) => {
     if (editing) {
-      return "border-primary/35 bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),rgba(15,23,42,0.96)_38%,rgba(15,23,42,0.92)_100%)] shadow-[0_20px_50px_-34px_hsl(var(--primary)/0.55)]";
+      return "border-amber-200/40 bg-[linear-gradient(135deg,rgba(253,230,138,0.14),rgba(15,23,42,0.96)_38%,rgba(15,23,42,0.92)_100%)] shadow-[0_20px_50px_-34px_rgba(253,224,71,0.34)]";
     }
 
     switch (status) {
       case "Done":
-        return "border-emerald-400/25 bg-[linear-gradient(135deg,rgba(52,211,153,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(52,211,153,0.42)]";
+        return "border-yellow-200/28 bg-[linear-gradient(135deg,rgba(254,240,138,0.12),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(250,204,21,0.28)]";
       case "On-going":
-        return "border-sky-400/25 bg-[linear-gradient(135deg,rgba(56,189,248,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(56,189,248,0.42)]";
+        return "border-amber-200/30 bg-[linear-gradient(135deg,rgba(253,230,138,0.12),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(252,211,77,0.3)]";
       case "Issue":
-        return "border-rose-400/25 bg-[linear-gradient(135deg,rgba(251,113,133,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(251,113,133,0.4)]";
+        return "border-orange-200/30 bg-[linear-gradient(135deg,rgba(254,215,170,0.12),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(251,191,36,0.28)]";
       case "Not Start":
-        return "border-amber-300/25 bg-[linear-gradient(135deg,rgba(251,191,36,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(251,191,36,0.34)]";
+        return "border-stone-200/24 bg-[linear-gradient(135deg,rgba(254,249,195,0.09),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(250,204,21,0.2)]";
       default:
         return index % 2 === 0
-          ? "border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.06),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_hsl(var(--primary)/0.28)]"
-          : "border-violet-400/20 bg-[linear-gradient(135deg,rgba(167,139,250,0.06),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_rgba(167,139,250,0.28)]";
+          ? "border-amber-100/22 bg-[linear-gradient(135deg,rgba(253,230,138,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_rgba(253,224,71,0.18)]"
+          : "border-yellow-100/20 bg-[linear-gradient(135deg,rgba(254,249,195,0.07),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_rgba(250,204,21,0.16)]";
     }
   };
 
@@ -143,7 +143,7 @@ export function ProgressEditDialog({
           編輯
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto border-primary/25 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.96)_100%)] shadow-[0_36px_120px_-52px_hsl(var(--primary)/0.7)]">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto border-amber-200/30 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.96)_100%)] shadow-[0_36px_120px_-52px_rgba(250,204,21,0.28)]">
         <DialogHeader>
           <DialogTitle>
             編輯測試進度 - {systemName} / {stationName}
