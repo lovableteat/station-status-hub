@@ -76,6 +76,27 @@ export function ProgressEditDialog({
 }: ProgressEditDialogProps) {
   const [open, setOpen] = useState(false);
 
+  const getPanelAccentClasses = (status?: string, editing = false, index = 0) => {
+    if (editing) {
+      return "border-primary/35 bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),rgba(15,23,42,0.96)_38%,rgba(15,23,42,0.92)_100%)] shadow-[0_20px_50px_-34px_hsl(var(--primary)/0.55)]";
+    }
+
+    switch (status) {
+      case "Done":
+        return "border-emerald-400/25 bg-[linear-gradient(135deg,rgba(52,211,153,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(52,211,153,0.42)]";
+      case "On-going":
+        return "border-sky-400/25 bg-[linear-gradient(135deg,rgba(56,189,248,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(56,189,248,0.42)]";
+      case "Issue":
+        return "border-rose-400/25 bg-[linear-gradient(135deg,rgba(251,113,133,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(251,113,133,0.4)]";
+      case "Not Start":
+        return "border-amber-300/25 bg-[linear-gradient(135deg,rgba(251,191,36,0.08),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-34px_rgba(251,191,36,0.34)]";
+      default:
+        return index % 2 === 0
+          ? "border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.06),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_hsl(var(--primary)/0.28)]"
+          : "border-violet-400/20 bg-[linear-gradient(135deg,rgba(167,139,250,0.06),rgba(15,23,42,0.96)_34%,rgba(15,23,42,0.92)_100%)] shadow-[0_18px_44px_-36px_rgba(167,139,250,0.28)]";
+    }
+  };
+
   const getItemProgress = (itemId: string) => {
     return getProgressForSystemItem(systemId, stationId, itemId);
   };
@@ -122,7 +143,7 @@ export function ProgressEditDialog({
           編輯
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto border-primary/25 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.96)_100%)] shadow-[0_36px_120px_-52px_hsl(var(--primary)/0.7)]">
         <DialogHeader>
           <DialogTitle>
             編輯測試進度 - {systemName} / {stationName}
@@ -135,7 +156,10 @@ export function ProgressEditDialog({
             const editing = isEditing(item.id);
             
             return (
-              <div key={item.id} className="border rounded-lg p-4 space-y-3">
+              <div
+                key={item.id}
+                className={`rounded-2xl border p-4 space-y-3 transition-colors ${getPanelAccentClasses(itemProgress?.status, editing, index)}`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <h4 className="font-medium">{item.item_name}</h4>
