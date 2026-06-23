@@ -5,7 +5,6 @@ import {
   FileCode2,
   Gauge,
   LayoutDashboard,
-  Loader2,
   Radar,
   ShieldCheck,
   Sparkles,
@@ -261,14 +260,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <Button
                     variant="outline"
                     className="h-11 rounded-2xl border-primary/25 bg-background/45 px-5 backdrop-blur hover:bg-primary/10"
-                    disabled={isArchiveExporting}
                   >
-                    {isArchiveExporting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    {isArchiveExporting ? "封存匯出中..." : "匯出選項"}
+                    <Download className="mr-2 h-4 w-4" />
+                    匯出選項
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
@@ -277,15 +271,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     匯出資料報表
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleArchiveExport}
-                    disabled={isArchiveExporting}
-                  >
-                    {isArchiveExporting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileCode2 className="mr-2 h-4 w-4" />
-                    )}
+                  <DropdownMenuItem onClick={handleArchiveExport}>
+                    <FileCode2 className="mr-2 h-4 w-4" />
                     匯出整站 HTML 封存
                   </DropdownMenuItem>
                 </DropdownMenuContent>
