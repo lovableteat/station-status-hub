@@ -15,7 +15,8 @@ interface SnapshotModule {
 interface SnapshotPage {
   id: string;
   label: string;
-  html: string;
+  navHtml: string;
+  mainHtml: string;
 }
 
 const SNAPSHOT_MODULES: SnapshotModule[] = [
@@ -416,24 +417,54 @@ const captureModulePages = async (visibleModules: SnapshotModule[]) => {
 
     normalizeSnapshotDom(snapshotRoot, visibleModules);
 
+    const nav = snapshotRoot.querySelector("nav");
+    const main = snapshotRoot.querySelector("main");
+
+    if (!nav || !main) {
+      throw new Error("整站快照缺少左側欄或主內容區塊，請重新整理網站後再試一次。");
+    }
+
     pages.push({
       id: module.id,
       label: module.label,
-      html: snapshotRoot.outerHTML,
+      navHtml: nav.innerHTML,
+      mainHtml: main.innerHTML,
     });
   }
 
   return pages;
 };
 
+const captureShellTemplate = (visibleModules: SnapshotModule[]) => {
+  const shell = findAppShell();
+  const snapshotRoot = shell.cloneNode(true) as HTMLElement;
+
+  normalizeSnapshotDom(snapshotRoot, visibleModules);
+
+  const nav = snapshotRoot.querySelector("nav");
+  const main = snapshotRoot.querySelector("main");
+
+  if (!nav || !main) {
+    throw new Error("找不到完整的網站版面骨架，無法建立整站快照。");
+  }
+
+  snapshotRoot.setAttribute("data-archive-shell-root", "true");
+  nav.setAttribute("data-archive-nav-host", "true");
+  main.setAttribute("data-archive-main-host", "true");
+
+  return snapshotRoot.outerHTML;
+};
+
 const buildArchiveHtml = ({
   pages,
+  shellHtml,
   styles,
   exportedAt,
   exportedBy,
   currentModule,
 }: {
   pages: SnapshotPage[];
+  shellHtml: string;
   styles: string;
   exportedAt: string;
   exportedBy?: string | null;
@@ -442,15 +473,14 @@ const buildArchiveHtml = ({
   const htmlClass = escapeHtml(document.documentElement.className);
   const bodyClass = escapeHtml(document.body.className);
   const title = escapeHtml(document.title || "Station Status Hub Snapshot");
-  const pageMarkup = pages
-    .map(
-      (page) => `
-        <section data-archive-page="${escapeHtml(page.id)}" hidden>
-          ${page.html}
-        </section>
-      `
-    )
-    .join("");
+  const snapshotPayload = JSON.stringify(
+    {
+      defaultModule: currentModule,
+      pages,
+    },
+    null,
+    2
+  ).replace(/</g, "\\u003c");
 
   const metadata = JSON.stringify(
     {
@@ -479,27 +509,29 @@ const buildArchiveHtml = ({
       body {
         min-height: 100%;
       }
-
-      [data-archive-page][hidden] {
-        display: none !important;
-      }
     </style>
   </head>
   <body class="${bodyClass}">
-    ${pageMarkup}
+    ${shellHtml}
+    <script id="station-status-hub-archive-snapshots" type="application/json">${snapshotPayload}</script>
     <script id="station-status-hub-archive-metadata" type="application/json">${metadata}</script>
     <script>
       (function () {
-        const pages = Array.from(document.querySelectorAll("[data-archive-page]"));
-        const pageIds = pages.map((page) => page.getAttribute("data-archive-page"));
-        const defaultModule = ${JSON.stringify(currentModule)};
+        const payloadElement = document.getElementById("station-status-hub-archive-snapshots");
+        const payload = payloadElement ? JSON.parse(payloadElement.textContent || "{}") : {};
+        const pages = Array.isArray(payload.pages) ? payload.pages : [];
+        const pageMap = new Map(pages.map((page) => [page.id, page]));
+        const defaultModule = payload.defaultModule || ${JSON.stringify(currentModule)};
+        const navHost = document.querySelector("[data-archive-nav-host]");
+        const mainHost = document.querySelector("[data-archive-main-host]");
 
         function showModule(moduleId) {
-          const nextModule = pageIds.includes(moduleId) ? moduleId : defaultModule;
+          const nextModule = pageMap.has(moduleId) ? moduleId : defaultModule;
+          const nextPage = pageMap.get(nextModule) || pages[0];
+          if (!nextPage || !navHost || !mainHost) return;
 
-          pages.forEach((page) => {
-            page.hidden = page.getAttribute("data-archive-page") !== nextModule;
-          });
+          navHost.innerHTML = nextPage.navHtml;
+          mainHost.innerHTML = nextPage.mainHtml;
 
           window.scrollTo({ top: 0, behavior: "auto" });
 
@@ -568,8 +600,12 @@ export async function exportSiteArchiveHtml({
       captureModulePages(visibleModules),
     ]);
 
+    await navigateToModule(currentModule);
+    const shellHtml = captureShellTemplate(visibleModules);
+
     const html = buildArchiveHtml({
       pages,
+      shellHtml,
       styles,
       exportedAt: new Date().toISOString(),
       exportedBy,
