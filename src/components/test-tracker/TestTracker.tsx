@@ -254,6 +254,8 @@ export function TestTracker() {
     return "未開始";
   };
 
+  const hasActiveSearchTerm = searchTerm.trim().length > 0;
+
   const baseFilteredSystems = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
 
@@ -294,13 +296,13 @@ export function TestTracker() {
   const filteredSystems = useMemo(
     () =>
       baseFilteredSystems.filter((system) => {
-        if (filterStatus === "all-status") {
+        if (hasActiveSearchTerm || filterStatus === "all-status") {
           return true;
         }
 
         return normalizeSystemStatus(system) === filterStatus;
       }),
-    [baseFilteredSystems, filterStatus]
+    [baseFilteredSystems, filterStatus, hasActiveSearchTerm]
   );
 
   const engineers = useMemo(
@@ -399,6 +401,12 @@ export function TestTracker() {
             </span>
           </Button>
         </div>
+
+        {hasActiveSearchTerm && (
+          <div className="px-2 pb-1 pt-2 text-sm text-primary/90">
+            目前為搜尋模式，已跨所有狀態顯示符合的機台結果。
+          </div>
+        )}
       </div>
 
       {/* Content */}
