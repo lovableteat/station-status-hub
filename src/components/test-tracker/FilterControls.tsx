@@ -1,6 +1,5 @@
 import { Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -9,8 +8,6 @@ interface FilterControlsProps {
   setSearchTerm: (term: string) => void;
   filterEngineer: string;
   setFilterEngineer: (engineer: string) => void;
-  filterStatus: string;
-  setFilterStatus: (status: string) => void;
   engineers: string[];
 }
 
@@ -19,8 +16,6 @@ export function FilterControls({
   setSearchTerm,
   filterEngineer,
   setFilterEngineer,
-  filterStatus,
-  setFilterStatus,
   engineers,
 }: FilterControlsProps) {
   return (
@@ -40,24 +35,15 @@ export function FilterControls({
           </div>
           <Select value={filterEngineer} onValueChange={setFilterEngineer}>
             <SelectTrigger className="h-12 w-full border-border/90 bg-secondary/80 lg:w-52">
-              <SelectValue placeholder="選擇工程師" />
+              <SelectValue placeholder="全部工程師" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all-engineers">全部工程師</SelectItem>
-              {engineers.map(engineer => (
-                <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>
+              {engineers.map((engineer) => (
+                <SelectItem key={engineer} value={engineer}>
+                  {engineer}
+                </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-12 w-full border-border/90 bg-secondary/80 lg:w-52">
-              <SelectValue placeholder="選擇狀態" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all-status">全部狀態</SelectItem>
-              <SelectItem value="未開始">未開始</SelectItem>
-              <SelectItem value="進行中">進行中</SelectItem>
-              <SelectItem value="已完成">已完成</SelectItem>
             </SelectContent>
           </Select>
         </div>

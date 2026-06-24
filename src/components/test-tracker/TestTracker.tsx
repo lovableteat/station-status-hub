@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Download, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
+import { cn } from "@/lib/utils";
 import { FilterControls } from "./FilterControls";
 import { TestProgressTable } from "./TestProgressTable";
 import { ExportManager } from "./ExportManager";
@@ -31,11 +32,19 @@ interface TestProgress {
 type ProgressUpdates = Pick<TestProgress, "status" | "progress_percent" | "notes"> &
   Partial<Pick<TestProgress, "started_at" | "completed_at">>;
 
+type StatusFilter = "all-status" | "未開始" | "進行中" | "已完成";
+
+const STATUS_TABS: Array<{ value: Exclude<StatusFilter, "all-status">; label: string }> = [
+  { value: "未開始", label: "尚未開始" },
+  { value: "進行中", label: "進行中" },
+  { value: "已完成", label: "已完成" },
+];
+
 export function TestTracker() {
   const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEngineer, setFilterEngineer] = useState("all-engineers");
-  const [filterStatus, setFilterStatus] = useState("all-status");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all-status");
   const [editingProgress, setEditingProgress] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [editValues, setEditValues] = useState<{
@@ -210,7 +219,7 @@ export function TestTracker() {
     return "未開始";
   };
 
-  const filteredSystems = useMemo(() => {
+  const baseFilteredSystems = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
 
     return systems.filter(system => {
@@ -225,12 +234,39 @@ export function TestTracker() {
 
       const matchesEngineer =
         filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
-      const matchesStatus =
-        filterStatus === "all-status" || displayStatus === filterStatus;
 
-      return matchesSearch && matchesEngineer && matchesStatus;
+      return matchesSearch && matchesEngineer;
     });
-  }, [systems, searchTerm, filterEngineer, filterStatus]);
+  }, [systems, searchTerm, filterEngineer]);
+
+  const statusCounts = useMemo(
+    () =>
+      baseFilteredSystems.reduce<Record<Exclude<StatusFilter, "all-status">, number>>(
+        (accumulator, system) => {
+          const normalizedStatus = normalizeSystemStatus(system) as Exclude<StatusFilter, "all-status">;
+          accumulator[normalizedStatus] += 1;
+          return accumulator;
+        },
+        {
+          "未開始": 0,
+          "進行中": 0,
+          "已完成": 0,
+        }
+      ),
+    [baseFilteredSystems]
+  );
+
+  const filteredSystems = useMemo(
+    () =>
+      baseFilteredSystems.filter((system) => {
+        if (filterStatus === "all-status") {
+          return true;
+        }
+
+        return normalizeSystemStatus(system) === filterStatus;
+      }),
+    [baseFilteredSystems, filterStatus]
+  );
 
   const engineers = useMemo(
     () =>
@@ -279,10 +315,57 @@ export function TestTracker() {
         setSearchTerm={setSearchTerm}
         filterEngineer={filterEngineer}
         setFilterEngineer={setFilterEngineer}
-        filterStatus={filterStatus}
-        setFilterStatus={setFilterStatus}
         engineers={engineers}
       />
+
+      <div className="rounded-2xl border border-primary/15 bg-card/90 p-2 shadow-[0_18px_48px_-38px_hsl(220_50%_2%/0.9)]">
+        <div className="flex flex-wrap items-center gap-2">
+          {STATUS_TABS.map((tab) => {
+            const isActive = filterStatus === tab.value;
+
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setFilterStatus(tab.value)}
+                className={cn(
+                  "inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200",
+                  isActive
+                    ? "border-primary/50 bg-primary/15 text-primary shadow-[0_18px_36px_-26px_hsl(var(--primary)/0.8)]"
+                    : "border-border/70 bg-secondary/60 text-muted-foreground hover:border-primary/30 hover:bg-primary/8 hover:text-foreground"
+                )}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-xs font-semibold",
+                    isActive ? "bg-primary/20 text-primary" : "bg-background/80 text-foreground/75"
+                  )}
+                >
+                  {statusCounts[tab.value]}
+                </span>
+              </button>
+            );
+          })}
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setFilterStatus("all-status")}
+            className={cn(
+              "ml-auto rounded-xl border px-4 text-sm font-medium",
+              filterStatus === "all-status"
+                ? "border-primary/35 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                : "border-border/70 text-muted-foreground hover:border-primary/25 hover:text-foreground"
+            )}
+          >
+            全部
+            <span className="ml-2 rounded-full bg-background/80 px-2 py-0.5 text-xs font-semibold text-foreground/75">
+              {baseFilteredSystems.length}
+            </span>
+          </Button>
+        </div>
+      </div>
 
       {/* Content */}
       <div data-testtracker-table>
