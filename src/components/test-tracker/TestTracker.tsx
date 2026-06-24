@@ -40,6 +40,41 @@ const STATUS_TABS: Array<{ value: Exclude<StatusFilter, "all-status">; label: st
   { value: "已完成", label: "已完成" },
 ];
 
+const STATUS_TAB_STYLES: Record<
+  Exclude<StatusFilter, "all-status">,
+  {
+    active: string;
+    inactive: string;
+    badgeActive: string;
+    badgeInactive: string;
+  }
+> = {
+  "未開始": {
+    active:
+      "border-rose-400/55 bg-rose-500/[0.18] text-rose-100 shadow-[0_18px_38px_-26px_hsl(350_90%_62%/0.7)]",
+    inactive:
+      "border-rose-400/35 bg-rose-500/[0.08] text-rose-100/90 hover:border-rose-300/55 hover:bg-rose-500/[0.14]",
+    badgeActive: "bg-rose-200/20 text-rose-50",
+    badgeInactive: "bg-rose-200/15 text-rose-100/90",
+  },
+  "進行中": {
+    active:
+      "border-amber-300/60 bg-amber-400/[0.18] text-amber-50 shadow-[0_18px_38px_-26px_hsl(42_100%_58%/0.72)]",
+    inactive:
+      "border-amber-300/40 bg-amber-400/[0.09] text-amber-50/95 hover:border-amber-200/60 hover:bg-amber-400/[0.15]",
+    badgeActive: "bg-amber-100/25 text-amber-50",
+    badgeInactive: "bg-amber-100/15 text-amber-50/90",
+  },
+  "已完成": {
+    active:
+      "border-emerald-300/55 bg-emerald-400/[0.18] text-emerald-50 shadow-[0_18px_38px_-26px_hsl(152_75%_48%/0.7)]",
+    inactive:
+      "border-emerald-300/35 bg-emerald-400/[0.08] text-emerald-50/92 hover:border-emerald-200/55 hover:bg-emerald-400/[0.14]",
+    badgeActive: "bg-emerald-100/22 text-emerald-50",
+    badgeInactive: "bg-emerald-100/15 text-emerald-50/90",
+  },
+};
+
 export function TestTracker() {
   const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
   const [searchTerm, setSearchTerm] = useState("");
@@ -322,6 +357,7 @@ export function TestTracker() {
         <div className="flex flex-wrap items-center gap-2">
           {STATUS_TABS.map((tab) => {
             const isActive = filterStatus === tab.value;
+            const palette = STATUS_TAB_STYLES[tab.value];
 
             return (
               <button
@@ -330,16 +366,14 @@ export function TestTracker() {
                 onClick={() => setFilterStatus(tab.value)}
                 className={cn(
                   "inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200",
-                  isActive
-                    ? "border-primary/50 bg-primary/15 text-primary shadow-[0_18px_36px_-26px_hsl(var(--primary)/0.8)]"
-                    : "border-border/70 bg-secondary/60 text-muted-foreground hover:border-primary/30 hover:bg-primary/8 hover:text-foreground"
+                  isActive ? palette.active : palette.inactive
                 )}
               >
                 <span>{tab.label}</span>
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-semibold",
-                    isActive ? "bg-primary/20 text-primary" : "bg-background/80 text-foreground/75"
+                    isActive ? palette.badgeActive : palette.badgeInactive
                   )}
                 >
                   {statusCounts[tab.value]}
