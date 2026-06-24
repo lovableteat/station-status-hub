@@ -51,27 +51,27 @@ const STATUS_TAB_STYLES: Record<
 > = {
   "未開始": {
     active:
-      "border-rose-400/55 bg-rose-500/[0.18] text-rose-100 shadow-[0_18px_38px_-26px_hsl(350_90%_62%/0.7)]",
+      "border-rose-300/75 bg-rose-400/[0.28] text-white shadow-[0_20px_42px_-24px_hsl(350_95%_68%/0.82)]",
     inactive:
-      "border-rose-400/35 bg-rose-500/[0.08] text-rose-100/90 hover:border-rose-300/55 hover:bg-rose-500/[0.14]",
-    badgeActive: "bg-rose-200/20 text-rose-50",
-    badgeInactive: "bg-rose-200/15 text-rose-100/90",
+      "border-rose-300/55 bg-rose-400/[0.16] text-rose-50 hover:border-rose-200/75 hover:bg-rose-400/[0.24]",
+    badgeActive: "bg-white/20 text-white",
+    badgeInactive: "bg-rose-100/20 text-rose-50",
   },
   "進行中": {
     active:
-      "border-amber-300/60 bg-amber-400/[0.18] text-amber-50 shadow-[0_18px_38px_-26px_hsl(42_100%_58%/0.72)]",
+      "border-amber-200/80 bg-amber-300/[0.3] text-white shadow-[0_20px_42px_-24px_hsl(42_100%_66%/0.85)]",
     inactive:
-      "border-amber-300/40 bg-amber-400/[0.09] text-amber-50/95 hover:border-amber-200/60 hover:bg-amber-400/[0.15]",
-    badgeActive: "bg-amber-100/25 text-amber-50",
-    badgeInactive: "bg-amber-100/15 text-amber-50/90",
+      "border-amber-200/60 bg-amber-300/[0.18] text-amber-50 hover:border-amber-100/80 hover:bg-amber-300/[0.26]",
+    badgeActive: "bg-white/22 text-white",
+    badgeInactive: "bg-amber-100/20 text-amber-50",
   },
   "已完成": {
     active:
-      "border-emerald-300/55 bg-emerald-400/[0.18] text-emerald-50 shadow-[0_18px_38px_-26px_hsl(152_75%_48%/0.7)]",
+      "border-emerald-200/75 bg-emerald-300/[0.26] text-white shadow-[0_20px_42px_-24px_hsl(152_80%_58%/0.82)]",
     inactive:
-      "border-emerald-300/35 bg-emerald-400/[0.08] text-emerald-50/92 hover:border-emerald-200/55 hover:bg-emerald-400/[0.14]",
-    badgeActive: "bg-emerald-100/22 text-emerald-50",
-    badgeInactive: "bg-emerald-100/15 text-emerald-50/90",
+      "border-emerald-200/55 bg-emerald-300/[0.15] text-emerald-50 hover:border-emerald-100/75 hover:bg-emerald-300/[0.23]",
+    badgeActive: "bg-white/20 text-white",
+    badgeInactive: "bg-emerald-100/20 text-emerald-50",
   },
 };
 
