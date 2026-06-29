@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { ComponentType, useMemo, useState } from "react";
 import {
-  AlertTriangle,
+  Activity,
+  Boxes,
+  Clock3,
   Download,
   FileCode2,
   Gauge,
   LayoutDashboard,
-  Radar,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -23,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { exportSiteArchiveHtml } from "@/utils/siteArchiveExport";
@@ -30,7 +32,6 @@ import { exportSiteArchiveHtml } from "@/utils/siteArchiveExport";
 import { DailyStationCompletionChart } from "./DailyStationCompletionChart";
 import { StationAverageTimeChart } from "./StationAverageTimeChart";
 import { StationOverview } from "./StationOverview";
-import { StatsCard } from "./StatsCard";
 import { SystemStatusList } from "./SystemStatusList";
 import { TestPassRateCard } from "./TestPassRateCard";
 
@@ -42,6 +43,16 @@ interface DashboardSectionProps {
   eyebrow: string;
   title: string;
   description: string;
+}
+
+interface CommandCardProps {
+  eyebrow: string;
+  title: string;
+  value: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  tone: string;
+  accent: string;
 }
 
 function DashboardSection({
@@ -64,9 +75,60 @@ function DashboardSection({
   );
 }
 
+function CommandCard({
+  eyebrow,
+  title,
+  value,
+  description,
+  icon: Icon,
+  tone,
+  accent,
+}: CommandCardProps) {
+  return (
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-[30px] border p-5 shadow-[0_24px_58px_-46px_hsl(var(--background)/0.95)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_60px_-42px_hsl(var(--primary)/0.55)]",
+        tone
+      )}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground/70">
+            {eyebrow}
+          </p>
+          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        </div>
+        <div
+          className={cn(
+            "flex h-12 w-12 items-center justify-center rounded-2xl border shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)]",
+            accent
+          )}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="text-5xl font-semibold tracking-tight text-foreground">
+          {value}
+        </div>
+        <div className="mt-4 rounded-2xl border border-white/8 bg-background/24 px-4 py-3">
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { systems, progress, stations, testItems, stationContents } =
-    useUnifiedData();
+  const {
+    systems,
+    progress,
+    stations,
+    testItems,
+    stationContents,
+  } = useUnifiedData();
   const { user } = useUser();
   const { toast } = useToast();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -93,6 +155,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const completionRate =
     totalSystems > 0 ? Math.round((completedSystems / totalSystems) * 100) : 0;
 
+  const singleMachineTestHours = useMemo(() => {
+    const totalEstimatedMinutes = testItems.reduce((sum, item) => {
+      return sum + (item.estimated_minutes ?? 30);
+    }, 0);
+
+    return Number((totalEstimatedMinutes / 60).toFixed(1));
+  }, [testItems]);
+
   const headerStats = [
     {
       label: "納入統計",
@@ -111,29 +181,121 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     },
   ];
 
-  const heroSignals = [
+  const commandCards = [
     {
-      title: "即時追蹤",
-      value: `${ongoingSystems} 台`,
-      description: "目前仍在流程中的機台數量。",
-      icon: Radar,
-      tone: "border-sky-300/20 bg-sky-400/[0.08] text-sky-100",
+      eyebrow: "Total",
+      title: "進行中機台總數",
+      value: `${ongoingSystems}台`,
+      description: `L10 現在仍在測試流程中的機台，已完成 ${completedSystems} 台。`,
+      icon: Activity,
+      tone: "border-blue-300/22 bg-[radial-gradient(circle_at_top_right,hsl(220_95%_68%/0.18),transparent_30%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))]",
+      accent: "border-blue-300/22 bg-blue-400/10 text-blue-200",
     },
     {
-      title: "完成進度",
-      value: `${completedSystems} / ${totalSystems}`,
-      description: "已經結束整體測試流程的機台。",
+      eyebrow: "Yield",
+      title: "測試目前總完成率",
+      value: `${completionRate}%`,
+      description: `目前共 ${totalSystems} 台，已完成 ${completedSystems} 台。`,
       icon: ShieldCheck,
-      tone: "border-emerald-300/20 bg-emerald-400/[0.08] text-emerald-100",
+      tone: "border-emerald-300/22 bg-[radial-gradient(circle_at_top_right,hsl(152_80%_58%/0.18),transparent_30%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))]",
+      accent: "border-emerald-300/22 bg-emerald-400/10 text-emerald-200",
     },
     {
-      title: "待啟動",
-      value: `${notStartedSystems} 台`,
-      description: "尚未開始、可優先排程的機台。",
-      icon: Sparkles,
-      tone: "border-amber-300/20 bg-amber-400/[0.08] text-amber-100",
+      eyebrow: "Capacity",
+      title: "機台總數",
+      value: `${totalSystems}台`,
+      description: `${notStartedSystems} 台尚未啟動，方便你安排下一批進站節奏。`,
+      icon: Boxes,
+      tone: "border-indigo-300/20 bg-[radial-gradient(circle_at_top_right,hsl(232_96%_72%/0.16),transparent_30%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))]",
+      accent: "border-indigo-300/20 bg-indigo-400/10 text-indigo-200",
+    },
+    {
+      eyebrow: "Test Time",
+      title: "單機總測試時間",
+      value: `${singleMachineTestHours}h`,
+      description: `依目前測項估算，涵蓋 ${testItems.length} 個測試項目。`,
+      icon: Clock3,
+      tone: "border-amber-300/20 bg-[radial-gradient(circle_at_top_right,hsl(43_96%_56%/0.16),transparent_30%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)))]",
+      accent: "border-amber-300/20 bg-amber-400/10 text-amber-200",
     },
   ];
+
+  const stationQueue = useMemo(() => {
+    return [...stations]
+      .sort((a, b) => a.station_order - b.station_order)
+      .map((station) => {
+        const systemsAtStation = filteredSystems.filter(
+          (system) => system.current_station === station.station_name
+        );
+        const stationItemsForThisStation = testItems.filter(
+          (item) => item.station_id === station.id
+        );
+
+        const progressValues = systemsAtStation.map((system) => {
+          if (stationItemsForThisStation.length === 0) {
+            return 0;
+          }
+
+          const completedCount = stationItemsForThisStation.filter((item) =>
+            progress.some(
+              (entry) =>
+                entry.system_id === system.id &&
+                entry.station_id === station.id &&
+                entry.item_id === item.id &&
+                entry.status === "Done"
+            )
+          ).length;
+
+          return Math.round(
+            (completedCount / stationItemsForThisStation.length) * 100
+          );
+        });
+
+        const averageProgress = progressValues.length
+          ? Math.round(
+              progressValues.reduce((sum, value) => sum + value, 0) /
+                progressValues.length
+            )
+          : 0;
+
+        let queueState: "idle" | "running" | "blocked" | "complete" = "idle";
+        if (systemsAtStation.length > 0) {
+          if (averageProgress >= 100) {
+            queueState = "complete";
+          } else if (averageProgress < 50) {
+            queueState = "blocked";
+          } else {
+            queueState = "running";
+          }
+        }
+
+        return {
+          id: station.id,
+          name: station.station_name,
+          count: systemsAtStation.length,
+          averageProgress,
+          queueState,
+          previewSystems: systemsAtStation.slice(0, 3).map((system) => system.system_name),
+        };
+      });
+  }, [filteredSystems, progress, stations, testItems]);
+
+  const rankedStations = useMemo(() => {
+    return stationQueue
+      .filter((station) => station.count > 0)
+      .sort(
+        (a, b) =>
+          b.count - a.count ||
+          a.averageProgress - b.averageProgress ||
+          a.name.localeCompare(b.name, "zh-Hant")
+      )
+      .slice(0, 5);
+  }, [stationQueue]);
+
+  const maxQueueCount = Math.max(
+    1,
+    ...rankedStations.map((station) => station.count)
+  );
 
   const handleArchiveExport = async () => {
     if (isArchiveExporting) return;
@@ -173,88 +335,57 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return (
     <div className="animate-fade-in space-y-8 p-4 sm:p-6" data-dashboard-content>
-      <div className="relative overflow-hidden rounded-[32px] border border-primary/20 bg-[linear-gradient(135deg,hsl(224_36%_16%),hsl(224_29%_13%)_42%,hsl(229_38%_18%)_100%)] shadow-[0_36px_100px_-60px_hsl(var(--primary)/0.9)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.26),transparent_22%),radial-gradient(circle_at_85%_18%,hsl(189_80%_55%/0.16),transparent_18%),linear-gradient(120deg,transparent_0%,hsl(0_0%_100%/0.025)_48%,transparent_52%)]" />
-        <div className="pointer-events-none absolute inset-y-0 right-[18%] hidden w-px bg-gradient-to-b from-transparent via-white/10 to-transparent lg:block" />
+      <div className="relative overflow-hidden rounded-[34px] border border-primary/20 bg-[linear-gradient(135deg,hsl(225_34%_16%),hsl(224_27%_13%)_46%,hsl(228_37%_17%)_100%)] shadow-[0_36px_100px_-60px_hsl(var(--primary)/0.9)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.22),transparent_22%),radial-gradient(circle_at_80%_16%,hsl(193_96%_68%/0.12),transparent_16%),linear-gradient(120deg,transparent_0%,hsl(0_0%_100%/0.03)_48%,transparent_54%)]" />
 
-        <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <BackButton />
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)]">
-                <LayoutDashboard className="h-6 w-6" />
-              </div>
-              <Badge
-                variant="secondary"
-                className="rounded-full border border-primary/20 bg-background/35 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-primary/85 backdrop-blur"
-              >
-                Dashboard Control Room
-              </Badge>
-            </div>
-
+        <div className="relative space-y-6 p-5 sm:p-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="mt-1 hidden h-20 w-px bg-gradient-to-b from-primary/80 via-cyan-300/50 to-transparent sm:block" />
-                <div>
-                  <h1 className="text-4xl font-semibold tracking-[-0.03em] text-foreground sm:text-5xl">
-                    系統儀表板
-                  </h1>
-                  <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-                    用來快速查看整體測試進度、站點狀態與完工比例。現在也可以直接從這裡匯出整站
-                    HTML 封存，讓每個專案結束時都能保留一份舊網站快照。
-                  </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <BackButton />
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)]">
+                  <LayoutDashboard className="h-6 w-6" />
                 </div>
+                <Badge
+                  variant="secondary"
+                  className="rounded-full border border-primary/20 bg-background/35 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-primary/85 backdrop-blur"
+                >
+                  Dashboard Control Room
+                </Badge>
               </div>
 
-              <div className="flex flex-wrap gap-2.5">
-                {headerStats.map((stat) => (
-                  <Badge
-                    key={stat.label}
-                    variant="secondary"
-                    className={`gap-2 rounded-full px-4 py-2 text-xs font-medium shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)] ${stat.className}`}
-                  >
-                    <span className="opacity-70">{stat.label}</span>
-                    <span className="font-semibold text-foreground">
-                      {stat.value}
-                    </span>
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              {heroSignals.map((signal) => {
-                const Icon = signal.icon;
-
-                return (
-                  <div
-                    key={signal.title}
-                    className={`rounded-3xl border px-4 py-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] backdrop-blur ${signal.tone}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-current/70">
-                          {signal.title}
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold text-foreground">
-                          {signal.value}
-                        </p>
-                      </div>
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-current/20 bg-background/25 text-current">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-current/75">
-                      {signal.description}
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 hidden h-20 w-px bg-gradient-to-b from-primary/80 via-cyan-300/50 to-transparent sm:block" />
+                  <div>
+                    <h1 className="text-4xl font-semibold tracking-[-0.03em] text-foreground sm:text-5xl">
+                      系統儀表板
+                    </h1>
+                    <p className="mt-3 max-w-4xl text-base leading-7 text-muted-foreground">
+                      參考你指定的控制台式放置方式，把首頁第一屏改成更容易掃視的總覽版面。
+                      原本統計、進度、匯出邏輯都保留，只把資訊改成更適合現場看板的配置。
                     </p>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
 
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-start lg:justify-end">
+                <div className="flex flex-wrap gap-2.5">
+                  {headerStats.map((stat) => (
+                    <Badge
+                      key={stat.label}
+                      variant="secondary"
+                      className={`gap-2 rounded-full px-4 py-2 text-xs font-medium shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)] ${stat.className}`}
+                    >
+                      <span className="opacity-70">{stat.label}</span>
+                      <span className="font-semibold text-foreground">
+                        {stat.value}
+                      </span>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-start xl:justify-end">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -278,64 +409,165 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+          </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-background/28 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] backdrop-blur">
-              <div className="flex items-center justify-between">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)_minmax(300px,0.84fr)]">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {commandCards.map((card) => (
+                <CommandCard key={card.title} {...card} />
+              ))}
+            </div>
+
+            <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,hsl(224_16%_15%/0.96),hsl(224_18%_13%/0.96))] p-5 shadow-[0_24px_62px_-46px_hsl(var(--background)/0.95)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground/70">
+                    Ranking
+                  </p>
+                  <h3 className="mt-3 text-2xl font-semibold text-foreground">
+                    站點節奏排行
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    以目前站點上的機台數與平均進度排序，方便你快速找出最擁擠或最需要關注的站點。
+                  </p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-300/16 bg-rose-400/10 text-rose-200">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {rankedStations.length > 0 ? (
+                  rankedStations.map((station, index) => {
+                    const ratio = Math.max(
+                      16,
+                      Math.round((station.count / maxQueueCount) * 100)
+                    );
+
+                    return (
+                      <div
+                        key={station.id}
+                        className="rounded-[24px] border border-rose-300/10 bg-background/22 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-semibold text-rose-100/80">
+                                {index + 1}.
+                              </span>
+                              <p className="truncate text-base font-semibold text-foreground">
+                                {station.name}
+                              </p>
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              平均進度 {station.averageProgress}%，目前有 {station.count} 台在此站點。
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xl font-semibold text-rose-100">
+                            {station.count}台
+                          </span>
+                        </div>
+
+                        <div className="mt-4 h-3 overflow-hidden rounded-full bg-background/60">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,hsl(2_68%_74%),hsl(6_78%_66%))]"
+                            style={{ width: `${ratio}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-[24px] border border-white/10 bg-background/18 px-5 py-8 text-sm leading-6 text-muted-foreground">
+                    目前還沒有站點排程中的機台，等第一批系統進站後，這裡就會自動顯示節奏排行。
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,hsl(224_16%_15%/0.96),hsl(224_18%_13%/0.96))] p-5 shadow-[0_24px_62px_-46px_hsl(var(--background)/0.95)]">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary/75">
-                    Operations Pulse
+                    WIP Queue
                   </p>
-                  <h3 className="mt-2 text-xl font-semibold text-foreground">
-                    即時節奏
+                  <h3 className="mt-3 text-2xl font-semibold text-foreground">
+                    站點在製品監控
                   </h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    依照每台機器目前的 `current_station` 顯示隊列狀況，不改原本資料來源，只換成更像看板的表現。
+                  </p>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
                   <Gauge className="h-5 w-5" />
                 </div>
               </div>
 
-              <div className="mt-5 space-y-3">
-                <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      完成比例
-                    </span>
-                    <span className="text-lg font-semibold text-foreground">
-                      {completionRate}%
-                    </span>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/55">
+              <div className="mt-6 space-y-3">
+                {stationQueue.map((station) => {
+                  const stateConfig = {
+                    idle: {
+                      tone: "border-white/10 bg-background/18 text-foreground",
+                      label: "Idle",
+                      countTone: "text-slate-200",
+                    },
+                    running: {
+                      tone: "border-emerald-300/18 bg-emerald-400/[0.08] text-emerald-50",
+                      label: "Running",
+                      countTone: "text-emerald-200",
+                    },
+                    blocked: {
+                      tone: "border-rose-300/18 bg-rose-400/[0.10] text-rose-50",
+                      label: "Blocked",
+                      countTone: "text-rose-200",
+                    },
+                    complete: {
+                      tone: "border-sky-300/18 bg-sky-400/[0.08] text-sky-50",
+                      label: "Complete",
+                      countTone: "text-sky-200",
+                    },
+                  }[station.queueState];
+
+                  return (
                     <div
-                      className="h-full rounded-full bg-[linear-gradient(90deg,hsl(var(--primary)),hsl(191_95%_68%))]"
-                      style={{ width: `${completionRate}%` }}
-                    />
-                  </div>
-                </div>
+                      key={station.id}
+                      className={cn(
+                        "rounded-[24px] border px-4 py-3 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.05)]",
+                        stateConfig.tone
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-foreground">
+                            {station.name}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.22em] opacity-70">
+                            平均進度 {station.averageProgress}%
+                          </p>
+                        </div>
+                        <span className={cn("shrink-0 text-lg font-semibold", stateConfig.countTone)}>
+                          [ {station.count}台 {stateConfig.label} ]
+                        </span>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      進行中
-                    </p>
-                    <p className="mt-3 text-3xl font-semibold text-foreground">
-                      {ongoingSystems}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      未開始
-                    </p>
-                    <p className="mt-3 text-3xl font-semibold text-foreground">
-                      {notStartedSystems}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.05] px-4 py-3 text-sm leading-6 text-muted-foreground">
-                  如果你要做專案結案封存，建議直接從右上角選單匯出整站 HTML。
-                  下載後的檔案可離線打開，方便後續回顧、交接與比對不同專案版本。
-                </p>
+                      {station.previewSystems.length > 0 && (
+                        <p className="mt-3 truncate text-sm opacity-80">
+                          {station.previewSystems.join("、")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              <Button
+                variant="outline"
+                className="mt-5 h-11 w-full rounded-2xl border-white/10 bg-background/24 hover:bg-primary/10"
+                onClick={() => onNavigate?.("test-tracker")}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                查看排程機台清單
+              </Button>
             </div>
           </div>
         </div>
@@ -343,34 +575,24 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       <DashboardSection
         eyebrow="Overview"
-        title="站點總覽"
-        description="快速查看目前站點數量、每日目標與整體測試佈局，作為當前專案的基礎摘要。"
+        title="核心概況"
+        description="保留原本的總量、目標與站點資訊，只把首頁後續區塊整理成更清楚的資訊段落。"
       />
       <StationOverview />
 
       <DashboardSection
         eyebrow="Quality"
-        title="通過率與品質"
-        description="用統一視角追蹤目前測試通過比例與達成狀況，方便評估整體品質成熟度。"
+        title="通過率與完成節奏"
+        description="用一致的方式追蹤目前完成比例、進行中與未開始分布，讓專案狀態更容易判讀。"
       />
       <TestPassRateCard />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <StatsCard
-          title="進行中機台"
-          value={`${ongoingSystems}`}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          description={`${notStartedSystems} 台尚未開始`}
-          variant={ongoingSystems > 0 ? "warning" : "success"}
-        />
-        <StatsCard
-          title="系統完成概況"
-          value={`${completedSystems}/${totalSystems}`}
-          icon={<TrendingUp className="h-4 w-4" />}
-          description={`完成率 ${completionRate}%`}
-          variant={completionRate >= 70 ? "success" : "warning"}
-        />
-      </div>
+      <DashboardSection
+        eyebrow="Trend"
+        title="每日站點完成趨勢"
+        description="維持原本統計來源，把完成數量趨勢保留在首頁中段，方便快速看出各站節奏變化。"
+      />
+      <DailyStationCompletionChart />
 
       <DashboardSection
         eyebrow="Analysis"
@@ -378,8 +600,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         description="觀察各站平均耗時與瓶頸位置，幫助你判斷哪一段流程最值得優先優化。"
       />
       <StationAverageTimeChart />
-
-      <DailyStationCompletionChart />
 
       <DashboardSection
         eyebrow="Live"
