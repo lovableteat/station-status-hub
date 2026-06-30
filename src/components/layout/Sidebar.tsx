@@ -1,21 +1,23 @@
 import React, { useState } from "react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { usePermissions } from "@/hooks/usePermissions";
-import { useUser } from "@/components/auth/UserContext";
 import {
-  Database,
-  Monitor,
   AlertTriangle,
-  Wrench,
-  Menu,
+  Database,
+  FileSpreadsheet,
+  FileText,
   Home,
   ListChecks,
-  FileText,
-  Users,
   LogOut,
-  User
+  Menu,
+  Monitor,
+  User,
+  Users,
+  Wrench,
 } from "lucide-react";
+
+import { useUser } from "@/components/auth/UserContext";
+import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/usePermissions";
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   activeModule: string;
@@ -26,38 +28,100 @@ interface SidebarProps {
 }
 
 const navigationItems = [
-  { id: "dashboard", label: "系統儀表板", icon: Home, description: "總覽與KPI" },
-  { id: "test-tracker", label: "L10 測試追蹤", icon: ListChecks, description: "L10 系統進度" },
-  { id: "flow-info", label: "L10 測試流程設定", icon: FileText, description: "各站流程設定" },
-  { id: "monitor", label: "生產監控牆", icon: Monitor, description: "實時狀態" },
-  { id: "issues", label: "問題追蹤", icon: AlertTriangle, description: "故障管理" },
-  { id: "data", label: "資料中心", icon: Database, description: "報告查詢" },
-  { id: "tools", label: "工具管理", icon: Wrench, description: "設備資源" },
-  { id: "users", label: "使用者管理", icon: Users, description: "帳號權限" },
+  {
+    id: "dashboard",
+    label: "系統儀表板",
+    icon: Home,
+    description: "KPI 與總覽",
+  },
+  {
+    id: "test-tracker",
+    label: "L10 測試追蹤",
+    icon: ListChecks,
+    description: "L10 測試進度",
+  },
+  {
+    id: "flow-info",
+    label: "L10 流程設定",
+    icon: FileText,
+    description: "流程與站點設定",
+  },
+  {
+    id: "monitor",
+    label: "生產監控牆",
+    icon: Monitor,
+    description: "生產即時狀態",
+  },
+  {
+    id: "issues",
+    label: "問題追蹤",
+    icon: AlertTriangle,
+    description: "異常與改善管理",
+  },
+  {
+    id: "data",
+    label: "資料中心",
+    icon: Database,
+    description: "報告查詢",
+  },
+  {
+    id: "material-requests",
+    label: "料號申請",
+    icon: FileSpreadsheet,
+    description: "替代料與申請視圖",
+  },
+  {
+    id: "tools",
+    label: "工具管理",
+    icon: Wrench,
+    description: "檔案與工具資產",
+  },
+  {
+    id: "users",
+    label: "使用者管理",
+    icon: Users,
+    description: "帳號與權限",
+  },
 ];
 
-export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle, isMobile = false }: SidebarProps) {
+function getRoleLabel(role?: string) {
+  switch (role) {
+    case "super_admin":
+      return "超級管理員";
+    case "admin":
+      return "管理員";
+    default:
+      return "一般使用者";
+  }
+}
+
+export function Sidebar({
+  activeModule,
+  onModuleChange,
+  isOpen = true,
+  onToggle,
+  isMobile = false,
+}: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { canViewModule } = usePermissions();
   const { user, logout } = useUser();
 
-  // On mobile, use isOpen prop; on desktop, use collapsed state
   const isVisible = isMobile ? isOpen : true;
   const isCompact = isMobile ? false : collapsed;
 
   const handleToggle = () => {
     if (isMobile && onToggle) {
       onToggle();
-    } else {
-      setCollapsed(!collapsed);
+      return;
     }
+
+    setCollapsed((value) => !value);
   };
 
   return (
     <>
-      {/* Mobile Header with Menu Button */}
       {isMobile && (
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border h-14 flex items-center px-4">
+        <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 lg:hidden">
           <Button
             variant="ghost"
             size="sm"
@@ -67,35 +131,30 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
             <Menu className="h-4 w-4" />
           </Button>
           <div className="ml-3">
-            <h1 className="text-sm font-bold text-foreground">測試管理系統</h1>
+            <h1 className="text-sm font-bold text-foreground">站點狀態中心</h1>
           </div>
         </div>
       )}
 
-      {/* Sidebar */}
       <div
         className={cn(
-          "border-r border-border bg-card transition-all duration-300 flex flex-col overflow-hidden",
-          // Mobile styles
+          "flex flex-col overflow-hidden border-r border-border bg-card transition-all duration-300",
           isMobile && [
-            "fixed left-0 top-14 bottom-0 z-40 lg:relative",
+            "fixed bottom-0 left-0 top-14 z-40 w-64 lg:relative",
             isVisible ? "translate-x-0" : "-translate-x-full",
-            "w-64"
           ],
-          // Desktop styles
           !isMobile && [
-            "sticky top-0 self-start h-screen",
-            isCompact ? "w-16" : "w-64"
+            "sticky top-0 h-screen self-start",
+            isCompact ? "w-16" : "w-64",
           ]
         )}
       >
-        {/* Header - Hidden on mobile as we have separate mobile header */}
         {!isMobile && (
-          <div className="p-4 border-b border-border">
+          <div className="border-b border-border p-4">
             <div className="flex items-center justify-between">
               {!isCompact && (
                 <div>
-                  <h1 className="text-lg font-bold text-foreground">測試管理系統</h1>
+                  <h1 className="text-lg font-bold text-foreground">站點狀態中心</h1>
                   <p className="text-xs text-muted-foreground">Station Status Hub</p>
                 </div>
               )}
@@ -111,33 +170,33 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
           </div>
         )}
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-2">
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeModule === item.id;
-              const hasPermission = canViewModule(item.id);
-              
-              // 如果用戶沒有權限，不顯示此導航項目
-              if (!hasPermission) {
+
+              if (!canViewModule(item.id)) {
                 return null;
               }
-              
+
               return (
                 <Button
                   key={item.id}
                   variant={isActive ? "default" : "ghost"}
                   className={cn(
-                    "w-full justify-start h-10 transition-all",
-                    (isCompact && !isMobile) ? "px-2" : "px-3",
+                    "h-10 w-full justify-start transition-all",
+                    isCompact && !isMobile ? "px-2" : "px-3",
                     isActive && "bg-primary text-primary-foreground shadow-station"
                   )}
-                  onClick={() => {
-                    onModuleChange(item.id);
-                  }}
+                  onClick={() => onModuleChange(item.id)}
                 >
-                  <Icon className={cn("h-4 w-4 flex-shrink-0", (isCompact && !isMobile) ? "mr-0" : "mr-3")} />
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 flex-shrink-0",
+                      isCompact && !isMobile ? "mr-0" : "mr-3"
+                    )}
+                  />
                   {(!isCompact || isMobile) && (
                     <div className="flex-1 text-left">
                       <div className="text-sm font-medium">{item.label}</div>
@@ -150,17 +209,15 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
           </div>
         </nav>
 
-        {/* User info and logout section */}
-        <div className="p-2 border-t border-border">
+        <div className="border-t border-border p-2">
           {(!collapsed || isMobile) && (
-            <div className="mb-2 p-2 rounded bg-accent/50">
+            <div className="mb-2 rounded bg-accent/50 p-2">
               <div className="flex items-center gap-2 text-sm">
                 <User className="h-4 w-4" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{user?.username}</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {user?.role === 'super_admin' ? '超級管理員' : 
-                     user?.role === 'admin' ? '管理員' : '工程師'}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{user?.username}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {getRoleLabel(user?.role)}
                   </div>
                 </div>
               </div>
@@ -169,12 +226,14 @@ export function Sidebar({ activeModule, onModuleChange, isOpen = true, onToggle,
           <Button
             variant="ghost"
             className={cn(
-              "w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10",
-              (collapsed && !isMobile) ? "px-2" : "px-3"
+              "w-full justify-start text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
+              collapsed && !isMobile ? "px-2" : "px-3"
             )}
             onClick={logout}
           >
-            <LogOut className={cn("h-4 w-4", (collapsed && !isMobile) ? "mr-0" : "mr-3")} />
+            <LogOut
+              className={cn("h-4 w-4", collapsed && !isMobile ? "mr-0" : "mr-3")}
+            />
             {(!collapsed || isMobile) && "登出"}
           </Button>
         </div>

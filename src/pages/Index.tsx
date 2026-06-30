@@ -6,6 +6,7 @@ import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { DataCenter } from "@/components/data-center/DataCenter";
+import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { UserManagement } from "@/components/user-management/UserManagement";
@@ -94,6 +95,12 @@ const Index = () => {
         return (
           <PermissionGuard module="data">
             <DataCenter />
+          </PermissionGuard>
+        );
+      case "material-requests":
+        return (
+          <PermissionGuard module="material-requests">
+            <MaterialRequestPage />
           </PermissionGuard>
         );
       case "tools":
