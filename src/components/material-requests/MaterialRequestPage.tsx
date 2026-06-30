@@ -65,8 +65,8 @@ import {
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 
-type AvailabilityFilter = "all" | "usable" | "pending" | "risk";
-type SortMode = "reference" | "alternatives" | "approved" | "pending";
+type AvailabilityFilter = "all" | "usable" | "pending" | "risk" | "single";
+type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
 
 interface SavedMaterialChanges {
@@ -168,6 +168,19 @@ function getSortedAlternatives(group: MaterialGroup) {
 
     return left.manufacturer.localeCompare(right.manufacturer);
   });
+}
+
+function getUniqueMpnCount(group: MaterialGroup) {
+  return new Set(
+    group.records
+      .flatMap((record) => record.mpnCandidates)
+      .map((mpn) => mpn.trim().toLowerCase())
+      .filter(Boolean)
+  ).size;
+}
+
+function hasNoAlternative(group: MaterialGroup) {
+  return getUniqueMpnCount(group) <= 1;
 }
 
 function formatTimestamp(value: string) {
@@ -472,6 +485,7 @@ function AlternativeRows({
   onEdit: (record: MaterialRecord) => void;
 }) {
   const alternatives = getSortedAlternatives(group);
+  const uniqueMpnCount = getUniqueMpnCount(group);
   const allMpns = alternatives
     .map((record) => record.manufacturerPartNumber)
     .filter(Boolean)
@@ -486,8 +500,13 @@ function AlternativeRows({
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-black text-slate-50">廠商替代料比較</h3>
                 <span className="rounded-full bg-blue-400/15 px-3 py-1 text-sm font-bold text-blue-200">
-                  {alternatives.length} 筆
+                  {alternatives.length} 筆資料 / {uniqueMpnCount} 個 MPN
                 </span>
+                {uniqueMpnCount <= 1 && (
+                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-sm font-bold text-amber-300">
+                    單一料・無替代
+                  </span>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">
                 <span>Symbol：<strong className="font-mono text-cyan-300">{group.schematicPart || "未設定"}</strong></span>
@@ -651,21 +670,30 @@ export function MaterialRequestPage() {
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
-      const matchesSearch = searchTokens.every((token) => group.searchText.includes(token));
+      const noAlternative = hasNoAlternative(group);
+      const derivedSearchText = noAlternative
+        ? "單一料 無替代料 單一來源 single source no alternative"
+        : "有替代料 multiple source alternative";
+      const searchableText = `${group.searchText} ${derivedSearchText}`;
+      const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
       const matchesManufacturer =
         manufacturer === "all" || group.manufacturers.includes(manufacturer);
       const matchesAvailability =
         availability === "all" ||
         (availability === "usable" && group.approvedCount > 0 && group.riskCount < group.totalCount) ||
         (availability === "pending" && group.pendingCount > 0) ||
-        (availability === "risk" && group.riskCount > 0);
+        (availability === "risk" && group.riskCount > 0) ||
+        (availability === "single" && noAlternative);
 
       return matchesSearch && matchesManufacturer && matchesAvailability;
     });
 
     return [...result].sort((left, right) => {
-      if (sortMode === "alternatives" && left.totalCount !== right.totalCount) {
-        return right.totalCount - left.totalCount;
+      if (sortMode === "single-source" && hasNoAlternative(left) !== hasNoAlternative(right)) {
+        return hasNoAlternative(left) ? -1 : 1;
+      }
+      if (sortMode === "alternatives" && getUniqueMpnCount(left) !== getUniqueMpnCount(right)) {
+        return getUniqueMpnCount(right) - getUniqueMpnCount(left);
       }
       if (sortMode === "approved" && left.approvedCount !== right.approvedCount) {
         return right.approvedCount - left.approvedCount;
@@ -678,6 +706,10 @@ export function MaterialRequestPage() {
   }, [availability, dataset.groups, manufacturer, searchTokens, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
+  const noAlternativeCount = useMemo(
+    () => dataset.groups.filter(hasNoAlternative).length,
+    [dataset.groups]
+  );
   const visibleGroups = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredGroups.slice(start, start + pageSize);
@@ -860,6 +892,7 @@ export function MaterialRequestPage() {
           <span className="text-slate-400">Approved <strong className="ml-1 text-emerald-300">{dataset.stats.approvedRecords.toLocaleString()}</strong></span>
           <span className="text-slate-400">待申請 <strong className="ml-1 text-amber-300">{dataset.stats.pendingRecords.toLocaleString()}</strong></span>
           <span className="text-slate-400">廠商料 <strong className="ml-1 text-cyan-300">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
+          <span className="text-slate-400">無替代料 <strong className="ml-1 text-orange-300">{noAlternativeCount.toLocaleString()}</strong></span>
         </div>
       </header>
 
@@ -867,13 +900,13 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_180px_220px_180px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋 Ref、料名、廠商、MPN、內部料號、Symbol、Footprint..." className="h-12 border-blue-400/20 bg-[#111f36] pl-12 text-base text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋 Ref、料名、MPN、內部料號；也可輸入『單一料』或『無替代料』" className="h-12 border-blue-400/20 bg-[#111f36] pl-12 text-base text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={availability} onValueChange={(value) => setAvailability(value as AvailabilityFilter)}>
             <SelectTrigger className="h-12 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
+              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
             </SelectContent>
           </Select>
 
@@ -887,7 +920,7 @@ export function MaterialRequestPage() {
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
             <SelectTrigger className="h-12 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-200"><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="reference">依 Ref 排序</SelectItem><SelectItem value="alternatives">替代料多到少</SelectItem><SelectItem value="approved">Approved 多到少</SelectItem><SelectItem value="pending">待申請多到少</SelectItem>
+              <SelectItem value="reference">依 Ref 排序</SelectItem><SelectItem value="single-source">無替代料優先</SelectItem><SelectItem value="alternatives">替代料多到少</SelectItem><SelectItem value="approved">Approved 多到少</SelectItem><SelectItem value="pending">待申請多到少</SelectItem>
             </SelectContent>
           </Select>
 
@@ -903,7 +936,7 @@ export function MaterialRequestPage() {
         <div className="flex items-center justify-between border-b border-blue-400/15 bg-[#101d33] px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
-            <p className="mt-1 text-sm text-slate-500">點擊整列展開替代料；內部料號尾數 00 固定排第一首選。</p>
+            <p className="mt-1 text-sm text-slate-500">橘色「單一料・無替代」代表同組只有 0–1 個不重複 MPN；尾數 00 固定排第一首選。</p>
           </div>
           {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
         </div>
@@ -924,6 +957,8 @@ export function MaterialRequestPage() {
               {visibleGroups.map((group, index) => {
                 const expanded = expandedKey === group.key;
                 const usableCount = group.records.filter((record) => record.isApproved && !record.isRisk).length;
+                const uniqueMpnCount = getUniqueMpnCount(group);
+                const noAlternative = uniqueMpnCount <= 1;
 
                 return (
                   <Fragment key={group.key}>
@@ -932,7 +967,14 @@ export function MaterialRequestPage() {
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-lg border", expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300")}>{expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</span>
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span><span className="rounded bg-blue-400/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{group.totalCount} 個廠商料</span></div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span>
+                              {noAlternative ? (
+                                <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-xs font-bold text-orange-300">單一料・無替代</span>
+                              ) : (
+                                <span className="rounded bg-blue-400/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{uniqueMpnCount} 個 MPN</span>
+                              )}
+                            </div>
                             <p className="mt-1.5 text-base font-bold leading-6 text-slate-50">{group.name}</p>
                             <p className="mt-1 text-sm text-slate-500">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
                           </div>
