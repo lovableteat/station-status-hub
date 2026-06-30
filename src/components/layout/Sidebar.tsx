@@ -23,6 +23,9 @@ interface SidebarProps {
   isOpen?: boolean;
   onToggle?: () => void;
   isMobile?: boolean;
+  desktopStickyClass?: string;
+  mobileHeaderOffsetClass?: string;
+  mobilePanelOffsetClass?: string;
 }
 
 const navigationItems = [
@@ -87,6 +90,9 @@ export function Sidebar({
   isOpen = true,
   onToggle,
   isMobile = false,
+  desktopStickyClass = "top-0 h-screen",
+  mobileHeaderOffsetClass = "top-0",
+  mobilePanelOffsetClass = "top-14",
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { canViewModule } = usePermissions();
@@ -107,7 +113,12 @@ export function Sidebar({
   return (
     <>
       {isMobile && (
-        <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 lg:hidden">
+        <div
+          className={cn(
+            "fixed left-0 right-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 lg:hidden",
+            mobileHeaderOffsetClass
+          )}
+        >
           <Button
             variant="ghost"
             size="sm"
@@ -126,11 +137,13 @@ export function Sidebar({
         className={cn(
           "flex flex-col overflow-hidden border-r border-border bg-card transition-all duration-300",
           isMobile && [
-            "fixed bottom-0 left-0 top-14 z-40 w-64 lg:relative",
+            "fixed bottom-0 left-0 z-40 w-64 lg:relative",
+            mobilePanelOffsetClass,
             isVisible ? "translate-x-0" : "-translate-x-full",
           ],
           !isMobile && [
-            "sticky top-0 h-screen self-start",
+            "sticky self-start",
+            desktopStickyClass,
             isCompact ? "w-16" : "w-64",
           ]
         )}
