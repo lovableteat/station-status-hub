@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   AlertTriangle,
-  FileSpreadsheet,
   FileText,
   Home,
   ListChecks,
@@ -71,12 +70,6 @@ const navigationItems = [
     label: "使用者管理",
     icon: Users,
     description: "帳號與權限",
-  },
-  {
-    id: "material-requests",
-    label: "料號申請",
-    icon: FileSpreadsheet,
-    description: "替代料與申請視圖",
   },
 ];
 
