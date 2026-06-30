@@ -1,47 +1,245 @@
-import React, { useState, useEffect } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Dashboard } from "@/components/dashboard/Dashboard";
-import { TestTracker } from "@/components/test-tracker/TestTracker";
-import { FlowInfo } from "@/components/test-tracker/FlowInfo";
-import { ProductionMonitor } from "@/components/production/ProductionMonitor";
-import { IssueTracker } from "@/components/issues/IssueTracker";
-import { DataCenter } from "@/components/data-center/DataCenter";
-import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
-import { ToolsManagement } from "@/components/tools/ToolsManagement";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Boxes,
+  ClipboardList,
+  Factory,
+  FileText,
+  LayoutDashboard,
+  Network,
+  ServerCog,
+  ShieldCheck,
+  Wrench,
+} from "lucide-react";
+
 import { AdminPanel } from "@/components/admin/AdminPanel";
-import { UserManagement } from "@/components/user-management/UserManagement";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { LoginPage } from "@/components/auth/LoginPage";
-import { PermissionGuard } from "@/components/layout/PermissionGuard";
-import { UpdateIndicator } from "@/components/common/UpdateIndicator";
+import { useUser } from "@/components/auth/UserContext";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
-import { useUser } from "@/components/auth/UserContext";
-import { useUserPresence } from "@/hooks/useUserPresence";
+import { UpdateIndicator } from "@/components/common/UpdateIndicator";
+import { DeploymentPlanningCenter } from "@/components/data-center/DeploymentPlanningCenter";
+import { Dashboard } from "@/components/dashboard/Dashboard";
+import { IssueTracker } from "@/components/issues/IssueTracker";
+import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
+import { PermissionGuard } from "@/components/layout/PermissionGuard";
+import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
+import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
+import { ProductionMonitor } from "@/components/production/ProductionMonitor";
+import { FlowInfo } from "@/components/test-tracker/FlowInfo";
+import { TestTracker } from "@/components/test-tracker/TestTracker";
+import { ToolsManagement } from "@/components/tools/ToolsManagement";
+import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
 
+type WorkspaceId = "station-status" | "material-requests" | "data-center";
+type StationModuleId =
+  | "dashboard"
+  | "test-tracker"
+  | "flow-info"
+  | "monitor"
+  | "issues"
+  | "tools"
+  | "users"
+  | "api-management";
+
+const stationModuleItems: Array<{
+  id: StationModuleId;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: "dashboard", label: "系統儀表板", icon: LayoutDashboard },
+  { id: "test-tracker", label: "L10 測試追蹤", icon: ClipboardList },
+  { id: "flow-info", label: "L10 流程設定", icon: FileText },
+  { id: "monitor", label: "生產監控牆", icon: Factory },
+  { id: "issues", label: "問題追蹤", icon: AlertTriangle },
+  { id: "tools", label: "工具管理", icon: Wrench },
+  { id: "users", label: "使用者管理", icon: ShieldCheck },
+  { id: "api-management", label: "API 管理", icon: Network },
+];
+
+const moduleWorkspaceMap: Record<string, WorkspaceId> = {
+  dashboard: "station-status",
+  "test-tracker": "station-status",
+  "flow-info": "station-status",
+  monitor: "station-status",
+  issues: "station-status",
+  tools: "station-status",
+  users: "station-status",
+  "api-management": "station-status",
+  "material-requests": "material-requests",
+  data: "data-center",
+  "data-center": "data-center",
+};
+
+function getRoleLabel(role?: string) {
+  switch (role) {
+    case "super_admin":
+      return "超級管理員";
+    case "admin":
+      return "管理員";
+    default:
+      return "一般使用者";
+  }
+}
+
+function getInitialWorkspace(): WorkspaceId | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = new URLSearchParams(window.location.search).get("workspace");
+  if (
+    value === "station-status" ||
+    value === "material-requests" ||
+    value === "data-center"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function getInitialStationModule(): StationModuleId {
+  if (typeof window === "undefined") {
+    return "dashboard";
+  }
+
+  const value = new URLSearchParams(window.location.search).get("module");
+  if (
+    value === "dashboard" ||
+    value === "test-tracker" ||
+    value === "flow-info" ||
+    value === "monitor" ||
+    value === "issues" ||
+    value === "tools" ||
+    value === "users" ||
+    value === "api-management"
+  ) {
+    return value;
+  }
+
+  return "dashboard";
+}
+
 const Index = () => {
-  const [activeModule, setActiveModule] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, login, isLoggedIn } = useUser();
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId | null>(
+    getInitialWorkspace
+  );
+  const [activeStationModule, setActiveStationModule] = useState<StationModuleId>(
+    getInitialStationModule
+  );
+  const { login, isLoggedIn, logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { isUpdating } = useUnifiedData();
-  const isMobile = useIsMobile();
+  const { canViewModule } = usePermissions();
+  const isDemoMode =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("demo") === "admin";
+
+  const workspaceCatalog = useMemo(
+    () => [
+      {
+        id: "station-status" as const,
+        label: "站點狀態中心",
+        description: "查看站點狀態、測試流程、生產監控與管理設定。",
+        icon: LayoutDashboard,
+        visible: stationModuleItems.some((item) => canViewModule(item.id)),
+      },
+      {
+        id: "material-requests" as const,
+        label: "料號申請",
+        description: "集中處理料號申請、追蹤與相關作業。",
+        icon: Boxes,
+        visible: canViewModule("material-requests"),
+      },
+      {
+        id: "data-center" as const,
+        label: "Data-center",
+        description: "規劃海外基櫃部署的位置、電力、散熱與網路資源。",
+        icon: ServerCog,
+        visible: canViewModule("data"),
+      },
+    ],
+    [canViewModule]
+  );
+
+  const workspaceItems = useMemo(
+    () =>
+      workspaceCatalog
+        .filter((item) => item.visible)
+        .map(({ id, label }) => ({ id, label })),
+    [workspaceCatalog]
+  );
+
+  const entranceItems = useMemo(
+    () =>
+      workspaceCatalog
+        .filter((item) => item.visible)
+        .map(({ id, label, description, icon }) => ({
+          id,
+          title: label,
+          description,
+          icon,
+        })),
+    [workspaceCatalog]
+  );
+
+  const availableStationModules = useMemo(
+    () => stationModuleItems.filter((item) => canViewModule(item.id)),
+    [canViewModule]
+  );
 
   useEffect(() => {
-    // Listen for navigation events from other components
-    const handleNavigationEvent = (event: CustomEvent) => {
-      const { module } = event.detail;
-      setActiveModule(module);
+    if (activeWorkspace && !workspaceItems.some((item) => item.id === activeWorkspace)) {
+      setActiveWorkspace(null);
+    }
+  }, [activeWorkspace, workspaceItems]);
+
+  useEffect(() => {
+    if (!availableStationModules.some((item) => item.id === activeStationModule)) {
+      setActiveStationModule(availableStationModules[0]?.id ?? "dashboard");
+    }
+  }, [activeStationModule, availableStationModules]);
+
+  useEffect(() => {
+    const presenceModule =
+      activeWorkspace === null
+        ? "workspace-home"
+        : activeWorkspace === "station-status"
+          ? activeStationModule
+          : activeWorkspace;
+
+    updateCurrentModule(presenceModule);
+  }, [activeStationModule, activeWorkspace, updateCurrentModule]);
+
+  useEffect(() => {
+    const handleNavigationEvent = (event: CustomEvent<{ module: string }>) => {
+      const module = event.detail?.module;
+      if (!module) return;
+
+      const targetWorkspace = moduleWorkspaceMap[module];
+      if (!targetWorkspace) return;
+
+      setActiveWorkspace(targetWorkspace);
+
+      if (
+        targetWorkspace === "station-status" &&
+        stationModuleItems.some((item) => item.id === module)
+      ) {
+        setActiveStationModule(module as StationModuleId);
+      }
     };
 
-    window.addEventListener('navigate', handleNavigationEvent as EventListener);
-    
+    window.addEventListener("navigate", handleNavigationEvent as EventListener);
     return () => {
-      window.removeEventListener('navigate', handleNavigationEvent as EventListener);
+      window.removeEventListener("navigate", handleNavigationEvent as EventListener);
     };
   }, []);
 
@@ -49,22 +247,21 @@ const Index = () => {
     return <LoginPage onLogin={login} />;
   }
 
-  const handleNavigation = (module: string, params?: any) => {
-    setActiveModule(module);
-    updateCurrentModule(module); // Update user presence
-    // Close sidebar on mobile after navigation
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-    // Here you could handle routing params in the future
+  const handleWorkspaceChange = (workspace: string) => {
+    setActiveWorkspace(workspace as WorkspaceId);
   };
 
-  const renderModule = () => {
-    switch (activeModule) {
+  const handleStationNavigation = (module: string) => {
+    setActiveWorkspace("station-status");
+    setActiveStationModule(module as StationModuleId);
+  };
+
+  const renderStationContent = () => {
+    switch (activeStationModule) {
       case "dashboard":
         return (
           <PermissionGuard module="dashboard">
-            <Dashboard onNavigate={handleNavigation} />
+            <Dashboard onNavigate={handleStationNavigation} />
           </PermissionGuard>
         );
       case "test-tracker":
@@ -91,18 +288,6 @@ const Index = () => {
             <IssueTracker />
           </PermissionGuard>
         );
-      case "data":
-        return (
-          <PermissionGuard module="data">
-            <DataCenter />
-          </PermissionGuard>
-        );
-      case "material-requests":
-        return (
-          <PermissionGuard module="material-requests">
-            <MaterialRequestPage />
-          </PermissionGuard>
-        );
       case "tools":
         return (
           <PermissionGuard module="tools">
@@ -122,49 +307,83 @@ const Index = () => {
           </PermissionGuard>
         );
       default:
+        return null;
+    }
+  };
+
+  const renderWorkspaceContent = () => {
+    if (activeWorkspace === null) {
+      return (
+        <WorkspaceEntrance items={entranceItems} onSelect={handleWorkspaceChange} />
+      );
+    }
+
+    switch (activeWorkspace) {
+      case "material-requests":
         return (
-          <PermissionGuard module="dashboard">
-            <Dashboard onNavigate={handleNavigation} />
+          <PermissionGuard module="material-requests">
+            <MaterialRequestPage />
           </PermissionGuard>
+        );
+      case "data-center":
+        return (
+          <PermissionGuard module="data">
+            <DeploymentPlanningCenter />
+          </PermissionGuard>
+        );
+      case "station-status":
+      default:
+        return (
+          <div className="space-y-4">
+            <div className="border-b border-primary/10 px-4 pt-4 sm:px-6">
+              <div className="flex flex-wrap gap-2 overflow-x-auto pb-4">
+                {availableStationModules.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.id === activeStationModule;
+
+                  return (
+                    <Button
+                      key={item.id}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      onClick={() => setActiveStationModule(item.id)}
+                      className={cn(
+                        "h-11 rounded-xl px-4 text-sm",
+                        !isActive &&
+                          "border-primary/15 bg-background/25 text-foreground/80 hover:bg-primary/10 hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="mr-2 h-4 w-4" />
+                      {item.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            {renderStationContent()}
+          </div>
         );
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Real-time update indicators */}
       <UpdateIndicator isUpdating={isUpdating} />
-      <FacebookStyleNotifications />
-      <OnlineUsersIndicator />
-      <RealtimeNotifications />
-      
-      {/* Mobile overlay */}
-      {isMobile && sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      <div className="flex min-h-screen">
-        <Sidebar 
-          activeModule={activeModule} 
-          onModuleChange={(module) => {
-            setActiveModule(module);
-            updateCurrentModule(module); // Update user presence
-            if (isMobile) setSidebarOpen(false);
-          }}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-          isMobile={isMobile}
-        />
-        <main className={cn(
-          "flex-1 overflow-auto",
-          isMobile && "pt-14" // Add top padding on mobile for fixed header
-        )}>
-          {renderModule()}
-        </main>
-      </div>
+      {!isDemoMode && <FacebookStyleNotifications />}
+      {!isDemoMode && <OnlineUsersIndicator />}
+      {!isDemoMode && <RealtimeNotifications />}
+
+      <MainWorkspaceHeader
+        items={workspaceItems}
+        activeItem={activeWorkspace ?? undefined}
+        onSelect={handleWorkspaceChange}
+        onLogout={logout}
+        onBrandClick={() => setActiveWorkspace(null)}
+        userName={user?.displayName || user?.username}
+        userRoleLabel={getRoleLabel(user?.role)}
+      />
+
+      <main className="min-h-[calc(100vh-92px)]">{renderWorkspaceContent()}</main>
     </div>
   );
 };
