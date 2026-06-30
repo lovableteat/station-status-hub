@@ -25,6 +25,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { IssueTracker } from "@/components/issues/IssueTracker";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
@@ -32,6 +33,7 @@ import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
@@ -134,10 +136,12 @@ const Index = () => {
   const [activeStationModule, setActiveStationModule] = useState<StationModuleId>(
     getInitialStationModule
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { login, isLoggedIn, logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { isUpdating } = useUnifiedData();
   const { canViewModule } = usePermissions();
+  const isMobile = useIsMobile();
   const isDemoMode =
     import.meta.env.DEV &&
     typeof window !== "undefined" &&
@@ -254,6 +258,9 @@ const Index = () => {
   const handleStationNavigation = (module: string) => {
     setActiveWorkspace("station-status");
     setActiveStationModule(module as StationModuleId);
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
   };
 
   const renderStationContent = () => {
@@ -334,33 +341,35 @@ const Index = () => {
       case "station-status":
       default:
         return (
-          <div className="space-y-4">
-            <div className="border-b border-primary/10 px-4 pt-4 sm:px-6">
-              <div className="flex flex-wrap gap-2 overflow-x-auto pb-4">
-                {availableStationModules.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = item.id === activeStationModule;
+          <div className="relative">
+            {isMobile && sidebarOpen && (
+              <div
+                className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
 
-                  return (
-                    <Button
-                      key={item.id}
-                      type="button"
-                      variant={isActive ? "default" : "outline"}
-                      onClick={() => setActiveStationModule(item.id)}
-                      className={cn(
-                        "h-11 rounded-xl px-4 text-sm",
-                        !isActive &&
-                          "border-primary/15 bg-background/25 text-foreground/80 hover:bg-primary/10 hover:text-foreground"
-                      )}
-                    >
-                      <Icon className="mr-2 h-4 w-4" />
-                      {item.label}
-                    </Button>
-                  );
-                })}
-              </div>
+            <div className="flex min-h-[calc(100vh-92px)]">
+              <Sidebar
+                activeModule={activeStationModule}
+                onModuleChange={handleStationNavigation}
+                isOpen={sidebarOpen}
+                onToggle={() => setSidebarOpen((value) => !value)}
+                isMobile={isMobile}
+                desktopStickyClass="top-[92px] h-[calc(100vh-92px)]"
+                mobileHeaderOffsetClass="top-[92px]"
+                mobilePanelOffsetClass="top-[148px]"
+              />
+
+              <main
+                className={cn(
+                  "flex-1 overflow-auto",
+                  isMobile && "pt-14"
+                )}
+              >
+                {renderStationContent()}
+              </main>
             </div>
-            {renderStationContent()}
           </div>
         );
     }
