@@ -240,4 +240,81 @@ All colors MUST be HSL for proper theming support.
       0 24px 68px -34px hsl(221 83% 63% / 0.35),
       0 26px 90px -42px hsl(220 50% 2% / 0.9);
   }
+
+  .material-sheet-theme .bg-white {
+    background-color: #111d33 !important;
+  }
+
+  .material-sheet-theme :is(.bg-slate-50, .bg-slate-100) {
+    background-color: #0d182b !important;
+  }
+
+  .material-sheet-theme [class*="bg-sky-50"],
+  .material-sheet-theme [class*="bg-blue-50"] {
+    background-color: rgb(37 99 235 / 0.12) !important;
+  }
+
+  .material-sheet-theme [class*="bg-emerald-50"],
+  .material-sheet-theme [class*="bg-emerald-100"] {
+    background-color: rgb(16 185 129 / 0.13) !important;
+  }
+
+  .material-sheet-theme [class*="bg-amber-50"],
+  .material-sheet-theme [class*="bg-amber-100"] {
+    background-color: rgb(245 158 11 / 0.14) !important;
+  }
+
+  .material-sheet-theme :is(
+    .text-slate-950,
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700
+  ) {
+    color: #e8efff !important;
+  }
+
+  .material-sheet-theme :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+    color: #9fb0ca !important;
+  }
+
+  .material-sheet-theme :is(.text-blue-700, .text-sky-700, .text-sky-800, .text-sky-900) {
+    color: #8db7ff !important;
+  }
+
+  .material-sheet-theme :is(.text-cyan-800, .text-cyan-700) {
+    color: #67e8f9 !important;
+  }
+
+  .material-sheet-theme :is(.text-indigo-800, .text-indigo-700) {
+    color: #a5b4fc !important;
+  }
+
+  .material-sheet-theme :is(.text-emerald-800, .text-emerald-700) {
+    color: #6ee7b7 !important;
+  }
+
+  .material-sheet-theme :is(.text-amber-800, .text-amber-700) {
+    color: #fcd34d !important;
+  }
+
+  .material-sheet-theme :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+    border-color: rgb(96 125 171 / 0.28) !important;
+  }
+
+  .material-sheet-theme input::placeholder,
+  .material-record-dialog input::placeholder,
+  .material-record-dialog textarea::placeholder {
+    color: #6f819e;
+  }
+
+  .material-record-dialog :is(input, textarea) {
+    border-color: rgb(96 165 250 / 0.25);
+    background-color: #091426;
+    color: #e8efff;
+  }
+
+  .material-record-dialog :is(input, textarea):disabled {
+    cursor: default;
+    opacity: 0.82;
+  }
 }
