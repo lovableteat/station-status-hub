@@ -94,18 +94,66 @@ export interface MaterialDataset {
   };
 }
 
-const RISK_STATUSES = new Set([
-  "Obsolete",
-  "Disqualified",
-  "Qualification Pending",
-  "NRND",
-]);
+type MaterialField =
+  | "level"
+  | "name"
+  | "qty"
+  | "refDes"
+  | "mpn1"
+  | "mpn2"
+  | "manufacturer"
+  | "sourcingStatus"
+  | "refGroup"
+  | "lv"
+  | "remark"
+  | "partNumber"
+  | "partName"
+  | "partSpec"
+  | "schematicPart"
+  | "pcbFootprint"
+  | "sectionName"
+  | "assemblyName";
 
-const REQUIRED_HEADERS = ["Level", "Name", "Qty", "Manufacturer", "Sourcing Status"];
+const FIELD_ALIASES: Record<MaterialField, string[]> = {
+  level: ["Level", "層級", "階層", "BOM Level"],
+  name: ["Name", "Material Name", "料件名稱", "料名", "品名", "元件名稱"],
+  qty: ["Qty", "Quantity", "數量", "用量"],
+  refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
+  mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
+  mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
+  manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
+  sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
+  refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
+  lv: ["LV", "Version", "版本", "版次"],
+  remark: ["Remark", "Remarks", "Comment", "Note", "備註", "申請狀態"],
+  partNumber: ["Part Number", "Internal Part Number", "Internal PN", "PN", "內部料號", "公司料號"],
+  partName: ["Part Name", "Internal Part Name", "內部料名", "料號名稱"],
+  partSpec: ["Part Spec", "Specification", "Spec", "規格", "料件規格"],
+  schematicPart: ["Schematic_Part", "Schematic Part", "Symbol", "原理圖元件", "原理圖符號"],
+  pcbFootprint: ["PCB_Footprint", "PCB Footprint", "Footprint", "封裝", "PCB封裝"],
+  sectionName: ["Section", "Section Name", "系統", "區段", "大分類"],
+  assemblyName: ["Assembly", "Assembly Name", "Module", "模組", "子系統"],
+};
+
+const APPROVED_STATUS_WORDS = ["approved", "qualified", "active", "已核准", "合格", "可用", "啟用"];
+const RISK_STATUS_WORDS = ["obsolete", "disqualified", "qualificationpending", "nrnd", "eol", "停產", "淘汰", "禁用", "不建議採用", "認證中"];
 
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
 }
+
+function normalizeHeader(value: unknown) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[\s_\-\/().（）]+/g, "");
+}
+
+const NORMALIZED_FIELD_ALIASES = Object.fromEntries(
+  Object.entries(FIELD_ALIASES).map(([field, aliases]) => [
+    field,
+    new Set(aliases.map(normalizeHeader)),
+  ])
+) as Record<MaterialField, Set<string>>;
 
 function normalizeCellValue(value: unknown) {
   if (value == null) {
@@ -128,23 +176,28 @@ function uniqueValues(values: unknown[]) {
 }
 
 export function getActionKind(remark: string): MaterialActionKind {
-  if (remark.includes("00/Part/Symbol")) {
+  const normalizedRemark = normalizeText(remark).toLowerCase();
+
+  if (normalizedRemark.includes("00/part/symbol")) {
     return "pending-00-part-symbol";
   }
 
-  if (remark.includes("#解除")) {
+  if (normalizedRemark.includes("#解除") || normalizedRemark.includes("unlock")) {
     return "pending-unlock";
   }
 
-  if (remark.includes("Part/Symbol")) {
+  if (normalizedRemark.includes("part/symbol")) {
     return "pending-part-symbol";
   }
 
-  if (remark.includes("需申請") && remark.includes("Symbol")) {
+  if (
+    normalizedRemark.includes("symbol") &&
+    (normalizedRemark.includes("需申請") || normalizedRemark.includes("pending") || normalizedRemark.includes("request"))
+  ) {
     return "pending-symbol";
   }
 
-  if (remark === "OK") {
+  if (["ok", "ready", "completed", "已完成", "已建檔"].includes(normalizedRemark)) {
     return "ok";
   }
 
@@ -209,13 +262,23 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   ]);
   const remark = normalizeText(raw.remark);
   const actionKind = getActionKind(remark);
-  const displayRef = firstNonEmpty(raw.refGroup, raw.refDes, raw.assemblyName, raw.name);
-  const groupKey = `${displayRef}::${normalizeText(raw.name)}`;
+  const displayRef = firstNonEmpty(raw.refGroup, raw.refDes, raw.partNumber, raw.name);
+  const inferredGroup = [raw.name, raw.partSpec, raw.pcbFootprint]
+    .map(normalizeText)
+    .filter(Boolean)
+    .join("::");
+  const groupIdentity = firstNonEmpty(raw.refGroup, raw.refDes, inferredGroup, raw.name);
+  const groupKey = `${groupIdentity}::${normalizeText(raw.name)}`;
   const partSummary = uniqueValues([
     raw.partNumber,
     raw.partName,
     raw.pcbFootprint,
   ]).join(" • ");
+
+  const normalizedStatus = normalizeHeader(raw.sourcingStatus);
+  const isPending = actionKind !== "ok" && actionKind !== "other";
+  const isApproved = APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
+  const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
 
   return {
     ...raw,
@@ -227,10 +290,10 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     mpnCandidates,
     partSummary,
     actionKind,
-    isPending: actionKind !== "ok" && actionKind !== "other",
-    isReady: actionKind === "ok",
-    isApproved: normalizeText(raw.sourcingStatus) === "Approved",
-    isRisk: RISK_STATUSES.has(normalizeText(raw.sourcingStatus)),
+    isPending,
+    isReady: actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending),
+    isApproved,
+    isRisk,
     searchText: buildSearchText([
       raw.sectionName,
       raw.assemblyName,
@@ -323,20 +386,43 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
   };
 }
 
-function findHeaderRow(rows: unknown[][]) {
-  return rows.findIndex((row) => {
-    const normalizedRow = row.map(normalizeText);
-    return REQUIRED_HEADERS.every((header) => normalizedRow.includes(header));
+function resolveHeaderFields(row: unknown[]) {
+  const fields = new Map<MaterialField, number>();
+
+  row.forEach((header, index) => {
+    const normalized = normalizeHeader(header);
+    if (!normalized) return;
+
+    (Object.keys(NORMALIZED_FIELD_ALIASES) as MaterialField[]).forEach((field) => {
+      if (!fields.has(field) && NORMALIZED_FIELD_ALIASES[field].has(normalized)) {
+        fields.set(field, index);
+      }
+    });
   });
+
+  return fields;
 }
 
-function buildRowObject(headers: string[], row: unknown[]) {
-  return headers.reduce<Record<string, unknown>>((result, header, index) => {
-    if (header) {
-      result[header] = row[index];
+function findHeaderRow(rows: unknown[][]) {
+  let bestMatch: { index: number; fields: Map<MaterialField, number>; score: number } | null = null;
+
+  rows.slice(0, 40).forEach((row, index) => {
+    const fields = resolveHeaderFields(row);
+    const hasName = fields.has("name") || fields.has("partName");
+    const hasMaterialIdentity = fields.has("mpn1") || fields.has("partNumber") || fields.has("refDes") || fields.has("refGroup");
+    const score = fields.size;
+
+    if (hasName && hasMaterialIdentity && score >= 3 && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { index, fields, score };
     }
-    return result;
-  }, {});
+  });
+
+  return bestMatch;
+}
+
+function getFieldValue(row: unknown[], fields: Map<MaterialField, number>, field: MaterialField) {
+  const index = fields.get(field);
+  return index == null ? "" : row[index];
 }
 
 function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
@@ -345,30 +431,30 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     defval: "",
     raw: false,
   });
-  const headerRowIndex = findHeaderRow(rows);
+  const headerMatch = findHeaderRow(rows);
 
-  if (headerRowIndex === -1) {
+  if (!headerMatch) {
     return null;
   }
 
-  const headers = rows[headerRowIndex].map(normalizeText);
+  const { index: headerRowIndex, fields } = headerMatch;
   const records: MaterialWorkbookRecord[] = [];
-  const hasRichColumns = ["Ref_tmp", "Remark", "Part Number", "PCB_Footprint"].every(
-    (header) => headers.includes(header)
-  );
+  const hasLevelColumn = fields.has("level");
 
   let currentSection = "";
   let currentAssembly = "";
 
   for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
-    const rowObject = buildRowObject(headers, rows[index]);
-    const levelValue = Number(rowObject.Level);
+    const row = rows[index];
+    const levelCell = getFieldValue(row, fields, "level");
+    const parsedLevel = Number(levelCell);
+    const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
+    const partName = normalizeText(getFieldValue(row, fields, "partName"));
+    const partNumber = normalizeText(getFieldValue(row, fields, "partNumber"));
+    const mpn1 = normalizeText(getFieldValue(row, fields, "mpn1"));
+    const name = firstNonEmpty(getFieldValue(row, fields, "name"), partName, partNumber, mpn1);
 
-    if (!Number.isFinite(levelValue)) {
-      continue;
-    }
-
-    const name = normalizeText(rowObject.Name);
+    if (!name) continue;
 
     if (levelValue === 0) {
       currentSection = name;
@@ -380,42 +466,39 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       continue;
     }
 
-    if (levelValue !== 2) {
+    if (levelValue < 2) {
       continue;
     }
 
+    const refDes = normalizeText(getFieldValue(row, fields, "refDes"));
+    const refGroup = firstNonEmpty(getFieldValue(row, fields, "refGroup"), refDes);
+
     records.push({
       id: `${sheetName}-${index}`,
-      sectionName: currentSection,
-      assemblyName: currentAssembly,
-      level: levelValue,
+      sectionName: firstNonEmpty(getFieldValue(row, fields, "sectionName"), currentSection),
+      assemblyName: firstNonEmpty(getFieldValue(row, fields, "assemblyName"), currentAssembly),
+      level: 2,
       name,
-      qty: normalizeCellValue(rowObject.Qty),
-      refDes: normalizeText(rowObject["Ref Des"]),
-      manufacturerPartNumber: firstNonEmpty(
-        rowObject["Manufacturer Part Number(1)"],
-        rowObject["Manufacturer Part Number"]
-      ),
-      manufacturerPartNumberAlt: firstNonEmpty(
-        rowObject["Manufacturer Part Number(2)"],
-        rowObject["Manufacturer Part Number"]
-      ),
-      manufacturer: normalizeText(rowObject.Manufacturer),
-      sourcingStatus: normalizeText(rowObject["Sourcing Status"]),
-      refGroup: firstNonEmpty(rowObject.Ref_tmp, rowObject["Ref Des"]),
-      lv: normalizeCellValue(rowObject.LV),
-      remark: normalizeText(rowObject.Remark),
-      partNumber: normalizeText(rowObject["Part Number"]),
-      partName: normalizeText(rowObject["Part Name"]),
-      partSpec: normalizeText(rowObject["Part Spec"]),
-      schematicPart: normalizeText(rowObject.Schematic_Part),
-      pcbFootprint: normalizeText(rowObject.PCB_Footprint),
+      qty: normalizeCellValue(getFieldValue(row, fields, "qty")),
+      refDes,
+      manufacturerPartNumber: mpn1,
+      manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
+      manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
+      sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
+      refGroup,
+      lv: normalizeCellValue(getFieldValue(row, fields, "lv")),
+      remark: normalizeText(getFieldValue(row, fields, "remark")),
+      partNumber,
+      partName,
+      partSpec: normalizeText(getFieldValue(row, fields, "partSpec")),
+      schematicPart: normalizeText(getFieldValue(row, fields, "schematicPart")),
+      pcbFootprint: normalizeText(getFieldValue(row, fields, "pcbFootprint")),
     });
   }
 
   return {
     sheetName,
-    score: records.length + (hasRichColumns ? 5000 : 0),
+    score: records.length + fields.size * 250,
     records,
   };
 }
@@ -436,7 +519,7 @@ export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWor
   const bestMatch = candidates.sort((left, right) => right.score - left.score)[0];
 
   if (!bestMatch || bestMatch.records.length === 0) {
-    throw new Error("找不到可解析的料號資料欄位，請確認 Excel 仍保留原始標題列。");
+    throw new Error("找不到可解析的料號資料。至少需要料名欄，以及 MPN、內部料號、Ref Des 或群組欄其中一項。");
   }
 
   return {
