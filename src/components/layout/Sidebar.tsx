@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import {
   AlertTriangle,
-  Database,
-  FileSpreadsheet,
   FileText,
   Home,
   ListChecks,
@@ -59,12 +57,6 @@ const navigationItems = [
     description: "異常與改善管理",
   },
   {
-    id: "data",
-    label: "資料中心",
-    icon: Database,
-    description: "報告查詢",
-  },
-  {
     id: "tools",
     label: "工具管理",
     icon: Wrench,
@@ -75,12 +67,6 @@ const navigationItems = [
     label: "使用者管理",
     icon: Users,
     description: "帳號與權限",
-  },
-  {
-    id: "material-requests",
-    label: "料號申請",
-    icon: FileSpreadsheet,
-    description: "替代料與申請視圖",
   },
 ];
 
