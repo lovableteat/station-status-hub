@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  CircleHelp,
   CircleCheck,
   Copy,
   Download,
@@ -249,6 +250,78 @@ function SummaryTile({
         </div>
       </div>
     </div>
+  );
+}
+
+function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+        <DialogHeader>
+          <DialogTitle className="text-2xl text-slate-50">Excel 整理與上傳流程</DialogTitle>
+          <DialogDescription className="text-[15px] leading-6 text-slate-400">
+            使用標準範本最穩定；系統也能辨識常見中英文欄名與沒有 Level 的一般明細表。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-2 text-[15px]">
+          <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.07] p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-cyan-200">1. 先下載標準範本</h3>
+                <p className="mt-1 leading-6 text-slate-400">內含「上傳資料」與「填寫說明」兩張工作表，以及可直接修改的範例。</p>
+              </div>
+              <Button asChild className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
+                <a href={templateUrl} download="料號替代料_上傳範本.xlsx">
+                  <Download className="mr-2 h-4 w-4" />下載上傳範本
+                </a>
+              </Button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5">
+            <h3 className="text-lg font-bold text-blue-200">2. 資料怎麼整理</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {[
+                ["每個廠商料一列", "同一顆料有 Murata、Samsung、TDK，就建立三列；不要把多個 MPN 塞在同一格。"],
+                ["同料固定同一群組", "替代料的 Ref_tmp 與 Name 必須完全相同，這是最可靠的分組方式。"],
+                ["Level 可有可無", "有階層時用 0=大分類、1=模組、2=料件；一般平面表沒有 Level 也能上傳。"],
+                ["已建料才填內部料號", "Part Number 有值代表已建立；未建立就留白，Remark 填需申請項目。"],
+                ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
+                ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
+              ].map(([title, description]) => (
+                <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
+                  <p className="font-bold text-slate-100">{title}</p>
+                  <p className="mt-2 leading-6 text-slate-400">{description}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+            <h3 className="text-lg font-bold text-emerald-200">3. 系統如何通用分析</h3>
+            <div className="mt-4 space-y-3 leading-6 text-slate-300">
+              <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
+              <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
+              <p><strong className="text-slate-100">分組：</strong>依 Ref Group → Ref Des → 料名＋規格＋Footprint 的順序判斷替代料關係。</p>
+              <p><strong className="text-slate-100">狀態：</strong>自動區分可用、待申請與 Obsolete／NRND／停產等風險狀態。</p>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5">
+            <h3 className="text-lg font-bold text-amber-200">4. 上傳前後</h3>
+            <ol className="mt-3 space-y-2 leading-6 text-slate-300">
+              <li>1. 在 Excel 篩選檢查空白 MPN、錯誤群組與重複列。</li>
+              <li>2. 回到本頁按「更新 Excel」，選擇 `.xlsx` 或 `.xls`。</li>
+              <li>3. 上傳新檔會以該檔案作為新的資料來源，並清除目前瀏覽器中的手動異動。</li>
+              <li>4. 上傳後先搜尋一個 Ref，展開確認廠商料、內部料號、Symbol 與 Footprint。</li>
+            </ol>
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -491,6 +564,7 @@ export function MaterialRequestPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [isImporting, setIsImporting] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
@@ -598,6 +672,15 @@ export function MaterialRequestPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const hasLocalChanges = savedChanges.added.length > 0 || Object.keys(savedChanges.updated).length > 0;
+    if (
+      hasLocalChanges &&
+      !window.confirm("上傳新的 Excel 會清除目前瀏覽器中的手動新增與修改。確定要繼續嗎？")
+    ) {
+      event.target.value = "";
+      return;
+    }
+
     setIsImporting(true);
     try {
       const payload = await parseMaterialWorkbookFile(file);
@@ -699,6 +782,7 @@ export function MaterialRequestPage() {
     <div className="material-sheet-theme min-h-full bg-[#07101f] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWorkbookImport} />
 
+      <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
 
       <header className="rounded-2xl border border-blue-400/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.11),transparent_34%),linear-gradient(135deg,#111d33,#0b1527)] p-5 shadow-[0_18px_55px_-38px_rgba(56,189,248,0.65)]">
@@ -714,6 +798,9 @@ export function MaterialRequestPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-amber-400/30 bg-amber-400/10 px-4 text-[15px] font-bold text-amber-200 hover:bg-amber-400/20 hover:text-amber-100">
+              <CircleHelp className="mr-2 h-4 w-4" />上傳說明
+            </Button>
             <Button type="button" onClick={() => openCreate()} className="h-11 bg-cyan-500 px-4 text-[15px] font-bold text-slate-950 hover:bg-cyan-400">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
