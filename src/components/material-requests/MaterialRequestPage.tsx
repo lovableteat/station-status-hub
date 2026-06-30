@@ -147,12 +147,18 @@ function parseSearchTokens(query: string) {
     .filter(Boolean);
 }
 
+function isPrimaryInternalPart(record: MaterialRecord) {
+  return /00$/i.test(record.partNumber.trim());
+}
+
 function getAlternativeScore(record: MaterialRecord) {
-  if (record.isApproved && record.isReady && !record.isRisk) return 0;
-  if (record.isApproved && !record.isRisk) return 1;
-  if (record.isReady && !record.isRisk) return 2;
-  if (!record.isRisk) return 3;
-  return 4;
+  const primaryOffset = isPrimaryInternalPart(record) ? 0 : 10;
+
+  if (record.isApproved && record.isReady && !record.isRisk) return primaryOffset;
+  if (record.isApproved && !record.isRisk) return primaryOffset + 1;
+  if (record.isReady && !record.isRisk) return primaryOffset + 2;
+  if (!record.isRisk) return primaryOffset + 3;
+  return primaryOffset + 4;
 }
 
 function getSortedAlternatives(group: MaterialGroup) {
@@ -288,7 +294,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["每個廠商料一列", "同一顆料有 Murata、Samsung、TDK，就建立三列；不要把多個 MPN 塞在同一格。"],
                 ["同料固定同一群組", "替代料的 Ref_tmp 與 Name 必須完全相同，這是最可靠的分組方式。"],
                 ["Level 可有可無", "有階層時用 0=大分類、1=模組、2=料件；一般平面表沒有 Level 也能上傳。"],
-                ["已建料才填內部料號", "Part Number 有值代表已建立；未建立就留白，Remark 填需申請項目。"],
+                ["已建料才填內部料號", "Part Number 有值代表已建立；尾數 00 會排為第一首選，未建立就留白並在 Remark 填需申請項目。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
               ].map(([title, description]) => (
@@ -497,7 +503,8 @@ function AlternativeRows({
 
           <div className="space-y-3">
             {alternatives.map((record, index) => {
-              const preferred = index === 0 && getAlternativeScore(record) <= 1;
+              const preferred = index === 0;
+              const primaryByPartNumber = preferred && isPrimaryInternalPart(record);
 
               return (
                 <article
@@ -516,7 +523,11 @@ function AlternativeRows({
                         <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-emerald-400 text-emerald-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
                         <div>
                           <p className="text-[15px] font-bold leading-6 text-slate-50">{record.manufacturer || "未填廠商"}</p>
-                          {preferred && <span className="mt-1 inline-flex rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">優先可用</span>}
+                          {preferred && (
+                            <span className="mt-1 inline-flex rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                              {primaryByPartNumber ? "尾數 00 首選" : "優先可用"}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -892,7 +903,7 @@ export function MaterialRequestPage() {
         <div className="flex items-center justify-between border-b border-blue-400/15 bg-[#101d33] px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
-            <p className="mt-1 text-sm text-slate-500">點擊整列展開替代料，綠色標記為優先可用。</p>
+            <p className="mt-1 text-sm text-slate-500">點擊整列展開替代料；內部料號尾數 00 固定排第一首選。</p>
           </div>
           {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
         </div>
