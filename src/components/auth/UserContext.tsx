@@ -16,8 +16,31 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+function getDevDemoUser(): User | null {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("demo") !== "admin") {
+    return null;
+  }
+
+  return {
+    userId: "demo-admin",
+    username: "operator7",
+    role: "admin",
+    displayName: "Operator 7",
+  };
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
+    const demoUser = getDevDemoUser();
+    if (demoUser) {
+      return demoUser;
+    }
+
     // 從 localStorage 恢復用戶狀態
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
