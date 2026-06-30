@@ -1,12 +1,32 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Save, Shield, X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { Shield, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  ALL_PAGE_PERMISSIONS,
+  DEFAULT_WORKSPACE_ACCESS,
+  LEGACY_PAGE_PERMISSION_GROUPS,
+  type Permission,
+  readWorkspaceAccess,
+  type UserPermissionSettings,
+  type WorkspaceAccessLevel,
+  type WorkspaceAccessMap,
+  type WorkspaceId,
+  WORKSPACE_LABELS,
+} from "@/lib/workspacePermissions";
 
 interface UserPermissionsDialogProps {
   isOpen: boolean;
@@ -15,75 +35,39 @@ interface UserPermissionsDialogProps {
   username: string;
 }
 
-const PERMISSION_GROUPS = {
-  'dashboard': {
-    name: '儀表板',
-    permissions: [
-      { key: 'dashboard_view', label: '檢視儀表板' },
-      { key: 'dashboard_edit', label: '編輯儀表板' }
-    ]
-  },
-  'test_tracker': {
-    name: 'L10 測試追蹤',
-    permissions: [
-      { key: 'test_tracker_view', label: '檢視測試追蹤' },
-      { key: 'test_tracker_edit', label: '編輯測試追蹤' }
-    ]
-  },
-  'issues': {
-    name: '問題追蹤與報告',
-    permissions: [
-      { key: 'issues_view', label: '檢視問題追蹤與統計' },
-      { key: 'issues_edit', label: '編輯問題追蹤與統計' }
-    ]
-  },
-  'production': {
-    name: '產線監控',
-    permissions: [
-      { key: 'production_view', label: '檢視產線監控' },
-      { key: 'production_edit', label: '編輯產線監控' }
-    ]
-  },
-  'data_center': {
-    name: '資料中心',
-    permissions: [
-      { key: 'data_center_view', label: '檢視資料中心' },
-      { key: 'data_center_edit', label: '編輯資料中心' }
-    ]
-  },
-  'api_management': {
-    name: 'API 管理',
-    permissions: [
-      { key: 'api_management_view', label: '檢視 API 管理' },
-      { key: 'api_management_edit', label: '編輯 API 管理' }
-    ]
-  },
-  'comparison_center': {
-    name: '比對中心',
-    permissions: [
-      { key: 'comparison_view', label: '檢視比對中心' },
-      { key: 'comparison_edit', label: '編輯比對中心' }
-    ]
-  },
-  'tools': {
-    name: '工具管理',
-    permissions: [
-      { key: 'tools_view', label: '檢視工具管理' },
-      { key: 'tools_edit', label: '編輯工具管理' }
-    ]
-  },
-  'admin': {
-    name: '後台管理',
-    permissions: [
-      { key: 'admin_view', label: '檢視後台管理' },
-      { key: 'admin_edit', label: '編輯後台管理' }
-    ]
-  }
-};
+const WORKSPACE_OPTIONS: Array<{
+  value: WorkspaceAccessLevel;
+  label: string;
+  description: string;
+}> = [
+  { value: "none", label: "未授權", description: "不顯示此工作區" },
+  { value: "view", label: "檢視", description: "可進入工作區，但不可編輯" },
+  { value: "edit", label: "管理", description: "可完整操作此工作區" },
+];
 
-export function UserPermissionsDialog({ isOpen, onClose, userId, username }: UserPermissionsDialogProps) {
-  const [permissions, setPermissions] = useState<string[]>([]);
+function getWorkspaceCardTone(level: WorkspaceAccessLevel) {
+  switch (level) {
+    case "edit":
+      return "border-primary/35 bg-primary/10";
+    case "view":
+      return "border-sky-400/30 bg-sky-500/10";
+    default:
+      return "border-border bg-card";
+  }
+}
+
+export function UserPermissionsDialog({
+  isOpen,
+  onClose,
+  userId,
+  username,
+}: UserPermissionsDialogProps) {
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [workspaceAccess, setWorkspaceAccess] =
+    useState<WorkspaceAccessMap>(DEFAULT_WORKSPACE_ACCESS);
   const [isLoading, setIsLoading] = useState(false);
+  const [storedPermissionSettings, setStoredPermissionSettings] =
+    useState<UserPermissionSettings>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -94,19 +78,45 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
 
   const loadUserPermissions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_page_permissions')
-        .select('permission')
-        .eq('user_id', userId);
+      const [{ data: pagePermissions, error: pagePermissionError }, { data: userData, error: userError }] =
+        await Promise.all([
+          supabase
+            .from("user_page_permissions")
+            .select("permission")
+            .eq("user_id", userId),
+          supabase
+            .from("system_users")
+            .select("permissions")
+            .eq("id", userId)
+            .maybeSingle(),
+        ]);
 
-      if (error) throw error;
-      setPermissions(data?.map(p => p.permission) || []);
+      if (pagePermissionError) throw pagePermissionError;
+      if (userError) throw userError;
+
+      setPermissions(pagePermissions?.map((item) => item.permission as Permission) || []);
+
+      const permissionSettings =
+        userData?.permissions && typeof userData.permissions === "object"
+          ? (userData.permissions as UserPermissionSettings)
+          : {};
+
+      setStoredPermissionSettings(permissionSettings);
+      setWorkspaceAccess(readWorkspaceAccess(permissionSettings));
     } catch (error) {
-      // Fallback: localStorage
       try {
-        const local = localStorage.getItem(`user_page_permissions:${userId}`);
-        setPermissions(local ? JSON.parse(local) : []);
-      } catch {}
+        const localPermissions = localStorage.getItem(`user_page_permissions:${userId}`);
+        const localWorkspace = localStorage.getItem(
+          `user_workspace_permissions:${userId}`
+        );
+
+        setPermissions(localPermissions ? JSON.parse(localPermissions) : []);
+        setWorkspaceAccess(readWorkspaceAccess(localWorkspace ? JSON.parse(localWorkspace) : null));
+      } catch {
+        setPermissions([]);
+        setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
+      }
+
       toast({
         title: "載入權限（離線）",
         description: "資料庫不可用，使用本機權限設定",
@@ -114,50 +124,121 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
     }
   };
 
-  const handlePermissionChange = (permission: string, checked: boolean) => {
+  const handlePermissionChange = (permission: Permission, checked: boolean) => {
     if (checked) {
-      setPermissions(prev => [...prev, permission]);
-    } else {
-      setPermissions(prev => prev.filter(p => p !== permission));
+      setPermissions((prev) =>
+        prev.includes(permission) ? prev : [...prev, permission]
+      );
+      return;
     }
+
+    setPermissions((prev) => prev.filter((item) => item !== permission));
   };
+
+  const handleWorkspaceLevelChange = (
+    workspaceId: WorkspaceId,
+    level: WorkspaceAccessLevel
+  ) => {
+    setWorkspaceAccess((prev) => ({
+      ...prev,
+      [workspaceId]: level,
+    }));
+  };
+
+  const applyGlobalPreset = (level: WorkspaceAccessLevel) => {
+    const nextWorkspaceAccess: WorkspaceAccessMap = {
+      "station-status": level,
+      "material-requests": level,
+      "data-center": level,
+    };
+
+    setWorkspaceAccess(nextWorkspaceAccess);
+
+    if (level === "edit") {
+      setPermissions(ALL_PAGE_PERMISSIONS);
+      return;
+    }
+
+    if (level === "view") {
+      setPermissions(
+        ALL_PAGE_PERMISSIONS.filter((permission) => permission.endsWith("_view"))
+      );
+      return;
+    }
+
+    setPermissions([]);
+  };
+
+  const workspaceSummary = useMemo(
+    () =>
+      Object.entries(WORKSPACE_LABELS).map(([workspaceId, label]) => ({
+        id: workspaceId as WorkspaceId,
+        label,
+        level: workspaceAccess[workspaceId as WorkspaceId],
+      })),
+    [workspaceAccess]
+  );
 
   const handleSave = async () => {
     try {
       setIsLoading(true);
 
-      // 先嘗試保存到資料庫
+      const nextPermissionSettings: UserPermissionSettings = {
+        ...storedPermissionSettings,
+        workspaceAccess,
+      };
+
       const { error: deleteError } = await supabase
-        .from('user_page_permissions')
+        .from("user_page_permissions")
         .delete()
-        .eq('user_id', userId);
+        .eq("user_id", userId);
       if (deleteError) throw deleteError;
 
       if (permissions.length > 0) {
         const { error: insertError } = await supabase
-          .from('user_page_permissions')
+          .from("user_page_permissions")
           .insert(
-            permissions.map(permission => ({
+            permissions.map((permission) => ({
               user_id: userId,
               permission: permission as any,
-              granted_by: 'admin'
+              granted_by: "admin",
             }))
           );
         if (insertError) throw insertError;
       }
 
-      // 同步一份到本機，作為離線備份
-      localStorage.setItem(`user_page_permissions:${userId}` , JSON.stringify(permissions));
+      const { error: settingsError } = await supabase
+        .from("system_users")
+        .update({ permissions: nextPermissionSettings as any })
+        .eq("id", userId);
+
+      if (settingsError) throw settingsError;
+
+      localStorage.setItem(
+        `user_page_permissions:${userId}`,
+        JSON.stringify(permissions)
+      );
+      localStorage.setItem(
+        `user_workspace_permissions:${userId}`,
+        JSON.stringify({ workspaceAccess })
+      );
 
       toast({
         title: "設定成功",
-        description: `已更新 ${username} 的頁面權限`
+        description: `已更新 ${username} 的工作區與頁面權限`,
       });
 
       onClose();
     } catch (error) {
-      // 資料庫失敗時，使用本機儲存以維持可用性
-      localStorage.setItem(`user_page_permissions:${userId}` , JSON.stringify(permissions));
+      localStorage.setItem(
+        `user_page_permissions:${userId}`,
+        JSON.stringify(permissions)
+      );
+      localStorage.setItem(
+        `user_workspace_permissions:${userId}`,
+        JSON.stringify({ workspaceAccess })
+      );
+
       toast({
         title: "已以本機方式儲存",
         description: "資料庫不可用，先保存至本機，稍後可再同步",
@@ -170,49 +251,158 @@ export function UserPermissionsDialog({ isOpen, onClose, userId, username }: Use
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            設定 {username} 的頁面權限
+            設定 {username} 的網站權限
           </DialogTitle>
           <DialogDescription>
-            設定使用者可以存取的系統模組權限。勾選相應的權限項目並點擊儲存。
+            先設定工作區權限，再視需要補細部頁面權限。工作區授權會直接影響登入後三大入口是否可見。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 max-h-[60vh] overflow-y-auto">
-          {Object.entries(PERMISSION_GROUPS).map(([groupKey, group]) => (
-            <div key={groupKey} className="space-y-3">
-              <h3 className="font-semibold text-lg">{group.name}</h3>
-              <div className="grid grid-cols-2 gap-3 pl-4">
-                {group.permissions.map(permission => (
-                  <div key={permission.key} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={permission.key}
-                      checked={permissions.includes(permission.key)}
-                      onCheckedChange={(checked) => 
-                        handlePermissionChange(permission.key, checked as boolean)
-                      }
-                    />
-                    <Label htmlFor={permission.key} className="text-sm">
-                      {permission.label}
-                    </Label>
-                  </div>
-                ))}
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="rounded-2xl border border-primary/15 bg-background/40 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-foreground">快速套用</div>
+                <div className="text-sm text-muted-foreground">
+                  一鍵給整站檢視、整站管理，或直接清空所有授權。
+                </div>
               </div>
-              {groupKey !== 'admin' && <Separator />}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => applyGlobalPreset("view")}
+                >
+                  全站檢視
+                </Button>
+                <Button type="button" onClick={() => applyGlobalPreset("edit")}>
+                  全站管理
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => applyGlobalPreset("none")}
+                >
+                  清空授權
+                </Button>
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">工作區權限</h3>
+              <p className="text-sm text-muted-foreground">
+                這裡控制登入後三大入口。`管理` 代表此工作區內全部功能都能操作。
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              {workspaceSummary.map((workspace) => (
+                <div
+                  key={workspace.id}
+                  className={`rounded-2xl border p-4 ${getWorkspaceCardTone(
+                    workspace.level
+                  )}`}
+                >
+                  <div className="mb-4 space-y-1">
+                    <div className="font-semibold text-foreground">{workspace.label}</div>
+                    <div className="text-sm text-muted-foreground">
+                      目前狀態：{WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
+                    </div>
+                  </div>
+
+                  <RadioGroup
+                    value={workspace.level}
+                    onValueChange={(value) =>
+                      handleWorkspaceLevelChange(
+                        workspace.id,
+                        value as WorkspaceAccessLevel
+                      )
+                    }
+                    className="space-y-3"
+                  >
+                    {WORKSPACE_OPTIONS.map((option) => (
+                      <div
+                        key={`${workspace.id}-${option.value}`}
+                        className="flex items-start gap-3 rounded-xl border border-border/60 p-3"
+                      >
+                        <RadioGroupItem
+                          value={option.value}
+                          id={`${workspace.id}-${option.value}`}
+                          className="mt-1"
+                        />
+                        <Label
+                          htmlFor={`${workspace.id}-${option.value}`}
+                          className="flex-1 cursor-pointer space-y-1"
+                        >
+                          <div className="font-medium text-foreground">
+                            {option.label}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {option.description}
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">細部頁面權限</h3>
+              <p className="text-sm text-muted-foreground">
+                進階設定。若工作區已授權，這些細項會被視為補充控制；舊版 `資料中心` 權限仍保留相容。
+              </p>
+            </div>
+
+            {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS).map(([groupKey, group]) => (
+              <div key={groupKey} className="space-y-3 rounded-2xl border p-4">
+                <h4 className="font-semibold text-foreground">{group.name}</h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {group.permissions.map((permission) => (
+                    <div
+                      key={permission.key}
+                      className="flex items-center space-x-2 rounded-xl border border-border/60 p-3"
+                    >
+                      <Checkbox
+                        id={permission.key}
+                        checked={permissions.includes(permission.key)}
+                        onCheckedChange={(checked) =>
+                          handlePermissionChange(
+                            permission.key,
+                            checked as boolean
+                          )
+                        }
+                      />
+                      <Label htmlFor={permission.key} className="text-sm">
+                        {permission.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            <X className="h-4 w-4 mr-2" />
+            <X className="mr-2 h-4 w-4" />
             取消
           </Button>
           <Button onClick={handleSave} disabled={isLoading}>
-            <Save className="h-4 w-4 mr-2" />
+            <Save className="mr-2 h-4 w-4" />
             {isLoading ? "儲存中..." : "儲存權限"}
           </Button>
         </div>
