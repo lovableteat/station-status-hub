@@ -14,6 +14,11 @@ import { useUser } from "@/components/auth/UserContext";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
+import {
+  getWorkspaceLevelLabel,
+  readWorkspaceAccess,
+  WORKSPACE_LABELS,
+} from "@/lib/workspacePermissions";
 
 interface Engineer {
   id: string;
@@ -371,6 +376,20 @@ export function AdminPanel() {
     }
   };
 
+  const getWorkspaceBadges = (permissionSettings: unknown) => {
+    const workspaceAccess = readWorkspaceAccess(permissionSettings);
+
+    return Object.entries(WORKSPACE_LABELS)
+      .filter(([workspaceId]) => workspaceAccess[workspaceId as keyof typeof workspaceAccess] !== "none")
+      .map(([workspaceId, label]) => ({
+        id: workspaceId,
+        label,
+        level: getWorkspaceLevelLabel(
+          workspaceAccess[workspaceId as keyof typeof workspaceAccess]
+        ),
+      }));
+  };
+
   const filteredEngineers = engineers.filter(engineer => {
     const matchesSearch = engineer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          engineer.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -411,7 +430,12 @@ export function AdminPanel() {
         {/* User Management Tab */}
         <TabsContent value="users" className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">系統用戶管理</h2>
+            <div>
+              <h2 className="text-2xl font-bold">系統用戶管理</h2>
+              <p className="text-sm text-muted-foreground">
+                支援工作區授權與細部頁面授權，讓不同帳號可以直接控制整個工作區。
+              </p>
+            </div>
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -480,6 +504,11 @@ export function AdminPanel() {
               <div className="space-y-4">
                 {systemUsers.map((user) => (
                   <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    {(() => {
+                      const workspaceBadges = getWorkspaceBadges(user.permissions);
+
+                      return (
+                        <>
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                         <Shield className="h-5 w-5 text-primary" />
@@ -487,6 +516,17 @@ export function AdminPanel() {
                        <div>
                          <h3 className="font-semibold">{user.display_name || user.username}</h3>
                          <p className="text-sm text-muted-foreground">帳號: {user.username} | 建立者: {user.created_by}</p>
+                         <div className="mt-2 flex flex-wrap gap-2">
+                           {workspaceBadges.length > 0 ? (
+                             workspaceBadges.map((workspace) => (
+                               <Badge key={`${user.id}-${workspace.id}`} variant="outline">
+                                 {workspace.label} · {workspace.level}
+                               </Badge>
+                             ))
+                           ) : (
+                             <Badge variant="outline">尚未設定工作區權限</Badge>
+                           )}
+                         </div>
                        </div>
                       <Badge className={getRoleColor(user.role)}>
                         {user.role === 'super_admin' ? '超級管理員' : user.role === 'admin' ? '管理員' : user.role === 'engineer' ? '工程師' : '檢視者'}
@@ -527,6 +567,9 @@ export function AdminPanel() {
                       onDelete={handleDeleteUser}
                     />
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
