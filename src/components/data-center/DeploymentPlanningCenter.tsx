@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import {
+  Box,
   Boxes,
   Building2,
   ClipboardCheck,
   Network,
+  RotateCcw,
   Snowflake,
   Zap,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -17,43 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { cn } from "@/lib/utils";
 
-type RackStatus = "allocated" | "reserved" | "available" | "blocked";
+import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
+import type { RackPlan, RackStatus, SitePlan } from "./dataCenterTypes";
 
-interface RackPlan {
-  id: string;
-  zone: string;
-  row: string;
-  cabinet: string;
-  status: RackStatus;
-  powerKw: number;
-  coolingKw: number;
-  uplinks: number;
-  owner: string;
-}
-
-interface ChecklistItem {
-  id: string;
-  label: string;
-  done: boolean;
-}
-
-interface SitePlan {
-  id: string;
-  label: string;
-  country: string;
-  phase: string;
-  targetDate: string;
-  powerBudgetKw: number;
-  coolingBudgetKw: number;
-  networkReady: string;
-  racks: RackPlan[];
-  checklist: ChecklistItem[];
-}
-
-const sitePlans: SitePlan[] = [
+const initialSitePlans: SitePlan[] = [
   {
     id: "frankfurt-1",
     label: "Frankfurt DC-1",
@@ -74,6 +48,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 7,
         uplinks: 2,
         owner: "GB300 Batch-1",
+        positionX: -3.2,
+        positionZ: -2.6,
+        rotation: 0,
       },
       {
         id: "rack-a02",
@@ -85,6 +62,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 7,
         uplinks: 2,
         owner: "GB300 Batch-2",
+        positionX: -1.4,
+        positionZ: -2.6,
+        rotation: 0,
       },
       {
         id: "rack-b01",
@@ -96,6 +76,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 5,
         uplinks: 2,
         owner: "Standby",
+        positionX: -3.2,
+        positionZ: 0,
+        rotation: 90,
       },
       {
         id: "rack-b02",
@@ -107,6 +90,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 0,
         uplinks: 0,
         owner: "Awaiting HVAC clearance",
+        positionX: -1.4,
+        positionZ: 0,
+        rotation: 90,
       },
       {
         id: "rack-c01",
@@ -118,6 +104,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 9,
         uplinks: 4,
         owner: "Inference Cluster",
+        positionX: -3.2,
+        positionZ: 2.8,
+        rotation: 180,
       },
       {
         id: "rack-c02",
@@ -129,6 +118,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 6,
         uplinks: 2,
         owner: "Expansion",
+        positionX: -1.4,
+        positionZ: 2.8,
+        rotation: 180,
       },
     ],
     checklist: [
@@ -158,6 +150,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 8,
         uplinks: 2,
         owner: "GPU Pod-1",
+        positionX: -2.4,
+        positionZ: -2.2,
+        rotation: 0,
       },
       {
         id: "rack-a04",
@@ -169,6 +164,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 6,
         uplinks: 2,
         owner: "GPU Pod-2",
+        positionX: -0.8,
+        positionZ: -2.2,
+        rotation: 0,
       },
       {
         id: "rack-b03",
@@ -180,6 +178,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 5,
         uplinks: 2,
         owner: "Standby",
+        positionX: -2.4,
+        positionZ: 0.4,
+        rotation: 90,
       },
       {
         id: "rack-b04",
@@ -191,6 +192,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 5,
         uplinks: 2,
         owner: "Standby",
+        positionX: -0.8,
+        positionZ: 0.4,
+        rotation: 90,
       },
       {
         id: "rack-c03",
@@ -202,6 +206,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 0,
         uplinks: 0,
         owner: "Earthquake anchor not approved",
+        positionX: -1.6,
+        positionZ: 3,
+        rotation: 180,
       },
     ],
     checklist: [
@@ -231,6 +238,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 7,
         uplinks: 4,
         owner: "Unassigned",
+        positionX: -3.4,
+        positionZ: -2.8,
+        rotation: 0,
       },
       {
         id: "rack-b05",
@@ -242,6 +252,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 7,
         uplinks: 4,
         owner: "GB300 Batch-3",
+        positionX: -1.4,
+        positionZ: -0.4,
+        rotation: 90,
       },
       {
         id: "rack-c05",
@@ -253,6 +266,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 8,
         uplinks: 4,
         owner: "Inference Cluster",
+        positionX: -3.4,
+        positionZ: 2.4,
+        rotation: 180,
       },
       {
         id: "rack-d05",
@@ -264,6 +280,9 @@ const sitePlans: SitePlan[] = [
         coolingKw: 0,
         uplinks: 0,
         owner: "Raised floor check",
+        positionX: -1.2,
+        positionZ: 2.4,
+        rotation: 180,
       },
     ],
     checklist: [
@@ -274,6 +293,10 @@ const sitePlans: SitePlan[] = [
     ],
   },
 ];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function getRackTone(status: RackStatus) {
   switch (status) {
@@ -338,12 +361,13 @@ function SummaryCard({
 
 export function DeploymentPlanningCenter() {
   const { systems, stations, testItems } = useUnifiedData();
-  const [selectedSiteId, setSelectedSiteId] = useState(sitePlans[0].id);
-  const [selectedRackId, setSelectedRackId] = useState(sitePlans[0].racks[0].id);
+  const [sitePlans, setSitePlans] = useState(initialSitePlans);
+  const [selectedSiteId, setSelectedSiteId] = useState(initialSitePlans[0].id);
+  const [selectedRackId, setSelectedRackId] = useState(initialSitePlans[0].racks[0].id);
 
   const selectedSite = useMemo(
     () => sitePlans.find((site) => site.id === selectedSiteId) ?? sitePlans[0],
-    [selectedSiteId]
+    [selectedSiteId, sitePlans]
   );
 
   const selectedRack = useMemo(
@@ -351,6 +375,14 @@ export function DeploymentPlanningCenter() {
       selectedSite.racks.find((rack) => rack.id === selectedRackId) ??
       selectedSite.racks[0],
     [selectedRackId, selectedSite]
+  );
+
+  const originalSelectedRack = useMemo(
+    () =>
+      initialSitePlans
+        .find((site) => site.id === selectedSiteId)
+        ?.racks.find((rack) => rack.id === selectedRackId),
+    [selectedRackId, selectedSiteId]
   );
 
   const statusCounts = useMemo(
@@ -378,6 +410,51 @@ export function DeploymentPlanningCenter() {
     Math.ceil(systems.length / 12)
   );
 
+  const updateRack = (rackId: string, updates: Partial<RackPlan>) => {
+    setSitePlans((prev) =>
+      prev.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) =>
+                rack.id === rackId ? { ...rack, ...updates } : rack
+              ),
+            }
+          : site
+      )
+    );
+  };
+
+  const nudgeSelectedRack = (field: "positionX" | "positionZ", delta: number) => {
+    updateRack(selectedRackId, {
+      [field]: clamp(Number((selectedRack[field] + delta).toFixed(1)), -6, 6),
+    } as Partial<RackPlan>);
+  };
+
+  const resetSelectedRack = () => {
+    if (!originalSelectedRack) {
+      return;
+    }
+
+    updateRack(selectedRackId, {
+      positionX: originalSelectedRack.positionX,
+      positionZ: originalSelectedRack.positionZ,
+      rotation: originalSelectedRack.rotation,
+    });
+  };
+
+  const resetSelectedSite = () => {
+    const sourceSite = initialSitePlans.find((site) => site.id === selectedSiteId);
+    if (!sourceSite) {
+      return;
+    }
+
+    setSitePlans((prev) =>
+      prev.map((site) => (site.id === selectedSiteId ? sourceSite : site))
+    );
+    setSelectedRackId(sourceSite.racks[0].id);
+  };
+
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-col gap-4 rounded-[28px] border border-primary/15 bg-[linear-gradient(135deg,hsl(224_28%_16%),hsl(225_22%_12%)_52%,hsl(221_30%_13%)_100%)] p-5 shadow-[0_26px_70px_-48px_hsl(var(--primary)/0.8)] xl:flex-row xl:items-end xl:justify-between">
@@ -386,7 +463,7 @@ export function DeploymentPlanningCenter() {
             Data-center
           </h1>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            提前規劃海外基櫃部署的位置、電力、散熱與網路，避免設備到場後才發現現場條件不足。
+            提前規劃海外基櫃部署的位置、電力、散熱與網路，並直接在 3D 佈局裡調整櫃位座標與朝向。
           </p>
         </div>
 
@@ -451,7 +528,7 @@ export function DeploymentPlanningCenter() {
             <div>
               <CardTitle>Rack Allocation</CardTitle>
               <div className="mt-2 text-sm text-muted-foreground">
-                直接管理各區基櫃的預留狀態與配置用途。
+                直接管理各區基櫃的預留狀態、用途與部署位置。
               </div>
             </div>
             <Badge variant="secondary" className="rounded-full px-3 py-1">
@@ -495,6 +572,9 @@ export function DeploymentPlanningCenter() {
                     <div>Cooling {rack.coolingKw} kW</div>
                     <div>{rack.uplinks} uplinks</div>
                   </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    3D 座標 X {rack.positionX.toFixed(1)} · Z {rack.positionZ.toFixed(1)} · R {rack.rotation}°
+                  </div>
                 </button>
               );
             })}
@@ -530,6 +610,9 @@ export function DeploymentPlanningCenter() {
                     {rack.cabinet}
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">{rack.owner}</div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    X {rack.positionX.toFixed(1)} · Z {rack.positionZ.toFixed(1)} · {rack.rotation}°
+                  </div>
                 </button>
               );
             })}
@@ -583,6 +666,137 @@ export function DeploymentPlanningCenter() {
               <div className="mt-2 text-sm leading-6 text-muted-foreground">
                 {selectedSite.networkReady}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card className="rounded-[28px]">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>3D Cabinet Planner</CardTitle>
+              <div className="mt-2 text-sm text-muted-foreground">
+                點選 3D 機櫃後，可直接調整座標與朝向，規劃海外機櫃落位。
+              </div>
+            </div>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              {selectedRack.cabinet}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <DataCenter3DPlanner
+              racks={selectedSite.racks}
+              selectedRackId={selectedRackId}
+              onSelectRack={setSelectedRackId}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[28px]">
+          <CardHeader>
+            <CardTitle>Layout Controls</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              調整目前選中的機櫃位置。這些座標會即時反映在 3D 佈局上。
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="rounded-2xl border border-primary/15 bg-background/35 p-4">
+              <div className="flex items-center gap-2 text-foreground">
+                <Box className="h-4 w-4 text-primary" />
+                <span className="font-medium">Selected Rack</span>
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-foreground">
+                {selectedRack.cabinet}
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {selectedRack.zone} · {selectedRack.owner}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline">{getStatusLabel(selectedRack.status)}</Badge>
+                <Badge variant="outline">Power {selectedRack.powerKw} kW</Badge>
+                <Badge variant="outline">Cooling {selectedRack.coolingKw} kW</Badge>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>左右位置 X</span>
+                  <span className="text-muted-foreground">
+                    {selectedRack.positionX.toFixed(1)} m
+                  </span>
+                </div>
+                <Slider
+                  min={-6}
+                  max={6}
+                  step={0.1}
+                  value={[selectedRack.positionX]}
+                  onValueChange={([value]) =>
+                    updateRack(selectedRackId, { positionX: clamp(value, -6, 6) })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>前後位置 Z</span>
+                  <span className="text-muted-foreground">
+                    {selectedRack.positionZ.toFixed(1)} m
+                  </span>
+                </div>
+                <Slider
+                  min={-6}
+                  max={6}
+                  step={0.1}
+                  value={[selectedRack.positionZ]}
+                  onValueChange={([value]) =>
+                    updateRack(selectedRackId, { positionZ: clamp(value, -6, 6) })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>朝向 Rotation</span>
+                  <span className="text-muted-foreground">{selectedRack.rotation}°</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={270}
+                  step={15}
+                  value={[selectedRack.rotation]}
+                  onValueChange={([value]) =>
+                    updateRack(selectedRackId, { rotation: value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={() => nudgeSelectedRack("positionZ", -0.2)}>
+                向前 -0.2m
+              </Button>
+              <Button variant="outline" onClick={() => nudgeSelectedRack("positionZ", 0.2)}>
+                向後 +0.2m
+              </Button>
+              <Button variant="outline" onClick={() => nudgeSelectedRack("positionX", -0.2)}>
+                向左 -0.2m
+              </Button>
+              <Button variant="outline" onClick={() => nudgeSelectedRack("positionX", 0.2)}>
+                向右 +0.2m
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="ghost" onClick={resetSelectedRack}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                重設目前機櫃
+              </Button>
+              <Button variant="ghost" onClick={resetSelectedSite}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                重設整站配置
+              </Button>
             </div>
           </CardContent>
         </Card>
