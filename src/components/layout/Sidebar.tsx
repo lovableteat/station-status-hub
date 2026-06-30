@@ -30,68 +30,68 @@ interface SidebarProps {
 const navigationItems = [
   {
     id: "dashboard",
-    label: "系統儀表板",
+    label: "蝟餌絞?銵冽",
     icon: Home,
-    description: "KPI 與總覽",
+    description: "KPI ?蜇閬?,
   },
   {
     id: "test-tracker",
-    label: "L10 測試追蹤",
+    label: "L10 皜祈岫餈質馱",
     icon: ListChecks,
-    description: "L10 測試進度",
+    description: "L10 皜祈岫?脣漲",
   },
   {
     id: "flow-info",
-    label: "L10 流程設定",
+    label: "L10 瘚?閮剖?",
     icon: FileText,
-    description: "流程與站點設定",
+    description: "瘚???暺身摰?,
   },
   {
     id: "monitor",
-    label: "生產監控牆",
+    label: "?????,
     icon: Monitor,
-    description: "生產即時狀態",
+    description: "??單????,
   },
   {
     id: "issues",
-    label: "問題追蹤",
+    label: "??餈質馱",
     icon: AlertTriangle,
-    description: "異常與改善管理",
+    description: "?啣虜??恣??,
   },
   {
     id: "data",
-    label: "資料中心",
+    label: "鞈?銝剖?",
     icon: Database,
-    description: "報告查詢",
-  },
-  {
-    id: "material-requests",
-    label: "料號申請",
-    icon: FileSpreadsheet,
-    description: "替代料與申請視圖",
+    description: "?勗??亥岷",
   },
   {
     id: "tools",
-    label: "工具管理",
+    label: "撌亙蝞∠?",
     icon: Wrench,
-    description: "檔案與工具資產",
+    description: "瑼??極?瑁??? ,
   },
   {
     id: "users",
-    label: "使用者管理",
+    label: "雿輻?恣??,
     icon: Users,
-    description: "帳號與權限",
+    description: "撣唾?????,
+  },
+  {
+    id: "material-requests",
+    label: "???唾?",
+    icon: FileSpreadsheet,
+    description: "?蹂誨???唾?閬?",
   },
 ];
 
 function getRoleLabel(role?: string) {
   switch (role) {
     case "super_admin":
-      return "超級管理員";
+      return "頞?蝞∠???.
     case "admin":
-      return "管理員";
+      return "蝞∠???.
     default:
-      return "一般使用者";
+      return "銝?砌蝙?刻?.
   }
 }
 
@@ -131,7 +131,7 @@ export function Sidebar({
             <Menu className="h-4 w-4" />
           </Button>
           <div className="ml-3">
-            <h1 className="text-sm font-bold text-foreground">站點狀態中心</h1>
+            <h1 className="text-sm font-bold text-foreground">蝡???葉敹?/h1>
           </div>
         </div>
       )}
@@ -154,7 +154,7 @@ export function Sidebar({
             <div className="flex items-center justify-between">
               {!isCompact && (
                 <div>
-                  <h1 className="text-lg font-bold text-foreground">站點狀態中心</h1>
+                  <h1 className="text-lg font-bold text-foreground">蝡???葉敹?/h1>
                   <p className="text-xs text-muted-foreground">Station Status Hub</p>
                 </div>
               )}
@@ -234,7 +234,7 @@ export function Sidebar({
             <LogOut
               className={cn("h-4 w-4", collapsed && !isMobile ? "mr-0" : "mr-3")}
             />
-            {(!collapsed || isMobile) && "登出"}
+            {(!collapsed || isMobile) && "?餃"}
           </Button>
         </div>
       </div>
