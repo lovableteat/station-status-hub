@@ -80,6 +80,7 @@ export function usePermissions() {
       case 'monitor':
         return hasPermission('production_view');
       case 'data':
+      case 'material-requests':
         return hasPermission('data_center_view');
       case 'tools':
         return hasPermission('tools_view');
@@ -111,6 +112,7 @@ export function usePermissions() {
       case 'monitor':
         return hasPermission('production_edit');
       case 'data':
+      case 'material-requests':
         return hasPermission('data_center_edit');
       case 'tools':
         return hasPermission('tools_edit');
