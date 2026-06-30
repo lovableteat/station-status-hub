@@ -466,88 +466,119 @@ function AlternativeRows({
   onEdit: (record: MaterialRecord) => void;
 }) {
   const alternatives = getSortedAlternatives(group);
+  const allMpns = alternatives
+    .map((record) => record.manufacturerPartNumber)
+    .filter(Boolean)
+    .join("\n");
 
   return (
-    <>
-      {alternatives.map((record, index) => {
-        const preferred = index === 0 && getAlternativeScore(record) <= 1;
-
-        return (
-          <tr
-            key={record.id}
-            className={cn(
-              "border-b border-blue-400/10 align-top text-slate-300",
-              preferred ? "bg-emerald-400/[0.08]" : "bg-[#0b1628] hover:bg-blue-400/[0.07]"
+    <tr className="border-b border-blue-400/20 bg-[#07111f]">
+      <td colSpan={6} className="p-0">
+        <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
+          <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-black text-slate-50">廠商替代料比較</h3>
+                <span className="rounded-full bg-blue-400/15 px-3 py-1 text-sm font-bold text-blue-200">
+                  {alternatives.length} 筆
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">
+                <span>Symbol：<strong className="font-mono text-cyan-300">{group.schematicPart || "未設定"}</strong></span>
+                <span>Footprint：<strong className="font-mono text-indigo-300">{group.footprint || "未設定"}</strong></span>
+              </div>
+            </div>
+            {allMpns && (
+              <Button type="button" variant="outline" size="sm" onClick={() => onCopy(allMpns)} className="border-blue-400/25 bg-blue-400/10 text-blue-200 hover:bg-blue-400/20 hover:text-white">
+                <Copy className="mr-2 h-4 w-4" />複製全部 MPN
+              </Button>
             )}
-          >
-            <td className="sticky left-0 z-10 border-r border-blue-400/10 bg-inherit px-4 py-3">
-              <div className="flex min-w-0 items-start gap-3 pl-7">
-                <span className="mt-1.5 h-2 w-2 flex-none rounded-full bg-cyan-400/70" />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-slate-100">{record.manufacturer || "未填廠商"}</span>
-                    {preferred && (
-                      <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">首選</span>
-                    )}
-                    <span className="font-mono text-sm text-slate-500">#{index + 1}</span>
-                  </div>
-                </div>
-              </div>
-            </td>
-            <td className="border-r border-blue-400/10 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="break-all font-mono text-sm font-bold text-blue-300">{record.manufacturerPartNumber || "-"}</p>
-                  {record.manufacturerPartNumberAlt && (
-                    <p className="mt-1 break-all font-mono text-sm text-slate-400">Alt: {record.manufacturerPartNumberAlt}</p>
+          </div>
+
+          <div className="space-y-3">
+            {alternatives.map((record, index) => {
+              const preferred = index === 0 && getAlternativeScore(record) <= 1;
+
+              return (
+                <article
+                  key={record.id}
+                  className={cn(
+                    "rounded-2xl border p-4 transition-colors",
+                    preferred
+                      ? "border-emerald-400/35 bg-emerald-400/[0.08] shadow-[inset_4px_0_0_rgba(52,211,153,0.65)]"
+                      : "border-blue-400/15 bg-[#0d192b] hover:border-blue-400/30"
                   )}
-                </div>
-                {record.manufacturerPartNumber && (
-                  <button type="button" onClick={() => onCopy(record.manufacturerPartNumber)} className="rounded-md border border-blue-400/20 bg-blue-400/10 p-1.5 text-blue-300 hover:bg-blue-400/20" title="複製 MPN">
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </td>
-            <td className="border-r border-blue-400/10 px-4 py-3">
-              {record.partNumber ? (
-                <button
-                  type="button"
-                  onClick={() => onCopy(record.partNumber)}
-                  className="group flex max-w-full items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20"
-                  title="複製內部料號"
                 >
-                  <span className="break-all font-mono text-[15px] font-black text-cyan-200">{record.partNumber}</span>
-                  <Copy className="h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
-                </button>
-              ) : (
-                <span className="text-sm font-semibold text-amber-300">尚未建立</span>
-              )}
-            </td>
-            <td className="border-r border-blue-400/10 px-4 py-3">
-              <div className="flex flex-col items-start gap-1.5">
-                <StatusPill record={record} />
-                <ActionPill record={record} />
-              </div>
-            </td>
-            <td className="border-r border-blue-400/10 px-4 py-3 text-sm leading-6 text-slate-300">
-              <p className="line-clamp-2">{record.partSpec || record.partName || "-"}</p>
-              {record.remark && <p className="mt-1 text-slate-500">{record.remark}</p>}
-            </td>
-            <td className="px-3 py-3">
-              <div className="flex justify-center gap-1">
-                <button type="button" onClick={() => onView(record)} className="rounded-md border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
-                  <Eye className="h-3.5 w-3.5" />
-                </button>
-                <button type="button" onClick={() => onEdit(record)} className="rounded-md border border-blue-400/25 bg-blue-400/10 p-2 text-blue-300 hover:bg-blue-400/20" title="修改">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        );
-      })}
-    </>
+                  <div className="grid gap-4 xl:grid-cols-[minmax(150px,1fr)_minmax(180px,1.25fr)_minmax(160px,0.9fr)_minmax(160px,0.95fr)_minmax(180px,1.1fr)_100px] xl:items-start">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">順位 / 廠商</p>
+                      <div className="mt-2 flex items-start gap-3">
+                        <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-emerald-400 text-emerald-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
+                        <div>
+                          <p className="text-[15px] font-bold leading-6 text-slate-50">{record.manufacturer || "未填廠商"}</p>
+                          {preferred && <span className="mt-1 inline-flex rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">優先可用</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-400">Manufacturer P/N</p>
+                      {record.manufacturerPartNumber ? (
+                        <button type="button" onClick={() => onCopy(record.manufacturerPartNumber)} className="group mt-2 flex max-w-full items-start gap-2 rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2.5 text-left hover:bg-blue-400/20" title="複製 MPN">
+                          <span className="break-all font-mono text-[15px] font-black leading-5 text-blue-200">{record.manufacturerPartNumber}</span>
+                          <Copy className="mt-0.5 h-4 w-4 flex-none text-blue-300 opacity-80 group-hover:opacity-100" />
+                        </button>
+                      ) : (
+                        <p className="mt-2 font-semibold text-amber-300">未填 MPN</p>
+                      )}
+                      {record.manufacturerPartNumberAlt && <p className="mt-2 break-all font-mono text-sm text-slate-400">第二料號：{record.manufacturerPartNumberAlt}</p>}
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-400">內部料號</p>
+                      {record.partNumber ? (
+                        <button type="button" onClick={() => onCopy(record.partNumber)} className="group mt-2 flex max-w-full items-start gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2.5 text-left hover:bg-cyan-300/20" title="複製內部料號">
+                          <span className="break-all font-mono text-[15px] font-black leading-5 text-cyan-200">{record.partNumber}</span>
+                          <Copy className="mt-0.5 h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
+                        </button>
+                      ) : (
+                        <p className="mt-2 font-bold text-amber-300">尚未建立</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">狀態</p>
+                      <div className="mt-2 flex flex-col items-start gap-2">
+                        <StatusPill record={record} />
+                        <ActionPill record={record} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">規格 / 備註</p>
+                      <p className="mt-2 text-[15px] leading-6 text-slate-200">{record.partSpec || record.partName || "-"}</p>
+                      {record.remark && <p className="mt-1 text-sm leading-5 text-slate-400">{record.remark}</p>}
+                    </div>
+
+                    <div>
+                      <p className="text-center text-xs font-bold uppercase tracking-[0.16em] text-slate-500">操作</p>
+                      <div className="mt-2 grid gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => onView(record)} className="border-cyan-400/25 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20 hover:text-white">
+                          <Eye className="mr-1.5 h-4 w-4" />詳細
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => onEdit(record)} className="border-blue-400/25 bg-blue-400/10 text-blue-200 hover:bg-blue-400/20 hover:text-white">
+                          <Pencil className="mr-1.5 h-4 w-4" />修改
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
