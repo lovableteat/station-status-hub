@@ -965,7 +965,7 @@ export function MaterialRequestPage() {
                 const noAlternative = uniqueMpnCount <= 1;
                 const sortedAlternatives = getSortedAlternatives(group);
                 const primaryAlternative = sortedAlternatives[0];
-                const secondaryAlternatives = sortedAlternatives.slice(1, 4);
+                const secondaryAlternatives = sortedAlternatives.slice(1);
 
                 return (
                   <Fragment key={group.key}>
@@ -1045,11 +1045,6 @@ export function MaterialRequestPage() {
                                     </button>
                                   );
                                 })}
-                                {sortedAlternatives.length > 4 && (
-                                  <span className="inline-flex items-center rounded-lg border border-blue-400/20 bg-blue-400/10 px-3 py-2 text-sm font-semibold text-blue-300">
-                                    +{sortedAlternatives.length - 4} 筆替代料
-                                  </span>
-                                )}
                               </div>
                             </div>
                           )}
