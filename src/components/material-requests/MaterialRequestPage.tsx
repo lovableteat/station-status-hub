@@ -103,6 +103,8 @@ interface MaterialColumnFilters {
   specification: string[];
 }
 
+type ColumnFilterKey = keyof MaterialColumnFilters;
+
 const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   material: [],
   refDes: [],
@@ -292,52 +294,45 @@ function getDisplayMpn(record: MaterialRecord) {
   return record.manufacturerPartNumber || record.manufacturerPartNumberAlt || "";
 }
 
-function getGroupMaterialValues(group: MaterialGroup) {
-  return [
-    group.displayRef,
-    group.name,
-    group.assemblyName,
-    ...group.manufacturers,
-  ];
-}
+function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
+  switch (key) {
+    case "material":
+      return [
+        group.displayRef,
+        group.name,
+        group.assemblyName,
+      ];
+    case "refDes":
+      return group.records.flatMap((record) => [record.refDes, record.refGroup]);
+    case "mpn":
+      return group.records.flatMap((record) => [record.manufacturerPartNumber, record.manufacturerPartNumberAlt]);
+    case "internal":
+      return group.records.flatMap((record) => [record.partNumber, record.schematicPart, record.pcbFootprint]);
+    case "virtualAlternative":
+      return group.records.map((record) => record.virtualAlternative ?? "");
+    case "trackingStatus": {
+      const values = group.records.flatMap((record) => [
+        record.trackingStatus ?? "",
+        record.sourcingStatus,
+        record.remark,
+      ]);
 
-function getGroupRefValues(group: MaterialGroup) {
-  return group.records.flatMap((record) => [record.refDes, record.refGroup]);
-}
+      if (group.requiresApplication) values.push("主料與替代都無料");
+      if (group.pendingCount > 0) values.push("有待申請");
+      if (group.riskCount > 0) values.push("有風險");
 
-function getGroupMpnValues(group: MaterialGroup) {
-  return group.records.flatMap((record) => [record.manufacturerPartNumber, record.manufacturerPartNumberAlt]);
-}
-
-function getGroupInternalValues(group: MaterialGroup) {
-  return group.records.flatMap((record) => [record.partNumber, record.schematicPart, record.pcbFootprint]);
-}
-
-function getGroupVirtualValues(group: MaterialGroup) {
-  return group.records.map((record) => record.virtualAlternative ?? "");
-}
-
-function getGroupTrackingValues(group: MaterialGroup) {
-  const values = group.records.flatMap((record) => [
-    record.trackingStatus ?? "",
-    record.sourcingStatus,
-    record.remark,
-  ]);
-
-  if (group.requiresApplication) values.push("主料與替代都無料");
-  if (group.pendingCount > 0) values.push("有待申請");
-  if (group.riskCount > 0) values.push("有風險");
-
-  return values;
-}
-
-function getGroupSpecificationValues(group: MaterialGroup) {
-  return [
-    group.partSpec,
-    group.partName,
-    group.schematicPart,
-    group.footprint,
-  ];
+      return values;
+    }
+    case "specification":
+      return [
+        group.partSpec,
+        group.partName,
+        group.schematicPart,
+        group.footprint,
+      ];
+    default:
+      return [];
+  }
 }
 
 function formatTimestamp(value: string) {
@@ -384,6 +379,18 @@ function matchesExcelFilter(selectedValues: string[], candidateValues: string[])
   if (selectedValues.length === 0) return true;
   const normalizedCandidates = uniqueNormalizedValues(candidateValues);
   return normalizedCandidates.some((value) => selectedValues.includes(value));
+}
+
+function matchesColumnFilters(
+  group: MaterialGroup,
+  filters: MaterialColumnFilters,
+  ignoredKey?: ColumnFilterKey,
+) {
+  const keys = Object.keys(filters) as ColumnFilterKey[];
+  return keys.every((key) => {
+    if (key === ignoredKey) return true;
+    return matchesExcelFilter(filters[key], getGroupColumnValues(group, key));
+  });
 }
 
 function ExcelFilterPopover({
@@ -449,7 +456,7 @@ function ExcelFilterPopover({
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-bold text-slate-100">{label}</p>
-            <p className="text-xs text-slate-500">比照 Excel，用勾選值保留要看的列。</p>
+            <p className="text-xs text-slate-500">只顯示目前篩選結果內、這一欄真正存在的值。</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -1393,45 +1400,50 @@ export function MaterialRequestPage() {
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
 
-  const columnFilterOptions = useMemo(() => ({
-    material: buildExcelFilterOptions(dataset.groups.flatMap(getGroupMaterialValues)),
-    refDes: buildExcelFilterOptions(dataset.groups.flatMap(getGroupRefValues)),
-    mpn: buildExcelFilterOptions(dataset.groups.flatMap(getGroupMpnValues)),
-    internal: buildExcelFilterOptions(dataset.groups.flatMap(getGroupInternalValues)),
-    virtualAlternative: buildExcelFilterOptions(dataset.groups.flatMap(getGroupVirtualValues)),
-    trackingStatus: buildExcelFilterOptions(dataset.groups.flatMap(getGroupTrackingValues)),
-    specification: buildExcelFilterOptions(dataset.groups.flatMap(getGroupSpecificationValues)),
-  }), [dataset.groups]);
+  const matchesSearch = (group: MaterialGroup) => {
+    const noAlternative = hasNoAlternative(group);
+    const mustApply = requiresApplication(group);
+    const alternativeSearchText = noAlternative
+      ? "單一料 無替代料 單一來源 single source no alternative"
+      : "有替代料 multiple source alternative";
+    const applicationSearchText = mustApply
+      ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
+      : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
+    const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
+
+    return searchTokens.every((token) => searchableText.includes(token));
+  };
+
+  const matchesAvailability = (group: MaterialGroup) => {
+    const noAlternative = hasNoAlternative(group);
+    const mustApply = requiresApplication(group);
+
+    return (
+      availability === "all" ||
+      (availability === "usable" && !mustApply) ||
+      (availability === "required" && mustApply) ||
+      (availability === "pending" && group.pendingCount > 0) ||
+      (availability === "risk" && group.riskCount > 0) ||
+      (availability === "single" && noAlternative)
+    );
+  };
+
+  const columnFilterOptions = useMemo(() => {
+    const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
+
+    return keys.reduce((result, key) => {
+      const values = dataset.groups
+        .filter((group) => matchesSearch(group) && matchesAvailability(group) && matchesColumnFilters(group, columnFilters, key))
+        .flatMap((group) => getGroupColumnValues(group, key));
+
+      result[key] = buildExcelFilterOptions(values);
+      return result;
+    }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
+  }, [availability, columnFilters, dataset.groups, searchTokens]);
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
-      const noAlternative = hasNoAlternative(group);
-      const mustApply = requiresApplication(group);
-      const alternativeSearchText = noAlternative
-        ? "單一料 無替代料 單一來源 single source no alternative"
-        : "有替代料 multiple source alternative";
-      const applicationSearchText = mustApply
-        ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-        : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
-      const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
-      const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
-      const matchesColumns =
-        matchesExcelFilter(columnFilters.material, getGroupMaterialValues(group)) &&
-        matchesExcelFilter(columnFilters.refDes, getGroupRefValues(group)) &&
-        matchesExcelFilter(columnFilters.mpn, getGroupMpnValues(group)) &&
-        matchesExcelFilter(columnFilters.internal, getGroupInternalValues(group)) &&
-        matchesExcelFilter(columnFilters.virtualAlternative, getGroupVirtualValues(group)) &&
-        matchesExcelFilter(columnFilters.trackingStatus, getGroupTrackingValues(group)) &&
-        matchesExcelFilter(columnFilters.specification, getGroupSpecificationValues(group));
-      const matchesAvailability =
-        availability === "all" ||
-        (availability === "usable" && !mustApply) ||
-        (availability === "required" && mustApply) ||
-        (availability === "pending" && group.pendingCount > 0) ||
-        (availability === "risk" && group.riskCount > 0) ||
-        (availability === "single" && noAlternative);
-
-      return matchesSearch && matchesColumns && matchesAvailability;
+      return matchesSearch(group) && matchesColumnFilters(group, columnFilters) && matchesAvailability(group);
     });
 
     return [...result].sort((left, right) => {
