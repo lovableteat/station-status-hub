@@ -129,6 +129,31 @@ function loadColumnWidths() {
   }
 }
 
+function fitColumnWidthsToViewport(widths: number[], viewportWidth: number) {
+  if (viewportWidth <= 0) return widths;
+  const next = [...widths];
+
+  for (let pass = 0; pass < 12; pass += 1) {
+    const difference = viewportWidth - next.reduce((total, width) => total + width, 0);
+    if (Math.abs(difference) < 1) break;
+
+    const candidates = next
+      .map((width, index) => ({ width, index }))
+      .filter(({ width, index }) => difference > 0 ? width < MAX_COLUMN_WIDTHS[index] : width > MIN_COLUMN_WIDTHS[index]);
+    if (candidates.length === 0) break;
+
+    const share = difference / candidates.length;
+    candidates.forEach(({ index }) => {
+      next[index] = Math.min(
+        MAX_COLUMN_WIDTHS[index],
+        Math.max(MIN_COLUMN_WIDTHS[index], next[index] + share)
+      );
+    });
+  }
+
+  return next;
+}
+
 function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecord {
   return {
     id: record.id,
@@ -969,6 +994,7 @@ export function MaterialRequestPage() {
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
 
@@ -1017,6 +1043,23 @@ export function MaterialRequestPage() {
     }
   }, [columnWidths]);
 
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const fitToContainer = () => {
+      setColumnWidths((current) => {
+        const fitted = fitColumnWidthsToViewport(current, container.clientWidth);
+        return fitted.every((width, index) => Math.abs(width - current[index]) < 0.5) ? current : fitted;
+      });
+    };
+
+    fitToContainer();
+    const observer = new ResizeObserver(fitToContainer);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   const resizeColumn = (index: number, width: number) => {
     setColumnWidths((current) => {
       const adjacentIndex = index + 1;
@@ -1036,6 +1079,11 @@ export function MaterialRequestPage() {
   };
 
   const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
+
+  const resetColumnWidths = () => {
+    const viewportWidth = tableContainerRef.current?.clientWidth ?? tableWidth;
+    setColumnWidths(fitColumnWidthsToViewport(DEFAULT_COLUMN_WIDTHS, viewportWidth));
+  };
 
   const replaceBomWorkspace = (workspace: BomWorkspace) => {
     setBomWorkspaces((current) => {
@@ -1360,12 +1408,12 @@ export function MaterialRequestPage() {
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
+            <Button type="button" variant="outline" size="sm" onClick={resetColumnWidths} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
             {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
           </div>
         </div>
 
-        <div className="max-h-[70vh] overflow-auto">
+        <div ref={tableContainerRef} className="max-h-[70vh] overflow-auto">
           <table className="table-fixed border-collapse text-[15px]" style={{ width: tableWidth, minWidth: tableWidth }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
