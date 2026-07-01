@@ -811,6 +811,90 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   );
 }
 
+function BomManagerDialog({
+  activeBomId,
+  bomWorkspaces,
+  open,
+  onDelete,
+  onOpenChange,
+  onSelect,
+}: {
+  activeBomId: string;
+  bomWorkspaces: BomWorkspace[];
+  open: boolean;
+  onDelete: (id: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+        <DialogHeader>
+          <DialogTitle className="text-2xl text-slate-50">BOM 管理</DialogTitle>
+          <DialogDescription className="text-[15px] leading-6 text-slate-400">
+            集中管理目前瀏覽器內的 BOM 工作區，可直接切換或刪除。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          {bomWorkspaces.map((workspace) => {
+            const isActive = workspace.id === activeBomId;
+
+            return (
+              <div
+                key={workspace.id}
+                className={cn(
+                  "rounded-xl border px-4 py-3",
+                  isActive ? "border-cyan-300/40 bg-cyan-400/10" : "border-blue-400/15 bg-[#101d33]"
+                )}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-base font-bold text-slate-50">{workspace.name}</p>
+                      {isActive && (
+                        <span className="rounded bg-cyan-400/15 px-2 py-0.5 text-xs font-bold text-cyan-100">
+                          目前使用中
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {workspace.payload.recordCount.toLocaleString()} 筆 · {workspace.payload.sheetName} · 更新 {formatTimestamp(workspace.updatedAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isActive && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onSelect(workspace.id)}
+                        className="h-9 border-cyan-400/25 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+                      >
+                        切換
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDelete(workspace.id)}
+                      className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
+                    >
+                      刪除
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MaterialRecordDialog({
   open,
   mode,
@@ -1217,6 +1301,7 @@ export function MaterialRequestPage() {
   const [pageSize, setPageSize] = useState(100);
   const [columnWidths, setColumnWidths] = useState(loadColumnWidths);
   const [isImporting, setIsImporting] = useState(false);
+  const [bomManagerOpen, setBomManagerOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
@@ -1513,18 +1598,21 @@ export function MaterialRequestPage() {
     setPage(1);
   };
 
-  const deleteActiveBom = async () => {
-    if (!window.confirm(`確定刪除 BOM「${activeWorkspace.name}」？`)) return;
+  const deleteBomWorkspaceById = async (targetBomId: string) => {
+    const targetWorkspace = bomWorkspaces.find((workspace) => workspace.id === targetBomId);
+    if (!targetWorkspace || !window.confirm(`確定刪除 BOM「${targetWorkspace.name}」？`)) return;
 
-    const remaining = bomWorkspaces.filter((workspace) => workspace.id !== activeBomId);
+    const remaining = bomWorkspaces.filter((workspace) => workspace.id !== targetBomId);
     const fallbackWorkspace = createDefaultBomWorkspace();
     const nextWorkspaces = remaining.length > 0 ? remaining : [fallbackWorkspace];
 
     setBomWorkspaces(nextWorkspaces);
-    switchActiveBom(nextWorkspaces[0].id);
+    if (activeBomId === targetBomId) {
+      switchActiveBom(nextWorkspaces[0].id);
+    }
 
     try {
-      await removeBomWorkspace(activeBomId);
+      await removeBomWorkspace(targetBomId);
       if (remaining.length === 0) {
         await saveBomWorkspace(fallbackWorkspace);
       }
@@ -1539,6 +1627,10 @@ export function MaterialRequestPage() {
         variant: "destructive",
       });
     }
+  };
+
+  const deleteActiveBom = async () => {
+    await deleteBomWorkspaceById(activeBomId);
   };
 
   const handleExport = () => {
@@ -1585,6 +1677,7 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
 
       <header className="rounded-xl border border-blue-400/20 bg-[#101b2f] p-4">
@@ -1632,6 +1725,9 @@ export function MaterialRequestPage() {
               </SelectContent>
             </Select>
             <span className="rounded bg-blue-400/10 px-2.5 py-1 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} className="h-9 border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20 hover:text-white">
+              <Layers3 className="mr-2 h-4 w-4" />BOM管理
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
