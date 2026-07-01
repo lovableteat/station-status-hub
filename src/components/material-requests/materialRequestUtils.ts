@@ -253,6 +253,16 @@ function compareActionPriority(left: MaterialRecord, right: MaterialRecord) {
   return left.manufacturer.localeCompare(right.manufacturer);
 }
 
+function getPreferenceScore(record: MaterialRecord) {
+  const primaryOffset = /00$/i.test(normalizeText(record.partNumber)) ? 0 : 10;
+
+  if (record.isApproved && record.isReady && !record.isRisk) return primaryOffset;
+  if (record.isApproved && !record.isRisk) return primaryOffset + 1;
+  if (record.isReady && !record.isRisk) return primaryOffset + 2;
+  if (!record.isRisk) return primaryOffset + 3;
+  return primaryOffset + 4;
+}
+
 function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const manufacturerPartNumber = normalizeText(raw.manufacturerPartNumber);
   const manufacturerPartNumberAlt = normalizeText(raw.manufacturerPartNumberAlt);
@@ -262,13 +272,12 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   ]);
   const remark = normalizeText(raw.remark);
   const actionKind = getActionKind(remark);
-  const displayRef = firstNonEmpty(raw.refGroup, raw.refDes, raw.partNumber, raw.name);
-  const inferredGroup = [raw.name, raw.partSpec, raw.pcbFootprint]
-    .map(normalizeText)
-    .filter(Boolean)
-    .join("::");
-  const groupIdentity = firstNonEmpty(raw.refGroup, raw.refDes, inferredGroup, raw.name);
-  const groupKey = `${groupIdentity}::${normalizeText(raw.name)}`;
+  const displayRef = firstNonEmpty(raw.refGroup, raw.partNumber, raw.refDes, raw.name);
+  const normalizedName = normalizeText(raw.name);
+  const groupIdentity = normalizeText(raw.refGroup)
+    ? `ref::${normalizeText(raw.refGroup)}::${normalizedName}`
+    : `name::${normalizeText(raw.sectionName)}::${normalizeText(raw.assemblyName)}::${normalizedName}`;
+  const groupKey = groupIdentity;
   const partSummary = uniqueValues([
     raw.partNumber,
     raw.partName,
@@ -326,18 +335,28 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
   const groups = Array.from(groupMap.entries())
     .map(([key, groupRecords]) => {
       const firstRecord = groupRecords[0];
+      const preferredRecord = [...groupRecords].sort((left, right) => {
+        const scoreDifference = getPreferenceScore(left) - getPreferenceScore(right);
+        return scoreDifference || left.manufacturer.localeCompare(right.manufacturer);
+      })[0] ?? firstRecord;
+      const preferredPartNumber = normalizeText(preferredRecord.partNumber);
 
       return {
         key,
-        displayRef: firstRecord.displayRef,
+        displayRef: firstNonEmpty(
+          preferredPartNumber,
+          ...groupRecords.map((item) => item.refGroup),
+          ...groupRecords.map((item) => item.refDes),
+          firstRecord.displayRef
+        ),
         sectionName: firstNonEmpty(...groupRecords.map((item) => item.sectionName)),
         assemblyName: firstNonEmpty(...groupRecords.map((item) => item.assemblyName)),
         name: firstNonEmpty(...groupRecords.map((item) => item.name)),
         qty: firstNonEmpty(...groupRecords.map((item) => item.qty), "-"),
-        partName: firstNonEmpty(...groupRecords.map((item) => item.partName)),
-        partSpec: firstNonEmpty(...groupRecords.map((item) => item.partSpec)),
-        schematicPart: firstNonEmpty(...groupRecords.map((item) => item.schematicPart)),
-        footprint: firstNonEmpty(...groupRecords.map((item) => item.pcbFootprint)),
+        partName: firstNonEmpty(preferredRecord.partName, ...groupRecords.map((item) => item.partName)),
+        partSpec: firstNonEmpty(preferredRecord.partSpec, ...groupRecords.map((item) => item.partSpec)),
+        schematicPart: firstNonEmpty(preferredRecord.schematicPart, ...groupRecords.map((item) => item.schematicPart)),
+        footprint: firstNonEmpty(preferredRecord.pcbFootprint, ...groupRecords.map((item) => item.pcbFootprint)),
         internalPartNumbers: uniqueValues(groupRecords.map((item) => item.partNumber)),
         manufacturers: uniqueValues(groupRecords.map((item) => item.manufacturer)),
         records: [...groupRecords].sort(compareActionPriority),
