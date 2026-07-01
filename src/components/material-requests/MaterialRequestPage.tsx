@@ -65,7 +65,7 @@ import {
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 
-type AvailabilityFilter = "all" | "usable" | "pending" | "risk" | "single";
+type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
 
@@ -181,6 +181,14 @@ function getUniqueMpnCount(group: MaterialGroup) {
 
 function hasNoAlternative(group: MaterialGroup) {
   return getUniqueMpnCount(group) <= 1;
+}
+
+function getUsableCount(group: MaterialGroup) {
+  return group.records.filter((record) => record.isApproved && !record.isRisk).length;
+}
+
+function requiresApplication(group: MaterialGroup) {
+  return getUsableCount(group) === 0;
 }
 
 function getDisplayMpn(record: MaterialRecord) {
@@ -775,16 +783,21 @@ export function MaterialRequestPage() {
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
       const noAlternative = hasNoAlternative(group);
-      const derivedSearchText = noAlternative
+      const mustApply = requiresApplication(group);
+      const alternativeSearchText = noAlternative
         ? "單一料 無替代料 單一來源 single source no alternative"
         : "有替代料 multiple source alternative";
-      const searchableText = `${group.searchText} ${derivedSearchText}`;
+      const applicationSearchText = mustApply
+        ? "必須申請 完全無可用料 無可用料 must apply no usable material"
+        : "已有可用料 usable material";
+      const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
       const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
       const matchesManufacturer =
         manufacturer === "all" || group.manufacturers.includes(manufacturer);
       const matchesAvailability =
         availability === "all" ||
-        (availability === "usable" && group.approvedCount > 0 && group.riskCount < group.totalCount) ||
+        (availability === "usable" && !mustApply) ||
+        (availability === "required" && mustApply) ||
         (availability === "pending" && group.pendingCount > 0) ||
         (availability === "risk" && group.riskCount > 0) ||
         (availability === "single" && noAlternative);
@@ -812,6 +825,10 @@ export function MaterialRequestPage() {
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
+    [dataset.groups]
+  );
+  const requiredApplicationCount = useMemo(
+    () => dataset.groups.filter(requiresApplication).length,
     [dataset.groups]
   );
   const visibleGroups = useMemo(() => {
@@ -956,6 +973,13 @@ export function MaterialRequestPage() {
     setExpandedKey(null);
   };
 
+  const showRequiredApplications = () => {
+    setQuery("");
+    setAvailability("required");
+    setManufacturer("all");
+    setExpandedKey(null);
+  };
+
   return (
     <div className="material-sheet-theme min-h-full bg-[#07101f] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWorkbookImport} />
@@ -993,6 +1017,7 @@ export function MaterialRequestPage() {
 
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-blue-400/15 pt-3 text-sm">
           <span className="text-slate-400">主料總數 <strong className="ml-1 text-blue-200">{dataset.stats.totalGroups.toLocaleString()}</strong></span>
+          <button type="button" onClick={showRequiredApplications} className="text-amber-300 hover:text-amber-200 hover:underline">必須申請 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
           <span className="text-slate-400">無替代料 <strong className="ml-1 text-orange-300">{noAlternativeCount.toLocaleString()}</strong></span>
           <span className="text-slate-400">廠商料明細 <strong className="ml-1 text-cyan-300">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
         </div>
@@ -1002,13 +1027,13 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_180px_220px_180px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『無替代料』" className="h-10 border-blue-400/20 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『必須申請』" className="h-10 border-blue-400/20 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={availability} onValueChange={(value) => setAvailability(value as AvailabilityFilter)}>
             <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
+              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="required">必須申請 / 完全無可用料</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
             </SelectContent>
           </Select>
 
@@ -1058,7 +1083,7 @@ export function MaterialRequestPage() {
             <tbody>
               {visibleGroups.map((group, index) => {
                 const expanded = expandedKey === group.key;
-                const usableCount = group.records.filter((record) => record.isApproved && !record.isRisk).length;
+                const usableCount = getUsableCount(group);
                 const uniqueMpnCount = getUniqueMpnCount(group);
                 const noAlternative = uniqueMpnCount <= 1;
                 const sortedAlternatives = getSortedAlternatives(group);
@@ -1219,7 +1244,7 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{usableCount > 0 ? <span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[15px] font-bold text-emerald-300">可用 {usableCount}</span> : <span className="rounded-full bg-slate-400/10 px-3 py-1.5 text-[15px] text-slate-400">尚無可用料</span>}{group.pendingCount > 0 && <span className="rounded-full bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">待申請 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{usableCount > 0 ? <span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[15px] font-bold text-emerald-300">可用 {usableCount}</span> : <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">必須申請</span>}{group.pendingCount > 0 && <span className="rounded-full bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">待申請 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
