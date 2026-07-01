@@ -81,6 +81,7 @@ const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v3";
 const DEFAULT_COLUMN_WIDTHS = [300, 190, 300, 250, 240, 200, 280, 150];
 const MIN_COLUMN_WIDTHS = [240, 140, 220, 200, 170, 160, 220, 120];
+const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 260];
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -91,9 +92,9 @@ function loadColumnWidths() {
       return DEFAULT_COLUMN_WIDTHS;
     }
 
-    return parsed.map((width, index) =>
-      Number.isFinite(width) ? Math.max(MIN_COLUMN_WIDTHS[index], Number(width)) : DEFAULT_COLUMN_WIDTHS[index]
-    );
+    return parsed.map((width, index) => Number.isFinite(width)
+      ? Math.min(MAX_COLUMN_WIDTHS[index], Math.max(MIN_COLUMN_WIDTHS[index], Number(width)))
+      : DEFAULT_COLUMN_WIDTHS[index]);
   } catch {
     return DEFAULT_COLUMN_WIDTHS;
   }
@@ -242,12 +243,14 @@ function ResizableHeader({
   children,
   width,
   minWidth,
+  maxWidth,
   onResize,
   className,
 }: {
   children: ReactNode;
   width: number;
   minWidth: number;
+  maxWidth: number;
   onResize: (width: number) => void;
   className?: string;
 }) {
@@ -261,7 +264,8 @@ function ResizableHeader({
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!dragRef.current) return;
-    onResize(Math.max(minWidth, dragRef.current.startWidth + event.clientX - dragRef.current.startX));
+    const nextWidth = dragRef.current.startWidth + event.clientX - dragRef.current.startX;
+    onResize(Math.min(maxWidth, Math.max(minWidth, nextWidth)));
   };
 
   const stopDragging = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -794,14 +798,10 @@ function CompactAlternativeRows({
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
-              {record.virtualAlternative ? (
-                <button type="button" onClick={() => onCopy(record.virtualAlternative ?? "")} className="group flex max-w-full items-center gap-2 text-left" title="複製虛擬替代料">
-                  <span className="break-all text-[15px] font-bold leading-6 text-teal-200 group-hover:text-teal-100">{record.virtualAlternative}</span>
-                  <Copy className="h-4 w-4 flex-none text-teal-400 opacity-75 group-hover:opacity-100" />
-                </button>
-              ) : (
-                <span className="text-sm text-slate-500">未填紀錄</span>
-              )}
+              <button type="button" onClick={() => onEdit(record)} className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15" title="修改虛擬替代料">
+                <span className={cn("break-all text-[15px] font-bold leading-6", record.virtualAlternative ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{record.virtualAlternative || "點擊填寫"}</span>
+                <Pencil className="h-4 w-4 flex-none text-teal-400" />
+              </button>
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
@@ -1215,6 +1215,7 @@ export function MaterialRequestPage() {
                     key={label}
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
+                    maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                     className={columnIndex === 7 ? "border-r-0 text-center" : undefined}
                   >
@@ -1396,14 +1397,10 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        {primaryAlternative?.virtualAlternative ? (
-                          <button type="button" onClick={() => handleCopy(primaryAlternative.virtualAlternative ?? "")} className="group flex max-w-full items-center gap-2 text-left" title="複製虛擬替代料">
-                            <span className="break-all text-[15px] font-bold leading-6 text-teal-200 group-hover:text-teal-100">{primaryAlternative.virtualAlternative}</span>
-                            <Copy className="h-4 w-4 flex-none text-teal-400 opacity-80 group-hover:opacity-100" />
-                          </button>
-                        ) : (
-                          <span className="text-sm text-slate-500">未填紀錄</span>
-                        )}
+                        <button type="button" onClick={() => primaryAlternative && openRecord(primaryAlternative, "edit")} className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15" title="修改虛擬替代料">
+                          <span className={cn("break-all text-[15px] font-bold leading-6", primaryAlternative?.virtualAlternative ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{primaryAlternative?.virtualAlternative || "點擊填寫"}</span>
+                          <Pencil className="h-4 w-4 flex-none text-teal-400" />
+                        </button>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
