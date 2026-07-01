@@ -13,6 +13,7 @@ export interface MaterialWorkbookRecord {
   refDes: string;
   manufacturerPartNumber: string;
   manufacturerPartNumberAlt: string;
+  virtualAlternative?: string;
   manufacturer: string;
   sourcingStatus: string;
   refGroup: string;
@@ -107,6 +108,7 @@ type MaterialField =
   | "refDes"
   | "mpn1"
   | "mpn2"
+  | "virtualAlternative"
   | "manufacturer"
   | "sourcingStatus"
   | "refGroup"
@@ -127,6 +129,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
+  virtualAlternative: ["Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
@@ -321,6 +324,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.refDes,
       manufacturerPartNumber,
       manufacturerPartNumberAlt,
+      raw.virtualAlternative,
       raw.manufacturer,
       raw.partNumber,
       raw.partName,
@@ -576,6 +580,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       refDes,
       manufacturerPartNumber: mpn1,
       manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
+      virtualAlternative: normalizeText(getFieldValue(row, fields, "virtualAlternative")),
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
       refGroup,
