@@ -14,6 +14,7 @@ export interface MaterialWorkbookRecord {
   manufacturerPartNumber: string;
   manufacturerPartNumberAlt: string;
   virtualAlternative?: string;
+  trackingStatus?: string;
   manufacturer: string;
   sourcingStatus: string;
   refGroup: string;
@@ -109,6 +110,7 @@ type MaterialField =
   | "mpn1"
   | "mpn2"
   | "virtualAlternative"
+  | "trackingStatus"
   | "manufacturer"
   | "sourcingStatus"
   | "refGroup"
@@ -130,6 +132,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
   virtualAlternative: ["Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
+  trackingStatus: ["Tracking Status", "Process Status", "處理狀態", "追蹤狀態", "自訂狀態"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
@@ -154,7 +157,7 @@ function normalizeText(value: unknown) {
 function normalizeHeader(value: unknown) {
   return normalizeText(value)
     .toLowerCase()
-    .replace(/[\s_\-\/().（）]+/g, "");
+    .replace(/[\s_/().（）-]+/g, "");
 }
 
 const NORMALIZED_FIELD_ALIASES = Object.fromEntries(
@@ -325,6 +328,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       manufacturerPartNumber,
       manufacturerPartNumberAlt,
       raw.virtualAlternative,
+      raw.trackingStatus,
       raw.manufacturer,
       raw.partNumber,
       raw.partName,
@@ -581,6 +585,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       manufacturerPartNumber: mpn1,
       manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
       virtualAlternative: normalizeText(getFieldValue(row, fields, "virtualAlternative")),
+      trackingStatus: normalizeText(getFieldValue(row, fields, "trackingStatus")),
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
       refGroup,
