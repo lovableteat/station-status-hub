@@ -372,7 +372,7 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         manufacturers: uniqueValues(groupRecords.map((item) => item.manufacturer)),
         records: groupRecords,
         primaryRecord,
-        requiresApplication: !primaryRecord.isPreferred,
+        requiresApplication: !groupRecords.some((record) => record.isPreferred),
         totalCount: groupRecords.length,
         pendingCount: groupRecords.filter((item) => item.isPending).length,
         okCount: groupRecords.filter((item) => item.isReady).length,
