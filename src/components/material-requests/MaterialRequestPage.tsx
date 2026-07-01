@@ -1,5 +1,6 @@
 import {
   type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   Fragment,
@@ -21,7 +22,6 @@ import {
   Eye,
   Factory,
   FileSpreadsheet,
-  Filter,
   Layers3,
   Pencil,
   Plus,
@@ -66,6 +66,12 @@ import {
   getActionLabel,
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
+import {
+  type BomWorkspace,
+  loadBomWorkspaces,
+  removeBomWorkspace,
+  saveBomWorkspace,
+} from "./materialBomStorage";
 
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
@@ -76,11 +82,34 @@ interface SavedMaterialChanges {
   updated: Record<string, MaterialWorkbookRecord>;
 }
 
+interface MaterialColumnFilters {
+  material: string;
+  refDes: string;
+  mpn: string;
+  internal: string;
+  virtualAlternative: string;
+  trackingStatus: string;
+  specification: string;
+}
+
+const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
+  material: "",
+  refDes: "",
+  mpn: "",
+  internal: "",
+  virtualAlternative: "",
+  trackingStatus: "",
+  specification: "",
+};
+
+const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
+const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
+
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v3";
-const DEFAULT_COLUMN_WIDTHS = [300, 190, 300, 250, 240, 200, 280, 150];
-const MIN_COLUMN_WIDTHS = [240, 140, 220, 200, 170, 160, 220, 120];
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v4";
+const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 130];
+const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 260];
 
 function loadColumnWidths() {
@@ -115,6 +144,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     manufacturerPartNumber: record.manufacturerPartNumber,
     manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
     virtualAlternative: record.virtualAlternative ?? "",
+    trackingStatus: record.trackingStatus ?? "",
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     refGroup: record.refGroup,
@@ -144,6 +174,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     manufacturerPartNumber: "",
     manufacturerPartNumberAlt: "",
     virtualAlternative: "",
+    trackingStatus: "",
     manufacturer: "",
     sourcingStatus: "",
     refGroup: group?.displayRef ?? "",
@@ -171,6 +202,30 @@ function loadSavedChanges(): SavedMaterialChanges {
   } catch {
     return { added: [], updated: {} };
   }
+}
+
+function createDefaultBomWorkspace(): BomWorkspace {
+  const payload = seedPayload as MaterialWorkbookPayload;
+  const savedChanges = loadSavedChanges();
+  const records = payload.records
+    .map((record) => savedChanges.updated[record.id] ?? record)
+    .concat(savedChanges.added);
+
+  return {
+    id: DEFAULT_BOM_ID,
+    name: payload.sourceFile,
+    payload: { ...payload, recordCount: records.length, records },
+    updatedAt: payload.generatedAt,
+  };
+}
+
+function createBomId(fileName: string) {
+  return `bom:${fileName.trim().toLowerCase()}`;
+}
+
+function loadActiveBomId() {
+  if (typeof window === "undefined") return DEFAULT_BOM_ID;
+  return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
 }
 
 function parseSearchTokens(query: string) {
@@ -244,6 +299,7 @@ function ResizableHeader({
   width,
   minWidth,
   maxWidth,
+  resizable = true,
   onResize,
   className,
 }: {
@@ -251,6 +307,7 @@ function ResizableHeader({
   width: number;
   minWidth: number;
   maxWidth: number;
+  resizable?: boolean;
   onResize: (width: number) => void;
   className?: string;
 }) {
@@ -281,7 +338,7 @@ function ResizableHeader({
       style={{ width, minWidth, maxWidth: width }}
     >
       {children}
-      <button
+      {resizable && <button
         type="button"
         aria-label="拖曳調整欄寬"
         title="拖曳調整欄寬"
@@ -290,8 +347,63 @@ function ResizableHeader({
         onPointerUp={stopDragging}
         onPointerCancel={stopDragging}
         className="absolute inset-y-0 right-0 z-30 w-2 touch-none cursor-col-resize border-r-2 border-transparent hover:border-cyan-300 active:border-cyan-200"
-      />
+      />}
     </th>
+  );
+}
+
+function InlineVirtualAlternativeEditor({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [editing, value]);
+
+  const commit = () => {
+    const nextValue = draft.trim();
+    setEditing(false);
+    if (nextValue !== value) onSave(nextValue);
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") event.currentTarget.blur();
+    if (event.key === "Escape") {
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        className="h-9 border-teal-300/50 bg-[#071522] text-[15px] font-bold text-teal-100 focus-visible:ring-teal-400"
+        placeholder="輸入虛擬替代料"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15"
+      title="直接修改虛擬替代料"
+    >
+      <span className={cn("break-all text-[15px] font-bold leading-6", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "點擊填寫"}</span>
+      <Pencil className="h-4 w-4 flex-none text-teal-400" />
+    </button>
   );
 }
 
@@ -380,7 +492,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">Excel 整理與上傳流程</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
-            使用標準範本最穩定；系統也能辨識常見中英文欄名與沒有 Level 的一般明細表。
+            每個 BOM 保留為獨立工作區；可一次上傳多個檔案，再切換、篩選與追蹤處理狀態。
           </DialogDescription>
         </DialogHeader>
 
@@ -409,6 +521,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00 就算可用；主料不符時會繼續檢查底下替代料。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
+                ["追蹤欄位可選填", "Virtual Alternative／虛擬替代料與 Tracking Status／處理狀態可直接放在 Excel，也能上傳後於網站填寫。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
                   <p className="font-bold text-slate-100">{title}</p>
@@ -429,12 +542,14 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5">
-            <h3 className="text-lg font-bold text-amber-200">4. 上傳前後</h3>
+            <h3 className="text-lg font-bold text-amber-200">4. 多 BOM 上傳與管理 SOP</h3>
             <ol className="mt-3 space-y-2 leading-6 text-slate-300">
-              <li>1. 在 Excel 篩選檢查空白 MPN、錯誤群組與重複列。</li>
-              <li>2. 回到本頁按「更新 Excel」，選擇 `.xlsx` 或 `.xls`。</li>
-              <li>3. 上傳新檔會以該檔案作為新的資料來源，並清除目前瀏覽器中的手動異動。</li>
-              <li>4. 上傳後先搜尋一個 Ref，展開確認廠商料、內部料號、Symbol 與 Footprint。</li>
+              <li>1. 每個專案／板號各存成一個 `.xlsx` 或 `.xls`，檔名請包含專案與版本，避免混淆。</li>
+              <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
+              <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
+              <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
+              <li>5. 虛擬替代料直接在表格內點擊填寫；處理狀態可在修改資料中填「待確認、申請中、已完成」。</li>
+              <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
             </ol>
           </section>
         </div>
@@ -543,6 +658,10 @@ function MaterialRecordDialog({
               <div className="space-y-2">
                 <Label htmlFor="material-virtual-alternative">虛擬替代料</Label>
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="material-tracking-status">處理狀態</Label>
+                <Input id="material-tracking-status" disabled={readOnly} value={form.trackingStatus ?? ""} onChange={(event) => updateField("trackingStatus", event.target.value)} placeholder="例如：待確認、申請中、已完成" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="material-sourcing">Sourcing Status</Label>
@@ -724,11 +843,13 @@ function CompactAlternativeRows({
   onCopy,
   onView,
   onEdit,
+  onSaveVirtual,
 }: {
   group: MaterialGroup;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
+  onSaveVirtual: (record: MaterialRecord, value: string) => void;
 }) {
   const alternatives = getSortedAlternatives(group).slice(1);
   const groupRefDes = group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
@@ -798,16 +919,14 @@ function CompactAlternativeRows({
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
-              <button type="button" onClick={() => onEdit(record)} className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15" title="修改虛擬替代料">
-                <span className={cn("break-all text-[15px] font-bold leading-6", record.virtualAlternative ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{record.virtualAlternative || "點擊填寫"}</span>
-                <Pencil className="h-4 w-4 flex-none text-teal-400" />
-              </button>
+              <InlineVirtualAlternativeEditor value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill record={record} />
                 <ActionPill record={record} />
+                {record.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{record.trackingStatus}</span>}
               </div>
             </td>
 
@@ -834,13 +953,11 @@ function CompactAlternativeRows({
 }
 
 export function MaterialRequestPage() {
-  const [basePayload, setBasePayload] = useState<MaterialWorkbookPayload>(
-    seedPayload as MaterialWorkbookPayload
-  );
-  const [savedChanges, setSavedChanges] = useState<SavedMaterialChanges>(loadSavedChanges);
+  const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
+  const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [query, setQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
-  const [manufacturer, setManufacturer] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -855,30 +972,42 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
 
-  const effectivePayload = useMemo<MaterialWorkbookPayload>(() => {
-    const records = basePayload.records
-      .map((record) => savedChanges.updated[record.id] ?? record)
-      .concat(savedChanges.added);
-
-    return {
-      ...basePayload,
-      recordCount: records.length,
-      records,
-    };
-  }, [basePayload, savedChanges]);
+  const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const basePayload = activeWorkspace.payload;
 
   const dataset = useMemo<MaterialDataset>(
-    () => buildMaterialDataset(effectivePayload),
-    [effectivePayload]
+    () => buildMaterialDataset(basePayload),
+    [basePayload]
   );
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(LOCAL_CHANGES_KEY, JSON.stringify(savedChanges));
-    } catch {
-      // The page remains usable even if browser storage is unavailable.
-    }
-  }, [savedChanges]);
+    let active = true;
+    loadBomWorkspaces()
+      .then((storedWorkspaces) => {
+        if (!active) return;
+        if (storedWorkspaces.length === 0) {
+          setActiveBomId(DEFAULT_BOM_ID);
+          return;
+        }
+        setBomWorkspaces((current) => {
+          const merged = new Map(current.map((workspace) => [workspace.id, workspace]));
+          storedWorkspaces.forEach((workspace) => merged.set(workspace.id, workspace));
+          return Array.from(merged.values());
+        });
+        const preferredBomId = loadActiveBomId();
+        if (preferredBomId !== DEFAULT_BOM_ID && !storedWorkspaces.some((workspace) => workspace.id === preferredBomId)) {
+          setActiveBomId(DEFAULT_BOM_ID);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(ACTIVE_BOM_KEY, activeBomId);
+  }, [activeBomId]);
 
   useEffect(() => {
     try {
@@ -889,18 +1018,34 @@ export function MaterialRequestPage() {
   }, [columnWidths]);
 
   const resizeColumn = (index: number, width: number) => {
-    setColumnWidths((current) => current.map((value, columnIndex) => columnIndex === index ? width : value));
+    setColumnWidths((current) => {
+      const adjacentIndex = index + 1;
+      if (adjacentIndex >= current.length) return current;
+
+      const requestedDelta = width - current[index];
+      const adjacentWidth = Math.min(
+        MAX_COLUMN_WIDTHS[adjacentIndex],
+        Math.max(MIN_COLUMN_WIDTHS[adjacentIndex], current[adjacentIndex] - requestedDelta)
+      );
+      const appliedDelta = current[adjacentIndex] - adjacentWidth;
+      const next = [...current];
+      next[index] = current[index] + appliedDelta;
+      next[adjacentIndex] = adjacentWidth;
+      return next;
+    });
   };
 
   const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
 
-  const manufacturers = useMemo(
-    () =>
-      Array.from(new Set(dataset.records.map((record) => record.manufacturer).filter(Boolean))).sort(
-        (left, right) => left.localeCompare(right)
-      ),
-    [dataset.records]
-  );
+  const replaceBomWorkspace = (workspace: BomWorkspace) => {
+    setBomWorkspaces((current) => {
+      const exists = current.some((item) => item.id === workspace.id);
+      return exists
+        ? current.map((item) => item.id === workspace.id ? workspace : item)
+        : [...current, workspace];
+    });
+    void saveBomWorkspace(workspace).catch(() => undefined);
+  };
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
 
@@ -916,8 +1061,21 @@ export function MaterialRequestPage() {
         : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
       const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
       const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
-      const matchesManufacturer =
-        manufacturer === "all" || group.manufacturers.includes(manufacturer);
+      const materialText = `${group.name} ${group.assemblyName} ${group.manufacturers.join(" ")}`.toLowerCase();
+      const refDesText = group.records.map((record) => `${record.refDes} ${record.refGroup}`).join(" ").toLowerCase();
+      const mpnText = group.records.map((record) => `${record.manufacturerPartNumber} ${record.manufacturerPartNumberAlt}`).join(" ").toLowerCase();
+      const internalText = group.records.map((record) => `${record.partNumber} ${record.schematicPart} ${record.pcbFootprint}`).join(" ").toLowerCase();
+      const virtualText = group.records.map((record) => record.virtualAlternative ?? "").join(" ").toLowerCase();
+      const trackingText = group.records.map((record) => `${record.trackingStatus ?? ""} ${record.remark} ${record.sourcingStatus}`).join(" ").toLowerCase();
+      const specificationText = `${group.partSpec} ${group.partName}`.toLowerCase();
+      const matchesColumns =
+        materialText.includes(columnFilters.material.toLowerCase()) &&
+        refDesText.includes(columnFilters.refDes.toLowerCase()) &&
+        mpnText.includes(columnFilters.mpn.toLowerCase()) &&
+        internalText.includes(columnFilters.internal.toLowerCase()) &&
+        virtualText.includes(columnFilters.virtualAlternative.toLowerCase()) &&
+        trackingText.includes(columnFilters.trackingStatus.toLowerCase()) &&
+        specificationText.includes(columnFilters.specification.toLowerCase());
       const matchesAvailability =
         availability === "all" ||
         (availability === "usable" && !mustApply) ||
@@ -926,7 +1084,7 @@ export function MaterialRequestPage() {
         (availability === "risk" && group.riskCount > 0) ||
         (availability === "single" && noAlternative);
 
-      return matchesSearch && matchesManufacturer && matchesAvailability;
+      return matchesSearch && matchesColumns && matchesAvailability;
     });
 
     return [...result].sort((left, right) => {
@@ -944,7 +1102,7 @@ export function MaterialRequestPage() {
       }
       return left.displayRef.localeCompare(right.displayRef, undefined, { numeric: true });
     });
-  }, [availability, dataset.groups, manufacturer, searchTokens, sortMode]);
+  }, [availability, columnFilters, dataset.groups, searchTokens, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
@@ -962,7 +1120,7 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [availability, deferredQuery, manufacturer, pageSize, sortMode]);
+  }, [availability, columnFilters, deferredQuery, pageSize, sortMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -972,7 +1130,7 @@ export function MaterialRequestPage() {
     if (searchTokens.length > 0 && filteredGroups.length === 1) {
       setExpandedKey(filteredGroups[0].key);
     }
-  }, [deferredQuery]);
+  }, [filteredGroups, searchTokens.length]);
 
   const toggleExpanded = (key: string) => {
     setExpandedKey((current) => (current === key ? null : key));
@@ -988,28 +1146,31 @@ export function MaterialRequestPage() {
   };
 
   const handleWorkbookImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const hasLocalChanges = savedChanges.added.length > 0 || Object.keys(savedChanges.updated).length > 0;
-    if (
-      hasLocalChanges &&
-      !window.confirm("上傳新的 Excel 會清除目前瀏覽器中的手動新增與修改。確定要繼續嗎？")
-    ) {
-      event.target.value = "";
-      return;
-    }
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
 
     setIsImporting(true);
     try {
-      const payload = await parseMaterialWorkbookFile(file);
-      setBasePayload(payload);
-      setSavedChanges({ added: [], updated: {} });
+      let lastWorkspaceId = activeBomId;
+      let totalRecords = 0;
+      for (const file of files) {
+        const payload = await parseMaterialWorkbookFile(file);
+        const workspace: BomWorkspace = {
+          id: createBomId(file.name),
+          name: file.name,
+          payload,
+          updatedAt: new Date().toISOString(),
+        };
+        replaceBomWorkspace(workspace);
+        lastWorkspaceId = workspace.id;
+        totalRecords += payload.recordCount;
+      }
+      setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
       toast({
-        title: "Excel 已更新",
-        description: `已載入 ${payload.recordCount.toLocaleString()} 筆廠商料明細。`,
+        title: files.length === 1 ? "BOM 已載入" : `${files.length} 個 BOM 已載入`,
+        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細，可從 BOM 切換器管理。`,
       });
     } catch (error) {
       toast({
@@ -1035,30 +1196,38 @@ export function MaterialRequestPage() {
     setEditorOpen(true);
   };
 
-  const handleSaveRecord = (record: MaterialWorkbookRecord) => {
-    setSavedChanges((current) => {
-      if (record.id.startsWith("manual-")) {
-        const exists = current.added.some((item) => item.id === record.id);
-        return {
-          ...current,
-          added: exists
-            ? current.added.map((item) => (item.id === record.id ? record : item))
-            : [...current.added, record],
-        };
-      }
-
-      return {
-        ...current,
-        updated: { ...current.updated, [record.id]: record },
-      };
+  const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
+    const exists = basePayload.records.some((item) => item.id === record.id);
+    const records = exists
+      ? basePayload.records.map((item) => item.id === record.id ? record : item)
+      : [...basePayload.records, record];
+    replaceBomWorkspace({
+      ...activeWorkspace,
+      payload: { ...basePayload, records, recordCount: records.length },
+      updatedAt: new Date().toISOString(),
     });
+  };
+
+  const handleSaveRecord = (record: MaterialWorkbookRecord) => {
+    saveRecordToActiveBom(record);
 
     setEditorOpen(false);
-    setExpandedKey(`${record.refGroup}::${record.name}`);
     toast({
       title: editorMode === "create" ? "料件已新增" : "料件已更新",
       description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
     });
+  };
+
+  const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
+    saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value });
+  };
+
+  const deleteActiveBom = () => {
+    if (bomWorkspaces.length <= 1 || activeBomId === DEFAULT_BOM_ID || !window.confirm(`確定刪除 BOM「${activeWorkspace.name}」？`)) return;
+    const remaining = bomWorkspaces.filter((workspace) => workspace.id !== activeBomId);
+    setBomWorkspaces(remaining);
+    setActiveBomId(remaining[0].id);
+    void removeBomWorkspace(activeBomId).catch(() => undefined);
   };
 
   const handleExport = () => {
@@ -1075,6 +1244,7 @@ export function MaterialRequestPage() {
         Manufacturer_PN: record.manufacturerPartNumber,
         Manufacturer_PN_2: record.manufacturerPartNumberAlt,
         虛擬替代料: record.virtualAlternative ?? "",
+        處理狀態: record.trackingStatus ?? "",
         Sourcing_Status: record.sourcingStatus,
         建料狀態: getActionLabel(record.actionKind),
         內部料號: record.partNumber,
@@ -1093,22 +1263,22 @@ export function MaterialRequestPage() {
 
   const clearFilters = () => {
     setQuery("");
+    setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
-    setManufacturer("all");
     setSortMode("reference");
     setExpandedKey(null);
   };
 
   const showRequiredApplications = () => {
     setQuery("");
+    setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("required");
-    setManufacturer("all");
     setExpandedKey(null);
   };
 
   return (
     <div className="material-sheet-theme min-h-full bg-[#07101f] p-4 text-slate-100 sm:p-5 lg:p-6">
-      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWorkbookImport} />
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
@@ -1133,12 +1303,24 @@ export function MaterialRequestPage() {
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
-              <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "更新 Excel"}
+              <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
               <Download className="mr-2 h-4 w-4" />匯出結果
             </Button>
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-blue-400/15 pt-3">
+          <span className="text-sm font-bold text-slate-300">目前 BOM</span>
+          <Select value={activeBomId} onValueChange={(value) => { setActiveBomId(value); setQuery(""); setColumnFilters(EMPTY_COLUMN_FILTERS); setAvailability("all"); setExpandedKey(null); setPage(1); }}>
+            <SelectTrigger className="h-9 w-full max-w-md border-cyan-400/30 bg-[#0a1527] text-cyan-100 sm:w-80"><SelectValue /></SelectTrigger>
+            <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
+              {bomWorkspaces.map((workspace) => <SelectItem key={workspace.id} value={workspace.id}>{workspace.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <span className="rounded bg-blue-400/10 px-2.5 py-1 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
+          <Button type="button" variant="outline" size="sm" onClick={deleteActiveBom} disabled={bomWorkspaces.length <= 1 || activeBomId === DEFAULT_BOM_ID} className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100">刪除目前 BOM</Button>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-blue-400/15 pt-3 text-sm">
@@ -1150,25 +1332,11 @@ export function MaterialRequestPage() {
       </header>
 
       <section className="mt-3 rounded-xl border border-blue-400/15 bg-[#0d182b] p-3">
-        <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_180px_220px_180px_auto]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
           </div>
-
-          <Select value={availability} onValueChange={(value) => setAvailability(value as AvailabilityFilter)}>
-            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
-            <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="required">主料與替代都無料</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">至少一顆可用料</SelectItem><SelectItem value="pending">有待申請明細</SelectItem><SelectItem value="risk">有風險料</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={manufacturer} onValueChange={setManufacturer}>
-            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><SelectValue placeholder="全部廠商" /></SelectTrigger>
-            <SelectContent className="max-h-80 border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="all">全部廠商</SelectItem>{manufacturers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
             <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><SelectValue /></SelectTrigger>
@@ -1216,12 +1384,28 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
+                    resizable={columnIndex < 7}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                     className={columnIndex === 7 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
                 ))}
+              </tr>
+              <tr className="bg-[#102b57] text-slate-100">
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.material} onChange={(event) => setColumnFilters((current) => ({ ...current, material: event.target.value }))} placeholder="篩選料名 / 廠商" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.refDes} onChange={(event) => setColumnFilters((current) => ({ ...current, refDes: event.target.value }))} placeholder="篩選 REF DES" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.mpn} onChange={(event) => setColumnFilters((current) => ({ ...current, mpn: event.target.value }))} placeholder="篩選 MPN" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.internal} onChange={(event) => setColumnFilters((current) => ({ ...current, internal: event.target.value }))} placeholder="料號 / Symbol" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.virtualAlternative} onChange={(event) => setColumnFilters((current) => ({ ...current, virtualAlternative: event.target.value }))} placeholder="篩選虛擬替代" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2">
+                  <select value={availability} onChange={(event) => setAvailability(event.target.value as AvailabilityFilter)} className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-xs outline-none focus:border-cyan-300">
+                    <option value="all">全部狀態</option><option value="required">全部無料</option><option value="usable">至少一顆可用</option><option value="single">無替代料</option><option value="pending">有待申請</option><option value="risk">有風險</option>
+                  </select>
+                  <input value={columnFilters.trackingStatus} onChange={(event) => setColumnFilters((current) => ({ ...current, trackingStatus: event.target.value }))} placeholder="篩選處理狀態" className="mt-1 h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-xs outline-none placeholder:text-slate-500 focus:border-cyan-300" />
+                </th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.specification} onChange={(event) => setColumnFilters((current) => ({ ...current, specification: event.target.value }))} placeholder="篩選規格" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
             <tbody>
@@ -1397,20 +1581,17 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        <button type="button" onClick={() => primaryAlternative && openRecord(primaryAlternative, "edit")} className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15" title="修改虛擬替代料">
-                          <span className={cn("break-all text-[15px] font-bold leading-6", primaryAlternative?.virtualAlternative ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{primaryAlternative?.virtualAlternative || "點擊填寫"}</span>
-                          <Pencil className="h-4 w-4 flex-none text-teal-400" />
-                        </button>
+                        {primaryAlternative && <InlineVirtualAlternativeEditor value={primaryAlternative.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(primaryAlternative, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{primaryAlternative?.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{primaryAlternative.trackingStatus}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />替代料</Button>
                       </td>
                     </tr>
-                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} />}
+                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} />}
                   </Fragment>
                 );
               })}
