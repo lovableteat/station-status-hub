@@ -80,6 +80,9 @@ const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecord {
   return {
     id: record.id,
+    sourceGroupKey: record.sourceGroupKey,
+    sourceRow: record.sourceRow,
+    isGroupStart: record.isGroupStart,
     sectionName: record.sectionName,
     assemblyName: record.assemblyName,
     level: record.level,
@@ -102,8 +105,12 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
 }
 
 function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
+  const id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
   return {
-    id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id,
+    sourceGroupKey: group?.primaryRecord.sourceGroupKey ?? id,
+    isGroupStart: !group,
     sectionName: group?.sectionName ?? "",
     assemblyName: group?.assemblyName ?? "",
     level: 2,
@@ -152,7 +159,7 @@ function isPrimaryInternalPart(record: MaterialRecord) {
 }
 
 function getAlternativeScore(record: MaterialRecord) {
-  const primaryOffset = isPrimaryInternalPart(record) ? 0 : 10;
+  const primaryOffset = record.isPreferred ? 0 : isPrimaryInternalPart(record) ? 10 : 20;
 
   if (record.isApproved && record.isReady && !record.isRisk) return primaryOffset;
   if (record.isApproved && !record.isRisk) return primaryOffset + 1;
@@ -162,12 +169,15 @@ function getAlternativeScore(record: MaterialRecord) {
 }
 
 function getSortedAlternatives(group: MaterialGroup) {
-  return [...group.records].sort((left, right) => {
+  const alternatives = group.records.filter((record) => record.id !== group.primaryRecord.id);
+  alternatives.sort((left, right) => {
     const scoreDiff = getAlternativeScore(left) - getAlternativeScore(right);
     if (scoreDiff !== 0) return scoreDiff;
 
     return left.manufacturer.localeCompare(right.manufacturer);
   });
+
+  return [group.primaryRecord, ...alternatives];
 }
 
 function getUniqueMpnCount(group: MaterialGroup) {
@@ -184,11 +194,11 @@ function hasNoAlternative(group: MaterialGroup) {
 }
 
 function getUsableCount(group: MaterialGroup) {
-  return group.records.filter((record) => record.isApproved && !record.isRisk).length;
+  return group.records.filter((record) => record.isPreferred).length;
 }
 
 function requiresApplication(group: MaterialGroup) {
-  return getUsableCount(group) === 0;
+  return group.requiresApplication;
 }
 
 function getDisplayMpn(record: MaterialRecord) {
@@ -317,9 +327,9 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
                 ["每個廠商料一列", "同一顆料有 Murata、Samsung、TDK，就建立三列；不要把多個 MPN 塞在同一格。"],
-                ["同料固定同一群組", "替代料的 Ref_tmp 與 Name 必須完全相同，這是最可靠的分組方式。"],
+                ["藍色列開新主料", "每個主料第一列填藍色；直到下一個藍色列以前，都視為它底下的替代料。"],
                 ["Level 可有可無", "有階層時用 0=大分類、1=模組、2=料件；一般平面表沒有 Level 也能上傳。"],
-                ["已建料才填內部料號", "Part Number 有值代表已建立；尾數 00 會排為第一首選，未建立就留白並在 Remark 填需申請項目。"],
+                ["首選必須同時符合兩項", "藍色列只有 Remark = OK 且 Part Number 尾數為 00，才判定首選已建料；任一不符就列入待申請主料。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
               ].map(([title, description]) => (
@@ -336,8 +346,8 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <div className="mt-4 space-y-3 leading-6 text-slate-300">
               <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
               <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
-              <p><strong className="text-slate-100">分組：</strong>有 Ref Group 時依 Ref Group＋料名分組；沒有時依模組＋料名合併成一個主料。</p>
-              <p><strong className="text-slate-100">狀態：</strong>自動區分可用、待申請與 Obsolete／NRND／停產等風險狀態。</p>
+              <p><strong className="text-slate-100">分組：</strong>有藍色起始列時完全依底色分組；沒有底色標記的其他格式，才退回 Ref Group＋料名規則。</p>
+              <p><strong className="text-slate-100">待申請：</strong>只看藍色主料列的 Remark 與 Part Number，不會被底下已有的替代料蓋掉。</p>
             </div>
           </section>
 
@@ -640,8 +650,7 @@ function CompactAlternativeRows({
   return (
     <>
       {alternatives.map((record, index) => {
-        const preferred = false;
-        const primaryByPartNumber = false;
+        const preferred = record.isPreferred;
 
         return (
           <tr
@@ -663,11 +672,11 @@ function CompactAlternativeRows({
                     <p className="text-[15px] font-bold text-slate-50">{record.manufacturer || "未填廠商"}</p>
                     {preferred && (
                       <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                        {primaryByPartNumber ? "尾數 00 首選" : "第一首選"}
+                        可用替代・OK + 00
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">替代料 #{index + 1}</p>
+                  <p className={cn("mt-1 text-xs", preferred ? "text-emerald-300" : "text-slate-400")}>替代料 #{index + 1}</p>
                 </div>
               </div>
             </td>
@@ -788,8 +797,8 @@ export function MaterialRequestPage() {
         ? "單一料 無替代料 單一來源 single source no alternative"
         : "有替代料 multiple source alternative";
       const applicationSearchText = mustApply
-        ? "必須申請 完全無可用料 無可用料 must apply no usable material"
-        : "已有可用料 usable material";
+        ? "待申請料 待申請主料 必須申請 藍色列有問題 must apply primary material"
+        : "首選已建料 remark ok 尾數 00 preferred material";
       const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
       const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
       const matchesManufacturer =
@@ -1017,7 +1026,7 @@ export function MaterialRequestPage() {
 
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-blue-400/15 pt-3 text-sm">
           <span className="text-slate-400">主料總數 <strong className="ml-1 text-blue-200">{dataset.stats.totalGroups.toLocaleString()}</strong></span>
-          <button type="button" onClick={showRequiredApplications} className="text-amber-300 hover:text-amber-200 hover:underline">必須申請 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
+          <button type="button" onClick={showRequiredApplications} className="rounded-md border border-amber-300/50 bg-amber-400/20 px-2.5 py-1 font-bold text-amber-200 hover:bg-amber-400/30 hover:text-amber-100">待申請主料 <strong className="ml-1 text-amber-100">{requiredApplicationCount.toLocaleString()}</strong></button>
           <span className="text-slate-400">無替代料 <strong className="ml-1 text-orange-300">{noAlternativeCount.toLocaleString()}</strong></span>
           <span className="text-slate-400">廠商料明細 <strong className="ml-1 text-cyan-300">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
         </div>
@@ -1027,13 +1036,13 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_180px_220px_180px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『必須申請』" className="h-10 border-blue-400/20 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『待申請料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={availability} onValueChange={(value) => setAvailability(value as AvailabilityFilter)}>
             <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="required">必須申請 / 完全無可用料</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
+              <SelectItem value="all">全部狀態</SelectItem><SelectItem value="required">待申請主料 / 藍色列有問題</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">首選已建料</SelectItem><SelectItem value="pending">有待申請明細</SelectItem><SelectItem value="risk">有風險料</SelectItem>
             </SelectContent>
           </Select>
 
@@ -1084,6 +1093,7 @@ export function MaterialRequestPage() {
               {visibleGroups.map((group, index) => {
                 const expanded = expandedKey === group.key;
                 const usableCount = getUsableCount(group);
+                const mustApply = group.requiresApplication;
                 const uniqueMpnCount = getUniqueMpnCount(group);
                 const noAlternative = uniqueMpnCount <= 1;
                 const sortedAlternatives = getSortedAlternatives(group);
@@ -1092,7 +1102,7 @@ export function MaterialRequestPage() {
 
                 return (
                   <Fragment key={group.key}>
-                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", expanded ? "bg-blue-500/[0.16]" : index % 2 === 0 ? "bg-[#101b2f] hover:bg-blue-400/[0.09]" : "bg-[#0d182b] hover:bg-blue-400/[0.09]") }>
+                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-l-4 border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "border-l-amber-400 bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : expanded ? "border-l-emerald-400 bg-emerald-400/[0.13]" : index % 2 === 0 ? "border-l-emerald-500 bg-[#101b2f] hover:bg-emerald-400/[0.09]" : "border-l-emerald-500 bg-[#0d182b] hover:bg-emerald-400/[0.09]") }>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
@@ -1125,16 +1135,16 @@ export function MaterialRequestPage() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="text-xs font-bold text-emerald-300">首選</p>
-                                  <p className="mt-0.5 break-all font-mono text-[15px] font-black leading-6 text-emerald-100">
+                                  <p className={cn("text-xs font-black", mustApply ? "text-amber-300" : "text-emerald-300")}>{mustApply ? "待申請主料" : "首選・OK + 00"}</p>
+                                  <p className={cn("mt-0.5 break-all font-mono text-[15px] font-black leading-6", mustApply ? "text-amber-100" : "text-emerald-100")}>
                                     {getDisplayMpn(primaryAlternative) || "未填 MPN"}
                                   </p>
-                                  <p className="mt-1 text-sm text-slate-300">
+                                  <p className={cn("mt-1 text-sm", mustApply ? "text-amber-200" : "text-slate-200")}>
                                     {primaryAlternative.manufacturer || "未填廠商"}
                                   </p>
                                 </div>
                                 {getDisplayMpn(primaryAlternative) && (
-                                  <Copy className="mt-1 h-4 w-4 flex-none text-emerald-200 opacity-80 group-hover:opacity-100" />
+                                  <Copy className={cn("mt-1 h-4 w-4 flex-none opacity-80 group-hover:opacity-100", mustApply ? "text-amber-300" : "text-emerald-200")} />
                                 )}
                               </div>
                             </button>
@@ -1178,7 +1188,7 @@ export function MaterialRequestPage() {
                           <div>
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="text-sm font-bold text-cyan-300">內部料號 / 圖面</p>
+                                <p className={cn("text-sm font-bold", mustApply ? "text-amber-300" : "text-cyan-300")}>內部料號 / 圖面</p>
                                 {primaryAlternative?.partNumber ? (
                                   <button
                                     type="button"
@@ -1189,10 +1199,10 @@ export function MaterialRequestPage() {
                                     className="group mt-1 flex w-full items-center gap-2 text-left"
                                     title="複製內部料號"
                                   >
-                                    <span className="truncate font-mono text-[15px] font-black text-cyan-200">
+                                    <span className={cn("truncate font-mono text-[15px] font-black", mustApply ? "text-amber-100" : "text-cyan-200")}>
                                       {primaryAlternative.partNumber}
                                     </span>
-                                    <Copy className="h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
+                                    <Copy className={cn("h-4 w-4 flex-none opacity-80 group-hover:opacity-100", mustApply ? "text-amber-300" : "text-cyan-300")} />
                                   </button>
                                 ) : (
                                   <p className="mt-1 text-[15px] font-semibold text-amber-300">尚未建立內部料號</p>
@@ -1244,7 +1254,7 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{usableCount > 0 ? <span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[15px] font-bold text-emerald-300">可用 {usableCount}</span> : <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">必須申請</span>}{group.pendingCount > 0 && <span className="rounded-full bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">待申請 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">待申請主料</span> : <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">首選已建料</span>}{mustApply && <span className="text-sm font-semibold leading-5 text-amber-200">Remark: {primaryAlternative?.remark || "未填"}<br />Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{usableCount > (mustApply ? 0 : 1) && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">另有可用替代 {usableCount - (mustApply ? 0 : 1)}</span>}{group.pendingCount > 0 && <span className="rounded bg-amber-400/15 px-2.5 py-1 text-sm font-bold text-amber-300">待申請明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>

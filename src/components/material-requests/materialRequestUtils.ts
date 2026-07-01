@@ -2,6 +2,9 @@ import * as XLSX from "xlsx";
 
 export interface MaterialWorkbookRecord {
   id: string;
+  sourceGroupKey?: string;
+  sourceRow?: number;
+  isGroupStart?: boolean;
   sectionName: string;
   assemblyName: string;
   level: number;
@@ -46,6 +49,7 @@ export interface MaterialRecord extends MaterialWorkbookRecord {
   actionKind: MaterialActionKind;
   isPending: boolean;
   isReady: boolean;
+  isPreferred: boolean;
   isApproved: boolean;
   isRisk: boolean;
   searchText: string;
@@ -65,6 +69,8 @@ export interface MaterialGroup {
   internalPartNumbers: string[];
   manufacturers: string[];
   records: MaterialRecord[];
+  primaryRecord: MaterialRecord;
+  requiresApplication: boolean;
   totalCount: number;
   pendingCount: number;
   okCount: number;
@@ -254,7 +260,7 @@ function compareActionPriority(left: MaterialRecord, right: MaterialRecord) {
 }
 
 function getPreferenceScore(record: MaterialRecord) {
-  const primaryOffset = /00$/i.test(normalizeText(record.partNumber)) ? 0 : 10;
+  const primaryOffset = record.isPreferred ? 0 : 10;
 
   if (record.isApproved && record.isReady && !record.isRisk) return primaryOffset;
   if (record.isApproved && !record.isRisk) return primaryOffset + 1;
@@ -274,9 +280,11 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const actionKind = getActionKind(remark);
   const displayRef = firstNonEmpty(raw.refGroup, raw.partNumber, raw.refDes, raw.name);
   const normalizedName = normalizeText(raw.name);
-  const groupIdentity = normalizeText(raw.refGroup)
-    ? `ref::${normalizeText(raw.refGroup)}::${normalizedName}`
-    : `name::${normalizeText(raw.sectionName)}::${normalizeText(raw.assemblyName)}::${normalizedName}`;
+  const groupIdentity = normalizeText(raw.sourceGroupKey)
+    ? `source::${normalizeText(raw.sourceGroupKey)}`
+    : normalizeText(raw.refGroup)
+      ? `ref::${normalizeText(raw.refGroup)}::${normalizedName}`
+      : `name::${normalizeText(raw.sectionName)}::${normalizeText(raw.assemblyName)}::${normalizedName}`;
   const groupKey = groupIdentity;
   const partSummary = uniqueValues([
     raw.partNumber,
@@ -286,6 +294,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
 
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
+  const isPreferred = actionKind === "ok" && /00$/i.test(normalizeText(raw.partNumber));
   const isApproved = APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
   const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
 
@@ -301,6 +310,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     actionKind,
     isPending,
     isReady: actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending),
+    isPreferred,
     isApproved,
     isRisk,
     searchText: buildSearchText([
@@ -323,7 +333,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
 }
 
 export function buildMaterialDataset(payload: MaterialWorkbookPayload): MaterialDataset {
-  const records = payload.records.map(buildRecord).sort(compareActionPriority);
+  const records = payload.records.map(buildRecord);
   const groupMap = new Map<string, MaterialRecord[]>();
 
   records.forEach((record) => {
@@ -339,7 +349,8 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         const scoreDifference = getPreferenceScore(left) - getPreferenceScore(right);
         return scoreDifference || left.manufacturer.localeCompare(right.manufacturer);
       })[0] ?? firstRecord;
-      const preferredPartNumber = normalizeText(preferredRecord.partNumber);
+      const primaryRecord = groupRecords.find((record) => record.isGroupStart) ?? preferredRecord;
+      const preferredPartNumber = normalizeText(primaryRecord.partNumber);
 
       return {
         key,
@@ -353,13 +364,15 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         assemblyName: firstNonEmpty(...groupRecords.map((item) => item.assemblyName)),
         name: firstNonEmpty(...groupRecords.map((item) => item.name)),
         qty: firstNonEmpty(...groupRecords.map((item) => item.qty), "-"),
-        partName: firstNonEmpty(preferredRecord.partName, ...groupRecords.map((item) => item.partName)),
-        partSpec: firstNonEmpty(preferredRecord.partSpec, ...groupRecords.map((item) => item.partSpec)),
-        schematicPart: firstNonEmpty(preferredRecord.schematicPart, ...groupRecords.map((item) => item.schematicPart)),
-        footprint: firstNonEmpty(preferredRecord.pcbFootprint, ...groupRecords.map((item) => item.pcbFootprint)),
+        partName: firstNonEmpty(primaryRecord.partName, ...groupRecords.map((item) => item.partName)),
+        partSpec: firstNonEmpty(primaryRecord.partSpec, ...groupRecords.map((item) => item.partSpec)),
+        schematicPart: firstNonEmpty(primaryRecord.schematicPart, ...groupRecords.map((item) => item.schematicPart)),
+        footprint: firstNonEmpty(primaryRecord.pcbFootprint, ...groupRecords.map((item) => item.pcbFootprint)),
         internalPartNumbers: uniqueValues(groupRecords.map((item) => item.partNumber)),
         manufacturers: uniqueValues(groupRecords.map((item) => item.manufacturer)),
-        records: [...groupRecords].sort(compareActionPriority),
+        records: groupRecords,
+        primaryRecord,
+        requiresApplication: !primaryRecord.isPreferred,
         totalCount: groupRecords.length,
         pendingCount: groupRecords.filter((item) => item.isPending).length,
         okCount: groupRecords.filter((item) => item.isReady).length,
@@ -400,7 +413,7 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
       readyRecords: records.filter((record) => record.isReady).length,
       approvedRecords: records.filter((record) => record.isApproved).length,
       riskRecords: records.filter((record) => record.isRisk).length,
-      pendingGroups: groups.filter((group) => group.pendingCount > 0).length,
+      pendingGroups: groups.filter((group) => group.requiresApplication).length,
     },
   };
 }
@@ -444,6 +457,36 @@ function getFieldValue(row: unknown[], fields: Map<MaterialField, number>, field
   return index == null ? "" : row[index];
 }
 
+interface StyledWorksheetCell extends XLSX.CellObject {
+  s?: {
+    patternType?: string;
+    fgColor?: {
+      rgb?: string;
+      theme?: number;
+      tint?: number;
+    };
+  };
+}
+
+function isBlueGroupStartRow(
+  worksheet: XLSX.WorkSheet,
+  rowIndex: number,
+  fields: Map<MaterialField, number>
+) {
+  const candidateColumns = [fields.get("name"), fields.get("refDes"), fields.get("mpn1")]
+    .filter((index): index is number => index != null);
+
+  return candidateColumns.some((columnIndex) => {
+    const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+    const style = (worksheet[address] as StyledWorksheetCell | undefined)?.s;
+    const rgb = style?.fgColor?.rgb?.replace(/^FF/i, "").toUpperCase();
+    const isWorkbookBlue = rgb === "DCEAF7";
+    const isThemeBlue = style?.fgColor?.theme === 3 && (style.fgColor.tint ?? 0) >= 0.8;
+
+    return style?.patternType === "solid" && (isWorkbookBlue || isThemeBlue);
+  });
+}
+
 function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
@@ -459,9 +502,23 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
   const { index: headerRowIndex, fields } = headerMatch;
   const records: MaterialWorkbookRecord[] = [];
   const hasLevelColumn = fields.has("level");
+  const blueGroupRows = new Set<number>();
+
+  for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
+    const levelCell = getFieldValue(rows[index], fields, "level");
+    const parsedLevel = Number(levelCell);
+    const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
+    if (levelValue >= 2 && isBlueGroupStartRow(worksheet, index, fields)) {
+      blueGroupRows.add(index);
+    }
+  }
+
+  const useBlueGroupRows = blueGroupRows.size > 0;
 
   let currentSection = "";
   let currentAssembly = "";
+  let currentSourceGroupKey = "";
+  let currentGroupRef = "";
 
   for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
     const row = rows[index];
@@ -477,11 +534,15 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
 
     if (levelValue === 0) {
       currentSection = name;
+      currentSourceGroupKey = "";
+      currentGroupRef = "";
       continue;
     }
 
     if (levelValue === 1) {
       currentAssembly = name;
+      currentSourceGroupKey = "";
+      currentGroupRef = "";
       continue;
     }
 
@@ -490,10 +551,23 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     }
 
     const refDes = normalizeText(getFieldValue(row, fields, "refDes"));
-    const refGroup = firstNonEmpty(getFieldValue(row, fields, "refGroup"), refDes);
+    const rowRefGroup = firstNonEmpty(getFieldValue(row, fields, "refGroup"), refDes);
+    const isGroupStart = useBlueGroupRows && blueGroupRows.has(index);
+
+    if (useBlueGroupRows && (isGroupStart || !currentSourceGroupKey)) {
+      currentSourceGroupKey = `${sheetName}-row-${index + 1}`;
+      currentGroupRef = firstNonEmpty(rowRefGroup, refDes, partNumber, name);
+    }
+
+    const refGroup = useBlueGroupRows
+      ? firstNonEmpty(currentGroupRef, rowRefGroup, refDes)
+      : rowRefGroup;
 
     records.push({
       id: `${sheetName}-${index}`,
+      sourceGroupKey: useBlueGroupRows ? currentSourceGroupKey : undefined,
+      sourceRow: index + 1,
+      isGroupStart: useBlueGroupRows ? isGroupStart : undefined,
       sectionName: firstNonEmpty(getFieldValue(row, fields, "sectionName"), currentSection),
       assemblyName: firstNonEmpty(getFieldValue(row, fields, "assemblyName"), currentAssembly),
       level: 2,
@@ -525,6 +599,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
 export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWorkbookPayload> {
   const workbook = XLSX.read(await file.arrayBuffer(), {
     type: "array",
+    cellStyles: true,
   });
 
   const candidates = workbook.SheetNames.map((sheetName) =>
