@@ -78,9 +78,9 @@ interface SavedMaterialChanges {
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v1";
-const DEFAULT_COLUMN_WIDTHS = [360, 340, 260, 210, 300, 160];
-const MIN_COLUMN_WIDTHS = [240, 220, 200, 170, 220, 120];
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v2";
+const DEFAULT_COLUMN_WIDTHS = [320, 200, 320, 260, 210, 300, 160];
+const MIN_COLUMN_WIDTHS = [240, 140, 220, 200, 170, 220, 120];
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -138,7 +138,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     level: 2,
     name: group?.name ?? "",
     qty: group?.qty ?? 1,
-    refDes: group?.displayRef ?? "",
+    refDes: group?.primaryRecord.refDes ?? "",
     manufacturerPartNumber: "",
     manufacturerPartNumberAlt: "",
     manufacturer: "",
@@ -488,6 +488,10 @@ function MaterialRecordDialog({
                 <Label htmlFor="material-ref">Ref Group *</Label>
                 <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 CARRIER_RAIL" />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="material-ref-des">REF DES</Label>
+                <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C418、R806" />
+              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="material-name">電路料名稱 *</Label>
                 <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V" />
@@ -586,7 +590,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={6} className="p-0">
+      <td colSpan={7} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -717,6 +721,7 @@ function CompactAlternativeRows({
   onEdit: (record: MaterialRecord) => void;
 }) {
   const alternatives = getSortedAlternatives(group).slice(1);
+  const groupRefDes = group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
 
   return (
     <>
@@ -750,6 +755,13 @@ function CompactAlternativeRows({
                   <p className={cn("mt-1 text-xs", preferred ? "text-emerald-300" : "text-slate-400")}>替代料 #{index + 1}</p>
                 </div>
               </div>
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              <button type="button" onClick={() => groupRefDes !== "-" && onCopy(groupRefDes)} className="group flex max-w-full items-center gap-2 text-left" title="複製 REF DES">
+                <span className="break-all font-mono text-base font-black text-sky-200 group-hover:text-sky-100">{groupRefDes}</span>
+                {groupRefDes !== "-" && <Copy className="h-4 w-4 flex-none text-sky-400 opacity-75 group-hover:opacity-100" />}
+              </button>
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
@@ -1172,6 +1184,7 @@ export function MaterialRequestPage() {
               <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
                 {[
                   "主料 / 廠商",
+                  "REF DES",
                   "MPN",
                   "內部料號 / 圖面",
                   "狀態",
@@ -1183,7 +1196,7 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 5 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 6 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
@@ -1201,6 +1214,7 @@ export function MaterialRequestPage() {
                 const secondaryAlternatives = sortedAlternatives.slice(1);
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
+                const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
 
                 return (
                   <Fragment key={group.key}>
@@ -1221,6 +1235,12 @@ export function MaterialRequestPage() {
                             <p className="mt-1 text-sm text-slate-500">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
+                        <button type="button" onClick={() => groupRefDes !== "-" && handleCopy(groupRefDes)} className="group flex max-w-full items-center gap-2 text-left" title="複製 REF DES">
+                          <span className="break-all font-mono text-base font-black text-sky-200 group-hover:text-sky-100">{groupRefDes}</span>
+                          {groupRefDes !== "-" && <Copy className="h-4 w-4 flex-none text-sky-400 opacity-80 group-hover:opacity-100" />}
+                        </button>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle">
                         <div>
