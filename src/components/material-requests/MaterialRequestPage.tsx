@@ -488,7 +488,7 @@ function AlternativeRows({
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
 }) {
-  const alternatives = getSortedAlternatives(group);
+  const alternatives = getSortedAlternatives(group).slice(1);
   const uniqueMpnCount = getUniqueMpnCount(group);
   const allMpns = alternatives
     .map((record) => record.manufacturerPartNumber)
@@ -627,13 +627,13 @@ function CompactAlternativeRows({
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
 }) {
-  const alternatives = getSortedAlternatives(group);
+  const alternatives = getSortedAlternatives(group).slice(1);
 
   return (
     <>
       {alternatives.map((record, index) => {
-        const preferred = index === 0;
-        const primaryByPartNumber = preferred && isPrimaryInternalPart(record);
+        const preferred = false;
+        const primaryByPartNumber = false;
 
         return (
           <tr
@@ -963,84 +963,82 @@ export function MaterialRequestPage() {
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
 
-      <header className="rounded-2xl border border-blue-400/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.11),transparent_34%),linear-gradient(135deg,#111d33,#0b1527)] p-5 shadow-[0_18px_55px_-38px_rgba(56,189,248,0.65)]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
-              <FileSpreadsheet className="h-6 w-6" />
+      <header className="rounded-xl border border-blue-400/20 bg-[#101b2f] p-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 flex-none items-center justify-center rounded bg-blue-600 text-white">
+              <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-50 sm:text-[28px]">料號與替代料</h1>
-              <p className="mt-1 text-[15px] text-slate-400">點主料展開廠商料；一次只開一組，方便逐列比較。</p>
+              <h1 className="text-xl font-bold text-slate-50">料號總表</h1>
+              <p className="mt-0.5 text-sm text-slate-400">一行一個主料，點箭頭查看其他替代料。</p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-amber-400/30 bg-amber-400/10 px-4 text-[15px] font-bold text-amber-200 hover:bg-amber-400/20 hover:text-amber-100">
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} className="h-11 bg-cyan-500 px-4 text-[15px] font-bold text-slate-950 hover:bg-cyan-400">
+            <Button type="button" onClick={() => openCreate()} className="h-9 bg-cyan-500 px-3 text-sm font-bold text-slate-950 hover:bg-cyan-400">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="h-11 border-sky-400/30 bg-sky-400/10 px-4 text-[15px] text-sky-200 hover:bg-sky-400/20 hover:text-white">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "更新 Excel"}
             </Button>
-            <Button type="button" onClick={handleExport} className="h-11 bg-blue-600 px-4 text-[15px] text-white hover:bg-blue-500">
+            <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
               <Download className="mr-2 h-4 w-4" />匯出結果
             </Button>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-blue-400/15 pt-4 text-[15px]">
-          <span className="text-slate-400">電路料 <strong className="ml-1 text-blue-300">{dataset.stats.totalGroups.toLocaleString()}</strong></span>
-          <span className="text-slate-400">Approved <strong className="ml-1 text-emerald-300">{dataset.stats.approvedRecords.toLocaleString()}</strong></span>
-          <span className="text-slate-400">待申請 <strong className="ml-1 text-amber-300">{dataset.stats.pendingRecords.toLocaleString()}</strong></span>
-          <span className="text-slate-400">廠商料 <strong className="ml-1 text-cyan-300">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-blue-400/15 pt-3 text-sm">
+          <span className="text-slate-400">主料總數 <strong className="ml-1 text-blue-200">{dataset.stats.totalGroups.toLocaleString()}</strong></span>
           <span className="text-slate-400">無替代料 <strong className="ml-1 text-orange-300">{noAlternativeCount.toLocaleString()}</strong></span>
+          <span className="text-slate-400">廠商料明細 <strong className="ml-1 text-cyan-300">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
         </div>
       </header>
 
-      <section className="mt-4 rounded-2xl border border-blue-400/15 bg-[#0d182b] p-4">
+      <section className="mt-3 rounded-xl border border-blue-400/15 bg-[#0d182b] p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_180px_220px_180px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋 Ref、料名、MPN、內部料號；也可輸入『單一料』或『無替代料』" className="h-12 border-blue-400/20 bg-[#111f36] pl-12 text-base text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『無替代料』" className="h-10 border-blue-400/20 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={availability} onValueChange={(value) => setAvailability(value as AvailabilityFilter)}>
-            <SelectTrigger className="h-12 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><Filter className="mr-2 h-4 w-4 text-blue-400" /><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
               <SelectItem value="all">全部狀態</SelectItem><SelectItem value="single">單一料 / 無替代</SelectItem><SelectItem value="usable">有可用料</SelectItem><SelectItem value="pending">有待申請</SelectItem><SelectItem value="risk">有風險料</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={manufacturer} onValueChange={setManufacturer}>
-            <SelectTrigger className="h-12 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-200"><SelectValue placeholder="全部廠商" /></SelectTrigger>
+            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><SelectValue placeholder="全部廠商" /></SelectTrigger>
             <SelectContent className="max-h-80 border-blue-400/25 bg-[#101a2d] text-slate-100">
               <SelectItem value="all">全部廠商</SelectItem>{manufacturers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-12 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-200"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><SelectValue /></SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
               <SelectItem value="reference">依 Ref 排序</SelectItem><SelectItem value="single-source">無替代料優先</SelectItem><SelectItem value="alternatives">替代料多到少</SelectItem><SelectItem value="approved">Approved 多到少</SelectItem><SelectItem value="pending">待申請多到少</SelectItem>
             </SelectContent>
           </Select>
 
-          <Button type="button" variant="outline" onClick={clearFilters} className="h-12 border-blue-400/20 bg-[#111f36] px-4 text-[15px] text-slate-300 hover:bg-blue-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
+          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-blue-400/20 bg-[#111f36] px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-          <p>找到 <strong className="text-blue-300">{filteredGroups.length.toLocaleString()}</strong> 組，搜尋會包含每組底下所有廠商料。</p>
+          <p>顯示 <strong className="text-blue-300">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
           <p>{dataset.meta.sourceFile} · {dataset.meta.sheetName} · {formatTimestamp(dataset.meta.generatedAt)}</p>
         </div>
       </section>
 
-      <section className="mt-4 overflow-hidden rounded-2xl border border-blue-400/15 bg-[#0b1527] shadow-sm">
-        <div className="flex items-center justify-between border-b border-blue-400/15 bg-[#101d33] px-5 py-4">
+      <section className="mt-3 overflow-hidden rounded-xl border border-blue-400/15 bg-[#0b1527]">
+        <div className="flex items-center justify-between border-b border-blue-400/15 bg-[#101d33] px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
-            <p className="mt-1 text-sm text-slate-500">橘色「單一料・無替代」代表同組只有 0–1 個不重複 MPN；尾數 00 固定排第一首選。</p>
+            <p className="mt-0.5 text-sm text-slate-500">表格列數就是主料數；展開後才顯示其他替代料。</p>
           </div>
           {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
         </div>
@@ -1049,9 +1047,9 @@ export function MaterialRequestPage() {
           <table className="min-w-[1120px] w-full table-fixed border-collapse text-[15px]">
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
-                <th className="w-[28%] border-r border-blue-300/20 px-4 py-4">料件 / 廠商</th>
-                <th className="w-[27%] border-r border-blue-300/20 px-4 py-4">首選 / 替代料</th>
-                <th className="w-[17%] border-r border-blue-300/20 px-4 py-4">原理圖 / 內部料號</th>
+                <th className="w-[28%] border-r border-blue-300/20 px-4 py-4">主料 / 廠商</th>
+                <th className="w-[27%] border-r border-blue-300/20 px-4 py-4">MPN</th>
+                <th className="w-[17%] border-r border-blue-300/20 px-4 py-4">內部料號 / 圖面</th>
                 <th className="w-[12%] border-r border-blue-300/20 px-4 py-4">狀態</th>
                 <th className="w-[16%] border-r border-blue-300/20 px-4 py-4">規格 / 備註</th>
                 <th className="w-40 px-4 py-4 text-center">操作</th>
@@ -1069,10 +1067,10 @@ export function MaterialRequestPage() {
 
                 return (
                   <Fragment key={group.key}>
-                    <tr onClick={() => toggleExpanded(group.key)} className={cn("cursor-pointer border-b border-blue-400/15 text-slate-200 transition-colors", expanded ? "bg-blue-500/[0.16]" : index % 2 === 0 ? "bg-[#101b2f] hover:bg-blue-400/[0.09]" : "bg-[#0d182b] hover:bg-blue-400/[0.09]") }>
-                      <td className="border-r border-blue-400/10 px-4 py-4">
+                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", expanded ? "bg-blue-500/[0.16]" : index % 2 === 0 ? "bg-[#101b2f] hover:bg-blue-400/[0.09]" : "bg-[#0d182b] hover:bg-blue-400/[0.09]") }>
+                      <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex items-start gap-3">
-                          <span className={cn("mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-lg border", expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300")}>{expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</span>
+                          <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span>
@@ -1087,8 +1085,8 @@ export function MaterialRequestPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4 align-top">
-                        <div className="space-y-3">
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle">
+                        <div>
                           {primaryAlternative ? (
                             <button
                               type="button"
@@ -1097,13 +1095,13 @@ export function MaterialRequestPage() {
                                 const value = getDisplayMpn(primaryAlternative);
                                 if (value) handleCopy(value);
                               }}
-                              className="group min-h-[82px] w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-3 text-left hover:bg-emerald-400/15"
+                              className="group w-full text-left"
                               title="複製首選 MPN"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="text-sm font-bold text-emerald-300">首選</p>
-                                  <p className="mt-1 break-all font-mono text-base font-black leading-6 text-emerald-100">
+                                  <p className="text-xs font-bold text-emerald-300">首選</p>
+                                  <p className="mt-0.5 break-all font-mono text-[15px] font-black leading-6 text-emerald-100">
                                     {getDisplayMpn(primaryAlternative) || "未填 MPN"}
                                   </p>
                                   <p className="mt-1 text-sm text-slate-300">
@@ -1120,7 +1118,7 @@ export function MaterialRequestPage() {
                           )}
 
                           {secondaryAlternatives.length > 0 && (
-                            <div className="space-y-2">
+                            <div className="hidden">
                               <p className="text-sm font-bold text-blue-300">其他替代料</p>
                               <div className="grid gap-2">
                                 {secondaryAlternatives.map((record) => {
@@ -1150,9 +1148,9 @@ export function MaterialRequestPage() {
                           )}
                         </div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4 align-top">
-                        <div className="space-y-3">
-                          <div className="min-h-[82px] rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-3">
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle">
+                        <div>
+                          <div>
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-cyan-300">內部料號 / 圖面</p>
@@ -1163,7 +1161,7 @@ export function MaterialRequestPage() {
                                       event.stopPropagation();
                                       handleCopy(primaryAlternative.partNumber);
                                     }}
-                                    className="group mt-1 flex w-full items-center justify-between gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20"
+                                    className="group mt-1 flex w-full items-center gap-2 text-left"
                                     title="複製內部料號"
                                   >
                                     <span className="truncate font-mono text-[15px] font-black text-cyan-200">
@@ -1185,7 +1183,7 @@ export function MaterialRequestPage() {
                           </div>
 
                           {secondaryAlternatives.length > 0 && (
-                            <div className="space-y-2">
+                            <div className="hidden">
                               <p className="text-sm font-bold text-cyan-300">對應內部料號</p>
                               <div className="grid gap-2">
                                 {secondaryAlternatives.map((record) => (
@@ -1220,12 +1218,12 @@ export function MaterialRequestPage() {
                           )}
                         </div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4">
+                      <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{usableCount > 0 ? <span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-[15px] font-bold text-emerald-300">可用 {usableCount}</span> : <span className="rounded-full bg-slate-400/10 px-3 py-1.5 text-[15px] text-slate-400">尚無可用料</span>}{group.pendingCount > 0 && <span className="rounded-full bg-amber-400/15 px-3 py-1.5 text-[15px] font-bold text-amber-300">待申請 {group.pendingCount}</span>}</div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4 text-[15px] leading-7 text-slate-400"><p className="line-clamp-3">{group.partSpec || group.partName || "-"}</p></td>
-                      <td className="px-4 py-4 text-center" onClick={(event) => event.stopPropagation()}>
-                        <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-10 w-full border-cyan-400/25 bg-cyan-400/10 px-3 text-[15px] text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-4 w-4" />替代料</Button>
+                      <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
+                      <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />替代料</Button>
                       </td>
                     </tr>
                     {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} />}
