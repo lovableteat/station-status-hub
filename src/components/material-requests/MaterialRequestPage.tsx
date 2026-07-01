@@ -987,7 +987,7 @@ export function MaterialRequestPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4">
+                      <td className="border-r border-blue-400/10 px-4 py-4 align-top">
                         <div className="space-y-3">
                           {primaryAlternative ? (
                             <button
@@ -997,7 +997,7 @@ export function MaterialRequestPage() {
                                 const value = getDisplayMpn(primaryAlternative);
                                 if (value) handleCopy(value);
                               }}
-                              className="group w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-3 text-left hover:bg-emerald-400/15"
+                              className="group min-h-[82px] w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-3 text-left hover:bg-emerald-400/15"
                               title="複製首選 MPN"
                             >
                               <div className="flex items-start justify-between gap-3">
@@ -1022,7 +1022,7 @@ export function MaterialRequestPage() {
                           {secondaryAlternatives.length > 0 && (
                             <div className="space-y-2">
                               <p className="text-sm font-bold text-blue-300">其他替代料</p>
-                              <div className="flex flex-wrap gap-2">
+                              <div className="grid gap-2">
                                 {secondaryAlternatives.map((record) => {
                                   const value = getDisplayMpn(record);
                                   return (
@@ -1033,13 +1033,13 @@ export function MaterialRequestPage() {
                                         event.stopPropagation();
                                         if (value) handleCopy(value);
                                       }}
-                                      className="max-w-full rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-left hover:bg-blue-400/20"
+                                      className="min-h-[66px] w-full rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-left hover:bg-blue-400/20"
                                       title={value ? "複製替代料 MPN" : "替代料"}
                                     >
                                       <p className="truncate text-sm font-bold text-slate-200">
                                         {record.manufacturer || "未填廠商"}
                                       </p>
-                                      <p className="mt-0.5 max-w-[220px] truncate font-mono text-[15px] font-semibold text-blue-200">
+                                      <p className="mt-0.5 truncate font-mono text-[15px] font-semibold text-blue-200">
                                         {value || "未填 MPN"}
                                       </p>
                                     </button>
@@ -1050,28 +1050,73 @@ export function MaterialRequestPage() {
                           )}
                         </div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-4">
-                        <p className="font-mono text-[15px] font-semibold text-cyan-300">{group.schematicPart || "No Symbol"}</p>
-                        <p className="mt-2 break-all font-mono text-[15px] text-indigo-300">{group.footprint || "No Footprint"}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {group.internalPartNumbers.length > 0 ? (
-                            group.internalPartNumbers.map((partNumber) => (
-                              <button
-                                key={partNumber}
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleCopy(partNumber);
-                                }}
-                                className="group flex items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 hover:bg-cyan-300/20"
-                                title="複製內部料號"
-                              >
-                                <span className="font-mono text-[15px] font-black text-cyan-200">{partNumber}</span>
-                                <Copy className="h-4 w-4 text-cyan-300 opacity-80 group-hover:opacity-100" />
-                              </button>
-                            ))
-                          ) : (
-                            <span className="text-[15px] font-semibold text-amber-300">尚未建立內部料號</span>
+                      <td className="border-r border-blue-400/10 px-4 py-4 align-top">
+                        <div className="space-y-3">
+                          <div className="min-h-[82px] rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-cyan-300">內部料號 / 圖面</p>
+                                {primaryAlternative?.partNumber ? (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleCopy(primaryAlternative.partNumber);
+                                    }}
+                                    className="group mt-1 flex w-full items-center justify-between gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20"
+                                    title="複製內部料號"
+                                  >
+                                    <span className="truncate font-mono text-[15px] font-black text-cyan-200">
+                                      {primaryAlternative.partNumber}
+                                    </span>
+                                    <Copy className="h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
+                                  </button>
+                                ) : (
+                                  <p className="mt-1 text-[15px] font-semibold text-amber-300">尚未建立內部料號</p>
+                                )}
+                                <p className="mt-2 truncate font-mono text-[13px] font-semibold text-cyan-300">
+                                  {group.schematicPart || "No Symbol"}
+                                </p>
+                                <p className="mt-1 truncate font-mono text-[13px] text-indigo-300">
+                                  {group.footprint || "No Footprint"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {secondaryAlternatives.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-bold text-cyan-300">對應內部料號</p>
+                              <div className="grid gap-2">
+                                {secondaryAlternatives.map((record) => (
+                                  <div
+                                    key={`${record.id}-internal`}
+                                    className="min-h-[66px] rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-2"
+                                  >
+                                    {record.partNumber ? (
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleCopy(record.partNumber);
+                                        }}
+                                        className="group flex w-full items-center justify-between gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20"
+                                        title="複製內部料號"
+                                      >
+                                        <span className="truncate font-mono text-[15px] font-black text-cyan-200">
+                                          {record.partNumber}
+                                        </span>
+                                        <Copy className="h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
+                                      </button>
+                                    ) : (
+                                      <div className="flex h-full min-h-[42px] items-center rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-3">
+                                        <span className="text-[15px] font-semibold text-amber-300">尚未建立內部料號</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </td>
