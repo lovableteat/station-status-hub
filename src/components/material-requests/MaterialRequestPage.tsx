@@ -107,10 +107,10 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v4";
-const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 130];
-const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 110];
-const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 260];
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v5";
+const DEFAULT_COLUMN_WIDTHS = [240, 150, 240, 190, 170, 180, 170, 230, 120];
+const MIN_COLUMN_WIDTHS = [180, 110, 170, 150, 140, 140, 130, 170, 100];
+const MAX_COLUMN_WIDTHS = [500, 340, 500, 440, 400, 380, 340, 500, 240];
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -432,6 +432,46 @@ function InlineVirtualAlternativeEditor({
   );
 }
 
+function InlineTrackingStatusEditor({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [editing, value]);
+
+  const commit = () => {
+    const nextValue = draft.trim();
+    setEditing(false);
+    if (nextValue !== value) onSave(nextValue);
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") event.currentTarget.blur();
+    if (event.key === "Escape") {
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return <Input autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={handleKeyDown} className="h-9 border-sky-300/50 bg-[#071522] text-[15px] font-bold text-sky-100 focus-visible:ring-sky-400" placeholder="輸入申請狀態" />;
+  }
+
+  return (
+    <button type="button" onClick={() => setEditing(true)} className="group flex w-full items-center justify-between gap-2 rounded border border-sky-400/20 bg-sky-400/[0.07] px-3 py-2 text-left hover:bg-sky-400/15" title="直接修改申請狀態追蹤">
+      <span className={cn("break-all text-[15px] font-bold leading-6", value ? "text-sky-200 group-hover:text-sky-100" : "text-slate-400")}>{value || "點擊填寫狀態"}</span>
+      <Pencil className="h-4 w-4 flex-none text-sky-400" />
+    </button>
+  );
+}
+
 function StatusPill({ record }: { record: MaterialRecord }) {
   if (record.isRisk) {
     return (
@@ -562,7 +602,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
               <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
               <p><strong className="text-slate-100">分組：</strong>有藍色起始列時完全依底色分組；沒有底色標記的其他格式，才退回 Ref Group＋料名規則。</p>
-              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00，才列入待申請；只要一顆替代料可用就不算問題。</p>
+              <p><strong className="text-slate-100">問題料：</strong>整組沒有 OK＋尾數 00，也沒有填任何虛擬替代料，才列入待申請；虛擬替代料一旦有值就恢復正常。</p>
             </div>
           </section>
 
@@ -573,7 +613,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
               <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
               <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
-              <li>5. 虛擬替代料直接在表格內點擊填寫；處理狀態可在修改資料中填「待確認、申請中、已完成」。</li>
+              <li>5. 虛擬替代料與申請狀態追蹤都可直接在表格內填寫；狀態建議用「待確認、申請中、已完成」。</li>
               <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
             </ol>
           </section>
@@ -685,7 +725,7 @@ function MaterialRecordDialog({
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-tracking-status">處理狀態</Label>
+                <Label htmlFor="material-tracking-status">申請狀態追蹤</Label>
                 <Input id="material-tracking-status" disabled={readOnly} value={form.trackingStatus ?? ""} onChange={(event) => updateField("trackingStatus", event.target.value)} placeholder="例如：待確認、申請中、已完成" />
               </div>
               <div className="space-y-2">
@@ -744,7 +784,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={8} className="p-0">
+      <td colSpan={9} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -869,12 +909,14 @@ function CompactAlternativeRows({
   onView,
   onEdit,
   onSaveVirtual,
+  onSaveTracking,
 }: {
   group: MaterialGroup;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
   onSaveVirtual: (record: MaterialRecord, value: string) => void;
+  onSaveTracking: (record: MaterialRecord, value: string) => void;
 }) {
   const alternatives = getSortedAlternatives(group).slice(1);
   const groupRefDes = group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
@@ -948,10 +990,13 @@ function CompactAlternativeRows({
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
+              <InlineTrackingStatusEditor value={record.trackingStatus ?? ""} onSave={(value) => onSaveTracking(record, value)} />
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill record={record} />
                 <ActionPill record={record} />
-                {record.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{record.trackingStatus}</span>}
               </div>
             </td>
 
@@ -1101,12 +1146,15 @@ export function MaterialRequestPage() {
     const result = dataset.groups.filter((group) => {
       const noAlternative = hasNoAlternative(group);
       const mustApply = requiresApplication(group);
+      const hasVirtualAlternative = group.records.some((record) => Boolean(record.virtualAlternative?.trim()));
       const alternativeSearchText = noAlternative
         ? "單一料 無替代料 單一來源 single source no alternative"
         : "有替代料 multiple source alternative";
       const applicationSearchText = mustApply
         ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-        : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
+        : hasVirtualAlternative
+          ? "虛擬替代已填 正常 virtual alternative available"
+          : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
       const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
       const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
       const materialText = `${group.name} ${group.assemblyName} ${group.manufacturers.join(" ")}`.toLowerCase();
@@ -1270,6 +1318,10 @@ export function MaterialRequestPage() {
     saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value });
   };
 
+  const saveTrackingStatus = (record: MaterialRecord, value: string) => {
+    saveRecordToActiveBom({ ...toWorkbookRecord(record), trackingStatus: value });
+  };
+
   const deleteActiveBom = () => {
     if (bomWorkspaces.length <= 1 || activeBomId === DEFAULT_BOM_ID || !window.confirm(`確定刪除 BOM「${activeWorkspace.name}」？`)) return;
     const remaining = bomWorkspaces.filter((workspace) => workspace.id !== activeBomId);
@@ -1292,7 +1344,7 @@ export function MaterialRequestPage() {
         Manufacturer_PN: record.manufacturerPartNumber,
         Manufacturer_PN_2: record.manufacturerPartNumberAlt,
         虛擬替代料: record.virtualAlternative ?? "",
-        處理狀態: record.trackingStatus ?? "",
+        申請狀態追蹤: record.trackingStatus ?? "",
         Sourcing_Status: record.sourcingStatus,
         建料狀態: getActionLabel(record.actionKind),
         內部料號: record.partNumber,
@@ -1423,6 +1475,7 @@ export function MaterialRequestPage() {
                   "MPN",
                   "內部料號 / 圖面",
                   "虛擬替代料",
+                  "申請狀態追蹤",
                   "狀態",
                   "規格 / 備註",
                   "操作",
@@ -1432,9 +1485,9 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
-                    resizable={columnIndex < 7}
+                    resizable={columnIndex < 8}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 7 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 8 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
@@ -1446,11 +1499,11 @@ export function MaterialRequestPage() {
                 <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.mpn} onChange={(event) => setColumnFilters((current) => ({ ...current, mpn: event.target.value }))} placeholder="篩選 MPN" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
                 <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.internal} onChange={(event) => setColumnFilters((current) => ({ ...current, internal: event.target.value }))} placeholder="料號 / Symbol" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
                 <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.virtualAlternative} onChange={(event) => setColumnFilters((current) => ({ ...current, virtualAlternative: event.target.value }))} placeholder="篩選虛擬替代" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
+                <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.trackingStatus} onChange={(event) => setColumnFilters((current) => ({ ...current, trackingStatus: event.target.value }))} placeholder="篩選申請狀態" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
                 <th className="border-r border-blue-300/20 p-2">
                   <select value={availability} onChange={(event) => setAvailability(event.target.value as AvailabilityFilter)} className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-xs outline-none focus:border-cyan-300">
                     <option value="all">全部狀態</option><option value="required">全部無料</option><option value="usable">至少一顆可用</option><option value="single">無替代料</option><option value="pending">有待申請</option><option value="risk">有風險</option>
                   </select>
-                  <input value={columnFilters.trackingStatus} onChange={(event) => setColumnFilters((current) => ({ ...current, trackingStatus: event.target.value }))} placeholder="篩選處理狀態" className="mt-1 h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-xs outline-none placeholder:text-slate-500 focus:border-cyan-300" />
                 </th>
                 <th className="border-r border-blue-300/20 p-2"><input value={columnFilters.specification} onChange={(event) => setColumnFilters((current) => ({ ...current, specification: event.target.value }))} placeholder="篩選規格" className="h-8 w-full rounded border border-blue-300/25 bg-[#07182d] px-2 text-sm outline-none placeholder:text-slate-500 focus:border-cyan-300" /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
@@ -1467,6 +1520,7 @@ export function MaterialRequestPage() {
                 const secondaryAlternatives = sortedAlternatives.slice(1);
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
+                const virtualAlternativeCount = group.records.filter((record) => Boolean(record.virtualAlternative?.trim())).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
 
                 return (
@@ -1510,7 +1564,7 @@ export function MaterialRequestPage() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className={cn("text-xs font-black", primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300")}>{primaryReady ? "主料已建・OK + 00" : mustApply ? "主料與替代都待申請" : "主料未建・已有可用替代"}</p>
+                                  <p className={cn("text-xs font-black", primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300")}>{primaryReady ? "主料已建・OK + 00" : mustApply ? "主料與替代都待申請" : availableAlternativeCount > 0 ? "主料未建・已有可用替代" : "主料未建・已有虛擬替代"}</p>
                                   <p className={cn("mt-0.5 break-all font-mono text-[15px] font-black leading-6", primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100")}>
                                     {getDisplayMpn(primaryAlternative) || "未填 MPN"}
                                   </p>
@@ -1631,15 +1685,18 @@ export function MaterialRequestPage() {
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
                         {primaryAlternative && <InlineVirtualAlternativeEditor value={primaryAlternative.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(primaryAlternative, value)} />}
                       </td>
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
+                        {primaryAlternative && <InlineTrackingStatusEditor value={primaryAlternative.trackingStatus ?? ""} onSave={(value) => saveTrackingStatus(primaryAlternative, value)} />}
+                      </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{primaryAlternative?.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{primaryAlternative.trackingStatus}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : availableAlternativeCount > 0 ? <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span> : <span className="rounded-md border border-teal-300/40 bg-teal-400/20 px-3 py-1.5 text-[15px] font-black text-teal-100">虛擬替代已填 {virtualAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />替代料</Button>
                       </td>
                     </tr>
-                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} />}
+                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onSaveTracking={saveTrackingStatus} />}
                   </Fragment>
                 );
               })}
