@@ -1686,7 +1686,7 @@ export function MaterialRequestPage() {
         </div>
 
         <div className="max-h-[70vh] overflow-auto">
-          <table className="table-fixed border-collapse text-[15px]" style={{ width: tableWidth, minWidth: tableWidth }}>
+          <table className="table-fixed border-collapse text-[15px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
                 {[
