@@ -78,9 +78,9 @@ interface SavedMaterialChanges {
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v2";
-const DEFAULT_COLUMN_WIDTHS = [320, 200, 320, 260, 210, 300, 160];
-const MIN_COLUMN_WIDTHS = [240, 140, 220, 200, 170, 220, 120];
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v3";
+const DEFAULT_COLUMN_WIDTHS = [300, 190, 300, 250, 240, 200, 280, 150];
+const MIN_COLUMN_WIDTHS = [240, 140, 220, 200, 170, 160, 220, 120];
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -113,6 +113,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     refDes: record.refDes,
     manufacturerPartNumber: record.manufacturerPartNumber,
     manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
+    virtualAlternative: record.virtualAlternative ?? "",
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     refGroup: record.refGroup,
@@ -141,6 +142,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     refDes: group?.primaryRecord.refDes ?? "",
     manufacturerPartNumber: "",
     manufacturerPartNumberAlt: "",
+    virtualAlternative: "",
     manufacturer: "",
     sourcingStatus: "",
     refGroup: group?.displayRef ?? "",
@@ -535,6 +537,10 @@ function MaterialRecordDialog({
                 <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="material-virtual-alternative">虛擬替代料</Label>
+                <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="material-sourcing">Sourcing Status</Label>
                 <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" />
               </div>
@@ -590,7 +596,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={7} className="p-0">
+      <td colSpan={8} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -784,6 +790,17 @@ function CompactAlternativeRows({
                 </button>
               ) : (
                 <span className="text-sm font-bold text-amber-300">尚未建立</span>
+              )}
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              {record.virtualAlternative ? (
+                <button type="button" onClick={() => onCopy(record.virtualAlternative ?? "")} className="group flex max-w-full items-center gap-2 text-left" title="複製虛擬替代料">
+                  <span className="break-all text-[15px] font-bold leading-6 text-teal-200 group-hover:text-teal-100">{record.virtualAlternative}</span>
+                  <Copy className="h-4 w-4 flex-none text-teal-400 opacity-75 group-hover:opacity-100" />
+                </button>
+              ) : (
+                <span className="text-sm text-slate-500">未填紀錄</span>
               )}
             </td>
 
@@ -1048,6 +1065,7 @@ export function MaterialRequestPage() {
     const rows = filteredGroups.flatMap((group) =>
       getSortedAlternatives(group).map((record) => ({
         Ref_Group: group.displayRef,
+        REF_DES: record.refDes || group.primaryRecord.refDes,
         電路料名稱: group.name,
         模組: group.assemblyName,
         Qty: group.qty,
@@ -1056,6 +1074,7 @@ export function MaterialRequestPage() {
         廠商: record.manufacturer,
         Manufacturer_PN: record.manufacturerPartNumber,
         Manufacturer_PN_2: record.manufacturerPartNumberAlt,
+        虛擬替代料: record.virtualAlternative ?? "",
         Sourcing_Status: record.sourcingStatus,
         建料狀態: getActionLabel(record.actionKind),
         內部料號: record.partNumber,
@@ -1187,6 +1206,7 @@ export function MaterialRequestPage() {
                   "REF DES",
                   "MPN",
                   "內部料號 / 圖面",
+                  "虛擬替代料",
                   "狀態",
                   "規格 / 備註",
                   "操作",
@@ -1196,7 +1216,7 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 6 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 7 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
@@ -1374,6 +1394,16 @@ export function MaterialRequestPage() {
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
+                        {primaryAlternative?.virtualAlternative ? (
+                          <button type="button" onClick={() => handleCopy(primaryAlternative.virtualAlternative ?? "")} className="group flex max-w-full items-center gap-2 text-left" title="複製虛擬替代料">
+                            <span className="break-all text-[15px] font-bold leading-6 text-teal-200 group-hover:text-teal-100">{primaryAlternative.virtualAlternative}</span>
+                            <Copy className="h-4 w-4 flex-none text-teal-400 opacity-80 group-hover:opacity-100" />
+                          </button>
+                        ) : (
+                          <span className="text-sm text-slate-500">未填紀錄</span>
+                        )}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
