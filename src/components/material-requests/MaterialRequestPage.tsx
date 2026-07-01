@@ -328,7 +328,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <div className="mt-4 space-y-3 leading-6 text-slate-300">
               <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
               <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
-              <p><strong className="text-slate-100">分組：</strong>依 Ref Group → Ref Des → 料名＋規格＋Footprint 的順序判斷替代料關係。</p>
+              <p><strong className="text-slate-100">分組：</strong>有 Ref Group 時依 Ref Group＋料名分組；沒有時依模組＋料名合併成一個主料。</p>
               <p><strong className="text-slate-100">狀態：</strong>自動區分可用、待申請與 Obsolete／NRND／停產等風險狀態。</p>
             </div>
           </section>
@@ -613,6 +613,106 @@ function AlternativeRows({
         </div>
       </td>
     </tr>
+  );
+}
+
+function CompactAlternativeRows({
+  group,
+  onCopy,
+  onView,
+  onEdit,
+}: {
+  group: MaterialGroup;
+  onCopy: (value: string) => void;
+  onView: (record: MaterialRecord) => void;
+  onEdit: (record: MaterialRecord) => void;
+}) {
+  const alternatives = getSortedAlternatives(group);
+
+  return (
+    <>
+      {alternatives.map((record, index) => {
+        const preferred = index === 0;
+        const primaryByPartNumber = preferred && isPrimaryInternalPart(record);
+
+        return (
+          <tr
+            key={record.id}
+            className={cn(
+              "border-b border-blue-400/10 text-slate-200",
+              preferred
+                ? "bg-emerald-400/[0.09] shadow-[inset_4px_0_0_rgba(52,211,153,0.75)]"
+                : index % 2 === 0
+                  ? "bg-[#0a1526] hover:bg-blue-400/[0.07]"
+                  : "bg-[#0c182a] hover:bg-blue-400/[0.07]"
+            )}
+          >
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              <div className="flex items-center gap-3 pl-8">
+                <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-emerald-400 text-emerald-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[15px] font-bold text-slate-50">{record.manufacturer || "未填廠商"}</p>
+                    {preferred && (
+                      <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                        {primaryByPartNumber ? "尾數 00 首選" : "第一首選"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">替代料 #{index + 1}</p>
+                </div>
+              </div>
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              {record.manufacturerPartNumber ? (
+                <button type="button" onClick={() => onCopy(record.manufacturerPartNumber)} className="group flex max-w-full items-center gap-2 text-left" title="複製 MPN">
+                  <span className="break-all font-mono text-[15px] font-black text-blue-200 group-hover:text-blue-100">{record.manufacturerPartNumber}</span>
+                  <Copy className="h-4 w-4 flex-none text-blue-400 opacity-75 group-hover:opacity-100" />
+                </button>
+              ) : (
+                <span className="text-sm font-bold text-amber-300">未填 MPN</span>
+              )}
+              {record.manufacturerPartNumberAlt && <p className="mt-1 break-all font-mono text-sm text-slate-500">Alt: {record.manufacturerPartNumberAlt}</p>}
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              {record.partNumber ? (
+                <button type="button" onClick={() => onCopy(record.partNumber)} className="group inline-flex max-w-full items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20" title="複製內部料號">
+                  <span className="break-all font-mono text-[15px] font-black text-cyan-200">{record.partNumber}</span>
+                  <Copy className="h-4 w-4 flex-none text-cyan-300 opacity-80 group-hover:opacity-100" />
+                </button>
+              ) : (
+                <span className="text-sm font-bold text-amber-300">尚未建立</span>
+              )}
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill record={record} />
+                <ActionPill record={record} />
+              </div>
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5">
+              <p className="line-clamp-2 text-[15px] leading-6 text-slate-200">{record.partSpec || record.partName || "-"}</p>
+              {record.remark && <p className="mt-1 text-sm text-slate-500">{record.remark}</p>}
+            </td>
+
+            <td className="px-3 py-3.5">
+              <div className="flex justify-center gap-2">
+                <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => onEdit(record)} className="rounded-lg border border-blue-400/25 bg-blue-400/10 p-2 text-blue-300 hover:bg-blue-400/20" title="修改">
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+    </>
   );
 }
 
@@ -1128,7 +1228,7 @@ export function MaterialRequestPage() {
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-10 w-full border-cyan-400/25 bg-cyan-400/10 px-3 text-[15px] text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-4 w-4" />替代料</Button>
                       </td>
                     </tr>
-                    {expanded && <AlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} />}
+                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} />}
                   </Fragment>
                 );
               })}
