@@ -1,26 +1,36 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 
 interface DailyStationData {
   date: string;
   [key: string]: string | number; // 動態站點完成數量
 }
 
+const taipeiDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Taipei",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function getTaipeiDateKey(value: Date | string) {
+  return taipeiDateFormatter.format(new Date(value));
+}
+
 export function DailyStationCompletionChart() {
-  const { stations } = useUnifiedData();
-  const { toast } = useToast();
-  const [chartData, setChartData] = useState<DailyStationData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { systems, stations, testItems, progress, isLoading, isUpdating, refetch } =
+    useUnifiedData();
   const [days, setDays] = useState<number>(7);
-  const sortedStations = [...stations].sort((a, b) => a.station_order - b.station_order);
+  const sortedStations = useMemo(
+    () => [...stations].sort((a, b) => a.station_order - b.station_order),
+    [stations]
+  );
 
   // 站點顏色映射
   const stationColors = [
@@ -28,130 +38,77 @@ export function DailyStationCompletionChart() {
     '#8dd1e1', '#d084d0', '#82d982', '#ffb347'
   ];
 
-  const loadDailyStationData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // 獲取指定天數的數據
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - (days - 1));
-      
-      // 查詢每日每站完成的系統數量 - 只有所有測項都完成才算站點完成
-      // 只查詢7/21之後的有效資料
-      const validStartDate = new Date('2025-07-21');
-      const actualStartDate = startDate < validStartDate ? validStartDate : startDate;
-      
-      // 首先獲取所有站點和對應的測項
-      const { data: stationItems, error: stationError } = await supabase
-        .from('test_flow_stations')
-        .select(`
-          id,
-          station_name,
-          station_order,
-          test_flow_items(id, item_name)
-        `);
+  const chartData = useMemo(() => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - (days - 1));
 
-      if (stationError) throw stationError;
+    const validStartDate = new Date("2025-07-21");
+    const actualStartDate = startDate < validStartDate ? validStartDate : startDate;
 
-      // 獲取指定日期範圍內的測試進度數據
-      const { data: progressData, error: progressError } = await supabase
-        .from('test_progress')
-        .select(`
-          system_id,
-          station_id,
-          item_id,
-          status,
-          completed_at,
-          test_systems!inner(
-            exclude_from_dashboard,
-            system_name
-          )
-        `)
-        .eq('test_systems.exclude_from_dashboard', false)
-        .gte('completed_at', actualStartDate.toISOString())
-        .lte('completed_at', endDate.toISOString());
+    const visibleSystems = systems.filter((system) => !system.exclude_from_dashboard);
+    const visibleSystemIds = new Set(visibleSystems.map((system) => system.id));
+    const progressMap = new Map(
+      progress
+        .filter((item) => visibleSystemIds.has(item.system_id))
+        .map((item) => [`${item.system_id}:${item.station_id}:${item.item_id}`, item])
+    );
 
-      if (progressError) throw progressError;
+    const processedData: Record<string, Record<string, Set<string>>> = {};
 
-      // 處理數據：只有當站點所有測項都完成時才算該站點完成
-      const processedData: { [date: string]: { [station: string]: Set<string> } } = {};
-      
-      // 為每個系統檢查每個站點是否完全完成
-      const systemsToCheck = new Set(progressData?.map(p => p.system_id) || []);
-      
-      for (const systemId of systemsToCheck) {
-        for (const station of stationItems || []) {
-          const stationTestItems = station.test_flow_items || [];
-          
-          // 如果站點沒有測項，跳過
-          if (stationTestItems.length === 0) continue;
-          
-          // 獲取該系統在該站點的所有測試進度
-          const systemStationProgress = progressData?.filter(
-            p => p.system_id === systemId && p.station_id === station.id
-          ) || [];
-          
-          // 檢查是否所有測項都已完成
-          const completedItems = systemStationProgress.filter(p => p.status === 'Done');
-          const allItemsCompleted = completedItems.length === stationTestItems.length;
-          
-          if (allItemsCompleted && completedItems.length > 0) {
-            // 找到最後完成的測項時間作為站點完成時間
-            const latestCompletionTime = completedItems
-              .map(item => new Date(item.completed_at!))
-              .sort((a, b) => b.getTime() - a.getTime())[0];
-            
-            const date = latestCompletionTime.toISOString().split('T')[0];
-            
-            if (!processedData[date]) {
-              processedData[date] = {};
-            }
-            
-            if (!processedData[date][station.station_name]) {
-              processedData[date][station.station_name] = new Set();
-            }
-            
-            processedData[date][station.station_name].add(systemId);
-          }
+    for (const system of visibleSystems) {
+      for (const station of sortedStations) {
+        const stationItems = testItems.filter((item) => item.station_id === station.id);
+        if (stationItems.length === 0) {
+          continue;
         }
-      }
 
-      // 生成指定天數的圖表數據
-      const chartData: DailyStationData[] = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        const displayDate = date.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-        
-        const dayData: DailyStationData = { date: displayDate };
-        
-        // 為每個站點添加該日完成數量
-        sortedStations.forEach(station => {
-          const stationData = processedData[dateStr]?.[station.station_name];
-          dayData[station.station_name] = stationData ? stationData.size : 0;
-        });
-        
-        chartData.push(dayData);
+        const completedRecords = stationItems
+          .map((item) => progressMap.get(`${system.id}:${station.id}:${item.id}`))
+          .filter(
+            (record): record is NonNullable<typeof record> =>
+              Boolean(record?.completed_at) && record?.status === "Done"
+          );
+
+        if (completedRecords.length !== stationItems.length) {
+          continue;
+        }
+
+        const latestCompletionTime = completedRecords
+          .map((record) => new Date(record.completed_at!))
+          .sort((a, b) => b.getTime() - a.getTime())[0];
+
+        if (latestCompletionTime < actualStartDate || latestCompletionTime > endDate) {
+          continue;
+        }
+
+        const dateKey = getTaipeiDateKey(latestCompletionTime);
+        processedData[dateKey] ??= {};
+        processedData[dateKey][station.station_name] ??= new Set();
+        processedData[dateKey][station.station_name].add(system.id);
       }
-      
-      setChartData(chartData);
-    } catch (error) {
-      console.error('載入每日站點完成數據失敗:', error);
-      toast({
-        title: "載入失敗",
-        description: "無法載入每日站點完成數據",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  useEffect(() => {
-    loadDailyStationData();
-  }, [stations, days]);
+    const nextChartData: DailyStationData[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateKey = getTaipeiDateKey(date);
+      const displayDate = date.toLocaleDateString("zh-TW", {
+        month: "2-digit",
+        day: "2-digit",
+      });
+
+      const dayData: DailyStationData = { date: displayDate };
+      sortedStations.forEach((station) => {
+        dayData[station.station_name] =
+          processedData[dateKey]?.[station.station_name]?.size ?? 0;
+      });
+      nextChartData.push(dayData);
+    }
+
+    return nextChartData;
+  }, [days, progress, sortedStations, systems, testItems]);
 
   // 自訂 Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -220,12 +177,12 @@ export function DailyStationCompletionChart() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={loadDailyStationData}
-              disabled={isLoading}
+              onClick={() => refetch()}
+              disabled={isLoading || isUpdating}
               className="h-10 rounded-2xl border-white/10 bg-background/35 px-4 hover:bg-primary/10"
             >
               <Calendar className="h-4 w-4 mr-1" />
-              {isLoading ? "載入中..." : "重新整理"}
+              {isLoading || isUpdating ? "載入中..." : "重新整理"}
             </Button>
           </div>
         </div>
