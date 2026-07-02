@@ -11,6 +11,13 @@ export interface BomWorkspace {
   updatedAt: string;
 }
 
+export type BomStorageMode = "remote" | "recovery";
+
+export interface BomWorkspaceLoadResult {
+  mode: BomStorageMode;
+  workspaces: BomWorkspace[];
+}
+
 interface BomWorkspaceRow {
   id: string;
   name: string;
@@ -312,107 +319,93 @@ async function mergeLegacyBomWorkspaces(primaryWorkspaces: BomWorkspace[]) {
   return sortWorkspaces([...merged.values()]);
 }
 
-export async function loadBomWorkspaces() {
+async function loadRecoveryBomWorkspaces() {
+  const [preferenceWorkspaces, legacyWorkspaces] = await Promise.all([
+    loadPreferenceBackedBomWorkspaces().catch(() => []),
+    loadLegacyBomWorkspaces(),
+  ]);
+
+  const merged = new Map<string, BomWorkspace>();
+  for (const workspace of [...preferenceWorkspaces, ...legacyWorkspaces]) {
+    const current = merged.get(workspace.id);
+    if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
+      merged.set(workspace.id, workspace);
+    }
+  }
+
+  return sortWorkspaces([...merged.values()]);
+}
+
+export async function loadBomWorkspacesDetailed(): Promise<BomWorkspaceLoadResult> {
   try {
     const remoteWorkspaces = await loadRemoteBomWorkspaces();
-    return mergeLegacyBomWorkspaces(remoteWorkspaces);
-  } catch (error) {
-    if (!isMissingCollaborativeTables(error)) {
-      throw error;
-    }
-
-    const fallbackWorkspaces = await loadPreferenceBackedBomWorkspaces();
-    return mergeLegacyBomWorkspaces(fallbackWorkspaces);
+    return {
+      mode: "remote",
+      workspaces: await mergeLegacyBomWorkspaces(remoteWorkspaces),
+    };
+  } catch {
+    return {
+      mode: "recovery",
+      workspaces: await loadRecoveryBomWorkspaces(),
+    };
   }
 }
 
+export async function loadBomWorkspaces() {
+  const result = await loadBomWorkspacesDetailed();
+  return result.workspaces;
+}
+
 export async function saveBomWorkspace(workspace: BomWorkspace) {
-  try {
-    await upsertWorkspaceRow(workspace);
-    const { data: existingRows, error: existingRowsError } = await supabaseClient
-      .from(RECORD_TABLE)
-      .select("record_id")
-      .eq("workspace_id", workspace.id);
+  await upsertWorkspaceRow(workspace);
+  const { data: existingRows, error: existingRowsError } = await supabaseClient
+    .from(RECORD_TABLE)
+    .select("record_id")
+    .eq("workspace_id", workspace.id);
 
-    if (existingRowsError) throw existingRowsError;
+  if (existingRowsError) throw existingRowsError;
 
-    await upsertRecordRows(toRecordRows(workspace));
+  await upsertRecordRows(toRecordRows(workspace));
 
-    const nextRecordIds = new Set(workspace.payload.records.map((record) => record.id));
-    const obsoleteRecordIds = ((existingRows ?? []) as Array<{ record_id: string }>).flatMap((row) =>
-      nextRecordIds.has(row.record_id) ? [] : [row.record_id]
-    );
+  const nextRecordIds = new Set(workspace.payload.records.map((record) => record.id));
+  const obsoleteRecordIds = ((existingRows ?? []) as Array<{ record_id: string }>).flatMap((row) =>
+    nextRecordIds.has(row.record_id) ? [] : [row.record_id]
+  );
 
-    if (obsoleteRecordIds.length > 0) {
-      await deleteRecordIds(workspace.id, obsoleteRecordIds);
-    }
-
-    await upsertWorkspaceRow(workspace);
-  } catch (error) {
-    if (!isMissingCollaborativeTables(error)) {
-      await saveLegacyBomWorkspace(workspace);
-      return;
-    }
-
-    try {
-      await savePreferenceBackedWorkspace(workspace);
-    } catch {
-      await saveLegacyBomWorkspace(workspace);
-      return;
-    }
+  if (obsoleteRecordIds.length > 0) {
+    await deleteRecordIds(workspace.id, obsoleteRecordIds);
   }
 
+  await upsertWorkspaceRow(workspace);
   await removeLegacyBomWorkspace(workspace.id);
 }
 
 export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: MaterialWorkbookRecord) {
-  try {
-    await upsertWorkspaceRow(workspace);
+  await upsertWorkspaceRow(workspace);
 
-    const orderIndex = workspace.payload.records.findIndex((item) => item.id === record.id);
-    if (orderIndex < 0) {
-      throw new Error(`Unable to save BOM record ${record.id} because it is not present in workspace ${workspace.id}.`);
-    }
-
-    await upsertRecordRows([{
-      workspace_id: workspace.id,
-      record_id: record.id,
-      order_index: orderIndex,
-      data: record,
-      updated_at: workspace.updatedAt,
-    }]);
-  } catch (error) {
-    if (!isMissingCollaborativeTables(error)) {
-      await saveLegacyBomWorkspace(workspace);
-      return;
-    }
-
-    try {
-      await savePreferenceBackedWorkspace(workspace);
-    } catch {
-      await saveLegacyBomWorkspace(workspace);
-      return;
-    }
+  const orderIndex = workspace.payload.records.findIndex((item) => item.id === record.id);
+  if (orderIndex < 0) {
+    throw new Error(`Unable to save BOM record ${record.id} because it is not present in workspace ${workspace.id}.`);
   }
+
+  await upsertRecordRows([{
+    workspace_id: workspace.id,
+    record_id: record.id,
+    order_index: orderIndex,
+    data: record,
+    updated_at: workspace.updatedAt,
+  }]);
 
   await removeLegacyBomWorkspace(workspace.id);
 }
 
 export async function removeBomWorkspace(id: string) {
-  try {
-    const { error } = await supabaseClient
-      .from(WORKSPACE_TABLE)
-      .delete()
-      .eq("id", id);
+  const { error } = await supabaseClient
+    .from(WORKSPACE_TABLE)
+    .delete()
+    .eq("id", id);
 
-    if (error) throw error;
-  } catch (error) {
-    if (!isMissingCollaborativeTables(error)) {
-      throw error;
-    }
-
-    await removePreferenceBackedWorkspace(id);
-  }
+  if (error) throw error;
 
   await removeLegacyBomWorkspace(id);
 }
