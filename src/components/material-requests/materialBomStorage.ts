@@ -49,6 +49,7 @@ const RECORD_TABLE = "material_bom_records";
 const PREFERENCE_TABLE = "ui_table_preferences";
 const PREFERENCE_KEY_PREFIX = "material-bom-workspace:";
 const RECORD_BATCH_SIZE = 200;
+const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 
 const supabaseClient = supabase as any;
 
@@ -197,34 +198,57 @@ function buildWorkspaceFromRows(workspaceRow: BomWorkspaceRow, recordRows: BomRe
   return {
     id: workspaceRow.id,
     name: workspaceRow.name,
-    payload: {
-      sourceFile: workspaceRow.source_file,
-      sheetName: workspaceRow.sheet_name,
-      generatedAt: workspaceRow.generated_at,
-      recordCount: workspaceRow.record_count ?? records.length,
-      records,
-    },
-    updatedAt: workspaceRow.updated_at,
-  };
+      payload: {
+        sourceFile: workspaceRow.source_file,
+        sheetName: workspaceRow.sheet_name,
+        generatedAt: workspaceRow.generated_at,
+        // Prefer the material rows we actually loaded so stale workspace metadata
+        // cannot desynchronize the visible counts from the rendered table.
+        recordCount: records.length,
+        records,
+      },
+      updatedAt: workspaceRow.updated_at,
+    };
+}
+
+async function loadAllRemoteRecordRows() {
+  const rows: BomRecordRow[] = [];
+
+  for (let start = 0; ; start += REMOTE_RECORD_FETCH_BATCH_SIZE) {
+    const end = start + REMOTE_RECORD_FETCH_BATCH_SIZE - 1;
+    const { data, error } = await supabaseClient
+      .from(RECORD_TABLE)
+      .select("workspace_id, record_id, order_index, data, updated_at")
+      .order("workspace_id", { ascending: true })
+      .order("order_index", { ascending: true })
+      .range(start, end);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as BomRecordRow[];
+    rows.push(...batch);
+
+    if (batch.length < REMOTE_RECORD_FETCH_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return rows;
 }
 
 async function loadRemoteBomWorkspaces() {
-  const [workspaceResponse, recordResponse] = await Promise.all([
+  const [workspaceResponse, recordRows] = await Promise.all([
     supabaseClient
       .from(WORKSPACE_TABLE)
       .select("id, name, source_file, sheet_name, generated_at, record_count, updated_at")
       .order("updated_at", { ascending: false }),
-    supabaseClient
-      .from(RECORD_TABLE)
-      .select("workspace_id, record_id, order_index, data, updated_at")
-      .order("order_index", { ascending: true }),
+    loadAllRemoteRecordRows(),
   ]);
 
   if (workspaceResponse.error) throw workspaceResponse.error;
-  if (recordResponse.error) throw recordResponse.error;
 
   const rowsByWorkspace = new Map<string, BomRecordRow[]>();
-  for (const row of (recordResponse.data ?? []) as BomRecordRow[]) {
+  for (const row of recordRows) {
     const current = rowsByWorkspace.get(row.workspace_id) ?? [];
     current.push(row);
     rowsByWorkspace.set(row.workspace_id, current);
