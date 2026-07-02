@@ -23,6 +23,8 @@ import {
   Factory,
   FileSpreadsheet,
   Filter,
+  History,
+  ImagePlus,
   Layers3,
   Pencil,
   Plus,
@@ -30,6 +32,7 @@ import {
   Search,
   TriangleAlert,
   Upload,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -64,10 +67,13 @@ import {
   type MaterialDataset,
   type MaterialGroup,
   type MaterialRecord,
+  type MaterialTrackingHistoryEntry,
+  type MaterialTrackingHistoryImage,
   type MaterialWorkbookRecord,
   type MaterialWorkbookPayload,
   buildMaterialDataset,
   getActionLabel,
+  getLatestTrackingEntry,
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
@@ -120,10 +126,10 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v4";
-const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 130];
-const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 110];
-const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 260];
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
+const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
+const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
+const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -158,6 +164,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
     virtualAlternative: record.virtualAlternative ?? "",
     trackingStatus: record.trackingStatus ?? "",
+    trackingHistory: record.trackingHistory ?? [],
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     refGroup: record.refGroup,
@@ -188,6 +195,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     manufacturerPartNumberAlt: "",
     virtualAlternative: "",
     trackingStatus: "",
+    trackingHistory: [],
     manufacturer: "",
     sourcingStatus: "",
     refGroup: group?.displayRef ?? "",
@@ -313,6 +321,8 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
     case "trackingStatus": {
       const values = group.records.flatMap((record) => [
         record.trackingStatus ?? "",
+        getLatestTrackingEntry(record)?.note ?? "",
+        getLatestTrackingEntry(record)?.createdBy ?? "",
         record.sourcingStatus,
         record.remark,
       ]);
@@ -345,6 +355,48 @@ function formatTimestamp(value: string) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function getTrackingStatusTone(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (!normalized) return "border-slate-400/25 bg-slate-400/10 text-slate-300";
+  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+  }
+  if (["待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "border-amber-400/30 bg-amber-400/10 text-amber-200";
+  }
+  return "border-sky-400/30 bg-sky-400/10 text-sky-200";
+}
+
+function createTrackingHistoryId() {
+  return `tracking-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createTrackingImageId() {
+  return `tracking-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readImageFile(file: File) {
+  return new Promise<MaterialTrackingHistoryImage>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error(`圖片「${file.name}」讀取失敗`));
+        return;
+      }
+
+      resolve({
+        id: createTrackingImageId(),
+        name: file.name,
+        mimeType: file.type || "image/*",
+        size: file.size,
+        dataUrl: reader.result,
+      });
+    };
+    reader.onerror = () => reject(new Error(`圖片「${file.name}」讀取失敗`));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -667,6 +719,283 @@ function InlineVirtualAlternativeEditor({
   );
 }
 
+function TrackingHistoryCell({
+  record,
+  onOpen,
+}: {
+  record: MaterialRecord;
+  onOpen: (record: MaterialRecord) => void;
+}) {
+  const latestEntry = getLatestTrackingEntry(record);
+  const historyCount = record.trackingHistory?.length
+    ? record.trackingHistory.length
+    : latestEntry
+      ? 1
+      : 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(record)}
+      className="group flex w-full items-start justify-between gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-3 py-3 text-left hover:bg-sky-400/[0.12]"
+      title="查看狀態追蹤歷史"
+    >
+      <div className="min-w-0">
+        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(latestEntry?.status || ""))}>
+          {latestEntry?.status || "新增追蹤"}
+        </span>
+        <p className={cn("mt-2 text-sm leading-6", latestEntry?.note ? "line-clamp-2 text-slate-200" : "text-slate-400")}>
+          {latestEntry?.note || (latestEntry ? "點擊查看完整歷史與圖片" : "點擊建立第一筆狀態追蹤")}
+        </p>
+        <p className="mt-2 text-xs text-slate-400">
+          {historyCount} 筆紀錄
+          {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
+        </p>
+      </div>
+      <History className="mt-1 h-4 w-4 flex-none text-sky-300 opacity-80 transition-opacity group-hover:opacity-100" />
+    </button>
+  );
+}
+
+function TrackingHistoryDialog({
+  open,
+  record,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  record: MaterialRecord | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => void;
+}) {
+  const { toast } = useToast();
+  const [status, setStatus] = useState("");
+  const [note, setNote] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
+  const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
+  const latestEntry = record ? getLatestTrackingEntry(record) : null;
+  const historyEntries = useMemo(() => {
+    if (!record) return [];
+
+    const entries = record.trackingHistory?.length
+      ? [...record.trackingHistory]
+      : latestEntry
+        ? [latestEntry]
+        : [];
+
+    return entries.sort((left, right) => {
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }, [latestEntry, record]);
+
+  useEffect(() => {
+    if (!open) return;
+    setStatus("");
+    setNote("");
+    setCreatedBy("");
+    setImages([]);
+  }, [open, record?.id]);
+
+  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    const invalidFiles = files.filter((file) => !file.type.startsWith("image/"));
+    if (invalidFiles.length > 0) {
+      toast({
+        title: "只支援圖片檔案",
+        description: invalidFiles.map((file) => file.name).join("、"),
+        variant: "destructive",
+      });
+    }
+
+    const validFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (validFiles.length === 0) {
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const nextImages = await Promise.all(validFiles.map(readImageFile));
+      setImages((current) => [...current, ...nextImages]);
+    } catch (error) {
+      toast({
+        title: "圖片讀取失敗",
+        description: error instanceof Error ? error.message : "請重新選擇圖片後再試一次。",
+        variant: "destructive",
+      });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleSave = () => {
+    if (!record || !status.trim()) return;
+
+    onSave(record, {
+      id: createTrackingHistoryId(),
+      status: status.trim(),
+      note: note.trim(),
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy.trim(),
+      images,
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+        <DialogHeader>
+          <DialogTitle className="text-2xl text-slate-50">狀態追蹤</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            {record
+              ? `${record.name || "未命名料件"} · ${record.manufacturerPartNumber || record.partNumber || record.displayRef}`
+              : "管理目前料件的追蹤歷史與附件圖片。"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {record && (
+          <div className="grid gap-5 py-2 xl:grid-cols-[1.15fr_0.95fr]">
+            <section className="rounded-2xl border border-sky-400/20 bg-[#101d33] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
+                <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestEntry?.status || ""))}>
+                  {latestEntry?.status || "尚未建立"}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                <span>歷史筆數 {historyEntries.length}</span>
+                {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
+                {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
+                <div className="flex items-center gap-2">
+                  <ImagePlus className="h-4 w-4 text-cyan-300" />
+                  <p className="text-sm font-bold text-cyan-200">新增追蹤紀錄</p>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="tracking-status-input">最新狀態 *</Label>
+                    <Input id="tracking-status-input" value={status} onChange={(event) => setStatus(event.target.value)} placeholder="例如：待確認、申請中、已完成" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tracking-owner-input">更新人</Label>
+                    <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="例如：採購 / RD / Peggy" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="tracking-note-input">追蹤說明</Label>
+                    <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="補充這次更新做了什麼、卡在哪裡、下一步是什麼。" className="min-h-28 border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="tracking-images-input">上傳圖片</Label>
+                    <label htmlFor="tracking-images-input" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-4 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/[0.12]">
+                      <Upload className="h-4 w-4" />
+                      選擇圖片
+                    </label>
+                    <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+                    <p className="text-xs leading-5 text-slate-400">圖片會跟這筆狀態一起保存，之後打開歷史可以直接回看。</p>
+                    {images.length > 0 && (
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {images.map((image) => (
+                          <div key={image.id} className="overflow-hidden rounded-xl border border-blue-400/20 bg-[#0a1527]">
+                            <div className="aspect-[4/3] bg-slate-950/40">
+                              <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
+                            </div>
+                            <div className="flex items-start justify-between gap-3 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
+                                <p className="text-xs text-slate-500">{(image.size / 1024).toFixed(1)} KB</p>
+                              </div>
+                              <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="rounded-md border border-rose-400/20 bg-rose-400/10 p-1.5 text-rose-200 hover:bg-rose-400/20" title="移除圖片">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <Button type="button" onClick={handleSave} disabled={!status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
+                    儲存這次追蹤
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-4">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-blue-300" />
+                <h3 className="text-lg font-bold text-slate-50">過去歷史</h3>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {historyEntries.length === 0 && (
+                  <div className="rounded-xl border border-slate-400/15 bg-[#0a1527] px-4 py-6 text-center">
+                    <p className="text-sm font-semibold text-slate-300">目前還沒有歷史紀錄</p>
+                    <p className="mt-1 text-sm text-slate-500">新增第一筆後，之後每次更新都會留在這裡。</p>
+                  </div>
+                )}
+
+                {historyEntries.map((entry, index) => (
+                  <article key={`${entry.id}-${index}`} className="rounded-2xl border border-blue-400/15 bg-[#0a1527] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(entry.status))}>
+                          {entry.status}
+                        </span>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+                          {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
+                          {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
+                          {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
+                        </div>
+                      </div>
+                      {index === 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-200">
+                          <CircleCheck className="h-3.5 w-3.5" />
+                          最新
+                        </span>
+                      )}
+                    </div>
+
+                    {entry.note && (
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-200">{entry.note}</p>
+                    )}
+
+                    {entry.images && entry.images.length > 0 && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {entry.images.map((image) => (
+                          <a key={image.id} href={image.dataUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/30 hover:border-cyan-400/30">
+                            <div className="aspect-[4/3]">
+                              <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
+                            </div>
+                            <div className="px-3 py-2">
+                              <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function StatusPill({ record }: { record: MaterialRecord }) {
   if (record.isRisk) {
     return (
@@ -752,7 +1081,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">Excel 整理與上傳流程</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
-            每個 BOM 保留為獨立工作區；可一次上傳多個檔案，再切換、篩選與追蹤處理狀態。
+            每個 BOM 保留為獨立工作區；可一次上傳多個檔案，再切換、篩選與追蹤最新狀態。
           </DialogDescription>
         </DialogHeader>
 
@@ -781,7 +1110,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00 就算可用；主料不符時會繼續檢查底下替代料。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
-                ["追蹤欄位可選填", "TX 與 Tracking Status／處理狀態可直接放在 Excel；TX 有值時會自動帶入，空白時也能上傳後於網站填寫。"],
+                ["追蹤欄位可選填", "TX 與 Tracking Status／處理狀態可直接放在 Excel；匯入後會顯示成最新狀態，後續可在網站裡追加歷史與圖片。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
                   <p className="font-bold text-slate-100">{title}</p>
@@ -808,7 +1137,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
               <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
               <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
-              <li>5. TX 直接在表格內點擊填寫；處理狀態可在修改資料中填「待確認、申請中、已完成」。</li>
+              <li>5. TX 直接在表格內點擊填寫；狀態追蹤改為點開欄位後新增歷史，建議用「待確認、申請中、已完成」。</li>
               <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
             </ol>
           </section>
@@ -919,6 +1248,7 @@ function MaterialRecordDialog({
 }) {
   const [form, setForm] = useState(record);
   const readOnly = mode === "view";
+  const latestTrackingEntry = getLatestTrackingEntry(form);
 
   useEffect(() => {
     if (open) setForm(toWorkbookRecord(record));
@@ -1003,9 +1333,17 @@ function MaterialRecordDialog({
                 <Label htmlFor="material-virtual-alternative">TX</Label>
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="material-tracking-status">處理狀態</Label>
-                <Input id="material-tracking-status" disabled={readOnly} value={form.trackingStatus ?? ""} onChange={(event) => updateField("trackingStatus", event.target.value)} placeholder="例如：待確認、申請中、已完成" />
+              <div className="space-y-2 md:col-span-2">
+                <Label>狀態追蹤</Label>
+                <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3">
+                  <p className="text-sm font-bold text-sky-200">{latestTrackingEntry?.status || "尚未建立狀態追蹤"}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    {latestTrackingEntry?.note || "狀態追蹤改由表格中的「狀態追蹤」欄位管理，可保留歷史紀錄與圖片。"}
+                  </p>
+                  {latestTrackingEntry?.createdAt && (
+                    <p className="mt-2 text-xs text-slate-400">最後更新：{formatTimestamp(latestTrackingEntry.createdAt)}</p>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="material-sourcing">Sourcing Status</Label>
@@ -1063,7 +1401,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={8} className="p-0">
+      <td colSpan={9} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1161,7 +1499,7 @@ function AlternativeRows({
                     </div>
 
                     <div>
-                      <p className="text-center text-sm font-bold uppercase tracking-[0.16em] text-slate-500">操作</p>
+                      <p className="text-center text-sm font-bold uppercase tracking-[0.16em] text-slate-500">資料更新</p>
                       <div className="mt-2 grid gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => onView(record)} className="h-10 w-full justify-center border-cyan-400/25 bg-cyan-400/10 text-sm text-cyan-200 hover:bg-cyan-400/20 hover:text-white">
                           <Eye className="mr-1.5 h-4 w-4" />詳細
@@ -1188,12 +1526,14 @@ function CompactAlternativeRows({
   onView,
   onEdit,
   onSaveVirtual,
+  onOpenTracking,
 }: {
   group: MaterialGroup;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
   onSaveVirtual: (record: MaterialRecord, value: string) => void;
+  onOpenTracking: (record: MaterialRecord) => void;
 }) {
   const alternatives = getSortedAlternatives(group).slice(1);
   const groupRefDes = group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
@@ -1270,13 +1610,16 @@ function CompactAlternativeRows({
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill record={record} />
                 <ActionPill record={record} />
-                {record.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{record.trackingStatus}</span>}
               </div>
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
               <p className="line-clamp-2 text-[15px] leading-6 text-slate-200">{record.partSpec || record.partName || "-"}</p>
               {record.remark && <p className="mt-1 text-sm text-slate-500">{record.remark}</p>}
+            </td>
+
+            <td className="border-r border-blue-400/10 px-4 py-3.5" onClick={(event) => event.stopPropagation()}>
+              <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
             </td>
 
             <td className="px-3 py-3.5">
@@ -1313,6 +1656,8 @@ export function MaterialRequestPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
+  const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
@@ -1567,6 +1912,11 @@ export function MaterialRequestPage() {
     setEditorOpen(true);
   };
 
+  const openTrackingDialog = (record: MaterialRecord) => {
+    setTrackingRecord(record);
+    setTrackingDialogOpen(true);
+  };
+
   const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
     const exists = basePayload.records.some((item) => item.id === record.id);
     const records = exists
@@ -1591,6 +1941,19 @@ export function MaterialRequestPage() {
 
   const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
     saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value });
+  };
+
+  const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
+    const currentHistory = record.trackingHistory ?? [];
+    saveRecordToActiveBom({
+      ...toWorkbookRecord(record),
+      trackingStatus: entry.status,
+      trackingHistory: [...currentHistory, entry],
+    });
+    toast({
+      title: "狀態追蹤已更新",
+      description: `${record.name || record.displayRef} · ${entry.status}`,
+    });
   };
 
   const switchActiveBom = (value: string) => {
@@ -1659,7 +2022,7 @@ export function MaterialRequestPage() {
         Manufacturer_PN: record.manufacturerPartNumber,
         Manufacturer_PN_2: record.manufacturerPartNumberAlt,
         TX: record.virtualAlternative ?? "",
-        處理狀態: record.trackingStatus ?? "",
+        狀態追蹤: record.trackingStatus ?? "",
         Sourcing_Status: record.sourcingStatus,
         建料狀態: getActionLabel(record.actionKind),
         內部料號: record.partNumber,
@@ -1691,6 +2054,7 @@ export function MaterialRequestPage() {
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
+      <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
 
       <header className="rounded-xl border border-blue-400/20 bg-[#101b2f] p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1763,7 +2127,7 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號、狀態追蹤；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
@@ -1805,16 +2169,17 @@ export function MaterialRequestPage() {
                   "TX",
                   "狀態",
                   "規格 / 備註",
-                  "操作",
+                  "狀態追蹤",
+                  "資料更新",
                 ].map((label, columnIndex) => (
                   <ResizableHeader
                     key={label}
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
-                    resizable={columnIndex < 7}
+                    resizable={columnIndex < 8}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 7 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 8 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
@@ -1826,8 +2191,13 @@ export function MaterialRequestPage() {
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} searchPlaceholder="搜尋 MPN" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} searchPlaceholder="搜尋料號 / Symbol / Footprint" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} searchPlaceholder="搜尋 TX" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} searchPlaceholder="搜尋處理狀態 / Remark" /></th>
+                <th className="border-r border-blue-300/20 p-2">
+                  <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
+                    狀態摘要
+                  </div>
+                </th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} searchPlaceholder="搜尋規格 / 備註" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} searchPlaceholder="搜尋最新狀態 / 備註 / 更新人" /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
@@ -2007,14 +2377,17 @@ export function MaterialRequestPage() {
                         {primaryAlternative && <InlineVirtualAlternativeEditor value={primaryAlternative.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(primaryAlternative, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{primaryAlternative?.trackingStatus && <span className="rounded border border-sky-300/30 bg-sky-400/15 px-2.5 py-1 text-sm font-bold text-sky-200">{primaryAlternative.trackingStatus}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
+                      <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
+                        {primaryAlternative && <TrackingHistoryCell record={primaryAlternative} onOpen={openTrackingDialog} />}
+                      </td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
-                        <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />替代料</Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />資料更新</Button>
                       </td>
                     </tr>
-                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} />}
+                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onOpenTracking={openTrackingDialog} />}
                   </Fragment>
                 );
               })}

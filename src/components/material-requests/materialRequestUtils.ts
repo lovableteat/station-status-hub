@@ -15,6 +15,7 @@ export interface MaterialWorkbookRecord {
   manufacturerPartNumberAlt: string;
   virtualAlternative?: string;
   trackingStatus?: string;
+  trackingHistory?: MaterialTrackingHistoryEntry[];
   manufacturer: string;
   sourcingStatus: string;
   refGroup: string;
@@ -25,6 +26,23 @@ export interface MaterialWorkbookRecord {
   partSpec: string;
   schematicPart: string;
   pcbFootprint: string;
+}
+
+export interface MaterialTrackingHistoryImage {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+}
+
+export interface MaterialTrackingHistoryEntry {
+  id: string;
+  status: string;
+  note?: string;
+  createdAt: string;
+  createdBy?: string;
+  images?: MaterialTrackingHistoryImage[];
 }
 
 export interface MaterialWorkbookPayload {
@@ -187,6 +205,73 @@ function uniqueValues(values: unknown[]) {
   return Array.from(new Set(values.map(normalizeText).filter(Boolean)));
 }
 
+function normalizeTrackingHistoryImage(raw: unknown): MaterialTrackingHistoryImage | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const image = raw as Partial<MaterialTrackingHistoryImage>;
+  const id = normalizeText(image.id);
+  const name = normalizeText(image.name);
+  const mimeType = normalizeText(image.mimeType);
+  const dataUrl = normalizeText(image.dataUrl);
+  const size = typeof image.size === "number" && Number.isFinite(image.size) ? image.size : 0;
+
+  if (!id || !name || !mimeType || !dataUrl) return null;
+
+  return { id, name, mimeType, size, dataUrl };
+}
+
+function normalizeTrackingHistoryEntry(raw: unknown): MaterialTrackingHistoryEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const entry = raw as Partial<MaterialTrackingHistoryEntry>;
+  const status = normalizeText(entry.status);
+  if (!status) return null;
+
+  const images = Array.isArray(entry.images)
+    ? entry.images
+        .map(normalizeTrackingHistoryImage)
+        .filter((image): image is MaterialTrackingHistoryImage => Boolean(image))
+    : [];
+
+  return {
+    id: normalizeText(entry.id) || `tracking-${Math.random().toString(36).slice(2, 10)}`,
+    status,
+    note: normalizeText(entry.note),
+    createdAt: normalizeText(entry.createdAt),
+    createdBy: normalizeText(entry.createdBy),
+    images,
+  };
+}
+
+export function getTrackingHistory(record: Pick<MaterialWorkbookRecord, "trackingHistory">) {
+  if (!Array.isArray(record.trackingHistory)) return [];
+
+  return record.trackingHistory
+    .map(normalizeTrackingHistoryEntry)
+    .filter((entry): entry is MaterialTrackingHistoryEntry => Boolean(entry));
+}
+
+export function getLatestTrackingEntry(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus">) {
+  const history = getTrackingHistory(record);
+  if (history.length > 0) return history[history.length - 1];
+
+  const legacyStatus = normalizeText(record.trackingStatus);
+  if (!legacyStatus) return null;
+
+  return {
+    id: "legacy-tracking-status",
+    status: legacyStatus,
+    note: "",
+    createdAt: "",
+    createdBy: "",
+    images: [],
+  } satisfies MaterialTrackingHistoryEntry;
+}
+
+export function getLatestTrackingStatus(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus">) {
+  return getLatestTrackingEntry(record)?.status ?? "";
+}
+
 export function getActionKind(remark: string): MaterialActionKind {
   const normalizedRemark = normalizeText(remark).toLowerCase();
 
@@ -278,6 +363,11 @@ function getPreferenceScore(record: MaterialRecord) {
 function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const manufacturerPartNumber = normalizeText(raw.manufacturerPartNumber);
   const manufacturerPartNumberAlt = normalizeText(raw.manufacturerPartNumberAlt);
+  const trackingHistory = getTrackingHistory(raw);
+  const trackingStatus = getLatestTrackingStatus({
+    trackingHistory,
+    trackingStatus: raw.trackingStatus,
+  });
   const mpnCandidates = uniqueValues([
     manufacturerPartNumber,
     manufacturerPartNumberAlt,
@@ -308,6 +398,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     ...raw,
     manufacturerPartNumber,
     manufacturerPartNumberAlt,
+    trackingHistory,
+    trackingStatus,
     remark,
     displayRef,
     groupKey,
@@ -328,7 +420,13 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       manufacturerPartNumber,
       manufacturerPartNumberAlt,
       raw.virtualAlternative,
-      raw.trackingStatus,
+      trackingStatus,
+      ...trackingHistory.flatMap((entry) => [
+        entry.status,
+        entry.note,
+        entry.createdBy,
+        ...(entry.images ?? []).map((image) => image.name),
+      ]),
       raw.manufacturer,
       raw.partNumber,
       raw.partName,
