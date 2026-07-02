@@ -649,7 +649,7 @@ function InlineVirtualAlternativeEditor({
         onBlur={commit}
         onKeyDown={handleKeyDown}
         className="h-9 border-teal-300/50 bg-[#071522] text-[15px] font-bold text-teal-100 focus-visible:ring-teal-400"
-        placeholder="輸入虛擬替代料"
+        placeholder="輸入 TX"
       />
     );
   }
@@ -659,7 +659,7 @@ function InlineVirtualAlternativeEditor({
       type="button"
       onClick={() => setEditing(true)}
       className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15"
-      title="直接修改虛擬替代料"
+      title="直接修改 TX"
     >
       <span className={cn("break-all text-[15px] font-bold leading-6", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "點擊填寫"}</span>
       <Pencil className="h-4 w-4 flex-none text-teal-400" />
@@ -781,7 +781,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00 就算可用；主料不符時會繼續檢查底下替代料。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
-                ["追蹤欄位可選填", "Virtual Alternative／虛擬替代料與 Tracking Status／處理狀態可直接放在 Excel，也能上傳後於網站填寫。"],
+                ["追蹤欄位可選填", "TX 與 Tracking Status／處理狀態可直接放在 Excel；TX 有值時會自動帶入，空白時也能上傳後於網站填寫。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
                   <p className="font-bold text-slate-100">{title}</p>
@@ -797,7 +797,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
               <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
               <p><strong className="text-slate-100">分組：</strong>有藍色起始列時完全依底色分組；沒有底色標記的其他格式，才退回 Ref Group＋料名規則。</p>
-              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00，才列入待申請；只要一顆替代料可用就不算問題。</p>
+              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00，且沒有填任何 TX，才列入待申請；只要一顆替代料可用或有 TX 就不算問題。</p>
             </div>
           </section>
 
@@ -808,7 +808,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
               <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
               <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
-              <li>5. 虛擬替代料直接在表格內點擊填寫；處理狀態可在修改資料中填「待確認、申請中、已完成」。</li>
+              <li>5. TX 直接在表格內點擊填寫；處理狀態可在修改資料中填「待確認、申請中、已完成」。</li>
               <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
             </ol>
           </section>
@@ -1000,7 +1000,7 @@ function MaterialRecordDialog({
                 <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-virtual-alternative">虛擬替代料</Label>
+                <Label htmlFor="material-virtual-alternative">TX</Label>
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
               </div>
               <div className="space-y-2">
@@ -1658,7 +1658,7 @@ export function MaterialRequestPage() {
         廠商: record.manufacturer,
         Manufacturer_PN: record.manufacturerPartNumber,
         Manufacturer_PN_2: record.manufacturerPartNumberAlt,
-        虛擬替代料: record.virtualAlternative ?? "",
+        TX: record.virtualAlternative ?? "",
         處理狀態: record.trackingStatus ?? "",
         Sourcing_Status: record.sourcingStatus,
         建料狀態: getActionLabel(record.actionKind),
@@ -1802,7 +1802,7 @@ export function MaterialRequestPage() {
                   "REF DES",
                   "MPN",
                   "內部料號 / 圖面",
-                  "虛擬替代料",
+                  "TX",
                   "狀態",
                   "規格 / 備註",
                   "操作",
@@ -1825,7 +1825,7 @@ export function MaterialRequestPage() {
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} searchPlaceholder="搜尋 REF DES" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} searchPlaceholder="搜尋 MPN" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} searchPlaceholder="搜尋料號 / Symbol / Footprint" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="虛擬替代" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} searchPlaceholder="搜尋虛擬替代料" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} searchPlaceholder="搜尋 TX" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} searchPlaceholder="搜尋處理狀態 / Remark" /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} searchPlaceholder="搜尋規格 / 備註" /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
