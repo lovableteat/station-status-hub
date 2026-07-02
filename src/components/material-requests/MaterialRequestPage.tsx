@@ -78,8 +78,9 @@ import {
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
+  type BomStorageMode,
   type BomWorkspace,
-  loadBomWorkspaces,
+  loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
   saveBomWorkspaceRecord,
@@ -1743,6 +1744,7 @@ function CompactAlternativeRows({
 
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
+  const [bomStorageMode, setBomStorageMode] = useState<BomStorageMode>("recovery");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
@@ -1764,6 +1766,7 @@ export function MaterialRequestPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
+  const isCollaborativeReady = bomStorageMode === "remote";
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
   const basePayload = activeWorkspace.payload;
@@ -1792,18 +1795,20 @@ export function MaterialRequestPage() {
   }, []);
 
   const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
-    const storedWorkspaces = await loadBomWorkspaces();
-    applyLoadedWorkspaces(storedWorkspaces, preferredBomId);
-    return storedWorkspaces;
+    const result = await loadBomWorkspacesDetailed();
+    setBomStorageMode(result.mode);
+    applyLoadedWorkspaces(result.workspaces, preferredBomId);
+    return result.workspaces;
   }, [applyLoadedWorkspaces]);
 
   useEffect(() => {
     let active = true;
     const syncWorkspaces = async (preferredBomId?: string) => {
       try {
-        const storedWorkspaces = await loadBomWorkspaces();
+        const result = await loadBomWorkspacesDetailed();
         if (!active) return;
-        applyLoadedWorkspaces(storedWorkspaces, preferredBomId);
+        setBomStorageMode(result.mode);
+        applyLoadedWorkspaces(result.workspaces, preferredBomId);
       } catch {
         // Keep the current local state when collaborative sync is temporarily unavailable.
       }
@@ -1988,9 +1993,22 @@ export function MaterialRequestPage() {
     }
   };
 
+  const showCollaborativeUnavailableToast = () => {
+    toast({
+      title: "多人同步未啟用",
+      description: "目前 BOM 共享資料表未連線，已切換成唯讀恢復模式。請先完成 Supabase migration 後再編輯。",
+      variant: "destructive",
+    });
+  };
+
   const handleWorkbookImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
+    if (!isCollaborativeReady) {
+      event.target.value = "";
+      showCollaborativeUnavailableToast();
+      return;
+    }
 
     setIsImporting(true);
     try {
@@ -2030,12 +2048,20 @@ export function MaterialRequestPage() {
   };
 
   const openCreate = (group?: MaterialGroup) => {
+    if (!isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
     setEditorRecord(createRecordTemplate(group));
     setEditorMode("create");
     setEditorOpen(true);
   };
 
   const openRecord = (record: MaterialRecord, mode: EditorMode) => {
+    if (mode !== "view" && !isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
     setEditorRecord(toWorkbookRecord(record));
     setEditorMode(mode);
     setEditorOpen(true);
@@ -2047,6 +2073,10 @@ export function MaterialRequestPage() {
   };
 
   const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
+    if (!isCollaborativeReady) {
+      return Promise.reject(new Error("Collaborative BOM storage unavailable"));
+    }
+
     const exists = basePayload.records.some((item) => item.id === record.id);
     const records = exists
       ? basePayload.records.map((item) => item.id === record.id ? record : item)
@@ -2082,6 +2112,10 @@ export function MaterialRequestPage() {
   };
 
   const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
+    if (!isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
     void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
       toast({
         title: "資料更新失敗",
@@ -2092,6 +2126,10 @@ export function MaterialRequestPage() {
   };
 
   const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
+    if (!isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
     const currentHistory = record.trackingHistory ?? [];
     void saveRecordToActiveBom({
       ...toWorkbookRecord(record),
@@ -2131,6 +2169,10 @@ export function MaterialRequestPage() {
   };
 
   const deleteBomWorkspaceById = async (targetBomId: string) => {
+    if (!isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
     const targetWorkspace = bomWorkspaces.find((workspace) => workspace.id === targetBomId);
     if (!targetWorkspace || !window.confirm(`確定刪除 BOM「${targetWorkspace.name}」？`)) return;
 
@@ -2232,10 +2274,10 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} className="h-9 bg-cyan-500 px-3 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 bg-cyan-500 px-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
@@ -2243,6 +2285,12 @@ export function MaterialRequestPage() {
             </Button>
           </div>
         </div>
+
+        {!isCollaborativeReady && (
+          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            目前是唯讀恢復模式，還不是多人同步。請先把 Supabase migration `20260702094500_4a79e28e-90e1-48d2-9487-f78e49b0d90a.sql` 套到正式資料庫。
+          </div>
+        )}
 
         <div className="mt-3 flex flex-col gap-3 border-t border-blue-400/15 pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-3">
@@ -2261,14 +2309,14 @@ export function MaterialRequestPage() {
               </SelectContent>
             </Select>
             <span className="rounded bg-blue-400/10 px-2.5 py-1 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} className="h-9 border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20 hover:text-white">
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-9 border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-500">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100">刪除目前 BOM</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
           </div>
         </div>
 
