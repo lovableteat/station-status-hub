@@ -236,6 +236,28 @@ async function loadAllRemoteRecordRows() {
   return rows;
 }
 
+async function repairRemoteWorkspaceRecordCounts(
+  workspaceRows: BomWorkspaceRow[],
+  rowsByWorkspace: Map<string, BomRecordRow[]>,
+) {
+  const mismatches = workspaceRows
+    .map((workspaceRow) => ({
+      id: workspaceRow.id,
+      recordCount: rowsByWorkspace.get(workspaceRow.id)?.length ?? 0,
+      currentRecordCount: workspaceRow.record_count ?? 0,
+    }))
+    .filter((workspace) => workspace.recordCount !== workspace.currentRecordCount);
+
+  await Promise.allSettled(
+    mismatches.map((workspace) =>
+      supabaseClient
+        .from(WORKSPACE_TABLE)
+        .update({ record_count: workspace.recordCount })
+        .eq("id", workspace.id)
+    ),
+  );
+}
+
 async function loadRemoteBomWorkspaces() {
   const [workspaceResponse, recordRows] = await Promise.all([
     supabaseClient
@@ -253,6 +275,11 @@ async function loadRemoteBomWorkspaces() {
     current.push(row);
     rowsByWorkspace.set(row.workspace_id, current);
   }
+
+  await repairRemoteWorkspaceRecordCounts(
+    (workspaceResponse.data ?? []) as BomWorkspaceRow[],
+    rowsByWorkspace,
+  );
 
   return sortWorkspaces(
     ((workspaceResponse.data ?? []) as BomWorkspaceRow[]).map((workspaceRow) =>
