@@ -483,7 +483,9 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         records: groupRecords,
         primaryRecord,
         requiresApplication: !groupRecords.some(
-          (record) => record.isPreferred || Boolean(normalizeText(record.virtualAlternative))
+          (record) =>
+            Boolean(normalizeText(record.partNumber)) ||
+            Boolean(normalizeText(record.virtualAlternative))
         ),
         totalCount: groupRecords.length,
         pendingCount: groupRecords.filter((item) => item.isPending).length,
@@ -651,7 +653,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     const levelCell = getFieldValue(rows[index], fields, "level");
     const parsedLevel = Number(levelCell);
     const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
-    if (levelValue >= 2 && isBlueGroupStartRow(worksheet, index, fields)) {
+    if (levelValue === 2 && isBlueGroupStartRow(worksheet, index, fields)) {
       blueGroupRows.add(index);
     }
   }
@@ -689,7 +691,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       continue;
     }
 
-    if (levelValue < 2) {
+    if (levelValue !== 2) {
       continue;
     }
 
