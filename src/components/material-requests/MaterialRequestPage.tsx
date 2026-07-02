@@ -3,7 +3,6 @@
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -2362,7 +2361,6 @@ export function MaterialRequestPage() {
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-            <tbody>
               {visibleGroups.map((group) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
@@ -2376,7 +2374,7 @@ export function MaterialRequestPage() {
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
 
                 return (
-                  <Fragment key={group.key}>
+                  <tbody key={group.key}>
                     <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-l-4 border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "border-l-amber-400 bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : primaryReady ? "border-l-emerald-400 bg-emerald-400/[0.08] hover:bg-emerald-400/[0.13]" : "border-l-cyan-400 bg-cyan-400/[0.09] hover:bg-cyan-400/[0.14]") }>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex items-start gap-3">
@@ -2549,10 +2547,9 @@ export function MaterialRequestPage() {
                       </td>
                     </tr>
                     {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onOpenTracking={openTrackingDialog} />}
-                  </Fragment>
+                  </tbody>
                 );
               })}
-            </tbody>
           </table>
 
           {visibleGroups.length === 0 && <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center"><Search className="h-10 w-10 text-slate-600" /><p className="mt-3 text-lg font-bold text-slate-300">找不到符合條件的料</p><p className="mt-1 text-[15px] text-slate-500">請清除篩選，或改用 MPN、廠商、Footprint 搜尋。</p></div>}

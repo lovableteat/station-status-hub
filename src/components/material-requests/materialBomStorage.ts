@@ -144,6 +144,14 @@ async function loadLegacyBomWorkspaces() {
   }
 }
 
+async function saveLegacyBomWorkspace(workspace: BomWorkspace) {
+  try {
+    await runLegacyRequest<IDBValidKey>("readwrite", (store) => store.put(workspace));
+  } catch {
+    // Ignore local fallback failures so remote storage can still continue independently.
+  }
+}
+
 async function removeLegacyBomWorkspace(id: string) {
   try {
     await runLegacyRequest<undefined>("readwrite", (store) => store.delete(id));
@@ -289,39 +297,32 @@ async function removePreferenceBackedWorkspace(id: string) {
   if (error) throw error;
 }
 
-async function migrateLegacyBomWorkspaces(remoteWorkspaces: BomWorkspace[]) {
+async function mergeLegacyBomWorkspaces(primaryWorkspaces: BomWorkspace[]) {
   const legacyWorkspaces = await loadLegacyBomWorkspaces();
-  if (legacyWorkspaces.length === 0) return remoteWorkspaces;
+  if (legacyWorkspaces.length === 0) return primaryWorkspaces;
 
-  const remoteMap = new Map(remoteWorkspaces.map((workspace) => [workspace.id, workspace]));
-  let migrated = false;
-
+  const merged = new Map(primaryWorkspaces.map((workspace) => [workspace.id, workspace]));
   for (const workspace of legacyWorkspaces) {
-    const remoteWorkspace = remoteMap.get(workspace.id);
-    const shouldUpload = !remoteWorkspace || toTimestamp(workspace.updatedAt) > toTimestamp(remoteWorkspace.updatedAt);
-
-    if (shouldUpload) {
-      await saveBomWorkspace(workspace);
-      migrated = true;
-    } else {
-      await removeLegacyBomWorkspace(workspace.id);
+    const current = merged.get(workspace.id);
+    if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
+      merged.set(workspace.id, workspace);
     }
   }
 
-  return migrated ? loadRemoteBomWorkspaces() : remoteWorkspaces;
+  return sortWorkspaces([...merged.values()]);
 }
 
 export async function loadBomWorkspaces() {
   try {
     const remoteWorkspaces = await loadRemoteBomWorkspaces();
-    return migrateLegacyBomWorkspaces(remoteWorkspaces);
+    return mergeLegacyBomWorkspaces(remoteWorkspaces);
   } catch (error) {
     if (!isMissingCollaborativeTables(error)) {
       throw error;
     }
 
     const fallbackWorkspaces = await loadPreferenceBackedBomWorkspaces();
-    return migrateLegacyBomWorkspaces(fallbackWorkspaces);
+    return mergeLegacyBomWorkspaces(fallbackWorkspaces);
   }
 }
 
@@ -349,10 +350,16 @@ export async function saveBomWorkspace(workspace: BomWorkspace) {
     await upsertWorkspaceRow(workspace);
   } catch (error) {
     if (!isMissingCollaborativeTables(error)) {
-      throw error;
+      await saveLegacyBomWorkspace(workspace);
+      return;
     }
 
-    await savePreferenceBackedWorkspace(workspace);
+    try {
+      await savePreferenceBackedWorkspace(workspace);
+    } catch {
+      await saveLegacyBomWorkspace(workspace);
+      return;
+    }
   }
 
   await removeLegacyBomWorkspace(workspace.id);
@@ -376,10 +383,16 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
     }]);
   } catch (error) {
     if (!isMissingCollaborativeTables(error)) {
-      throw error;
+      await saveLegacyBomWorkspace(workspace);
+      return;
     }
 
-    await savePreferenceBackedWorkspace(workspace);
+    try {
+      await savePreferenceBackedWorkspace(workspace);
+    } catch {
+      await saveLegacyBomWorkspace(workspace);
+      return;
+    }
   }
 
   await removeLegacyBomWorkspace(workspace.id);
