@@ -378,7 +378,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   ]);
   const remark = normalizeText(raw.remark);
   const actionKind = getActionKind(remark);
-  const displayRef = firstNonEmpty(raw.refGroup, raw.partNumber, raw.refDes, raw.name);
+  const displayRef = firstNonEmpty(raw.refGroup, raw.refDes, raw.partNumber, raw.name);
   const normalizedName = normalizeText(raw.name);
   const groupIdentity = normalizeText(raw.sourceGroupKey)
     ? `source::${normalizeText(raw.sourceGroupKey)}`
@@ -465,9 +465,9 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
       return {
         key,
         displayRef: firstNonEmpty(
-          preferredPartNumber,
           ...groupRecords.map((item) => item.refGroup),
           ...groupRecords.map((item) => item.refDes),
+          preferredPartNumber,
           firstRecord.displayRef
         ),
         sectionName: firstNonEmpty(...groupRecords.map((item) => item.sectionName)),
