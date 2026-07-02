@@ -131,7 +131,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
-  virtualAlternative: ["Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
+  virtualAlternative: ["TX", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
   trackingStatus: ["Tracking Status", "Process Status", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
@@ -498,18 +498,49 @@ function isBlueGroupStartRow(
 }
 
 function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+  const worksheetRange = XLSX.utils.decode_range(worksheet["!ref"] ?? "A1:A1");
+  const previewRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
     defval: "",
     raw: false,
+    blankrows: true,
+    range: {
+      s: { r: 0, c: 0 },
+      e: { r: Math.min(39, worksheetRange.e.r), c: worksheetRange.e.c },
+    },
   });
-  const headerMatch = findHeaderRow(rows);
+  const headerMatch = findHeaderRow(previewRows);
 
   if (!headerMatch) {
     return null;
   }
 
   const { index: headerRowIndex, fields } = headerMatch;
+  const dataColumns = Array.from(new Set(fields.values()));
+  let lastDataRow = headerRowIndex;
+
+  for (let rowIndex = worksheetRange.e.r; rowIndex > headerRowIndex; rowIndex -= 1) {
+    const hasData = dataColumns.some((columnIndex) => {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      return Boolean(normalizeText(worksheet[address]?.v));
+    });
+
+    if (hasData) {
+      lastDataRow = rowIndex;
+      break;
+    }
+  }
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+    blankrows: true,
+    range: {
+      s: { r: 0, c: 0 },
+      e: { r: lastDataRow, c: worksheetRange.e.c },
+    },
+  });
   const records: MaterialWorkbookRecord[] = [];
   const hasLevelColumn = fields.has("level");
   const blueGroupRows = new Set<number>();
@@ -612,6 +643,8 @@ export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWor
   const workbook = XLSX.read(await file.arrayBuffer(), {
     type: "array",
     cellStyles: true,
+    // Some source BOMs format every Excel row; cap parsing while retaining far more rows than a normal BOM.
+    sheetRows: 100_000,
   });
 
   const candidates = workbook.SheetNames.map((sheetName) =>
