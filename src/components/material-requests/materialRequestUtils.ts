@@ -172,6 +172,10 @@ function normalizeText(value: unknown) {
   return String(value ?? "").trim();
 }
 
+export function isPreferredInternalPartNumber(value: string) {
+  return /(?:00|zz|zy)$/i.test(normalizeText(value));
+}
+
 function normalizeHeader(value: unknown) {
   return normalizeText(value)
     .toLowerCase()
@@ -390,7 +394,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
 
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
-  const isPreferred = actionKind === "ok" && /00$/i.test(normalizeText(raw.partNumber));
+  const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber);
   const isApproved = APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
   const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
 
