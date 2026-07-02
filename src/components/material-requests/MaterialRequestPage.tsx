@@ -402,6 +402,20 @@ function getUniqueMpnCount(group: MaterialGroup) {
   return getUniqueMpnCountForRecords(group.records);
 }
 
+function splitRefDesignators(...values: string[]) {
+  return Array.from(new Set(
+    values
+      .flatMap((value) => String(value ?? "")
+        .split(/[\s,，、;；\n\r\t]+/g)
+        .map((item) => item.trim())
+        .filter(Boolean))
+  ));
+}
+
+function isExactRefDesToken(token: string) {
+  return /^[a-z]{1,4}\d+(?:[_-][a-z0-9]+)?$/i.test(token.trim());
+}
+
 function hasNoAlternative(group: MaterialGroup) {
   return getUniqueMpnCount(group) <= 1;
 }
@@ -424,7 +438,12 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
         ...group.manufacturers,
       ];
     case "refDes":
-      return group.records.flatMap((record) => [record.refDes, record.refGroup]);
+      return group.records.flatMap((record) => {
+        const splitRefs = splitRefDesignators(record.refDes);
+        return splitRefs.length > 0
+          ? splitRefs
+          : splitRefDesignators(record.refGroup, group.displayRef);
+      });
     case "mpn":
       return group.records.flatMap((record) => [record.manufacturerPartNumber, record.manufacturerPartNumberAlt]);
     case "internal":
@@ -473,7 +492,9 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
         record.refGroup,
       ];
     case "refDes":
-      return [record.refDes, record.refGroup, group.displayRef];
+      return splitRefDesignators(record.refDes).length > 0
+        ? splitRefDesignators(record.refDes)
+        : splitRefDesignators(record.refGroup, group.displayRef);
     case "mpn":
       return [record.manufacturerPartNumber, record.manufacturerPartNumberAlt];
     case "internal":
@@ -2114,6 +2135,7 @@ export function MaterialRequestPage() {
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const workspaceSyncRequestRef = useRef(0);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const isCollaborativeReady = bomStorageMode === "remote";
@@ -2145,7 +2167,12 @@ export function MaterialRequestPage() {
   }, []);
 
   const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
+    const requestId = ++workspaceSyncRequestRef.current;
     const result = await loadBomWorkspacesDetailed();
+    if (requestId !== workspaceSyncRequestRef.current) {
+      return result.workspaces;
+    }
+
     setBomStorageMode(result.mode);
     applyLoadedWorkspaces(result.workspaces, preferredBomId);
     return result.workspaces;
@@ -2154,9 +2181,10 @@ export function MaterialRequestPage() {
   useEffect(() => {
     let active = true;
     const syncWorkspaces = async (preferredBomId?: string) => {
+      const requestId = ++workspaceSyncRequestRef.current;
       try {
         const result = await loadBomWorkspacesDetailed();
-        if (!active) return;
+        if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setBomStorageMode(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredBomId);
       } catch {
@@ -2237,8 +2265,22 @@ export function MaterialRequestPage() {
       ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
       : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
     const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
+    const exactRefTokens = new Set(
+      [
+        group.displayRef,
+        ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
+      ]
+        .flatMap((value) => splitRefDesignators(value))
+        .map((value) => value.toLowerCase())
+    );
 
-    return searchTokens.every((token) => searchableText.includes(token));
+    return searchTokens.every((token) => {
+      if (isExactRefDesToken(token)) {
+        return exactRefTokens.has(token);
+      }
+
+      return searchableText.includes(token);
+    });
   };
 
   const matchesAvailability = (group: MaterialGroup) => {
@@ -2716,7 +2758,7 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、MPN、內部料號、狀態追蹤；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>

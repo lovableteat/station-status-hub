@@ -209,6 +209,15 @@ function uniqueValues(values: unknown[]) {
   return Array.from(new Set(values.map(normalizeText).filter(Boolean)));
 }
 
+function splitRefDesignators(value: unknown) {
+  return Array.from(new Set(
+    normalizeText(value)
+      .split(/[\s,，、;；\n\r\t]+/g)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  ));
+}
+
 function normalizeTrackingHistoryImage(raw: unknown): MaterialTrackingHistoryImage | null {
   if (!raw || typeof raw !== "object") return null;
 
@@ -421,6 +430,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.name,
       raw.refGroup,
       raw.refDes,
+      ...splitRefDesignators(raw.refDes),
+      ...splitRefDesignators(raw.refGroup),
       manufacturerPartNumber,
       manufacturerPartNumberAlt,
       raw.virtualAlternative,
