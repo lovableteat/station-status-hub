@@ -4,6 +4,7 @@
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   Fragment,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -82,6 +83,8 @@ import {
   loadBomWorkspaces,
   removeBomWorkspace,
   saveBomWorkspace,
+  saveBomWorkspaceRecord,
+  subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
 
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
@@ -269,6 +272,44 @@ function createBomId(fileName: string) {
 function loadActiveBomId() {
   if (typeof window === "undefined") return DEFAULT_BOM_ID;
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
+}
+
+function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, workspaceId: string, payload: MaterialWorkbookPayload): BomWorkspace {
+  const existingRecords = new Map((existingWorkspace?.payload.records ?? []).map((record) => [record.id, record]));
+  const importedRecordIds = new Set<string>();
+  const mergedRecords = payload.records.map((record) => {
+    importedRecordIds.add(record.id);
+    const existingRecord = existingRecords.get(record.id);
+
+    return {
+      ...existingRecord,
+      ...record,
+      virtualAlternative: record.virtualAlternative?.trim()
+        ? record.virtualAlternative
+        : existingRecord?.virtualAlternative ?? "",
+      trackingStatus: record.trackingStatus?.trim()
+        ? record.trackingStatus
+        : existingRecord?.trackingStatus ?? "",
+      trackingHistory: record.trackingHistory?.length
+        ? record.trackingHistory
+        : existingRecord?.trackingHistory ?? [],
+    };
+  });
+  const preservedManualRecords = (existingWorkspace?.payload.records ?? []).filter((record) =>
+    record.id.startsWith("manual-") && !importedRecordIds.has(record.id)
+  );
+  const records = mergedRecords.concat(preservedManualRecords);
+
+  return {
+    id: workspaceId,
+    name: payload.sourceFile,
+    payload: {
+      ...payload,
+      records,
+      recordCount: records.length,
+    },
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function parseSearchTokens(query: string) {
@@ -1733,31 +1774,56 @@ export function MaterialRequestPage() {
     [basePayload]
   );
 
+  const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
+    if (storedWorkspaces.length === 0) {
+      const fallbackWorkspace = createDefaultBomWorkspace();
+      setBomWorkspaces([fallbackWorkspace]);
+      setActiveBomId(fallbackWorkspace.id);
+      void saveBomWorkspace(fallbackWorkspace).catch(() => undefined);
+      return;
+    }
+
+    setBomWorkspaces(storedWorkspaces);
+    setActiveBomId((current) => {
+      const candidateBomId = preferredBomId ?? current ?? loadActiveBomId();
+      return storedWorkspaces.some((workspace) => workspace.id === candidateBomId)
+        ? candidateBomId
+        : storedWorkspaces[0].id;
+    });
+  }, []);
+
+  const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
+    const storedWorkspaces = await loadBomWorkspaces();
+    applyLoadedWorkspaces(storedWorkspaces, preferredBomId);
+    return storedWorkspaces;
+  }, [applyLoadedWorkspaces]);
+
   useEffect(() => {
     let active = true;
-    loadBomWorkspaces()
-      .then((storedWorkspaces) => {
+    const syncWorkspaces = async (preferredBomId?: string) => {
+      try {
+        const storedWorkspaces = await loadBomWorkspaces();
         if (!active) return;
-        if (storedWorkspaces.length === 0) {
-          const fallbackWorkspace = createDefaultBomWorkspace();
-          setBomWorkspaces([fallbackWorkspace]);
-          setActiveBomId(fallbackWorkspace.id);
-          void saveBomWorkspace(fallbackWorkspace).catch(() => undefined);
-          return;
-        }
-        setBomWorkspaces(storedWorkspaces);
-        const preferredBomId = loadActiveBomId();
-        setActiveBomId(
-          storedWorkspaces.some((workspace) => workspace.id === preferredBomId)
-            ? preferredBomId
-            : storedWorkspaces[0].id
-        );
-      })
-      .catch(() => undefined);
+        applyLoadedWorkspaces(storedWorkspaces, preferredBomId);
+      } catch {
+        // Keep the current local state when collaborative sync is temporarily unavailable.
+      }
+    };
+
+    void syncWorkspaces(loadActiveBomId());
+    const unsubscribe = subscribeBomWorkspaceChanges(() => {
+      void syncWorkspaces();
+    });
+    const pollId = window.setInterval(() => {
+      void syncWorkspaces();
+    }, 15000);
+
     return () => {
       active = false;
+      window.clearInterval(pollId);
+      unsubscribe();
     };
-  }, []);
+  }, [applyLoadedWorkspaces]);
 
   useEffect(() => {
     window.localStorage.setItem(ACTIVE_BOM_KEY, activeBomId);
@@ -1798,7 +1864,6 @@ export function MaterialRequestPage() {
         ? current.map((item) => item.id === workspace.id ? workspace : item)
         : [...current, workspace];
     });
-    void saveBomWorkspace(workspace).catch(() => undefined);
   };
 
   const orderedBomWorkspaces = useMemo(
@@ -1932,18 +1997,20 @@ export function MaterialRequestPage() {
     try {
       let lastWorkspaceId = activeBomId;
       let totalRecords = 0;
+      const workspaceMap = new Map(bomWorkspaces.map((workspace) => [workspace.id, workspace]));
+
       for (const file of files) {
         const payload = await parseMaterialWorkbookFile(file);
-        const workspace: BomWorkspace = {
-          id: createBomId(file.name),
-          name: file.name,
-          payload,
-          updatedAt: new Date().toISOString(),
-        };
+        const workspaceId = createBomId(file.name);
+        const workspace = mergeImportedWorkspace(workspaceMap.get(workspaceId), workspaceId, payload);
+        await saveBomWorkspace(workspace);
         replaceBomWorkspace(workspace);
+        workspaceMap.set(workspaceId, workspace);
         lastWorkspaceId = workspace.id;
-        totalRecords += payload.recordCount;
+        totalRecords += workspace.payload.recordCount;
       }
+
+      await reloadBomWorkspaces(lastWorkspaceId);
       setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
@@ -1985,37 +2052,63 @@ export function MaterialRequestPage() {
     const records = exists
       ? basePayload.records.map((item) => item.id === record.id ? record : item)
       : [...basePayload.records, record];
-    replaceBomWorkspace({
+    const nextWorkspace: BomWorkspace = {
       ...activeWorkspace,
       payload: { ...basePayload, records, recordCount: records.length },
       updatedAt: new Date().toISOString(),
+    };
+    replaceBomWorkspace(nextWorkspace);
+
+    return saveBomWorkspaceRecord(nextWorkspace, record).catch(async (error) => {
+      await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+      throw error;
     });
   };
 
-  const handleSaveRecord = (record: MaterialWorkbookRecord) => {
-    saveRecordToActiveBom(record);
-
-    setEditorOpen(false);
-    toast({
-      title: editorMode === "create" ? "料件已新增" : "料件已更新",
-      description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
-    });
+  const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
+    try {
+      await saveRecordToActiveBom(record);
+      setEditorOpen(false);
+      toast({
+        title: editorMode === "create" ? "料件已新增" : "料件已更新",
+        description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
+      });
+    } catch {
+      toast({
+        title: "同步更新失敗",
+        description: "這筆料件還沒寫進共用資料，請稍後再試一次。",
+        variant: "destructive",
+      });
+    }
   };
 
   const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
-    saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value });
+    void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
+      toast({
+        title: "資料更新失敗",
+        description: "TX 尚未同步到共用資料，已重新載入最新版本。",
+        variant: "destructive",
+      });
+    });
   };
 
   const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
     const currentHistory = record.trackingHistory ?? [];
-    saveRecordToActiveBom({
+    void saveRecordToActiveBom({
       ...toWorkbookRecord(record),
       trackingStatus: entry.status,
       trackingHistory: [...currentHistory, entry],
-    });
-    toast({
-      title: "狀態追蹤已更新",
-      description: `${record.name || record.displayRef} · ${entry.status}`,
+    }).then(() => {
+      toast({
+        title: "狀態追蹤已更新",
+        description: `${record.name || record.displayRef} · ${entry.status}`,
+      });
+    }).catch(() => {
+      toast({
+        title: "狀態追蹤更新失敗",
+        description: "這筆追蹤還沒同步到共用資料，已重新載入最新版本。",
+        variant: "destructive",
+      });
     });
   };
 
@@ -2056,11 +2149,13 @@ export function MaterialRequestPage() {
       if (remaining.length === 0) {
         await saveBomWorkspace(fallbackWorkspace);
       }
+      await reloadBomWorkspaces(nextWorkspaces[0].id);
       toast({
         title: "BOM 已刪除",
         description: remaining.length === 0 ? "已自動建立新的預設備援 BOM。" : `剩餘 ${remaining.length} 個 BOM。`,
       });
     } catch {
+      await reloadBomWorkspaces(activeBomId).catch(() => undefined);
       toast({
         title: "刪除 BOM 失敗",
         description: "請重新整理後再試一次。",
