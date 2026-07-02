@@ -96,7 +96,11 @@ interface ExcelFilterOption {
   value: string;
   count: number;
   keywords?: string;
+  tone?: ExcelFilterTone;
 }
+
+type ExcelFilterTone = "emerald" | "amber" | "sky" | "rose" | "slate";
+type ColumnFilterSelection = string[] | null;
 
 interface SavedMaterialChanges {
   added: MaterialWorkbookRecord[];
@@ -104,13 +108,13 @@ interface SavedMaterialChanges {
 }
 
 interface MaterialColumnFilters {
-  material: string[];
-  refDes: string[];
-  mpn: string[];
-  internal: string[];
-  virtualAlternative: string[];
-  trackingStatus: string[];
-  specification: string[];
+  material: ColumnFilterSelection;
+  refDes: ColumnFilterSelection;
+  mpn: ColumnFilterSelection;
+  internal: ColumnFilterSelection;
+  virtualAlternative: ColumnFilterSelection;
+  trackingStatus: ColumnFilterSelection;
+  specification: ColumnFilterSelection;
 }
 
 interface MaterialColumnTextFilters {
@@ -126,13 +130,13 @@ interface MaterialColumnTextFilters {
 type ColumnFilterKey = keyof MaterialColumnFilters;
 
 const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
-  material: [],
-  refDes: [],
-  mpn: [],
-  internal: [],
-  virtualAlternative: [],
-  trackingStatus: [],
-  specification: [],
+  material: null,
+  refDes: null,
+  mpn: null,
+  internal: null,
+  virtualAlternative: null,
+  trackingStatus: null,
+  specification: null,
 };
 
 const EMPTY_COLUMN_TEXT_FILTERS: MaterialColumnTextFilters = {
@@ -410,6 +414,58 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
   }
 }
 
+function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key: ColumnFilterKey) {
+  const latestTrackingEntry = getLatestTrackingEntry(record);
+
+  switch (key) {
+    case "material":
+      return [
+        group.displayRef,
+        group.name,
+        group.assemblyName,
+        record.manufacturer,
+        record.refDes,
+        record.refGroup,
+      ];
+    case "refDes":
+      return [record.refDes, record.refGroup, group.displayRef];
+    case "mpn":
+      return [record.manufacturerPartNumber, record.manufacturerPartNumberAlt];
+    case "internal":
+      return [record.partNumber, record.schematicPart, record.pcbFootprint];
+    case "virtualAlternative":
+      return [record.virtualAlternative ?? ""];
+    case "trackingStatus": {
+      const values = [
+        record.trackingStatus ?? "",
+        latestTrackingEntry?.status ?? "",
+        latestTrackingEntry?.note ?? "",
+        latestTrackingEntry?.createdBy ?? "",
+        record.sourcingStatus,
+        record.remark,
+      ];
+
+      if (group.requiresApplication) values.push("主料與替代都無料");
+      if (group.pendingCount > 0) values.push("有待申請");
+      if (group.riskCount > 0) values.push("有風險");
+
+      return values;
+    }
+    case "specification":
+      return [
+        group.partSpec,
+        group.partName,
+        group.schematicPart,
+        group.footprint,
+        record.partSpec,
+        record.partName,
+        record.remark,
+      ];
+    default:
+      return [];
+  }
+}
+
 function formatTimestamp(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -433,6 +489,48 @@ function getTrackingStatusTone(status: string) {
     return "border-amber-400/30 bg-amber-400/10 text-amber-200";
   }
   return "border-sky-400/30 bg-sky-400/10 text-sky-200";
+}
+
+function getTrackingStatusCardTone(status: string) {
+  const normalized = status.trim().toLowerCase();
+
+  if (!normalized) {
+    return {
+      wrapper: "border-slate-500/30 bg-slate-500/[0.08] hover:bg-slate-500/[0.14]",
+      accent: "bg-slate-300/70",
+      note: "bg-slate-950/25 text-slate-300",
+      meta: "text-slate-300",
+      icon: "text-slate-200",
+    };
+  }
+
+  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return {
+      wrapper: "border-emerald-400/40 bg-emerald-500/[0.14] hover:bg-emerald-500/[0.2]",
+      accent: "bg-emerald-300",
+      note: "bg-emerald-950/30 text-emerald-50",
+      meta: "text-emerald-100",
+      icon: "text-emerald-100",
+    };
+  }
+
+  if (["待", "申請", "確認", "排程", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return {
+      wrapper: "border-amber-400/40 bg-amber-500/[0.16] hover:bg-amber-500/[0.22]",
+      accent: "bg-amber-300",
+      note: "bg-amber-950/30 text-amber-50",
+      meta: "text-amber-100",
+      icon: "text-amber-100",
+    };
+  }
+
+  return {
+    wrapper: "border-sky-400/40 bg-sky-500/[0.15] hover:bg-sky-500/[0.22]",
+    accent: "bg-sky-300",
+    note: "bg-sky-950/30 text-sky-50",
+    meta: "text-sky-100",
+    icon: "text-sky-100",
+  };
 }
 
 function createTrackingHistoryId() {
@@ -474,12 +572,33 @@ function uniqueNormalizedValues(values: string[]) {
   return Array.from(new Set(values.map(normalizeFilterValue)));
 }
 
-function buildExcelFilterOptions(values: string[]) {
+function inferFilterOptionTone(value: string): ExcelFilterTone {
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized) return "slate";
+  if (["完成", "已完成", "ok", "approved", "結案", "可用", "已建"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "emerald";
+  }
+  if (["風險", "缺料", "阻塞", "blocked", "失敗"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "rose";
+  }
+  if (["待", "申請", "確認", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "amber";
+  }
+  if (["處理中", "追蹤", "進行", "progress"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "sky";
+  }
+
+  return "slate";
+}
+
+function buildExcelFilterOptions(valueGroups: string[][]) {
   const counter = new Map<string, number>();
 
-  values.forEach((value) => {
-    const normalized = normalizeFilterValue(value);
-    counter.set(normalized, (counter.get(normalized) ?? 0) + 1);
+  valueGroups.forEach((values) => {
+    uniqueNormalizedValues(values).forEach((value) => {
+      counter.set(value, (counter.get(value) ?? 0) + 1);
+    });
   });
 
   return Array.from(counter.entries())
@@ -489,11 +608,13 @@ function buildExcelFilterOptions(values: string[]) {
       value,
       count,
       keywords: value,
+      tone: inferFilterOptionTone(value),
     }));
 }
 
-function matchesExcelFilter(selectedValues: string[], candidateValues: string[]) {
-  if (selectedValues.length === 0) return true;
+function matchesExcelFilter(selectedValues: ColumnFilterSelection, candidateValues: string[]) {
+  if (selectedValues === null) return true;
+  if (selectedValues.length === 0) return false;
   const normalizedCandidates = uniqueNormalizedValues(candidateValues);
   return normalizedCandidates.some((value) => selectedValues.includes(value));
 }
@@ -509,21 +630,35 @@ function matchesTextFilterQuery(query: string, candidateValues: string[]) {
   return tokens.every((token) => searchableText.includes(token));
 }
 
-function matchesColumnFilters(
+function matchesRecordColumnFilters(
+  record: MaterialRecord,
   group: MaterialGroup,
   filters: MaterialColumnFilters,
   textFilters: MaterialColumnTextFilters,
   ignoredKey?: ColumnFilterKey,
 ) {
   const keys = Object.keys(filters) as ColumnFilterKey[];
+
   return keys.every((key) => {
     if (key === ignoredKey) return true;
-    const candidateValues = getGroupColumnValues(group, key);
+    const candidateValues = getRecordColumnValues(record, group, key);
+
     return (
       matchesExcelFilter(filters[key], candidateValues) &&
       matchesTextFilterQuery(textFilters[key], candidateValues)
     );
   });
+}
+
+function matchesColumnFilters(
+  group: MaterialGroup,
+  filters: MaterialColumnFilters,
+  textFilters: MaterialColumnTextFilters,
+  ignoredKey?: ColumnFilterKey,
+) {
+  return group.records.some((record) =>
+    matchesRecordColumnFilters(record, group, filters, textFilters, ignoredKey)
+  );
 }
 
 function ExcelFilterPopover({
@@ -537,43 +672,120 @@ function ExcelFilterPopover({
 }: {
   label: string;
   options: ExcelFilterOption[];
-  selectedValues: string[];
-  onSelectedValuesChange: (values: string[]) => void;
+  selectedValues: ColumnFilterSelection;
+  onSelectedValuesChange: (values: ColumnFilterSelection) => void;
   textFilterValue: string;
   onTextFilterValueChange: (value: string) => void;
   searchPlaceholder: string;
 }) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const effectiveSelected = selectedValues.length === 0 ? options.map((option) => option.value) : selectedValues;
-  const hasTextFilter = textFilterValue.trim().length > 0;
+  const [optionSearchQuery, setOptionSearchQuery] = useState("");
+  const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
+  const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
+  const effectiveSelected = useMemo(
+    () => selectedValues === null
+      ? options.map((option) => option.value)
+      : selectedValues.filter((value) => optionValueSet.has(value)),
+    [optionValueSet, options, selectedValues],
+  );
+  const hasContainsFilter = textFilterValue.trim().length > 0;
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = textFilterValue.trim().toLowerCase();
-    const next = normalizedQuery
-      ? options.filter((option) => `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(normalizedQuery))
-      : options;
+    const normalizedQuery = optionSearchQuery.trim().toLowerCase();
+    const next = options.filter((option) => {
+      const matchesSearch = !normalizedQuery || `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(normalizedQuery);
+      const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
+      return matchesSearch && matchesTone;
+    });
 
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [options, sortDirection, textFilterValue]);
+  }, [optionSearchQuery, options, sortDirection, toneFilter]);
 
-  const allSelected = options.length > 0 && effectiveSelected.length === options.length;
-  const summary = hasTextFilter
-    ? allSelected || options.length === 0
-      ? "文字"
-      : `${effectiveSelected.length}/${options.length} + 文字`
-    : options.length === 0 || allSelected
-      ? "全部"
-      : `${effectiveSelected.length}/${options.length}`;
+  const toneButtons = useMemo(() => {
+    const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
+    return [
+      {
+        value: "all" as const,
+        label: "全部顏色",
+        className: "border-slate-400/20 bg-slate-500/10 text-slate-200 hover:bg-slate-500/20",
+        activeClassName: "border-cyan-300/50 bg-cyan-400/15 text-cyan-100",
+      },
+      availableTones.has("emerald") ? {
+        value: "emerald" as const,
+        label: "綠",
+        className: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20",
+        activeClassName: "border-emerald-300/60 bg-emerald-500/25 text-emerald-50",
+      } : null,
+      availableTones.has("amber") ? {
+        value: "amber" as const,
+        label: "黃",
+        className: "border-amber-400/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20",
+        activeClassName: "border-amber-300/60 bg-amber-500/25 text-amber-50",
+      } : null,
+      availableTones.has("sky") ? {
+        value: "sky" as const,
+        label: "藍",
+        className: "border-sky-400/25 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
+        activeClassName: "border-sky-300/60 bg-sky-500/25 text-sky-50",
+      } : null,
+      availableTones.has("rose") ? {
+        value: "rose" as const,
+        label: "紅",
+        className: "border-rose-400/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
+        activeClassName: "border-rose-300/60 bg-rose-500/25 text-rose-50",
+      } : null,
+      availableTones.has("slate") ? {
+        value: "slate" as const,
+        label: "灰",
+        className: "border-slate-400/20 bg-slate-500/10 text-slate-300 hover:bg-slate-500/20",
+        activeClassName: "border-slate-300/60 bg-slate-500/25 text-slate-50",
+      } : null,
+    ].filter(Boolean) as Array<{
+      value: ExcelFilterTone | "all";
+      label: string;
+      className: string;
+      activeClassName: string;
+    }>;
+  }, [options]);
+
+  const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelected.includes(option.value)).length;
+  const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
+  const hasValueFilter = selectedValues !== null;
+  const summary = hasContainsFilter
+    ? hasValueFilter
+      ? effectiveSelected.length === 0
+        ? "未選 + 包含"
+        : `${effectiveSelected.length}/${options.length} + 包含`
+      : "全部 + 包含"
+    : hasValueFilter
+      ? effectiveSelected.length === 0
+        ? "未選"
+        : `${effectiveSelected.length}/${options.length}`
+      : "全部";
+
+  const applySelection = (nextValues: string[]) => {
+    const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
+    onSelectedValuesChange(normalized.length === options.length ? null : normalized);
+  };
 
   const toggleValue = (value: string, checked: boolean) => {
-    const current = selectedValues.length === 0 ? options.map((option) => option.value) : selectedValues;
+    const current = selectedValues === null ? options.map((option) => option.value) : effectiveSelected;
     const next = checked
       ? Array.from(new Set([...current, value]))
       : current.filter((item) => item !== value);
 
-    onSelectedValuesChange(next.length === options.length ? [] : next);
+    applySelection(next);
+  };
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    const next = new Set(selectedValues === null ? options.map((option) => option.value) : effectiveSelected);
+    filteredOptions.forEach((option) => {
+      if (checked) next.add(option.value);
+      else next.delete(option.value);
+    });
+    applySelection(Array.from(next));
   };
 
   return (
@@ -594,12 +806,12 @@ function ExcelFilterPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[280px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100"
+        className="w-[320px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100"
       >
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-bold text-slate-100">{label}</p>
-            <p className="text-xs text-slate-500">只顯示目前篩選結果內、這一欄真正存在的值。</p>
+            <p className="text-xs text-slate-500">比照 Excel：排序、勾選值、文字包含與顏色快速篩選。</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -629,20 +841,52 @@ function ExcelFilterPopover({
             </button>
           </div>
 
-          <Input
-            value={textFilterValue}
-            onChange={(event) => onTextFilterValueChange(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
-          />
-          <p className="text-[11px] text-cyan-200/80">輸入後會直接做文字篩選，下方清單也會同步縮小。</p>
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-slate-400">搜尋勾選清單</p>
+            <Input
+              value={optionSearchQuery}
+              onChange={(event) => setOptionSearchQuery(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-slate-400">文字包含</p>
+            <Input
+              value={textFilterValue}
+              onChange={(event) => onTextFilterValueChange(event.target.value)}
+              placeholder={`只顯示包含指定文字的${label}`}
+              className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+            />
+            <p className="text-[11px] text-cyan-200/80">這個條件會真正影響表格結果，搜尋勾選清單只用來找值。</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-slate-400">依顏色快速篩選</p>
+            <div className="flex flex-wrap gap-1.5">
+              {toneButtons.map((button) => (
+                <button
+                  key={button.value}
+                  type="button"
+                  onClick={() => setToneFilter(button.value)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    toneFilter === button.value ? button.activeClassName : button.className,
+                  )}
+                >
+                  {button.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="flex items-center justify-between gap-2">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onSelectedValuesChange([])}
+              onClick={() => onSelectedValuesChange(null)}
               className="h-8 px-2 text-xs text-blue-300 hover:bg-blue-400/10 hover:text-blue-200"
             >
               全選
@@ -651,7 +895,16 @@ function ExcelFilterPopover({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onSelectedValuesChange(filteredOptions.map((option) => option.value))}
+              onClick={() => onSelectedValuesChange([])}
+              className="h-8 px-2 text-xs text-rose-300 hover:bg-rose-400/10 hover:text-rose-200"
+            >
+              全不選
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => applySelection(filteredOptions.map((option) => option.value))}
               className="h-8 px-2 text-xs text-amber-300 hover:bg-amber-400/10 hover:text-amber-200"
             >
               只留搜尋結果
@@ -660,18 +913,40 @@ function ExcelFilterPopover({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onTextFilterValueChange("")}
+              onClick={() => {
+                setOptionSearchQuery("");
+                setToneFilter("all");
+                onTextFilterValueChange("");
+              }}
               className="h-8 px-2 text-xs text-slate-400 hover:bg-slate-400/10 hover:text-slate-200"
             >
               清空搜尋
             </Button>
           </div>
 
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
+            <span>清單顯示 {filteredOptions.length} 筆</span>
+          </div>
+
           <ScrollArea className="h-64 rounded-xl border border-blue-400/15 bg-[#091222]">
             <div className="space-y-1 p-2">
+              {options.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2 py-2 text-sm font-semibold text-slate-100 hover:bg-blue-400/10">
+                  <Checkbox
+                    checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
+                    onCheckedChange={(value) => toggleVisibleSelection(value === true)}
+                    className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                  />
+                  <span className="min-w-0 flex-1 truncate">(全選)</span>
+                  <span className="text-xs text-slate-400">{visibleCheckedCount}/{filteredOptions.length}</span>
+                </label>
+              )}
+
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option) => {
                   const checked = effectiveSelected.includes(option.value);
+                  const tone = option.tone ?? "slate";
                   return (
                     <label
                       key={option.value}
@@ -682,8 +957,18 @@ function ExcelFilterPopover({
                         onCheckedChange={(value) => toggleValue(option.value, value === true)}
                         className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
                       />
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full flex-none",
+                          tone === "emerald" && "bg-emerald-300",
+                          tone === "amber" && "bg-amber-300",
+                          tone === "sky" && "bg-sky-300",
+                          tone === "rose" && "bg-rose-300",
+                          tone === "slate" && "bg-slate-400",
+                        )}
+                      />
                       <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      <span className="text-xs text-slate-500">{option.count}</span>
+                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-xs text-slate-400">{option.count}</span>
                     </label>
                   );
                 })
@@ -819,6 +1104,7 @@ function TrackingHistoryCell({
   onOpen: (record: MaterialRecord) => void;
 }) {
   const latestEntry = getLatestTrackingEntry(record);
+  const cardTone = getTrackingStatusCardTone(latestEntry?.status || "");
   const historyCount = record.trackingHistory?.length
     ? record.trackingHistory.length
     : latestEntry
@@ -829,22 +1115,31 @@ function TrackingHistoryCell({
     <button
       type="button"
       onClick={() => onOpen(record)}
-      className="group flex w-full items-start justify-between gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-3 py-3 text-left hover:bg-sky-400/[0.12]"
+      className={cn(
+        "group flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+        cardTone.wrapper,
+      )}
       title="查看狀態追蹤歷史"
     >
-      <div className="min-w-0">
+      <span className={cn("mt-1 h-14 w-1.5 flex-none rounded-full", cardTone.accent)} />
+      <div className="min-w-0 flex-1">
         <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(latestEntry?.status || ""))}>
           {latestEntry?.status || "新增追蹤"}
         </span>
-        <p className={cn("mt-2 text-sm leading-6", latestEntry?.note ? "line-clamp-2 text-slate-200" : "text-slate-400")}>
+        <p
+          className={cn(
+            "mt-2 rounded-lg px-2.5 py-2 text-sm leading-6",
+            latestEntry?.note ? `${cardTone.note} line-clamp-2` : "bg-slate-950/25 text-slate-400",
+          )}
+        >
           {latestEntry?.note || (latestEntry ? "點擊查看完整歷史與圖片" : "點擊建立第一筆狀態追蹤")}
         </p>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className={cn("mt-2 text-xs", cardTone.meta)}>
           {historyCount} 筆紀錄
           {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
         </p>
       </div>
-      <History className="mt-1 h-4 w-4 flex-none text-sky-300 opacity-80 transition-opacity group-hover:opacity-100" />
+      <History className={cn("mt-1 h-4 w-4 flex-none opacity-90 transition-opacity group-hover:opacity-100", cardTone.icon)} />
     </button>
   );
 }
@@ -1049,14 +1344,17 @@ function TrackingHistoryDialog({
                   </div>
                 )}
 
-                {historyEntries.map((entry, index) => (
-                  <article key={`${entry.id}-${index}`} className="rounded-2xl border border-blue-400/15 bg-[#0a1527] p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                {historyEntries.map((entry, index) => {
+                  const entryTone = getTrackingStatusCardTone(entry.status);
+
+                  return (
+                    <article key={`${entry.id}-${index}`} className={cn("rounded-2xl border p-4", entryTone.wrapper)}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(entry.status))}>
                           {entry.status}
                         </span>
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+                        <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
                           {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
                           {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
                           {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
@@ -1068,28 +1366,31 @@ function TrackingHistoryDialog({
                           最新
                         </span>
                       )}
-                    </div>
-
-                    {entry.note && (
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-200">{entry.note}</p>
-                    )}
-
-                    {entry.images && entry.images.length > 0 && (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {entry.images.map((image) => (
-                          <a key={image.id} href={image.dataUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/30 hover:border-cyan-400/30">
-                            <div className="aspect-[4/3]">
-                              <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="px-3 py-2">
-                              <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
-                            </div>
-                          </a>
-                        ))}
                       </div>
-                    )}
-                  </article>
-                ))}
+
+                      {entry.note && (
+                        <p className={cn("mt-3 whitespace-pre-wrap rounded-xl px-3 py-3 text-sm leading-6", entryTone.note)}>
+                          {entry.note}
+                        </p>
+                      )}
+
+                      {entry.images && entry.images.length > 0 && (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {entry.images.map((image) => (
+                            <a key={image.id} href={image.dataUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/30 hover:border-cyan-400/30">
+                              <div className="aspect-[4/3]">
+                                <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="px-3 py-2">
+                                <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </div>
@@ -1909,14 +2210,18 @@ export function MaterialRequestPage() {
     const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
 
     return keys.reduce((result, key) => {
-      const values = dataset.groups
-        .filter((group) => matchesSearch(group) && matchesAvailability(group) && matchesColumnFilters(group, columnFilters, columnTextFilters, key))
-        .flatMap((group) => getGroupColumnValues(group, key));
+      const valueGroups = dataset.groups
+        .filter((group) => matchesSearch(group) && matchesAvailability(group))
+        .flatMap((group) =>
+          getSortedAlternatives(group)
+            .filter((record) => matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters, key))
+            .map((record) => getRecordColumnValues(record, group, key))
+        );
 
-      result[key] = buildExcelFilterOptions(values);
+      result[key] = buildExcelFilterOptions(valueGroups);
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
-  }, [availability, columnFilters, columnTextFilters, dataset.groups, searchTokens]);
+  }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch]);
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
@@ -1938,7 +2243,7 @@ export function MaterialRequestPage() {
       }
       return left.displayRef.localeCompare(right.displayRef, undefined, { numeric: true });
     });
-  }, [availability, columnFilters, columnTextFilters, dataset.groups, searchTokens, sortMode]);
+  }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
@@ -2211,7 +2516,9 @@ export function MaterialRequestPage() {
 
   const handleExport = () => {
     const rows = filteredGroups.flatMap((group) =>
-      getSortedAlternatives(group).map((record) => ({
+      getSortedAlternatives(group)
+        .filter((record) => matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters))
+        .map((record) => ({
         Ref_Group: group.displayRef,
         REF_DES: record.refDes || group.primaryRecord.refDes,
         電路料名稱: group.name,
