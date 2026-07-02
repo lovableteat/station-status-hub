@@ -389,13 +389,17 @@ function getSortedAlternatives(group: MaterialGroup) {
   return [group.primaryRecord, ...alternatives];
 }
 
-function getUniqueMpnCount(group: MaterialGroup) {
+function getUniqueMpnCountForRecords(records: MaterialRecord[]) {
   return new Set(
-    group.records
+    records
       .flatMap((record) => record.mpnCandidates)
       .map((mpn) => mpn.trim().toLowerCase())
-      .filter(Boolean)
+      .filter(Boolean),
   ).size;
+}
+
+function getUniqueMpnCount(group: MaterialGroup) {
+  return getUniqueMpnCountForRecords(group.records);
 }
 
 function hasNoAlternative(group: MaterialGroup) {
@@ -1967,6 +1971,8 @@ function AlternativeRows({
 
 function CompactAlternativeRows({
   group,
+  records,
+  primaryRecord,
   onCopy,
   onView,
   onEdit,
@@ -1974,14 +1980,16 @@ function CompactAlternativeRows({
   onOpenTracking,
 }: {
   group: MaterialGroup;
+  records: MaterialRecord[];
+  primaryRecord: MaterialRecord;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
   onSaveVirtual: (record: MaterialRecord, value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
-  const alternatives = getSortedAlternatives(group).slice(1);
-  const groupRefDes = group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
+  const alternatives = records.filter((record) => record.id !== primaryRecord.id);
+  const groupRefDes = primaryRecord.refDes || primaryRecord.refGroup || "-";
 
   return (
     <>
@@ -2247,17 +2255,18 @@ export function MaterialRequestPage() {
     );
   };
 
+  const getMatchingRecords = (group: MaterialGroup, ignoredKey?: ColumnFilterKey) =>
+    getSortedAlternatives(group).filter((record) =>
+      matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters, ignoredKey)
+    );
+
   const columnFilterOptions = useMemo(() => {
     const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
 
     return keys.reduce((result, key) => {
       const valueGroups = dataset.groups
         .filter((group) => matchesSearch(group) && matchesAvailability(group))
-        .flatMap((group) =>
-          getSortedAlternatives(group)
-            .filter((record) => matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters, key))
-            .map((record) => getRecordColumnValues(record, group, key))
-        );
+        .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
 
       result[key] = buildExcelFilterOptions(valueGroups);
       return result;
@@ -2266,7 +2275,7 @@ export function MaterialRequestPage() {
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
-      return matchesSearch(group) && matchesColumnFilters(group, columnFilters, columnTextFilters) && matchesAvailability(group);
+      return matchesSearch(group) && getMatchingRecords(group).length > 0 && matchesAvailability(group);
     });
 
     return [...result].sort((left, right) => {
@@ -2311,6 +2320,23 @@ export function MaterialRequestPage() {
     const start = (page - 1) * pageSize;
     return filteredGroups.slice(start, start + pageSize);
   }, [filteredGroups, page, pageSize]);
+
+  const visibleGroupRows = useMemo(
+    () => visibleGroups.map((group) => {
+      const matchingRecords = getMatchingRecords(group);
+      const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
+      const secondaryAlternatives = matchingRecords.slice(primaryAlternative ? 1 : 0);
+
+      return {
+        group,
+        matchingRecords,
+        primaryAlternative,
+        secondaryAlternatives,
+        uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
+      };
+    }),
+    [visibleGroups, columnFilters, columnTextFilters],
+  );
 
   useEffect(() => {
     setPage(1);
@@ -2558,11 +2584,10 @@ export function MaterialRequestPage() {
 
   const handleExport = () => {
     const rows = filteredGroups.flatMap((group) =>
-      getSortedAlternatives(group)
-        .filter((record) => matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters))
+      getMatchingRecords(group)
         .map((record) => ({
-        Ref_Group: group.displayRef,
-        REF_DES: record.refDes || group.primaryRecord.refDes,
+          Ref_Group: group.displayRef,
+          REF_DES: record.refDes || group.primaryRecord.refDes,
         電路料名稱: group.name,
         模組: group.assemblyName,
         Qty: group.qty,
@@ -2765,14 +2790,10 @@ export function MaterialRequestPage() {
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-              {visibleGroups.map((group) => {
+              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, secondaryAlternatives, uniqueMpnCount }) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
-                const uniqueMpnCount = getUniqueMpnCount(group);
                 const noAlternative = uniqueMpnCount <= 1;
-                const sortedAlternatives = getSortedAlternatives(group);
-                const primaryAlternative = sortedAlternatives[0];
-                const secondaryAlternatives = sortedAlternatives.slice(1);
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
@@ -2950,13 +2971,13 @@ export function MaterialRequestPage() {
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />資料更新</Button>
                       </td>
                     </tr>
-                    {expanded && <CompactAlternativeRows group={group} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onOpenTracking={openTrackingDialog} />}
+                    {expanded && <CompactAlternativeRows group={group} records={matchingRecords} primaryRecord={primaryAlternative} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onOpenTracking={openTrackingDialog} />}
                   </tbody>
                 );
               })}
           </table>
 
-          {visibleGroups.length === 0 && <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center"><Search className="h-10 w-10 text-slate-600" /><p className="mt-3 text-lg font-bold text-slate-300">找不到符合條件的料</p><p className="mt-1 text-[15px] text-slate-500">請清除篩選，或改用 MPN、廠商、Footprint 搜尋。</p></div>}
+          {visibleGroupRows.length === 0 && <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center"><Search className="h-10 w-10 text-slate-600" /><p className="mt-3 text-lg font-bold text-slate-300">找不到符合條件的料</p><p className="mt-1 text-[15px] text-slate-500">請清除篩選，或改用 MPN、廠商、Footprint 搜尋。</p></div>}
         </div>
 
         <div className="flex flex-col gap-3 border-t border-blue-400/15 bg-[#101d33] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
