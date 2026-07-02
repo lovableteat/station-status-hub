@@ -74,6 +74,7 @@ import {
   buildMaterialDataset,
   getActionLabel,
   getLatestTrackingEntry,
+  isPreferredInternalPartNumber,
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
@@ -147,6 +148,7 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
+const TRACKING_STATUS_OPTIONS = ["待處理", "處理中", "已完成"] as const;
 const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
@@ -276,7 +278,7 @@ function parseSearchTokens(query: string) {
 }
 
 function isPrimaryInternalPart(record: MaterialRecord) {
-  return /00$/i.test(record.partNumber.trim());
+  return isPreferredInternalPartNumber(record.partNumber);
 }
 
 function getAlternativeScore(record: MaterialRecord) {
@@ -818,7 +820,7 @@ function TrackingHistoryDialog({
   onSave: (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => void;
 }) {
   const { toast } = useToast();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<(typeof TRACKING_STATUS_OPTIONS)[number] | "">("");
   const [note, setNote] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
@@ -931,8 +933,19 @@ function TrackingHistoryDialog({
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="tracking-status-input">最新狀態 *</Label>
-                    <Input id="tracking-status-input" value={status} onChange={(event) => setStatus(event.target.value)} placeholder="例如：待確認、申請中、已完成" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    <Label htmlFor="tracking-status-select">最新狀態 *</Label>
+                    <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
+                      <SelectTrigger id="tracking-status-select" className="border-blue-400/25 bg-[#071522] text-slate-100 focus:ring-blue-500">
+                        <SelectValue placeholder="請選擇最新狀態" />
+                      </SelectTrigger>
+                      <SelectContent className="border-blue-400/25 bg-[#0d1729] text-slate-100">
+                        {TRACKING_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tracking-owner-input">更新人</Label>
@@ -1156,7 +1169,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["每個廠商料一列", "同一顆料有 Murata、Samsung、TDK，就建立三列；不要把多個 MPN 塞在同一格。"],
                 ["藍色列開新主料", "每個主料第一列填藍色；直到下一個藍色列以前，都視為它底下的替代料。"],
                 ["Level 可有可無", "有階層時用 0=大分類、1=模組、2=料件；一般平面表沒有 Level 也能上傳。"],
-                ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00 就算可用；主料不符時會繼續檢查底下替代料。"],
+                ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00、ZZ 或 ZY 就算可用；主料不符時會繼續檢查底下替代料。"],
                 ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
                 ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
                 ["追蹤欄位可選填", "TX 與 Tracking Status／處理狀態可直接放在 Excel；匯入後會顯示成最新狀態，後續可在網站裡追加歷史與圖片。"],
@@ -1175,7 +1188,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
               <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
               <p><strong className="text-slate-100">分組：</strong>有藍色起始列時完全依底色分組；沒有底色標記的其他格式，才退回 Ref Group＋料名規則。</p>
-              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00，且沒有填任何 TX，才列入待申請；只要一顆替代料可用或有 TX 就不算問題。</p>
+              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00、ZZ 或 ZY，且沒有填任何 TX，才列入待申請；只要一顆替代料可用或有 TX 就不算問題。</p>
             </div>
           </section>
 
@@ -1186,7 +1199,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
               <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
               <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
-              <li>5. TX 直接在表格內點擊填寫；狀態追蹤改為點開欄位後新增歷史，建議用「待確認、申請中、已完成」。</li>
+              <li>5. TX 直接在表格內點擊填寫；狀態追蹤改為點開欄位後新增歷史，最新狀態固定使用「待處理、處理中、已完成」。</li>
               <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
             </ol>
           </section>
@@ -1501,7 +1514,7 @@ function AlternativeRows({
                           <p className="text-base font-bold leading-6 text-slate-50">{record.manufacturer || "未填廠商"}</p>
                           {preferred && (
                             <span className="mt-1 inline-flex rounded-full bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">
-                              {primaryByPartNumber ? "尾數 00 首選" : "優先可用"}
+                              {primaryByPartNumber ? "尾數 00 / ZZ / ZY 首選" : "優先可用"}
                             </span>
                           )}
                         </div>
@@ -1803,7 +1816,7 @@ export function MaterialRequestPage() {
       : "有替代料 multiple source alternative";
     const applicationSearchText = mustApply
       ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-      : "至少一顆可用料 有可用替代 remark ok 尾數 00 usable material";
+      : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
     const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
 
     return searchTokens.every((token) => searchableText.includes(token));
