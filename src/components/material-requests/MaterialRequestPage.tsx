@@ -109,6 +109,16 @@ interface MaterialColumnFilters {
   specification: string[];
 }
 
+interface MaterialColumnTextFilters {
+  material: string;
+  refDes: string;
+  mpn: string;
+  internal: string;
+  virtualAlternative: string;
+  trackingStatus: string;
+  specification: string;
+}
+
 type ColumnFilterKey = keyof MaterialColumnFilters;
 
 const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
@@ -119,6 +129,16 @@ const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   virtualAlternative: [],
   trackingStatus: [],
   specification: [],
+};
+
+const EMPTY_COLUMN_TEXT_FILTERS: MaterialColumnTextFilters = {
+  material: "",
+  refDes: "",
+  mpn: "",
+  internal: "",
+  virtualAlternative: "",
+  trackingStatus: "",
+  specification: "",
 };
 
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
@@ -309,6 +329,7 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
         group.displayRef,
         group.name,
         group.assemblyName,
+        ...group.manufacturers,
       ];
     case "refDes":
       return group.records.flatMap((record) => [record.refDes, record.refGroup]);
@@ -339,6 +360,7 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
         group.partName,
         group.schematicPart,
         group.footprint,
+        ...group.records.map((record) => record.remark),
       ];
     default:
       return [];
@@ -433,15 +455,31 @@ function matchesExcelFilter(selectedValues: string[], candidateValues: string[])
   return normalizedCandidates.some((value) => selectedValues.includes(value));
 }
 
+function matchesTextFilterQuery(query: string, candidateValues: string[]) {
+  const tokens = parseSearchTokens(query);
+  if (tokens.length === 0) return true;
+
+  const searchableText = candidateValues
+    .map((value) => normalizeFilterValue(value).toLowerCase())
+    .join(" ");
+
+  return tokens.every((token) => searchableText.includes(token));
+}
+
 function matchesColumnFilters(
   group: MaterialGroup,
   filters: MaterialColumnFilters,
+  textFilters: MaterialColumnTextFilters,
   ignoredKey?: ColumnFilterKey,
 ) {
   const keys = Object.keys(filters) as ColumnFilterKey[];
   return keys.every((key) => {
     if (key === ignoredKey) return true;
-    return matchesExcelFilter(filters[key], getGroupColumnValues(group, key));
+    const candidateValues = getGroupColumnValues(group, key);
+    return (
+      matchesExcelFilter(filters[key], candidateValues) &&
+      matchesTextFilterQuery(textFilters[key], candidateValues)
+    );
   });
 }
 
@@ -450,20 +488,24 @@ function ExcelFilterPopover({
   options,
   selectedValues,
   onSelectedValuesChange,
+  textFilterValue,
+  onTextFilterValueChange,
   searchPlaceholder,
 }: {
   label: string;
   options: ExcelFilterOption[];
   selectedValues: string[];
   onSelectedValuesChange: (values: string[]) => void;
+  textFilterValue: string;
+  onTextFilterValueChange: (value: string) => void;
   searchPlaceholder: string;
 }) {
-  const [query, setQuery] = useState("");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const effectiveSelected = selectedValues.length === 0 ? options.map((option) => option.value) : selectedValues;
+  const hasTextFilter = textFilterValue.trim().length > 0;
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = textFilterValue.trim().toLowerCase();
     const next = normalizedQuery
       ? options.filter((option) => `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(normalizedQuery))
       : options;
@@ -471,10 +513,16 @@ function ExcelFilterPopover({
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [options, query, sortDirection]);
+  }, [options, sortDirection, textFilterValue]);
 
   const allSelected = options.length > 0 && effectiveSelected.length === options.length;
-  const summary = options.length === 0 || allSelected ? "全部" : `${effectiveSelected.length}/${options.length}`;
+  const summary = hasTextFilter
+    ? allSelected || options.length === 0
+      ? "文字"
+      : `${effectiveSelected.length}/${options.length} + 文字`
+    : options.length === 0 || allSelected
+      ? "全部"
+      : `${effectiveSelected.length}/${options.length}`;
 
   const toggleValue = (value: string, checked: boolean) => {
     const current = selectedValues.length === 0 ? options.map((option) => option.value) : selectedValues;
@@ -539,11 +587,12 @@ function ExcelFilterPopover({
           </div>
 
           <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={textFilterValue}
+            onChange={(event) => onTextFilterValueChange(event.target.value)}
             placeholder={searchPlaceholder}
             className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
           />
+          <p className="text-[11px] text-cyan-200/80">輸入後會直接做文字篩選，下方清單也會同步縮小。</p>
 
           <div className="flex items-center justify-between gap-2">
             <Button
@@ -568,7 +617,7 @@ function ExcelFilterPopover({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setQuery("")}
+              onClick={() => onTextFilterValueChange("")}
               className="h-8 px-2 text-xs text-slate-400 hover:bg-slate-400/10 hover:text-slate-200"
             >
               清空搜尋
@@ -1644,6 +1693,7 @@ export function MaterialRequestPage() {
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
+  const [columnTextFilters, setColumnTextFilters] = useState<MaterialColumnTextFilters>(EMPTY_COLUMN_TEXT_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -1778,17 +1828,17 @@ export function MaterialRequestPage() {
 
     return keys.reduce((result, key) => {
       const values = dataset.groups
-        .filter((group) => matchesSearch(group) && matchesAvailability(group) && matchesColumnFilters(group, columnFilters, key))
+        .filter((group) => matchesSearch(group) && matchesAvailability(group) && matchesColumnFilters(group, columnFilters, columnTextFilters, key))
         .flatMap((group) => getGroupColumnValues(group, key));
 
       result[key] = buildExcelFilterOptions(values);
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
-  }, [availability, columnFilters, dataset.groups, searchTokens]);
+  }, [availability, columnFilters, columnTextFilters, dataset.groups, searchTokens]);
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
-      return matchesSearch(group) && matchesColumnFilters(group, columnFilters) && matchesAvailability(group);
+      return matchesSearch(group) && matchesColumnFilters(group, columnFilters, columnTextFilters) && matchesAvailability(group);
     });
 
     return [...result].sort((left, right) => {
@@ -1806,7 +1856,7 @@ export function MaterialRequestPage() {
       }
       return left.displayRef.localeCompare(right.displayRef, undefined, { numeric: true });
     });
-  }, [availability, columnFilters, dataset.groups, searchTokens, sortMode]);
+  }, [availability, columnFilters, columnTextFilters, dataset.groups, searchTokens, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
@@ -1836,7 +1886,7 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [availability, columnFilters, deferredQuery, pageSize, sortMode]);
+  }, [availability, columnFilters, columnTextFilters, deferredQuery, pageSize, sortMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -1960,6 +2010,7 @@ export function MaterialRequestPage() {
     setActiveBomId(value);
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
+    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability("all");
     setExpandedKey(null);
     setPage(1);
@@ -1968,6 +2019,7 @@ export function MaterialRequestPage() {
   const applyAvailabilityFilter = (nextAvailability: AvailabilityFilter) => {
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
+    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability((current) => current === nextAvailability ? "all" : nextAvailability);
     setExpandedKey(null);
     setPage(1);
@@ -2042,6 +2094,7 @@ export function MaterialRequestPage() {
   const clearFilters = () => {
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
+    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability("all");
     setSortMode("reference");
     setExpandedKey(null);
@@ -2186,18 +2239,18 @@ export function MaterialRequestPage() {
                 ))}
               </tr>
               <tr className="bg-[#102b57] text-slate-100">
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} searchPlaceholder="搜尋料名 / 廠商" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} searchPlaceholder="搜尋 REF DES" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} searchPlaceholder="搜尋 MPN" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} searchPlaceholder="搜尋料號 / Symbol / Footprint" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} searchPlaceholder="搜尋 TX" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} textFilterValue={columnTextFilters.material} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, material: value }))} searchPlaceholder="搜尋料名 / 廠商" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} textFilterValue={columnTextFilters.refDes} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, refDes: value }))} searchPlaceholder="搜尋 REF DES" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} textFilterValue={columnTextFilters.mpn} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, mpn: value }))} searchPlaceholder="搜尋 MPN" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} textFilterValue={columnTextFilters.internal} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, internal: value }))} searchPlaceholder="搜尋料號 / Symbol / Footprint" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} textFilterValue={columnTextFilters.virtualAlternative} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, virtualAlternative: value }))} searchPlaceholder="搜尋 TX" /></th>
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     狀態摘要
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} searchPlaceholder="搜尋規格 / 備註" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} searchPlaceholder="搜尋最新狀態 / 備註 / 更新人" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} textFilterValue={columnTextFilters.specification} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, specification: value }))} searchPlaceholder="搜尋規格 / 備註" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} searchPlaceholder="搜尋最新狀態 / 備註 / 更新人" /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
