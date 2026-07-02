@@ -269,8 +269,49 @@ function createDefaultBomWorkspace(): BomWorkspace {
   };
 }
 
-function createBomId(fileName: string) {
-  return `bom:${fileName.trim().toLowerCase()}`;
+function hashBomSignature(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function createBomSignature(payload: MaterialWorkbookPayload) {
+  const signature = payload.records.map((record) => [
+    record.sectionName,
+    record.assemblyName,
+    record.name,
+    String(record.qty ?? ""),
+    record.refDes,
+    record.manufacturerPartNumber,
+    record.manufacturerPartNumberAlt,
+    record.manufacturer,
+    record.refGroup,
+    record.lv,
+    record.remark,
+    record.partNumber,
+    record.partName,
+    record.partSpec,
+    record.schematicPart,
+    record.pcbFootprint,
+  ].map((value) => String(value ?? "").trim()).join("\u001f")).join("\u001e");
+
+  return `${payload.sheetName}\u001d${payload.recordCount}\u001d${signature}`;
+}
+
+function createBomId(fileName: string, payload: MaterialWorkbookPayload) {
+  const normalizedFileName = fileName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "bom";
+  const fingerprint = hashBomSignature(createBomSignature(payload));
+
+  return `bom:${normalizedFileName}:${fingerprint}`;
 }
 
 function loadActiveBomId() {
@@ -2323,8 +2364,9 @@ export function MaterialRequestPage() {
 
       for (const file of files) {
         const payload = await parseMaterialWorkbookFile(file);
-        const workspaceId = createBomId(file.name);
-        const workspace = mergeImportedWorkspace(workspaceMap.get(workspaceId), workspaceId, payload);
+        const workspaceId = createBomId(file.name, payload);
+        const existingWorkspace = workspaceMap.get(workspaceId);
+        const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
         await saveBomWorkspace(workspace);
         replaceBomWorkspace(workspace);
         workspaceMap.set(workspaceId, workspace);
@@ -2603,7 +2645,14 @@ export function MaterialRequestPage() {
           <div className="flex flex-1 flex-wrap items-center gap-3">
             <span className="text-sm font-bold text-slate-300">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="h-10 w-full max-w-xl border-cyan-400/30 bg-[#0a1527] text-cyan-100 sm:w-[28rem]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10 w-full max-w-xl border-cyan-400/30 bg-[#0a1527] text-cyan-100 sm:w-[28rem]">
+                <div className="flex min-w-0 flex-col items-start text-left">
+                  <span className="max-w-full truncate font-semibold text-cyan-100">{activeWorkspace.name}</span>
+                  <span className="max-w-full truncate text-xs text-slate-400">
+                    {activeWorkspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(activeWorkspace.updatedAt)}
+                  </span>
+                </div>
+              </SelectTrigger>
               <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
                 {orderedBomWorkspaces.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
