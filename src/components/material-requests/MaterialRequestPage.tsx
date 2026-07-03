@@ -558,15 +558,15 @@ function formatRelativeTimestamp(value: string) {
 
 function getTrackingStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
-  if (!normalized) return "border-amber-400/30 bg-amber-400/10 text-amber-200";
+  if (!normalized) return "border-slate-300/25 bg-slate-200/10 text-slate-200";
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+    return "border-fuchsia-300/60 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_0_18px_rgba(217,70,239,0.28)]";
   }
   if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-fuchsia-300/70 bg-fuchsia-500/25 text-fuchsia-50 shadow-[0_0_18px_rgba(217,70,239,0.35)]";
+    return "border-amber-300/60 bg-amber-400/20 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.24)]";
   }
   if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-amber-400/30 bg-amber-400/10 text-amber-200";
+    return "border-slate-300/25 bg-slate-200/10 text-slate-200";
   }
   return "border-sky-400/30 bg-sky-400/10 text-sky-200";
 }
@@ -576,27 +576,17 @@ function getTrackingStatusCardTone(status: string) {
 
   if (!normalized) {
     return {
-      wrapper: "border-amber-400/35 bg-amber-500/[0.14] hover:bg-amber-500/[0.2]",
-      accent: "bg-amber-300",
-      note: "bg-amber-950/30 text-amber-50",
-      meta: "text-amber-100",
-      icon: "text-amber-100",
+      wrapper: "border-slate-300/25 bg-slate-200/[0.08] hover:bg-slate-200/[0.12]",
+      accent: "bg-slate-200/80",
+      note: "bg-slate-950/25 text-slate-200",
+      meta: "text-slate-300",
+      icon: "text-slate-200",
     };
   }
 
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
-      wrapper: "border-emerald-400/40 bg-emerald-500/[0.14] hover:bg-emerald-500/[0.2]",
-      accent: "bg-emerald-300",
-      note: "bg-emerald-950/30 text-emerald-50",
-      meta: "text-emerald-100",
-      icon: "text-emerald-100",
-    };
-  }
-
-  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return {
-      wrapper: "border-fuchsia-300/65 bg-fuchsia-500/[0.22] shadow-[0_0_22px_rgba(217,70,239,0.2)] hover:bg-fuchsia-500/[0.3]",
+      wrapper: "border-fuchsia-300/55 bg-fuchsia-500/[0.2] shadow-[0_0_22px_rgba(217,70,239,0.18)] hover:bg-fuchsia-500/[0.26]",
       accent: "bg-fuchsia-200",
       note: "bg-fuchsia-950/40 text-fuchsia-50",
       meta: "text-fuchsia-100",
@@ -604,13 +594,23 @@ function getTrackingStatusCardTone(status: string) {
     };
   }
 
-  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
-      wrapper: "border-amber-400/40 bg-amber-500/[0.16] hover:bg-amber-500/[0.22]",
+      wrapper: "border-amber-300/55 bg-amber-400/[0.18] shadow-[0_0_22px_rgba(251,191,36,0.15)] hover:bg-amber-400/[0.24]",
       accent: "bg-amber-300",
       note: "bg-amber-950/30 text-amber-50",
       meta: "text-amber-100",
       icon: "text-amber-100",
+    };
+  }
+
+  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return {
+      wrapper: "border-slate-300/25 bg-slate-200/[0.08] hover:bg-slate-200/[0.12]",
+      accent: "bg-slate-200/80",
+      note: "bg-slate-950/25 text-slate-200",
+      meta: "text-slate-300",
+      icon: "text-slate-200",
     };
   }
 
