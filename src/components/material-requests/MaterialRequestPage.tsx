@@ -943,11 +943,15 @@ function ExcelFilterPopover({
   const [scrollTop, setScrollTop] = useState(0);
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
   useEffect(() => {
-    setDraftSelectedValues(selectedValues);
-  }, [selectedValues]);
+    if (!open) {
+      setDraftSelectedValues(selectedValues);
+    }
+  }, [open, selectedValues]);
   useEffect(() => {
-    setDraftTextFilterValue(textFilterValue);
-  }, [textFilterValue]);
+    if (!open) {
+      setDraftTextFilterValue(textFilterValue);
+    }
+  }, [open, textFilterValue]);
   useEffect(() => {
     if (draftTextFilterValue === textFilterValue) return undefined;
 
@@ -980,7 +984,7 @@ function ExcelFilterPopover({
     [draftSelectedValues, optionValueSet, options],
   );
   const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
-  const hasContainsFilter = textFilterValue.trim().length > 0;
+  const hasContainsFilter = draftTextFilterValue.trim().length > 0;
   const selectedCount = draftSelectedValues === null ? options.length : effectiveSelected.length;
   const triggerSummary = hasContainsFilter
     ? draftSelectedValues === null
