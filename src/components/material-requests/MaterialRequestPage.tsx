@@ -960,21 +960,22 @@ function ExcelFilterPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[372px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)]"
+        className="w-[320px] border border-blue-400/25 bg-[#0d182b] p-2.5 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)]"
       >
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-blue-400/15 bg-[#111f36] px-4 py-2.5">
-            <p className="text-base font-black text-slate-50">{label}</p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#111f36] px-3 py-2">
+            <p className="text-sm font-black text-slate-50">{label}</p>
+            <span className="rounded bg-cyan-400/10 px-2 py-0.5 text-[11px] font-bold text-cyan-100">{summary}</span>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-2.5">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">排序</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">排序</p>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() => setSortDirection("asc")}
                 className={cn(
-                  "rounded-xl border px-3 py-2.5 text-[14px] font-semibold transition-colors",
+                  "rounded-lg border px-2.5 py-2 text-[13px] font-semibold transition-colors",
                   sortDirection === "asc"
                     ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
                     : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
@@ -986,7 +987,7 @@ function ExcelFilterPopover({
                 type="button"
                 onClick={() => setSortDirection("desc")}
                 className={cn(
-                  "rounded-xl border px-3 py-2.5 text-[14px] font-semibold transition-colors",
+                  "rounded-lg border px-2.5 py-2 text-[13px] font-semibold transition-colors",
                   sortDirection === "desc"
                     ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
                     : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
@@ -997,46 +998,40 @@ function ExcelFilterPopover({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-2.5">
-            <div className="space-y-2">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">勾選清單搜尋</p>
-                <p className="mt-1 text-[13px] leading-5 text-slate-500">只用來快速找值，不會直接改變表格結果。</p>
-              </div>
+          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">勾選清單搜尋</p>
               <Input
                 value={optionSearchQuery}
                 onChange={(event) => setOptionSearchQuery(event.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-10 rounded-xl border-blue-400/20 bg-[#111f36] text-[14px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2.5">
-            <div className="space-y-2">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">文字包含</p>
-                <p className="mt-1 text-[13px] leading-5 text-cyan-100/80">這個條件會直接影響表格，只留下包含指定文字的資料。</p>
-              </div>
+          <div className="rounded-xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">文字包含</p>
               <Input
                 value={textFilterValue}
                 onChange={(event) => onTextFilterValueChange(event.target.value)}
                 placeholder={`只顯示包含指定文字的${label}`}
-                className="h-10 rounded-xl border-blue-400/20 bg-[#111f36] text-[14px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-2.5">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">依顏色快速篩選</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">依顏色快速篩選</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {toneButtons.map((button) => (
                 <button
                   key={button.value}
                   type="button"
                   onClick={() => setToneFilter(button.value)}
                   className={cn(
-                    "rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors",
+                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
                     toneFilter === button.value ? button.activeClassName : button.className,
                   )}
                 >
@@ -1046,15 +1041,15 @@ function ExcelFilterPopover({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-2.5">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">快捷操作</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">快捷操作</p>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelectedValuesChange(null)}
-                className="h-10 rounded-xl border border-blue-400/20 bg-blue-400/10 px-3 text-[14px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
+                className="h-8 rounded-lg border border-blue-400/20 bg-blue-400/10 px-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
               >
                 全選
               </Button>
@@ -1063,7 +1058,7 @@ function ExcelFilterPopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelectedValuesChange([])}
-                className="h-10 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 text-[14px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
+                className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/10 px-2 text-[12px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
               >
                 全不選
               </Button>
@@ -1072,7 +1067,7 @@ function ExcelFilterPopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => applySelection(filteredOptions.map((option) => option.value))}
-                className="h-10 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 text-[14px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
+                className="h-8 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2 text-[12px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
               >
                 只留搜尋結果
               </Button>
@@ -1086,28 +1081,22 @@ function ExcelFilterPopover({
                   onSelectedValuesChange(null);
                   onTextFilterValueChange("");
                 }}
-                className="h-10 rounded-xl border border-slate-400/20 bg-slate-400/10 px-3 text-[14px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
+                className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-2 text-[12px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
               >
                 清空此欄
               </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2.5">
-              <p className="text-[12px] font-bold text-slate-400">目前勾選</p>
-              <p className="mt-1 text-[15px] font-semibold text-slate-100">{effectiveSelected.length} / {options.length}</p>
-            </div>
-            <div className="rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2.5">
-              <p className="text-[12px] font-bold text-slate-400">清單顯示</p>
-              <p className="mt-1 text-[15px] font-semibold text-slate-100">{filteredOptions.length} 筆</p>
-            </div>
+          <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2 text-[12px] text-slate-300">
+            <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
+            <span>清單顯示 {filteredOptions.length} 筆</span>
           </div>
 
-          <ScrollArea className="h-72 rounded-2xl border border-blue-400/15 bg-[#091222]">
-            <div className="space-y-2 p-3">
+          <ScrollArea className="h-56 rounded-xl border border-blue-400/15 bg-[#091222]">
+            <div className="space-y-1.5 p-2">
               {options.length > 0 && (
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-blue-400/10 bg-blue-400/[0.06] px-3 py-3 text-[15px] font-semibold text-slate-100 hover:bg-blue-400/10">
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
                   <Checkbox
                     checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
                     onCheckedChange={(value) => toggleVisibleSelection(value === true)}
@@ -1125,7 +1114,7 @@ function ExcelFilterPopover({
                   return (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-[15px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
                     >
                       <Checkbox
                         checked={checked}
@@ -1143,12 +1132,12 @@ function ExcelFilterPopover({
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-sm text-slate-300">{option.count}</span>
+                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
                     </label>
                   );
                 })
               ) : (
-                <div className="px-2 py-8 text-center text-[15px] text-slate-400">找不到符合的篩選值</div>
+                <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
               )}
             </div>
           </ScrollArea>
