@@ -50,7 +50,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -139,6 +138,13 @@ interface MaterialColumnTextFilters {
 
 type ColumnFilterKey = keyof MaterialColumnFilters;
 
+interface CachedColumnValues {
+  raw: string[];
+  searchable: string;
+}
+
+type CachedRecordColumnValues = Record<ColumnFilterKey, CachedColumnValues>;
+
 const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   material: null,
   refDes: null,
@@ -159,6 +165,8 @@ const EMPTY_COLUMN_TEXT_FILTERS: MaterialColumnTextFilters = {
   specification: "",
 };
 
+const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
+
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 
@@ -169,6 +177,9 @@ const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as co
 const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
+const FILTER_OPTION_ROW_HEIGHT = 38;
+const FILTER_OPTION_LIST_HEIGHT = 224;
+const FILTER_OPTION_OVERSCAN = 8;
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -713,6 +724,15 @@ function uniqueNormalizedValues(values: string[]) {
   return Array.from(new Set(values.map(normalizeFilterValue)));
 }
 
+function createCachedColumnValues(values: string[]): CachedColumnValues {
+  const raw = uniqueNormalizedValues(values);
+
+  return {
+    raw,
+    searchable: raw.map((value) => value.toLowerCase()).join(" "),
+  };
+}
+
 function inferFilterOptionTone(value: string): ExcelFilterTone {
   const normalized = value.trim().toLowerCase();
 
@@ -858,6 +878,47 @@ function normalizeColumnFilterSelection(
   return normalized.length === options.length ? null : normalized;
 }
 
+function DeferredTextInput({
+  className,
+  commitDelay = 90,
+  onCommit,
+  placeholder,
+  value,
+}: {
+  className?: string;
+  commitDelay?: number;
+  onCommit: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  const [draftValue, setDraftValue] = useState(value);
+
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (draftValue === value) return undefined;
+
+    const timerId = window.setTimeout(() => {
+      startTransition(() => {
+        onCommit(draftValue);
+      });
+    }, commitDelay);
+
+    return () => window.clearTimeout(timerId);
+  }, [commitDelay, draftValue, onCommit, value]);
+
+  return (
+    <Input
+      value={draftValue}
+      onChange={(event) => setDraftValue(event.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
 function ExcelFilterPopover({
   label,
   options,
@@ -876,10 +937,26 @@ function ExcelFilterPopover({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
   const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(selectedValues);
+  const [draftTextFilterValue, setDraftTextFilterValue] = useState(textFilterValue);
+  const [scrollTop, setScrollTop] = useState(0);
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
   useEffect(() => {
     setDraftSelectedValues(selectedValues);
   }, [selectedValues]);
+  useEffect(() => {
+    setDraftTextFilterValue(textFilterValue);
+  }, [textFilterValue]);
+  useEffect(() => {
+    if (draftTextFilterValue === textFilterValue) return undefined;
+
+    const timerId = window.setTimeout(() => {
+      startTransition(() => {
+        onTextFilterValueChange(draftTextFilterValue);
+      });
+    }, 90);
+
+    return () => window.clearTimeout(timerId);
+  }, [draftTextFilterValue, onTextFilterValueChange, textFilterValue]);
 
   const effectiveSelected = useMemo(
     () => draftSelectedValues === null
@@ -951,6 +1028,15 @@ function ExcelFilterPopover({
   const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
   const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
   const hasValueFilter = draftSelectedValues !== null;
+  const virtualStartIndex = Math.max(
+    0,
+    Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN,
+  );
+  const virtualEndIndex = Math.min(
+    filteredOptions.length,
+    Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN,
+  );
+  const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
   const summary = hasContainsFilter
     ? hasValueFilter
       ? effectiveSelected.length === 0
@@ -989,6 +1075,10 @@ function ExcelFilterPopover({
     });
     applySelection(Array.from(next));
   };
+
+  useEffect(() => {
+    setScrollTop(0);
+  }, [draftTextFilterValue, filteredOptions.length, toneFilter, sortDirection]);
 
   return (
     <Popover>
@@ -1050,8 +1140,8 @@ function ExcelFilterPopover({
             <div className="space-y-1.5">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">文字包含</p>
               <Input
-                value={textFilterValue}
-                onChange={(event) => onTextFilterValueChange(event.target.value)}
+                value={draftTextFilterValue}
+                onChange={(event) => setDraftTextFilterValue(event.target.value)}
                 placeholder={`只顯示包含指定文字的${label}`}
                 className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
@@ -1114,7 +1204,10 @@ function ExcelFilterPopover({
                 onClick={() => {
                   setToneFilter("all");
                   applySelection(options.map((option) => option.value));
-                  onTextFilterValueChange("");
+                  setDraftTextFilterValue("");
+                  startTransition(() => {
+                    onTextFilterValueChange("");
+                  });
                 }}
                 className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
               >
@@ -1128,9 +1221,9 @@ function ExcelFilterPopover({
             <span>清單顯示 {filteredOptions.length} 筆</span>
           </div>
 
-          <ScrollArea className="h-56 rounded-xl border border-blue-400/15 bg-[#091222]">
-            <div className="space-y-1.5 p-2">
-              {options.length > 0 && (
+          <div className="rounded-xl border border-blue-400/15 bg-[#091222]">
+            {options.length > 0 && (
+              <div className="border-b border-blue-400/10 p-2">
                 <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
                   <Checkbox
                     checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
@@ -1140,42 +1233,55 @@ function ExcelFilterPopover({
                   <span className="min-w-0 flex-1 truncate">(全選)</span>
                   <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
                 </label>
-              )}
+              </div>
+            )}
 
-              {filteredOptions.length > 0 ? (
-                filteredOptions.map((option) => {
-                  const checked = effectiveSelectedSet.has(option.value);
-                  const tone = option.tone ?? "slate";
-                  return (
-                    <label
-                      key={option.value}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) => toggleValue(option.value, value === true)}
-                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
-                      />
-                      <span
-                        className={cn(
-                          "h-2.5 w-2.5 rounded-full flex-none",
-                          tone === "emerald" && "bg-emerald-300",
-                          tone === "amber" && "bg-amber-300",
-                          tone === "sky" && "bg-sky-300",
-                          tone === "rose" && "bg-rose-300",
-                          tone === "slate" && "bg-slate-400",
-                        )}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
-                    </label>
-                  );
-                })
-              ) : (
-                <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
-              )}
-            </div>
-          </ScrollArea>
+            {filteredOptions.length > 0 ? (
+              <div
+                className="h-56 overflow-y-auto"
+                onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+              >
+                <div
+                  className="relative"
+                  style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}
+                >
+                  {visibleOptionSlice.map((option, index) => {
+                    const checked = effectiveSelectedSet.has(option.value);
+                    const tone = option.tone ?? "slate";
+                    const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
+
+                    return (
+                      <label
+                        key={option.value}
+                        className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
+                        style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => toggleValue(option.value, value === true)}
+                          className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                        />
+                        <span
+                          className={cn(
+                            "h-2.5 w-2.5 rounded-full flex-none",
+                            tone === "emerald" && "bg-emerald-300",
+                            tone === "amber" && "bg-amber-300",
+                            tone === "sky" && "bg-sky-300",
+                            tone === "rose" && "bg-rose-300",
+                            tone === "slate" && "bg-slate-400",
+                          )}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
+            )}
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -2648,25 +2754,106 @@ export function MaterialRequestPage() {
   );
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
+  const groupRuntimeIndex = useMemo(() => {
+    const searchableTextByGroup = new Map<string, string>();
+    const exactRefTokensByGroup = new Map<string, Set<string>>();
+    const sortedRecordsByGroup = new Map<string, MaterialRecord[]>();
+    const uniqueMpnCountByGroup = new Map<string, number>();
+    const recordColumnsByRecordId = new Map<string, CachedRecordColumnValues>();
 
-  const matchesSearch = (group: MaterialGroup) => {
-    const noAlternative = hasNoAlternative(group);
-    const mustApply = requiresApplication(group);
-    const alternativeSearchText = noAlternative
-      ? "單一料 無替代料 單一來源 single source no alternative"
-      : "有替代料 multiple source alternative";
-    const applicationSearchText = mustApply
-      ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-      : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
-    const searchableText = `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`;
-    const exactRefTokens = new Set(
-      [
-        group.displayRef,
-        ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
-      ]
-        .flatMap((value) => splitRefDesignators(value))
-        .map((value) => value.toLowerCase())
-    );
+    dataset.groups.forEach((group) => {
+      const sortedRecords = getSortedAlternatives(group);
+      const uniqueMpnCount = getUniqueMpnCountForRecords(group.records);
+      const mustApply = requiresApplication(group);
+      const noAlternative = uniqueMpnCount <= 1;
+      const alternativeSearchText = noAlternative
+        ? "單一料 無替代料 單一來源 single source no alternative"
+        : "有替代料 multiple source alternative";
+      const applicationSearchText = mustApply
+        ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
+        : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
+
+      searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
+      exactRefTokensByGroup.set(
+        group.key,
+        new Set(
+          [
+            group.displayRef,
+            ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
+          ]
+            .flatMap((value) => splitRefDesignators(value))
+            .map((value) => value.toLowerCase()),
+        ),
+      );
+      sortedRecordsByGroup.set(group.key, sortedRecords);
+      uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
+
+      group.records.forEach((record) => {
+        const latestTrackingEntry = getLatestTrackingEntry(record);
+        const splitRefs = splitRefDesignators(record.refDes);
+        const refValues = splitRefs.length > 0
+          ? splitRefs
+          : splitRefDesignators(record.refGroup, group.displayRef);
+
+        recordColumnsByRecordId.set(record.id, {
+          material: createCachedColumnValues([
+            group.displayRef,
+            group.name,
+            group.assemblyName,
+            record.manufacturer,
+            record.refDes,
+            record.refGroup,
+          ]),
+          refDes: createCachedColumnValues(refValues),
+          mpn: createCachedColumnValues([record.manufacturerPartNumber, record.manufacturerPartNumberAlt]),
+          internal: createCachedColumnValues([record.partNumber, record.schematicPart, record.pcbFootprint]),
+          virtualAlternative: createCachedColumnValues([record.virtualAlternative ?? ""]),
+          trackingStatus: createCachedColumnValues([
+            getTrackingWorkflowStatus(record),
+            latestTrackingEntry?.note ?? "",
+            latestTrackingEntry?.createdBy ?? "",
+          ]),
+          specification: createCachedColumnValues([
+            group.partSpec,
+            group.partName,
+            group.schematicPart,
+            group.footprint,
+            record.partSpec,
+            record.partName,
+            record.remark,
+          ]),
+        });
+      });
+    });
+
+    return {
+      exactRefTokensByGroup,
+      recordColumnsByRecordId,
+      searchableTextByGroup,
+      sortedRecordsByGroup,
+      uniqueMpnCountByGroup,
+    };
+  }, [dataset.groups]);
+
+  const columnFilterSets = useMemo(
+    () => FILTER_KEYS.reduce((result, key) => {
+      result[key] = columnFilters[key] === null ? null : new Set(columnFilters[key]);
+      return result;
+    }, {} as Record<ColumnFilterKey, Set<string> | null>),
+    [columnFilters],
+  );
+
+  const columnTextFilterTokens = useMemo(
+    () => FILTER_KEYS.reduce((result, key) => {
+      result[key] = parseSearchTokens(columnTextFilters[key]);
+      return result;
+    }, {} as Record<ColumnFilterKey, string[]>),
+    [columnTextFilters],
+  );
+
+  const matchesSearch = useCallback((group: MaterialGroup) => {
+    const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
+    const exactRefTokens = groupRuntimeIndex.exactRefTokensByGroup.get(group.key) ?? new Set<string>();
 
     return searchTokens.every((token) => {
       if (isExactRefDesToken(token)) {
@@ -2675,10 +2862,10 @@ export function MaterialRequestPage() {
 
       return searchableText.includes(token);
     });
-  };
+  }, [groupRuntimeIndex, searchTokens]);
 
-  const matchesAvailability = (group: MaterialGroup) => {
-    const noAlternative = hasNoAlternative(group);
+  const matchesAvailability = useCallback((group: MaterialGroup) => {
+    const noAlternative = (groupRuntimeIndex.uniqueMpnCountByGroup.get(group.key) ?? 0) <= 1;
     const mustApply = requiresApplication(group);
 
     return (
@@ -2689,19 +2876,41 @@ export function MaterialRequestPage() {
       (availability === "risk" && group.riskCount > 0) ||
       (availability === "single" && noAlternative)
     );
-  };
+  }, [availability, groupRuntimeIndex.uniqueMpnCountByGroup]);
 
-  const getMatchingRecords = (group: MaterialGroup, ignoredKey?: ColumnFilterKey) =>
-    getSortedAlternatives(group).filter((record) =>
-      matchesRecordColumnFilters(record, group, columnFilters, columnTextFilters, ignoredKey)
+  const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
+    const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
+
+    return sortedRecords.filter((record) =>
+      FILTER_KEYS.every((key) => {
+        if (key === ignoredKey) return true;
+
+        const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
+          ?? createCachedColumnValues(getRecordColumnValues(record, group, key));
+        const selectedSet = columnFilterSets[key];
+        const textTokens = columnTextFilterTokens[key];
+
+        if (selectedSet !== null && !cachedValues.raw.some((value) => selectedSet.has(value))) {
+          return false;
+        }
+
+        if (textTokens.length > 0 && !textTokens.every((token) => cachedValues.searchable.includes(token))) {
+          return false;
+        }
+
+        return true;
+      })
     );
+  }, [columnFilterSets, columnTextFilterTokens, groupRuntimeIndex]);
+
+  const searchAvailabilityGroups = useMemo(
+    () => dataset.groups.filter((group) => matchesSearch(group) && matchesAvailability(group)),
+    [dataset.groups, matchesAvailability, matchesSearch],
+  );
 
   const columnFilterOptions = useMemo(() => {
-    const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
-
-    return keys.reduce((result, key) => {
-      const valueGroups = dataset.groups
-        .filter((group) => matchesSearch(group) && matchesAvailability(group))
+    return FILTER_KEYS.reduce((result, key) => {
+      const valueGroups = searchAvailabilityGroups
         .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
 
       result[key] = key === "trackingStatus"
@@ -2709,15 +2918,14 @@ export function MaterialRequestPage() {
         : buildExcelFilterOptions(valueGroups);
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
-  }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch]);
+  }, [getMatchingRecords, searchAvailabilityGroups]);
 
   useEffect(() => {
     setColumnFilters((current) => {
-      const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
       let changed = false;
       const next = { ...current };
 
-      keys.forEach((key) => {
+      FILTER_KEYS.forEach((key) => {
         const normalized = normalizeColumnFilterSelection(current[key], columnFilterOptions[key]);
         if (normalized !== current[key]) {
           next[key] = normalized;
@@ -2730,16 +2938,21 @@ export function MaterialRequestPage() {
   }, [columnFilterOptions]);
 
   const filteredGroups = useMemo(() => {
-    const result = dataset.groups.filter((group) => {
-      return matchesSearch(group) && getMatchingRecords(group).length > 0 && matchesAvailability(group);
+    const result = searchAvailabilityGroups.filter((group) => {
+      return getMatchingRecords(group).length > 0;
     });
 
     return [...result].sort((left, right) => {
-      if (sortMode === "single-source" && hasNoAlternative(left) !== hasNoAlternative(right)) {
-        return hasNoAlternative(left) ? -1 : 1;
+      const leftUniqueMpnCount = groupRuntimeIndex.uniqueMpnCountByGroup.get(left.key) ?? getUniqueMpnCount(left);
+      const rightUniqueMpnCount = groupRuntimeIndex.uniqueMpnCountByGroup.get(right.key) ?? getUniqueMpnCount(right);
+      const leftNoAlternative = leftUniqueMpnCount <= 1;
+      const rightNoAlternative = rightUniqueMpnCount <= 1;
+
+      if (sortMode === "single-source" && leftNoAlternative !== rightNoAlternative) {
+        return leftNoAlternative ? -1 : 1;
       }
-      if (sortMode === "alternatives" && getUniqueMpnCount(left) !== getUniqueMpnCount(right)) {
-        return getUniqueMpnCount(right) - getUniqueMpnCount(left);
+      if (sortMode === "alternatives" && leftUniqueMpnCount !== rightUniqueMpnCount) {
+        return rightUniqueMpnCount - leftUniqueMpnCount;
       }
       if (sortMode === "approved" && left.approvedCount !== right.approvedCount) {
         return right.approvedCount - left.approvedCount;
@@ -2749,7 +2962,7 @@ export function MaterialRequestPage() {
       }
       return left.displayRef.localeCompare(right.displayRef, undefined, { numeric: true });
     });
-  }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch, sortMode]);
+  }, [getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
@@ -2791,7 +3004,7 @@ export function MaterialRequestPage() {
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
       };
     }),
-    [visibleGroups, columnFilters, columnTextFilters],
+    [getMatchingRecords, visibleGroups],
   );
 
   useEffect(() => {
@@ -3185,7 +3398,12 @@ export function MaterialRequestPage() {
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』" className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
+            <DeferredTextInput
+              value={query}
+              onCommit={setQuery}
+              placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
+              className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500"
+            />
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
