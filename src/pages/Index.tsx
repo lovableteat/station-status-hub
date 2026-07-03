@@ -254,6 +254,10 @@ const Index = () => {
     setActiveWorkspace(workspace as WorkspaceId);
   };
 
+  const handleOpenNotifications = () => {
+    window.dispatchEvent(new CustomEvent("open-global-notifications"));
+  };
+
   const handleStationNavigation = (module: string) => {
     setActiveWorkspace("station-status");
     setActiveStationModule(module as StationModuleId);
@@ -386,9 +390,31 @@ const Index = () => {
         activeItem={activeWorkspace ?? undefined}
         onSelect={handleWorkspaceChange}
         onLogout={logout}
+        onOpenNotifications={handleOpenNotifications}
         onBrandClick={() => setActiveWorkspace(null)}
+        onOpenWorkspaceHome={() => setActiveWorkspace(null)}
         userName={user?.displayName || user?.username}
         userRoleLabel={getRoleLabel(user?.role)}
+        userMenuItems={[
+          ...(canViewModule("users")
+            ? [
+                {
+                  id: "users",
+                  label: "使用者管理",
+                  onSelect: () => handleStationNavigation("users"),
+                },
+              ]
+            : []),
+          ...(canViewModule("api-management")
+            ? [
+                {
+                  id: "api-management",
+                  label: "API 管理",
+                  onSelect: () => handleStationNavigation("api-management"),
+                },
+              ]
+            : []),
+        ]}
       />
 
       <main className="min-h-[calc(100vh-92px)]">{renderWorkspaceContent()}</main>

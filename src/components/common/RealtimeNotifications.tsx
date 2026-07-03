@@ -53,6 +53,7 @@ export function RealtimeNotifications() {
   const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [showConversation, setShowConversation] = useState<{ issueId?: string; referenceType?: string; referenceId?: string } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   
   const { 
     sendReply, 
@@ -102,6 +103,17 @@ export function RealtimeNotifications() {
     if (!user) return;
     loadUserNotifications();
   }, [user]);
+
+  useEffect(() => {
+    const handleOpenNotifications = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener("open-global-notifications", handleOpenNotifications);
+    return () => {
+      window.removeEventListener("open-global-notifications", handleOpenNotifications);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -462,7 +474,7 @@ export function RealtimeNotifications() {
 
   return (
     <>
-      <Popover>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
