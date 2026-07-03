@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { Database, KeyRound, Play, Waypoints } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Database, KeyRound, Play, Sparkles, Waypoints } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,13 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 import { ApiDataTable } from "./ApiDataTable";
 import { API_ENDPOINTS, buildApiUrl } from "./apiManagementConfig";
+import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 const previewEndpoints = API_ENDPOINTS.filter((endpoint) => endpoint.previewable);
 
-export function ApiDataPreview() {
+interface ApiDataPreviewProps {
+  selectedApiKey?: ApiKeyRecord | null;
+}
+
+export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
   const [apiKey, setApiKey] = useState("");
   const [selectedEndpointKey, setSelectedEndpointKey] = useState(
     previewEndpoints[0]?.key ?? "stats",
@@ -29,6 +36,25 @@ export function ApiDataPreview() {
     title: string;
     requestUrl: string;
   } | null>(null);
+  const [providerPrompt, setProviderPrompt] = useState("請簡短回覆：API 測試成功");
+  const [providerResponse, setProviderResponse] = useState("");
+  const [providerLoading, setProviderLoading] = useState(false);
+
+  const selectedMetadata = useMemo(() => {
+    return selectedApiKey ? normalizeApiKeyPermissions(selectedApiKey.permissions).metadata : null;
+  }, [selectedApiKey]);
+
+  const isGeminiKey = useMemo(() => {
+    return selectedMetadata?.provider.toLowerCase() === "gemini" && Boolean(selectedMetadata.baseUrl);
+  }, [selectedMetadata]);
+
+  useEffect(() => {
+    if (!selectedApiKey) return;
+
+    setApiKey(selectedApiKey.api_key);
+    setActiveRequest(null);
+    setProviderResponse("");
+  }, [selectedApiKey]);
 
   const selectedEndpoint = useMemo(
     () =>
@@ -47,7 +73,16 @@ export function ApiDataPreview() {
     });
   }, [queryValue, selectedEndpoint]);
 
-  const handlePreview = () => {
+  const geminiRequestUrl = useMemo(() => {
+    if (!isGeminiKey || !selectedMetadata?.baseUrl || !selectedMetadata.model || !apiKey.trim()) {
+      return "";
+    }
+
+    const normalizedBaseUrl = selectedMetadata.baseUrl.replace(/\/$/, "");
+    return `${normalizedBaseUrl}/models/${selectedMetadata.model}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+  }, [apiKey, isGeminiKey, selectedMetadata]);
+
+  const handleInternalPreview = () => {
     if (!selectedEndpoint) return;
 
     setActiveRequest({
@@ -56,16 +91,197 @@ export function ApiDataPreview() {
     });
   };
 
+  const handleGeminiTest = async () => {
+    if (!geminiRequestUrl) {
+      toast.error("請先確認 API key、模型與 Base URL 都有填入");
+      return;
+    }
+
+    setProviderLoading(true);
+    setProviderResponse("");
+
+    try {
+      const response = await fetch(geminiRequestUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: providerPrompt.trim() || "請簡短回覆：API 測試成功" }],
+            },
+          ],
+        }),
+      });
+
+      const result = await response.json();
+      setProviderResponse(JSON.stringify(result, null, 2));
+
+      if (!response.ok) {
+        toast.error(`Gemini API 測試失敗：HTTP ${response.status}`);
+        return;
+      }
+
+      toast.success("Gemini API 測試完成");
+    } catch (error) {
+      setProviderResponse(
+        JSON.stringify(
+          { error: error instanceof Error ? error.message : "Unknown error" },
+          null,
+          2,
+        ),
+      );
+      toast.error("Gemini API 測試失敗");
+    } finally {
+      setProviderLoading(false);
+    }
+  };
+
+  if (isGeminiKey && selectedApiKey && selectedMetadata) {
+    return (
+      <div className="space-y-5">
+        <Card className="border-blue-400/15 bg-[#10192e]">
+          <CardHeader className="border-b border-blue-400/10 pb-5">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
+              <Sparkles className="h-6 w-6 text-emerald-300" />
+              外部 API 測試
+            </CardTitle>
+            <p className="text-sm leading-6 text-slate-400">
+              你現在選的是外部服務金鑰。這裡會直接對 {selectedMetadata.provider} 發真實測試請求。
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-5 pt-5">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  標籤
+                </p>
+                <p className="mt-2 text-sm font-bold text-slate-100">{selectedApiKey.key_name}</p>
+              </div>
+              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  Provider
+                </p>
+                <p className="mt-2 text-sm font-bold text-slate-100">{selectedMetadata.provider}</p>
+              </div>
+              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  Model
+                </p>
+                <p className="mt-2 text-sm font-bold text-slate-100">{selectedMetadata.model || "-"}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-300">API 金鑰</Label>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <Input
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder="可直接調整目前帶入的 key"
+                      className="h-11 border-blue-400/20 bg-[#0b1423] pl-10 text-slate-100 placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-300">測試提示詞</Label>
+                  <Textarea
+                    value={providerPrompt}
+                    onChange={(event) => setProviderPrompt(event.target.value)}
+                    placeholder="輸入你要測試模型回應的內容"
+                    className="min-h-[120px] border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-blue-400/15 bg-[#0b1423] p-5">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-200">
+                    <Waypoints className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-slate-50">
+                      POST /models/{selectedMetadata.model}:generateContent
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      這裡會用目前金鑰直接打 Gemini `generateContent`，確認 key、模型和路徑是否正常。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-blue-400/10 bg-[#10192e] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                    Request URL
+                  </p>
+                  <p className="mt-2 break-all text-sm leading-6 text-cyan-100">
+                    {geminiRequestUrl || "請先補齊測試資料"}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Badge className="bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/15">
+                    {selectedMetadata.provider}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="border-blue-400/15 bg-transparent text-slate-300"
+                  >
+                    POST
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="border-blue-400/15 bg-transparent text-slate-300"
+                  >
+                    JSON
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={() => void handleGeminiTest()}
+                disabled={providerLoading || !apiKey.trim()}
+                className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+              >
+                <Play className="mr-2 h-4 w-4" />
+                {providerLoading ? "測試中..." : "測試 Gemini API"}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-black text-slate-200">回應結果</p>
+              <Textarea
+                value={providerResponse}
+                readOnly
+                placeholder="送出測試後，這裡會顯示實際 API 回應。"
+                className="min-h-[320px] border-blue-400/20 bg-[#06101c] font-mono text-sm leading-7 text-slate-100 placeholder:text-slate-500"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <Card className="border-blue-400/15 bg-[#10192e]">
         <CardHeader className="border-b border-blue-400/10 pb-5">
           <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
             <Database className="h-6 w-6 text-emerald-300" />
-            API 資料預覽
+            內部 API 測試
           </CardTitle>
           <p className="text-sm leading-6 text-slate-400">
-            用有效的 API key 直接打正式端點，先確認回傳內容正不正確，再交給外部系統串接。
+            輸入內部 API key 後測試正式端點，確認回傳資料正確再交給外部系統串接。
           </p>
         </CardHeader>
 
@@ -80,7 +296,7 @@ export function ApiDataPreview() {
                     type="password"
                     value={apiKey}
                     onChange={(event) => setApiKey(event.target.value)}
-                    placeholder="輸入有效的 API key"
+                    placeholder="輸入內部 API key"
                     className="h-11 border-blue-400/20 bg-[#0b1423] pl-10 text-slate-100 placeholder:text-slate-500"
                   />
                 </div>
@@ -167,12 +383,12 @@ export function ApiDataPreview() {
             </code>
             <Button
               type="button"
-              onClick={handlePreview}
+              onClick={handleInternalPreview}
               disabled={!apiKey.trim() || !selectedEndpoint}
               className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
             >
               <Play className="mr-2 h-4 w-4" />
-              讀取資料
+              測試內部 API
             </Button>
           </div>
         </CardContent>
