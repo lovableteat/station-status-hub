@@ -1146,6 +1146,7 @@ function InlineVirtualAlternativeEditor({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!editing) setDraft(value);
@@ -1153,6 +1154,15 @@ function InlineVirtualAlternativeEditor({
 
   const commit = () => {
     const nextValue = draft.trim();
+
+    if (!nextValue) {
+      const confirmed = window.confirm("TX 尚未填入資訊，確定要維持空白嗎？");
+      if (!confirmed) {
+        requestAnimationFrame(() => inputRef.current?.focus());
+        return;
+      }
+    }
+
     setEditing(false);
     if (nextValue !== value) onSave(nextValue);
   };
@@ -1169,6 +1179,7 @@ function InlineVirtualAlternativeEditor({
     return (
       <Input
         autoFocus
+        ref={inputRef}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
