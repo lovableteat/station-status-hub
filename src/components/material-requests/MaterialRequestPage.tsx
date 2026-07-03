@@ -155,7 +155,7 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
-const TRACKING_STATUS_OPTIONS = ["待處理", "處理中", "已完成"] as const;
+const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
@@ -451,19 +451,14 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
     case "virtualAlternative":
       return group.records.map((record) => record.virtualAlternative ?? "");
     case "trackingStatus": {
-      const values = group.records.flatMap((record) => [
-        record.trackingStatus ?? "",
-        getLatestTrackingEntry(record)?.note ?? "",
-        getLatestTrackingEntry(record)?.createdBy ?? "",
-        record.sourcingStatus,
-        record.remark,
-      ]);
-
-      if (group.requiresApplication) values.push("主料與替代都無料");
-      if (group.pendingCount > 0) values.push("有待申請");
-      if (group.riskCount > 0) values.push("有風險");
-
-      return values;
+      return group.records.flatMap((record) => {
+        const latestEntry = getLatestTrackingEntry(record);
+        return [
+          getTrackingWorkflowStatus(record),
+          latestEntry?.note ?? "",
+          latestEntry?.createdBy ?? "",
+        ];
+      });
     }
     case "specification":
       return [
@@ -503,17 +498,10 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
       return [record.virtualAlternative ?? ""];
     case "trackingStatus": {
       const values = [
-        record.trackingStatus ?? "",
-        latestTrackingEntry?.status ?? "",
+        getTrackingWorkflowStatus(record),
         latestTrackingEntry?.note ?? "",
         latestTrackingEntry?.createdBy ?? "",
-        record.sourcingStatus,
-        record.remark,
       ];
-
-      if (group.requiresApplication) values.push("主料與替代都無料");
-      if (group.pendingCount > 0) values.push("有待申請");
-      if (group.riskCount > 0) values.push("有風險");
 
       return values;
     }
@@ -570,14 +558,14 @@ function formatRelativeTimestamp(value: string) {
 
 function getTrackingStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
-  if (!normalized) return "border-slate-400/25 bg-slate-400/10 text-slate-300";
+  if (!normalized) return "border-amber-400/30 bg-amber-400/10 text-amber-200";
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
   }
   if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-fuchsia-300/70 bg-fuchsia-500/25 text-fuchsia-50 shadow-[0_0_18px_rgba(217,70,239,0.35)]";
   }
-  if (["待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-amber-400/30 bg-amber-400/10 text-amber-200";
   }
   return "border-sky-400/30 bg-sky-400/10 text-sky-200";
@@ -588,11 +576,11 @@ function getTrackingStatusCardTone(status: string) {
 
   if (!normalized) {
     return {
-      wrapper: "border-slate-500/30 bg-slate-500/[0.08] hover:bg-slate-500/[0.14]",
-      accent: "bg-slate-300/70",
-      note: "bg-slate-950/25 text-slate-300",
-      meta: "text-slate-300",
-      icon: "text-slate-200",
+      wrapper: "border-amber-400/35 bg-amber-500/[0.14] hover:bg-amber-500/[0.2]",
+      accent: "bg-amber-300",
+      note: "bg-amber-950/30 text-amber-50",
+      meta: "text-amber-100",
+      icon: "text-amber-100",
     };
   }
 
@@ -616,7 +604,7 @@ function getTrackingStatusCardTone(status: string) {
     };
   }
 
-  if (["待", "申請", "確認", "排程", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
       wrapper: "border-amber-400/40 bg-amber-500/[0.16] hover:bg-amber-500/[0.22]",
       accent: "bg-amber-300",
@@ -677,14 +665,14 @@ function uniqueNormalizedValues(values: string[]) {
 function inferFilterOptionTone(value: string): ExcelFilterTone {
   const normalized = value.trim().toLowerCase();
 
-  if (!normalized) return "slate";
+  if (!normalized) return "amber";
   if (["完成", "已完成", "ok", "approved", "結案", "可用", "已建"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "emerald";
   }
   if (["風險", "缺料", "阻塞", "blocked", "失敗"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "rose";
   }
-  if (["待", "申請", "確認", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["新增追蹤", "待", "申請", "確認", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "amber";
   }
   if (["處理中", "追蹤", "進行", "progress"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
@@ -711,6 +699,46 @@ function buildExcelFilterOptions(valueGroups: string[][]) {
       count,
       keywords: value,
       tone: inferFilterOptionTone(value),
+    }));
+}
+
+function normalizeTrackingWorkflowStatus(status: string) {
+  const normalized = status.trim().toLowerCase();
+
+  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "已完成" as const;
+  }
+
+  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "處理中" as const;
+  }
+
+  return "新增追蹤" as const;
+}
+
+function getTrackingWorkflowStatus(record: MaterialRecord) {
+  const latestEntry = getLatestTrackingEntry(record);
+  return normalizeTrackingWorkflowStatus(latestEntry?.status || record.trackingStatus || "");
+}
+
+function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
+  const counter = new Map<(typeof TRACKING_STATUS_OPTIONS)[number], number>(
+    TRACKING_STATUS_OPTIONS.map((status) => [status, 0]),
+  );
+
+  valueGroups.forEach((values) => {
+    const status = normalizeTrackingWorkflowStatus(values[0] ?? "");
+    counter.set(status, (counter.get(status) ?? 0) + 1);
+  });
+
+  return TRACKING_STATUS_OPTIONS
+    .filter((status) => (counter.get(status) ?? 0) > 0)
+    .map((status) => ({
+      label: status,
+      value: status,
+      count: counter.get(status) ?? 0,
+      keywords: status,
+      tone: inferFilterOptionTone(status),
     }));
 }
 
@@ -911,7 +939,7 @@ function ExcelFilterPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-9 w-full items-center justify-between rounded border border-blue-300/25 bg-[#07182d] px-2.5 text-left text-sm font-bold text-slate-100 hover:border-cyan-300/50 hover:bg-cyan-400/10"
+          className="flex h-10 w-full items-center justify-between rounded-lg border border-blue-300/25 bg-[#07182d] px-3 text-left text-sm font-bold text-slate-100 hover:border-cyan-300/50 hover:bg-cyan-400/10"
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 flex-none text-cyan-300" />
@@ -924,72 +952,84 @@ function ExcelFilterPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[340px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100"
+        className="w-[388px] border border-blue-400/25 bg-[#0d182b] p-4 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)]"
       >
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <p className="text-base font-bold text-slate-50">{label}</p>
-            <p className="text-sm text-slate-400">比照 Excel：排序、勾選值、文字包含與顏色快速篩選。</p>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-blue-400/15 bg-[#111f36] px-4 py-3">
+            <p className="text-lg font-black text-slate-50">{label}</p>
+            <p className="mt-1 text-[14px] leading-6 text-slate-300">排序、搜尋、文字包含與勾選值都集中在這裡處理。</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSortDirection("asc")}
-              className={cn(
-                "rounded border px-2 py-2 text-sm font-semibold",
-                sortDirection === "asc"
-                  ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
-                  : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
-              )}
-            >
-              從 A 到 Z
-            </button>
-            <button
-              type="button"
-              onClick={() => setSortDirection("desc")}
-              className={cn(
-                "rounded border px-2 py-2 text-sm font-semibold",
-                sortDirection === "desc"
-                  ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
-                  : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
-              )}
-            >
-              從 Z 到 A
-            </button>
+          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-3">
+            <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-400">排序</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSortDirection("asc")}
+                className={cn(
+                  "rounded-xl border px-3 py-3 text-[15px] font-semibold transition-colors",
+                  sortDirection === "asc"
+                    ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
+                    : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
+                )}
+              >
+                從 A 到 Z
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortDirection("desc")}
+                className={cn(
+                  "rounded-xl border px-3 py-3 text-[15px] font-semibold transition-colors",
+                  sortDirection === "desc"
+                    ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
+                    : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
+                )}
+              >
+                從 Z 到 A
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-300">搜尋勾選清單</p>
-            <Input
-              value={optionSearchQuery}
-              onChange={(event) => setOptionSearchQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="h-10 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
-            />
+          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-3">
+            <div className="space-y-3">
+              <div>
+                <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-400">勾選清單搜尋</p>
+                <p className="mt-1 text-[13px] leading-5 text-slate-500">只用來快速找值，不會直接改變表格結果。</p>
+              </div>
+              <Input
+                value={optionSearchQuery}
+                onChange={(event) => setOptionSearchQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-11 rounded-xl border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-300">文字包含</p>
-            <Input
-              value={textFilterValue}
-              onChange={(event) => onTextFilterValueChange(event.target.value)}
-              placeholder={`只顯示包含指定文字的${label}`}
-              className="h-10 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
-            />
-            <p className="text-xs text-cyan-200/85">這個條件會真正影響表格結果，搜尋勾選清單只用來找值。</p>
+          <div className="rounded-2xl border border-cyan-400/18 bg-cyan-400/[0.05] p-3">
+            <div className="space-y-3">
+              <div>
+                <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-cyan-200">文字包含</p>
+                <p className="mt-1 text-[13px] leading-5 text-cyan-100/80">這個條件會直接影響表格，只留下包含指定文字的資料。</p>
+              </div>
+              <Input
+                value={textFilterValue}
+                onChange={(event) => onTextFilterValueChange(event.target.value)}
+                placeholder={`只顯示包含指定文字的${label}`}
+                className="h-11 rounded-xl border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-300">依顏色快速篩選</p>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-3">
+            <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-400">依顏色快速篩選</p>
+            <div className="mt-3 flex flex-wrap gap-2">
               {toneButtons.map((button) => (
                 <button
                   key={button.value}
                   type="button"
                   onClick={() => setToneFilter(button.value)}
                   className={cn(
-                    "rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                    "rounded-full border px-3 py-2 text-[13px] font-semibold transition-colors",
                     toneFilter === button.value ? button.activeClassName : button.className,
                   )}
                 >
@@ -999,59 +1039,68 @@ function ExcelFilterPopover({
             </div>
           </div>
 
+          <div className="rounded-2xl border border-blue-400/15 bg-[#10192e] p-3">
+            <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-400">快捷操作</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSelectedValuesChange(null)}
+                className="h-11 rounded-xl border border-blue-400/20 bg-blue-400/10 px-3 text-[15px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
+              >
+                全選
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSelectedValuesChange([])}
+                className="h-11 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 text-[15px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
+              >
+                全不選
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => applySelection(filteredOptions.map((option) => option.value))}
+                className="h-11 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 text-[15px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
+              >
+                只留搜尋結果
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOptionSearchQuery("");
+                  setToneFilter("all");
+                  onSelectedValuesChange(null);
+                  onTextFilterValueChange("");
+                }}
+                className="h-11 rounded-xl border border-slate-400/20 bg-slate-400/10 px-3 text-[15px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
+              >
+                清空此欄
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelectedValuesChange(null)}
-              className="h-9 px-2 text-sm font-semibold text-blue-200 hover:bg-blue-400/10 hover:text-blue-100"
-            >
-              全選
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelectedValuesChange([])}
-              className="h-9 px-2 text-sm font-semibold text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
-            >
-              全刪除
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => applySelection(filteredOptions.map((option) => option.value))}
-              className="h-9 px-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10 hover:text-amber-100"
-            >
-              只留搜尋結果
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setOptionSearchQuery("");
-                setToneFilter("all");
-                onSelectedValuesChange(null);
-                onTextFilterValueChange("");
-              }}
-              className="h-9 px-2 text-sm font-semibold text-slate-300 hover:bg-slate-400/10 hover:text-slate-100"
-            >
-              清空此欄
-            </Button>
+            <div className="rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2.5">
+              <p className="text-[12px] font-bold text-slate-400">目前勾選</p>
+              <p className="mt-1 text-[15px] font-semibold text-slate-100">{effectiveSelected.length} / {options.length}</p>
+            </div>
+            <div className="rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2.5">
+              <p className="text-[12px] font-bold text-slate-400">清單顯示</p>
+              <p className="mt-1 text-[15px] font-semibold text-slate-100">{filteredOptions.length} 筆</p>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between text-[13px] text-slate-300">
-            <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
-            <span>清單顯示 {filteredOptions.length} 筆</span>
-          </div>
-
-          <ScrollArea className="h-64 rounded-xl border border-blue-400/15 bg-[#091222]">
-            <div className="space-y-1 p-2">
+          <ScrollArea className="h-72 rounded-2xl border border-blue-400/15 bg-[#091222]">
+            <div className="space-y-2 p-3">
               {options.length > 0 && (
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2.5 text-[15px] font-semibold text-slate-100 hover:bg-blue-400/10">
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-blue-400/10 bg-blue-400/[0.06] px-3 py-3 text-[15px] font-semibold text-slate-100 hover:bg-blue-400/10">
                   <Checkbox
                     checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
                     onCheckedChange={(value) => toggleVisibleSelection(value === true)}
@@ -1069,7 +1118,7 @@ function ExcelFilterPopover({
                   return (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-[15px] text-slate-100 hover:bg-blue-400/10"
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-[15px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
                     >
                       <Checkbox
                         checked={checked}
@@ -1282,7 +1331,8 @@ function TrackingHistoryCell({
   onOpen: (record: MaterialRecord) => void;
 }) {
   const latestEntry = getLatestTrackingEntry(record);
-  const cardTone = getTrackingStatusCardTone(latestEntry?.status || "");
+  const workflowStatus = getTrackingWorkflowStatus(record);
+  const cardTone = getTrackingStatusCardTone(workflowStatus);
   const historyCount = record.trackingHistory?.length
     ? record.trackingHistory.length
     : latestEntry
@@ -1301,8 +1351,8 @@ function TrackingHistoryCell({
     >
       <span className={cn("mt-1 h-14 w-1.5 flex-none rounded-full", cardTone.accent)} />
       <div className="min-w-0 flex-1">
-        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(latestEntry?.status || ""))}>
-          {latestEntry?.status || "新增追蹤"}
+        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(workflowStatus))}>
+          {workflowStatus}
         </span>
         <p
           className={cn(
@@ -1340,6 +1390,7 @@ function TrackingHistoryDialog({
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
   const latestEntry = record ? getLatestTrackingEntry(record) : null;
+  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "新增追蹤";
   const historyEntries = useMemo(() => {
     if (!record) return [];
 
@@ -1412,6 +1463,20 @@ function TrackingHistoryDialog({
     onOpenChange(false);
   };
 
+  const handleMarkCompleted = () => {
+    if (!record) return;
+
+    onSave(record, {
+      id: createTrackingHistoryId(),
+      status: "已完成",
+      note: latestEntry?.note?.trim() || "已手動標記完成",
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy.trim(),
+      images: [],
+    });
+    onOpenChange(false);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1428,11 +1493,25 @@ function TrackingHistoryDialog({
           {record && (
             <div className="grid gap-5 py-2 xl:grid-cols-[1.15fr_0.95fr]">
               <section className="rounded-2xl border border-sky-400/20 bg-[#101d33] p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
-                  <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestEntry?.status || ""))}>
-                    {latestEntry?.status || "尚未建立"}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
+                    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestWorkflowStatus))}>
+                      {latestWorkflowStatus}
+                    </span>
+                  </div>
+                  {latestWorkflowStatus !== "已完成" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleMarkCompleted}
+                      className="h-10 border-emerald-400/30 bg-emerald-400/15 px-4 text-sm font-bold text-emerald-100 hover:bg-emerald-400/25 hover:text-emerald-50"
+                    >
+                      <CircleCheck className="mr-2 h-4 w-4" />
+                      直接標記完成
+                    </Button>
+                  )}
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
                   {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
@@ -1505,16 +1584,16 @@ function TrackingHistoryDialog({
                           ))}
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <Button type="button" onClick={handleSave} disabled={!status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
+                      儲存這次追蹤
+                    </Button>
                   </div>
                 </div>
-
-                <div className="mt-4 flex justify-end">
-                  <Button type="button" onClick={handleSave} disabled={!status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
-                    儲存這次追蹤
-                  </Button>
-                </div>
-              </div>
-            </section>
+              </section>
 
             <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-4">
               <div className="flex items-center gap-2">
@@ -1704,9 +1783,9 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-slate-50">Excel 整理與上傳流程</DialogTitle>
+          <DialogTitle className="text-2xl text-slate-50">上傳說明</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
-            每個 BOM 保留為獨立工作區；可一次上傳多個檔案，再切換、篩選與追蹤最新狀態。
+            這裡不是教你做 Excel 格式研究，而是告訴你這個網站要怎麼餵資料、怎麼看結果、出錯時先檢查哪裡。
           </DialogDescription>
         </DialogHeader>
 
@@ -1714,8 +1793,8 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.07] p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-bold text-cyan-200">1. 先下載標準範本</h3>
-                <p className="mt-1 leading-6 text-slate-400">內含「上傳資料」與「填寫說明」兩張工作表，以及可直接修改的範例。</p>
+                <h3 className="text-lg font-bold text-cyan-200">1. 先用標準範本整理</h3>
+                <p className="mt-1 leading-6 text-slate-400">如果你手上的 BOM 很亂，先用範本重排一次最省事。範本裡有欄位示例，照著填，網站辨識率最高。</p>
               </div>
               <Button asChild className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
                 <a href={templateUrl} download="料號替代料_上傳範本.xlsx">
@@ -1726,16 +1805,17 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5">
-            <h3 className="text-lg font-bold text-blue-200">2. 資料怎麼整理</h3>
+            <h3 className="text-lg font-bold text-blue-200">2. Excel 要怎麼排，網站才看得懂</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
-                ["每個廠商料一列", "同一顆料有 Murata、Samsung、TDK，就建立三列；不要把多個 MPN 塞在同一格。"],
-                ["藍色列開新主料", "每個主料第一列填藍色；直到下一個藍色列以前，都視為它底下的替代料。"],
-                ["Level 可有可無", "有階層時用 0=大分類、1=模組、2=料件；一般平面表沒有 Level 也能上傳。"],
-                ["可用料必須同時符合兩項", "任何一列只要 Remark = OK 且 Part Number 尾數為 00、ZZ 或 ZY 就算可用；主料不符時會繼續檢查底下替代料。"],
-                ["原理圖資訊要一致", "同群組的 Part Spec、Schematic_Part、PCB_Footprint 應維持一致。"],
-                ["狀態使用標準詞", "建議使用 Approved、Active、NRND、Obsolete、Disqualified，系統也支援常見中文狀態。"],
-                ["追蹤欄位可選填", "TX 與 Tracking Status／處理狀態可直接放在 Excel；匯入後會顯示成最新狀態，後續可在網站裡追加歷史與圖片。"],
+                ["一列只放一個廠商料", "同一個 location 如果有 3 個候選 MPN，就要拆成 3 列，不要把 3 個料號塞在同一格。"],
+                ["主料與替代料要排在一起", "同一組資料請連續擺放，主料在前，替代料接在後面，避免網站把它拆成不同群組。"],
+                ["有藍色起始列就照藍色分組", "如果你的 Excel 有用底色標主料，網站會優先用這個規則；下一個藍色列出現前，都算同一組。"],
+                ["Ref Des / location 要寫清楚", "像 `C418`、`J10`、`U73` 這些位號是網站判斷焊位的核心欄位，能填就一定要填。"],
+                ["同一組的圖面資料要一致", "Part Spec、Schematic_Part、PCB_Footprint 這些資料，在同一主料與替代料群組裡不要亂變。"],
+                ["狀態欄請用固定字", "建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
+                ["TX 與追蹤欄可後補", "TX、狀態追蹤不一定要在 Excel 就填好，匯入後也能直接在網站上補。"],
+                ["一個 BOM 一個檔案", "不同板子、不同版本請分開存，檔名最好帶專案名與版次，不然後面很難查。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
                   <p className="font-bold text-slate-100">{title}</p>
@@ -1746,25 +1826,35 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-emerald-200">3. 系統如何通用分析</h3>
+            <h3 className="text-lg font-bold text-emerald-200">3. 上傳後系統怎麼判斷</h3>
             <div className="mt-4 space-y-3 leading-6 text-slate-300">
-              <p><strong className="text-slate-100">欄位：</strong>辨識 Name／料名、MPN／廠商料號、Part Number／內部料號、Ref Group／群組等中英文別名。</p>
-              <p><strong className="text-slate-100">工作表：</strong>比較所有工作表，選擇可辨識欄位最多且有效資料列最多的一張。</p>
-              <p><strong className="text-slate-100">分組：</strong>有藍色起始列時完全依底色分組；沒有底色標記的其他格式，才退回 Ref Group＋料名規則。</p>
-              <p><strong className="text-slate-100">問題料：</strong>整組每一列都沒有同時符合 Remark = OK 與 Part Number 尾數 00、ZZ 或 ZY，且沒有填任何 TX，才列入待申請；只要一顆替代料可用或有 TX 就不算問題。</p>
+              <p><strong className="text-slate-100">先找主工作表：</strong>如果檔案裡有很多 sheet，系統會挑欄位最完整、有效資料最多的那一張來讀。</p>
+              <p><strong className="text-slate-100">再判斷分組：</strong>有藍色列就先照藍色列；沒有藍色列才退回用 Ref Group、Ref Des、料名等欄位去猜。</p>
+              <p><strong className="text-slate-100">再判斷可用料：</strong>一列如果有可用的內部料號，或你已經填了 TX，系統就不會把它當成完全無料。</p>
+              <p><strong className="text-slate-100">你看到的主料總表：</strong>是一行一個主料群組，展開後才會看到下面所有替代料與追蹤資訊。</p>
             </div>
           </section>
 
           <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5">
-            <h3 className="text-lg font-bold text-amber-200">4. 多 BOM 上傳與管理 SOP</h3>
+            <h3 className="text-lg font-bold text-amber-200">4. 實際操作流程</h3>
             <ol className="mt-3 space-y-2 leading-6 text-slate-300">
-              <li>1. 每個專案／板號各存成一個 `.xlsx` 或 `.xls`，檔名請包含專案與版本，避免混淆。</li>
-              <li>2. 按「上傳 BOM」；可一次選取多個檔案。相同檔名會更新該 BOM，不會覆蓋其他 BOM。</li>
-              <li>3. 從「目前 BOM」切換工作區；資料與網站手動修改會保存在此瀏覽器。</li>
-              <li>4. 先用各欄表頭下方的篩選確認 REF DES、MPN、內部料號及問題料，再展開替代料抽查。</li>
-              <li>5. TX 直接在表格內點擊填寫；狀態追蹤改為點開欄位後新增歷史，最新狀態固定使用「待處理、處理中、已完成」。</li>
-              <li>6. 確認後用「匯出結果」下載目前 BOM 的篩選結果；不再使用的 BOM 可按「刪除目前 BOM」。</li>
+              <li>1. 先把單一專案 / 單一版本 BOM 整理成一個 Excel 檔。</li>
+              <li>2. 按「上傳 BOM」匯入；可以一次選多個檔，但每個檔都會變成一個獨立 BOM 工作區。</li>
+              <li>3. 匯入後先看上方統計數字，再用表頭篩選檢查 `REF DES`、`MPN`、`內部料號`、`TX`、`狀態追蹤`。</li>
+              <li>4. 如果某組料需要補充說明，可直接在表格內填 `TX`；如果需要持續追蹤，就到「狀態追蹤」欄位新增紀錄。</li>
+              <li>5. 要切不同版本或不同專案，直接用上方 BOM 切換器，或進 `BOM管理` 看所有歷史 BOM。</li>
+              <li>6. 確認畫面篩選結果沒問題後，再用「匯出結果」下載你目前看到的結果。</li>
             </ol>
+          </section>
+
+          <section className="rounded-2xl border border-rose-400/25 bg-rose-400/[0.06] p-5">
+            <h3 className="text-lg font-bold text-rose-200">5. 常見錯誤先看這裡</h3>
+            <div className="mt-3 space-y-3 leading-6 text-slate-300">
+              <p><strong className="text-slate-100">搜不到資料：</strong>先按右上角或表頭的「清除」，很多時候是舊篩選還留著，不是真的沒有資料。</p>
+              <p><strong className="text-slate-100">同一個 location 看起來重複：</strong>先回原始 BOM 看是不是同一個位號被展開成多個候選料，或同一顆料被分配到多個位號。</p>
+              <p><strong className="text-slate-100">上傳後分組怪怪的：</strong>通常是主料與替代料沒有排在一起、藍色列沒標好，或 Ref Des / Ref Group 本身就不完整。</p>
+              <p><strong className="text-slate-100">TX 被清空：</strong>現在空白送出前會跳確認框，若看到提示請確認是不是要故意留白，不要直接略過。</p>
+            </div>
           </section>
         </div>
       </DialogContent>
@@ -1811,7 +1901,7 @@ function BomManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+      <DialogContent className="max-h-[90vh] max-w-[1120px] overflow-y-auto border-blue-400/30 bg-[#0d1729] px-7 py-6 text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">BOM 管理</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
@@ -1819,49 +1909,49 @@ function BomManagerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+        <div className="space-y-5 py-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-200/80">歷史 BOM</p>
-              <p className="mt-2 text-3xl font-black text-cyan-50">{bomWorkspaces.length}</p>
-              <p className="mt-1 text-sm text-cyan-100/80">目前可切換的 BOM 工作區</p>
+              <p className="mt-3 text-3xl font-black text-cyan-50">{bomWorkspaces.length}</p>
+              <p className="mt-2 text-[15px] leading-6 text-cyan-100/80">目前可切換的 BOM 工作區</p>
             </div>
-            <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4">
+            <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-200/80">總筆數</p>
-              <p className="mt-2 text-3xl font-black text-blue-50">{totalRecordCount.toLocaleString()}</p>
-              <p className="mt-1 text-sm text-blue-100/80">所有歷史 BOM 的料件明細總和</p>
+              <p className="mt-3 text-3xl font-black text-blue-50">{totalRecordCount.toLocaleString()}</p>
+              <p className="mt-2 text-[15px] leading-6 text-blue-100/80">所有歷史 BOM 的料件明細總和</p>
             </div>
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-200/80">目前使用中</p>
-              <p className="mt-2 line-clamp-2 text-lg font-black text-emerald-50">{bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇"}</p>
-              <p className="mt-1 text-sm text-emerald-100/80">目前畫面正在使用的 BOM</p>
+              <p className="mt-3 line-clamp-2 text-xl font-black leading-8 text-emerald-50">{bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇"}</p>
+              <p className="mt-2 text-[15px] leading-6 text-emerald-100/80">目前畫面正在使用的 BOM</p>
             </div>
-            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4">
+            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">最近更新</p>
-              <p className="mt-2 line-clamp-1 text-lg font-black text-violet-50">{latestWorkspace ? formatRelativeTimestamp(latestWorkspace.updatedAt) : "-"}</p>
-              <p className="mt-1 text-sm text-violet-100/80">{latestWorkspace ? latestWorkspace.name : "沒有可用資料"}</p>
+              <p className="mt-3 line-clamp-1 text-xl font-black leading-8 text-violet-50">{latestWorkspace ? formatRelativeTimestamp(latestWorkspace.updatedAt) : "-"}</p>
+              <p className="mt-2 text-[15px] leading-6 text-violet-100/80">{latestWorkspace ? latestWorkspace.name : "沒有可用資料"}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#0b1322] p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="rounded-2xl border border-blue-400/15 bg-[#0b1322] p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-lg font-black text-slate-50">歷史 BOM 清單</p>
-                <p className="mt-1 text-sm text-slate-400">依最近更新時間排序，往下可查看舊版本、備援版本與目前正在用的 BOM。</p>
+                <p className="text-xl font-black text-slate-50">歷史 BOM 清單</p>
+                <p className="mt-2 text-[15px] leading-6 text-slate-400">依最近更新時間排序，往下可查看舊版本、備援版本與目前正在用的 BOM。</p>
               </div>
-              <div className="relative w-full lg:w-[360px]">
+              <div className="relative w-full lg:w-[380px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-300" />
                 <Input
                   value={historyQuery}
                   onChange={(event) => setHistoryQuery(event.target.value)}
                   placeholder="搜尋 BOM 名稱、工作表或來源檔名"
-                  className="h-10 border-blue-400/20 bg-[#111f36] pl-10 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                  className="h-11 border-blue-400/20 bg-[#111f36] pl-10 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
           {filteredWorkspaces.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-blue-400/20 bg-[#10192c] px-6 py-12 text-center">
               <p className="text-lg font-bold text-slate-200">找不到符合條件的歷史 BOM</p>
@@ -1874,17 +1964,17 @@ function BomManagerDialog({
               <div
                 key={workspace.id}
                 className={cn(
-                  "rounded-2xl border px-5 py-4 transition-colors",
+                  "rounded-2xl border px-6 py-5 transition-colors",
                   isActive ? "border-cyan-300/40 bg-cyan-400/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]" : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
                 )}
               >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-start gap-2.5">
                       <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2.5 py-1 text-xs font-black text-blue-100">
                         #{index + 1}
                       </span>
-                      <p className="truncate text-lg font-black text-slate-50">{workspace.name}</p>
+                      <p className="min-w-0 flex-1 break-all text-[23px] font-black leading-8 text-slate-50">{workspace.name}</p>
                       {isActive && (
                         <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-100">
                           目前使用中
@@ -1896,39 +1986,48 @@ function BomManagerDialog({
                         </span>
                       )}
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">來源檔案</p>
-                        <p className="mt-1 truncate text-sm font-bold text-slate-100">{workspace.payload.sourceFile}</p>
+                        <p className="mt-2 break-all text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.sourceFile}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">工作表</p>
-                        <p className="mt-1 truncate text-sm font-bold text-slate-100">{workspace.payload.sheetName}</p>
+                        <p className="mt-2 break-all text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.sheetName}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">料件筆數</p>
-                        <p className="mt-1 text-sm font-bold text-slate-100">{workspace.payload.recordCount.toLocaleString()} 筆</p>
+                        <p className="mt-2 text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.recordCount.toLocaleString()} 筆</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">更新時間</p>
-                        <p className="mt-1 text-sm font-bold text-slate-100">{formatRelativeTimestamp(workspace.updatedAt)}</p>
+                        <p className="mt-2 text-[15px] font-bold leading-6 text-slate-100">{formatRelativeTimestamp(workspace.updatedAt)}</p>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-400">
-                      <span>建立時間：<strong className="font-semibold text-slate-200">{formatTimestamp(workspace.payload.generatedAt)}</strong></span>
-                      <span>最後更新：<strong className="font-semibold text-slate-200">{formatTimestamp(workspace.updatedAt)}</strong></span>
-                      <span>ID：<strong className="font-mono font-semibold text-slate-300">{workspace.id}</strong></span>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">建立時間</p>
+                        <p className="mt-2 text-[14px] font-semibold leading-6 text-slate-200">{formatTimestamp(workspace.payload.generatedAt)}</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">最後更新</p>
+                        <p className="mt-2 text-[14px] font-semibold leading-6 text-slate-200">{formatTimestamp(workspace.updatedAt)}</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3 md:col-span-2 xl:col-span-1">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">BOM ID</p>
+                        <p className="mt-2 break-all font-mono text-[13px] leading-6 text-slate-300">{workspace.id}</p>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:pl-4">
+                  <div className="flex shrink-0 flex-wrap items-center gap-3 xl:w-[190px] xl:justify-end xl:pl-4">
                     {!isActive && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => onSelect(workspace.id)}
-                        className="h-10 border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+                        className="h-11 border-cyan-400/25 bg-cyan-400/10 px-5 text-[15px] font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
                       >
                         切換到這個 BOM
                       </Button>
@@ -1938,7 +2037,7 @@ function BomManagerDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => onDelete(workspace.id)}
-                      className="h-10 border-rose-400/25 bg-rose-400/10 px-4 text-sm font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
+                      className="h-11 border-rose-400/25 bg-rose-400/10 px-5 text-[15px] font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
                     >
                       刪除
                     </Button>
@@ -2563,7 +2662,9 @@ export function MaterialRequestPage() {
         .filter((group) => matchesSearch(group) && matchesAvailability(group))
         .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
 
-      result[key] = buildExcelFilterOptions(valueGroups);
+      result[key] = key === "trackingStatus"
+        ? buildTrackingStatusFilterOptions(valueGroups)
+        : buildExcelFilterOptions(valueGroups);
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
   }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch]);
@@ -3099,7 +3200,7 @@ export function MaterialRequestPage() {
                   </div>
                 </th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} textFilterValue={columnTextFilters.specification} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, specification: value }))} searchPlaceholder="搜尋規格 / 備註" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} searchPlaceholder="搜尋最新狀態 / 備註 / 更新人" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} searchPlaceholder="搜尋追蹤狀態 / 備註 / 更新人" /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
