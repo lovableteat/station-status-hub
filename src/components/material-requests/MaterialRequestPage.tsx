@@ -3075,16 +3075,13 @@ export function MaterialRequestPage() {
         )}
 
         <div className="mt-3 flex flex-col gap-3 border-t border-blue-400/15 pt-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-wrap items-start gap-3">
-            <span className="text-sm font-bold text-slate-300">切換 BOM</span>
+          <div className="flex flex-1 flex-wrap items-center gap-2.5">
+            <span className="inline-flex h-10 items-center text-sm font-bold text-slate-300">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="min-h-[3.6rem] w-full max-w-[44rem] flex-1 items-start border-cyan-400/30 bg-[#0a1527] py-2 text-cyan-100 sm:min-w-[24rem] sm:w-[32rem]">
-                <div className="flex min-w-0 flex-col items-start text-left">
-                  <span className="line-clamp-2 max-w-full break-all text-[14px] font-semibold leading-5 text-cyan-100">
+              <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/30 bg-[#0a1527] px-4 py-0 text-cyan-100 sm:min-w-[24rem] sm:flex-[1_1_28rem]">
+                <div className="flex min-w-0 items-center text-left">
+                  <span className="block max-w-full truncate text-[14px] font-semibold leading-5 text-cyan-100">
                     {activeWorkspace.name}
-                  </span>
-                  <span className="mt-0.5 max-w-full truncate text-xs leading-5 text-slate-400">
-                    {activeWorkspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(activeWorkspace.updatedAt)}
                   </span>
                 </div>
               </SelectTrigger>
@@ -3099,15 +3096,15 @@ export function MaterialRequestPage() {
                 ))}
               </SelectContent>
             </Select>
-            <span className="rounded bg-blue-400/10 px-2.5 py-1 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-9 border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
+            <span className="inline-flex h-10 items-center rounded-md bg-blue-400/10 px-3 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-blue-400/20 bg-blue-400/10 px-3 text-sm font-bold text-slate-200 hover:bg-blue-400/20 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-500">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-10 border-rose-400/25 bg-rose-400/10 px-3 text-sm font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
           </div>
         </div>
 
