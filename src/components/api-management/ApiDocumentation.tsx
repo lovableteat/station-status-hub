@@ -1,447 +1,348 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Copy, ExternalLink, Play, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMemo, useState } from "react";
+import { BookOpen, Copy, ExternalLink, FileJson, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+import {
+  API_BASE_URL,
+  API_ENDPOINTS,
+  buildApiUrl,
+} from "./apiManagementConfig";
+
+function copyText(value: string, label: string) {
+  void navigator.clipboard.writeText(value);
+  toast.success(`${label} 已複製`);
+}
+
 export function ApiDocumentation() {
-  const baseUrl = "https://rfppeuzuoxtqkpbwehbq.supabase.co/functions/v1/api";
-  const [testApiKey, setTestApiKey] = useState("");
-  const [selectedEndpoint, setSelectedEndpoint] = useState("/stats");
-  const [testResponse, setTestResponse] = useState<any>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [selectedKey, setSelectedKey] = useState(API_ENDPOINTS[0]?.key ?? "stats");
+  const [pathValue, setPathValue] = useState("");
+  const [queryValue, setQueryValue] = useState("");
+  const [responseText, setResponseText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('已複製到剪貼簿');
-    } catch (error) {
-      toast.error('複製失敗');
-    }
-  };
+  const selectedEndpoint = useMemo(
+    () => API_ENDPOINTS.find((endpoint) => endpoint.key === selectedKey) ?? API_ENDPOINTS[0],
+    [selectedKey],
+  );
 
-  const testApi = async () => {
-    if (!testApiKey.trim()) {
-      toast.error('請輸入 API 金鑰');
+  const requestUrl = useMemo(() => {
+    if (!selectedEndpoint) return "";
+
+    return buildApiUrl(selectedEndpoint.path, {
+      pathParams: selectedEndpoint.pathParamKey
+        ? { [selectedEndpoint.pathParamKey]: pathValue }
+        : undefined,
+      queryParams: selectedEndpoint.queryParamKey
+        ? { [selectedEndpoint.queryParamKey]: queryValue }
+        : undefined,
+    });
+  }, [pathValue, queryValue, selectedEndpoint]);
+
+  const curlExample = useMemo(() => {
+    return [
+      `curl -X ${selectedEndpoint?.method ?? "GET"} \\`,
+      `  "${requestUrl}" \\`,
+      `  -H "x-api-key: YOUR_API_KEY" \\`,
+      `  -H "Content-Type: application/json"`,
+    ].join("\n");
+  }, [requestUrl, selectedEndpoint]);
+
+  const fetchExample = useMemo(() => {
+    return [
+      `const response = await fetch("${requestUrl}", {`,
+      `  method: "${selectedEndpoint?.method ?? "GET"}",`,
+      `  headers: {`,
+      `    "x-api-key": "YOUR_API_KEY",`,
+      `    "Content-Type": "application/json",`,
+      `  },`,
+      `});`,
+      ``,
+      `const data = await response.json();`,
+      `console.log(data);`,
+    ].join("\n");
+  }, [requestUrl, selectedEndpoint]);
+
+  const testEndpoint = async () => {
+    if (!apiKey.trim()) {
+      toast.error("請先輸入 API 金鑰");
+      return;
+    }
+
+    if (selectedEndpoint?.pathParamKey && !pathValue.trim()) {
+      toast.error(`請先輸入 ${selectedEndpoint.pathParamLabel}`);
       return;
     }
 
     setIsLoading(true);
-    setTestResponse(null);
 
     try {
-      const response = await fetch(`${baseUrl}${selectedEndpoint}`, {
-        method: 'GET',
+      const response = await fetch(requestUrl, {
+        method: selectedEndpoint?.method ?? "GET",
         headers: {
-          'x-api-key': testApiKey,
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+          "x-api-key": apiKey.trim(),
+        },
       });
 
-      const data = await response.json();
-      
-      setTestResponse({
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        data: data
-      });
+      const result = await response.json();
+      setResponseText(JSON.stringify(result, null, 2));
 
-      if (response.ok) {
-        toast.success('API 測試成功！');
+      if (!response.ok) {
+        toast.error(`測試失敗：HTTP ${response.status}`);
       } else {
-        toast.error('API 測試失敗');
+        toast.success("端點測試完成");
       }
     } catch (error) {
-      setTestResponse({
-        status: 0,
-        statusText: 'Network Error',
-        data: { error: error instanceof Error ? error.message : '網路錯誤' }
-      });
-      toast.error('測試失敗：網路錯誤');
+      setResponseText(
+        JSON.stringify(
+          {
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+          null,
+          2,
+        ),
+      );
+      toast.error("端點測試失敗");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const endpoints = [
-    {
-      method: "GET",
-      path: "/issues",
-      description: "獲取問題列表",
-      response: "問題陣列，包含標題、描述、狀態等資訊"
-    },
-    {
-      method: "GET", 
-      path: "/issues/{id}",
-      description: "獲取單個問題詳情",
-      response: "問題物件，包含完整資訊和附件"
-    },
-    {
-      method: "GET",
-      path: "/test-systems", 
-      description: "獲取測試系統列表",
-      response: "測試系統陣列，包含進度、狀態等資訊"
-    },
-    {
-      method: "GET",
-      path: "/test-progress",
-      description: "獲取測試進度",
-      parameters: "system_id（可選）- 篩選特定系統",
-      response: "測試進度陣列"
-    },
-    {
-      method: "GET",
-      path: "/stats",
-      description: "獲取統計數據", 
-      response: "包含問題、系統、進度的統計摘要"
-    },
-    {
-      method: "GET",
-      path: "/docs",
-      description: "獲取 API 文檔",
-      response: "API 文檔和端點說明"
-    }
-  ];
-
-  const exampleCode = `// JavaScript 範例
-const apiKey = 'ak_your_api_key_here';
-
-fetch('${baseUrl}/issues', {
-  headers: {
-    'x-api-key': apiKey,
-    'Content-Type': 'application/json'
-  }
-})
-.then(response => response.json())
-.then(data => console.log(data));
-
-// curl 範例  
-curl -H "x-api-key: ak_your_api_key_here" \\
-     -H "Content-Type: application/json" \\
-     "${baseUrl}/issues"`;
-
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>API 測試工具</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            直接在此測試您的 API 金鑰和端點
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">API 金鑰</label>
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-blue-400/15 bg-[#10192e]">
+          <CardHeader className="border-b border-blue-400/10 pb-5">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
+              <BookOpen className="h-6 w-6 text-violet-300" />
+              API 文件
+            </CardTitle>
+            <p className="text-sm leading-6 text-slate-400">
+              給內外部系統看的正式串接說明，包含 Base URL、Header、端點用途與範例。
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-5 pt-5">
+            <div className="rounded-3xl border border-blue-400/12 bg-[#0b1423] p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                    Base URL
+                  </p>
+                  <p className="mt-2 break-all text-sm leading-6 text-cyan-100">{API_BASE_URL}</p>
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={() => copyText(API_BASE_URL, "Base URL")}
+                  className="border-blue-400/20 bg-transparent text-slate-300 hover:bg-blue-400/10 hover:text-white"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-3xl border border-blue-400/12 bg-[#0b1423] p-5">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                  <p className="text-sm font-black text-slate-100">驗證方式</p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  所有端點都使用 <code className="text-cyan-100">x-api-key</code> 作為驗證 Header。
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-blue-400/12 bg-[#0b1423] p-5">
+                <div className="flex items-center gap-2">
+                  <FileJson className="h-5 w-5 text-cyan-300" />
+                  <p className="text-sm font-black text-slate-100">回應格式</p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  回應以 JSON 為主，清單端點通常包含 <code className="text-cyan-100">data</code> 與{" "}
+                  <code className="text-cyan-100">total</code>。
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-blue-400/12 bg-[#0b1423] p-5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-300" />
+                <p className="text-sm font-black text-slate-100">端點清單</p>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {API_ENDPOINTS.map((endpoint) => (
+                  <div
+                    key={endpoint.key}
+                    className="rounded-2xl border border-blue-400/10 bg-[#10192e] p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/15">
+                        {endpoint.method}
+                      </Badge>
+                      <p className="font-bold text-slate-100">{endpoint.path}</p>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">{endpoint.description}</p>
+                    <p className="mt-2 text-sm text-slate-400">{endpoint.responseSummary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-400/15 bg-[#10192e]">
+          <CardHeader className="border-b border-blue-400/10 pb-5">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
+              <ExternalLink className="h-6 w-6 text-cyan-300" />
+              即時測試與範例
+            </CardTitle>
+            <p className="text-sm leading-6 text-slate-400">
+              選端點後可直接測試，下面也會同步更新 curl 與 fetch 範例。
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-5 pt-5">
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-300">API 金鑰</Label>
                 <Input
                   type="password"
-                  placeholder="輸入您的 API 金鑰（ak_...）"
-                  value={testApiKey}
-                  onChange={(e) => setTestApiKey(e.target.value)}
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder="輸入 API 金鑰後可直接測試"
+                  className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">選擇端點</label>
-                <Select value={selectedEndpoint} onValueChange={setSelectedEndpoint}>
-                  <SelectTrigger>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-300">選擇端點</Label>
+                <Select value={selectedKey} onValueChange={setSelectedKey}>
+                  <SelectTrigger className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="/stats">GET /stats</SelectItem>
-                    <SelectItem value="/issues">GET /issues</SelectItem>
-                    <SelectItem value="/test-systems">GET /test-systems</SelectItem>
-                    <SelectItem value="/test-progress">GET /test-progress</SelectItem>
-                    <SelectItem value="/docs">GET /docs</SelectItem>
+                  <SelectContent className="border-blue-400/20 bg-[#10192e] text-slate-100">
+                    {API_ENDPOINTS.map((endpoint) => (
+                      <SelectItem key={endpoint.key} value={endpoint.key}>
+                        {endpoint.method} {endpoint.path}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {selectedEndpoint?.pathParamKey && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-300">
+                    {selectedEndpoint.pathParamLabel}
+                  </Label>
+                  <Input
+                    value={pathValue}
+                    onChange={(event) => setPathValue(event.target.value)}
+                    placeholder={selectedEndpoint.pathParamPlaceholder}
+                    className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
+                  />
+                </div>
+              )}
+
+              {selectedEndpoint?.queryParamKey && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-300">
+                    {selectedEndpoint.queryParamLabel}
+                  </Label>
+                  <Input
+                    value={queryValue}
+                    onChange={(event) => setQueryValue(event.target.value)}
+                    placeholder={selectedEndpoint.queryParamPlaceholder}
+                    className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
+                  />
+                </div>
+              )}
             </div>
-            
-            <div className="flex items-center gap-2">
-              <Button onClick={testApi} disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4 mr-2" />
-                )}
-                測試 API
+
+            <div className="rounded-2xl border border-blue-400/12 bg-[#0b1423] px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                Request URL
+              </p>
+              <p className="mt-2 break-all text-sm text-cyan-100">{requestUrl}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={testEndpoint}
+                disabled={isLoading}
+                className="bg-cyan-500 text-slate-950 hover:bg-cyan-400"
+              >
+                {isLoading ? "測試中..." : "測試端點"}
               </Button>
-              <code className="text-sm bg-muted px-2 py-1 rounded">
-                GET {baseUrl}{selectedEndpoint}
-              </code>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => copyText(curlExample, "curl 範例")}
+                className="border-blue-400/20 bg-transparent text-slate-300 hover:bg-blue-400/10 hover:text-white"
+              >
+                複製 curl
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => copyText(fetchExample, "fetch 範例")}
+                className="border-blue-400/20 bg-transparent text-slate-300 hover:bg-blue-400/10 hover:text-white"
+              >
+                複製 fetch
+              </Button>
             </div>
 
-            {testResponse && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant={testResponse.status >= 200 && testResponse.status < 300 ? "default" : "destructive"}>
-                    {testResponse.status} {testResponse.statusText}
-                  </Badge>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">回應內容：</h4>
-                  <pre className="p-4 bg-muted rounded text-sm overflow-x-auto">
-                    <code>{JSON.stringify(testResponse.data, null, 2)}</code>
-                  </pre>
-                </div>
+            <Separator className="bg-blue-400/10" />
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-sm font-black text-slate-200">curl 範例</p>
+                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#0b1423] p-4">
+                  <pre className="text-sm leading-6 text-cyan-100">{curlExample}</pre>
+                </ScrollArea>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>連接步驟指南</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            按照以下步驟連接到您的生產管理系統 API
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <h4 className="font-medium">第一步：獲取 API 金鑰</h4>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground ml-4">
-                <li>點擊左側導航欄中的「API 金鑰管理」</li>
-                <li>切換到「金鑰管理」標籤</li>
-                <li>點擊「建立新金鑰」按鈕</li>
-                <li>填寫金鑰名稱和描述</li>
-                <li>選擇所需的權限（讀取/寫入）</li>
-                <li>點擊「建立」按鈕</li>
-                <li>複製生成的 API 金鑰（格式：ak_...）</li>
-              </ol>
-            </div>
-
-            <div className="space-y-3">
-              <h4 className="font-medium">第二步：測試連接</h4>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    1. 使用 curl 命令測試（替換 YOUR_API_KEY 為實際金鑰）：
-                  </p>
-                  <div className="flex items-center gap-2 mb-2">
-                    <code className="flex-1 p-2 bg-muted rounded text-sm">
-                      curl -H "x-api-key: YOUR_API_KEY" {baseUrl}/stats
-                    </code>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => copyToClipboard(`curl -H "x-api-key: YOUR_API_KEY" ${baseUrl}/stats`)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    2. 使用瀏覽器開發者工具測試：
-                  </p>
-                  <pre className="p-3 bg-muted rounded text-sm overflow-x-auto">
-                    <code>{`fetch('${baseUrl}/stats', {
-  headers: {
-    'x-api-key': 'YOUR_API_KEY',
-    'Content-Type': 'application/json'
-  }
-})
-.then(response => response.json())
-.then(data => console.log(data))
-.catch(error => console.error('Error:', error));`}</code>
-                  </pre>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    3. 使用 Postman 或其他 API 工具：
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                    <li>URL: <code className="bg-muted px-1 rounded">{baseUrl}/stats</code></li>
-                    <li>方法: GET</li>
-                    <li>標頭: x-api-key = YOUR_API_KEY</li>
-                    <li>標頭: Content-Type = application/json</li>
-                  </ul>
-                </div>
-
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    <strong>成功回應範例：</strong>
-                  </p>
-                  <pre className="mt-2 p-2 bg-white rounded text-xs">
-                    <code>{`{
-  "success": true,
-  "data": {
-    "totalIssues": 25,
-    "totalSystems": 150,
-    "completedSystems": 120
-  }
-}`}</code>
-                  </pre>
-                </div>
-
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-800">
-                    <strong>錯誤回應範例：</strong>
-                  </p>
-                  <pre className="mt-2 p-2 bg-white rounded text-xs">
-                    <code>{`{
-  "error": "Invalid or expired API key"
-}`}</code>
-                  </pre>
-                </div>
+              <div className="space-y-2">
+                <p className="text-sm font-black text-slate-200">fetch 範例</p>
+                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#0b1423] p-4">
+                  <pre className="text-sm leading-6 text-cyan-100">{fetchExample}</pre>
+                </ScrollArea>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h4 className="font-medium">第三步：整合到您的應用程式</h4>
-              <p className="text-sm text-muted-foreground">
-                在每個 API 請求的標頭中加入您的金鑰：
-              </p>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li>標頭名稱：<code className="bg-muted px-1 rounded">x-api-key</code></li>
-                <li>標頭值：您的 API 金鑰</li>
-                <li>內容類型：<code className="bg-muted px-1 rounded">application/json</code></li>
-              </ul>
+            <div className="space-y-2">
+              <p className="text-sm font-black text-slate-200">測試回應</p>
+              <Textarea
+                value={responseText}
+                readOnly
+                placeholder="測試端點後，這裡會顯示 JSON 回應。"
+                className="min-h-[260px] border-blue-400/20 bg-[#0b1423] font-mono text-sm leading-6 text-cyan-100 placeholder:text-slate-500"
+              />
             </div>
-
-            <div className="space-y-3">
-              <h4 className="font-medium">注意事項</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li>請妥善保管您的 API 金鑰，不要在公開場所分享</li>
-                <li>如果金鑰洩露，請立即停用並建立新的金鑰</li>
-                <li>可以在金鑰管理頁面查看使用統計和管理金鑰狀態</li>
-                <li>每個 API 請求都會記錄使用次數和最後使用時間</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>API 文檔</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            使用以下端點來存取您的生產管理系統資料
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">基礎 URL</h4>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-muted rounded text-sm">
-                  {baseUrl}
-                </code>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => copyToClipboard(baseUrl)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => window.open(`${baseUrl}/docs`, '_blank')}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">認證方式</h4>
-              <p className="text-sm text-muted-foreground mb-2">
-                在請求標頭中包含您的 API 金鑰：
-              </p>
-              <code className="block p-2 bg-muted rounded text-sm">
-                x-api-key: ak_your_api_key_here
-              </code>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>可用端點</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {endpoints.map((endpoint, index) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant={endpoint.method === 'GET' ? 'default' : 'secondary'}>
-                    {endpoint.method}
-                  </Badge>
-                  <code className="text-sm">{endpoint.path}</code>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {endpoint.description}
-                </p>
-                {endpoint.parameters && (
-                  <div className="text-sm">
-                    <span className="font-medium">參數：</span> {endpoint.parameters}
-                  </div>
-                )}
-                <div className="text-sm">
-                  <span className="font-medium">回傳：</span> {endpoint.response}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>使用範例</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <h4 className="font-medium">程式碼範例</h4>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => copyToClipboard(exampleCode)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <pre className="p-4 bg-muted rounded text-sm overflow-x-auto">
-                <code>{exampleCode}</code>
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">回應格式</h4>
-              <pre className="p-4 bg-muted rounded text-sm overflow-x-auto">
-                <code>{`{
-  "success": true,
-  "data": [...],
-  "total": 10
-}`}</code>
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">錯誤回應</h4>
-              <pre className="p-4 bg-muted rounded text-sm overflow-x-auto">
-                <code>{`{
-  "error": "Invalid or expired API key"
-}`}</code>
-              </pre>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
