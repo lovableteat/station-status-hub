@@ -7,6 +7,7 @@ import {
   EyeOff,
   KeyRound,
   Pencil,
+  Play,
   Plus,
   Power,
   ShieldCheck,
@@ -41,6 +42,10 @@ import {
 import { CreateApiKeyDialog } from "./CreateApiKeyDialog";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
+interface ApiKeyManagementProps {
+  onTestKey?: (record: ApiKeyRecord) => void;
+}
+
 function maskApiKey(value: string, visible: boolean) {
   if (visible) return value;
   if (value.length <= 16) return `${value.slice(0, 4)}••••${value.slice(-4)}`;
@@ -57,7 +62,7 @@ function formatDateTime(value: string | null, fallback: string) {
   }
 }
 
-export function ApiKeyManagement() {
+export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -228,7 +233,7 @@ export function ApiKeyManagement() {
               API 金鑰管理
             </CardTitle>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              在這裡可新增、編輯、停用與刪除 API 金鑰。Provider、模型、Base URL 也能一起維護。
+              在這裡可新增、編輯、停用與刪除 API 金鑰。需要測試時可直接從列表把金鑰帶去測試頁。
             </p>
           </div>
 
@@ -238,7 +243,7 @@ export function ApiKeyManagement() {
             className="bg-cyan-500 text-slate-950 hover:bg-cyan-400"
           >
             <Plus className="mr-2 h-4 w-4" />
-            新增金鑰
+            建立新金鑰
           </Button>
         </CardHeader>
 
@@ -250,7 +255,7 @@ export function ApiKeyManagement() {
               <KeyRound className="mx-auto h-12 w-12 text-slate-500" />
               <p className="mt-4 text-lg font-bold text-slate-100">目前沒有 API 金鑰</p>
               <p className="mt-2 text-sm text-slate-400">
-                可先新增一把 API key，並且把 provider、模型和 base URL 一起建好。
+                你可以先新增 API key，再補上 provider、model 和 base URL。
               </p>
               <Button
                 type="button"
@@ -266,11 +271,10 @@ export function ApiKeyManagement() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-blue-400/10 hover:bg-transparent">
-                    <TableHead className="text-slate-400">標籤 / 服務商</TableHead>
-                    <TableHead className="text-slate-400">API Key</TableHead>
+                    <TableHead className="text-slate-400">名稱 / 服務商</TableHead>
+                    <TableHead className="text-slate-400">金鑰</TableHead>
                     <TableHead className="text-slate-400">狀態</TableHead>
                     <TableHead className="text-slate-400">模型</TableHead>
-                    <TableHead className="text-slate-400">Base URL</TableHead>
                     <TableHead className="text-slate-400">權限</TableHead>
                     <TableHead className="text-slate-400">使用次數</TableHead>
                     <TableHead className="text-slate-400">最後使用</TableHead>
@@ -354,12 +358,6 @@ export function ApiKeyManagement() {
                         </TableCell>
 
                         <TableCell className="align-top">
-                          <div className="max-w-[18rem] break-all text-sm text-slate-300">
-                            {permissions.metadata.baseUrl || "-"}
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="align-top">
                           <div className="flex flex-wrap gap-1.5">
                             {permissions.read ? (
                               <Badge
@@ -385,12 +383,23 @@ export function ApiKeyManagement() {
                         <TableCell className="align-top">
                           <div className="inline-flex items-center gap-2 text-sm text-slate-300">
                             <Clock3 className="h-3.5 w-3.5 text-slate-500" />
-                            {formatDateTime(apiKey.last_used_at, "尚未使用")}
+                            {formatDateTime(apiKey.last_used_at, "從未使用")}
                           </div>
                         </TableCell>
 
                         <TableCell className="align-top">
                           <div className="flex justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onTestKey?.(apiKey)}
+                              className="text-emerald-200 hover:bg-emerald-400/10 hover:text-emerald-100"
+                            >
+                              <Play className="mr-1.5 h-4 w-4" />
+                              測試
+                            </Button>
+
                             <Button
                               type="button"
                               variant="ghost"
@@ -428,7 +437,7 @@ export function ApiKeyManagement() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>確認刪除 API 金鑰？</AlertDialogTitle>
                                   <AlertDialogDescription className="text-slate-400">
-                                    刪除後這把 key 將無法再使用，而且不會自動恢復。
+                                    刪除後這把 key 就不能再使用，而且不會自動恢復。
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
