@@ -999,7 +999,7 @@ function ExcelFilterPopover({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -1016,7 +1016,8 @@ function ExcelFilterPopover({
               onClick={() => onSelectedValuesChange([])}
               className="h-9 px-2 text-sm font-semibold text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
             >
-              全不選
+              全刪除
+            >
             </Button>
             <Button
               type="button"
@@ -1170,6 +1171,8 @@ function InlineVirtualAlternativeEditor({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingValue, setPendingValue] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing) setDraft(value);
@@ -1187,7 +1190,10 @@ function InlineVirtualAlternativeEditor({
     }
 
     setEditing(false);
-    if (nextValue !== value) onSave(nextValue);
+    if (nextValue !== value) {
+      setPendingValue(nextValue);
+      setConfirmOpen(true);
+    }
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -1196,6 +1202,19 @@ function InlineVirtualAlternativeEditor({
       setDraft(value);
       setEditing(false);
     }
+  };
+
+  const closeConfirmation = () => {
+    setConfirmOpen(false);
+    setPendingValue(null);
+    setDraft(value);
+  };
+
+  const confirmSave = () => {
+    if (pendingValue == null) return;
+    onSave(pendingValue);
+    setConfirmOpen(false);
+    setPendingValue(null);
   };
 
   if (editing) {
@@ -1214,15 +1233,45 @@ function InlineVirtualAlternativeEditor({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15"
-      title="直接修改 TX"
-    >
-      <span className={cn("break-all text-[15px] font-bold leading-6", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "點擊填寫"}</span>
-      <Pencil className="h-4 w-4 flex-none text-teal-400" />
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15"
+        title="直接修改 TX"
+      >
+        <span className={cn("break-all text-[15px] font-bold leading-6", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "點擊填寫"}</span>
+        <Pencil className="h-4 w-4 flex-none text-teal-400" />
+      </button>
+      <Dialog open={confirmOpen} onOpenChange={(open) => { if (!open) closeConfirmation(); }}>
+        <DialogContent className="max-w-md border-teal-400/25 bg-[#0d1729] text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-slate-50">確認更新 TX</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              送出前再確認一次，避免誤動造成資料被改掉。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 rounded-xl border border-teal-400/15 bg-[#091222] p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">原本 TX</p>
+              <p className="mt-1 break-all text-sm font-bold text-slate-200">{value || "空白"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">更新後 TX</p>
+              <p className="mt-1 break-all text-sm font-bold text-teal-200">{pendingValue || "空白"}</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button type="button" variant="outline" onClick={closeConfirmation} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">
+              取消
+            </Button>
+            <Button type="button" onClick={confirmSave} className="bg-teal-500 font-bold text-slate-950 hover:bg-teal-400">
+              確認更新
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
