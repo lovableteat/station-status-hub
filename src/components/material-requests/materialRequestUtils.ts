@@ -63,6 +63,8 @@ export type MaterialActionKind =
 
 export interface MaterialRecord extends MaterialWorkbookRecord {
   groupKey: string;
+  locationKey: string;
+  locationTokens: string[];
   displayRef: string;
   mpnCandidates: string[];
   partSummary: string;
@@ -216,6 +218,52 @@ function splitRefDesignators(value: unknown) {
       .map((item) => item.trim())
       .filter(Boolean)
   ));
+}
+
+function compareLocationTokens(left: string, right: string) {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function getLocationTokens(...values: unknown[]) {
+  return Array.from(new Set(
+    values
+      .flatMap((value) => splitRefDesignators(value))
+      .map((token) => token.trim().toUpperCase())
+      .filter((token) => token && token !== "-")
+  )).sort(compareLocationTokens);
+}
+
+function buildLocationKey(raw: Pick<MaterialWorkbookRecord, "sectionName" | "assemblyName" | "refDes" | "refGroup" | "sourceGroupKey" | "name">) {
+  const locationTokens = getLocationTokens(raw.refGroup, raw.refDes);
+  if (locationTokens.length > 0) {
+    const scope = [
+      normalizeHeader(raw.sectionName),
+      normalizeHeader(raw.assemblyName),
+    ].filter(Boolean).join("::");
+
+    return {
+      locationKey: `loc::${scope || "default"}::${locationTokens.join("|")}`,
+      locationTokens,
+    };
+  }
+
+  if (normalizeText(raw.sourceGroupKey)) {
+    return {
+      locationKey: `source::${normalizeText(raw.sourceGroupKey)}`,
+      locationTokens: [],
+    };
+  }
+
+  const nameFallback = [
+    normalizeHeader(raw.sectionName),
+    normalizeHeader(raw.assemblyName),
+    normalizeHeader(raw.name),
+  ].filter(Boolean).join("::");
+
+  return {
+    locationKey: `name::${nameFallback || "unknown"}`,
+    locationTokens: [],
+  };
 }
 
 function normalizeTrackingHistoryImage(raw: unknown): MaterialTrackingHistoryImage | null {
@@ -388,13 +436,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const remark = normalizeText(raw.remark);
   const actionKind = getActionKind(remark);
   const displayRef = firstNonEmpty(raw.refGroup, raw.refDes, raw.partNumber, raw.name);
-  const normalizedName = normalizeText(raw.name);
-  const groupIdentity = normalizeText(raw.sourceGroupKey)
-    ? `source::${normalizeText(raw.sourceGroupKey)}`
-    : normalizeText(raw.refGroup)
-      ? `ref::${normalizeText(raw.refGroup)}::${normalizedName}`
-      : `name::${normalizeText(raw.sectionName)}::${normalizeText(raw.assemblyName)}::${normalizedName}`;
-  const groupKey = groupIdentity;
+  const { locationKey, locationTokens } = buildLocationKey(raw);
+  const groupKey = locationKey;
   const partSummary = uniqueValues([
     raw.partNumber,
     raw.partName,
@@ -415,6 +458,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     trackingStatus,
     remark,
     displayRef,
+    locationKey,
+    locationTokens,
     groupKey,
     mpnCandidates,
     partSummary,
@@ -470,17 +515,29 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         const scoreDifference = getPreferenceScore(left) - getPreferenceScore(right);
         return scoreDifference || left.manufacturer.localeCompare(right.manufacturer);
       })[0] ?? firstRecord;
-      const primaryRecord = groupRecords.find((record) => record.isGroupStart) ?? preferredRecord;
+      const primaryCandidates = groupRecords.filter((record) => record.isGroupStart);
+      const primaryRecord = (primaryCandidates.length > 0 ? [...primaryCandidates] : [...groupRecords]).sort((left, right) => {
+        const scoreDifference = getPreferenceScore(left) - getPreferenceScore(right);
+        if (scoreDifference !== 0) return scoreDifference;
+
+        const actionPriority = compareActionPriority(left, right);
+        if (actionPriority !== 0) return actionPriority;
+
+        return left.manufacturer.localeCompare(right.manufacturer);
+      })[0] ?? preferredRecord;
       const preferredPartNumber = normalizeText(primaryRecord.partNumber);
+      const displayLocationTokens = Array.from(new Set(groupRecords.flatMap((item) => item.locationTokens))).sort(compareLocationTokens);
 
       return {
         key,
-        displayRef: firstNonEmpty(
-          ...groupRecords.map((item) => item.refGroup),
-          ...groupRecords.map((item) => item.refDes),
-          preferredPartNumber,
-          firstRecord.displayRef
-        ),
+        displayRef: displayLocationTokens.length > 0
+          ? displayLocationTokens.join(", ")
+          : firstNonEmpty(
+              ...groupRecords.map((item) => item.refGroup),
+              ...groupRecords.map((item) => item.refDes),
+              preferredPartNumber,
+              firstRecord.displayRef
+            ),
         sectionName: firstNonEmpty(...groupRecords.map((item) => item.sectionName)),
         assemblyName: firstNonEmpty(...groupRecords.map((item) => item.assemblyName)),
         name: firstNonEmpty(...groupRecords.map((item) => item.name)),

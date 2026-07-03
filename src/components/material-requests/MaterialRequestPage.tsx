@@ -727,6 +727,22 @@ function matchesColumnFilters(
   );
 }
 
+function normalizeColumnFilterSelection(
+  selectedValues: ColumnFilterSelection,
+  options: ExcelFilterOption[],
+) {
+  if (selectedValues === null) return null;
+
+  const optionValueSet = new Set(options.map((option) => option.value));
+  const normalized = Array.from(new Set(selectedValues.filter((value) => optionValueSet.has(value))));
+
+  if (normalized.length === 0 && selectedValues.length > 0) {
+    return null;
+  }
+
+  return normalized.length === options.length ? null : normalized;
+}
+
 function ExcelFilterPopover({
   label,
   options,
@@ -822,12 +838,12 @@ function ExcelFilterPopover({
   const summary = hasContainsFilter
     ? hasValueFilter
       ? effectiveSelected.length === 0
-        ? "未選 + 包含"
+        ? `0/${options.length} + 包含`
         : `${effectiveSelected.length}/${options.length} + 包含`
       : "全部 + 包含"
     : hasValueFilter
       ? effectiveSelected.length === 0
-        ? "未選"
+        ? `0/${options.length}`
         : `${effectiveSelected.length}/${options.length}`
       : "全部";
 
@@ -859,25 +875,25 @@ function ExcelFilterPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-8 w-full items-center justify-between rounded border border-blue-300/25 bg-[#07182d] px-2 text-left text-xs font-bold text-slate-200 hover:border-cyan-300/50 hover:bg-cyan-400/10"
+          className="flex h-9 w-full items-center justify-between rounded border border-blue-300/25 bg-[#07182d] px-2.5 text-left text-sm font-bold text-slate-100 hover:border-cyan-300/50 hover:bg-cyan-400/10"
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 flex-none text-cyan-300" />
             <span className="truncate">{label}</span>
           </span>
-          <span className="ml-2 flex-none rounded bg-cyan-400/10 px-1.5 py-0.5 text-[11px] text-cyan-200">
+          <span className="ml-2 flex-none rounded bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-100">
             {summary}
           </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[320px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100"
+        className="w-[340px] border border-blue-400/25 bg-[#0d182b] p-3 text-slate-100"
       >
         <div className="space-y-3">
           <div className="space-y-1">
-            <p className="text-sm font-bold text-slate-100">{label}</p>
-            <p className="text-xs text-slate-500">比照 Excel：排序、勾選值、文字包含與顏色快速篩選。</p>
+            <p className="text-base font-bold text-slate-50">{label}</p>
+            <p className="text-sm text-slate-400">比照 Excel：排序、勾選值、文字包含與顏色快速篩選。</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -885,7 +901,7 @@ function ExcelFilterPopover({
               type="button"
               onClick={() => setSortDirection("asc")}
               className={cn(
-                "rounded border px-2 py-1.5 text-xs font-semibold",
+                "rounded border px-2 py-2 text-sm font-semibold",
                 sortDirection === "asc"
                   ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
                   : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
@@ -897,7 +913,7 @@ function ExcelFilterPopover({
               type="button"
               onClick={() => setSortDirection("desc")}
               className={cn(
-                "rounded border px-2 py-1.5 text-xs font-semibold",
+                "rounded border px-2 py-2 text-sm font-semibold",
                 sortDirection === "desc"
                   ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
                   : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
@@ -908,28 +924,28 @@ function ExcelFilterPopover({
           </div>
 
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold text-slate-400">搜尋勾選清單</p>
+            <p className="text-sm font-semibold text-slate-300">搜尋勾選清單</p>
             <Input
               value={optionSearchQuery}
               onChange={(event) => setOptionSearchQuery(event.target.value)}
               placeholder={searchPlaceholder}
-              className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+              className="h-10 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
             />
           </div>
 
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold text-slate-400">文字包含</p>
+            <p className="text-sm font-semibold text-slate-300">文字包含</p>
             <Input
               value={textFilterValue}
               onChange={(event) => onTextFilterValueChange(event.target.value)}
               placeholder={`只顯示包含指定文字的${label}`}
-              className="h-9 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+              className="h-10 border-blue-400/20 bg-[#111f36] text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
             />
-            <p className="text-[11px] text-cyan-200/80">這個條件會真正影響表格結果，搜尋勾選清單只用來找值。</p>
+            <p className="text-xs text-cyan-200/85">這個條件會真正影響表格結果，搜尋勾選清單只用來找值。</p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold text-slate-400">依顏色快速篩選</p>
+            <p className="text-sm font-semibold text-slate-300">依顏色快速篩選</p>
             <div className="flex flex-wrap gap-1.5">
               {toneButtons.map((button) => (
                 <button
@@ -937,7 +953,7 @@ function ExcelFilterPopover({
                   type="button"
                   onClick={() => setToneFilter(button.value)}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    "rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors",
                     toneFilter === button.value ? button.activeClassName : button.className,
                   )}
                 >
@@ -953,7 +969,7 @@ function ExcelFilterPopover({
               variant="ghost"
               size="sm"
               onClick={() => onSelectedValuesChange(null)}
-              className="h-8 px-2 text-xs text-blue-300 hover:bg-blue-400/10 hover:text-blue-200"
+              className="h-9 px-2 text-sm font-semibold text-blue-200 hover:bg-blue-400/10 hover:text-blue-100"
             >
               全選
             </Button>
@@ -962,7 +978,7 @@ function ExcelFilterPopover({
               variant="ghost"
               size="sm"
               onClick={() => onSelectedValuesChange([])}
-              className="h-8 px-2 text-xs text-rose-300 hover:bg-rose-400/10 hover:text-rose-200"
+              className="h-9 px-2 text-sm font-semibold text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
             >
               全不選
             </Button>
@@ -971,7 +987,7 @@ function ExcelFilterPopover({
               variant="ghost"
               size="sm"
               onClick={() => applySelection(filteredOptions.map((option) => option.value))}
-              className="h-8 px-2 text-xs text-amber-300 hover:bg-amber-400/10 hover:text-amber-200"
+              className="h-9 px-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10 hover:text-amber-100"
             >
               只留搜尋結果
             </Button>
@@ -982,15 +998,16 @@ function ExcelFilterPopover({
               onClick={() => {
                 setOptionSearchQuery("");
                 setToneFilter("all");
+                onSelectedValuesChange(null);
                 onTextFilterValueChange("");
               }}
-              className="h-8 px-2 text-xs text-slate-400 hover:bg-slate-400/10 hover:text-slate-200"
+              className="h-9 px-2 text-sm font-semibold text-slate-300 hover:bg-slate-400/10 hover:text-slate-100"
             >
-              清空搜尋
+              清空此欄
             </Button>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center justify-between text-[13px] text-slate-300">
             <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
             <span>清單顯示 {filteredOptions.length} 筆</span>
           </div>
@@ -998,14 +1015,14 @@ function ExcelFilterPopover({
           <ScrollArea className="h-64 rounded-xl border border-blue-400/15 bg-[#091222]">
             <div className="space-y-1 p-2">
               {options.length > 0 && (
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2 py-2 text-sm font-semibold text-slate-100 hover:bg-blue-400/10">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2.5 text-[15px] font-semibold text-slate-100 hover:bg-blue-400/10">
                   <Checkbox
                     checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
                     onCheckedChange={(value) => toggleVisibleSelection(value === true)}
                     className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
                   />
                   <span className="min-w-0 flex-1 truncate">(全選)</span>
-                  <span className="text-xs text-slate-400">{visibleCheckedCount}/{filteredOptions.length}</span>
+                  <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
                 </label>
               )}
 
@@ -1016,7 +1033,7 @@ function ExcelFilterPopover({
                   return (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-slate-200 hover:bg-blue-400/10"
+                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-[15px] text-slate-100 hover:bg-blue-400/10"
                     >
                       <Checkbox
                         checked={checked}
@@ -1034,12 +1051,12 @@ function ExcelFilterPopover({
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-xs text-slate-400">{option.count}</span>
+                      <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-sm text-slate-300">{option.count}</span>
                     </label>
                   );
                 })
               ) : (
-                <div className="px-2 py-8 text-center text-sm text-slate-500">找不到符合的篩選值</div>
+                <div className="px-2 py-8 text-center text-[15px] text-slate-400">找不到符合的篩選值</div>
               )}
             </div>
           </ScrollArea>
@@ -2314,6 +2331,24 @@ export function MaterialRequestPage() {
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
   }, [columnFilters, columnTextFilters, dataset.groups, matchesAvailability, matchesSearch]);
+
+  useEffect(() => {
+    setColumnFilters((current) => {
+      const keys = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
+      let changed = false;
+      const next = { ...current };
+
+      keys.forEach((key) => {
+        const normalized = normalizeColumnFilterSelection(current[key], columnFilterOptions[key]);
+        if (normalized !== current[key]) {
+          next[key] = normalized;
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [columnFilterOptions]);
 
   const filteredGroups = useMemo(() => {
     const result = dataset.groups.filter((group) => {
