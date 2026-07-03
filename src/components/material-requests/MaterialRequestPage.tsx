@@ -10,6 +10,7 @@
   useRef,
   useState,
 } from "react";
+import { startTransition } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -874,13 +875,19 @@ function ExcelFilterPopover({
 }) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
+  const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(selectedValues);
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
+  useEffect(() => {
+    setDraftSelectedValues(selectedValues);
+  }, [selectedValues]);
+
   const effectiveSelected = useMemo(
-    () => selectedValues === null
+    () => draftSelectedValues === null
       ? options.map((option) => option.value)
-      : selectedValues.filter((value) => optionValueSet.has(value)),
-    [optionValueSet, options, selectedValues],
+      : draftSelectedValues.filter((value) => optionValueSet.has(value)),
+    [draftSelectedValues, optionValueSet, options],
   );
+  const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
   const hasContainsFilter = textFilterValue.trim().length > 0;
 
   const filteredOptions = useMemo(() => {
@@ -941,9 +948,9 @@ function ExcelFilterPopover({
     }>;
   }, [options]);
 
-  const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelected.includes(option.value)).length;
+  const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
   const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
-  const hasValueFilter = selectedValues !== null;
+  const hasValueFilter = draftSelectedValues !== null;
   const summary = hasContainsFilter
     ? hasValueFilter
       ? effectiveSelected.length === 0
@@ -958,11 +965,15 @@ function ExcelFilterPopover({
 
   const applySelection = (nextValues: string[]) => {
     const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
-    onSelectedValuesChange(normalized.length === options.length ? null : normalized);
+    const nextSelection = normalized.length === options.length ? null : normalized;
+    setDraftSelectedValues(nextSelection);
+    startTransition(() => {
+      onSelectedValuesChange(nextSelection);
+    });
   };
 
   const toggleValue = (value: string, checked: boolean) => {
-    const current = selectedValues === null ? options.map((option) => option.value) : effectiveSelected;
+    const current = draftSelectedValues === null ? options.map((option) => option.value) : effectiveSelected;
     const next = checked
       ? Array.from(new Set([...current, value]))
       : current.filter((item) => item !== value);
@@ -971,7 +982,7 @@ function ExcelFilterPopover({
   };
 
   const toggleVisibleSelection = (checked: boolean) => {
-    const next = new Set(selectedValues === null ? options.map((option) => option.value) : effectiveSelected);
+    const next = new Set(draftSelectedValues === null ? options.map((option) => option.value) : effectiveSelected);
     filteredOptions.forEach((option) => {
       if (checked) next.add(option.value);
       else next.delete(option.value);
@@ -1073,7 +1084,7 @@ function ExcelFilterPopover({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => onSelectedValuesChange(null)}
+                onClick={() => applySelection(options.map((option) => option.value))}
                 className="h-8 rounded-lg border border-blue-400/20 bg-blue-400/10 px-1.5 text-[11px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
               >
                 全選
@@ -1082,7 +1093,7 @@ function ExcelFilterPopover({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => onSelectedValuesChange([])}
+                onClick={() => applySelection([])}
                 className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/10 px-1.5 text-[11px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
               >
                 全不選
@@ -1102,7 +1113,7 @@ function ExcelFilterPopover({
                 size="sm"
                 onClick={() => {
                   setToneFilter("all");
-                  onSelectedValuesChange(null);
+                  applySelection(options.map((option) => option.value));
                   onTextFilterValueChange("");
                 }}
                 className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
@@ -1133,7 +1144,7 @@ function ExcelFilterPopover({
 
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option) => {
-                  const checked = effectiveSelected.includes(option.value);
+                  const checked = effectiveSelectedSet.has(option.value);
                   const tone = option.tone ?? "slate";
                   return (
                     <label
