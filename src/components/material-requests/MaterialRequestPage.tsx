@@ -91,6 +91,14 @@ type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
 
+const SORT_MODE_LABELS: Record<SortMode, string> = {
+  reference: "Ref 由小到大",
+  "single-source": "無替代料優先",
+  alternatives: "替代料數由多到少",
+  approved: "Approved 數由多到少",
+  pending: "待申請數由多到少",
+};
+
 interface ExcelFilterOption {
   label: string;
   value: string;
@@ -3133,9 +3141,15 @@ export function MaterialRequestPage() {
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200">
+              <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
+            </SelectTrigger>
             <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
-              <SelectItem value="reference">依 Ref 排序</SelectItem><SelectItem value="single-source">無替代料優先</SelectItem><SelectItem value="alternatives">替代料多到少</SelectItem><SelectItem value="approved">Approved 多到少</SelectItem><SelectItem value="pending">待申請多到少</SelectItem>
+              <SelectItem value="reference">{SORT_MODE_LABELS.reference}</SelectItem>
+              <SelectItem value="single-source">{SORT_MODE_LABELS["single-source"]}</SelectItem>
+              <SelectItem value="alternatives">{SORT_MODE_LABELS.alternatives}</SelectItem>
+              <SelectItem value="approved">{SORT_MODE_LABELS.approved}</SelectItem>
+              <SelectItem value="pending">{SORT_MODE_LABELS.pending}</SelectItem>
             </SelectContent>
           </Select>
 
