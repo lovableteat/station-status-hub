@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, Edit, UserPlus, Shield, LogOut, Users, Settings, Target } from "lucide-react";
+import { Search, Plus, Edit, UserPlus, Shield, LogOut, Users, Settings, Target, Network } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
+import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -47,10 +48,13 @@ interface ProductionTarget {
   target_date: string;
 }
 
-export function AdminPanel() {
+type AdminTab = "users" | "engineers" | "targets" | "api-management";
+
+export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [productionTargets, setProductionTargets] = useState<ProductionTarget[]>([]);
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTeam, setFilterTeam] = useState("all-teams");
   const [isEngineerDialogOpen, setIsEngineerDialogOpen] = useState(false);
@@ -69,6 +73,10 @@ export function AdminPanel() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const loadAllData = async () => {
     await Promise.all([loadEngineers(), loadSystemUsers(), loadProductionTargets()]);
@@ -411,8 +419,8 @@ export function AdminPanel() {
         </Button>
       </div>
 
-      <Tabs defaultValue="users" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
@@ -424,6 +432,10 @@ export function AdminPanel() {
           <TabsTrigger value="targets">
             <Target className="h-4 w-4 mr-2" />
             生產目標
+          </TabsTrigger>
+          <TabsTrigger value="api-management">
+            <Network className="h-4 w-4 mr-2" />
+            API 管理
           </TabsTrigger>
         </TabsList>
 
@@ -788,6 +800,9 @@ export function AdminPanel() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="api-management" className="space-y-6">
+          <ApiManagementPage />
         </TabsContent>
       </Tabs>
 
