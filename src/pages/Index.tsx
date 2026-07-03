@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { AdminPanel } from "@/components/admin/AdminPanel";
-import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
@@ -307,13 +306,13 @@ const Index = () => {
       case "users":
         return (
           <PermissionGuard module="users">
-            <AdminPanel />
+            <AdminPanel initialTab="users" />
           </PermissionGuard>
         );
       case "api-management":
         return (
           <PermissionGuard module="api-management">
-            <ApiManagementPage />
+            <AdminPanel initialTab="api-management" />
           </PermissionGuard>
         );
       default:
