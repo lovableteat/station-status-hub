@@ -90,6 +90,7 @@ import {
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
+type CollaborationStatus = BomStorageMode | "checking" | "error";
 
 const SORT_MODE_LABELS: Record<SortMode, string> = {
   reference: "Ref 由小到大",
@@ -562,6 +563,47 @@ function formatRelativeTimestamp(value: string) {
 
   const diffYears = Math.floor(diffMonths / 12);
   return `${diffYears} 年前`;
+}
+
+function getCollaborationStatusMeta(status: CollaborationStatus) {
+  switch (status) {
+    case "remote":
+      return {
+        label: "多人共享已啟用",
+        description: "目前正在使用共用雲端 BOM，其他電腦新增的 BOM 也會同步出現。",
+        badgeClassName: "border-emerald-400/30 bg-emerald-400/10 text-emerald-100",
+        dotClassName: "bg-emerald-300",
+        bannerClassName: "",
+        bannerText: "",
+      };
+    case "recovery":
+      return {
+        label: "唯讀恢復模式",
+        description: "目前不是多人同步，只能查看恢復資料；上傳與編輯會被鎖住。",
+        badgeClassName: "border-amber-400/30 bg-amber-400/10 text-amber-100",
+        dotClassName: "bg-amber-300",
+        bannerClassName: "border-amber-400/30 bg-amber-400/10 text-amber-100",
+        bannerText: "目前是唯讀恢復模式，還不是多人同步。請先把 Supabase migration `20260702094500_4a79e28e-90e1-48d2-9487-f78e49b0d90a.sql` 套到正式資料庫。",
+      };
+    case "error":
+      return {
+        label: "雲端同步異常",
+        description: "最近一次共用 BOM 同步失敗，畫面可能停留在上次載入的資料。",
+        badgeClassName: "border-rose-400/30 bg-rose-400/10 text-rose-100",
+        dotClassName: "bg-rose-300",
+        bannerClassName: "border-rose-400/30 bg-rose-400/10 text-rose-100",
+        bannerText: "共用雲端 BOM 目前連線異常，畫面可能停留在上次載入的資料。請重新整理，或稍後再試一次。",
+      };
+    default:
+      return {
+        label: "檢查共享狀態中",
+        description: "系統正在確認是否連上共用雲端 BOM，完成前先不要判斷是否可多人共享。",
+        badgeClassName: "border-sky-400/30 bg-sky-400/10 text-sky-100",
+        dotClassName: "bg-sky-300",
+        bannerClassName: "border-sky-400/30 bg-sky-400/10 text-sky-100",
+        bannerText: "系統正在檢查共用 BOM 是否可用，確認完成前會暫時鎖住需要多人同步的操作。",
+      };
+  }
 }
 
 function getTrackingStatusTone(status: string) {
@@ -2443,7 +2485,7 @@ function CompactAlternativeRows({
 
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
-  const [bomStorageMode, setBomStorageMode] = useState<BomStorageMode>("recovery");
+  const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
@@ -2466,7 +2508,11 @@ export function MaterialRequestPage() {
   const workspaceSyncRequestRef = useRef(0);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
-  const isCollaborativeReady = bomStorageMode === "remote";
+  const isCollaborativeReady = collaborationStatus === "remote";
+  const collaborationStatusMeta = useMemo(
+    () => getCollaborationStatusMeta(collaborationStatus),
+    [collaborationStatus],
+  );
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
   const basePayload = activeWorkspace.payload;
@@ -2496,14 +2542,21 @@ export function MaterialRequestPage() {
 
   const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
     const requestId = ++workspaceSyncRequestRef.current;
-    const result = await loadBomWorkspacesDetailed();
-    if (requestId !== workspaceSyncRequestRef.current) {
-      return result.workspaces;
-    }
+    try {
+      const result = await loadBomWorkspacesDetailed();
+      if (requestId !== workspaceSyncRequestRef.current) {
+        return result.workspaces;
+      }
 
-    setBomStorageMode(result.mode);
-    applyLoadedWorkspaces(result.workspaces, preferredBomId);
-    return result.workspaces;
+      setCollaborationStatus(result.mode);
+      applyLoadedWorkspaces(result.workspaces, preferredBomId);
+      return result.workspaces;
+    } catch (error) {
+      if (requestId === workspaceSyncRequestRef.current) {
+        setCollaborationStatus("error");
+      }
+      throw error;
+    }
   }, [applyLoadedWorkspaces]);
 
   useEffect(() => {
@@ -2513,9 +2566,11 @@ export function MaterialRequestPage() {
       try {
         const result = await loadBomWorkspacesDetailed();
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
-        setBomStorageMode(result.mode);
+        setCollaborationStatus(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredBomId);
       } catch {
+        if (!active || requestId !== workspaceSyncRequestRef.current) return;
+        setCollaborationStatus("error");
         // Keep the current local state when collaborative sync is temporarily unavailable.
       }
     };
@@ -2756,9 +2811,14 @@ export function MaterialRequestPage() {
   };
 
   const showCollaborativeUnavailableToast = () => {
+    const title = collaborationStatus === "error"
+      ? "多人同步暫時異常"
+      : collaborationStatus === "checking"
+        ? "正在檢查共享狀態"
+        : "多人同步未啟用";
     toast({
-      title: "多人同步未啟用",
-      description: "目前 BOM 共享資料表未連線，已切換成唯讀恢復模式。請先完成 Supabase migration 後再編輯。",
+      title,
+      description: collaborationStatusMeta.bannerText || collaborationStatusMeta.description,
       variant: "destructive",
     });
   };
@@ -3031,6 +3091,13 @@ export function MaterialRequestPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-50">料號總表</h1>
               <p className="mt-0.5 text-sm text-slate-400">一行一個主料，點箭頭查看其他替代料。</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge className={cn("border px-2.5 py-1 text-xs font-bold", collaborationStatusMeta.badgeClassName)}>
+                  <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
+                  {collaborationStatusMeta.label}
+                </Badge>
+                <span className="text-xs text-slate-500">{collaborationStatusMeta.description}</span>
+              </div>
             </div>
           </div>
 
@@ -3050,9 +3117,15 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        {!isCollaborativeReady && (
-          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
-            目前是唯讀恢復模式，還不是多人同步。請先把 Supabase migration `20260702094500_4a79e28e-90e1-48d2-9487-f78e49b0d90a.sql` 套到正式資料庫。
+        {collaborationStatus !== "remote" && (
+          <div className={cn("mt-3 rounded-lg border px-3 py-2 text-sm", collaborationStatusMeta.bannerClassName)}>
+            <div className="flex items-start gap-2">
+              <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
+              <div>
+                <p className="font-bold">{collaborationStatusMeta.label}</p>
+                <p className="mt-0.5">{collaborationStatusMeta.bannerText}</p>
+              </div>
+            </div>
           </div>
         )}
 
