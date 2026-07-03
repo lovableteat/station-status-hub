@@ -934,6 +934,8 @@ function ExcelFilterPopover({
   textFilterValue: string;
   onTextFilterValueChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [isPanelReady, setIsPanelReady] = useState(false);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
   const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(selectedValues);
@@ -958,6 +960,19 @@ function ExcelFilterPopover({
     return () => window.clearTimeout(timerId);
   }, [draftTextFilterValue, onTextFilterValueChange, textFilterValue]);
 
+  useEffect(() => {
+    if (!open) {
+      setIsPanelReady(false);
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setIsPanelReady(true);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [open]);
+
   const effectiveSelected = useMemo(
     () => draftSelectedValues === null
       ? options.map((option) => option.value)
@@ -966,8 +981,18 @@ function ExcelFilterPopover({
   );
   const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
   const hasContainsFilter = textFilterValue.trim().length > 0;
+  const selectedCount = draftSelectedValues === null ? options.length : effectiveSelected.length;
+  const triggerSummary = hasContainsFilter
+    ? draftSelectedValues === null
+      ? "全部 + 包含"
+      : `${selectedCount}/${options.length} + 包含`
+    : draftSelectedValues === null
+      ? "全部"
+      : `${selectedCount}/${options.length}`;
 
   const filteredOptions = useMemo(() => {
+    if (!isPanelReady) return options;
+
     const next = options.filter((option) => {
       const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
       return matchesTone;
@@ -1037,7 +1062,7 @@ function ExcelFilterPopover({
     Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN,
   );
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
-  const summary = hasContainsFilter
+  const panelSummary = hasContainsFilter
     ? hasValueFilter
       ? effectiveSelected.length === 0
         ? `0/${options.length} + 包含`
@@ -1081,7 +1106,7 @@ function ExcelFilterPopover({
   }, [draftTextFilterValue, filteredOptions.length, toneFilter, sortDirection]);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -1092,7 +1117,7 @@ function ExcelFilterPopover({
             <span className="truncate">{label}</span>
           </span>
           <span className="ml-2 flex-none rounded bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-100">
-            {summary}
+            {triggerSummary}
           </span>
         </button>
       </PopoverTrigger>
@@ -1103,7 +1128,7 @@ function ExcelFilterPopover({
         <div className="space-y-2">
           <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#111f36] px-3 py-2">
             <p className="text-sm font-black text-slate-50">{label}</p>
-            <span className="rounded bg-cyan-400/10 px-2 py-0.5 text-[11px] font-bold text-cyan-100">{summary}</span>
+            <span className="rounded bg-cyan-400/10 px-2 py-0.5 text-[11px] font-bold text-cyan-100">{panelSummary}</span>
           </div>
 
           <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
@@ -1221,67 +1246,73 @@ function ExcelFilterPopover({
             <span>清單顯示 {filteredOptions.length} 筆</span>
           </div>
 
-          <div className="rounded-xl border border-blue-400/15 bg-[#091222]">
-            {options.length > 0 && (
-              <div className="border-b border-blue-400/10 p-2">
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
-                  <Checkbox
-                    checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
-                    onCheckedChange={(value) => toggleVisibleSelection(value === true)}
-                    className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
-                  />
-                  <span className="min-w-0 flex-1 truncate">(全選)</span>
-                  <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
-                </label>
-              </div>
-            )}
-
-            {filteredOptions.length > 0 ? (
-              <div
-                className="h-56 overflow-y-auto"
-                onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-              >
-                <div
-                  className="relative"
-                  style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}
-                >
-                  {visibleOptionSlice.map((option, index) => {
-                    const checked = effectiveSelectedSet.has(option.value);
-                    const tone = option.tone ?? "slate";
-                    const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
-
-                    return (
-                      <label
-                        key={option.value}
-                        className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
-                        style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(value) => toggleValue(option.value, value === true)}
-                          className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
-                        />
-                        <span
-                          className={cn(
-                            "h-2.5 w-2.5 rounded-full flex-none",
-                            tone === "emerald" && "bg-emerald-300",
-                            tone === "amber" && "bg-amber-300",
-                            tone === "sky" && "bg-sky-300",
-                            tone === "rose" && "bg-rose-300",
-                            tone === "slate" && "bg-slate-400",
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
-                      </label>
-                    );
-                  })}
+          {isPanelReady ? (
+            <div className="rounded-xl border border-blue-400/15 bg-[#091222]">
+              {options.length > 0 && (
+                <div className="border-b border-blue-400/10 p-2">
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
+                    <Checkbox
+                      checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
+                      onCheckedChange={(value) => toggleVisibleSelection(value === true)}
+                      className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                    />
+                    <span className="min-w-0 flex-1 truncate">(全選)</span>
+                    <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
+                  </label>
                 </div>
-              </div>
-            ) : (
-              <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
-            )}
-          </div>
+              )}
+
+              {filteredOptions.length > 0 ? (
+                <div
+                  className="h-56 overflow-y-auto"
+                  onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+                >
+                  <div
+                    className="relative"
+                    style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}
+                  >
+                    {visibleOptionSlice.map((option, index) => {
+                      const checked = effectiveSelectedSet.has(option.value);
+                      const tone = option.tone ?? "slate";
+                      const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
+
+                      return (
+                        <label
+                          key={option.value}
+                          className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
+                          style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => toggleValue(option.value, value === true)}
+                            className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                          />
+                          <span
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full flex-none",
+                              tone === "emerald" && "bg-emerald-300",
+                              tone === "amber" && "bg-amber-300",
+                              tone === "sky" && "bg-sky-300",
+                              tone === "rose" && "bg-rose-300",
+                              tone === "slate" && "bg-slate-400",
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                          <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-blue-400/15 bg-[#091222] px-3 py-8 text-center text-[13px] text-slate-400">
+              正在載入篩選清單...
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>
