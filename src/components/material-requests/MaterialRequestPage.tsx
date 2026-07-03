@@ -545,6 +545,29 @@ function formatTimestamp(value: string) {
   });
 }
 
+function formatRelativeTimestamp(value: string) {
+  const parsed = new Date(value).getTime();
+  if (!Number.isFinite(parsed)) return value;
+
+  const diffMs = Date.now() - parsed;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) return "剛剛更新";
+  if (diffMinutes < 60) return `${diffMinutes} 分鐘前`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} 小時前`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays} 天前`;
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} 個月前`;
+
+  const diffYears = Math.floor(diffMonths / 12);
+  return `${diffYears} 年前`;
+}
+
 function getTrackingStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
   if (!normalized) return "border-slate-400/25 bg-slate-400/10 text-slate-300";
@@ -1673,53 +1696,150 @@ function BomManagerDialog({
   onOpenChange: (open: boolean) => void;
   onSelect: (id: string) => void;
 }) {
+  const [historyQuery, setHistoryQuery] = useState("");
+  const totalRecordCount = useMemo(
+    () => bomWorkspaces.reduce((sum, workspace) => sum + workspace.payload.recordCount, 0),
+    [bomWorkspaces],
+  );
+  const latestWorkspace = bomWorkspaces[0];
+  const filteredWorkspaces = useMemo(() => {
+    const keyword = historyQuery.trim().toLowerCase();
+    if (!keyword) return bomWorkspaces;
+
+    return bomWorkspaces.filter((workspace) => {
+      const haystack = [
+        workspace.name,
+        workspace.payload.sourceFile,
+        workspace.payload.sheetName,
+        workspace.id,
+      ].join(" ").toLowerCase();
+
+      return haystack.includes(keyword);
+    });
+  }, [bomWorkspaces, historyQuery]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">BOM 管理</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
-            集中管理目前瀏覽器內的 BOM 工作區，可直接切換或刪除。
+            查看所有歷史 BOM、最近更新時間、筆數與目前使用中的版本，可直接切換或刪除。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
-          {bomWorkspaces.map((workspace) => {
+        <div className="space-y-4 py-2">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-200/80">歷史 BOM</p>
+              <p className="mt-2 text-3xl font-black text-cyan-50">{bomWorkspaces.length}</p>
+              <p className="mt-1 text-sm text-cyan-100/80">目前可切換的 BOM 工作區</p>
+            </div>
+            <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-200/80">總筆數</p>
+              <p className="mt-2 text-3xl font-black text-blue-50">{totalRecordCount.toLocaleString()}</p>
+              <p className="mt-1 text-sm text-blue-100/80">所有歷史 BOM 的料件明細總和</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-200/80">目前使用中</p>
+              <p className="mt-2 line-clamp-2 text-lg font-black text-emerald-50">{bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇"}</p>
+              <p className="mt-1 text-sm text-emerald-100/80">目前畫面正在使用的 BOM</p>
+            </div>
+            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">最近更新</p>
+              <p className="mt-2 line-clamp-1 text-lg font-black text-violet-50">{latestWorkspace ? formatRelativeTimestamp(latestWorkspace.updatedAt) : "-"}</p>
+              <p className="mt-1 text-sm text-violet-100/80">{latestWorkspace ? latestWorkspace.name : "沒有可用資料"}</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-400/15 bg-[#0b1322] p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-lg font-black text-slate-50">歷史 BOM 清單</p>
+                <p className="mt-1 text-sm text-slate-400">依最近更新時間排序，往下可查看舊版本、備援版本與目前正在用的 BOM。</p>
+              </div>
+              <div className="relative w-full lg:w-[360px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-300" />
+                <Input
+                  value={historyQuery}
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                  placeholder="搜尋 BOM 名稱、工作表或來源檔名"
+                  className="h-10 border-blue-400/20 bg-[#111f36] pl-10 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+          {filteredWorkspaces.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-blue-400/20 bg-[#10192c] px-6 py-12 text-center">
+              <p className="text-lg font-bold text-slate-200">找不到符合條件的歷史 BOM</p>
+              <p className="mt-2 text-sm text-slate-500">請改用 BOM 名稱、工作表名稱或來源檔名搜尋。</p>
+            </div>
+          ) : filteredWorkspaces.map((workspace, index) => {
             const isActive = workspace.id === activeBomId;
 
             return (
               <div
                 key={workspace.id}
                 className={cn(
-                  "rounded-xl border px-4 py-3",
-                  isActive ? "border-cyan-300/40 bg-cyan-400/10" : "border-blue-400/15 bg-[#101d33]"
+                  "rounded-2xl border px-5 py-4 transition-colors",
+                  isActive ? "border-cyan-300/40 bg-cyan-400/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]" : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
                 )}
               >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-bold text-slate-50">{workspace.name}</p>
+                      <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2.5 py-1 text-xs font-black text-blue-100">
+                        #{index + 1}
+                      </span>
+                      <p className="truncate text-lg font-black text-slate-50">{workspace.name}</p>
                       {isActive && (
-                        <span className="rounded bg-cyan-400/15 px-2 py-0.5 text-xs font-bold text-cyan-100">
+                        <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-100">
                           目前使用中
                         </span>
                       )}
+                      {!isActive && index === 0 && (
+                        <span className="rounded-full border border-violet-300/35 bg-violet-400/15 px-2.5 py-1 text-xs font-black text-violet-100">
+                          最近更新
+                        </span>
+                      )}
                     </div>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {workspace.payload.recordCount.toLocaleString()} 筆 · {workspace.payload.sheetName} · 更新 {formatTimestamp(workspace.updatedAt)}
-                    </p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">來源檔案</p>
+                        <p className="mt-1 truncate text-sm font-bold text-slate-100">{workspace.payload.sourceFile}</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">工作表</p>
+                        <p className="mt-1 truncate text-sm font-bold text-slate-100">{workspace.payload.sheetName}</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">料件筆數</p>
+                        <p className="mt-1 text-sm font-bold text-slate-100">{workspace.payload.recordCount.toLocaleString()} 筆</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">更新時間</p>
+                        <p className="mt-1 text-sm font-bold text-slate-100">{formatRelativeTimestamp(workspace.updatedAt)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-400">
+                      <span>建立時間：<strong className="font-semibold text-slate-200">{formatTimestamp(workspace.payload.generatedAt)}</strong></span>
+                      <span>最後更新：<strong className="font-semibold text-slate-200">{formatTimestamp(workspace.updatedAt)}</strong></span>
+                      <span>ID：<strong className="font-mono font-semibold text-slate-300">{workspace.id}</strong></span>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:pl-4">
                     {!isActive && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => onSelect(workspace.id)}
-                        className="h-9 border-cyan-400/25 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+                        className="h-10 border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
                       >
-                        切換
+                        切換到這個 BOM
                       </Button>
                     )}
                     <Button
@@ -1727,7 +1847,7 @@ function BomManagerDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => onDelete(workspace.id)}
-                      className="h-9 border-rose-400/25 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
+                      className="h-10 border-rose-400/25 bg-rose-400/10 px-4 text-sm font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
                     >
                       刪除
                     </Button>
@@ -1736,6 +1856,7 @@ function BomManagerDialog({
               </div>
             );
           })}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
