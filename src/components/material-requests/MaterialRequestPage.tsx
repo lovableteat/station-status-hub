@@ -822,7 +822,6 @@ function ExcelFilterPopover({
   onSelectedValuesChange,
   textFilterValue,
   onTextFilterValueChange,
-  searchPlaceholder,
 }: {
   label: string;
   options: ExcelFilterOption[];
@@ -830,10 +829,8 @@ function ExcelFilterPopover({
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
   textFilterValue: string;
   onTextFilterValueChange: (value: string) => void;
-  searchPlaceholder: string;
 }) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [optionSearchQuery, setOptionSearchQuery] = useState("");
   const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
   const effectiveSelected = useMemo(
@@ -845,17 +842,15 @@ function ExcelFilterPopover({
   const hasContainsFilter = textFilterValue.trim().length > 0;
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = optionSearchQuery.trim().toLowerCase();
     const next = options.filter((option) => {
-      const matchesSearch = !normalizedQuery || `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(normalizedQuery);
       const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
-      return matchesSearch && matchesTone;
+      return matchesTone;
     });
 
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [optionSearchQuery, options, sortDirection, toneFilter]);
+  }, [options, sortDirection, toneFilter]);
 
   const toneButtons = useMemo(() => {
     const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
@@ -998,18 +993,6 @@ function ExcelFilterPopover({
             </div>
           </div>
 
-          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">勾選清單搜尋</p>
-              <Input
-                value={optionSearchQuery}
-                onChange={(event) => setOptionSearchQuery(event.target.value)}
-                placeholder={searchPlaceholder}
-                className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
-              />
-            </div>
-          </div>
-
           <div className="rounded-xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2">
             <div className="space-y-1.5">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">文字包含</p>
@@ -1043,13 +1026,13 @@ function ExcelFilterPopover({
 
           <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">快捷操作</p>
-            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            <div className="mt-1.5 grid grid-cols-4 gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelectedValuesChange(null)}
-                className="h-8 rounded-lg border border-blue-400/20 bg-blue-400/10 px-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
+                className="h-8 rounded-lg border border-blue-400/20 bg-blue-400/10 px-1.5 text-[11px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
               >
                 全選
               </Button>
@@ -1058,7 +1041,7 @@ function ExcelFilterPopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelectedValuesChange([])}
-                className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/10 px-2 text-[12px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
+                className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/10 px-1.5 text-[11px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
               >
                 全不選
               </Button>
@@ -1067,21 +1050,20 @@ function ExcelFilterPopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => applySelection(filteredOptions.map((option) => option.value))}
-                className="h-8 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2 text-[12px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
+                className="h-8 rounded-lg border border-amber-400/20 bg-amber-400/10 px-1.5 text-[11px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
               >
-                只留搜尋結果
+                只留目前顯示
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setOptionSearchQuery("");
                   setToneFilter("all");
                   onSelectedValuesChange(null);
                   onTextFilterValueChange("");
                 }}
-                className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-2 text-[12px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
+                className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
               >
                 清空此欄
               </Button>
@@ -3184,18 +3166,18 @@ export function MaterialRequestPage() {
                 ))}
               </tr>
               <tr className="bg-[#102b57] text-slate-100">
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} textFilterValue={columnTextFilters.material} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, material: value }))} searchPlaceholder="搜尋料名 / 廠商" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} textFilterValue={columnTextFilters.refDes} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, refDes: value }))} searchPlaceholder="搜尋 REF DES" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} textFilterValue={columnTextFilters.mpn} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, mpn: value }))} searchPlaceholder="搜尋 MPN" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} textFilterValue={columnTextFilters.internal} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, internal: value }))} searchPlaceholder="搜尋料號 / Symbol / Footprint" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} textFilterValue={columnTextFilters.virtualAlternative} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, virtualAlternative: value }))} searchPlaceholder="搜尋 TX" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} textFilterValue={columnTextFilters.material} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, material: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} textFilterValue={columnTextFilters.refDes} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, refDes: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} textFilterValue={columnTextFilters.mpn} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, mpn: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} textFilterValue={columnTextFilters.internal} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, internal: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} textFilterValue={columnTextFilters.virtualAlternative} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, virtualAlternative: value }))} /></th>
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     狀態摘要
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} textFilterValue={columnTextFilters.specification} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, specification: value }))} searchPlaceholder="搜尋規格 / 備註" /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} searchPlaceholder="搜尋追蹤狀態 / 備註 / 更新人" /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} textFilterValue={columnTextFilters.specification} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, specification: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
