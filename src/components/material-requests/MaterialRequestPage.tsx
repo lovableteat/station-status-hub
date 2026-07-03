@@ -551,6 +551,9 @@ function getTrackingStatusTone(status: string) {
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
   }
+  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "border-fuchsia-300/70 bg-fuchsia-500/25 text-fuchsia-50 shadow-[0_0_18px_rgba(217,70,239,0.35)]";
+  }
   if (["待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-amber-400/30 bg-amber-400/10 text-amber-200";
   }
@@ -577,6 +580,16 @@ function getTrackingStatusCardTone(status: string) {
       note: "bg-emerald-950/30 text-emerald-50",
       meta: "text-emerald-100",
       icon: "text-emerald-100",
+    };
+  }
+
+  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return {
+      wrapper: "border-fuchsia-300/65 bg-fuchsia-500/[0.22] shadow-[0_0_22px_rgba(217,70,239,0.2)] hover:bg-fuchsia-500/[0.3]",
+      accent: "bg-fuchsia-200",
+      note: "bg-fuchsia-950/40 text-fuchsia-50",
+      meta: "text-fuchsia-100",
+      icon: "text-fuchsia-100",
     };
   }
 
