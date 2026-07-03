@@ -3080,13 +3080,15 @@ export function MaterialRequestPage() {
         )}
 
         <div className="mt-3 flex flex-col gap-3 border-t border-blue-400/15 pt-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="flex flex-1 flex-wrap items-start gap-3">
             <span className="text-sm font-bold text-slate-300">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="h-10 w-full max-w-xl border-cyan-400/30 bg-[#0a1527] text-cyan-100 sm:w-[28rem]">
+              <SelectTrigger className="min-h-[3.6rem] w-full max-w-[44rem] flex-1 items-start border-cyan-400/30 bg-[#0a1527] py-2 text-cyan-100 sm:min-w-[24rem] sm:w-[32rem]">
                 <div className="flex min-w-0 flex-col items-start text-left">
-                  <span className="max-w-full truncate font-semibold text-cyan-100">{activeWorkspace.name}</span>
-                  <span className="max-w-full truncate text-xs text-slate-400">
+                  <span className="line-clamp-2 max-w-full break-all text-[14px] font-semibold leading-5 text-cyan-100">
+                    {activeWorkspace.name}
+                  </span>
+                  <span className="mt-0.5 max-w-full truncate text-xs leading-5 text-slate-400">
                     {activeWorkspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(activeWorkspace.updatedAt)}
                   </span>
                 </div>
@@ -3094,9 +3096,9 @@ export function MaterialRequestPage() {
               <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
                 {orderedBomWorkspaces.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
-                    <div className="flex flex-col py-0.5">
-                      <span className="font-semibold text-slate-100">{workspace.name}</span>
-                      <span className="text-xs text-slate-400">{workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)}</span>
+                    <div className="flex max-w-[30rem] flex-col py-1 text-left">
+                      <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
+                      <span className="mt-1 text-xs leading-5 text-slate-400">{workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)}</span>
                     </div>
                   </SelectItem>
                 ))}
