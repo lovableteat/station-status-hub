@@ -355,19 +355,33 @@ async function removePreferenceBackedWorkspace(id: string) {
   if (error) throw error;
 }
 
-async function mergeLegacyBomWorkspaces(primaryWorkspaces: BomWorkspace[]) {
+async function migrateLegacyBomWorkspaces(
+  currentWorkspaces: BomWorkspace[],
+  saveWorkspace: (workspace: BomWorkspace) => Promise<void>,
+  reloadWorkspaces: () => Promise<BomWorkspace[]>,
+) {
   const legacyWorkspaces = await loadLegacyBomWorkspaces();
-  if (legacyWorkspaces.length === 0) return primaryWorkspaces;
+  if (legacyWorkspaces.length === 0) return currentWorkspaces;
 
-  const merged = new Map(primaryWorkspaces.map((workspace) => [workspace.id, workspace]));
+  const currentMap = new Map(currentWorkspaces.map((workspace) => [workspace.id, workspace]));
+  let migrated = false;
   for (const workspace of legacyWorkspaces) {
-    const current = merged.get(workspace.id);
-    if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
-      merged.set(workspace.id, workspace);
+    const currentWorkspace = currentMap.get(workspace.id);
+    const shouldUpload = !currentWorkspace || toTimestamp(workspace.updatedAt) > toTimestamp(currentWorkspace.updatedAt);
+
+    if (shouldUpload) {
+      await saveWorkspace(workspace);
+      migrated = true;
+    } else {
+      await removeLegacyBomWorkspace(workspace.id);
+    }
+
+    if (shouldUpload) {
+      await removeLegacyBomWorkspace(workspace.id);
     }
   }
 
-  return sortWorkspaces([...merged.values()]);
+  return migrated ? reloadWorkspaces() : currentWorkspaces;
 }
 
 async function loadRecoveryBomWorkspaces() {
@@ -376,15 +390,23 @@ async function loadRecoveryBomWorkspaces() {
     loadLegacyBomWorkspaces(),
   ]);
 
-  const merged = new Map<string, BomWorkspace>();
-  for (const workspace of [...preferenceWorkspaces, ...legacyWorkspaces]) {
-    const current = merged.get(workspace.id);
-    if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
-      merged.set(workspace.id, workspace);
+  try {
+    return await migrateLegacyBomWorkspaces(
+      preferenceWorkspaces,
+      savePreferenceBackedWorkspace,
+      loadPreferenceBackedBomWorkspaces,
+    );
+  } catch {
+    const merged = new Map<string, BomWorkspace>();
+    for (const workspace of [...preferenceWorkspaces, ...legacyWorkspaces]) {
+      const current = merged.get(workspace.id);
+      if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
+        merged.set(workspace.id, workspace);
+      }
     }
-  }
 
-  return sortWorkspaces([...merged.values()]);
+    return sortWorkspaces([...merged.values()]);
+  }
 }
 
 export async function loadBomWorkspacesDetailed(): Promise<BomWorkspaceLoadResult> {
@@ -392,9 +414,17 @@ export async function loadBomWorkspacesDetailed(): Promise<BomWorkspaceLoadResul
     const remoteWorkspaces = await loadRemoteBomWorkspaces();
     return {
       mode: "remote",
-      workspaces: await mergeLegacyBomWorkspaces(remoteWorkspaces),
+      workspaces: await migrateLegacyBomWorkspaces(
+        remoteWorkspaces,
+        saveBomWorkspace,
+        loadRemoteBomWorkspaces,
+      ),
     };
-  } catch {
+  } catch (error) {
+    if (!isMissingCollaborativeTables(error)) {
+      throw error;
+    }
+
     return {
       mode: "recovery",
       workspaces: await loadRecoveryBomWorkspaces(),
