@@ -1017,7 +1017,6 @@ function ExcelFilterPopover({
               className="h-9 px-2 text-sm font-semibold text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
             >
               全刪除
-            >
             </Button>
             <Button
               type="button"
@@ -1339,6 +1338,7 @@ function TrackingHistoryDialog({
   const [note, setNote] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
+  const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
   const latestEntry = record ? getLatestTrackingEntry(record) : null;
   const historyEntries = useMemo(() => {
     if (!record) return [];
@@ -1362,6 +1362,7 @@ function TrackingHistoryDialog({
     setNote("");
     setCreatedBy("");
     setImages([]);
+    setPreviewImage(null);
   }, [open, record?.id]);
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1412,92 +1413,98 @@ function TrackingHistoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
-        <DialogHeader>
-          <DialogTitle className="text-2xl text-slate-50">狀態追蹤</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            {record
-              ? `${record.name || "未命名料件"} · ${record.manufacturerPartNumber || record.partNumber || record.displayRef}`
-              : "管理目前料件的追蹤歷史與附件圖片。"}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-slate-50">狀態追蹤</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {record
+                ? `${record.name || "未命名料件"} · ${record.manufacturerPartNumber || record.partNumber || record.displayRef}`
+                : "管理目前料件的追蹤歷史與附件圖片。"}
+            </DialogDescription>
+          </DialogHeader>
 
-        {record && (
-          <div className="grid gap-5 py-2 xl:grid-cols-[1.15fr_0.95fr]">
-            <section className="rounded-2xl border border-sky-400/20 bg-[#101d33] p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
-                <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestEntry?.status || ""))}>
-                  {latestEntry?.status || "尚未建立"}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                <span>歷史筆數 {historyEntries.length}</span>
-                {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
-                {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
-                <div className="flex items-center gap-2">
-                  <ImagePlus className="h-4 w-4 text-cyan-300" />
-                  <p className="text-sm font-bold text-cyan-200">新增追蹤紀錄</p>
+          {record && (
+            <div className="grid gap-5 py-2 xl:grid-cols-[1.15fr_0.95fr]">
+              <section className="rounded-2xl border border-sky-400/20 bg-[#101d33] p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
+                  <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestEntry?.status || ""))}>
+                    {latestEntry?.status || "尚未建立"}
+                  </span>
                 </div>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="tracking-status-select">最新狀態 *</Label>
-                    <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
-                      <SelectTrigger id="tracking-status-select" className="border-blue-400/25 bg-[#071522] text-slate-100 focus:ring-blue-500">
-                        <SelectValue placeholder="請選擇最新狀態" />
-                      </SelectTrigger>
-                      <SelectContent className="border-blue-400/25 bg-[#0d1729] text-slate-100">
-                        {TRACKING_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                  <span>歷史筆數 {historyEntries.length}</span>
+                  {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
+                  {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
+                  <div className="flex items-center gap-2">
+                    <ImagePlus className="h-4 w-4 text-cyan-300" />
+                    <p className="text-sm font-bold text-cyan-200">新增追蹤紀錄</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tracking-owner-input">更新人</Label>
-                    <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="例如：採購 / RD / Peggy" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="tracking-note-input">追蹤說明</Label>
-                    <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="補充這次更新做了什麼、卡在哪裡、下一步是什麼。" className="min-h-28 border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="tracking-images-input">上傳圖片</Label>
-                    <label htmlFor="tracking-images-input" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-4 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/[0.12]">
-                      <Upload className="h-4 w-4" />
-                      選擇圖片
-                    </label>
-                    <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
-                    <p className="text-xs leading-5 text-slate-400">圖片會跟這筆狀態一起保存，之後打開歷史可以直接回看。</p>
-                    {images.length > 0 && (
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {images.map((image) => (
-                          <div key={image.id} className="overflow-hidden rounded-xl border border-blue-400/20 bg-[#0a1527]">
-                            <div className="aspect-[4/3] bg-slate-950/40">
-                              <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="flex items-start justify-between gap-3 px-3 py-2">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
-                                <p className="text-xs text-slate-500">{(image.size / 1024).toFixed(1)} KB</p>
-                              </div>
-                              <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="rounded-md border border-rose-400/20 bg-rose-400/10 p-1.5 text-rose-200 hover:bg-rose-400/20" title="移除圖片">
-                                <X className="h-3.5 w-3.5" />
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-status-select">最新狀態 *</Label>
+                      <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
+                        <SelectTrigger id="tracking-status-select" className="border-blue-400/25 bg-[#071522] text-slate-100 focus:ring-blue-500">
+                          <SelectValue placeholder="請選擇最新狀態" />
+                        </SelectTrigger>
+                        <SelectContent className="border-blue-400/25 bg-[#0d1729] text-slate-100">
+                          {TRACKING_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-owner-input">更新人</Label>
+                      <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="例如：採購 / RD / Peggy" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="tracking-note-input">追蹤說明</Label>
+                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="補充這次更新做了什麼、卡在哪裡、下一步是什麼。" className="min-h-28 border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="tracking-images-input">上傳圖片</Label>
+                      <label htmlFor="tracking-images-input" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-4 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/[0.12]">
+                        <Upload className="h-4 w-4" />
+                        選擇圖片
+                      </label>
+                      <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+                      <p className="text-xs leading-5 text-slate-400">圖片會跟這筆狀態一起保存，之後打開歷史可以直接回看。</p>
+                      {images.length > 0 && (
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {images.map((image) => (
+                            <div key={image.id} className="overflow-hidden rounded-xl border border-blue-400/20 bg-[#0a1527]">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImage(image)}
+                                className="block aspect-[4/3] w-full bg-slate-950/40 transition hover:opacity-90"
+                                title={`預覽圖片：${image.name}`}
+                              >
+                                <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
                               </button>
+                              <div className="flex items-start justify-between gap-3 px-3 py-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
+                                  <p className="text-xs text-slate-500">{(image.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                                <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="rounded-md border border-rose-400/20 bg-rose-400/10 p-1.5 text-rose-200 hover:bg-rose-400/20" title="移除圖片">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
                   </div>
                 </div>
 
@@ -1529,22 +1536,22 @@ function TrackingHistoryDialog({
                   return (
                     <article key={`${entry.id}-${index}`} className={cn("rounded-2xl border p-4", entryTone.wrapper)}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(entry.status))}>
-                          {entry.status}
-                        </span>
-                        <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
-                          {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
-                          {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
-                          {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
+                        <div>
+                          <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(entry.status))}>
+                            {entry.status}
+                          </span>
+                          <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
+                            {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
+                            {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
+                            {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
+                          </div>
                         </div>
-                      </div>
-                      {index === 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-200">
-                          <CircleCheck className="h-3.5 w-3.5" />
-                          最新
-                        </span>
-                      )}
+                        {index === 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-200">
+                            <CircleCheck className="h-3.5 w-3.5" />
+                            最新
+                          </span>
+                        )}
                       </div>
 
                       {entry.note && (
@@ -1556,14 +1563,20 @@ function TrackingHistoryDialog({
                       {entry.images && entry.images.length > 0 && (
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
                           {entry.images.map((image) => (
-                            <a key={image.id} href={image.dataUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/30 hover:border-cyan-400/30">
+                            <button
+                              key={image.id}
+                              type="button"
+                              onClick={() => setPreviewImage(image)}
+                              className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/30 text-left hover:border-cyan-400/30"
+                              title={`檢視圖片：${image.name}`}
+                            >
                               <div className="aspect-[4/3]">
                                 <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
                               </div>
                               <div className="px-3 py-2">
                                 <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
                               </div>
-                            </a>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1574,8 +1587,37 @@ function TrackingHistoryDialog({
             </section>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(previewImage)} onOpenChange={(nextOpen) => { if (!nextOpen) setPreviewImage(null); }}>
+        <DialogContent className="max-w-4xl border-blue-400/30 bg-[#0d1729] text-slate-100">
+          {previewImage && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl text-slate-50">{previewImage.name}</DialogTitle>
+                <DialogDescription className="text-slate-400">
+                  點擊縮圖後直接在頁內預覽，避免被瀏覽器擋掉圖片開啟。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="overflow-hidden rounded-2xl border border-blue-400/15 bg-slate-950/40">
+                <img src={previewImage.dataUrl} alt={previewImage.name} className="max-h-[70vh] w-full object-contain" />
+              </div>
+              <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
+                <span>{(previewImage.size / 1024).toFixed(1)} KB</span>
+                <a
+                  href={previewImage.dataUrl}
+                  download={previewImage.name}
+                  className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 font-semibold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+                >
+                  下載圖片
+                </a>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
