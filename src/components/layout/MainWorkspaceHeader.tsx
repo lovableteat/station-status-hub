@@ -1,6 +1,13 @@
 import { Bell, ChevronDown, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 export interface WorkspaceNavItem {
@@ -13,9 +20,16 @@ interface MainWorkspaceHeaderProps {
   activeItem?: string;
   onSelect: (id: string) => void;
   onLogout: () => void;
+  onOpenNotifications?: () => void;
   onBrandClick?: () => void;
+  onOpenWorkspaceHome?: () => void;
   userName?: string;
   userRoleLabel?: string;
+  userMenuItems?: Array<{
+    id: string;
+    label: string;
+    onSelect: () => void;
+  }>;
 }
 
 export function MainWorkspaceHeader({
@@ -23,9 +37,12 @@ export function MainWorkspaceHeader({
   activeItem,
   onSelect,
   onLogout,
+  onOpenNotifications,
   onBrandClick,
+  onOpenWorkspaceHome,
   userName,
   userRoleLabel,
+  userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
   const brand = (
     <>
@@ -84,25 +101,74 @@ export function MainWorkspaceHeader({
           <Button
             variant="ghost"
             size="icon"
+            onClick={onOpenNotifications}
             className="h-10 w-10 rounded-xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
           >
             <Bell className="h-4 w-4" />
           </Button>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-background/20 px-3 py-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
-              {(userName ?? "OP").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-foreground">
-                {userName ?? "Operator"}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-background/20 px-3 py-2.5 text-left transition-colors hover:bg-primary/10"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                  {(userName ?? "OP").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-foreground">
+                    {userName ?? "Operator"}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {userRoleLabel ?? "使用者"}
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 rounded-2xl border-primary/15 bg-[hsl(223_34%_11%/0.98)] p-2 text-foreground"
+            >
+              <div className="px-2 py-1.5">
+                <div className="truncate text-sm font-semibold text-foreground">
+                  {userName ?? "Operator"}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {userRoleLabel ?? "使用者"}
+                </div>
               </div>
-              <div className="truncate text-xs text-muted-foreground">
-                {userRoleLabel ?? "一般使用者"}
-              </div>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </div>
+              <DropdownMenuSeparator className="bg-primary/10" />
+              {onOpenWorkspaceHome && (
+                <DropdownMenuItem
+                  onClick={onOpenWorkspaceHome}
+                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground"
+                >
+                  工作區首頁
+                </DropdownMenuItem>
+              )}
+              {userMenuItems.map((item) => (
+                <DropdownMenuItem
+                  key={item.id}
+                  onClick={item.onSelect}
+                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground"
+                >
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+              {(onOpenWorkspaceHome || userMenuItems.length > 0) && (
+                <DropdownMenuSeparator className="bg-primary/10" />
+              )}
+              <DropdownMenuItem
+                onClick={onLogout}
+                className="rounded-xl px-3 py-2 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                登出
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             variant="outline"
