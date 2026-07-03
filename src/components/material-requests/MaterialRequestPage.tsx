@@ -173,7 +173,7 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
-const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
+const TRACKING_STATUS_OPTIONS = ["無狀態", "處理中", "已完成"] as const;
 const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
@@ -627,7 +627,7 @@ function getTrackingStatusTone(status: string) {
   if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-amber-300/60 bg-amber-400/20 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.24)]";
   }
-  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "border-slate-300/25 bg-slate-200/10 text-slate-200";
   }
   return "border-sky-400/30 bg-sky-400/10 text-sky-200";
@@ -666,7 +666,7 @@ function getTrackingStatusCardTone(status: string) {
     };
   }
 
-  if (["新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
       wrapper: "border-slate-300/25 bg-slate-200/[0.08] hover:bg-slate-200/[0.12]",
       accent: "bg-slate-200/80",
@@ -743,7 +743,7 @@ function inferFilterOptionTone(value: string): ExcelFilterTone {
   if (["風險", "缺料", "阻塞", "blocked", "失敗"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "rose";
   }
-  if (["新增追蹤", "待", "申請", "確認", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+  if (["無狀態", "新增追蹤", "待", "申請", "確認", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "amber";
   }
   if (["處理中", "追蹤", "進行", "progress"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
@@ -784,7 +784,11 @@ function normalizeTrackingWorkflowStatus(status: string) {
     return "處理中" as const;
   }
 
-  return "新增追蹤" as const;
+  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+    return "無狀態" as const;
+  }
+
+  return "無狀態" as const;
 }
 
 function getTrackingWorkflowStatus(record: MaterialRecord) {
@@ -1082,9 +1086,7 @@ function ExcelFilterPopover({
     const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
     const nextSelection = normalized.length === options.length ? null : normalized;
     setDraftSelectedValues(nextSelection);
-    startTransition(() => {
-      onSelectedValuesChange(nextSelection);
-    });
+    onSelectedValuesChange(nextSelection);
   };
 
   const toggleValue = (value: string, checked: boolean) => {
@@ -1562,7 +1564,7 @@ function TrackingHistoryDialog({
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
   const latestEntry = record ? getLatestTrackingEntry(record) : null;
-  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "新增追蹤";
+  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "無狀態";
   const historyEntries = useMemo(() => {
     if (!record) return [];
 
