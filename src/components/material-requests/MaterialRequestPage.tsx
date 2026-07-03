@@ -1900,7 +1900,7 @@ function BomManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[1120px] overflow-y-auto border-blue-400/30 bg-[#0d1729] px-7 py-6 text-slate-100">
+      <DialogContent className="max-h-[90vh] max-w-[1080px] overflow-y-auto border-blue-400/30 bg-[#0d1729] px-6 py-5 text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">BOM 管理</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
@@ -1908,35 +1908,35 @@ function BomManagerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-3">
+        <div className="space-y-4 py-2">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-200/80">歷史 BOM</p>
-              <p className="mt-3 text-3xl font-black text-cyan-50">{bomWorkspaces.length}</p>
-              <p className="mt-2 text-[15px] leading-6 text-cyan-100/80">目前可切換的 BOM 工作區</p>
+              <p className="mt-2 text-3xl font-black text-cyan-50">{bomWorkspaces.length}</p>
+              <p className="mt-1 text-sm leading-6 text-cyan-100/80">目前可切換的 BOM 工作區</p>
             </div>
-            <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-5">
+            <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-200/80">總筆數</p>
-              <p className="mt-3 text-3xl font-black text-blue-50">{totalRecordCount.toLocaleString()}</p>
-              <p className="mt-2 text-[15px] leading-6 text-blue-100/80">所有歷史 BOM 的料件明細總和</p>
+              <p className="mt-2 text-3xl font-black text-blue-50">{totalRecordCount.toLocaleString()}</p>
+              <p className="mt-1 text-sm leading-6 text-blue-100/80">所有歷史 BOM 的料件明細總和</p>
             </div>
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-200/80">目前使用中</p>
-              <p className="mt-3 line-clamp-2 text-xl font-black leading-8 text-emerald-50">{bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇"}</p>
-              <p className="mt-2 text-[15px] leading-6 text-emerald-100/80">目前畫面正在使用的 BOM</p>
+              <p className="mt-2 line-clamp-2 break-all text-base font-black leading-6 text-emerald-50">{bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇"}</p>
+              <p className="mt-1 text-sm leading-6 text-emerald-100/80">目前畫面正在使用的 BOM</p>
             </div>
-            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-5">
+            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-violet-200/80">最近更新</p>
-              <p className="mt-3 line-clamp-1 text-xl font-black leading-8 text-violet-50">{latestWorkspace ? formatRelativeTimestamp(latestWorkspace.updatedAt) : "-"}</p>
-              <p className="mt-2 text-[15px] leading-6 text-violet-100/80">{latestWorkspace ? latestWorkspace.name : "沒有可用資料"}</p>
+              <p className="mt-2 line-clamp-1 text-lg font-black leading-7 text-violet-50">{latestWorkspace ? formatRelativeTimestamp(latestWorkspace.updatedAt) : "-"}</p>
+              <p className="mt-1 line-clamp-2 break-all text-sm leading-6 text-violet-100/80">{latestWorkspace ? latestWorkspace.name : "沒有可用資料"}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-400/15 bg-[#0b1322] p-5">
+          <div className="rounded-2xl border border-blue-400/15 bg-[#0b1322] p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xl font-black text-slate-50">歷史 BOM 清單</p>
-                <p className="mt-2 text-[15px] leading-6 text-slate-400">依最近更新時間排序，往下可查看舊版本、備援版本與目前正在用的 BOM。</p>
+                <p className="text-lg font-black text-slate-50">歷史 BOM 清單</p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">依最近更新時間排序，往下可查看舊版本、備援版本與目前正在用的 BOM。</p>
               </div>
               <div className="relative w-full lg:w-[380px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-300" />
@@ -1944,7 +1944,7 @@ function BomManagerDialog({
                   value={historyQuery}
                   onChange={(event) => setHistoryQuery(event.target.value)}
                   placeholder="搜尋 BOM 名稱、工作表或來源檔名"
-                  className="h-11 border-blue-400/20 bg-[#111f36] pl-10 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                  className="h-10 border-blue-400/20 bg-[#111f36] pl-10 text-[14px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
                 />
               </div>
             </div>
@@ -1963,70 +1963,68 @@ function BomManagerDialog({
               <div
                 key={workspace.id}
                 className={cn(
-                  "rounded-2xl border px-6 py-5 transition-colors",
+                  "rounded-2xl border px-4 py-4 transition-colors",
                   isActive ? "border-cyan-300/40 bg-cyan-400/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]" : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
                 )}
               >
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start gap-2.5">
-                      <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2.5 py-1 text-xs font-black text-blue-100">
+                    <div className="flex flex-wrap items-start gap-2">
+                      <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2 py-0.5 text-[11px] font-black text-blue-100">
                         #{index + 1}
                       </span>
-                      <p className="min-w-0 flex-1 break-all text-[23px] font-black leading-8 text-slate-50">{workspace.name}</p>
+                      <p className="min-w-0 flex-1 line-clamp-2 break-all text-lg font-black leading-6 text-slate-50">{workspace.name}</p>
                       {isActive && (
-                        <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2.5 py-1 text-xs font-black text-cyan-100">
+                        <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2 py-0.5 text-[11px] font-black text-cyan-100">
                           目前使用中
                         </span>
                       )}
                       {!isActive && index === 0 && (
-                        <span className="rounded-full border border-violet-300/35 bg-violet-400/15 px-2.5 py-1 text-xs font-black text-violet-100">
+                        <span className="rounded-full border border-violet-300/35 bg-violet-400/15 px-2 py-0.5 text-[11px] font-black text-violet-100">
                           最近更新
                         </span>
                       )}
                     </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
+                    <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">來源檔案</p>
-                        <p className="mt-2 break-all text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.sourceFile}</p>
+                        <p className="mt-1.5 line-clamp-2 break-all text-[13px] font-bold leading-5 text-slate-100">{workspace.payload.sourceFile}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">工作表</p>
-                        <p className="mt-2 break-all text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.sheetName}</p>
+                        <p className="mt-1.5 line-clamp-2 break-all text-[13px] font-bold leading-5 text-slate-100">{workspace.payload.sheetName}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">料件筆數</p>
-                        <p className="mt-2 text-[15px] font-bold leading-6 text-slate-100">{workspace.payload.recordCount.toLocaleString()} 筆</p>
+                        <p className="mt-1.5 text-[13px] font-bold leading-5 text-slate-100">{workspace.payload.recordCount.toLocaleString()} 筆</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-4 py-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">更新時間</p>
-                        <p className="mt-2 text-[15px] font-bold leading-6 text-slate-100">{formatRelativeTimestamp(workspace.updatedAt)}</p>
+                        <p className="mt-1.5 text-[13px] font-bold leading-5 text-slate-100">{formatRelativeTimestamp(workspace.updatedAt)}</p>
                       </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">建立時間</p>
-                        <p className="mt-2 text-[14px] font-semibold leading-6 text-slate-200">{formatTimestamp(workspace.payload.generatedAt)}</p>
+                        <p className="mt-1.5 text-[13px] font-semibold leading-5 text-slate-200">{formatTimestamp(workspace.payload.generatedAt)}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">最後更新</p>
-                        <p className="mt-2 text-[14px] font-semibold leading-6 text-slate-200">{formatTimestamp(workspace.updatedAt)}</p>
+                        <p className="mt-1.5 text-[13px] font-semibold leading-5 text-slate-200">{formatTimestamp(workspace.updatedAt)}</p>
                       </div>
-                      <div className="rounded-xl border border-blue-400/10 bg-[#0d1729] px-4 py-3 md:col-span-2 xl:col-span-1">
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">BOM ID</p>
-                        <p className="mt-2 break-all font-mono text-[13px] leading-6 text-slate-300">{workspace.id}</p>
+                        <p className="mt-1.5 line-clamp-2 break-all font-mono text-[12px] leading-5 text-slate-300">{workspace.id}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-3 xl:w-[190px] xl:justify-end xl:pl-4">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:w-[160px] xl:justify-end xl:pl-3">
                     {!isActive && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => onSelect(workspace.id)}
-                        className="h-11 border-cyan-400/25 bg-cyan-400/10 px-5 text-[15px] font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+                        className="h-9 border-cyan-400/25 bg-cyan-400/10 px-3 text-[13px] font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
                       >
                         切換到這個 BOM
                       </Button>
@@ -2036,7 +2034,7 @@ function BomManagerDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => onDelete(workspace.id)}
-                      className="h-11 border-rose-400/25 bg-rose-400/10 px-5 text-[15px] font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
+                      className="h-9 border-rose-400/25 bg-rose-400/10 px-3 text-[13px] font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
                     >
                       刪除
                     </Button>
