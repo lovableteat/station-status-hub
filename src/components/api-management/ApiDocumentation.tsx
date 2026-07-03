@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Copy, ExternalLink, FileJson, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  Copy,
+  ExternalLink,
+  FileJson,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,15 +26,59 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import {
-  API_BASE_URL,
-  API_ENDPOINTS,
-  buildApiUrl,
-} from "./apiManagementConfig";
+import { API_BASE_URL, API_ENDPOINTS, buildApiUrl } from "./apiManagementConfig";
+
+const successExample = `{
+  "success": true,
+  "data": {
+    "totalIssues": 25,
+    "totalSystems": 150,
+    "completedSystems": 120
+  }
+}`;
+
+const errorExample = `{
+  "error": "Invalid or expired API key"
+}`;
 
 function copyText(value: string, label: string) {
   void navigator.clipboard.writeText(value);
   toast.success(`${label} 已複製`);
+}
+
+function CodePanel({
+  title,
+  code,
+  tone = "default",
+}: {
+  title: string;
+  code: string;
+  tone?: "default" | "success" | "error";
+}) {
+  const toneClassName =
+    tone === "success"
+      ? "border-emerald-400/25 bg-emerald-500/10"
+      : tone === "error"
+        ? "border-rose-400/25 bg-rose-500/10"
+        : "border-blue-400/15 bg-[#09121f]";
+
+  return (
+    <div className={`rounded-2xl border ${toneClassName} p-4`}>
+      <div className="mb-3 flex items-center gap-2">
+        {tone === "success" ? (
+          <Sparkles className="h-4 w-4 text-emerald-300" />
+        ) : tone === "error" ? (
+          <AlertTriangle className="h-4 w-4 text-rose-300" />
+        ) : (
+          <FileJson className="h-4 w-4 text-cyan-300" />
+        )}
+        <p className="text-sm font-black text-slate-100">{title}</p>
+      </div>
+      <pre className="overflow-auto rounded-xl border border-white/8 bg-[#06101c] px-4 py-3 font-mono text-sm leading-7 text-slate-100">
+        {code}
+      </pre>
+    </div>
+  );
 }
 
 export function ApiDocumentation() {
@@ -74,8 +126,8 @@ export function ApiDocumentation() {
       `  },`,
       `});`,
       ``,
-      `const data = await response.json();`,
-      `console.log(data);`,
+      `const result = await response.json();`,
+      `console.log(result);`,
     ].join("\n");
   }, [requestUrl, selectedEndpoint]);
 
@@ -105,16 +157,14 @@ export function ApiDocumentation() {
       setResponseText(JSON.stringify(result, null, 2));
 
       if (!response.ok) {
-        toast.error(`測試失敗：HTTP ${response.status}`);
+        toast.error(`端點測試失敗：HTTP ${response.status}`);
       } else {
         toast.success("端點測試完成");
       }
     } catch (error) {
       setResponseText(
         JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : "Unknown error",
-          },
+          { error: error instanceof Error ? error.message : "Unknown error" },
           null,
           2,
         ),
@@ -127,7 +177,7 @@ export function ApiDocumentation() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid gap-5 xl:grid-cols-[0.96fr_1.04fr]">
         <Card className="border-blue-400/15 bg-[#10192e]">
           <CardHeader className="border-b border-blue-400/10 pb-5">
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
@@ -135,7 +185,7 @@ export function ApiDocumentation() {
               API 文件
             </CardTitle>
             <p className="text-sm leading-6 text-slate-400">
-              給內外部系統看的正式串接說明，包含 Base URL、Header、端點用途與範例。
+              這裡整理正式串接要看的 Base URL、驗證方式、端點說明與標準回應格式。
             </p>
           </CardHeader>
 
@@ -146,7 +196,9 @@ export function ApiDocumentation() {
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
                     Base URL
                   </p>
-                  <p className="mt-2 break-all text-sm leading-6 text-cyan-100">{API_BASE_URL}</p>
+                  <p className="mt-2 break-all text-sm leading-6 text-cyan-100">
+                    {API_BASE_URL}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -167,7 +219,7 @@ export function ApiDocumentation() {
                   <p className="text-sm font-black text-slate-100">驗證方式</p>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  所有端點都使用 <code className="text-cyan-100">x-api-key</code> 作為驗證 Header。
+                  所有端點都使用 <code className="text-cyan-100">x-api-key</code> 當作驗證 Header。
                 </p>
               </div>
 
@@ -177,10 +229,16 @@ export function ApiDocumentation() {
                   <p className="text-sm font-black text-slate-100">回應格式</p>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  回應以 JSON 為主，清單端點通常包含 <code className="text-cyan-100">data</code> 與{" "}
+                  API 主要回傳 JSON，清單類端點通常會包含{" "}
+                  <code className="text-cyan-100">data</code> 和{" "}
                   <code className="text-cyan-100">total</code>。
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <CodePanel title="成功回應範例" code={successExample} tone="success" />
+              <CodePanel title="錯誤回應範例" code={errorExample} tone="error" />
             </div>
 
             <div className="rounded-3xl border border-blue-400/12 bg-[#0b1423] p-5">
@@ -201,8 +259,12 @@ export function ApiDocumentation() {
                       </Badge>
                       <p className="font-bold text-slate-100">{endpoint.path}</p>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-300">{endpoint.description}</p>
-                    <p className="mt-2 text-sm text-slate-400">{endpoint.responseSummary}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      {endpoint.description}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      {endpoint.responseSummary}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -217,7 +279,7 @@ export function ApiDocumentation() {
               即時測試與範例
             </CardTitle>
             <p className="text-sm leading-6 text-slate-400">
-              選端點後可直接測試，下面也會同步更新 curl 與 fetch 範例。
+              選好端點後可直接測試，底下會同步更新 curl 與 fetch 範例。
             </p>
           </CardHeader>
 
@@ -318,15 +380,19 @@ export function ApiDocumentation() {
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="space-y-2">
                 <p className="text-sm font-black text-slate-200">curl 範例</p>
-                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#0b1423] p-4">
-                  <pre className="text-sm leading-6 text-cyan-100">{curlExample}</pre>
+                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#06101c] px-4 py-3">
+                  <pre className="font-mono text-sm leading-7 text-slate-100">
+                    {curlExample}
+                  </pre>
                 </ScrollArea>
               </div>
 
               <div className="space-y-2">
                 <p className="text-sm font-black text-slate-200">fetch 範例</p>
-                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#0b1423] p-4">
-                  <pre className="text-sm leading-6 text-cyan-100">{fetchExample}</pre>
+                <ScrollArea className="h-[180px] rounded-2xl border border-blue-400/12 bg-[#06101c] px-4 py-3">
+                  <pre className="font-mono text-sm leading-7 text-slate-100">
+                    {fetchExample}
+                  </pre>
                 </ScrollArea>
               </div>
             </div>
@@ -337,7 +403,7 @@ export function ApiDocumentation() {
                 value={responseText}
                 readOnly
                 placeholder="測試端點後，這裡會顯示 JSON 回應。"
-                className="min-h-[260px] border-blue-400/20 bg-[#0b1423] font-mono text-sm leading-6 text-cyan-100 placeholder:text-slate-500"
+                className="min-h-[260px] border-blue-400/20 bg-[#06101c] font-mono text-sm leading-7 text-slate-100 placeholder:text-slate-500"
               />
             </div>
           </CardContent>
