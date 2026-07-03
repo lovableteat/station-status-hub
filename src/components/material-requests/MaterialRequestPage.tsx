@@ -173,7 +173,7 @@ const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
-const TRACKING_STATUS_OPTIONS = ["無狀態", "處理中", "已完成"] as const;
+const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
@@ -753,6 +753,11 @@ function inferFilterOptionTone(value: string): ExcelFilterTone {
   return "slate";
 }
 
+function getTrackingStatusDisplayLabel(status: string) {
+  const workflowStatus = normalizeTrackingWorkflowStatus(status);
+  return workflowStatus === "新增追蹤" ? "無狀態" : workflowStatus;
+}
+
 function buildExcelFilterOptions(valueGroups: string[][]) {
   const counter = new Map<string, number>();
 
@@ -785,10 +790,10 @@ function normalizeTrackingWorkflowStatus(status: string) {
   }
 
   if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "無狀態" as const;
+    return "新增追蹤" as const;
   }
 
-  return "無狀態" as const;
+  return "新增追蹤" as const;
 }
 
 function getTrackingWorkflowStatus(record: MaterialRecord) {
@@ -809,10 +814,10 @@ function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
   return TRACKING_STATUS_OPTIONS
     .filter((status) => (counter.get(status) ?? 0) > 0)
     .map((status) => ({
-      label: status,
+      label: getTrackingStatusDisplayLabel(status),
       value: status,
       count: counter.get(status) ?? 0,
-      keywords: status,
+      keywords: `${status} ${getTrackingStatusDisplayLabel(status)}`,
       tone: inferFilterOptionTone(status),
     }));
 }
@@ -873,7 +878,10 @@ function normalizeColumnFilterSelection(
   if (selectedValues === null) return null;
 
   const optionValueSet = new Set(options.map((option) => option.value));
-  const normalized = Array.from(new Set(selectedValues.filter((value) => optionValueSet.has(value))));
+  const migratedValues = selectedValues.map((value) =>
+    value === "無狀態" && optionValueSet.has("新增追蹤") ? "新增追蹤" : value,
+  );
+  const normalized = Array.from(new Set(migratedValues.filter((value) => optionValueSet.has(value))));
 
   if (normalized.length === 0 && selectedValues.length > 0) {
     return null;
@@ -1526,7 +1534,7 @@ function TrackingHistoryCell({
       <span className={cn("mt-1 h-14 w-1.5 flex-none rounded-full", cardTone.accent)} />
       <div className="min-w-0 flex-1">
         <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(workflowStatus))}>
-          {workflowStatus}
+          {getTrackingStatusDisplayLabel(workflowStatus)}
         </span>
         <p
           className={cn(
@@ -1564,7 +1572,7 @@ function TrackingHistoryDialog({
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
   const latestEntry = record ? getLatestTrackingEntry(record) : null;
-  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "無狀態";
+  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "新增追蹤";
   const historyEntries = useMemo(() => {
     if (!record) return [];
 
@@ -1671,7 +1679,7 @@ function TrackingHistoryDialog({
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
                     <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestWorkflowStatus))}>
-                      {latestWorkflowStatus}
+                      {getTrackingStatusDisplayLabel(latestWorkflowStatus)}
                     </span>
                   </div>
                   {latestWorkflowStatus !== "已完成" && (
@@ -1711,7 +1719,7 @@ function TrackingHistoryDialog({
                         <SelectContent className="border-blue-400/25 bg-[#0d1729] text-slate-100">
                           {TRACKING_STATUS_OPTIONS.map((option) => (
                             <SelectItem key={option} value={option}>
-                              {option}
+                              {getTrackingStatusDisplayLabel(option)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1791,7 +1799,7 @@ function TrackingHistoryDialog({
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(entry.status))}>
-                            {entry.status}
+                            {getTrackingStatusDisplayLabel(entry.status)}
                           </span>
                           <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
                             {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
