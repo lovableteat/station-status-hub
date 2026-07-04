@@ -20,6 +20,15 @@ export function WorkspaceEntrance({
   items,
   onSelect,
 }: WorkspaceEntranceProps) {
+  const gridClass =
+    items.length === 1
+      ? "mx-auto max-w-md"
+      : items.length === 2
+        ? "mx-auto max-w-4xl md:grid-cols-2"
+        : items.length === 4
+          ? "mx-auto max-w-5xl md:grid-cols-2"
+          : "lg:grid-cols-3";
+
   return (
     <section className="mx-auto flex min-h-[calc(100vh-92px)] w-full max-w-6xl items-center px-4 py-10 sm:px-6">
       <div className="w-full space-y-8">
@@ -35,16 +44,7 @@ export function WorkspaceEntrance({
           </p>
         </div>
 
-        <div
-          className={cn(
-            "grid gap-4",
-            items.length === 1
-              ? "max-w-md mx-auto"
-              : items.length === 2
-                ? "mx-auto max-w-4xl md:grid-cols-2"
-                : "lg:grid-cols-3"
-          )}
-        >
+        <div className={cn("grid gap-4", gridClass)}>
           {items.map((item) => {
             const Icon = item.icon;
 
