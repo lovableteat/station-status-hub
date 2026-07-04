@@ -413,10 +413,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           <h1 className="text-3xl font-bold">後台管理</h1>
           <p className="text-muted-foreground">歡迎，{user?.displayName || user?.username} (超級管理員)</p>
         </div>
+        <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={() => setActiveTab("api-management")}>
+          <Network className="h-4 w-4 mr-2" />
+          API 管理
+        </Button>
         <Button variant="outline" onClick={logout}>
           <LogOut className="h-4 w-4 mr-2" />
           登出
         </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
