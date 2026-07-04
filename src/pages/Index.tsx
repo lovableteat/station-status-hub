@@ -221,10 +221,12 @@ const Index = () => {
   );
 
   const workspaceItems = useMemo(
-    () =>
-      workspaceCatalog
+    () => [
+      { id: "workspace-home", label: "首頁" },
+      ...workspaceCatalog
         .filter((item) => item.visible)
         .map(({ id, label }) => ({ id, label })),
+    ],
     [workspaceCatalog]
   );
 
@@ -304,6 +306,11 @@ const Index = () => {
   }
 
   const handleWorkspaceChange = (workspace: string) => {
+    if (workspace === "workspace-home") {
+      setActiveWorkspace(null);
+      return;
+    }
+
     setActiveWorkspace(workspace as WorkspaceId);
   };
 
@@ -440,7 +447,7 @@ const Index = () => {
 
       <MainWorkspaceHeader
         items={workspaceItems}
-        activeItem={activeWorkspace ?? undefined}
+        activeItem={activeWorkspace ?? "workspace-home"}
         onSelect={handleWorkspaceChange}
         onLogout={logout}
         onOpenNotifications={handleOpenNotifications}
