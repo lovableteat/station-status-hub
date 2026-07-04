@@ -6,7 +6,7 @@ import {
   Factory,
   FileText,
   LayoutDashboard,
-  Network,
+  MessageSquareText,
   ServerCog,
   ShieldCheck,
   Wrench,
@@ -19,6 +19,7 @@ import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNot
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
+import { ApiChatWorkspacePage } from "@/components/api-management/ApiChatWorkspacePage";
 import { DeploymentPlanningCenter } from "@/components/data-center/DeploymentPlanningCenter";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { IssueTracker } from "@/components/issues/IssueTracker";
@@ -41,7 +42,8 @@ type WorkspaceId =
   | "station-status"
   | "material-requests"
   | "data-center"
-  | "user-management";
+  | "user-management"
+  | "ai-chat";
 
 type StationModuleId =
   | "dashboard"
@@ -78,6 +80,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
+  "ai-chat": "ai-chat",
 };
 
 function getRoleLabel(role?: string) {
@@ -104,11 +107,16 @@ function getInitialWorkspace(): WorkspaceId | null {
     return "user-management";
   }
 
+  if (module === "ai-chat") {
+    return "ai-chat";
+  }
+
   if (
     workspace === "station-status" ||
     workspace === "material-requests" ||
     workspace === "data-center" ||
-    workspace === "user-management"
+    workspace === "user-management" ||
+    workspace === "ai-chat"
   ) {
     return workspace;
   }
@@ -197,9 +205,16 @@ const Index = () => {
       {
         id: "user-management" as const,
         label: "使用者管理",
-        description: "集中管理帳號、工程師、權限、API 金鑰與後台控制設定。",
+        description: "集中管理帳號、工程師、權限與後台系統控制。",
         icon: ShieldCheck,
         visible: canViewModule("users") || canViewModule("api-management"),
+      },
+      {
+        id: "ai-chat" as const,
+        label: "AI 對話",
+        description: "直接選擇或帶入 API 金鑰，與模型持續對話、追問與驗證回覆。",
+        icon: MessageSquareText,
+        visible: canViewModule("api-management"),
       },
     ],
     [canViewModule]
@@ -376,6 +391,12 @@ const Index = () => {
             module={activeAdminModule === "api-management" ? "api-management" : "users"}
           >
             <AdminPanel initialTab={activeAdminModule} />
+          </PermissionGuard>
+        );
+      case "ai-chat":
+        return (
+          <PermissionGuard module="api-management">
+            <ApiChatWorkspacePage />
           </PermissionGuard>
         );
       case "station-status":
