@@ -37,16 +37,21 @@ import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
 
-type WorkspaceId = "station-status" | "material-requests" | "data-center";
+type WorkspaceId =
+  | "station-status"
+  | "material-requests"
+  | "data-center"
+  | "user-management";
+
 type StationModuleId =
   | "dashboard"
   | "test-tracker"
   | "flow-info"
   | "monitor"
   | "issues"
-  | "tools"
-  | "users"
-  | "api-management";
+  | "tools";
+
+type AdminModuleId = "users" | "api-management";
 
 const stationModuleItems: Array<{
   id: StationModuleId;
@@ -59,8 +64,6 @@ const stationModuleItems: Array<{
   { id: "monitor", label: "生產監控牆", icon: Factory },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具管理", icon: Wrench },
-  { id: "users", label: "使用者管理", icon: ShieldCheck },
-  { id: "api-management", label: "API 管理", icon: Network },
 ];
 
 const moduleWorkspaceMap: Record<string, WorkspaceId> = {
@@ -70,8 +73,8 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   monitor: "station-status",
   issues: "station-status",
   tools: "station-status",
-  users: "station-status",
-  "api-management": "station-status",
+  users: "user-management",
+  "api-management": "user-management",
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
@@ -93,13 +96,21 @@ function getInitialWorkspace(): WorkspaceId | null {
     return null;
   }
 
-  const value = new URLSearchParams(window.location.search).get("workspace");
+  const params = new URLSearchParams(window.location.search);
+  const workspace = params.get("workspace");
+  const module = params.get("module");
+
+  if (module === "users" || module === "api-management") {
+    return "user-management";
+  }
+
   if (
-    value === "station-status" ||
-    value === "material-requests" ||
-    value === "data-center"
+    workspace === "station-status" ||
+    workspace === "material-requests" ||
+    workspace === "data-center" ||
+    workspace === "user-management"
   ) {
-    return value;
+    return workspace;
   }
 
   return null;
@@ -117,14 +128,25 @@ function getInitialStationModule(): StationModuleId {
     value === "flow-info" ||
     value === "monitor" ||
     value === "issues" ||
-    value === "tools" ||
-    value === "users" ||
-    value === "api-management"
+    value === "tools"
   ) {
     return value;
   }
 
   return "dashboard";
+}
+
+function getInitialAdminModule(): AdminModuleId {
+  if (typeof window === "undefined") {
+    return "users";
+  }
+
+  const value = new URLSearchParams(window.location.search).get("module");
+  if (value === "users" || value === "api-management") {
+    return value;
+  }
+
+  return "users";
 }
 
 const Index = () => {
@@ -134,7 +156,11 @@ const Index = () => {
   const [activeStationModule, setActiveStationModule] = useState<StationModuleId>(
     getInitialStationModule
   );
+  const [activeAdminModule, setActiveAdminModule] = useState<AdminModuleId>(
+    getInitialAdminModule
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const { login, isLoggedIn, logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { isUpdating } = useUnifiedData();
@@ -150,14 +176,14 @@ const Index = () => {
       {
         id: "station-status" as const,
         label: "站點狀態中心",
-        description: "查看站點狀態、測試流程、生產監控與管理設定。",
+        description: "查看站點狀態、測試流程、生產監控與現場營運資訊。",
         icon: LayoutDashboard,
         visible: stationModuleItems.some((item) => canViewModule(item.id)),
       },
       {
         id: "material-requests" as const,
         label: "料號申請",
-        description: "集中處理料號申請、追蹤與相關作業。",
+        description: "集中處理料號申請、替代料比對、BOM 匯入與協作作業。",
         icon: Boxes,
         visible: canViewModule("material-requests"),
       },
@@ -167,6 +193,13 @@ const Index = () => {
         description: "規劃海外基櫃部署的位置、電力、散熱與網路資源。",
         icon: ServerCog,
         visible: canViewModule("data"),
+      },
+      {
+        id: "user-management" as const,
+        label: "使用者管理",
+        description: "集中管理帳號、工程師、權限、API 金鑰與後台控制設定。",
+        icon: ShieldCheck,
+        visible: canViewModule("users") || canViewModule("api-management"),
       },
     ],
     [canViewModule]
@@ -216,10 +249,12 @@ const Index = () => {
         ? "workspace-home"
         : activeWorkspace === "station-status"
           ? activeStationModule
-          : activeWorkspace;
+          : activeWorkspace === "user-management"
+            ? activeAdminModule
+            : activeWorkspace;
 
     updateCurrentModule(presenceModule);
-  }, [activeStationModule, activeWorkspace, updateCurrentModule]);
+  }, [activeAdminModule, activeStationModule, activeWorkspace, updateCurrentModule]);
 
   useEffect(() => {
     const handleNavigationEvent = (event: CustomEvent<{ module: string }>) => {
@@ -236,6 +271,10 @@ const Index = () => {
         stationModuleItems.some((item) => item.id === module)
       ) {
         setActiveStationModule(module as StationModuleId);
+      }
+
+      if (targetWorkspace === "user-management") {
+        setActiveAdminModule(module === "api-management" ? "api-management" : "users");
       }
     };
 
@@ -263,6 +302,11 @@ const Index = () => {
     if (isMobile) {
       setSidebarOpen(false);
     }
+  };
+
+  const handleAdminNavigation = (module: AdminModuleId) => {
+    setActiveWorkspace("user-management");
+    setActiveAdminModule(module);
   };
 
   const renderStationContent = () => {
@@ -303,18 +347,6 @@ const Index = () => {
             <ToolsManagement />
           </PermissionGuard>
         );
-      case "users":
-        return (
-          <PermissionGuard module="users">
-            <AdminPanel initialTab="users" />
-          </PermissionGuard>
-        );
-      case "api-management":
-        return (
-          <PermissionGuard module="api-management">
-            <AdminPanel initialTab="api-management" />
-          </PermissionGuard>
-        );
       default:
         return null;
     }
@@ -322,9 +354,7 @@ const Index = () => {
 
   const renderWorkspaceContent = () => {
     if (activeWorkspace === null) {
-      return (
-        <WorkspaceEntrance items={entranceItems} onSelect={handleWorkspaceChange} />
-      );
+      return <WorkspaceEntrance items={entranceItems} onSelect={handleWorkspaceChange} />;
     }
 
     switch (activeWorkspace) {
@@ -338,6 +368,14 @@ const Index = () => {
         return (
           <PermissionGuard module="data">
             <DeploymentPlanningCenter />
+          </PermissionGuard>
+        );
+      case "user-management":
+        return (
+          <PermissionGuard
+            module={activeAdminModule === "api-management" ? "api-management" : "users"}
+          >
+            <AdminPanel initialTab={activeAdminModule} />
           </PermissionGuard>
         );
       case "station-status":
@@ -363,12 +401,7 @@ const Index = () => {
                 mobilePanelOffsetClass="top-[148px]"
               />
 
-              <main
-                className={cn(
-                  "flex-1 overflow-auto",
-                  isMobile && "pt-14"
-                )}
-              >
+              <main className={cn("flex-1 overflow-auto", isMobile && "pt-14")}>
                 {renderStationContent()}
               </main>
             </div>
@@ -400,7 +433,7 @@ const Index = () => {
                 {
                   id: "users",
                   label: "使用者管理",
-                  onSelect: () => handleStationNavigation("users"),
+                  onSelect: () => handleAdminNavigation("users"),
                 },
               ]
             : []),
@@ -409,7 +442,7 @@ const Index = () => {
                 {
                   id: "api-management",
                   label: "API 管理",
-                  onSelect: () => handleStationNavigation("api-management"),
+                  onSelect: () => handleAdminNavigation("api-management"),
                 },
               ]
             : []),
