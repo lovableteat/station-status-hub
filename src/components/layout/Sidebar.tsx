@@ -8,7 +8,6 @@ import {
   Menu,
   Monitor,
   User,
-  Users,
   Wrench,
 } from "lucide-react";
 
@@ -64,12 +63,6 @@ const navigationItems = [
     label: "工具管理",
     icon: Wrench,
     description: "檔案與工具資產",
-  },
-  {
-    id: "users",
-    label: "使用者管理",
-    icon: Users,
-    description: "帳號與權限",
   },
 ];
 
