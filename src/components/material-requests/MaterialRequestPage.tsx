@@ -3343,7 +3343,7 @@ export function MaterialRequestPage() {
   };
 
   return (
-    <div className="material-sheet-theme min-h-full bg-[#07101f] p-4 text-slate-100 sm:p-5 lg:p-6">
+    <div className="material-sheet-theme min-h-full bg-[#050b16] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
@@ -3351,36 +3351,36 @@ export function MaterialRequestPage() {
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
 
-      <header className="rounded-xl border border-blue-400/20 bg-[#101b2f] p-4">
+      <header className="overflow-hidden rounded-2xl border border-cyan-400/14 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.10),transparent_30%),linear-gradient(180deg,#122033_0%,#0c1626_100%)] p-4 shadow-[0_20px_60px_rgba(2,8,23,0.24)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-none items-center justify-center rounded bg-blue-600 text-white">
+            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-50">料號總表</h1>
-              <p className="mt-0.5 text-sm text-slate-400">一行一個主料，點箭頭查看其他替代料。</p>
+              <p className="mt-0.5 text-sm text-slate-300">一行一個主料，點箭頭查看其他替代料。</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge className={cn("border px-2.5 py-1 text-xs font-bold", collaborationStatusMeta.badgeClassName)}>
                   <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
                   {collaborationStatusMeta.label}
                 </Badge>
-                <span className="text-xs text-slate-500">{collaborationStatusMeta.description}</span>
+                <span className="text-xs text-slate-400">{collaborationStatusMeta.description}</span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 bg-cyan-500 px-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 bg-emerald-400 px-3 text-sm font-bold text-slate-950 shadow-[0_14px_34px_rgba(74,222,128,0.18)] hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-blue-400/20 bg-transparent px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white">
+            <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
               <Download className="mr-2 h-4 w-4" />匯出結果
             </Button>
           </div>
@@ -3398,18 +3398,18 @@ export function MaterialRequestPage() {
           </div>
         )}
 
-        <div className="mt-3 flex flex-col gap-3 border-t border-blue-400/15 pt-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="mt-3 flex flex-col gap-3 border-t border-cyan-400/10 pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2.5">
-            <span className="inline-flex h-10 items-center text-sm font-bold text-slate-300">切換 BOM</span>
+            <span className="inline-flex h-10 items-center text-sm font-bold text-slate-200">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/30 bg-[#0a1527] px-4 py-0 text-cyan-100 sm:min-w-[24rem] sm:flex-[1_1_28rem]">
+              <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/24 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:min-w-[24rem] sm:flex-[1_1_28rem]">
                 <div className="flex min-w-0 items-center text-left">
                   <span className="block max-w-full truncate text-[14px] font-semibold leading-5 text-cyan-100">
                     {activeWorkspace.name}
                   </span>
                 </div>
               </SelectTrigger>
-              <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
+              <SelectContent className="border-cyan-400/20 bg-[#0d1727] text-slate-100">
                 {orderedBomWorkspaces.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
                     <div className="flex max-w-[30rem] flex-col py-1 text-left">
@@ -3420,42 +3420,42 @@ export function MaterialRequestPage() {
                 ))}
               </SelectContent>
             </Select>
-            <span className="inline-flex h-10 items-center rounded-md bg-blue-400/10 px-3 text-sm font-bold text-blue-200">{bomWorkspaces.length} 個 BOM</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-blue-400/20 bg-blue-400/10 px-3 text-sm font-bold text-slate-200 hover:bg-blue-400/20 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
+            <span className="inline-flex h-10 items-center rounded-lg border border-sky-300/16 bg-sky-400/10 px-3 text-sm font-bold text-sky-100">{bomWorkspaces.length} 個 BOM</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-slate-500/30 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-10 border-rose-400/25 bg-rose-400/10 px-3 text-sm font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
+            <span className="text-xs text-slate-400">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-10 border-rose-400/24 bg-rose-500/10 px-3 text-sm font-bold text-rose-100 hover:bg-rose-500/18 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-blue-400/15 pt-3 text-sm">
-          <button type="button" onClick={clearFilters} className={cn("rounded-md border px-2.5 py-1 font-bold transition-colors", availability === "all" ? "border-blue-300/50 bg-blue-400/20 text-blue-100" : "border-blue-300/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20 hover:text-blue-100")}>主料總數 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
-          <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("rounded-md border px-2.5 py-1 font-bold transition-colors", availability === "required" ? "border-amber-300/60 bg-amber-400/25 text-amber-100" : "border-amber-300/35 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25 hover:text-amber-100")}>主料與替代都無料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
-          <span className="rounded-md border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 font-bold text-cyan-200">廠商料明細 <strong className="ml-1">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-cyan-400/10 pt-3 text-sm">
+          <button type="button" onClick={clearFilters} className={cn("rounded-lg border px-3 py-1.5 font-bold transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50 shadow-[0_10px_24px_rgba(56,189,248,0.12)]" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料總數 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
+          <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("rounded-lg border px-3 py-1.5 font-bold transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50 shadow-[0_10px_24px_rgba(251,191,36,0.10)]" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>主料與替代都無料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
+          <span className="rounded-lg border border-emerald-300/24 bg-emerald-400/10 px-3 py-1.5 font-bold text-emerald-100">廠商料明細 <strong className="ml-1">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
         </div>
       </header>
 
-      <section className="mt-3 rounded-xl border border-blue-400/15 bg-[#0d182b] p-3">
+      <section className="mt-3 rounded-2xl border border-cyan-400/10 bg-[linear-gradient(180deg,#0c1627_0%,#09111d_100%)] p-3 shadow-[0_18px_44px_rgba(2,8,23,0.18)]">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
             <DeferredTextInput
               value={query}
               onCommit={setQuery}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
-              className="h-10 border-blue-400/30 bg-[#111f36] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500"
+              className="h-10 border-cyan-400/18 bg-[#111b2a] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-400"
             />
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-10 border-blue-400/20 bg-[#111f36] text-sm text-slate-200">
+            <SelectTrigger className="h-10 border-slate-500/28 bg-[#111b2a] text-sm text-slate-200">
               <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
             </SelectTrigger>
-            <SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">
+            <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
               <SelectItem value="reference">{SORT_MODE_LABELS.reference}</SelectItem>
               <SelectItem value="single-source">{SORT_MODE_LABELS["single-source"]}</SelectItem>
               <SelectItem value="alternatives">{SORT_MODE_LABELS.alternatives}</SelectItem>
@@ -3464,10 +3464,10 @@ export function MaterialRequestPage() {
             </SelectContent>
           </Select>
 
-          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-blue-400/20 bg-[#111f36] px-3 text-sm text-slate-300 hover:bg-blue-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
+          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-500/28 bg-[#111b2a] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-          <p>顯示 <strong className="text-blue-300">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
+          <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
           <p>{dataset.meta.sourceFile} · {dataset.meta.sheetName} · {formatTimestamp(dataset.meta.generatedAt)}</p>
         </div>
       </section>
