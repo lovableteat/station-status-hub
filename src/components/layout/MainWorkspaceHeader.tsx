@@ -51,10 +51,10 @@ export function MainWorkspaceHeader({
       </div>
       <div className="text-left">
         <div className="text-[1.55rem] font-semibold tracking-[-0.03em] text-foreground">
-          Station Status Hub
+          伺服器工作系統
         </div>
         <div className="text-sm text-muted-foreground">
-          Unified operations workspace
+          整合式工作平台
         </div>
       </div>
     </>
