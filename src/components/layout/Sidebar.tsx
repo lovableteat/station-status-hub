@@ -115,7 +115,7 @@ export function Sidebar({
       {isMobile && (
         <div
           className={cn(
-            "fixed left-0 right-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 lg:hidden",
+            "glass-strip fixed left-0 right-0 z-50 flex h-14 items-center border-b border-border px-4 shadow-[0_16px_36px_-32px_hsl(var(--primary)/0.52)] lg:hidden",
             mobileHeaderOffsetClass
           )}
         >
@@ -123,7 +123,7 @@ export function Sidebar({
             variant="ghost"
             size="sm"
             onClick={handleToggle}
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 rounded-xl p-0"
           >
             <Menu className="h-4 w-4" />
           </Button>
@@ -135,7 +135,7 @@ export function Sidebar({
 
       <div
         className={cn(
-          "flex flex-col overflow-hidden border-r border-border bg-card transition-all duration-300",
+          "flex flex-col overflow-hidden border-r border-border bg-[linear-gradient(180deg,hsl(222_34%_12%),hsl(222_30%_9%))] shadow-[24px_0_54px_-44px_hsl(var(--primary)/0.42)] transition-all duration-300",
           isMobile && [
             "fixed bottom-0 left-0 z-40 w-64 lg:relative",
             mobilePanelOffsetClass,
@@ -149,7 +149,7 @@ export function Sidebar({
         )}
       >
         {!isMobile && (
-          <div className="border-b border-border p-4">
+          <div className="border-b border-border/90 bg-[linear-gradient(180deg,hsl(221_34%_14%/0.9),transparent)] p-4">
             <div className="flex items-center justify-between">
               {!isCompact && (
                 <div>
@@ -161,7 +161,7 @@ export function Sidebar({
                 variant="ghost"
                 size="sm"
                 onClick={handleToggle}
-                className="h-8 w-8 p-0"
+                className="h-9 w-9 rounded-xl p-0"
               >
                 <Menu className="h-4 w-4" />
               </Button>
@@ -169,7 +169,7 @@ export function Sidebar({
           </div>
         )}
 
-        <nav className="flex-1 overflow-y-auto p-2">
+        <nav className="flex-1 overflow-y-auto p-2.5">
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -184,9 +184,11 @@ export function Sidebar({
                   key={item.id}
                   variant={isActive ? "default" : "ghost"}
                   className={cn(
-                    "h-10 w-full justify-start transition-all",
+                    "interactive-lift h-auto min-h-[3.25rem] w-full justify-start rounded-2xl border border-transparent transition-all",
                     isCompact && !isMobile ? "px-2" : "px-3",
-                    isActive && "bg-primary text-primary-foreground shadow-station"
+                    isActive
+                      ? "border-primary/18 bg-primary text-primary-foreground shadow-[0_18px_32px_-24px_hsl(var(--primary)/0.8)]"
+                      : "hover:border-primary/12 hover:bg-primary/8"
                   )}
                   onClick={() => onModuleChange(item.id)}
                 >
@@ -208,9 +210,9 @@ export function Sidebar({
           </div>
         </nav>
 
-        <div className="border-t border-border p-2">
+        <div className="border-t border-border/85 bg-[linear-gradient(180deg,transparent,hsl(221_31%_10%/0.94))] p-2.5">
           {(!collapsed || isMobile) && (
-            <div className="mb-2 rounded bg-accent/50 p-2">
+            <div className="panel-surface-soft mb-2 rounded-2xl bg-accent/35 p-3">
               <div className="flex items-center gap-2 text-sm">
                 <User className="h-4 w-4" />
                 <div className="min-w-0 flex-1">
@@ -225,7 +227,7 @@ export function Sidebar({
           <Button
             variant="ghost"
             className={cn(
-              "w-full justify-start text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
+              "w-full justify-start rounded-2xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
               collapsed && !isMobile ? "px-2" : "px-3"
             )}
             onClick={logout}
