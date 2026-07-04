@@ -53,10 +53,10 @@ export function WorkspaceEntrance({
                 key={item.id}
                 type="button"
                 onClick={() => onSelect(item.id)}
-                className="group flex h-full flex-col justify-between rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(224_25%_16%),hsl(225_22%_12%))] p-6 text-left shadow-[0_24px_60px_-42px_hsl(var(--primary)/0.75)] transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 hover:bg-[linear-gradient(180deg,hsl(223_30%_18%),hsl(225_24%_13%))]"
+                className="interactive-lift group panel-surface flex h-full flex-col justify-between rounded-[30px] p-6 text-left hover:border-primary/30"
               >
                 <div className="space-y-5">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-[0_16px_30px_-24px_hsl(var(--primary)/0.65)]">
                     <Icon className="h-6 w-6" />
                   </div>
 
