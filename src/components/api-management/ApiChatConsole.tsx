@@ -388,7 +388,7 @@ export function ApiChatConsole({
             </div>
             <div>
               <CardTitle className="text-3xl font-black tracking-tight text-slate-50">
-                AI 對話控制台
+                AI 對話空間
               </CardTitle>
               <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
                 {isChatOnly
