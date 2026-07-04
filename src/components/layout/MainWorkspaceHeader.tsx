@@ -46,7 +46,7 @@ export function MainWorkspaceHeader({
 }: MainWorkspaceHeaderProps) {
   const brand = (
     <>
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary shadow-[0_16px_34px_-24px_hsl(var(--primary)/0.65)]">
+      <div className="interactive-lift flex h-11 w-11 items-center justify-center rounded-[1.15rem] border border-primary/25 bg-primary/10 text-primary shadow-[0_16px_34px_-24px_hsl(var(--primary)/0.65)]">
         <span className="text-lg font-black tracking-[0.08em]">S</span>
       </div>
       <div className="text-left">
@@ -61,7 +61,7 @@ export function MainWorkspaceHeader({
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-primary/15 bg-[linear-gradient(180deg,hsl(222_42%_11%/0.98),hsl(223_42%_9%/0.95))] backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-primary/15 bg-[linear-gradient(180deg,hsl(222_42%_11%/0.98),hsl(223_42%_9%/0.95))] shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
       <div className="flex flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         {onBrandClick ? (
           <button
@@ -75,7 +75,7 @@ export function MainWorkspaceHeader({
           <div className="flex items-center gap-3">{brand}</div>
         )}
 
-        <nav className="flex overflow-x-auto rounded-2xl border border-primary/15 bg-background/30 p-1.5">
+        <nav className="glass-strip flex overflow-x-auto rounded-[1.35rem] border border-primary/15 p-1.5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -85,9 +85,9 @@ export function MainWorkspaceHeader({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "min-w-fit rounded-xl px-5 py-3 text-base font-medium transition-all duration-200",
+                  "interactive-lift min-w-fit rounded-xl px-5 py-3 text-base font-medium transition-all duration-200",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-[0_16px_34px_-24px_hsl(var(--primary)/0.85)]"
+                    ? "bg-primary text-primary-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.85)]"
                     : "text-foreground/80 hover:bg-primary/10 hover:text-foreground"
                 )}
               >
@@ -111,9 +111,9 @@ export function MainWorkspaceHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-background/20 px-3 py-2.5 text-left transition-colors hover:bg-primary/10"
+                className="interactive-lift flex items-center gap-3 rounded-2xl border border-primary/15 bg-background/20 px-3 py-2.5 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)]"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary/15 text-sm font-bold text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]">
                   {(userName ?? "OP").slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
