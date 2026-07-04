@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  MessageSquareText,
   Pencil,
   Play,
   Plus,
@@ -44,6 +45,7 @@ import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 interface ApiKeyManagementProps {
   onTestKey?: (record: ApiKeyRecord) => void;
+  onChatKey?: (record: ApiKeyRecord) => void;
 }
 
 function maskApiKey(value: string, visible: boolean) {
@@ -62,7 +64,7 @@ function formatDateTime(value: string | null, fallback: string) {
   }
 }
 
-export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
+export function ApiKeyManagement({ onTestKey, onChatKey }: ApiKeyManagementProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -284,6 +286,10 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                 <TableBody>
                   {apiKeys.map((apiKey) => {
                     const permissions = normalizeApiKeyPermissions(apiKey.permissions);
+                    const supportsChat =
+                      permissions.metadata.provider.trim().toLowerCase() === "gemini" &&
+                      Boolean(permissions.metadata.model.trim()) &&
+                      Boolean(permissions.metadata.baseUrl.trim());
 
                     return (
                       <TableRow
@@ -389,6 +395,19 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">
                           <div className="flex justify-end gap-1.5">
+                            {supportsChat ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onChatKey?.(apiKey)}
+                                className="text-sky-200 hover:bg-sky-400/10 hover:text-sky-100"
+                              >
+                                <MessageSquareText className="mr-1.5 h-4 w-4" />
+                                對話
+                              </Button>
+                            ) : null}
+
                             <Button
                               type="button"
                               variant="ghost"
