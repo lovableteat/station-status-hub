@@ -72,7 +72,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <div className="space-y-2">
             <CardTitle className="text-2xl font-bold sm:text-3xl">機台管理系統登入</CardTitle>
             <CardDescription className="text-sm leading-6">
-              請輸入您的帳號與密碼以進入 Station Status Hub。
+              請輸入您的帳號與密碼以進入伺服器工作系統。
             </CardDescription>
           </div>
         </CardHeader>
