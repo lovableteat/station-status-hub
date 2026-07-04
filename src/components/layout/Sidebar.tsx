@@ -121,7 +121,7 @@ export function Sidebar({
             <Menu className="h-4 w-4" />
           </Button>
           <div className="ml-3">
-            <h1 className="text-sm font-bold text-foreground">站點狀態中心</h1>
+            <h1 className="text-sm font-bold text-foreground">機台維修紀錄中心</h1>
           </div>
         </div>
       )}
@@ -146,7 +146,7 @@ export function Sidebar({
             <div className="flex items-center justify-between">
               {!isCompact && (
                 <div>
-                  <h1 className="text-lg font-bold text-foreground">站點狀態中心</h1>
+                  <h1 className="text-lg font-bold text-foreground">機台維修紀錄中心</h1>
                   <p className="text-xs text-muted-foreground">Station Status Hub</p>
                 </div>
               )}
