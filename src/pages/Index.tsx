@@ -183,7 +183,7 @@ const Index = () => {
     () => [
       {
         id: "station-status" as const,
-        label: "站點狀態中心",
+        label: "機台維修紀錄中心",
         description: "查看站點狀態、測試流程、生產監控與現場營運資訊。",
         icon: LayoutDashboard,
         visible: stationModuleItems.some((item) => canViewModule(item.id)),
