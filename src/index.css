@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,30 +11,30 @@ All colors MUST be HSL for proper theming support.
 @layer base {
   :root {
     /* Matte Navy + Cobalt palette */
-    --background: 222 47% 7%;
-    --foreground: 218 38% 94%;
-    --card: 221 36% 13%;
-    --card-foreground: 218 38% 94%;
-    --popover: 221 34% 13%;
-    --popover-foreground: 218 38% 94%;
-    --primary: 221 83% 63%;
-    --primary-foreground: 222 47% 7%;
-    --secondary: 220 28% 18%;
-    --secondary-foreground: 218 38% 94%;
-    --muted: 220 28% 18%;
-    --muted-foreground: 218 22% 78%;
-    --accent: 220 28% 18%;
-    --accent-foreground: 221 92% 76%;
+    --background: 222 52% 6%;
+    --foreground: 214 32% 96%;
+    --card: 221 33% 14%;
+    --card-foreground: 214 32% 96%;
+    --popover: 221 31% 12%;
+    --popover-foreground: 214 32% 96%;
+    --primary: 217 90% 64%;
+    --primary-foreground: 222 52% 8%;
+    --secondary: 220 29% 16%;
+    --secondary-foreground: 214 32% 96%;
+    --muted: 221 25% 18%;
+    --muted-foreground: 217 17% 72%;
+    --accent: 221 25% 18%;
+    --accent-foreground: 213 100% 85%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 63% 7%;
-    --border: 223 34% 35%;
-    --input: 223 34% 38%;
-    --ring: 221 83% 63%;
-    --radius: 0.75rem;
+    --border: 221 24% 27%;
+    --input: 221 24% 31%;
+    --ring: 214 95% 70%;
+    --radius: 1rem;
 
     /* Status colors for testing system */
-    --success: 221 70% 58%;
-    --success-foreground: 222 47% 7%;
+    --success: 142 71% 45%;
+    --success-foreground: 222 52% 8%;
     --warning: 43 96% 56%;
     --warning-foreground: 215 63% 7%;
     --danger: 351 95% 71%;
@@ -41,22 +43,22 @@ All colors MUST be HSL for proper theming support.
     --info-foreground: 222 47% 7%;
     
     /* Station status colors */
-    --station-idle: 220 28% 17%;
-    --station-working: 221 83% 63%;
+    --station-idle: 220 23% 20%;
+    --station-working: 217 90% 64%;
     --station-warning: 43 96% 56%;
     --station-error: 351 95% 71%;
-    --station-complete: 221 70% 58%;
+    --station-complete: 142 71% 45%;
     
     /* Chart colors */
-    --chart-1: 221 83% 63%;
-    --chart-2: 214 86% 66%;
+    --chart-1: 217 90% 64%;
+    --chart-2: 188 92% 58%;
     --chart-3: 245 58% 66%;
     --chart-4: 43 96% 56%;
     --chart-5: 351 95% 71%;
     
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(221 83% 63%), hsl(245 58% 66%));
-    --gradient-success: linear-gradient(135deg, hsl(221 70% 58%), hsl(214 86% 66%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 90% 64%), hsl(245 64% 68%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(188 92% 58%));
     --gradient-warning: linear-gradient(135deg, hsl(43 96% 56%), hsl(32 95% 60%));
     --gradient-danger: linear-gradient(135deg, hsl(351 95% 71%), hsl(358 78% 62%));
     
@@ -64,54 +66,54 @@ All colors MUST be HSL for proper theming support.
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
-    --shadow-glow: 0 14px 34px -26px hsl(221 83% 63% / 0.75), 0 0 18px hsl(221 83% 63% / 0.14);
+    --shadow-glow: 0 22px 48px -28px hsl(217 90% 64% / 0.78), 0 0 24px hsl(217 90% 64% / 0.16);
 
     /* Today marker */
-    --today-line: hsl(221 83% 63%);
-    --today-glow: 0 0 14px hsl(221 83% 63% / 0.32);
+    --today-line: hsl(217 90% 64%);
+    --today-glow: 0 0 18px hsl(217 90% 64% / 0.34);
 
-    --sidebar-background: 222 47% 7%;
+    --sidebar-background: 222 52% 6%;
 
     --sidebar-foreground: 218 38% 94%;
 
-    --sidebar-primary: 221 83% 63%;
+    --sidebar-primary: 217 90% 64%;
 
     --sidebar-primary-foreground: 222 47% 7%;
 
-    --sidebar-accent: 220 28% 17%;
+    --sidebar-accent: 220 22% 14%;
 
-    --sidebar-accent-foreground: 221 92% 76%;
+    --sidebar-accent-foreground: 213 100% 85%;
 
-    --sidebar-border: 220 22% 30%;
+    --sidebar-border: 221 24% 24%;
 
-    --sidebar-ring: 221 83% 63%;
+    --sidebar-ring: 214 95% 70%;
   }
 
   .dark {
     /* Dark mode colors - Matte Navy + Cobalt */
-    --background: 222 50% 6%;
-    --foreground: 218 38% 94%;
-    --card: 221 38% 12%;
-    --card-foreground: 218 38% 94%;
-    --popover: 221 36% 11%;
-    --popover-foreground: 218 38% 94%;
-    --primary: 221 83% 63%;
-    --primary-foreground: 222 50% 6%;
-    --secondary: 220 29% 17%;
-    --secondary-foreground: 218 38% 94%;
-    --muted: 220 29% 17%;
-    --muted-foreground: 218 22% 78%;
-    --accent: 220 29% 17%;
-    --accent-foreground: 221 92% 76%;
+    --background: 222 52% 6%;
+    --foreground: 214 32% 96%;
+    --card: 221 33% 14%;
+    --card-foreground: 214 32% 96%;
+    --popover: 221 31% 12%;
+    --popover-foreground: 214 32% 96%;
+    --primary: 217 90% 64%;
+    --primary-foreground: 222 52% 8%;
+    --secondary: 220 29% 16%;
+    --secondary-foreground: 214 32% 96%;
+    --muted: 221 25% 18%;
+    --muted-foreground: 217 17% 72%;
+    --accent: 221 25% 18%;
+    --accent-foreground: 213 100% 85%;
     --destructive: 351 95% 71%;
     --destructive-foreground: 215 68% 6%;
-    --border: 223 34% 34%;
-    --input: 223 34% 37%;
-    --ring: 221 83% 63%;
+    --border: 221 24% 27%;
+    --input: 221 24% 31%;
+    --ring: 214 95% 70%;
     
     /* Dark mode status colors */
-    --success: 221 70% 58%;
-    --success-foreground: 222 50% 6%;
+    --success: 142 71% 45%;
+    --success-foreground: 222 52% 8%;
     --warning: 43 96% 56%;
     --warning-foreground: 215 68% 6%;
     --danger: 351 95% 71%;
@@ -120,43 +122,90 @@ All colors MUST be HSL for proper theming support.
     --info-foreground: 222 50% 6%;
     
     /* Dark mode station colors */
-    --station-idle: 220 29% 15%;
-    --station-working: 221 83% 63%;
+    --station-idle: 220 23% 20%;
+    --station-working: 217 90% 64%;
     --station-warning: 43 96% 56%;
     --station-error: 351 95% 71%;
-    --station-complete: 221 70% 58%;
+    --station-complete: 142 71% 45%;
     
     /* Dark mode gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(221 83% 63%), hsl(245 58% 66%));
-    --gradient-success: linear-gradient(135deg, hsl(221 70% 58%), hsl(214 86% 66%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 90% 64%), hsl(245 64% 68%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(188 92% 58%));
     --gradient-warning: linear-gradient(135deg, hsl(43 96% 56%), hsl(32 95% 60%));
     --gradient-danger: linear-gradient(135deg, hsl(351 95% 71%), hsl(358 78% 62%));
     
     /* Dark mode shadows */
-    --shadow-glow: 0 14px 34px -26px hsl(221 83% 63% / 0.75), 0 0 18px hsl(221 83% 63% / 0.16);
-    --today-glow: 0 0 14px hsl(221 83% 63% / 0.4);
-    --sidebar-background: 222 50% 6%;
-    --sidebar-foreground: 218 38% 94%;
-    --sidebar-primary: 221 83% 63%;
-    --sidebar-primary-foreground: 222 50% 6%;
-    --sidebar-accent: 220 29% 15%;
-    --sidebar-accent-foreground: 221 92% 76%;
-    --sidebar-border: 220 23% 29%;
-    --sidebar-ring: 221 83% 63%;
+    --shadow-glow: 0 22px 48px -28px hsl(217 90% 64% / 0.78), 0 0 24px hsl(217 90% 64% / 0.18);
+    --today-glow: 0 0 18px hsl(217 90% 64% / 0.42);
+    --sidebar-background: 222 52% 6%;
+    --sidebar-foreground: 214 32% 96%;
+    --sidebar-primary: 217 90% 64%;
+    --sidebar-primary-foreground: 222 52% 8%;
+    --sidebar-accent: 220 22% 14%;
+    --sidebar-accent-foreground: 213 100% 85%;
+    --sidebar-border: 221 24% 24%;
+    --sidebar-ring: 214 95% 70%;
   }
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: "Noto Sans TC", "Segoe UI", sans-serif;
+    text-rendering: optimizeLegibility;
     background-image:
-      radial-gradient(circle at top left, hsl(var(--primary) / 0.08), transparent 36rem),
-      radial-gradient(circle at bottom right, hsl(245 58% 66% / 0.07), transparent 32rem);
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.16), transparent 28rem),
+      radial-gradient(circle at top right, hsl(188 92% 58% / 0.09), transparent 30rem),
+      radial-gradient(circle at bottom right, hsl(245 64% 68% / 0.08), transparent 30rem),
+      linear-gradient(180deg, hsl(222 46% 8%), hsl(222 54% 5%));
     background-attachment: fixed;
+  }
+
+  :is(code, pre, kbd, samp) {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  :is(button, a, input, textarea, select, [role="button"]) {
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      opacity 180ms ease;
+  }
+
+  :is(button, [role="button"], summary, input[type="checkbox"], input[type="radio"]) {
+    touch-action: manipulation;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: hsl(221 31% 12% / 0.72);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: linear-gradient(180deg, hsl(217 90% 64% / 0.6), hsl(245 64% 68% / 0.6));
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, hsl(217 90% 68% / 0.82), hsl(245 64% 72% / 0.82));
+    background-clip: padding-box;
   }
 
   ::selection {
@@ -208,37 +257,85 @@ All colors MUST be HSL for proper theming support.
     color: hsl(214 95% 75%);
     filter: drop-shadow(0 0 10px hsl(214 95% 75% / 0.12));
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
   .panel-surface {
     @apply relative isolate border;
-    border-color: hsl(221 83% 63% / 0.16);
+    border-color: hsl(217 90% 64% / 0.16);
+    background:
+      linear-gradient(180deg, hsl(222 34% 14% / 0.96), hsl(222 31% 11% / 0.96)),
+      linear-gradient(135deg, hsl(217 90% 64% / 0.06), transparent 32%);
     box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.04),
-      0 0 0 1px hsl(245 58% 66% / 0.06),
-      0 18px 55px -38px hsl(221 83% 63% / 0.28),
-      0 18px 55px -38px hsl(220 50% 2% / 0.78);
+      inset 0 1px 0 hsl(0 0% 100% / 0.06),
+      0 0 0 1px hsl(245 64% 68% / 0.05),
+      0 20px 55px -36px hsl(217 90% 64% / 0.24),
+      0 28px 85px -44px hsl(220 50% 2% / 0.84);
   }
 
   .panel-surface-soft {
     @apply relative isolate border;
-    border-color: hsl(214 86% 66% / 0.14);
+    border-color: hsl(188 92% 58% / 0.12);
+    background:
+      linear-gradient(180deg, hsl(222 33% 13% / 0.94), hsl(222 30% 10% / 0.94)),
+      linear-gradient(135deg, hsl(188 92% 58% / 0.05), transparent 36%);
     box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.035),
-      0 0 0 1px hsl(245 58% 66% / 0.05),
-      0 16px 44px -38px hsl(214 86% 66% / 0.22),
-      0 14px 36px -34px hsl(220 50% 2% / 0.82);
+      inset 0 1px 0 hsl(0 0% 100% / 0.04),
+      0 0 0 1px hsl(245 64% 68% / 0.04),
+      0 16px 44px -34px hsl(188 92% 58% / 0.18),
+      0 20px 52px -38px hsl(220 50% 2% / 0.84);
   }
 
   .panel-surface-floating {
     @apply relative isolate border;
-    border-color: hsl(221 83% 63% / 0.2);
+    border-color: hsl(217 90% 64% / 0.22);
+    background:
+      linear-gradient(180deg, hsl(222 34% 15% / 0.97), hsl(222 30% 11% / 0.96)),
+      linear-gradient(135deg, hsl(217 90% 64% / 0.08), transparent 32%);
     box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.05),
-      0 0 0 1px hsl(188 92% 70% / 0.08),
-      0 24px 68px -34px hsl(221 83% 63% / 0.35),
-      0 26px 90px -42px hsl(220 50% 2% / 0.9);
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      0 0 0 1px hsl(188 92% 58% / 0.08),
+      0 26px 70px -34px hsl(217 90% 64% / 0.34),
+      0 28px 96px -40px hsl(220 50% 2% / 0.92);
+  }
+
+  .interactive-lift {
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease;
+    will-change: transform;
+  }
+
+  .interactive-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  .interactive-lift:active {
+    transform: translateY(1px) scale(0.988);
+  }
+
+  .glass-strip {
+    background:
+      linear-gradient(180deg, hsl(222 34% 16% / 0.82), hsl(222 30% 12% / 0.78)),
+      linear-gradient(135deg, hsl(217 90% 64% / 0.08), transparent 44%);
+    backdrop-filter: blur(18px);
   }
 
   .material-sheet-theme .bg-white {
