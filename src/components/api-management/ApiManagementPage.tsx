@@ -24,7 +24,7 @@ const summaryCards = [
     tone: "from-cyan-500/18 via-sky-500/12 to-transparent",
   },
   {
-    title: "AI 對話台",
+    title: "AI 對話空間",
     description: "選好 API 金鑰後直接連續對話，不是一次性測試，適合即時驗證模型與回覆品質。",
     icon: MessageSquareText,
     tone: "from-sky-500/18 via-indigo-500/12 to-transparent",
@@ -141,7 +141,7 @@ export function ApiManagementPage() {
             value="chat"
             className="rounded-xl border border-transparent py-2.5 text-sm font-bold data-[state=active]:border-sky-400/20 data-[state=active]:bg-sky-400/12 data-[state=active]:text-sky-100"
           >
-            AI 對話
+            AI 對話空間
           </TabsTrigger>
           <TabsTrigger
             value="preview"
