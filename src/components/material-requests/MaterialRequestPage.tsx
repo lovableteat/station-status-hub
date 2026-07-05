@@ -892,23 +892,14 @@ function matchesColumnFilters(
   );
 }
 
-function normalizeColumnFilterSelection(
-  selectedValues: ColumnFilterSelection,
-  options: ExcelFilterOption[],
-) {
+function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection) {
   if (selectedValues === null) return null;
 
-  const optionValueSet = new Set(options.map((option) => option.value));
-  const migratedValues = selectedValues.map((value) =>
-    value === "無狀態" && optionValueSet.has("新增追蹤") ? "新增追蹤" : value,
-  );
-  const normalized = Array.from(new Set(migratedValues.filter((value) => optionValueSet.has(value))));
-
-  if (normalized.length === 0 && selectedValues.length > 0) {
-    return null;
-  }
-
-  return normalized.length === options.length ? null : normalized;
+  return Array.from(new Set(
+    selectedValues.map((value) => normalizeFilterValue(
+      value === "無狀態" ? "新增追蹤" : String(value ?? ""),
+    )),
+  ));
 }
 
 function DeferredTextInput({
@@ -966,16 +957,23 @@ function ExcelFilterPopover({
   const [open, setOpen] = useState(false);
   const [isPanelReady, setIsPanelReady] = useState(false);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
-  const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(selectedValues);
+  const [mergeSearchSelection, setMergeSearchSelection] = useState(true);
+  const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(
+    normalizeColumnFilterSelection(selectedValues),
+  );
   const [draftSearchValue, setDraftSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
+  const appliedSelectedValues = useMemo(
+    () => normalizeColumnFilterSelection(selectedValues),
+    [selectedValues],
+  );
+
   useEffect(() => {
     if (open) {
-      setDraftSelectedValues(selectedValues);
+      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
       setDraftSearchValue("");
-      setToneFilter("all");
+      setMergeSearchSelection(true);
       setScrollTop(0);
     }
   }, [open, selectedValues]);
@@ -996,21 +994,24 @@ function ExcelFilterPopover({
   const effectiveSelected = useMemo(
     () => draftSelectedValues === null
       ? options.map((option) => option.value)
-      : draftSelectedValues.filter((value) => optionValueSet.has(value)),
-    [draftSelectedValues, optionValueSet, options],
+      : normalizeColumnFilterSelection(draftSelectedValues) ?? [],
+    [draftSelectedValues, options],
   );
   const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
-  const selectedCount = draftSelectedValues === null ? options.length : effectiveSelected.length;
-  const triggerSummary = draftSelectedValues === null ? "全部" : `${selectedCount}/${options.length}`;
+  const hiddenSelectedValues = useMemo(
+    () => draftSelectedValues === null
+      ? []
+      : effectiveSelected.filter((value) => !optionValueSet.has(value)),
+    [draftSelectedValues, optionValueSet, options],
+  );
+  const selectedCount = appliedSelectedValues === null ? options.length : appliedSelectedValues.length;
+  const triggerSummary = appliedSelectedValues === null ? "全部" : `${selectedCount}項`;
 
-  const matchingOptions = useMemo(() => {
+  const filteredOptions = useMemo(() => {
     if (!isPanelReady) return options;
 
     const searchTokens = parseSearchTokens(draftSearchValue);
     const next = options.filter((option) => {
-      const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
-      if (!matchesTone) return false;
-
       if (searchTokens.length === 0) return true;
 
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
@@ -1020,59 +1021,15 @@ function ExcelFilterPopover({
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [draftSearchValue, isPanelReady, options, sortDirection, toneFilter]);
-
-  const filteredOptions = matchingOptions;
-
-  const toneButtons = useMemo(() => {
-    const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
-    return [
-      {
-        value: "all" as const,
-        label: "全部顏色",
-        className: "border-slate-400/20 bg-slate-500/10 text-slate-200 hover:bg-slate-500/20",
-        activeClassName: "border-cyan-300/50 bg-cyan-400/15 text-cyan-100",
-      },
-      availableTones.has("emerald") ? {
-        value: "emerald" as const,
-        label: "綠",
-        className: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20",
-        activeClassName: "border-emerald-300/60 bg-emerald-500/25 text-emerald-50",
-      } : null,
-      availableTones.has("amber") ? {
-        value: "amber" as const,
-        label: "黃",
-        className: "border-amber-400/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20",
-        activeClassName: "border-amber-300/60 bg-amber-500/25 text-amber-50",
-      } : null,
-      availableTones.has("sky") ? {
-        value: "sky" as const,
-        label: "藍",
-        className: "border-sky-400/25 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
-        activeClassName: "border-sky-300/60 bg-sky-500/25 text-sky-50",
-      } : null,
-      availableTones.has("rose") ? {
-        value: "rose" as const,
-        label: "紅",
-        className: "border-rose-400/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
-        activeClassName: "border-rose-300/60 bg-rose-500/25 text-rose-50",
-      } : null,
-      availableTones.has("slate") ? {
-        value: "slate" as const,
-        label: "灰",
-        className: "border-slate-400/20 bg-slate-500/10 text-slate-300 hover:bg-slate-500/20",
-        activeClassName: "border-slate-300/60 bg-slate-500/25 text-slate-50",
-      } : null,
-    ].filter(Boolean) as Array<{
-      value: ExcelFilterTone | "all";
-      label: string;
-      className: string;
-      activeClassName: string;
-    }>;
-  }, [options]);
+  }, [draftSearchValue, isPanelReady, options, sortDirection]);
 
   const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
   const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
+  const allOptionsChecked = draftSelectedValues === null || (
+    hiddenSelectedValues.length === 0
+    && options.length > 0
+    && options.every((option) => effectiveSelectedSet.has(option.value))
+  );
   const virtualStartIndex = Math.max(
     0,
     Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN,
@@ -1082,46 +1039,69 @@ function ExcelFilterPopover({
     Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN,
   );
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
-  const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length}/${options.length}`;
+  const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length} 項`;
   const exactMatchingCount = useMemo(() => {
     const searchTokens = parseSearchTokens(draftSearchValue);
     return options.filter((option) => {
-      const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
-      if (!matchesTone) return false;
       if (searchTokens.length === 0) return true;
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
       return searchTokens.every((token) => searchableText.includes(token));
     }).length;
-  }, [draftSearchValue, options, toneFilter]);
+  }, [draftSearchValue, options]);
+  const searchHasValue = draftSearchValue.trim().length > 0;
+  const currentVisibleValues = useMemo(
+    () => filteredOptions.map((option) => option.value),
+    [filteredOptions],
+  );
+  const hiddenBySearchCount = useMemo(
+    () => searchHasValue
+      ? effectiveSelected.filter((value) => !currentVisibleValues.includes(value)).length
+      : 0,
+    [currentVisibleValues, effectiveSelected, searchHasValue],
+  );
+
+  const convertSelectionState = useCallback((values: string[]) => {
+    const normalized = normalizeColumnFilterSelection(values) ?? [];
+
+    if (
+      hiddenSelectedValues.length === 0
+      && options.length > 0
+      && normalized.length === options.length
+      && options.every((option) => normalized.includes(option.value))
+    ) {
+      return null;
+    }
+
+    return normalized;
+  }, [hiddenSelectedValues.length, options]);
 
   const applySelection = (nextValues: string[]) => {
-    const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
-    const nextSelection = normalized.length === options.length ? null : normalized;
-    setDraftSelectedValues(nextSelection);
+    setDraftSelectedValues(convertSelectionState(nextValues));
   };
 
   const commitSelection = () => {
-    const normalized = draftSelectedValues === null
+    onSelectedValuesChange(draftSelectedValues === null
       ? null
-      : Array.from(new Set(draftSelectedValues.filter((value) => optionValueSet.has(value))));
-    onSelectedValuesChange(normalized && normalized.length === options.length ? null : normalized);
+      : normalizeColumnFilterSelection(draftSelectedValues));
     setOpen(false);
   };
 
   const cancelSelection = () => {
-    setDraftSelectedValues(selectedValues);
+    setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
     setOpen(false);
   };
 
   const clearColumnDraft = () => {
-    setToneFilter("all");
     setDraftSearchValue("");
     setDraftSelectedValues(null);
+    setMergeSearchSelection(true);
     setScrollTop(0);
   };
 
   const toggleValue = (value: string, checked: boolean) => {
-    const current = draftSelectedValues === null ? options.map((option) => option.value) : effectiveSelected;
+    const current = draftSelectedValues === null
+      ? options.map((option) => option.value)
+      : effectiveSelected;
     const next = checked
       ? Array.from(new Set([...current, value]))
       : current.filter((item) => item !== value);
@@ -1129,18 +1109,30 @@ function ExcelFilterPopover({
     applySelection(next);
   };
 
+  const toggleAllOptions = (checked: boolean) => {
+    setDraftSelectedValues(checked ? null : []);
+  };
+
   const toggleVisibleSelection = (checked: boolean) => {
-    const next = new Set(draftSelectedValues === null ? options.map((option) => option.value) : effectiveSelected);
-    filteredOptions.forEach((option) => {
-      if (checked) next.add(option.value);
-      else next.delete(option.value);
-    });
-    applySelection(Array.from(next));
+    const current = draftSelectedValues === null
+      ? options.map((option) => option.value)
+      : effectiveSelected;
+
+    if (checked) {
+      applySelection(
+        searchHasValue && !mergeSearchSelection
+          ? currentVisibleValues
+          : Array.from(new Set([...current, ...currentVisibleValues])),
+      );
+      return;
+    }
+
+    applySelection(current.filter((value) => !currentVisibleValues.includes(value)));
   };
 
   useEffect(() => {
     setScrollTop(0);
-  }, [draftSearchValue, filteredOptions.length, toneFilter, sortDirection]);
+  }, [draftSearchValue, filteredOptions.length, sortDirection]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -1198,85 +1190,42 @@ function ExcelFilterPopover({
             </div>
           </div>
 
+          <button
+            type="button"
+            onClick={clearColumnDraft}
+            className="flex w-full items-center justify-start rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2 text-left text-[13px] font-semibold text-slate-200 transition-colors hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-cyan-100"
+          >
+            清除「{label}」中的篩選
+          </button>
+
           <div className="rounded-xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2">
             <div className="space-y-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">搜尋勾選值</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">搜尋</p>
               <Input
                 value={draftSearchValue}
                 onChange={(event) => setDraftSearchValue(event.target.value)}
-                placeholder={`搜尋 ${label}，只縮小清單，不直接改表格`}
+                placeholder={`輸入 ${label} 關鍵字，只縮小清單`}
                 className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">依顏色快速篩選</p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {toneButtons.map((button) => (
-                <button
-                  key={button.value}
-                  type="button"
-                  onClick={() => setToneFilter(button.value)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                    toneFilter === button.value ? button.activeClassName : button.className,
-                  )}
-                >
-                  {button.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-blue-400/15 bg-[#10192e] p-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">快捷操作</p>
-            <div className="mt-1.5 grid grid-cols-4 gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => applySelection(options.map((option) => option.value))}
-                className="h-8 rounded-lg border border-blue-400/20 bg-blue-400/10 px-1.5 text-[11px] font-semibold text-blue-100 hover:bg-blue-400/20 hover:text-blue-50"
-              >
-                全選
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => applySelection([])}
-                className="h-8 rounded-lg border border-rose-400/20 bg-rose-400/10 px-1.5 text-[11px] font-semibold text-rose-100 hover:bg-rose-400/20 hover:text-rose-50"
-              >
-                全不選
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => applySelection(filteredOptions.map((option) => option.value))}
-                className="h-8 rounded-lg border border-amber-400/20 bg-amber-400/10 px-1.5 text-[11px] font-semibold text-amber-100 hover:bg-amber-400/20 hover:text-amber-50"
-              >
-                只留目前顯示
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  clearColumnDraft();
-                }}
-                className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
-              >
-                清空此欄
-              </Button>
-            </div>
-          </div>
-
           <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2 text-[12px] text-slate-300">
-            <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
+            <span>目前勾選 {draftSelectedValues === null ? options.length : effectiveSelected.length} / {options.length}</span>
             <span>搜尋命中 {exactMatchingCount} 筆</span>
           </div>
+
+          {hiddenBySearchCount > 0 ? (
+            <div className="rounded-xl border border-sky-300/18 bg-sky-400/10 px-3 py-2 text-[12px] text-sky-100">
+              目前搜尋只顯示其中 {visibleCheckedCount} 個已勾選值；另有 {hiddenBySearchCount} 個已勾選值被搜尋關鍵字暫時隱藏。
+            </div>
+          ) : null}
+
+          {hiddenSelectedValues.length > 0 ? (
+            <div className="rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-100">
+              另有 {hiddenSelectedValues.length} 個已勾選值因目前條件未顯示，套用時仍會保留。
+            </div>
+          ) : null}
 
           {isPanelReady ? (
             <div className="rounded-xl border border-blue-400/15 bg-[#091222]">
@@ -1284,18 +1233,42 @@ function ExcelFilterPopover({
                 <div className="border-b border-blue-400/10 p-2">
                   <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
                     <Checkbox
-                      checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
-                      onCheckedChange={(value) => toggleVisibleSelection(value === true)}
+                      checked={allOptionsChecked ? true : (draftSelectedValues !== null && draftSelectedValues.length > 0 ? "indeterminate" : false)}
+                      onCheckedChange={(value) => toggleAllOptions(value === true)}
                       className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
                     />
                     <span className="min-w-0 flex-1 truncate">(全選)</span>
-                    {draftSearchValue.trim() ? (
-                      <span className="truncate text-[11px] text-cyan-200">選取所有搜尋結果</span>
-                    ) : null}
-                    <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
+                    <span className="text-sm text-slate-300">
+                      {draftSelectedValues === null ? options.length : effectiveSelected.length}/{options.length}
+                    </span>
                   </label>
                 </div>
               )}
+
+              {searchHasValue ? (
+                <div className="border-b border-blue-400/10 p-2">
+                  <div className="space-y-2 rounded-lg border border-cyan-400/12 bg-cyan-400/[0.04] p-2">
+                    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
+                      <Checkbox
+                        checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
+                        onCheckedChange={(value) => toggleVisibleSelection(value === true)}
+                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                      />
+                      <span className="min-w-0 flex-1 truncate">(選取所有搜尋結果)</span>
+                      <span className="text-sm text-cyan-200">{visibleCheckedCount}/{filteredOptions.length}</span>
+                    </label>
+
+                    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-[13px] text-slate-300 hover:bg-blue-400/10">
+                      <Checkbox
+                        checked={mergeSearchSelection}
+                        onCheckedChange={(value) => setMergeSearchSelection(value === true)}
+                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                      />
+                      <span>[新增目前的選取範圍至篩選]</span>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
 
               {filteredOptions.length > 0 ? (
                 <div
@@ -3234,7 +3207,8 @@ export function MaterialRequestPage() {
 
   const columnFilterSets = useMemo(
     () => FILTER_KEYS.reduce((result, key) => {
-      result[key] = columnFilters[key] === null ? null : new Set(columnFilters[key]);
+      const normalized = normalizeColumnFilterSelection(columnFilters[key]);
+      result[key] = normalized === null ? null : new Set(normalized);
       return result;
     }, {} as Record<ColumnFilterKey, Set<string> | null>),
     [columnFilters],
@@ -3307,23 +3281,6 @@ export function MaterialRequestPage() {
       return result;
     }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
   }, [getMatchingRecords, searchAvailabilityGroups]);
-
-  useEffect(() => {
-    setColumnFilters((current) => {
-      let changed = false;
-      const next = { ...current };
-
-      FILTER_KEYS.forEach((key) => {
-        const normalized = normalizeColumnFilterSelection(current[key], columnFilterOptions[key]);
-        if (normalized !== current[key]) {
-          next[key] = normalized;
-          changed = true;
-        }
-      });
-
-      return changed ? next : current;
-    });
-  }, [columnFilterOptions]);
 
   const filteredGroups = useMemo(() => {
     const result = searchAvailabilityGroups.filter((group) => {
