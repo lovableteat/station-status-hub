@@ -204,7 +204,7 @@ const Index = () => {
       },
       {
         id: "user-management" as const,
-        label: "使用者管理",
+        label: "後台管理",
         description: "集中管理帳號、工程師、權限與後台系統控制。",
         icon: ShieldCheck,
         visible: canViewModule("users") || canViewModule("api-management"),
@@ -460,7 +460,7 @@ const Index = () => {
             ? [
                 {
                   id: "users",
-                  label: "使用者管理",
+                  label: "後台管理",
                   onSelect: () => handleAdminNavigation("users"),
                 },
               ]
