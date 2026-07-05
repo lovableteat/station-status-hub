@@ -3384,7 +3384,7 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 bg-emerald-400 px-3 text-sm font-bold text-slate-950 shadow-[0_14px_34px_rgba(74,222,128,0.18)] hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 border border-cyan-300/30 bg-cyan-500 px-3 text-sm font-bold text-white shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-600 disabled:text-slate-300">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
