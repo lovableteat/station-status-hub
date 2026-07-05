@@ -22,6 +22,14 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -140,13 +148,13 @@ function formatSavedItemTime(value: number) {
   }).format(new Date(value));
 }
 
-function createSavedWorkspaceItem(content: string): SavedWorkspaceItem {
+function createSavedWorkspaceItem(content: string, customTitle?: string): SavedWorkspaceItem {
   const trimmed = content.trim();
-  const firstLine = trimmed.split(/\r?\n/)[0] || "未命名內容";
+  const firstLine = customTitle?.trim() || trimmed.split(/\r?\n/)[0] || "未命名內容";
 
   return {
     id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: firstLine.slice(0, 28),
+    title: firstLine.slice(0, 32),
     content: trimmed,
     savedAt: Date.now(),
   };
@@ -463,6 +471,13 @@ export function ApiChatConsole({
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
+  const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
+  const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
+  const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false);
+  const [promptDialogTitle, setPromptDialogTitle] = useState("");
+  const [promptDialogContent, setPromptDialogContent] = useState("");
+  const [draftDialogTitle, setDraftDialogTitle] = useState("");
+  const [draftDialogContent, setDraftDialogContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [uploadedImages, setUploadedImages] = useState<GeneratedImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -721,10 +736,24 @@ export function ApiChatConsole({
     }
   };
 
-  const hasConversationContent = messages.length > 0 || draftMessage.trim().length > 0;
+  const getLatestUserMessage = () =>
+    [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
+
+  const buildWorkspaceItemDraft = (fallbackTitle: string) => {
+    const content = draftMessage.trim() || getLatestUserMessage();
+    const titleSource = content || fallbackTitle;
+
+    return {
+      title: titleSource.split(/\r?\n/)[0].slice(0, 32) || fallbackTitle,
+      content,
+    };
+  };
+
+  const hasConversationContent =
+    messages.length > 0 || draftMessage.trim().length > 0 || uploadedImages.length > 0;
 
   const persistCurrentConversation = () => {
-    if (!hasConversationContent) return false;
+    if (messages.length === 0 && draftMessage.trim().length === 0) return false;
 
     setSavedConversations((current) => [
       createSavedConversation({
@@ -740,38 +769,61 @@ export function ApiChatConsole({
     return true;
   };
 
+  const requestResetConversation = () => {
+    setNewConversationDialogOpen(true);
+  };
+
   const resetConversation = () => {
     const archived = persistCurrentConversation();
     setMessages([]);
     setDraftMessage("");
     setUploadedImages([]);
     setConnectionState(null);
+    setNewConversationDialogOpen(false);
     toast.success(archived ? "已建立新對話，上一段內容已保留" : "已建立新對話");
   };
 
+  const openSavePromptDialog = () => {
+    const draft = buildWorkspaceItemDraft("新提示詞");
+    setPromptDialogTitle(draft.title);
+    setPromptDialogContent(draft.content);
+    setSavePromptDialogOpen(true);
+  };
+
   const saveCurrentPrompt = () => {
-    const latestUserPrompt =
-      [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
-    const content = draftMessage.trim() || latestUserPrompt;
+    const content = promptDialogContent.trim();
     if (!content) {
-      toast.error("目前沒有可儲存的提示詞");
+      toast.error("請先填入提示詞內容");
       return;
     }
 
-    setSavedPrompts((current) => [createSavedWorkspaceItem(content), ...current].slice(0, 20));
+    setSavedPrompts((current) => [
+      createSavedWorkspaceItem(content, promptDialogTitle),
+      ...current,
+    ].slice(0, 20));
+    setSavePromptDialogOpen(false);
     toast.success("提示詞已儲存");
   };
 
+  const openSaveDraftDialog = () => {
+    const draft = buildWorkspaceItemDraft("新草稿");
+    setDraftDialogTitle(draft.title);
+    setDraftDialogContent(draft.content);
+    setSaveDraftDialogOpen(true);
+  };
+
   const saveCurrentDraft = () => {
-    const latestUserDraft =
-      [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
-    const content = draftMessage.trim() || latestUserDraft;
+    const content = draftDialogContent.trim();
     if (!content) {
-      toast.error("目前沒有可儲存的草稿");
+      toast.error("請先填入草稿內容");
       return;
     }
 
-    setSavedDrafts((current) => [createSavedWorkspaceItem(content), ...current].slice(0, 20));
+    setSavedDrafts((current) => [
+      createSavedWorkspaceItem(content, draftDialogTitle),
+      ...current,
+    ].slice(0, 20));
+    setSaveDraftDialogOpen(false);
     toast.success("草稿已儲存");
   };
 
@@ -848,6 +900,183 @@ export function ApiChatConsole({
   const chatHeightClass = isChatOnly
     ? "min-h-[520px] max-h-[calc(100vh-310px)]"
     : "min-h-[560px] max-h-[560px]";
+
+  const workspaceDialogs = (
+    <>
+      <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
+        <DialogContent className="max-w-xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-2xl font-black text-slate-50">建立新對話</DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-400">
+              這個動作會把目前視窗清空。若你已經有聊天內容或輸入中的文字，系統會先自動存到左側的對話紀錄。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-[22px] border border-cyan-400/14 bg-cyan-400/8 px-4 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-100/80">
+                Messages
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-50">{messages.length}</p>
+              <p className="mt-1 text-xs text-slate-400">目前已經建立的對話訊息。</p>
+            </div>
+            <div className="rounded-[22px] border border-violet-300/14 bg-violet-400/8 px-4 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-100/80">
+                Draft
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-50">
+                {draftMessage.trim().length ? "已填寫" : "空白"}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">輸入框尚未送出的內容狀態。</p>
+            </div>
+            <div className="rounded-[22px] border border-amber-300/14 bg-amber-400/8 px-4 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-100/80">
+                Images
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-50">{uploadedImages.length}</p>
+              <p className="mt-1 text-xs text-slate-400">尚未送出的圖片會直接清空。</p>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/8 bg-white/5 px-4 py-4 text-sm leading-6 text-slate-300">
+            {hasConversationContent
+              ? "按下確認後會切到全新對話；文字與聊天紀錄會保留到左側清單，未送出的圖片會直接移除。"
+              : "目前沒有未儲存內容，按下確認後會直接建立乾淨的新對話。"}
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNewConversationDialogOpen(false)}
+              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={resetConversation}
+              className="h-11 rounded-2xl bg-[linear-gradient(135deg,#22d3ee_0%,#7c3aed_100%)] px-5 font-bold text-white shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:brightness-110"
+            >
+              確認建立
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={savePromptDialogOpen} onOpenChange={setSavePromptDialogOpen}>
+        <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-2xl font-black text-slate-50">儲存提示詞</DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-400">
+              在視窗裡先確認標題與內容，再存進提示詞庫。之後點提示詞庫卡片就能直接帶回輸入框。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">提示詞名稱</Label>
+              <Input
+                value={promptDialogTitle}
+                onChange={(event) => setPromptDialogTitle(event.target.value)}
+                placeholder="例如：每日異常摘要"
+                className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">提示詞內容</Label>
+              <Textarea
+                value={promptDialogContent}
+                onChange={(event) => setPromptDialogContent(event.target.value)}
+                placeholder="請直接輸入要保存的提示詞內容"
+                className="min-h-[220px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+              />
+              <p className="text-xs text-slate-500">
+                建議把常用格式、回覆要求或固定流程寫完整，之後套用時才不需要重打。
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSavePromptDialogOpen(false)}
+              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={saveCurrentPrompt}
+              disabled={!promptDialogContent.trim()}
+              className="h-11 rounded-2xl bg-cyan-500 px-5 font-bold text-slate-950 shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Bookmark className="mr-2 h-4 w-4" />
+              儲存提示詞
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={saveDraftDialogOpen} onOpenChange={setSaveDraftDialogOpen}>
+        <DialogContent className="max-w-2xl border-violet-300/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-2xl font-black text-slate-50">儲存草稿</DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-400">
+              這裡適合保留還沒發出去的長文、待整理需求或圖片搭配的說明文字。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">草稿名稱</Label>
+              <Input
+                value={draftDialogTitle}
+                onChange={(event) => setDraftDialogTitle(event.target.value)}
+                placeholder="例如：主管簡報用草稿"
+                className="h-12 rounded-2xl border-violet-300/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-violet-300/22 focus:ring-2 focus:ring-violet-400/18"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">草稿內容</Label>
+              <Textarea
+                value={draftDialogContent}
+                onChange={(event) => setDraftDialogContent(event.target.value)}
+                placeholder="請直接輸入要保留的草稿內容"
+                className="min-h-[220px] rounded-[24px] border-violet-300/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-violet-300/22 focus:ring-2 focus:ring-violet-400/18"
+              />
+              <p className="text-xs text-slate-500">
+                草稿會保留在左側草稿庫，之後可以一鍵帶回輸入框繼續編輯或直接送出。
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSaveDraftDialogOpen(false)}
+              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={saveCurrentDraft}
+              disabled={!draftDialogContent.trim()}
+              className="h-11 rounded-2xl bg-[linear-gradient(135deg,#8b5cf6_0%,#6366f1_100%)] px-5 font-bold text-white shadow-[0_18px_44px_-28px_rgba(139,92,246,0.55)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              儲存草稿
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 
   const conversationPanel = (
     <div className="rounded-[36px] border border-cyan-400/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.05),transparent_28%),linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)]">
@@ -950,7 +1179,7 @@ export function ApiChatConsole({
               <Button
                 type="button"
                 variant="outline"
-                onClick={resetConversation}
+                onClick={requestResetConversation}
                 className="h-10 rounded-2xl border-cyan-400/16 bg-transparent px-4 font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -1078,9 +1307,11 @@ export function ApiChatConsole({
 
   if (isChatOnly) {
     return (
-      <div className="grid min-h-[calc(100vh-132px)] w-full gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:sticky xl:top-4 xl:h-[calc(100vh-164px)] xl:overflow-hidden">
-          <div className="flex h-full flex-col gap-4">
+      <>
+        {workspaceDialogs}
+        <div className="grid min-h-[calc(100vh-132px)] w-full gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:sticky xl:top-4 xl:h-[calc(100vh-164px)] xl:overflow-hidden">
+            <div className="flex h-full flex-col gap-4">
             <div className="space-y-4 border-b border-white/8 pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
@@ -1094,7 +1325,7 @@ export function ApiChatConsole({
 
               <Button
                 type="button"
-                onClick={resetConversation}
+                onClick={requestResetConversation}
                 className="h-11 w-full justify-start rounded-2xl bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400"
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -1105,7 +1336,7 @@ export function ApiChatConsole({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={saveCurrentPrompt}
+                  onClick={openSavePromptDialog}
                   className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 >
                   <Bookmark className="mr-2 h-4 w-4" />
@@ -1114,7 +1345,7 @@ export function ApiChatConsole({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={saveCurrentDraft}
+                  onClick={openSaveDraftDialog}
                   className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 >
                   <Save className="mr-2 h-4 w-4" />
@@ -1320,161 +1551,165 @@ export function ApiChatConsole({
                 {provider || "-"} / {model || "-"}
               </p>
             </div>
-          </div>
-        </aside>
+            </div>
+          </aside>
 
-        <div className="min-w-0">{conversationPanel}</div>
-      </div>
+          <div className="min-w-0">{conversationPanel}</div>
+        </div>
+      </>
     );
   }
 
   return (
-    <Card className="overflow-hidden rounded-[36px] border border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.06),transparent_32%),linear-gradient(180deg,#10192e_0%,#0a1322_100%)] shadow-[0_28px_90px_rgba(2,8,23,0.34)]">
-      <CardHeader className="border-b border-white/8 pb-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/16 bg-cyan-400/8 px-3 py-1 text-xs font-bold tracking-[0.2em] text-cyan-100">
-              <MessageSquareText className="h-3.5 w-3.5" />
-              API CHAT CONSOLE
-            </div>
-            <div>
-              <CardTitle className="text-3xl font-black tracking-tight text-slate-50">
-                AI 對話控制台
-              </CardTitle>
-              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-                這裡用來調整 API、模型與系統提示詞，並同步測試對話結果。
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
-            <MetricTile label="Current key" value={activeKeyLabel} caption="目前套用中的對話來源。" />
-            <MetricTile
-              label="Mode"
-              value={modeLabel}
-              caption={isGeminiProvider ? "目前已接通 Gemini 對話。" : "此 provider 尚未接對話流程。"}
-            />
-            <MetricTile
-              label="Messages"
-              value={totalMessages}
-              caption="本次工作區內保留的對話訊息數。"
-            />
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6 pt-6">
-        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <div className="flex items-start justify-between gap-4">
-                <SectionTitle
-                  title="模型與憑證設定"
-                  description="左側只負責 API 與模型控制；右側保留實際對話。"
-                />
-                <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
-                  {truncateMiddle(activeKeyLabel, 24)}
-                </Badge>
+    <>
+      {workspaceDialogs}
+      <Card className="overflow-hidden rounded-[36px] border border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.06),transparent_32%),linear-gradient(180deg,#10192e_0%,#0a1322_100%)] shadow-[0_28px_90px_rgba(2,8,23,0.34)]">
+        <CardHeader className="border-b border-white/8 pb-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/16 bg-cyan-400/8 px-3 py-1 text-xs font-bold tracking-[0.2em] text-cyan-100">
+                <MessageSquareText className="h-3.5 w-3.5" />
+                API CHAT CONSOLE
               </div>
+              <div>
+                <CardTitle className="text-3xl font-black tracking-tight text-slate-50">
+                  AI 對話控制台
+                </CardTitle>
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
+                  這裡用來調整 API、模型與系統提示詞，並同步測試對話結果。
+                </p>
+              </div>
+            </div>
 
-              <div className="mt-5 space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold text-slate-300">API 金鑰</Label>
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <Input
-                      type="password"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      placeholder="貼上要對話的 API Key"
-                      className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] pl-11 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-                    />
-                  </div>
-                </div>
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
+              <MetricTile label="Current key" value={activeKeyLabel} caption="目前套用中的對話來源。" />
+              <MetricTile
+                label="Mode"
+                value={modeLabel}
+                caption={isGeminiProvider ? "目前已接通 Gemini 對話。" : "此 provider 尚未接對話流程。"}
+              />
+              <MetricTile
+                label="Messages"
+                value={totalMessages}
+                caption="本次工作區內保留的對話訊息數。"
+              />
+            </div>
+          </div>
+        </CardHeader>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold text-slate-300">Provider</Label>
-                    <Input
-                      value={provider}
-                      onChange={(event) => setProvider(event.target.value)}
-                      placeholder="gemini"
-                      className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold text-slate-300">Model</Label>
-                    <Input
-                      value={model}
-                      onChange={(event) => setModel(event.target.value)}
-                      placeholder="gemini-2.5-flash"
-                      className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold text-slate-300">API Base URL</Label>
-                  <Input
-                    value={baseUrl}
-                    onChange={(event) => setBaseUrl(event.target.value)}
-                    placeholder="https://generativelanguage.googleapis.com/v1beta"
-                    className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+        <CardContent className="space-y-6 pt-6">
+          <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex items-start justify-between gap-4">
+                  <SectionTitle
+                    title="模型與憑證設定"
+                    description="左側只負責 API 與模型控制；右側保留實際對話。"
                   />
+                  <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
+                    {truncateMiddle(activeKeyLabel, 24)}
+                  </Badge>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-300">API 金鑰</Label>
+                    <div className="relative">
+                      <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Input
+                        type="password"
+                        value={apiKey}
+                        onChange={(event) => setApiKey(event.target.value)}
+                        placeholder="貼上要對話的 API Key"
+                        className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] pl-11 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-300">Provider</Label>
+                      <Input
+                        value={provider}
+                        onChange={(event) => setProvider(event.target.value)}
+                        placeholder="gemini"
+                        className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-300">Model</Label>
+                      <Input
+                        value={model}
+                        onChange={(event) => setModel(event.target.value)}
+                        placeholder="gemini-2.5-flash"
+                        className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-300">API Base URL</Label>
+                    <Input
+                      value={baseUrl}
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      placeholder="https://generativelanguage.googleapis.com/v1beta"
+                      className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <SectionTitle
+                  title="System Prompt"
+                  description="先定義角色與回覆方式，AI 對話會依這裡的規則執行。"
+                />
+                <Textarea
+                  value={systemPrompt}
+                  onChange={(event) => setSystemPrompt(event.target.value)}
+                  placeholder="定義這個 AI 助理的角色、語氣、限制與回答格式"
+                  className="mt-4 min-h-[164px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                />
+              </div>
+
+              <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <SectionTitle title="請求預覽" description="用來確認目前實際打到哪個模型端點。" />
+                <div className="mt-4 rounded-2xl border border-cyan-400/12 bg-[#09111f] px-4 py-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
+                    Request URL
+                  </p>
+                  <p className="mt-3 break-all text-sm leading-7 text-cyan-100">
+                    {requestUrl || "請先補齊 API key / provider / model / base URL"}
+                  </p>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    onClick={() => void handleConnectionTest()}
+                    disabled={loading || !requestUrl}
+                    className="h-12 rounded-2xl bg-emerald-500 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99]"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {loading ? "測試中..." : "測試連線"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={requestResetConversation}
+                    className="h-12 rounded-2xl border-cyan-400/16 bg-transparent font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    清空對話
+                  </Button>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <SectionTitle
-                title="System Prompt"
-                description="先定義角色與回覆方式，AI 對話會依這裡的規則執行。"
-              />
-              <Textarea
-                value={systemPrompt}
-                onChange={(event) => setSystemPrompt(event.target.value)}
-                placeholder="定義這個 AI 助理的角色、語氣、限制與回答格式"
-                className="mt-4 min-h-[164px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-              />
-            </div>
-
-            <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <SectionTitle title="請求預覽" description="用來確認目前實際打到哪個模型端點。" />
-              <div className="mt-4 rounded-2xl border border-cyan-400/12 bg-[#09111f] px-4 py-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
-                  Request URL
-                </p>
-                <p className="mt-3 break-all text-sm leading-7 text-cyan-100">
-                  {requestUrl || "請先補齊 API key / provider / model / base URL"}
-                </p>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  onClick={() => void handleConnectionTest()}
-                  disabled={loading || !requestUrl}
-                  className="h-12 rounded-2xl bg-emerald-500 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99]"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {loading ? "測試中..." : "測試連線"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetConversation}
-                  className="h-12 rounded-2xl border-cyan-400/16 bg-transparent font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  清空對話
-                </Button>
-              </div>
-            </div>
+            {conversationPanel}
           </div>
-
-          {conversationPanel}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </>
   );
 }
