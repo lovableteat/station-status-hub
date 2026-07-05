@@ -70,6 +70,7 @@ export function WorkspaceEntrance({
   items,
   onSelect,
 }: WorkspaceEntranceProps) {
+  const isFiveItemLayout = items.length === 5;
   const gridClass =
     items.length === 1
       ? "mx-auto max-w-xl grid-cols-1"
@@ -77,7 +78,9 @@ export function WorkspaceEntrance({
         ? "grid-cols-1 lg:grid-cols-2"
         : items.length === 4
           ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-4"
-          : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+          : isFiveItemLayout
+            ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-6"
+            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
 
   return (
     <section className="relative w-full px-4 py-6 sm:px-6 lg:px-8">
@@ -100,6 +103,11 @@ export function WorkspaceEntrance({
           {items.map((item) => {
             const Icon = item.icon;
             const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
+            const layoutClass = isFiveItemLayout
+              ? items.indexOf(item) < 3
+                ? "xl:col-span-2"
+                : "xl:col-span-3"
+              : "";
 
             return (
               <button
@@ -108,7 +116,8 @@ export function WorkspaceEntrance({
                 onClick={() => onSelect(item.id)}
                 className={cn(
                   "interactive-lift group relative flex min-h-[238px] flex-col justify-between overflow-hidden rounded-[1.8rem] border border-white/10 p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-30px_rgba(15,23,42,0.9)]",
-                  tone.panel
+                  tone.panel,
+                  layoutClass
                 )}
               >
                 <div className="space-y-6">
