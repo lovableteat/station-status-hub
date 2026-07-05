@@ -417,19 +417,19 @@ const Index = () => {
               />
             )}
 
-            <div className="flex min-h-[calc(100vh-92px)]">
+            <div className="flex min-h-[calc(100vh-92px)] gap-4 px-4 pb-4 pt-4">
               <Sidebar
                 activeModule={activeStationModule}
                 onModuleChange={handleStationNavigation}
                 isOpen={sidebarOpen}
                 onToggle={() => setSidebarOpen((value) => !value)}
                 isMobile={isMobile}
-                desktopStickyClass="top-[92px] h-[calc(100vh-92px)]"
+                desktopStickyClass="top-[108px] h-[calc(100vh-124px)]"
                 mobileHeaderOffsetClass="top-[92px]"
                 mobilePanelOffsetClass="top-[148px]"
               />
 
-              <main className={cn("flex-1 overflow-auto", isMobile && "pt-14")}>
+              <main className={cn("min-w-0 flex-1 overflow-auto", isMobile && "pt-14")}>
                 {renderStationContent()}
               </main>
             </div>
