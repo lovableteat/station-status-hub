@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -179,6 +178,52 @@ export function UserPermissionsDialog({
     [workspaceAccess]
   );
 
+  const enabledWorkspaceCount = useMemo(
+    () => workspaceSummary.filter((workspace) => workspace.level !== "none").length,
+    [workspaceSummary]
+  );
+
+  const editableWorkspaceCount = useMemo(
+    () => workspaceSummary.filter((workspace) => workspace.level === "edit").length,
+    [workspaceSummary]
+  );
+
+  const permissionPresetLabel = useMemo(() => {
+    if (permissions.length === 0 && enabledWorkspaceCount === 0) {
+      return "未授權";
+    }
+
+    if (
+      editableWorkspaceCount === workspaceSummary.length &&
+      permissions.length === ALL_PAGE_PERMISSIONS.length
+    ) {
+      return "全站管理";
+    }
+
+    if (
+      enabledWorkspaceCount === workspaceSummary.length &&
+      editableWorkspaceCount === 0 &&
+      permissions.every((permission) => permission.endsWith("_view"))
+    ) {
+      return "全站檢視";
+    }
+
+    return "自訂配置";
+  }, [editableWorkspaceCount, enabledWorkspaceCount, permissions, workspaceSummary.length]);
+
+  const applyPermissionGroupPreset = (
+    groupPermissions: Permission[],
+    mode: "all" | "none"
+  ) => {
+    setPermissions((prev) => {
+      if (mode === "none") {
+        return prev.filter((permission) => !groupPermissions.includes(permission));
+      }
+
+      return Array.from(new Set([...prev, ...groupPermissions]));
+    });
+  };
+
   const handleSave = async () => {
     try {
       setIsLoading(true);
@@ -251,160 +296,261 @@ export function UserPermissionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            設定 {username} 的網站權限
-          </DialogTitle>
-          <DialogDescription>
-            先設定工作區權限，再視需要補細部頁面權限。工作區授權會直接影響登入後三大入口是否可見。
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-6xl overflow-hidden p-0">
+        <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_28%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.94))] px-6 py-5">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              設定 {username} 的網站權限
+            </DialogTitle>
+            <DialogDescription>
+              先決定三大工作區是否可見，再補細部頁面權限。工作區是入口層，頁面權限是進入後的操作層。
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-          <div className="rounded-2xl border border-primary/15 bg-background/40 p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-foreground">快速套用</div>
-                <div className="text-sm text-muted-foreground">
-                  一鍵給整站檢視、整站管理，或直接清空所有授權。
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => applyGlobalPreset("view")}
-                >
-                  全站檢視
-                </Button>
-                <Button type="button" onClick={() => applyGlobalPreset("edit")}>
-                  全站管理
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => applyGlobalPreset("none")}
-                >
-                  清空授權
-                </Button>
-              </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-primary/15 bg-primary/10 p-4">
+              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Workspaces</div>
+              <div className="mt-2 text-3xl font-semibold text-foreground">{enabledWorkspaceCount}</div>
+              <p className="mt-1 text-sm text-muted-foreground">目前可見工作區</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
+              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Editable</div>
+              <div className="mt-2 text-3xl font-semibold text-foreground">{editableWorkspaceCount}</div>
+              <p className="mt-1 text-sm text-muted-foreground">可直接管理的工作區</p>
+            </div>
+            <div className="rounded-2xl border border-sky-400/15 bg-sky-500/10 p-4">
+              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Page Permissions</div>
+              <div className="mt-2 text-3xl font-semibold text-foreground">{permissions.length}</div>
+              <p className="mt-1 text-sm text-muted-foreground">已勾選的細部頁面權限</p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Preset</div>
+              <div className="mt-2 text-xl font-semibold text-foreground">{permissionPresetLabel}</div>
+              <p className="mt-1 text-sm text-muted-foreground">目前整體授權模式</p>
             </div>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold">工作區權限</h3>
-              <p className="text-sm text-muted-foreground">
-                這裡控制登入後三大入口。`管理` 代表此工作區內全部功能都能操作。
-              </p>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              {workspaceSummary.map((workspace) => (
-                <div
-                  key={workspace.id}
-                  className={`rounded-2xl border p-4 ${getWorkspaceCardTone(
-                    workspace.level
-                  )}`}
-                >
-                  <div className="mb-4 space-y-1">
-                    <div className="font-semibold text-foreground">{workspace.label}</div>
-                    <div className="text-sm text-muted-foreground">
-                      目前狀態：{WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
-                    </div>
+        <div className="max-h-[76vh] overflow-y-auto px-6 py-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <section className="space-y-6">
+              <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <div className="text-base font-semibold text-foreground">快速套用</div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      一鍵切換成全站檢視、全站管理，或整筆清空授權。
+                    </p>
                   </div>
 
-                  <RadioGroup
-                    value={workspace.level}
-                    onValueChange={(value) =>
-                      handleWorkspaceLevelChange(
-                        workspace.id,
-                        value as WorkspaceAccessLevel
-                      )
-                    }
-                    className="space-y-3"
-                  >
-                    {WORKSPACE_OPTIONS.map((option) => (
-                      <div
-                        key={`${workspace.id}-${option.value}`}
-                        className="flex items-start gap-3 rounded-xl border border-border/60 p-3"
-                      >
-                        <RadioGroupItem
-                          value={option.value}
-                          id={`${workspace.id}-${option.value}`}
-                          className="mt-1"
-                        />
-                        <Label
-                          htmlFor={`${workspace.id}-${option.value}`}
-                          className="flex-1 cursor-pointer space-y-1"
-                        >
-                          <div className="font-medium text-foreground">
-                            {option.label}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {option.description}
-                          </div>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold">細部頁面權限</h3>
-              <p className="text-sm text-muted-foreground">
-                進階設定。若工作區已授權，這些細項會被視為補充控制；舊版 `資料中心` 權限仍保留相容。
-              </p>
-            </div>
-
-            {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS).map(([groupKey, group]) => (
-              <div key={groupKey} className="space-y-3 rounded-2xl border p-4">
-                <h4 className="font-semibold text-foreground">{group.name}</h4>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {group.permissions.map((permission) => (
-                    <div
-                      key={permission.key}
-                      className="flex items-center space-x-2 rounded-xl border border-border/60 p-3"
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => applyGlobalPreset("view")}
                     >
-                      <Checkbox
-                        id={permission.key}
-                        checked={permissions.includes(permission.key)}
-                        onCheckedChange={(checked) =>
-                          handlePermissionChange(
-                            permission.key,
-                            checked as boolean
+                      全站檢視
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => applyGlobalPreset("edit")}
+                    >
+                      全站管理
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => applyGlobalPreset("none")}
+                    >
+                      清空授權
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">工作區權限</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    這裡決定登入後首頁會看見哪些工作區入口；選「管理」代表該工作區內所有功能都能操作。
+                  </p>
+                </div>
+
+                <div className="grid gap-4">
+                  {workspaceSummary.map((workspace) => (
+                    <div
+                      key={workspace.id}
+                      className={`rounded-[28px] border p-5 ${getWorkspaceCardTone(workspace.level)}`}
+                    >
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-lg font-semibold text-foreground">{workspace.label}</div>
+                          <div className="text-sm text-muted-foreground">
+                            目前狀態：{WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
+                          </div>
+                        </div>
+                        <Badge variant="outline">
+                          {WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
+                        </Badge>
+                      </div>
+
+                      <RadioGroup
+                        value={workspace.level}
+                        onValueChange={(value) =>
+                          handleWorkspaceLevelChange(
+                            workspace.id,
+                            value as WorkspaceAccessLevel
                           )
                         }
-                      />
-                      <Label htmlFor={permission.key} className="text-sm">
-                        {permission.label}
-                      </Label>
+                        className="grid gap-3 md:grid-cols-3"
+                      >
+                        {WORKSPACE_OPTIONS.map((option) => (
+                          <div
+                            key={`${workspace.id}-${option.value}`}
+                            className={`rounded-2xl border p-4 transition-colors ${
+                              workspace.level === option.value
+                                ? "border-primary/45 bg-primary/10"
+                                : "border-border/70 bg-background/50"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <RadioGroupItem
+                                value={option.value}
+                                id={`${workspace.id}-${option.value}`}
+                                className="mt-1"
+                              />
+                              <Label
+                                htmlFor={`${workspace.id}-${option.value}`}
+                                className="flex-1 cursor-pointer space-y-1"
+                              >
+                                <div className="font-medium text-foreground">
+                                  {option.label}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {option.description}
+                                </div>
+                              </Label>
+                            </div>
+                          </div>
+                        ))}
+                      </RadioGroup>
                     </div>
                   ))}
                 </div>
               </div>
-            ))}
+            </section>
+
+            <section className="space-y-6">
+              <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
+                <h3 className="text-lg font-semibold">細部頁面權限</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  進階控制用。若工作區已開放，這些權限決定進入後是只能看、可以編修，還是連管理設定也能操作。
+                </p>
+              </div>
+
+              <div className="grid gap-4">
+                {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS).map(([groupKey, group]) => {
+                  const groupPermissions = group.permissions.map((permission) => permission.key);
+                  const selectedCount = groupPermissions.filter((permission) =>
+                    permissions.includes(permission)
+                  ).length;
+
+                  return (
+                    <div
+                      key={groupKey}
+                      className="rounded-[28px] border border-border/70 bg-card/70 p-5"
+                    >
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{group.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            已選 {selectedCount} / {group.permissions.length} 項
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => applyPermissionGroupPreset(groupPermissions, "all")}
+                          >
+                            全選
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => applyPermissionGroupPreset(groupPermissions, "none")}
+                          >
+                            清空
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {group.permissions.map((permission) => {
+                          const checked = permissions.includes(permission.key);
+
+                          return (
+                            <Label
+                              key={permission.key}
+                              htmlFor={permission.key}
+                              className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                                checked
+                                  ? "border-primary/45 bg-primary/10"
+                                  : "border-border/70 bg-background/50"
+                              }`}
+                            >
+                              <Checkbox
+                                id={permission.key}
+                                checked={checked}
+                                onCheckedChange={(checkedValue) =>
+                                  handlePermissionChange(
+                                    permission.key,
+                                    checkedValue as boolean
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                              <div className="space-y-1">
+                                <div className="font-medium text-foreground">
+                                  {permission.label}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {permission.key.endsWith("_edit")
+                                    ? "可編輯、更新或管理這個頁面的內容。"
+                                    : "可查看此頁內容，但不允許修改。"}
+                                </div>
+                              </div>
+                            </Label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            <X className="mr-2 h-4 w-4" />
-            取消
-          </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
-            <Save className="mr-2 h-4 w-4" />
-            {isLoading ? "儲存中..." : "儲存權限"}
-          </Button>
+        <div className="flex flex-col gap-3 border-t border-border/70 bg-card/95 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted-foreground">
+            儲存後會同時更新工作區入口權限與細部頁面授權。
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={isLoading}>
+              <X className="mr-2 h-4 w-4" />
+              取消
+            </Button>
+            <Button onClick={handleSave} disabled={isLoading}>
+              <Save className="mr-2 h-4 w-4" />
+              {isLoading ? "儲存中..." : "儲存權限"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
