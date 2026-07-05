@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  BrainCircuit,
-  ImageIcon,
-  MessageSquareText,
-  Sparkles,
-  Wand2,
-} from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 
 import { ApiChatConsole } from "./ApiChatConsole";
@@ -40,7 +32,19 @@ export function ApiChatWorkspacePage() {
           );
         });
 
-        setApiKeys(availableKeys);
+        setApiKeys(
+          availableKeys.sort((left, right) => {
+            const leftImage = looksLikeImageModel(
+              normalizeApiKeyPermissions(left.permissions).metadata.model
+            );
+            const rightImage = looksLikeImageModel(
+              normalizeApiKeyPermissions(right.permissions).metadata.model
+            );
+
+            if (leftImage === rightImage) return 0;
+            return leftImage ? -1 : 1;
+          })
+        );
       } catch (error) {
         console.error("Failed to load API chat keys:", error);
         setApiKeys([]);
@@ -51,139 +55,10 @@ export function ApiChatWorkspacePage() {
   }, []);
 
   const selectedApiKey = useMemo(() => apiKeys[0] ?? null, [apiKeys]);
-  const selectedMetadata = useMemo(
-    () =>
-      selectedApiKey
-        ? normalizeApiKeyPermissions(selectedApiKey.permissions).metadata
-        : null,
-    [selectedApiKey]
-  );
-
-  const imageReady = looksLikeImageModel(selectedMetadata?.model);
 
   return (
-    <div className="min-h-[calc(100vh-132px)] px-4 py-4 md:px-6 md:py-5">
-      <div className="mx-auto grid max-w-[1840px] gap-5 xl:grid-cols-[290px_minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-          <Card className="overflow-hidden rounded-[32px] border border-cyan-400/14 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,#14253d_0%,#0a1322_58%,#09111d_100%)] shadow-[0_28px_72px_rgba(2,8,23,0.32)]">
-            <CardContent className="space-y-5 p-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/18 bg-cyan-400/10 px-3 py-1 text-[11px] font-black tracking-[0.22em] text-cyan-100">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI WORKSPACE
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/18 bg-cyan-400/8 text-cyan-100">
-                  <MessageSquareText className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-black tracking-tight text-slate-50">
-                    AI 對話空間
-                  </h1>
-                  <p className="mt-2 text-sm leading-7 text-slate-300">
-                    這頁只保留聊天、追問與生成結果。金鑰、模型、base URL、system prompt
-                    都留在後台 API 控制台，不再佔掉你的對話畫面。
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,17,31,0.96),rgba(8,14,25,0.98))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
-                    Current source
-                  </p>
-                  <p className="mt-2 truncate text-base font-black text-slate-50">
-                    {selectedApiKey?.key_name || "尚未啟用 Gemini Key"}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">
-                    這個工作區會直接套用後台目前啟用中的 Gemini 設定。
-                  </p>
-                </div>
-
-                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,17,31,0.96),rgba(8,14,25,0.98))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
-                    Provider / Model
-                  </p>
-                  <p className="mt-2 break-words text-sm font-bold text-slate-50">
-                    {(selectedMetadata?.provider || "gemini").trim()} /{" "}
-                    {(selectedMetadata?.model || "未設定").trim()}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">
-                    如果要切模型或改參數，請到後台 API 控制台操作。
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,41,0.96),rgba(9,16,29,0.98))] shadow-[0_22px_52px_rgba(2,8,23,0.22)]">
-            <CardContent className="space-y-4 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/8 text-cyan-100">
-                  <BrainCircuit className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-slate-50">工作模式</p>
-                  <p className="text-xs leading-5 text-slate-400">對話主畫面，其他資訊全部收側邊。</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3 transition-colors hover:border-cyan-300/16 hover:bg-[#0d1728]">
-                  <p className="text-sm font-bold text-slate-100">連續對話</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    保留本次上下文，你可以一路追問，不用一直重講背景。
-                  </p>
-                </div>
-                <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3 transition-colors hover:border-cyan-300/16 hover:bg-[#0d1728]">
-                  <p className="text-sm font-bold text-slate-100">畫面重心在聊天</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    主區只保留訊息流、圖片結果與輸入框，不再塞一堆設定卡。
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[30px] border border-violet-400/16 bg-[radial-gradient(circle_at_top_right,rgba(192,132,252,0.12),transparent_34%),linear-gradient(180deg,rgba(76,29,149,0.18),rgba(15,23,41,0.96))] shadow-[0_22px_54px_rgba(2,8,23,0.22)]">
-            <CardContent className="space-y-4 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-violet-300/18 bg-violet-400/10 text-violet-100">
-                  <ImageIcon className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-slate-50">圖片生成</p>
-                  <p className="text-xs leading-5 text-slate-300">
-                    對話區現在會直接顯示 AI 回傳的圖片，不再只剩文字。
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-black/18 px-4 py-3 text-xs leading-6 text-slate-300">
-                {imageReady
-                  ? "目前模型名稱看起來支援圖片輸出。你可以直接要求它生成示意圖、流程圖風格圖像或視覺草圖。"
-                  : "如果你要生成圖片，請在後台 API 控制台把模型切成支援 image 輸出的 Gemini Image 模型，這頁就會直接顯示圖片結果。"}
-              </div>
-
-              <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-100">
-                  <Wand2 className="h-4 w-4 text-violet-200" />
-                  提問範例
-                </div>
-                <ul className="mt-3 space-y-2 text-xs leading-6 text-slate-300">
-                  <li>幫我整理今天的站點異常重點並給處理順序。</li>
-                  <li>生成一張 16:9 機櫃部署概念圖，風格乾淨、工程導向。</li>
-                  <li>把我剛剛的需求整理成可執行待辦表。</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
-
-        <div className="min-w-0">
-          <ApiChatConsole selectedApiKey={selectedApiKey} mode="chat-only" />
-        </div>
-      </div>
+    <div className="min-h-[calc(100vh-132px)] w-full px-3 py-3 md:px-5 md:py-4">
+      <ApiChatConsole selectedApiKey={selectedApiKey} mode="chat-only" />
     </div>
   );
 }

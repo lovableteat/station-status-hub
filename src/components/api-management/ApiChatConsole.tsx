@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Bookmark,
   Bot,
   CheckCircle2,
+  FileText,
   ImageIcon,
   KeyRound,
   MessageSquareText,
+  Plus,
+  Save,
   Send,
   Sparkles,
   Trash2,
@@ -53,6 +57,16 @@ interface ChatConnectionState {
   durationMs: number;
 }
 
+interface SavedWorkspaceItem {
+  id: string;
+  title: string;
+  content: string;
+  savedAt: number;
+}
+
+const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
+const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
+
 interface GeminiResponsePart {
   text?: string;
   inlineData?: {
@@ -97,6 +111,27 @@ function truncateMiddle(value: string, maxLength = 36) {
   const head = Math.ceil(maxLength / 2) - 2;
   const tail = Math.floor(maxLength / 2) - 1;
   return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function formatSavedItemTime(value: number) {
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function createSavedWorkspaceItem(content: string): SavedWorkspaceItem {
+  const trimmed = content.trim();
+  const firstLine = trimmed.split(/\r?\n/)[0] || "未命名內容";
+
+  return {
+    id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: firstLine.slice(0, 28),
+    content: trimmed,
+    savedAt: Date.now(),
+  };
 }
 
 function extractGeminiResponse(result: unknown) {
@@ -337,6 +372,8 @@ export function ApiChatConsole({
     "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。"
   );
   const [draftMessage, setDraftMessage] = useState("");
+  const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
+  const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
@@ -365,6 +402,32 @@ export function ApiChatConsole({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!isChatOnly || typeof window === "undefined") return;
+
+    try {
+      const promptPayload = window.localStorage.getItem(SAVED_PROMPTS_STORAGE_KEY);
+      const draftPayload = window.localStorage.getItem(SAVED_DRAFTS_STORAGE_KEY);
+
+      setSavedPrompts(promptPayload ? (JSON.parse(promptPayload) as SavedWorkspaceItem[]) : []);
+      setSavedDrafts(draftPayload ? (JSON.parse(draftPayload) as SavedWorkspaceItem[]) : []);
+    } catch (error) {
+      console.error("Failed to load saved AI workspace items:", error);
+      setSavedPrompts([]);
+      setSavedDrafts([]);
+    }
+  }, [isChatOnly]);
+
+  useEffect(() => {
+    if (!isChatOnly || typeof window === "undefined") return;
+    window.localStorage.setItem(SAVED_PROMPTS_STORAGE_KEY, JSON.stringify(savedPrompts));
+  }, [isChatOnly, savedPrompts]);
+
+  useEffect(() => {
+    if (!isChatOnly || typeof window === "undefined") return;
+    window.localStorage.setItem(SAVED_DRAFTS_STORAGE_KEY, JSON.stringify(savedDrafts));
+  }, [isChatOnly, savedDrafts]);
 
   const normalizedProvider = provider.trim().toLowerCase();
   const isGeminiProvider = normalizedProvider === "gemini";
@@ -539,6 +602,47 @@ export function ApiChatConsole({
     }
   };
 
+  const resetConversation = () => {
+    setMessages([]);
+    setDraftMessage("");
+    setConnectionState(null);
+  };
+
+  const saveCurrentPrompt = () => {
+    const content = draftMessage.trim();
+    if (!content) {
+      toast.error("目前沒有可儲存的提示詞");
+      return;
+    }
+
+    setSavedPrompts((current) => [createSavedWorkspaceItem(content), ...current].slice(0, 20));
+    toast.success("提示詞已儲存");
+  };
+
+  const saveCurrentDraft = () => {
+    const content = draftMessage.trim();
+    if (!content) {
+      toast.error("目前沒有可儲存的草稿");
+      return;
+    }
+
+    setSavedDrafts((current) => [createSavedWorkspaceItem(content), ...current].slice(0, 20));
+    toast.success("草稿已儲存");
+  };
+
+  const loadSavedItem = (content: string) => {
+    setDraftMessage(content);
+    toast.success("已帶入輸入框");
+  };
+
+  const removeSavedPrompt = (id: string) => {
+    setSavedPrompts((current) => current.filter((item) => item.id !== id));
+  };
+
+  const removeSavedDraft = (id: string) => {
+    setSavedDrafts((current) => current.filter((item) => item.id !== id));
+  };
+
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
   const totalMessages = messages.length.toString();
   const modeLabel = isGeminiProvider ? "可對話" : "待擴充";
@@ -647,10 +751,7 @@ export function ApiChatConsole({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setMessages([]);
-                  setConnectionState(null);
-                }}
+                onClick={resetConversation}
                 className="h-10 rounded-2xl border-cyan-400/16 bg-transparent px-4 font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -720,46 +821,173 @@ export function ApiChatConsole({
 
   if (isChatOnly) {
     return (
-      <Card className="overflow-hidden rounded-[34px] border border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.06),transparent_32%),linear-gradient(180deg,#10192e_0%,#09111d_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.32)]">
-        <CardHeader className="border-b border-white/8 px-6 py-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/16 bg-cyan-400/8 px-3 py-1 text-[11px] font-black tracking-[0.22em] text-cyan-100">
-                <MessageSquareText className="h-3.5 w-3.5" />
-                LIVE CONVERSATION
+      <div className="grid min-h-[calc(100vh-132px)] w-full gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:sticky xl:top-4 xl:h-[calc(100vh-164px)] xl:overflow-hidden">
+          <div className="flex h-full flex-col gap-4">
+            <div className="space-y-4 border-b border-white/8 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
+                  <MessageSquareText className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-50">AI 對話空間</p>
+                  <p className="text-xs text-slate-400">全寬聊天工作台</p>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-3xl font-black tracking-tight text-slate-50">
-                  AI 對話空間
-                </CardTitle>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-                  主畫面只保留聊天本身。圖片回應會直接顯示在訊息流裡，不再被埋在其他設定卡下面。
-                </p>
+
+              <Button
+                type="button"
+                onClick={resetConversation}
+                className="h-11 w-full justify-start rounded-2xl bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                新對話
+              </Button>
+
+              <div className="grid gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={saveCurrentPrompt}
+                  className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  儲存提示詞
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={saveCurrentDraft}
+                  className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  儲存草稿
+                </Button>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
-                {truncateMiddle(activeKeyLabel, 28)}
-              </Badge>
-              <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200 hover:bg-white/5">
-                {modeLabel}
-              </Badge>
-              <Badge
-                className={cn(
-                  "rounded-full px-3 py-1 hover:bg-transparent",
-                  imageCapable
-                    ? "border border-violet-300/18 bg-violet-400/10 text-violet-100"
-                    : "border border-white/10 bg-white/5 text-slate-300"
-                )}
-              >
-                {imageCapable ? "圖片輸出已開啟" : "目前為文字模型"}
-              </Badge>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-100">提示詞庫</p>
+                    <p className="text-xs text-slate-400">點一下直接帶入輸入框</p>
+                  </div>
+                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
+                    {savedPrompts.length}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {savedPrompts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
+                      目前還沒有儲存提示詞
+                    </div>
+                  ) : (
+                    savedPrompts.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-cyan-300/16 hover:bg-white/8"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => loadSavedItem(item.content)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start gap-2">
+                            <Bookmark className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-100">
+                                {item.title}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                {formatSavedItemTime(item.savedAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSavedPrompt(item.id)}
+                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-100">草稿庫</p>
+                    <p className="text-xs text-slate-400">保留尚未送出的內容</p>
+                  </div>
+                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
+                    {savedDrafts.length}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {savedDrafts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
+                      目前還沒有儲存草稿
+                    </div>
+                  ) : (
+                    savedDrafts.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-violet-300/16 hover:bg-white/8"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => loadSavedItem(item.content)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start gap-2">
+                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-100">
+                                {item.title}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                {formatSavedItemTime(item.savedAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSavedDraft(item.id)}
+                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Current API
+              </p>
+              <p className="mt-2 truncate text-sm font-bold text-slate-100">{activeKeyLabel}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {provider || "-"} / {model || "-"}
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6">{conversationPanel}</CardContent>
-      </Card>
+        </aside>
+
+        <div className="min-w-0">{conversationPanel}</div>
+      </div>
     );
   }
 
@@ -897,10 +1125,7 @@ export function ApiChatConsole({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setMessages([]);
-                    setConnectionState(null);
-                  }}
+                  onClick={resetConversation}
                   className="h-12 rounded-2xl border-cyan-400/16 bg-transparent font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
