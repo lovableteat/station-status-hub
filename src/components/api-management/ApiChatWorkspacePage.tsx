@@ -62,10 +62,10 @@ export function ApiChatWorkspacePage() {
   const imageReady = looksLikeImageModel(selectedMetadata?.model);
 
   return (
-    <div className="min-h-[calc(100vh-132px)] p-4 md:p-6">
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-          <Card className="overflow-hidden rounded-[30px] border border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,#132238_0%,#0a1322_100%)] shadow-[0_24px_64px_rgba(2,8,23,0.28)]">
+    <div className="min-h-[calc(100vh-132px)] px-4 py-4 md:px-6 md:py-5">
+      <div className="mx-auto grid max-w-[1840px] gap-5 xl:grid-cols-[290px_minmax(0,1fr)]">
+        <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+          <Card className="overflow-hidden rounded-[32px] border border-cyan-400/14 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,#14253d_0%,#0a1322_58%,#09111d_100%)] shadow-[0_28px_72px_rgba(2,8,23,0.32)]">
             <CardContent className="space-y-5 p-6">
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/18 bg-cyan-400/10 px-3 py-1 text-[11px] font-black tracking-[0.22em] text-cyan-100">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -88,7 +88,7 @@ export function ApiChatWorkspacePage() {
               </div>
 
               <div className="grid gap-3">
-                <div className="rounded-2xl border border-white/8 bg-[#0b1423] px-4 py-4">
+                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,17,31,0.96),rgba(8,14,25,0.98))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
                     Current source
                   </p>
@@ -100,7 +100,7 @@ export function ApiChatWorkspacePage() {
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-white/8 bg-[#0b1423] px-4 py-4">
+                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,17,31,0.96),rgba(8,14,25,0.98))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
                     Provider / Model
                   </p>
@@ -116,7 +116,7 @@ export function ApiChatWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[28px] border border-white/8 bg-[#0f1729] shadow-[0_20px_48px_rgba(2,8,23,0.18)]">
+          <Card className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,41,0.96),rgba(9,16,29,0.98))] shadow-[0_22px_52px_rgba(2,8,23,0.22)]">
             <CardContent className="space-y-4 p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/8 text-cyan-100">
@@ -129,13 +129,13 @@ export function ApiChatWorkspacePage() {
               </div>
 
               <div className="space-y-3">
-                <div className="rounded-2xl border border-white/8 bg-[#0b1423] px-4 py-3">
+                <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3 transition-colors hover:border-cyan-300/16 hover:bg-[#0d1728]">
                   <p className="text-sm font-bold text-slate-100">連續對話</p>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
                     保留本次上下文，你可以一路追問，不用一直重講背景。
                   </p>
                 </div>
-                <div className="rounded-2xl border border-white/8 bg-[#0b1423] px-4 py-3">
+                <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3 transition-colors hover:border-cyan-300/16 hover:bg-[#0d1728]">
                   <p className="text-sm font-bold text-slate-100">畫面重心在聊天</p>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
                     主區只保留訊息流、圖片結果與輸入框，不再塞一堆設定卡。
@@ -145,7 +145,7 @@ export function ApiChatWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[28px] border border-violet-400/14 bg-[linear-gradient(180deg,rgba(76,29,149,0.18),rgba(15,23,41,0.96))] shadow-[0_20px_48px_rgba(2,8,23,0.18)]">
+          <Card className="rounded-[30px] border border-violet-400/16 bg-[radial-gradient(circle_at_top_right,rgba(192,132,252,0.12),transparent_34%),linear-gradient(180deg,rgba(76,29,149,0.18),rgba(15,23,41,0.96))] shadow-[0_22px_54px_rgba(2,8,23,0.22)]">
             <CardContent className="space-y-4 p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-violet-300/18 bg-violet-400/10 text-violet-100">
@@ -165,7 +165,7 @@ export function ApiChatWorkspacePage() {
                   : "如果你要生成圖片，請在後台 API 控制台把模型切成支援 image 輸出的 Gemini Image 模型，這頁就會直接顯示圖片結果。"}
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-[#0b1423] px-4 py-3">
+              <div className="rounded-[20px] border border-white/8 bg-[#0b1423] px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-100">
                   <Wand2 className="h-4 w-4 text-violet-200" />
                   提問範例
