@@ -51,7 +51,7 @@ export function MainWorkspaceHeader({
       </div>
       <div className="text-left">
         <div className="text-[1.55rem] font-semibold tracking-[-0.03em] text-foreground">
-          伺服器工作系統
+          工作整合平台
         </div>
         <div className="text-sm text-muted-foreground">
           整合式工作平台
