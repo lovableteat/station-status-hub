@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Edit, Save, X, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/components/auth/UserContext";
 
 interface UserEditDialogProps {
   userId: string;
@@ -28,6 +29,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
     password: ""
   });
   const { toast } = useToast();
+  const { user } = useUser();
 
   const handleSave = async () => {
     try {
@@ -84,63 +86,78 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Edit className="h-4 w-4" />
+          編輯與重設
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>編輯用戶</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>用戶名</Label>
-            <Input
-              value={editValues.username}
-              onChange={(e) => setEditValues({...editValues, username: e.target.value})}
-              placeholder="請輸入用戶名..."
-            />
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-primary/15 bg-primary/10 p-4 text-sm text-muted-foreground">
+            這裡可修改帳號基本資料，若要重設密碼，直接輸入新的密碼後儲存即可。系統不會顯示舊密碼，也不保留任何明文密碼。
           </div>
-          <div>
-            <Label>顯示名稱</Label>
-            <Input
-              value={editValues.displayName}
-              onChange={(e) => setEditValues({...editValues, displayName: e.target.value})}
-              placeholder="請輸入顯示名稱..."
-            />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>用戶名</Label>
+              <Input
+                value={editValues.username}
+                onChange={(e) => setEditValues({...editValues, username: e.target.value})}
+                placeholder="請輸入用戶名..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>顯示名稱</Label>
+              <Input
+                value={editValues.displayName}
+                onChange={(e) => setEditValues({...editValues, displayName: e.target.value})}
+                placeholder="請輸入顯示名稱..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>角色</Label>
+              <Select value={editValues.role} onValueChange={(value) => setEditValues({...editValues, role: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {user?.role === "super_admin" ? (
+                    <SelectItem value="super_admin">超級管理員</SelectItem>
+                  ) : null}
+                  <SelectItem value="admin">管理員</SelectItem>
+                  <SelectItem value="engineer">工程師</SelectItem>
+                  <SelectItem value="viewer">檢視者</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>狀態</Label>
+              <Select value={editValues.status} onValueChange={(value) => setEditValues({...editValues, status: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">啟用</SelectItem>
+                  <SelectItem value="inactive">停用</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div>
-            <Label>新密碼 (留空則不更改)</Label>
+
+          <div className="space-y-2">
+            <Label>新密碼（留空則不更改）</Label>
             <Input
               type="password"
               value={editValues.password}
               onChange={(e) => setEditValues({...editValues, password: e.target.value})}
-              placeholder="請輸入新密碼..."
+              placeholder="請輸入新的登入密碼"
             />
           </div>
-          <div>
-            <Label>角色</Label>
-            <Select value={editValues.role} onValueChange={(value) => setEditValues({...editValues, role: value})}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">管理員</SelectItem>
-                <SelectItem value="engineer">工程師</SelectItem>
-                <SelectItem value="viewer">檢視者</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>狀態</Label>
-            <Select value={editValues.status} onValueChange={(value) => setEditValues({...editValues, status: value})}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">啟用</SelectItem>
-                <SelectItem value="inactive">停用</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
           <div className="flex justify-between">
             <Button variant="destructive" onClick={handleDelete}>
               <Trash className="h-3 w-3 mr-2" />
