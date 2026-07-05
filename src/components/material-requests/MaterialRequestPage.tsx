@@ -126,16 +126,6 @@ interface MaterialColumnFilters {
   specification: ColumnFilterSelection;
 }
 
-interface MaterialColumnTextFilters {
-  material: string;
-  refDes: string;
-  mpn: string;
-  internal: string;
-  virtualAlternative: string;
-  trackingStatus: string;
-  specification: string;
-}
-
 type ColumnFilterKey = keyof MaterialColumnFilters;
 
 interface CachedColumnValues {
@@ -153,16 +143,6 @@ const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   virtualAlternative: null,
   trackingStatus: null,
   specification: null,
-};
-
-const EMPTY_COLUMN_TEXT_FILTERS: MaterialColumnTextFilters = {
-  material: "",
-  refDes: "",
-  mpn: "",
-  internal: "",
-  virtualAlternative: "",
-  trackingStatus: "",
-  specification: "",
 };
 
 const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
@@ -829,17 +809,6 @@ function matchesExcelFilter(selectedValues: ColumnFilterSelection, candidateValu
   return normalizedCandidates.some((value) => selectedValues.includes(value));
 }
 
-function matchesTextFilterQuery(query: string, candidateValues: string[]) {
-  const tokens = parseSearchTokens(query);
-  if (tokens.length === 0) return true;
-
-  const searchableText = candidateValues
-    .map((value) => normalizeFilterValue(value).toLowerCase())
-    .join(" ");
-
-  return tokens.every((token) => searchableText.includes(token));
-}
-
 function matchesRecordColumnFilters(
   record: MaterialRecord,
   group: MaterialGroup,
@@ -931,34 +900,28 @@ function ExcelFilterPopover({
   options,
   selectedValues,
   onSelectedValuesChange,
-  textFilterValue,
-  onTextFilterValueChange,
 }: {
   label: string;
   options: ExcelFilterOption[];
   selectedValues: ColumnFilterSelection;
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
-  textFilterValue: string;
-  onTextFilterValueChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [isPanelReady, setIsPanelReady] = useState(false);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [toneFilter, setToneFilter] = useState<ExcelFilterTone | "all">("all");
   const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(selectedValues);
-  const [draftTextFilterValue, setDraftTextFilterValue] = useState(textFilterValue);
+  const [draftSearchValue, setDraftSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
   const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setDraftSelectedValues(selectedValues);
+      setDraftSearchValue("");
+      setToneFilter("all");
+      setScrollTop(0);
     }
   }, [open, selectedValues]);
-  useEffect(() => {
-    if (!open) {
-      setDraftTextFilterValue(textFilterValue);
-    }
-  }, [open, textFilterValue]);
 
   useEffect(() => {
     if (!open) {
@@ -986,7 +949,7 @@ function ExcelFilterPopover({
   const matchingOptions = useMemo(() => {
     if (!isPanelReady) return options;
 
-    const searchTokens = parseSearchTokens(draftTextFilterValue);
+    const searchTokens = parseSearchTokens(draftSearchValue);
     const next = options.filter((option) => {
       const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
       if (!matchesTone) return false;
@@ -994,20 +957,15 @@ function ExcelFilterPopover({
       if (searchTokens.length === 0) return true;
 
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-      const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
-      return matchesSearch || effectiveSelectedSet.has(option.value);
+      return searchTokens.every((token) => searchableText.includes(token));
     });
 
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [draftTextFilterValue, effectiveSelectedSet, isPanelReady, options, sortDirection, toneFilter]);
+  }, [draftSearchValue, isPanelReady, options, sortDirection, toneFilter]);
 
-  const filteredOptions = useMemo(() => {
-    const selectedOptions = matchingOptions.filter((option) => effectiveSelectedSet.has(option.value));
-    const unselectedOptions = matchingOptions.filter((option) => !effectiveSelectedSet.has(option.value));
-    return [...selectedOptions, ...unselectedOptions];
-  }, [effectiveSelectedSet, matchingOptions]);
+  const filteredOptions = matchingOptions;
 
   const toneButtons = useMemo(() => {
     const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
@@ -1069,7 +1027,7 @@ function ExcelFilterPopover({
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
   const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length}/${options.length}`;
   const exactMatchingCount = useMemo(() => {
-    const searchTokens = parseSearchTokens(draftTextFilterValue);
+    const searchTokens = parseSearchTokens(draftSearchValue);
     return options.filter((option) => {
       const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
       if (!matchesTone) return false;
@@ -1077,13 +1035,32 @@ function ExcelFilterPopover({
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
       return searchTokens.every((token) => searchableText.includes(token));
     }).length;
-  }, [draftTextFilterValue, options, toneFilter]);
+  }, [draftSearchValue, options, toneFilter]);
 
   const applySelection = (nextValues: string[]) => {
     const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
     const nextSelection = normalized.length === options.length ? null : normalized;
     setDraftSelectedValues(nextSelection);
-    onSelectedValuesChange(nextSelection);
+  };
+
+  const commitSelection = () => {
+    const normalized = draftSelectedValues === null
+      ? null
+      : Array.from(new Set(draftSelectedValues.filter((value) => optionValueSet.has(value))));
+    onSelectedValuesChange(normalized && normalized.length === options.length ? null : normalized);
+    setOpen(false);
+  };
+
+  const cancelSelection = () => {
+    setDraftSelectedValues(selectedValues);
+    setOpen(false);
+  };
+
+  const clearColumnDraft = () => {
+    setToneFilter("all");
+    setDraftSearchValue("");
+    setDraftSelectedValues(null);
+    setScrollTop(0);
   };
 
   const toggleValue = (value: string, checked: boolean) => {
@@ -1106,7 +1083,7 @@ function ExcelFilterPopover({
 
   useEffect(() => {
     setScrollTop(0);
-  }, [draftTextFilterValue, filteredOptions.length, toneFilter, sortDirection]);
+  }, [draftSearchValue, filteredOptions.length, toneFilter, sortDirection]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -1168,9 +1145,9 @@ function ExcelFilterPopover({
             <div className="space-y-1.5">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">搜尋勾選值</p>
               <Input
-                value={draftTextFilterValue}
-                onChange={(event) => setDraftTextFilterValue(event.target.value)}
-                placeholder={`輸入 ${label} 關鍵字，只縮小勾選清單，不直接改表格`}
+                value={draftSearchValue}
+                onChange={(event) => setDraftSearchValue(event.target.value)}
+                placeholder={`搜尋 ${label}，只縮小清單，不直接改表格`}
                 className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
             </div>
@@ -1230,9 +1207,7 @@ function ExcelFilterPopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setToneFilter("all");
-                  applySelection(options.map((option) => option.value));
-                  setDraftTextFilterValue("");
+                  clearColumnDraft();
                 }}
                 className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
               >
@@ -1257,6 +1232,9 @@ function ExcelFilterPopover({
                       className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
                     />
                     <span className="min-w-0 flex-1 truncate">(全選)</span>
+                    {draftSearchValue.trim() ? (
+                      <span className="truncate text-[11px] text-cyan-200">選取所有搜尋結果</span>
+                    ) : null}
                     <span className="text-sm text-slate-300">{visibleCheckedCount}/{filteredOptions.length}</span>
                   </label>
                 </div>
@@ -1313,6 +1291,26 @@ function ExcelFilterPopover({
               正在載入篩選清單...
             </div>
           )}
+
+          <div className="flex items-center justify-end gap-2 border-t border-blue-400/10 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={cancelSelection}
+              className="h-9 rounded-lg border-slate-500/30 bg-slate-500/10 px-4 text-slate-200 hover:bg-slate-500/20 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={commitSelection}
+              className="h-9 rounded-lg bg-cyan-500 px-5 font-bold text-slate-950 hover:bg-cyan-400"
+            >
+              確定
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -2637,7 +2635,6 @@ export function MaterialRequestPage() {
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
-  const [columnTextFilters, setColumnTextFilters] = useState<MaterialColumnTextFilters>(EMPTY_COLUMN_TEXT_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -2874,14 +2871,6 @@ export function MaterialRequestPage() {
     [columnFilters],
   );
 
-  const columnTextFilterTokens = useMemo(
-    () => FILTER_KEYS.reduce((result, key) => {
-      result[key] = parseSearchTokens(columnTextFilters[key]);
-      return result;
-    }, {} as Record<ColumnFilterKey, string[]>),
-    [columnTextFilters],
-  );
-
   const matchesSearch = useCallback((group: MaterialGroup) => {
     const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
     const exactRefTokens = groupRuntimeIndex.exactRefTokensByGroup.get(group.key) ?? new Set<string>();
@@ -2919,20 +2908,15 @@ export function MaterialRequestPage() {
         const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
           ?? createCachedColumnValues(getRecordColumnValues(record, group, key));
         const selectedSet = columnFilterSets[key];
-        const textTokens = columnTextFilterTokens[key];
 
         if (selectedSet !== null && !cachedValues.raw.some((value) => selectedSet.has(value))) {
-          return false;
-        }
-
-        if (textTokens.length > 0 && !textTokens.every((token) => cachedValues.searchable.includes(token))) {
           return false;
         }
 
         return true;
       })
     );
-  }, [columnFilterSets, columnTextFilterTokens, groupRuntimeIndex]);
+  }, [columnFilterSets, groupRuntimeIndex]);
 
   const searchAvailabilityGroups = useMemo(
     () => dataset.groups.filter((group) => matchesSearch(group) && matchesAvailability(group)),
@@ -3040,7 +3024,7 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [availability, columnFilters, columnTextFilters, deferredQuery, pageSize, sortMode]);
+  }, [availability, columnFilters, deferredQuery, pageSize, sortMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -3231,7 +3215,6 @@ export function MaterialRequestPage() {
     setActiveBomId(value);
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
-    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability("all");
     setExpandedKey(null);
     setPage(1);
@@ -3240,7 +3223,6 @@ export function MaterialRequestPage() {
   const applyAvailabilityFilter = (nextAvailability: AvailabilityFilter) => {
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
-    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability((current) => current === nextAvailability ? "all" : nextAvailability);
     setExpandedKey(null);
     setPage(1);
@@ -3326,7 +3308,6 @@ export function MaterialRequestPage() {
   const clearFilters = () => {
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
-    setColumnTextFilters(EMPTY_COLUMN_TEXT_FILTERS);
     setAvailability("all");
     setSortMode("reference");
     setExpandedKey(null);
@@ -3503,18 +3484,18 @@ export function MaterialRequestPage() {
                 ))}
               </tr>
               <tr className="bg-[#102b57] text-slate-100">
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} textFilterValue={columnTextFilters.material} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, material: value }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} textFilterValue={columnTextFilters.refDes} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, refDes: value }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} textFilterValue={columnTextFilters.mpn} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, mpn: value }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} textFilterValue={columnTextFilters.internal} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, internal: value }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} textFilterValue={columnTextFilters.virtualAlternative} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, virtualAlternative: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     狀態摘要
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} textFilterValue={columnTextFilters.specification} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, specification: value }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} textFilterValue={columnTextFilters.trackingStatus} onTextFilterValueChange={(value) => setColumnTextFilters((current) => ({ ...current, trackingStatus: value }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
