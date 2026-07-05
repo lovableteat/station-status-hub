@@ -210,6 +210,32 @@ All colors MUST be HSL for proper theming support.
     caret-color: hsl(var(--foreground));
   }
 
+  input[type="file"] {
+    color-scheme: dark;
+    color: hsl(var(--foreground));
+  }
+
+  input[type="file"]::file-selector-button {
+    margin-right: 0.75rem;
+    border: 1px solid hsl(var(--border) / 0.95);
+    border-radius: 0.85rem;
+    background: hsl(var(--secondary) / 0.92);
+    color: hsl(var(--foreground));
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  input[type="file"]::file-selector-button:hover {
+    border-color: hsl(var(--primary) / 0.35);
+    background: hsl(var(--secondary) / 1);
+  }
+
   input[type="search"]::-webkit-search-decoration,
   input[type="search"]::-webkit-search-cancel-button,
   input[type="search"]::-webkit-search-results-button,
