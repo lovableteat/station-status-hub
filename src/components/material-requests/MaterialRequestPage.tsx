@@ -1009,15 +1009,21 @@ function ExcelFilterPopover({
   const filteredOptions = useMemo(() => {
     if (!isPanelReady) return options;
 
+    const searchTokens = parseSearchTokens(draftTextFilterValue);
     const next = options.filter((option) => {
       const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
-      return matchesTone;
+      if (!matchesTone) return false;
+
+      if (searchTokens.length === 0) return true;
+
+      const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
+      return searchTokens.every((token) => searchableText.includes(token));
     });
 
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [options, sortDirection, toneFilter]);
+  }, [draftTextFilterValue, isPanelReady, options, sortDirection, toneFilter]);
 
   const toneButtons = useMemo(() => {
     const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
@@ -3329,7 +3335,11 @@ export function MaterialRequestPage() {
       return;
     }
 
-    exportToCsv(rows, `material-alternatives-${new Date().toISOString().slice(0, 10)}.csv`);
+    const exportFileName = `${activeWorkspace.name || "material-alternatives"}-${new Date().toISOString().slice(0, 10)}`
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, "-");
+
+    exportToCsv(rows, `${exportFileName}.csv`);
     toast({ title: "CSV 已下載", description: `共匯出 ${rows.length.toLocaleString()} 筆替代料。` });
   };
 
