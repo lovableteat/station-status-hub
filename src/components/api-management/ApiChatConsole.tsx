@@ -64,8 +64,20 @@ interface SavedWorkspaceItem {
   savedAt: number;
 }
 
+interface SavedConversation {
+  id: string;
+  title: string;
+  savedAt: number;
+  draftMessage: string;
+  messages: ChatMessage[];
+  provider: string;
+  model: string;
+  keyLabel: string;
+}
+
 const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
 const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
+const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
 
 interface GeminiResponsePart {
   text?: string;
@@ -131,6 +143,29 @@ function createSavedWorkspaceItem(content: string): SavedWorkspaceItem {
     title: firstLine.slice(0, 28),
     content: trimmed,
     savedAt: Date.now(),
+  };
+}
+
+function createSavedConversation(params: {
+  messages: ChatMessage[];
+  draftMessage: string;
+  provider: string;
+  model: string;
+  keyLabel: string;
+}): SavedConversation {
+  const latestUserMessage =
+    [...params.messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
+  const fallbackTitleSource = params.draftMessage.trim() || latestUserMessage || "新對話";
+
+  return {
+    id: `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: fallbackTitleSource.split(/\r?\n/)[0].slice(0, 28) || "新對話",
+    savedAt: Date.now(),
+    draftMessage: params.draftMessage,
+    messages: params.messages,
+    provider: params.provider,
+    model: params.model,
+    keyLabel: params.keyLabel,
   };
 }
 
@@ -374,6 +409,7 @@ export function ApiChatConsole({
   const [draftMessage, setDraftMessage] = useState("");
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
+  const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
@@ -409,13 +445,18 @@ export function ApiChatConsole({
     try {
       const promptPayload = window.localStorage.getItem(SAVED_PROMPTS_STORAGE_KEY);
       const draftPayload = window.localStorage.getItem(SAVED_DRAFTS_STORAGE_KEY);
+      const conversationPayload = window.localStorage.getItem(SAVED_CONVERSATIONS_STORAGE_KEY);
 
       setSavedPrompts(promptPayload ? (JSON.parse(promptPayload) as SavedWorkspaceItem[]) : []);
       setSavedDrafts(draftPayload ? (JSON.parse(draftPayload) as SavedWorkspaceItem[]) : []);
+      setSavedConversations(
+        conversationPayload ? (JSON.parse(conversationPayload) as SavedConversation[]) : []
+      );
     } catch (error) {
       console.error("Failed to load saved AI workspace items:", error);
       setSavedPrompts([]);
       setSavedDrafts([]);
+      setSavedConversations([]);
     }
   }, [isChatOnly]);
 
@@ -428,6 +469,14 @@ export function ApiChatConsole({
     if (!isChatOnly || typeof window === "undefined") return;
     window.localStorage.setItem(SAVED_DRAFTS_STORAGE_KEY, JSON.stringify(savedDrafts));
   }, [isChatOnly, savedDrafts]);
+
+  useEffect(() => {
+    if (!isChatOnly || typeof window === "undefined") return;
+    window.localStorage.setItem(
+      SAVED_CONVERSATIONS_STORAGE_KEY,
+      JSON.stringify(savedConversations)
+    );
+  }, [isChatOnly, savedConversations]);
 
   const normalizedProvider = provider.trim().toLowerCase();
   const isGeminiProvider = normalizedProvider === "gemini";
@@ -602,14 +651,37 @@ export function ApiChatConsole({
     }
   };
 
+  const hasConversationContent = messages.length > 0 || draftMessage.trim().length > 0;
+
+  const persistCurrentConversation = () => {
+    if (!hasConversationContent) return false;
+
+    setSavedConversations((current) => [
+      createSavedConversation({
+        messages,
+        draftMessage,
+        provider,
+        model,
+        keyLabel: activeKeyLabel,
+      }),
+      ...current,
+    ].slice(0, 24));
+
+    return true;
+  };
+
   const resetConversation = () => {
+    const archived = persistCurrentConversation();
     setMessages([]);
     setDraftMessage("");
     setConnectionState(null);
+    toast.success(archived ? "已建立新對話，上一段內容已保留" : "已建立新對話");
   };
 
   const saveCurrentPrompt = () => {
-    const content = draftMessage.trim();
+    const latestUserPrompt =
+      [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
+    const content = draftMessage.trim() || latestUserPrompt;
     if (!content) {
       toast.error("目前沒有可儲存的提示詞");
       return;
@@ -620,7 +692,9 @@ export function ApiChatConsole({
   };
 
   const saveCurrentDraft = () => {
-    const content = draftMessage.trim();
+    const latestUserDraft =
+      [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
+    const content = draftMessage.trim() || latestUserDraft;
     if (!content) {
       toast.error("目前沒有可儲存的草稿");
       return;
@@ -635,12 +709,25 @@ export function ApiChatConsole({
     toast.success("已帶入輸入框");
   };
 
+  const restoreConversation = (conversation: SavedConversation) => {
+    setMessages(conversation.messages);
+    setDraftMessage(conversation.draftMessage);
+    setProvider(conversation.provider || "gemini");
+    setModel(conversation.model || "gemini-2.5-flash");
+    setConnectionState(null);
+    toast.success(`已載入對話：${conversation.title}`);
+  };
+
   const removeSavedPrompt = (id: string) => {
     setSavedPrompts((current) => current.filter((item) => item.id !== id));
   };
 
   const removeSavedDraft = (id: string) => {
     setSavedDrafts((current) => current.filter((item) => item.id !== id));
+  };
+
+  const removeSavedConversation = (id: string) => {
+    setSavedConversations((current) => current.filter((item) => item.id !== id));
   };
 
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
@@ -867,6 +954,59 @@ export function ApiChatConsole({
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-100">對話紀錄</p>
+                    <p className="text-xs text-slate-400">保留最近建立的新對話</p>
+                  </div>
+                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
+                    {savedConversations.length}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {savedConversations.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
+                      目前還沒有對話紀錄
+                    </div>
+                  ) : (
+                    savedConversations.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-cyan-300/16 hover:bg-white/8"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => restoreConversation(item)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start gap-2">
+                            <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-100">
+                                {item.title}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                {formatSavedItemTime(item.savedAt)} · {item.provider} / {item.model}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSavedConversation(item.id)}
+                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
