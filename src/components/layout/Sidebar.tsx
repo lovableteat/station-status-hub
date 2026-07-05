@@ -128,14 +128,14 @@ export function Sidebar({
 
       <div
         className={cn(
-          "flex flex-col overflow-hidden border-r border-border bg-[linear-gradient(180deg,hsl(222_34%_12%),hsl(222_30%_9%))] shadow-[24px_0_54px_-44px_hsl(var(--primary)/0.42)] transition-all duration-300",
+          "flex flex-col overflow-hidden bg-[linear-gradient(180deg,hsl(222_34%_12%),hsl(222_30%_9%))] shadow-[24px_0_54px_-44px_hsl(var(--primary)/0.42)] transition-all duration-300",
           isMobile && [
-            "fixed bottom-0 left-0 z-40 w-72 lg:relative",
+            "fixed bottom-0 left-0 z-40 w-72 border-r border-border lg:relative",
             mobilePanelOffsetClass,
             isVisible ? "translate-x-0" : "-translate-x-full",
           ],
           !isMobile && [
-            "sticky self-start",
+            "sticky self-start rounded-[28px] border border-border/80",
             desktopStickyClass,
             isCompact ? "w-16" : "w-72",
           ]
