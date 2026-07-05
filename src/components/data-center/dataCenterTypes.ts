@@ -89,3 +89,28 @@ export interface SitePlan {
   racks: RackPlan[];
   checklist: ChecklistItem[];
 }
+
+export interface ImportedStepPart {
+  id: string;
+  name: string;
+  color?: [number, number, number];
+  position: Float32Array;
+  normal?: Float32Array;
+  index: Uint32Array;
+}
+
+export interface ImportedStepDimensions {
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+}
+
+export interface ImportedStepModel {
+  id: string;
+  fileName: string;
+  importedAt: string;
+  sourceUnit: "millimeter";
+  parts: ImportedStepPart[];
+  dimensions: ImportedStepDimensions;
+  calibratedDimensions: ImportedStepDimensions;
+}
