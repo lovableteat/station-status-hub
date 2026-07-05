@@ -147,7 +147,7 @@ export function Sidebar({
               {!isCompact && (
                 <div>
                   <h1 className="text-lg font-bold text-foreground">機台維修紀錄中心</h1>
-                  <p className="text-xs text-muted-foreground">伺服器工作系統</p>
+                  <p className="text-xs text-muted-foreground">工作整合平台</p>
                 </div>
               )}
               <Button
