@@ -52,7 +52,7 @@ const SNAPSHOT_MODULES: SnapshotModule[] = [
   { id: "issues", label: "問題追蹤" },
   { id: "data", label: "資料中心" },
   { id: "tools", label: "工具管理" },
-  { id: "users", label: "使用者管理" },
+  { id: "users", label: "後台管理" },
 ];
 
 const wait = (ms: number) =>
