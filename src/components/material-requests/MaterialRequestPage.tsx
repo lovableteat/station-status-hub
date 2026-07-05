@@ -844,7 +844,6 @@ function matchesRecordColumnFilters(
   record: MaterialRecord,
   group: MaterialGroup,
   filters: MaterialColumnFilters,
-  textFilters: MaterialColumnTextFilters,
   ignoredKey?: ColumnFilterKey,
 ) {
   const keys = Object.keys(filters) as ColumnFilterKey[];
@@ -853,21 +852,17 @@ function matchesRecordColumnFilters(
     if (key === ignoredKey) return true;
     const candidateValues = getRecordColumnValues(record, group, key);
 
-    return (
-      matchesExcelFilter(filters[key], candidateValues) &&
-      matchesTextFilterQuery(textFilters[key], candidateValues)
-    );
+    return matchesExcelFilter(filters[key], candidateValues);
   });
 }
 
 function matchesColumnFilters(
   group: MaterialGroup,
   filters: MaterialColumnFilters,
-  textFilters: MaterialColumnTextFilters,
   ignoredKey?: ColumnFilterKey,
 ) {
   return group.records.some((record) =>
-    matchesRecordColumnFilters(record, group, filters, textFilters, ignoredKey)
+    matchesRecordColumnFilters(record, group, filters, ignoredKey)
   );
 }
 
@@ -964,17 +959,6 @@ function ExcelFilterPopover({
       setDraftTextFilterValue(textFilterValue);
     }
   }, [open, textFilterValue]);
-  useEffect(() => {
-    if (draftTextFilterValue === textFilterValue) return undefined;
-
-    const timerId = window.setTimeout(() => {
-      startTransition(() => {
-        onTextFilterValueChange(draftTextFilterValue);
-      });
-    }, 90);
-
-    return () => window.clearTimeout(timerId);
-  }, [draftTextFilterValue, onTextFilterValueChange, textFilterValue]);
 
   useEffect(() => {
     if (!open) {
@@ -996,17 +980,10 @@ function ExcelFilterPopover({
     [draftSelectedValues, optionValueSet, options],
   );
   const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
-  const hasContainsFilter = draftTextFilterValue.trim().length > 0;
   const selectedCount = draftSelectedValues === null ? options.length : effectiveSelected.length;
-  const triggerSummary = hasContainsFilter
-    ? draftSelectedValues === null
-      ? "全部 + 包含"
-      : `${selectedCount}/${options.length} + 包含`
-    : draftSelectedValues === null
-      ? "全部"
-      : `${selectedCount}/${options.length}`;
+  const triggerSummary = draftSelectedValues === null ? "全部" : `${selectedCount}/${options.length}`;
 
-  const filteredOptions = useMemo(() => {
+  const matchingOptions = useMemo(() => {
     if (!isPanelReady) return options;
 
     const searchTokens = parseSearchTokens(draftTextFilterValue);
@@ -1017,13 +994,20 @@ function ExcelFilterPopover({
       if (searchTokens.length === 0) return true;
 
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-      return searchTokens.every((token) => searchableText.includes(token));
+      const matchesSearch = searchTokens.every((token) => searchableText.includes(token));
+      return matchesSearch || effectiveSelectedSet.has(option.value);
     });
 
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [draftTextFilterValue, isPanelReady, options, sortDirection, toneFilter]);
+  }, [draftTextFilterValue, effectiveSelectedSet, isPanelReady, options, sortDirection, toneFilter]);
+
+  const filteredOptions = useMemo(() => {
+    const selectedOptions = matchingOptions.filter((option) => effectiveSelectedSet.has(option.value));
+    const unselectedOptions = matchingOptions.filter((option) => !effectiveSelectedSet.has(option.value));
+    return [...selectedOptions, ...unselectedOptions];
+  }, [effectiveSelectedSet, matchingOptions]);
 
   const toneButtons = useMemo(() => {
     const availableTones = new Set(options.map((option) => option.tone ?? "slate"));
@@ -1074,7 +1058,6 @@ function ExcelFilterPopover({
 
   const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
   const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
-  const hasValueFilter = draftSelectedValues !== null;
   const virtualStartIndex = Math.max(
     0,
     Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN,
@@ -1084,17 +1067,17 @@ function ExcelFilterPopover({
     Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN,
   );
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
-  const panelSummary = hasContainsFilter
-    ? hasValueFilter
-      ? effectiveSelected.length === 0
-        ? `0/${options.length} + 包含`
-        : `${effectiveSelected.length}/${options.length} + 包含`
-      : "全部 + 包含"
-    : hasValueFilter
-      ? effectiveSelected.length === 0
-        ? `0/${options.length}`
-        : `${effectiveSelected.length}/${options.length}`
-      : "全部";
+  const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length}/${options.length}`;
+  const exactMatchingCount = useMemo(() => {
+    const searchTokens = parseSearchTokens(draftTextFilterValue);
+    return options.filter((option) => {
+      const matchesTone = toneFilter === "all" || (option.tone ?? "slate") === toneFilter;
+      if (!matchesTone) return false;
+      if (searchTokens.length === 0) return true;
+      const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
+      return searchTokens.every((token) => searchableText.includes(token));
+    }).length;
+  }, [draftTextFilterValue, options, toneFilter]);
 
   const applySelection = (nextValues: string[]) => {
     const normalized = Array.from(new Set(nextValues.filter((value) => optionValueSet.has(value))));
@@ -1183,11 +1166,11 @@ function ExcelFilterPopover({
 
           <div className="rounded-xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2">
             <div className="space-y-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">文字包含</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">搜尋勾選值</p>
               <Input
                 value={draftTextFilterValue}
                 onChange={(event) => setDraftTextFilterValue(event.target.value)}
-                placeholder={`只顯示包含指定文字的${label}`}
+                placeholder={`輸入 ${label} 關鍵字，只縮小勾選清單，不直接改表格`}
                 className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500"
               />
             </div>
@@ -1250,9 +1233,6 @@ function ExcelFilterPopover({
                   setToneFilter("all");
                   applySelection(options.map((option) => option.value));
                   setDraftTextFilterValue("");
-                  startTransition(() => {
-                    onTextFilterValueChange("");
-                  });
                 }}
                 className="h-8 rounded-lg border border-slate-400/20 bg-slate-400/10 px-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-400/20 hover:text-slate-50"
               >
@@ -1263,7 +1243,7 @@ function ExcelFilterPopover({
 
           <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2 text-[12px] text-slate-300">
             <span>目前勾選 {effectiveSelected.length} / {options.length}</span>
-            <span>清單顯示 {filteredOptions.length} 筆</span>
+            <span>搜尋命中 {exactMatchingCount} 筆</span>
           </div>
 
           {isPanelReady ? (
