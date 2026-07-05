@@ -130,14 +130,14 @@ export function Sidebar({
         className={cn(
           "flex flex-col overflow-hidden border-r border-border bg-[linear-gradient(180deg,hsl(222_34%_12%),hsl(222_30%_9%))] shadow-[24px_0_54px_-44px_hsl(var(--primary)/0.42)] transition-all duration-300",
           isMobile && [
-            "fixed bottom-0 left-0 z-40 w-64 lg:relative",
+            "fixed bottom-0 left-0 z-40 w-72 lg:relative",
             mobilePanelOffsetClass,
             isVisible ? "translate-x-0" : "-translate-x-full",
           ],
           !isMobile && [
             "sticky self-start",
             desktopStickyClass,
-            isCompact ? "w-16" : "w-64",
+            isCompact ? "w-16" : "w-72",
           ]
         )}
       >

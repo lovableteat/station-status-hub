@@ -182,7 +182,7 @@ export function UserManagement() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">使用者管理</h1>
+          <h1 className="text-3xl font-bold">後台管理</h1>
           <p className="text-muted-foreground">管理系統使用者與工程師帳號</p>
         </div>
         <div className="flex gap-2">
