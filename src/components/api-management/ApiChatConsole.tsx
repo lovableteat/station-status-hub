@@ -13,6 +13,8 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Upload,
+  X,
   User,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -78,6 +80,10 @@ interface SavedConversation {
 const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
 const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
 const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
+const DEFAULT_IMAGE_OCR_PROMPT =
+  "請擷取我上傳圖片中的所有文字，保留重要換行與表格關係，最後用繁體中文整理重點。";
+const MAX_UPLOAD_IMAGE_COUNT = 4;
+const MAX_UPLOAD_IMAGE_BYTES = 8 * 1024 * 1024;
 
 interface GeminiResponsePart {
   text?: string;
@@ -146,6 +152,17 @@ function createSavedWorkspaceItem(content: string): SavedWorkspaceItem {
   };
 }
 
+type GeminiRequestPart =
+  | {
+      text: string;
+    }
+  | {
+      inlineData: {
+        mimeType: string;
+        data: string;
+      };
+    };
+
 function createSavedConversation(params: {
   messages: ChatMessage[];
   draftMessage: string;
@@ -162,10 +179,46 @@ function createSavedConversation(params: {
     title: fallbackTitleSource.split(/\r?\n/)[0].slice(0, 28) || "新對話",
     savedAt: Date.now(),
     draftMessage: params.draftMessage,
-    messages: params.messages,
+    messages: params.messages.map((message) => ({
+      ...message,
+      images: [],
+    })),
     provider: params.provider,
     model: params.model,
     keyLabel: params.keyLabel,
+  };
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("圖片讀取失敗"));
+    reader.onerror = () => reject(new Error("圖片讀取失敗"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function createUploadedImageFromFile(file: File): Promise<GeneratedImage> {
+  const src = await readFileAsDataUrl(file);
+
+  return {
+    id: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    src,
+    mimeType: file.type || "image/png",
+  };
+}
+
+function imageToGeminiRequestPart(image: GeneratedImage): GeminiRequestPart | null {
+  const dataUrlMatch = image.src.match(/^data:([^;]+);base64,(.+)$/);
+
+  if (!dataUrlMatch) return null;
+
+  return {
+    inlineData: {
+      mimeType: dataUrlMatch[1] || image.mimeType || "image/png",
+      data: dataUrlMatch[2],
+    },
   };
 }
 
@@ -367,7 +420,7 @@ function MessageCard({ message }: { message: ChatMessage }) {
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
                     <ImageIcon className="h-3.5 w-3.5 text-cyan-200" />
-                    生成圖片 {index + 1}
+                    {isUser ? "上傳圖片" : "生成圖片"} {index + 1}
                   </div>
                   <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                     {image.mimeType.replace("image/", "")}
@@ -376,7 +429,7 @@ function MessageCard({ message }: { message: ChatMessage }) {
                 <div className="bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_45%),#08101d] p-3">
                   <img
                     src={image.src}
-                    alt={`AI 生成圖片 ${index + 1}`}
+                    alt={`${isUser ? "上傳圖片" : "AI 生成圖片"} ${index + 1}`}
                     className="w-full rounded-2xl border border-white/8 bg-slate-950/40 object-contain"
                   />
                 </div>
@@ -411,9 +464,11 @@ export function ApiChatConsole({
   const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<GeneratedImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const isChatOnly = mode === "chat-only";
 
@@ -432,6 +487,7 @@ export function ApiChatConsole({
     setBaseUrl(selectedMetadata?.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
     setMessages([]);
     setDraftMessage("");
+    setUploadedImages([]);
     setConnectionState(null);
   }, [selectedApiKey, selectedMetadata]);
 
@@ -494,15 +550,26 @@ export function ApiChatConsole({
       provider.trim() &&
       model.trim() &&
       baseUrl.trim() &&
-      draftMessage.trim() &&
+      (draftMessage.trim() || uploadedImages.length > 0) &&
       !loading
   );
 
   const buildGeminiContents = (history: ChatMessage[]) =>
-    history.map((message) => ({
-      role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }],
-    }));
+    history.map((message) => {
+      const parts: GeminiRequestPart[] = message.content ? [{ text: message.content }] : [];
+
+      if (message.role === "user") {
+        message.images?.forEach((image) => {
+          const imagePart = imageToGeminiRequestPart(image);
+          if (imagePart) parts.push(imagePart);
+        });
+      }
+
+      return {
+        role: message.role === "assistant" ? "model" : "user",
+        parts: parts.length ? parts : [{ text: "" }],
+      };
+    });
 
   const runGeminiRequest = async (
     history: ChatMessage[],
@@ -580,10 +647,11 @@ export function ApiChatConsole({
   };
 
   const handleSend = async () => {
-    const content = draftMessage.trim();
+    const typedContent = draftMessage.trim();
+    const content = typedContent || (uploadedImages.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
 
     if (!content) {
-      toast.error("請先輸入對話內容");
+      toast.error("請先輸入對話內容或上傳圖片");
       return;
     }
 
@@ -592,11 +660,13 @@ export function ApiChatConsole({
       return;
     }
 
-    const userMessage = createMessage("user", content);
+    const userImages = [...uploadedImages];
+    const userMessage = createMessage("user", content, "normal", userImages);
     const nextHistory = [...messages, userMessage];
 
     setMessages(nextHistory);
     setDraftMessage("");
+    setUploadedImages([]);
     setLoading(true);
 
     try {
@@ -674,6 +744,7 @@ export function ApiChatConsole({
     const archived = persistCurrentConversation();
     setMessages([]);
     setDraftMessage("");
+    setUploadedImages([]);
     setConnectionState(null);
     toast.success(archived ? "已建立新對話，上一段內容已保留" : "已建立新對話");
   };
@@ -730,6 +801,47 @@ export function ApiChatConsole({
     setSavedConversations((current) => current.filter((item) => item.id !== id));
   };
 
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+
+    const availableSlots = MAX_UPLOAD_IMAGE_COUNT - uploadedImages.length;
+
+    if (availableSlots <= 0) {
+      toast.error(`一次最多上傳 ${MAX_UPLOAD_IMAGE_COUNT} 張圖片`);
+      return;
+    }
+
+    const selectedFiles = Array.from(files).slice(0, availableSlots);
+    const validFiles = selectedFiles.filter((file) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error(`${file.name} 不是圖片檔`);
+        return false;
+      }
+
+      if (file.size > MAX_UPLOAD_IMAGE_BYTES) {
+        toast.error(`${file.name} 超過 8MB`);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (!validFiles.length) return;
+
+    try {
+      const images = await Promise.all(validFiles.map(createUploadedImageFromFile));
+      setUploadedImages((current) => [...current, ...images].slice(0, MAX_UPLOAD_IMAGE_COUNT));
+      toast.success(`已加入 ${images.length} 張圖片，可直接送出擷取文字`);
+    } catch (error) {
+      console.error(error);
+      toast.error("圖片讀取失敗");
+    }
+  };
+
+  const removeUploadedImage = (id: string) => {
+    setUploadedImages((current) => current.filter((image) => image.id !== id));
+  };
+
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
   const totalMessages = messages.length.toString();
   const modeLabel = isGeminiProvider ? "可對話" : "待擴充";
@@ -767,7 +879,7 @@ export function ApiChatConsole({
                 : "border border-white/10 bg-white/5 text-slate-300"
             )}
           >
-            {imageCapable ? "支援圖片輸出" : "目前為文字模型"}
+            {imageCapable ? "可生成圖片" : "可讀圖片"}
           </Badge>
         </div>
       </div>
@@ -849,10 +961,68 @@ export function ApiChatConsole({
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_196px]">
             <div className="space-y-3">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleImageUpload(event.currentTarget.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <div className="flex flex-col gap-2 rounded-[22px] border border-cyan-400/10 bg-cyan-400/5 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-slate-100">圖片文字擷取</p>
+                  <p className="text-xs leading-5 text-slate-400">
+                    上傳截圖後可直接送出，AI 會擷取圖片文字。
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={loading || uploadedImages.length >= MAX_UPLOAD_IMAGE_COUNT}
+                  className="h-10 rounded-2xl border-cyan-300/22 bg-cyan-400/10 px-4 font-bold text-cyan-100 transition-all duration-200 hover:bg-cyan-400/16 hover:text-white active:scale-[0.99]"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  上傳圖片
+                </Button>
+              </div>
+
+              {uploadedImages.length ? (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {uploadedImages.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className="group relative overflow-hidden rounded-2xl border border-cyan-300/14 bg-[#07101c]"
+                    >
+                      <img
+                        src={image.src}
+                        alt={`待辨識圖片 ${index + 1}`}
+                        className="h-28 w-full object-cover opacity-90"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-slate-950/78 px-3 py-2 text-xs text-slate-200 backdrop-blur">
+                        <span>圖片 {index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedImage(image.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+                          aria-label={`移除圖片 ${index + 1}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               <Textarea
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
-                placeholder="例如：幫我整理今天的站點異常重點，或生成一張 16:9 的機櫃配置概念圖。"
+                placeholder="例如：幫我整理今天的站點異常重點，或上傳圖片後輸入「請擷取圖中文字」。"
                 className="min-h-[160px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#08101d_0%,#09111c_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <div className="flex flex-wrap gap-2 text-xs text-slate-400">
@@ -860,7 +1030,7 @@ export function ApiChatConsole({
                   可連續追問
                 </span>
                 <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-                  可整理需求
+                  可上傳圖片抽文字
                 </span>
                 <span
                   className={cn(
@@ -870,7 +1040,7 @@ export function ApiChatConsole({
                       : "border border-white/8 bg-white/5"
                   )}
                 >
-                  {imageCapable ? "本模型可嘗試生成圖片" : "若要出圖，請切換 image 模型"}
+                  {imageCapable ? "可生成圖片與讀圖" : "可讀圖片抽文字"}
                 </span>
               </div>
             </div>
@@ -939,7 +1109,7 @@ export function ApiChatConsole({
                   className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 >
                   <Bookmark className="mr-2 h-4 w-4" />
-                  儲存提示詞
+                  存成提示詞
                 </Button>
                 <Button
                   type="button"
@@ -948,7 +1118,7 @@ export function ApiChatConsole({
                   className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  儲存草稿
+                  存成草稿
                 </Button>
               </div>
             </div>
@@ -992,15 +1162,24 @@ export function ApiChatConsole({
                             </div>
                           </div>
                         </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeSavedConversation(item.id)}
-                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => restoreConversation(item)}
+                            className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
+                          >
+                            恢復
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => removeSavedConversation(item.id)}
+                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
+                          >
+                            刪除
+                          </Button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1045,15 +1224,24 @@ export function ApiChatConsole({
                             </div>
                           </div>
                         </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeSavedPrompt(item.id)}
-                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => loadSavedItem(item.content)}
+                            className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
+                          >
+                            套用
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => removeSavedPrompt(item.id)}
+                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
+                          >
+                            刪除
+                          </Button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1098,15 +1286,24 @@ export function ApiChatConsole({
                             </div>
                           </div>
                         </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeSavedDraft(item.id)}
-                          className="mt-2 h-8 w-8 rounded-xl text-slate-500 hover:bg-rose-500/10 hover:text-rose-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => loadSavedItem(item.content)}
+                            className="h-8 rounded-xl border-violet-300/16 bg-violet-400/8 text-xs font-bold text-violet-100 hover:bg-violet-400/14 hover:text-white"
+                          >
+                            套用
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => removeSavedDraft(item.id)}
+                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
+                          >
+                            刪除
+                          </Button>
+                        </div>
                       </div>
                     ))
                   )}
