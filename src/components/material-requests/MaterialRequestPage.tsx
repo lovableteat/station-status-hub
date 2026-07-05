@@ -27,10 +27,14 @@ import {
   History,
   ImagePlus,
   Layers3,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   RotateCcw,
+  Rows3,
   Search,
+  Star,
   TriangleAlert,
   Upload,
   X,
@@ -57,8 +61,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import seedPayload from "@/data/materialRequestSeed.json";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/utils/apiExportUtils";
@@ -149,17 +155,23 @@ const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
 
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
+const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
+const BOM_SIDEBAR_COLLAPSED_KEY = "station-status-hub:material-bom-sidebar-collapsed:v1";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v6";
+const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v7";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
-const DEFAULT_COLUMN_WIDTHS = [260, 160, 260, 210, 190, 180, 250, 220, 130];
-const MIN_COLUMN_WIDTHS = [200, 120, 180, 170, 150, 140, 180, 180, 110];
-const MAX_COLUMN_WIDTHS = [520, 360, 520, 460, 420, 360, 520, 420, 260];
+const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 250, 220, 130];
+const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 180, 110];
+const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 520, 420, 260];
 const FILTER_OPTION_ROW_HEIGHT = 38;
 const FILTER_OPTION_LIST_HEIGHT = 224;
 const FILTER_OPTION_OVERSCAN = 8;
+
+function getMarkedGroupsStorageKey(bomId: string) {
+  return `${MARKED_GROUPS_KEY_PREFIX}${bomId}`;
+}
 
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
@@ -318,6 +330,51 @@ function createBomId(fileName: string, payload: MaterialWorkbookPayload) {
 function loadActiveBomId() {
   if (typeof window === "undefined") return DEFAULT_BOM_ID;
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
+}
+
+function loadMarkedGroups(bomId: string) {
+  if (typeof window === "undefined") return [] as string[];
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(getMarkedGroupsStorageKey(bomId)) ?? "[]");
+    if (!Array.isArray(stored)) return [];
+    return Array.from(new Set(stored.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+  } catch {
+    return [];
+  }
+}
+
+function saveMarkedGroups(bomId: string, values: string[]) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      getMarkedGroupsStorageKey(bomId),
+      JSON.stringify(Array.from(new Set(values.filter((value) => value.trim().length > 0)))),
+    );
+  } catch {
+    // Ignore browser storage failures and keep current session state usable.
+  }
+}
+
+function loadBomSidebarCollapsed() {
+  if (typeof window === "undefined") return false;
+
+  try {
+    return window.localStorage.getItem(BOM_SIDEBAR_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getGroupItemValue(group: MaterialGroup, fallbackIndex: number) {
+  const sourceRows = group.records
+    .map((record) => Number(record.sourceRow))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  return sourceRows.length > 0
+    ? Math.min(...sourceRows)
+    : fallbackIndex;
 }
 
 function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, workspaceId: string, payload: MaterialWorkbookPayload): BomWorkspace {
@@ -2387,7 +2444,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={9} className="p-0">
+      <td colSpan={11} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2510,20 +2567,26 @@ function CompactAlternativeRows({
   group,
   records,
   primaryRecord,
+  itemValue,
+  isMarked,
   onCopy,
   onView,
   onEdit,
   onSaveVirtual,
   onOpenTracking,
+  onToggleMarked,
 }: {
   group: MaterialGroup;
   records: MaterialRecord[];
   primaryRecord: MaterialRecord;
+  itemValue: number;
+  isMarked: boolean;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
   onSaveVirtual: (record: MaterialRecord, value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
+  onToggleMarked: () => void;
 }) {
   const alternatives = records.filter((record) => record.id !== primaryRecord.id);
   const groupRefDes = primaryRecord.refDes || primaryRecord.refGroup || "-";
@@ -2545,6 +2608,29 @@ function CompactAlternativeRows({
                   : "bg-[#0c182a] hover:bg-blue-400/[0.07]"
             )}
           >
+            <td className="border-r border-blue-400/10 px-3 py-3.5 text-center align-middle">
+              <div className="flex flex-col items-center justify-center">
+                <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
+                <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Alt</span>
+              </div>
+            </td>
+
+            <td className="border-r border-blue-400/10 px-2 py-3.5 text-center align-middle">
+              <button
+                type="button"
+                onClick={onToggleMarked}
+                className={cn(
+                  "inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
+                  isMarked
+                    ? "border-amber-300/40 bg-amber-400/18 text-amber-200 hover:bg-amber-400/24"
+                    : "border-slate-500/25 bg-slate-900/35 text-slate-500 hover:border-amber-300/24 hover:bg-amber-400/10 hover:text-amber-200",
+                )}
+                title={isMarked ? "移除我的標記" : "加入我的標記"}
+              >
+                <Star className={cn("h-4.5 w-4.5", isMarked && "fill-current")} />
+              </button>
+            </td>
+
             <td className="border-r border-blue-400/10 px-4 py-3.5">
               <div className="flex items-center gap-3 pl-8">
                 <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-emerald-400 text-emerald-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
@@ -2629,10 +2715,234 @@ function CompactAlternativeRows({
   );
 }
 
+function BomWorkspaceSidebarPanel({
+  activeBomId,
+  activeWorkspace,
+  workspaces,
+  totalCount,
+  query,
+  collapsed,
+  isMobile,
+  isCollaborativeReady,
+  onQueryChange,
+  onSelect,
+  onToggleCollapse,
+  onOpenManager,
+  onDeleteActive,
+}: {
+  activeBomId: string;
+  activeWorkspace: BomWorkspace;
+  workspaces: BomWorkspace[];
+  totalCount: number;
+  query: string;
+  collapsed: boolean;
+  isMobile: boolean;
+  isCollaborativeReady: boolean;
+  onQueryChange: (value: string) => void;
+  onSelect: (bomId: string) => void;
+  onToggleCollapse?: () => void;
+  onOpenManager: () => void;
+  onDeleteActive: () => void;
+}) {
+  const showBody = isMobile || !collapsed;
+
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-[28px] border border-cyan-400/14 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_28%),linear-gradient(180deg,#0d1728_0%,#08111d_100%)] shadow-[0_24px_60px_rgba(2,8,23,0.32)]",
+        showBody ? "w-full" : "w-[92px]",
+      )}
+    >
+      <div className="border-b border-cyan-400/10 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className={cn("min-w-0", !showBody && "sr-only")}>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-cyan-300">BOM Navigator</p>
+            <h3 className="mt-1 text-lg font-black text-slate-50">BOM 側邊欄</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-400">切版本、看更新時間、直接切到對應 BOM。</p>
+          </div>
+
+          {onToggleCollapse ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onToggleCollapse}
+              className="h-10 w-10 rounded-xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/18 hover:text-white"
+              title={collapsed ? "展開 BOM 側欄" : "收合 BOM 側欄"}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
+            </Button>
+          ) : null}
+        </div>
+
+        {showBody ? (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-cyan-400/10 bg-[#091321] px-3 py-2.5">
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">總 BOM</p>
+                <p className="mt-1 text-lg font-black text-slate-50">{totalCount}</p>
+              </div>
+              <div className="rounded-2xl border border-cyan-400/10 bg-[#091321] px-3 py-2.5">
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">目前</p>
+                <p className="mt-1 truncate text-sm font-bold text-cyan-100">{activeWorkspace.payload.sheetName}</p>
+              </div>
+            </div>
+
+            <div className="relative mt-3">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+              <Input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="搜尋 BOM 名稱或工作表"
+                className="h-10 rounded-xl border-cyan-400/18 bg-[#091321] pl-10 text-sm text-slate-100 placeholder:text-slate-500"
+              />
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 flex justify-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/14 bg-cyan-400/10 text-cyan-100">
+              <Rows3 className="h-4.5 w-4.5" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="max-h-[calc(100vh-21rem)] overflow-y-auto p-3">
+        <div className="space-y-2">
+          {workspaces.length > 0 ? (
+            workspaces.map((workspace, index) => {
+              const isActive = workspace.id === activeBomId;
+
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  onClick={() => onSelect(workspace.id)}
+                  className={cn(
+                    "group relative w-full rounded-2xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/45",
+                    showBody ? "px-3 py-3.5" : "flex h-14 items-center justify-center px-2 py-2",
+                    isActive
+                      ? "border-cyan-300/32 bg-cyan-400/[0.14] shadow-[0_18px_36px_rgba(14,165,233,0.16)]"
+                      : "border-slate-500/22 bg-[#091321] hover:border-cyan-300/24 hover:bg-cyan-400/[0.08]",
+                  )}
+                  title={workspace.name}
+                >
+                  {showBody ? (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <div className={cn("mt-0.5 flex h-10 w-10 flex-none items-center justify-center rounded-2xl border", isActive ? "border-cyan-300/28 bg-cyan-400/18 text-cyan-100" : "border-slate-500/20 bg-slate-900/35 text-slate-400")}>
+                          <FileSpreadsheet className="h-4.5 w-4.5" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-slate-50">{workspace.name}</p>
+                              <p className="mt-1 truncate text-xs text-slate-400">{workspace.payload.sheetName}</p>
+                            </div>
+                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-black", isActive ? "border border-cyan-300/28 bg-cyan-400/15 text-cyan-100" : "border border-slate-500/20 bg-slate-900/35 text-slate-400")}>
+                              #{index + 1}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-400">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Layers3 className="h-3.5 w-3.5 text-sky-300" />
+                              {workspace.payload.recordCount.toLocaleString()} 筆
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 truncate">
+                              <History className="h-3.5 w-3.5 text-cyan-300" />
+                              {formatTimestamp(workspace.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl border", isActive ? "border-cyan-300/28 bg-cyan-400/18 text-cyan-100" : "border-slate-500/20 bg-slate-900/35 text-slate-400")}>
+                        <FileSpreadsheet className="h-4.5 w-4.5" />
+                      </div>
+                      <span className={cn("absolute right-1.5 top-1.5 min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-black", isActive ? "bg-cyan-300 text-slate-950" : "bg-slate-700 text-slate-200")}>
+                        {index + 1}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-500/22 bg-[#091321] px-3 py-6 text-center text-sm text-slate-500">
+              找不到符合的 BOM。
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-cyan-400/10 p-3">
+        {showBody ? (
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenManager}
+              disabled={!isCollaborativeReady}
+              className="h-10 justify-start rounded-xl border-slate-500/24 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/24 hover:bg-sky-400/10 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
+            >
+              <Layers3 className="mr-2 h-4 w-4" />
+              BOM 管理
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onDeleteActive}
+              disabled={!isCollaborativeReady}
+              className="h-10 justify-start rounded-xl border-rose-400/22 bg-rose-500/10 px-3 text-sm font-bold text-rose-100 hover:bg-rose-500/16 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
+            >
+              <History className="mr-2 h-4 w-4" />
+              刪除目前 BOM
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onOpenManager}
+              disabled={!isCollaborativeReady}
+              className="h-10 w-10 rounded-xl border border-slate-500/24 bg-slate-900/35 text-slate-200 hover:border-sky-300/24 hover:bg-sky-400/10 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
+              title="BOM 管理"
+            >
+              <Layers3 className="h-4.5 w-4.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onDeleteActive}
+              disabled={!isCollaborativeReady}
+              className="h-10 w-10 rounded-xl border border-rose-400/22 bg-rose-500/10 text-rose-100 hover:bg-rose-500/16 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
+              title="刪除目前 BOM"
+            >
+              <History className="h-4.5 w-4.5" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
+  const [markedGroupKeys, setMarkedGroupKeys] = useState<string[]>(() => loadMarkedGroups(loadActiveBomId()));
+  const [showMarkedOnly, setShowMarkedOnly] = useState(false);
+  const [bomSidebarCollapsed, setBomSidebarCollapsed] = useState(loadBomSidebarCollapsed);
+  const [bomSidebarMobileOpen, setBomSidebarMobileOpen] = useState(false);
+  const [bomSidebarQuery, setBomSidebarQuery] = useState("");
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
@@ -2651,6 +2961,8 @@ export function MaterialRequestPage() {
   const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
+  const isMobile = useIsMobile();
+  const deferredBomSidebarQuery = useDeferredValue(bomSidebarQuery);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const isCollaborativeReady = collaborationStatus === "remote";
@@ -2665,6 +2977,18 @@ export function MaterialRequestPage() {
   const dataset = useMemo<MaterialDataset>(
     () => buildMaterialDataset(basePayload),
     [basePayload]
+  );
+  const validGroupKeys = useMemo(
+    () => new Set(dataset.groups.map((group) => group.key)),
+    [dataset.groups],
+  );
+  const markedGroupKeySet = useMemo(
+    () => new Set(markedGroupKeys),
+    [markedGroupKeys],
+  );
+  const markedGroupCount = useMemo(
+    () => dataset.groups.filter((group) => markedGroupKeySet.has(group.key)).length,
+    [dataset.groups, markedGroupKeySet],
   );
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
@@ -2741,6 +3065,35 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     try {
+      window.localStorage.setItem(BOM_SIDEBAR_COLLAPSED_KEY, bomSidebarCollapsed ? "true" : "false");
+    } catch {
+      // Ignore storage failures and keep the current in-memory sidebar state.
+    }
+  }, [bomSidebarCollapsed]);
+
+  useEffect(() => {
+    setMarkedGroupKeys(loadMarkedGroups(activeBomId));
+  }, [activeBomId]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setBomSidebarMobileOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    setMarkedGroupKeys((current) => {
+      const normalized = current.filter((key) => validGroupKeys.has(key));
+      return normalized.length === current.length ? current : normalized;
+    });
+  }, [validGroupKeys]);
+
+  useEffect(() => {
+    saveMarkedGroups(activeBomId, markedGroupKeys);
+  }, [activeBomId, markedGroupKeys]);
+
+  useEffect(() => {
+    try {
       window.localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(columnWidths));
     } catch {
       // Column resizing still works for the current session without browser storage.
@@ -2780,6 +3133,22 @@ export function MaterialRequestPage() {
     () => [...bomWorkspaces].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [bomWorkspaces]
   );
+  const visibleBomWorkspaces = useMemo(() => {
+    const keyword = deferredBomSidebarQuery.trim().toLowerCase();
+    if (!keyword) return orderedBomWorkspaces;
+
+    return orderedBomWorkspaces.filter((workspace) => {
+      const haystack = [
+        workspace.name,
+        workspace.payload.sheetName,
+        workspace.payload.sourceFile,
+      ]
+        .map((value) => value?.toLowerCase() ?? "")
+        .join(" ");
+
+      return haystack.includes(keyword);
+    });
+  }, [deferredBomSidebarQuery, orderedBomWorkspaces]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const groupRuntimeIndex = useMemo(() => {
@@ -2898,6 +3267,10 @@ export function MaterialRequestPage() {
     );
   }, [availability, groupRuntimeIndex.uniqueMpnCountByGroup]);
 
+  const matchesMarkedState = useCallback((group: MaterialGroup) => {
+    return !showMarkedOnly || markedGroupKeySet.has(group.key);
+  }, [markedGroupKeySet, showMarkedOnly]);
+
   const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
     const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
 
@@ -2919,8 +3292,8 @@ export function MaterialRequestPage() {
   }, [columnFilterSets, groupRuntimeIndex]);
 
   const searchAvailabilityGroups = useMemo(
-    () => dataset.groups.filter((group) => matchesSearch(group) && matchesAvailability(group)),
-    [dataset.groups, matchesAvailability, matchesSearch],
+    () => dataset.groups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
+    [dataset.groups, matchesAvailability, matchesMarkedState, matchesSearch],
   );
 
   const columnFilterOptions = useMemo(() => {
@@ -3024,7 +3397,7 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [availability, columnFilters, deferredQuery, pageSize, sortMode]);
+  }, [availability, columnFilters, deferredQuery, pageSize, showMarkedOnly, sortMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -3213,9 +3586,11 @@ export function MaterialRequestPage() {
 
   const switchActiveBom = (value: string) => {
     setActiveBomId(value);
+    setBomSidebarMobileOpen(false);
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
+    setShowMarkedOnly(false);
     setExpandedKey(null);
     setPage(1);
   };
@@ -3270,26 +3645,28 @@ export function MaterialRequestPage() {
   };
 
   const handleExport = () => {
-    const rows = filteredGroups.flatMap((group) =>
+    const rows = filteredGroups.flatMap((group, groupIndex) =>
       getMatchingRecords(group)
         .map((record) => ({
+          Item: getGroupItemValue(group, groupIndex + 1),
+          我的標記: markedGroupKeySet.has(group.key) ? "★" : "",
           Ref_Group: group.displayRef,
           REF_DES: record.refDes || group.primaryRecord.refDes,
-        電路料名稱: group.name,
-        模組: group.assemblyName,
-        Qty: group.qty,
-        Symbol: group.schematicPart,
-        Footprint: group.footprint,
-        廠商: record.manufacturer,
-        Manufacturer_PN: record.manufacturerPartNumber,
-        Manufacturer_PN_2: record.manufacturerPartNumberAlt,
-        TX: record.virtualAlternative ?? "",
-        狀態追蹤: record.trackingStatus ?? "",
-        Sourcing_Status: record.sourcingStatus,
-        建料狀態: getActionLabel(record.actionKind),
-        內部料號: record.partNumber,
-        規格: record.partSpec,
-      }))
+          電路料名稱: group.name,
+          模組: group.assemblyName,
+          Qty: group.qty,
+          Symbol: group.schematicPart,
+          Footprint: group.footprint,
+          廠商: record.manufacturer,
+          Manufacturer_PN: record.manufacturerPartNumber,
+          Manufacturer_PN_2: record.manufacturerPartNumberAlt,
+          TX: record.virtualAlternative ?? "",
+          狀態追蹤: record.trackingStatus ?? "",
+          Sourcing_Status: record.sourcingStatus,
+          建料狀態: getActionLabel(record.actionKind),
+          內部料號: record.partNumber,
+          規格: record.partSpec,
+        }))
     );
 
     if (!rows.length) {
@@ -3309,8 +3686,15 @@ export function MaterialRequestPage() {
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
+    setShowMarkedOnly(false);
     setSortMode("reference");
     setExpandedKey(null);
+  };
+
+  const toggleMarkedGroup = (groupKey: string) => {
+    setMarkedGroupKeys((current) => current.includes(groupKey)
+      ? current.filter((key) => key !== groupKey)
+      : [...current, groupKey]);
   };
 
   return (
@@ -3342,6 +3726,23 @@ export function MaterialRequestPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowMarkedOnly((current) => !current)}
+              className={cn(
+                "h-9 px-3 text-sm font-bold transition-colors",
+                showMarkedOnly
+                  ? "border-amber-300/35 bg-amber-400/18 text-amber-50 hover:bg-amber-400/24"
+                  : "border-slate-500/30 bg-slate-900/35 text-slate-200 hover:border-amber-300/25 hover:bg-amber-400/10 hover:text-amber-100",
+              )}
+            >
+              <Star className={cn("mr-2 h-4 w-4", showMarkedOnly && "fill-current")} />
+              我的標記
+              <span className="ml-2 rounded-full border border-current/20 px-2 py-0.5 text-[11px] leading-none">
+                {markedGroupCount}
+              </span>
+            </Button>
             <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
@@ -3371,6 +3772,22 @@ export function MaterialRequestPage() {
 
         <div className="mt-3 flex flex-col gap-3 border-t border-cyan-400/10 pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => isMobile ? setBomSidebarMobileOpen(true) : setBomSidebarCollapsed((current) => !current)}
+              className="h-10 border-sky-300/20 bg-sky-400/10 px-3 text-sm font-bold text-sky-100 hover:border-sky-300/28 hover:bg-sky-400/18 hover:text-white"
+            >
+              {isMobile ? (
+                <Rows3 className="mr-2 h-4 w-4" />
+              ) : bomSidebarCollapsed ? (
+                <PanelLeftOpen className="mr-2 h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="mr-2 h-4 w-4" />
+              )}
+              {isMobile ? "BOM 清單" : bomSidebarCollapsed ? "展開側欄" : "收合側欄"}
+            </Button>
             <span className="inline-flex h-10 items-center text-sm font-bold text-slate-200">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
               <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/24 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:min-w-[24rem] sm:flex-[1_1_28rem]">
@@ -3410,7 +3827,61 @@ export function MaterialRequestPage() {
         </div>
       </header>
 
-      <section className="mt-3 rounded-2xl border border-cyan-400/10 bg-[linear-gradient(180deg,#0c1627_0%,#09111d_100%)] p-3 shadow-[0_18px_44px_rgba(2,8,23,0.18)]">
+      <Sheet open={bomSidebarMobileOpen} onOpenChange={setBomSidebarMobileOpen}>
+        <SheetContent side="left" className="w-[22rem] border-cyan-400/16 bg-[#050b16] p-0 text-slate-100 sm:max-w-[22rem]">
+          <SheetHeader className="sr-only">
+            <SheetTitle>BOM 側邊欄</SheetTitle>
+          </SheetHeader>
+          <div className="h-full p-3">
+            <BomWorkspaceSidebarPanel
+              activeBomId={activeBomId}
+              activeWorkspace={activeWorkspace}
+              workspaces={visibleBomWorkspaces}
+              totalCount={orderedBomWorkspaces.length}
+              query={bomSidebarQuery}
+              collapsed={false}
+              isMobile
+              isCollaborativeReady={isCollaborativeReady}
+              onQueryChange={setBomSidebarQuery}
+              onSelect={switchActiveBom}
+              onOpenManager={() => {
+                setBomManagerOpen(true);
+                setBomSidebarMobileOpen(false);
+              }}
+              onDeleteActive={() => {
+                setBomSidebarMobileOpen(false);
+                void deleteActiveBom();
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <div className="mt-3 flex items-start gap-3">
+        <aside className={cn("hidden shrink-0 transition-[width] duration-200 lg:block", bomSidebarCollapsed ? "w-[92px]" : "w-[320px]")}>
+          <div className="sticky top-3">
+            <BomWorkspaceSidebarPanel
+              activeBomId={activeBomId}
+              activeWorkspace={activeWorkspace}
+              workspaces={visibleBomWorkspaces}
+              totalCount={orderedBomWorkspaces.length}
+              query={bomSidebarQuery}
+              collapsed={bomSidebarCollapsed}
+              isMobile={false}
+              isCollaborativeReady={isCollaborativeReady}
+              onQueryChange={setBomSidebarQuery}
+              onSelect={switchActiveBom}
+              onToggleCollapse={() => setBomSidebarCollapsed((current) => !current)}
+              onOpenManager={() => setBomManagerOpen(true)}
+              onDeleteActive={() => {
+                void deleteActiveBom();
+              }}
+            />
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+      <section className="rounded-2xl border border-cyan-400/10 bg-[linear-gradient(180deg,#0c1627_0%,#09111d_100%)] p-3 shadow-[0_18px_44px_rgba(2,8,23,0.18)]">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
@@ -3439,7 +3910,7 @@ export function MaterialRequestPage() {
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
-          <p>{dataset.meta.sourceFile} · {dataset.meta.sheetName} · {formatTimestamp(dataset.meta.generatedAt)}</p>
+          <p>{showMarkedOnly ? `目前只顯示我的標記 · ${markedGroupCount.toLocaleString()} 筆` : `${dataset.meta.sourceFile} · ${dataset.meta.sheetName} · ${formatTimestamp(dataset.meta.generatedAt)}`}</p>
         </div>
       </section>
 
@@ -3460,6 +3931,8 @@ export function MaterialRequestPage() {
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
                 {[
+                  "Item",
+                  "標記",
                   "主料 / 廠商",
                   "REF DES",
                   "MPN",
@@ -3475,15 +3948,25 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
-                    resizable={columnIndex < 8}
+                    resizable={columnIndex < 10}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 8 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 10 ? "border-r-0 text-center" : undefined}
                   >
                     {label}
                   </ResizableHeader>
                 ))}
               </tr>
               <tr className="bg-[#102b57] text-slate-100">
+                <th className="border-r border-blue-300/20 p-2">
+                  <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
+                    原始列號
+                  </div>
+                </th>
+                <th className="border-r border-blue-300/20 p-2">
+                  <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-amber-200">
+                    {markedGroupCount} 筆
+                  </div>
+                </th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>
@@ -3499,23 +3982,51 @@ export function MaterialRequestPage() {
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, secondaryAlternatives, uniqueMpnCount }) => {
+              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
                 const noAlternative = uniqueMpnCount <= 1;
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
+                const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
+                const isMarked = markedGroupKeySet.has(group.key);
 
                 return (
                   <tbody key={group.key}>
                     <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-l-4 border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "border-l-amber-400 bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : primaryReady ? "border-l-emerald-400 bg-emerald-400/[0.08] hover:bg-emerald-400/[0.13]" : "border-l-cyan-400 bg-cyan-400/[0.09] hover:bg-cyan-400/[0.14]") }>
+                      <td className="border-r border-blue-400/10 px-3 py-3 text-center align-middle">
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
+                          <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Item</span>
+                        </div>
+                      </td>
+                      <td className="border-r border-blue-400/10 px-2 py-3 text-center align-middle" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => toggleMarkedGroup(group.key)}
+                          className={cn(
+                            "inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
+                            isMarked
+                              ? "border-amber-300/40 bg-amber-400/18 text-amber-200 hover:bg-amber-400/24"
+                              : "border-slate-500/25 bg-slate-900/35 text-slate-500 hover:border-amber-300/24 hover:bg-amber-400/10 hover:text-amber-200",
+                          )}
+                          title={isMarked ? "移除我的標記" : "加入我的標記"}
+                        >
+                          <Star className={cn("h-4.5 w-4.5", isMarked && "fill-current")} />
+                        </button>
+                      </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span>
+                              {isMarked && (
+                                <span className="rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-200">
+                                  已標記
+                                </span>
+                              )}
                               {noAlternative ? (
                                 <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-xs font-bold text-orange-300">單一料・無替代</span>
                               ) : (
@@ -3680,13 +4191,27 @@ export function MaterialRequestPage() {
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />資料更新</Button>
                       </td>
                     </tr>
-                    {expanded && <CompactAlternativeRows group={group} records={matchingRecords} primaryRecord={primaryAlternative} onCopy={handleCopy} onView={(record) => openRecord(record, "view")} onEdit={(record) => openRecord(record, "edit")} onSaveVirtual={saveVirtualAlternative} onOpenTracking={openTrackingDialog} />}
+                    {expanded && (
+                      <CompactAlternativeRows
+                        group={group}
+                        records={matchingRecords}
+                        primaryRecord={primaryAlternative}
+                        itemValue={itemValue}
+                        isMarked={isMarked}
+                        onCopy={handleCopy}
+                        onView={(record) => openRecord(record, "view")}
+                        onEdit={(record) => openRecord(record, "edit")}
+                        onSaveVirtual={saveVirtualAlternative}
+                        onOpenTracking={openTrackingDialog}
+                        onToggleMarked={() => toggleMarkedGroup(group.key)}
+                      />
+                    )}
                   </tbody>
                 );
               })}
           </table>
 
-          {visibleGroupRows.length === 0 && <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center"><Search className="h-10 w-10 text-slate-600" /><p className="mt-3 text-lg font-bold text-slate-300">找不到符合條件的料</p><p className="mt-1 text-[15px] text-slate-500">請清除篩選，或改用 MPN、廠商、Footprint 搜尋。</p></div>}
+          {visibleGroupRows.length === 0 && <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center"><Search className="h-10 w-10 text-slate-600" /><p className="mt-3 text-lg font-bold text-slate-300">{showMarkedOnly ? "目前沒有標記料件" : "找不到符合條件的料"}</p><p className="mt-1 text-[15px] text-slate-500">{showMarkedOnly ? "先點每列星號加入我的標記，再切回這裡集中檢查或匯出給主管。" : "請清除篩選，或改用 MPN、廠商、Footprint 搜尋。"}</p></div>}
         </div>
 
         <div className="flex flex-col gap-3 border-t border-blue-400/15 bg-[#101d33] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3694,6 +4219,8 @@ export function MaterialRequestPage() {
           <div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-9 border-blue-400/20 bg-[#0b1527] text-sm text-slate-300"><ChevronLeft className="mr-1 h-4 w-4" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-9 border-blue-400/20 bg-[#0b1527] text-sm text-slate-300">下一頁<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
         </div>
       </section>
+        </div>
+      </div>
     </div>
   );
 }
