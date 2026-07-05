@@ -547,7 +547,7 @@ export function ApiChatConsole({
     : "min-h-[560px] max-h-[560px]";
 
   const conversationPanel = (
-    <div className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_20px_60px_rgba(2,8,23,0.22)]">
+    <div className="rounded-[36px] border border-cyan-400/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.05),transparent_28%),linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)]">
       <div className="flex flex-col gap-3 border-b border-white/8 px-2 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
@@ -562,7 +562,7 @@ export function ApiChatConsole({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="rounded-full border border-blue-300/15 bg-blue-500/10 px-3 py-1 text-blue-100 hover:bg-blue-500/10">
+          <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
             {truncateMiddle(activeKeyLabel)}
           </Badge>
           <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200 hover:bg-white/5">
@@ -586,10 +586,10 @@ export function ApiChatConsole({
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
 
-        <div className="rounded-[28px] border border-cyan-400/10 bg-[#08101d] p-3">
+        <div className="rounded-[30px] border border-cyan-400/10 bg-[linear-gradient(180deg,#08101d_0%,#091322_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
           <div className={cn("space-y-4 overflow-y-auto pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
-              <div className="flex min-h-[480px] items-center justify-center rounded-[24px] border border-dashed border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_35%),#0b1423] px-8 text-center">
+              <div className="flex min-h-[500px] items-center justify-center rounded-[26px] border border-dashed border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_35%),#0b1423] px-8 text-center">
                 <div className="max-w-xl space-y-4">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-cyan-400/16 bg-cyan-400/8 text-cyan-100">
                     <MessageSquareText className="h-7 w-7" />
@@ -622,7 +622,7 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0d1627_0%,#0a1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
           <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <SectionTitle
               title={isChatOnly ? "輸入訊息" : "對話輸入"}
@@ -659,13 +659,13 @@ export function ApiChatConsole({
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_168px]">
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_196px]">
             <div className="space-y-3">
               <Textarea
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
                 placeholder="例如：幫我整理今天的站點異常重點，或生成一張 16:9 的機櫃配置概念圖。"
-                className="min-h-[148px] rounded-[24px] border-cyan-400/14 bg-[#08101d] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                className="min-h-[160px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#08101d_0%,#09111c_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <div className="flex flex-wrap gap-2 text-xs text-slate-400">
                 <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
@@ -688,7 +688,7 @@ export function ApiChatConsole({
             </div>
 
             <div className="flex flex-col justify-between gap-3">
-              <div className="rounded-2xl border border-white/8 bg-[#09111f] px-4 py-3">
+              <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#0a1220_0%,#09101b_100%)] px-4 py-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
                   Status
                 </p>
@@ -706,7 +706,7 @@ export function ApiChatConsole({
                 type="button"
                 onClick={() => void handleSend()}
                 disabled={!canSend}
-                className="h-14 rounded-2xl bg-cyan-500 font-bold text-slate-950 transition-all duration-200 hover:bg-cyan-400 active:scale-[0.99]"
+                className="h-14 rounded-[24px] bg-[linear-gradient(135deg,#22d3ee_0%,#7c3aed_100%)] font-bold text-white shadow-[0_18px_40px_-24px_rgba(34,211,238,0.55)] transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
               >
                 <Send className="mr-2 h-4 w-4" />
                 {loading ? "送出中..." : "送出對話"}
@@ -764,7 +764,7 @@ export function ApiChatConsole({
   }
 
   return (
-    <Card className="overflow-hidden rounded-[32px] border border-cyan-400/12 bg-[linear-gradient(180deg,#10192e_0%,#0a1322_100%)] shadow-[0_24px_80px_rgba(2,8,23,0.3)]">
+    <Card className="overflow-hidden rounded-[36px] border border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.06),transparent_32%),linear-gradient(180deg,#10192e_0%,#0a1322_100%)] shadow-[0_28px_90px_rgba(2,8,23,0.34)]">
       <CardHeader className="border-b border-white/8 pb-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-3">
