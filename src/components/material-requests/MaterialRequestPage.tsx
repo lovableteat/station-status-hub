@@ -84,11 +84,14 @@ import {
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
+  type BomPageTracker,
+  type BomPageTrackerPage,
   type BomStorageMode,
   type BomWorkspace,
   loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
+  saveBomWorkspacePageTracker,
   saveBomWorkspaceRecord,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
@@ -162,6 +165,7 @@ const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v7";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
+const MAX_BOM_TRACKER_PAGES = 500;
 const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 520, 420, 260];
@@ -188,6 +192,79 @@ function loadColumnWidths() {
   } catch {
     return DEFAULT_COLUMN_WIDTHS;
   }
+}
+
+function clampBomTrackerPageCount(value: number) {
+  return Number.isFinite(value) ? Math.min(MAX_BOM_TRACKER_PAGES, Math.max(0, Math.trunc(value))) : 0;
+}
+
+function sortBomTrackerPages(pages: BomPageTrackerPage[]) {
+  return [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
+}
+
+function syncBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number) {
+  const normalizedTotalPages = clampBomTrackerPageCount(totalPages);
+  const pageMap = new Map<number, BomPageTrackerPage>();
+
+  pages.forEach((page) => {
+    const pageNumber = clampBomTrackerPageCount(page.pageNumber);
+    if (pageNumber < 1) return;
+
+    pageMap.set(pageNumber, {
+      pageNumber,
+      completed: page.completed === true,
+      note: page.note ?? "",
+    });
+  });
+
+  for (let pageNumber = 1; pageNumber <= normalizedTotalPages; pageNumber += 1) {
+    if (!pageMap.has(pageNumber)) {
+      pageMap.set(pageNumber, {
+        pageNumber,
+        completed: false,
+        note: "",
+      });
+    }
+  }
+
+  return sortBomTrackerPages([...pageMap.values()]);
+}
+
+function getBomPageTrackerSummary(pageTracker?: BomPageTracker) {
+  const totalPages = clampBomTrackerPageCount(pageTracker?.totalPages ?? 0);
+  const pages = syncBomTrackerPages(pageTracker?.pages ?? [], totalPages);
+  const completedPages = pages.filter((page) => page.pageNumber <= totalPages && page.completed).length;
+
+  return {
+    totalPages,
+    completedPages,
+  };
+}
+
+function BomPageTrackerSummaryPill({
+  pageTracker,
+  className,
+}: {
+  pageTracker?: BomPageTracker;
+  className?: string;
+}) {
+  const summary = getBomPageTrackerSummary(pageTracker);
+  const ready = summary.totalPages > 0;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold",
+        ready
+          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+          : "border-slate-400/25 bg-slate-500/10 text-slate-300",
+        className,
+      )}
+    >
+      <CircleCheck className={cn("h-3.5 w-3.5", ready ? "text-emerald-300" : "text-slate-400")} />
+      {ready ? `已完成 ${summary.completedPages} / ${summary.totalPages} 頁` : "頁數未設定"}
+    </span>
+  );
 }
 
 function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecord {
@@ -411,6 +488,7 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       records,
       recordCount: records.length,
     },
+    pageTracker: existingWorkspace?.pageTracker,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -2058,12 +2136,196 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   );
 }
 
+function BomPageTrackerDialog({
+  workspace,
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  workspace: BomWorkspace | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (workspaceId: string, pageTracker: BomPageTracker) => Promise<void>;
+}) {
+  const [totalPagesInput, setTotalPagesInput] = useState("0");
+  const [pages, setPages] = useState<BomPageTrackerPage[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !workspace) return;
+
+    const summary = getBomPageTrackerSummary(workspace.pageTracker);
+    setTotalPagesInput(String(summary.totalPages));
+    setPages(syncBomTrackerPages(workspace.pageTracker?.pages ?? [], summary.totalPages));
+    setIsSaving(false);
+  }, [open, workspace?.id, workspace?.pageTracker?.updatedAt]);
+
+  if (!workspace) return null;
+
+  const totalPages = clampBomTrackerPageCount(Number(totalPagesInput || 0));
+  const syncedPages = syncBomTrackerPages(pages, totalPages);
+  const visiblePages = syncedPages.filter((page) => page.pageNumber <= totalPages);
+  const completedPages = visiblePages.filter((page) => page.completed).length;
+  const completionRate = totalPages > 0 ? Math.round((completedPages / totalPages) * 100) : 0;
+
+  const updatePage = (pageNumber: number, patch: Partial<BomPageTrackerPage>) => {
+    setPages((current) =>
+      syncBomTrackerPages(current, Math.max(totalPages, pageNumber)).map((page) =>
+        page.pageNumber === pageNumber ? { ...page, ...patch } : page
+      )
+    );
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(workspace.id, {
+        totalPages,
+        pages: syncedPages,
+        updatedAt: new Date().toISOString(),
+      });
+      onOpenChange(false);
+    } catch {
+      // Save handler already shows the error toast.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+        <DialogHeader>
+          <DialogTitle className="text-2xl text-slate-50">BOM 頁數追蹤</DialogTitle>
+          <DialogDescription className="text-[15px] leading-6 text-slate-400">
+            先填這份 BOM 一共有幾頁，再逐頁勾選是否完成，旁邊可以補充每一頁目前狀態。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <p className="text-lg font-black text-slate-50">{workspace.name}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆料件
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <BomPageTrackerSummaryPill pageTracker={{ totalPages, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
+                  <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-100">
+                    完成率 {completionRate}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="w-full max-w-[220px] space-y-2">
+                <Label htmlFor="bom-total-pages">總頁數</Label>
+                <Input
+                  id="bom-total-pages"
+                  type="number"
+                  min={0}
+                  max={MAX_BOM_TRACKER_PAGES}
+                  step={1}
+                  value={totalPagesInput}
+                  onChange={(event) => setTotalPagesInput(event.target.value)}
+                  placeholder="例如 12"
+                  className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100"
+                />
+                <p className="text-xs leading-5 text-slate-500">
+                  可填 0 到 {MAX_BOM_TRACKER_PAGES} 頁；若頁數調小，原本後面頁面的備註會先保留不刪掉。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-cyan-400/20 bg-[#101d33] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-black text-slate-50">逐頁完成狀態</p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  勾起來代表該頁已完成；右邊可補「卡在哪裡、已送誰、還缺什麼」。
+                </p>
+              </div>
+              <span className="rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-bold text-blue-100">
+                {completedPages} / {totalPages} 頁
+              </span>
+            </div>
+
+            {totalPages === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-blue-400/20 bg-[#0b1322] px-6 py-12 text-center">
+                <p className="text-lg font-bold text-slate-200">先填總頁數</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  設定好這份 BOM 一共有幾頁之後，下面就會自動展開逐頁勾選與備註欄位。
+                </p>
+              </div>
+            ) : (
+              <ScrollArea className="mt-4 h-[52vh] rounded-2xl border border-blue-400/15 bg-[#0b1322]">
+                <div className="space-y-3 p-3">
+                  {visiblePages.map((page) => (
+                    <div
+                      key={page.pageNumber}
+                      className={cn(
+                        "rounded-2xl border px-4 py-3 transition-colors",
+                        page.completed
+                          ? "border-emerald-400/20 bg-emerald-400/[0.08]"
+                          : "border-blue-400/10 bg-[#10192c]",
+                      )}
+                    >
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
+                        <label className="flex min-w-[150px] cursor-pointer items-center gap-3">
+                          <Checkbox
+                            checked={page.completed}
+                            onCheckedChange={(value) => updatePage(page.pageNumber, { completed: value === true })}
+                            className="border-blue-400/40 data-[state=checked]:bg-emerald-500 data-[state=checked]:text-slate-950"
+                          />
+                          <span className="text-base font-black text-slate-100">第 {page.pageNumber} 頁</span>
+                        </label>
+
+                        <Input
+                          value={page.note}
+                          onChange={(event) => updatePage(page.pageNumber, { note: event.target.value })}
+                          placeholder="例如：已完成、待補圖、等 RD 回覆、已送審"
+                          className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100 placeholder:text-slate-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </section>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20"
+          >
+            先關閉
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-300"
+          >
+            {isSaving ? "儲存中..." : "儲存頁數追蹤"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function BomManagerDialog({
   activeBomId,
   bomWorkspaces,
   open,
   onDelete,
   onOpenChange,
+  onOpenPageTracker,
   onSelect,
 }: {
   activeBomId: string;
@@ -2071,6 +2333,7 @@ function BomManagerDialog({
   open: boolean;
   onDelete: (id: string) => void;
   onOpenChange: (open: boolean) => void;
+  onOpenPageTracker: (workspaceId: string) => void;
   onSelect: (id: string) => void;
 }) {
   const [historyQuery, setHistoryQuery] = useState("");
@@ -2155,6 +2418,7 @@ function BomManagerDialog({
             </div>
           ) : filteredWorkspaces.map((workspace, index) => {
             const isActive = workspace.id === activeBomId;
+            const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
 
             return (
               <div
@@ -2171,6 +2435,7 @@ function BomManagerDialog({
                         #{index + 1}
                       </span>
                       <p className="min-w-0 flex-1 line-clamp-2 break-all text-lg font-black leading-6 text-slate-50">{workspace.name}</p>
+                      <BomPageTrackerSummaryPill pageTracker={workspace.pageTracker} />
                       {isActive && (
                         <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2 py-0.5 text-[11px] font-black text-cyan-100">
                           目前使用中
@@ -2211,10 +2476,27 @@ function BomManagerDialog({
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">BOM ID</p>
                         <p className="mt-1.5 line-clamp-2 break-all font-mono text-[12px] leading-5 text-slate-300">{workspace.id}</p>
                       </div>
+                      <div className="rounded-xl border border-blue-400/10 bg-[#0b1322] px-3 py-2.5">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">頁數追蹤</p>
+                        <p className="mt-1.5 text-[13px] font-semibold leading-5 text-slate-200">
+                          {pageTrackerSummary.totalPages > 0
+                            ? `已完成 ${pageTrackerSummary.completedPages} / ${pageTrackerSummary.totalPages} 頁`
+                            : "尚未設定頁數"}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:w-[160px] xl:justify-end xl:pl-3">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:w-[260px] xl:justify-end xl:pl-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onOpenPageTracker(workspace.id)}
+                      className="h-9 border-emerald-400/25 bg-emerald-400/10 px-3 text-[13px] font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
+                    >
+                      頁數追蹤
+                    </Button>
                     {!isActive && (
                       <Button
                         type="button"
@@ -2932,6 +3214,8 @@ export function MaterialRequestPage() {
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
+  const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
+  const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
   const isMobile = useIsMobile();
@@ -2939,12 +3223,14 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const isCollaborativeReady = collaborationStatus === "remote";
+  const canManageBomPageTracker = collaborationStatus !== "checking" && collaborationStatus !== "error";
   const collaborationStatusMeta = useMemo(
     () => getCollaborationStatusMeta(collaborationStatus),
     [collaborationStatus],
   );
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const pageTrackerWorkspace = bomWorkspaces.find((workspace) => workspace.id === (pageTrackerWorkspaceId ?? activeBomId)) ?? activeWorkspace;
   const basePayload = activeWorkspace.payload;
 
   const dataset = useMemo<MaterialDataset>(
@@ -3464,6 +3750,16 @@ export function MaterialRequestPage() {
     setTrackingDialogOpen(true);
   };
 
+  const openBomPageTrackerDialog = (workspaceId = activeBomId) => {
+    if (!canManageBomPageTracker) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
+
+    setPageTrackerWorkspaceId(workspaceId);
+    setPageTrackerDialogOpen(true);
+  };
+
   const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
     if (!isCollaborativeReady) {
       return Promise.reject(new Error("Collaborative BOM storage unavailable"));
@@ -3539,6 +3835,36 @@ export function MaterialRequestPage() {
         variant: "destructive",
       });
     });
+  };
+
+  const saveBomPageTracker = async (workspaceId: string, pageTracker: BomPageTracker) => {
+    const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
+    if (!workspace) {
+      throw new Error(`Workspace ${workspaceId} not found.`);
+    }
+    const pageTrackerSummary = getBomPageTrackerSummary(pageTracker);
+
+    const nextWorkspace: BomWorkspace = {
+      ...workspace,
+      pageTracker,
+    };
+    replaceBomWorkspace(nextWorkspace);
+
+    try {
+      await saveBomWorkspacePageTracker(workspaceId, pageTracker);
+      toast({
+        title: "頁數追蹤已更新",
+        description: `${workspace.name} · 已完成 ${pageTrackerSummary.completedPages} / ${pageTrackerSummary.totalPages} 頁`,
+      });
+    } catch (error) {
+      await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+      toast({
+        title: "頁數追蹤更新失敗",
+        description: "共用頁數狀態尚未同步成功，已重新載入最新版本。",
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const switchActiveBom = (value: string) => {
@@ -3659,7 +3985,8 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
-      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
+      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
 
@@ -3754,18 +4081,28 @@ export function MaterialRequestPage() {
                   </span>
                 </div>
               </SelectTrigger>
-              <SelectContent className="border-cyan-400/20 bg-[#0d1727] text-slate-100">
-                {orderedBomWorkspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id}>
-                    <div className="flex max-w-[30rem] flex-col py-1 text-left">
-                      <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
-                      <span className="mt-1 text-xs leading-5 text-slate-400">{workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+              <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
+                {orderedBomWorkspaces.map((workspace) => {
+                  const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
+
+                  return (
+                    <SelectItem key={workspace.id} value={workspace.id}>
+                      <div className="flex max-w-[30rem] flex-col py-1 text-left">
+                        <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
+                        <span className="mt-1 text-xs leading-5 text-slate-400">
+                          {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)} · {pageTrackerSummary.totalPages > 0 ? `已完成 ${pageTrackerSummary.completedPages}/${pageTrackerSummary.totalPages} 頁` : "頁數未設定"}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             <span className="inline-flex h-10 items-center rounded-lg border border-sky-300/16 bg-sky-400/10 px-3 text-sm font-bold text-sky-100">{bomWorkspaces.length} 個 BOM</span>
+            <BomPageTrackerSummaryPill pageTracker={activeWorkspace.pageTracker} className="h-10" />
+            <Button type="button" variant="outline" size="sm" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-10 border-emerald-400/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
+              <CircleCheck className="mr-2 h-4 w-4" />頁數追蹤
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-slate-500/30 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
             </Button>
@@ -3948,10 +4285,15 @@ export function MaterialRequestPage() {
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
+                const rowAccentClass = mustApply
+                  ? "bg-amber-400"
+                  : primaryReady
+                    ? "bg-emerald-400"
+                    : "bg-cyan-400";
 
                 return (
                   <tbody key={group.key}>
-                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-l-4 border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "border-l-amber-400 bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : primaryReady ? "border-l-emerald-400 bg-emerald-400/[0.08] hover:bg-emerald-400/[0.13]" : "border-l-cyan-400 bg-cyan-400/[0.09] hover:bg-cyan-400/[0.14]") }>
+                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : primaryReady ? "bg-emerald-400/[0.08] hover:bg-emerald-400/[0.13]" : "bg-cyan-400/[0.09] hover:bg-cyan-400/[0.14]") }>
                       <td className="border-r border-blue-400/10 px-3 py-3 text-center align-middle">
                         <div className="flex flex-col items-center justify-center">
                           <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
@@ -3973,7 +4315,8 @@ export function MaterialRequestPage() {
                           <Star className={cn("h-4.5 w-4.5", isMarked && "fill-current")} />
                         </button>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-3">
+                      <td className="relative overflow-hidden border-r border-blue-400/10 px-4 py-3">
+                        <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", rowAccentClass)} />
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
                           <div className="min-w-0">
