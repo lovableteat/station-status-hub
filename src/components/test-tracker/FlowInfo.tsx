@@ -622,11 +622,11 @@ export function FlowInfo() {
           {selectedStation && (
             <section
               key={selectedStation.id}
-              className={`animate-in fade-in-0 slide-in-from-top-2 overflow-hidden rounded-2xl border duration-300 ${selectedStationTheme.contentPanel}`}
+              className={`animate-in fade-in-0 slide-in-from-top-2 relative overflow-hidden rounded-[1.6rem] border duration-300 before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-cyan-200/60 before:to-transparent ${selectedStationTheme.contentPanel}`}
             >
-              <div className={`flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${selectedStationTheme.contentHeader}`}>
+              <div className={`relative flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${selectedStationTheme.contentHeader}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${selectedStationTheme.contentIcon}`}>
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_12px_28px_-18px_rgba(34,211,238,0.8)] ${selectedStationTheme.contentIcon}`}>
                     <Layers className="h-5 w-5" />
                   </div>
                   <div>
@@ -639,13 +639,13 @@ export function FlowInfo() {
                     <p className="mt-1 text-sm text-muted-foreground">目前顯示 {selectedStation.station_name} 的流程內容。</p>
                   </div>
                 </div>
-                <Badge variant="outline" className={`w-fit px-3 py-1.5 text-xs ${selectedStationTheme.contentBadge}`}>
+                <Badge variant="outline" className={`w-fit rounded-full px-3 py-1.5 text-xs shadow-[0_10px_24px_-18px_rgba(34,211,238,0.8)] ${selectedStationTheme.contentBadge}`}>
                   已切換至 {selectedStation.station_name}
                 </Badge>
               </div>
-              <div className="p-5 sm:p-6">
-                <div className={`rounded-2xl border p-3 ${selectedStationTheme.contentSurface}`}>
-                  <div className={`mb-3 h-1 rounded-full bg-gradient-to-r ${selectedStationTheme.contentBar}`} />
+              <div className="relative p-4 sm:p-5">
+                <div className={`rounded-[1.35rem] border p-2 shadow-inner shadow-black/20 ${selectedStationTheme.contentSurface}`}>
+                  <div className={`mb-3 h-1.5 rounded-full bg-gradient-to-r shadow-[0_0_22px_-8px_rgba(34,211,238,0.9)] ${selectedStationTheme.contentBar}`} />
                   <div className="overflow-visible">
                     <StationContentManager
                       stationId={selectedStation.id}
