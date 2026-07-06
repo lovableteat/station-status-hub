@@ -88,8 +88,16 @@ interface SavedConversation {
 const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
 const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
 const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
+const LEGACY_ASSISTANT_SYSTEM_PROMPT =
+  "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。";
+const DEFAULT_QUERY_SYSTEM_PROMPT = [
+  "你是站點管理系統的資料查詢引擎，不要扮演聊天助理。",
+  "請只根據使用者輸入、上傳圖片內容與本次對話上下文回答，不要主動延伸成生活建議或無關推薦。",
+  "若資訊不足，直接說明缺少哪些資料、欄位或篩選條件，不要自行猜測。",
+  "請用繁體中文回答，優先輸出查詢結果、重點整理與依據，內容要簡短精準。",
+].join(" ");
 const DEFAULT_IMAGE_OCR_PROMPT =
-  "請擷取我上傳圖片中的所有文字，保留重要換行與表格關係，最後用繁體中文整理重點。";
+  "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
 const MAX_UPLOAD_IMAGE_COUNT = 4;
 const MAX_UPLOAD_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -464,9 +472,7 @@ export function ApiChatConsole({
   const [provider, setProvider] = useState("gemini");
   const [model, setModel] = useState("gemini-2.5-flash");
   const [baseUrl, setBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta");
-  const [systemPrompt, setSystemPrompt] = useState(
-    "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。"
-  );
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_QUERY_SYSTEM_PROMPT);
   const [draftMessage, setDraftMessage] = useState("");
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
@@ -505,6 +511,17 @@ export function ApiChatConsole({
     setUploadedImages([]);
     setConnectionState(null);
   }, [selectedApiKey, selectedMetadata]);
+
+  useEffect(() => {
+    setSystemPrompt((current) => {
+      const normalized = current.trim();
+      if (!normalized || normalized === LEGACY_ASSISTANT_SYSTEM_PROMPT) {
+        return DEFAULT_QUERY_SYSTEM_PROMPT;
+      }
+
+      return current;
+    });
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -647,7 +664,7 @@ export function ApiChatConsole({
         message:
           parsed.images.length > 0
             ? "API 已正常回應，並回傳可直接顯示的圖片結果。"
-            : "AI API 已正常回應，你可以直接繼續追問。",
+            : "API 已正常回應，你可以直接繼續查詢。",
         endpoint: requestUrl,
         provider: provider || "gemini",
         model: model || "-",
@@ -685,19 +702,19 @@ export function ApiChatConsole({
     setLoading(true);
 
     try {
-      const reply = await runGeminiRequest(nextHistory, "AI 對話", false);
+      const reply = await runGeminiRequest(nextHistory, "資料查詢", false);
       setMessages((current) => [
         ...current,
         createMessage("assistant", reply.text, "normal", reply.images),
       ]);
-      toast.success(reply.images.length > 0 ? "圖片已生成並顯示" : "AI 回覆完成");
+      toast.success(reply.images.length > 0 ? "結果已回傳並顯示" : "查詢完成");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "AI 對話失敗";
+      const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
       setMessages((current) => [
         ...current,
         createMessage("assistant", `API 呼叫失敗：${errorMessage}`, "error"),
       ]);
-      toast.error("AI 對話失敗");
+      toast.error("資料查詢失敗");
     } finally {
       setLoading(false);
     }
@@ -1086,9 +1103,9 @@ export function ApiChatConsole({
             <Bot className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-lg font-black text-slate-50">對話視窗</p>
+            <p className="text-lg font-black text-slate-50">查詢視窗</p>
             <p className="text-sm leading-6 text-slate-400">
-              保留本次上下文，適合連續追問、整理需求與顯示生成圖片。
+              保留本次上下文，適合連續查詢、比對欄位與擷取圖片文字。
             </p>
           </div>
         </div>
@@ -1127,11 +1144,11 @@ export function ApiChatConsole({
                     <MessageSquareText className="h-7 w-7" />
                   </div>
                   <div>
-                    <p className="text-xl font-black text-slate-50">開始一段新的對話</p>
+                    <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
                     <p className="mt-2 text-sm leading-7 text-slate-400">
                       {isChatOnly
-                        ? "直接在下方輸入需求。你可以請 AI 整理工作、分析問題，或在模型支援時直接生成圖片。"
-                        : "可以先按「測試連線」確認成功，再從下方開始提問。這個區塊會保留你本次工作區的上下文。"}
+                        ? "直接在下方輸入要查的內容，系統會依本次上下文回傳查詢結果、整理重點或圖片文字。"
+                        : "可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。"}
                     </p>
                   </div>
                 </div>
@@ -1146,7 +1163,7 @@ export function ApiChatConsole({
                   <Bot className="h-4.5 w-4.5" />
                 </div>
                 <div className="max-w-[88%] rounded-[24px] border border-cyan-400/10 bg-[linear-gradient(180deg,#10192e_0%,#0b1423_100%)] px-5 py-4 text-[15px] leading-7 text-slate-300">
-                  AI 回覆中...
+                  查詢中...
                 </div>
               </div>
             ) : null}
@@ -1157,11 +1174,11 @@ export function ApiChatConsole({
         <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0d1627_0%,#0a1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
           <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <SectionTitle
-              title={isChatOnly ? "輸入訊息" : "對話輸入"}
+              title="查詢輸入"
               description={
                 isChatOnly
-                  ? "你可以直接要求分析、整理，或在支援的模型上請 AI 生成圖片。"
-                  : "支援連續追問，也能拿 API 設定一起驗證模型回覆。"
+                  ? "可直接貼查詢條件、料號、欄位需求，或上傳圖片擷取文字。"
+                  : "支援連續查詢，也能拿 API 設定一起驗證回覆結果。"
               }
             />
             <div className="flex gap-2">
@@ -1251,7 +1268,7 @@ export function ApiChatConsole({
               <Textarea
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
-                placeholder="例如：幫我整理今天的站點異常重點，或上傳圖片後輸入「請擷取圖中文字」。"
+                placeholder="例如：查這批料號的狀態差異，或上傳圖片後輸入「請擷取圖中文字」。"
                 className="min-h-[160px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#08101d_0%,#09111c_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <div className="flex flex-wrap gap-2 text-xs text-slate-400">
@@ -1284,8 +1301,8 @@ export function ApiChatConsole({
                 </p>
                 <p className="mt-1 text-xs leading-5 text-slate-400">
                   {isChatOnly
-                    ? "輸入訊息後按下送出，結果會直接留在這個對話空間。"
-                    : "你也可以先做 API 測試，再開始正式對話。"}
+                    ? "輸入訊息後按下送出，查詢結果會直接留在這個工作區。"
+                    : "你也可以先做 API 測試，再開始正式查詢。"}
                 </p>
               </div>
 
@@ -1296,7 +1313,7 @@ export function ApiChatConsole({
                 className="h-14 rounded-[24px] bg-[linear-gradient(135deg,#22d3ee_0%,#7c3aed_100%)] font-bold text-white shadow-[0_18px_40px_-24px_rgba(34,211,238,0.55)] transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
               >
                 <Send className="mr-2 h-4 w-4" />
-                {loading ? "送出中..." : "送出對話"}
+                {loading ? "送出中..." : "送出查詢"}
               </Button>
             </div>
           </div>
@@ -1318,8 +1335,8 @@ export function ApiChatConsole({
                   <MessageSquareText className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-lg font-black text-slate-50">AI 對話空間</p>
-                  <p className="text-xs text-slate-400">全寬聊天工作台</p>
+                  <p className="text-lg font-black text-slate-50">資料查詢空間</p>
+                  <p className="text-xs text-slate-400">單純查資料 / 整理結果</p>
                 </div>
               </div>
 
@@ -1359,7 +1376,7 @@ export function ApiChatConsole({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-100">對話紀錄</p>
-                    <p className="text-xs text-slate-400">保留最近建立的新對話</p>
+                    <p className="text-xs text-slate-400">保留最近建立的查詢紀錄</p>
                   </div>
                   <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
                     {savedConversations.length}
@@ -1573,25 +1590,25 @@ export function ApiChatConsole({
               </div>
               <div>
                 <CardTitle className="text-3xl font-black tracking-tight text-slate-50">
-                  AI 對話控制台
+                  API 資料查詢控制台
                 </CardTitle>
                 <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-                  這裡用來調整 API、模型與系統提示詞，並同步測試對話結果。
+                  這裡用來調整 API、模型與系統提示詞，並同步測試查詢結果。
                 </p>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
-              <MetricTile label="Current key" value={activeKeyLabel} caption="目前套用中的對話來源。" />
+              <MetricTile label="Current key" value={activeKeyLabel} caption="目前套用中的查詢來源。" />
               <MetricTile
                 label="Mode"
                 value={modeLabel}
-                caption={isGeminiProvider ? "目前已接通 Gemini 對話。" : "此 provider 尚未接對話流程。"}
+                caption={isGeminiProvider ? "目前已接通 Gemini 查詢。" : "此 provider 尚未接查詢流程。"}
               />
               <MetricTile
                 label="Messages"
                 value={totalMessages}
-                caption="本次工作區內保留的對話訊息數。"
+                caption="本次工作區內保留的查詢訊息數。"
               />
             </div>
           </div>
@@ -1604,7 +1621,7 @@ export function ApiChatConsole({
                 <div className="flex items-start justify-between gap-4">
                   <SectionTitle
                     title="模型與憑證設定"
-                    description="左側只負責 API 與模型控制；右側保留實際對話。"
+                    description="左側只負責 API 與模型控制；右側保留實際查詢結果。"
                   />
                   <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
                     {truncateMiddle(activeKeyLabel, 24)}
@@ -1662,12 +1679,12 @@ export function ApiChatConsole({
               <div className="rounded-[28px] border border-white/8 bg-[#0b1423] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <SectionTitle
                   title="System Prompt"
-                  description="先定義角色與回覆方式，AI 對話會依這裡的規則執行。"
+                  description="先定義查詢規則與輸出格式，API 回傳會依這裡的規則執行。"
                 />
                 <Textarea
                   value={systemPrompt}
                   onChange={(event) => setSystemPrompt(event.target.value)}
-                  placeholder="定義這個 AI 助理的角色、語氣、限制與回答格式"
+                  placeholder="定義資料查詢規則、輸出格式與限制條件"
                   className="mt-4 min-h-[164px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
                 />
               </div>
