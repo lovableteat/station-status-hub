@@ -528,13 +528,8 @@ function saveMarkedGroups(bomId: string, values: string[]) {
 }
 
 function getGroupItemValue(group: MaterialGroup, fallbackIndex: number) {
-  const sourceRows = group.records
-    .map((record) => Number(record.sourceRow))
-    .filter((value) => Number.isFinite(value) && value > 0);
-
-  return sourceRows.length > 0
-    ? Math.min(...sourceRows)
-    : fallbackIndex;
+  void group;
+  return fallbackIndex;
 }
 
 function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, workspaceId: string, payload: MaterialWorkbookPayload): BomWorkspace {
@@ -4263,7 +4258,7 @@ export function MaterialRequestPage() {
               <tr className="bg-[#102b57] text-slate-100">
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
-                    原始列號
+                    項次
                   </div>
                 </th>
                 <th className="border-r border-blue-300/20 p-2">
