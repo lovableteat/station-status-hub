@@ -57,12 +57,12 @@ const workspaceToneMap: Record<
     description: "管理使用者、工程師與工作區權限。",
   },
   "ai-chat": {
-    badge: "生成協作",
+    badge: "資料查詢",
     iconWrap:
       "border-fuchsia-300/22 bg-fuchsia-400/10 text-fuchsia-100 shadow-[0_18px_38px_-28px_rgba(232,121,249,0.8)]",
     panel:
       "bg-[linear-gradient(180deg,rgba(43,20,60,0.96),rgba(13,17,36,0.98))] hover:border-fuchsia-300/34",
-    description: "直接進入 AI 對話空間，延續上下文與生成內容。",
+    description: "直接進入資料查詢空間，用 API 查資料、整理結果與擷取圖片文字。",
   },
 };
 
