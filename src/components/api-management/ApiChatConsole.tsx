@@ -1014,6 +1014,7 @@ export function ApiChatConsole({
             <div className="space-y-2">
               <Label className="text-sm font-bold text-slate-200">提示詞名稱</Label>
               <Input
+                data-ai-surface="true"
                 value={promptDialogTitle}
                 onChange={(event) => setPromptDialogTitle(event.target.value)}
                 placeholder="例如：每日異常摘要"
@@ -1024,6 +1025,7 @@ export function ApiChatConsole({
             <div className="space-y-2">
               <Label className="text-sm font-bold text-slate-200">提示詞內容</Label>
               <Textarea
+                data-ai-surface="true"
                 value={promptDialogContent}
                 onChange={(event) => setPromptDialogContent(event.target.value)}
                 placeholder="請直接輸入要保存的提示詞內容"
@@ -1070,6 +1072,7 @@ export function ApiChatConsole({
             <div className="space-y-2">
               <Label className="text-sm font-bold text-slate-200">草稿名稱</Label>
               <Input
+                data-ai-surface="true"
                 value={draftDialogTitle}
                 onChange={(event) => setDraftDialogTitle(event.target.value)}
                 placeholder="例如：主管簡報用草稿"
@@ -1080,6 +1083,7 @@ export function ApiChatConsole({
             <div className="space-y-2">
               <Label className="text-sm font-bold text-slate-200">草稿內容</Label>
               <Textarea
+                data-ai-surface="true"
                 value={draftDialogContent}
                 onChange={(event) => setDraftDialogContent(event.target.value)}
                 placeholder="請直接輸入要保留的草稿內容"
@@ -1340,6 +1344,7 @@ export function ApiChatConsole({
               ) : null}
 
               <Textarea
+                data-ai-surface="true"
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
                 placeholder="例如：查這批料號的狀態差異，或上傳圖片後輸入「請擷取圖中文字」。"
@@ -1708,6 +1713,7 @@ export function ApiChatConsole({
                     <div className="relative">
                       <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                       <Input
+                        data-ai-surface="true"
                         type="password"
                         value={apiKey}
                         onChange={(event) => setApiKey(event.target.value)}
@@ -1721,6 +1727,7 @@ export function ApiChatConsole({
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-300">Provider</Label>
                       <Input
+                        data-ai-surface="true"
                         value={provider}
                         onChange={(event) => setProvider(event.target.value)}
                         placeholder="gemini"
@@ -1730,6 +1737,7 @@ export function ApiChatConsole({
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-300">Model</Label>
                       <Input
+                        data-ai-surface="true"
                         value={model}
                         onChange={(event) => setModel(event.target.value)}
                         placeholder="gemini-2.5-flash"
@@ -1741,6 +1749,7 @@ export function ApiChatConsole({
                   <div className="space-y-2">
                     <Label className="text-sm font-bold text-slate-300">API Base URL</Label>
                     <Input
+                      data-ai-surface="true"
                       value={baseUrl}
                       onChange={(event) => setBaseUrl(event.target.value)}
                       placeholder="https://generativelanguage.googleapis.com/v1beta"
@@ -1756,6 +1765,7 @@ export function ApiChatConsole({
                   description="先定義查詢規則與輸出格式，API 回傳會依這裡的規則執行。"
                 />
                 <Textarea
+                  data-ai-surface="true"
                   value={systemPrompt}
                   onChange={(event) => setSystemPrompt(event.target.value)}
                   placeholder="定義資料查詢規則、輸出格式與限制條件"

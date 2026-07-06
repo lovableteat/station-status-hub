@@ -188,26 +188,29 @@ All colors MUST be HSL for proper theming support.
   }
 
   :is(
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="month"],
-    input[type="time"],
-    textarea,
-    select
+    input[type="text"]:not([data-ai-surface="true"]),
+    input[type="search"]:not([data-ai-surface="true"]),
+    input[type="email"]:not([data-ai-surface="true"]),
+    input[type="password"]:not([data-ai-surface="true"]),
+    input[type="number"]:not([data-ai-surface="true"]),
+    input[type="url"]:not([data-ai-surface="true"]),
+    input[type="tel"]:not([data-ai-surface="true"]),
+    input[type="date"]:not([data-ai-surface="true"]),
+    input[type="datetime-local"]:not([data-ai-surface="true"]),
+    input[type="month"]:not([data-ai-surface="true"]),
+    input[type="time"]:not([data-ai-surface="true"]),
+    textarea:not([data-ai-surface="true"]),
+    select:not([data-ai-surface="true"])
   ) {
     appearance: none;
     -webkit-appearance: none;
     color-scheme: dark;
-    background-color: hsl(var(--secondary) / 0.82) !important;
+    background: hsl(var(--secondary) / 0.82) !important;
+    background-image: none !important;
     color: hsl(var(--foreground));
     caret-color: hsl(var(--foreground));
+    -webkit-text-fill-color: hsl(var(--foreground));
+    box-shadow: inset 0 0 0 1000px hsl(var(--secondary) / 0.82);
   }
 
   input[type="file"] {
@@ -246,66 +249,66 @@ All colors MUST be HSL for proper theming support.
   }
 
   :is(
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="month"],
-    input[type="time"],
-    textarea
+    input[type="text"]:not([data-ai-surface="true"]),
+    input[type="search"]:not([data-ai-surface="true"]),
+    input[type="email"]:not([data-ai-surface="true"]),
+    input[type="password"]:not([data-ai-surface="true"]),
+    input[type="number"]:not([data-ai-surface="true"]),
+    input[type="url"]:not([data-ai-surface="true"]),
+    input[type="tel"]:not([data-ai-surface="true"]),
+    input[type="date"]:not([data-ai-surface="true"]),
+    input[type="datetime-local"]:not([data-ai-surface="true"]),
+    input[type="month"]:not([data-ai-surface="true"]),
+    input[type="time"]:not([data-ai-surface="true"]),
+    textarea:not([data-ai-surface="true"])
   )::placeholder {
     color: hsl(var(--muted-foreground) / 0.82);
   }
 
   :is(
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="month"],
-    input[type="time"],
-    textarea,
-    select
+    input[type="text"]:not([data-ai-surface="true"]),
+    input[type="search"]:not([data-ai-surface="true"]),
+    input[type="email"]:not([data-ai-surface="true"]),
+    input[type="password"]:not([data-ai-surface="true"]),
+    input[type="number"]:not([data-ai-surface="true"]),
+    input[type="url"]:not([data-ai-surface="true"]),
+    input[type="tel"]:not([data-ai-surface="true"]),
+    input[type="date"]:not([data-ai-surface="true"]),
+    input[type="datetime-local"]:not([data-ai-surface="true"]),
+    input[type="month"]:not([data-ai-surface="true"]),
+    input[type="time"]:not([data-ai-surface="true"]),
+    textarea:not([data-ai-surface="true"]),
+    select:not([data-ai-surface="true"])
   ):-webkit-autofill,
   :is(
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="month"],
-    input[type="time"],
-    textarea,
-    select
+    input[type="text"]:not([data-ai-surface="true"]),
+    input[type="search"]:not([data-ai-surface="true"]),
+    input[type="email"]:not([data-ai-surface="true"]),
+    input[type="password"]:not([data-ai-surface="true"]),
+    input[type="number"]:not([data-ai-surface="true"]),
+    input[type="url"]:not([data-ai-surface="true"]),
+    input[type="tel"]:not([data-ai-surface="true"]),
+    input[type="date"]:not([data-ai-surface="true"]),
+    input[type="datetime-local"]:not([data-ai-surface="true"]),
+    input[type="month"]:not([data-ai-surface="true"]),
+    input[type="time"]:not([data-ai-surface="true"]),
+    textarea:not([data-ai-surface="true"]),
+    select:not([data-ai-surface="true"])
   ):-webkit-autofill:hover,
   :is(
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="month"],
-    input[type="time"],
-    textarea,
-    select
+    input[type="text"]:not([data-ai-surface="true"]),
+    input[type="search"]:not([data-ai-surface="true"]),
+    input[type="email"]:not([data-ai-surface="true"]),
+    input[type="password"]:not([data-ai-surface="true"]),
+    input[type="number"]:not([data-ai-surface="true"]),
+    input[type="url"]:not([data-ai-surface="true"]),
+    input[type="tel"]:not([data-ai-surface="true"]),
+    input[type="date"]:not([data-ai-surface="true"]),
+    input[type="datetime-local"]:not([data-ai-surface="true"]),
+    input[type="month"]:not([data-ai-surface="true"]),
+    input[type="time"]:not([data-ai-surface="true"]),
+    textarea:not([data-ai-surface="true"]),
+    select:not([data-ai-surface="true"])
   ):-webkit-autofill:focus {
     -webkit-text-fill-color: hsl(var(--foreground));
     box-shadow:
