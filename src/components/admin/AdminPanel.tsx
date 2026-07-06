@@ -42,7 +42,7 @@ interface SystemUser {
   password_hash?: string;
 }
 
-type AdminTab = "users" | "engineers" | "api-management";
+type AdminTab = "users" | "api-management";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -72,7 +72,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   }, [initialTab]);
 
   const loadAllData = async () => {
-    await Promise.all([loadEngineers(), loadSystemUsers()]);
+    await loadSystemUsers();
   };
 
   const loadEngineers = async () => {
@@ -422,15 +422,15 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
           </TabsTrigger>
-          <TabsTrigger value="engineers">
+          {false ? <TabsTrigger value="engineers">
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
-          </TabsTrigger>
+          </TabsTrigger> : null}
           <TabsTrigger value="api-management">
             <Network className="h-4 w-4 mr-2" />
             API 管理
@@ -442,9 +442,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-2">
               <h2 className="text-2xl font-bold">系統用戶管理</h2>
-              <p className="max-w-3xl text-sm text-muted-foreground">
+              {false ? <p className="max-w-3xl text-sm text-muted-foreground">
                 這裡集中管理整站帳號、角色、工作區權限與細部頁面權限。密碼只會以雜湊方式保存，超級帳號可直接發起重設，但不能回看任何人的明文密碼。
-              </p>
+              </p> : null}
             </div>
 
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
@@ -776,7 +776,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </TabsContent>
 
         {/* Engineer Management Tab */}
-        <TabsContent value="engineers" className="space-y-6">
+        {false ? <TabsContent value="engineers" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">工程師管理</h2>
             <Dialog open={isEngineerDialogOpen} onOpenChange={setIsEngineerDialogOpen}>
@@ -909,7 +909,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> : null}
 
         <TabsContent value="api-management" className="space-y-6">
           <ApiManagementPage />
