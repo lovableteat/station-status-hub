@@ -437,6 +437,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       }));
   };
 
+  const isProtectedSystemUser = (systemUser: SystemUser) =>
+    systemUser.username === "liu52417" ||
+    systemUser.display_name === "管理員" ||
+    systemUser.display_name === "Andy";
+
   const filteredEngineers = engineers.filter(engineer => {
     const matchesSearch = engineer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          engineer.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -517,7 +522,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </TabsList>
 
         {/* User Management Tab */}
-        <TabsContent value="users" className="space-y-6">
+        <TabsContent value="users" className="space-y-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-2">
               <h2 className="text-2xl font-bold">系統用戶管理</h2>
@@ -604,9 +609,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Dialog>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Card className="border-primary/15 bg-primary/10">
-              <CardContent className="flex items-center justify-between p-5">
+              <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Accounts</div>
                   <div className="mt-2 text-3xl font-semibold text-foreground">{totalUsers}</div>
@@ -617,7 +622,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Card>
 
             <Card className="border-emerald-400/15 bg-emerald-500/10">
-              <CardContent className="flex items-center justify-between p-5">
+              <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Active</div>
                   <div className="mt-2 text-3xl font-semibold text-foreground">{activeUsers}</div>
@@ -628,7 +633,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Card>
 
             <Card className="border-amber-400/15 bg-amber-500/10">
-              <CardContent className="flex items-center justify-between p-5">
+              <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Privileged</div>
                   <div className="mt-2 text-3xl font-semibold text-foreground">{privilegedUsers}</div>
@@ -639,7 +644,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Card>
 
             <Card className="border-sky-400/15 bg-sky-500/10">
-              <CardContent className="flex items-center justify-between p-5">
+              <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Workspace Access</div>
                   <div className="mt-2 text-3xl font-semibold text-foreground">{workspaceConfiguredUsers}</div>
@@ -697,25 +702,26 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </Card>
 
           <Card className="border-border/70 bg-card/85">
-            <CardContent className="pt-6">
-              <div className="space-y-4">
+            <CardContent className="pt-5">
+              <div className="space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
+                  const isProtected = isProtectedSystemUser(systemUser);
 
                   return (
                     <div
                       key={systemUser.id}
-                      className="rounded-[28px] border border-border/70 bg-secondary/20 p-5 transition-colors hover:border-primary/30 hover:bg-secondary/30"
+                      className="rounded-[24px] border border-border/70 bg-secondary/20 p-4 transition-colors hover:border-primary/30 hover:bg-secondary/30"
                     >
-                      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="flex min-w-0 flex-1 gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-                            <Shield className="h-5 w-5 text-primary" />
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="flex min-w-0 flex-1 gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
+                            <Shield className="h-4.5 w-4.5 text-primary" />
                           </div>
 
-                          <div className="min-w-0 flex-1 space-y-4">
+                          <div className="min-w-0 flex-1 space-y-3">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-lg font-semibold text-foreground">
+                              <h3 className="text-base font-semibold text-foreground">
                                 {systemUser.display_name || systemUser.username}
                               </h3>
                               <Badge className={getRoleColor(systemUser.role)}>
@@ -724,9 +730,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               <Badge className={getStatusTone(systemUser.status)}>
                                 {getStatusLabel(systemUser.status)}
                               </Badge>
+                              {isProtected ? <Badge variant="outline">保留帳號</Badge> : null}
                             </div>
 
-                            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                            <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
                               <div className="rounded-2xl border border-border/60 bg-background/55 p-3">
                                 <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                                   帳號
@@ -752,11 +759,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-border/60 bg-background/55 p-4">
+                            <div className="rounded-2xl border border-border/60 bg-background/55 px-3 py-3">
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <div>
                                   <div className="text-sm font-semibold text-foreground">網站與工作區權限</div>
-                                  <div className="text-sm text-muted-foreground">
+                                  <div className="hidden text-sm text-muted-foreground">
                                     工作區入口與角色已合併顯示，超管可直接點右側按鈕調整。
                                   </div>
                                 </div>
@@ -780,9 +787,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           </div>
                         </div>
 
-                        <div className="xl:w-[320px] xl:shrink-0">
-                          <div className="space-y-3 rounded-[24px] border border-border/70 bg-background/45 p-4">
-                            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+                        <div className="xl:w-[240px] xl:shrink-0">
+                          <div className="space-y-2 rounded-[24px] border border-border/40 bg-background/20 p-3">
+                            <div className="hidden rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
                               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                                 <Lock className="h-4 w-4 text-amber-300" />
                                 密碼安全
@@ -792,7 +799,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               </p>
                             </div>
 
-                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                            <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
                               {systemUser.username !== "liu52417" ? (
                                 <Button
                                   variant="outline"
