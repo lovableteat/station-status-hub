@@ -62,6 +62,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import seedPayload from "@/data/materialRequestSeed.json";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -234,10 +235,26 @@ function getBomPageTrackerSummary(pageTracker?: BomPageTracker) {
   const totalPages = clampBomTrackerPageCount(pageTracker?.totalPages ?? 0);
   const pages = syncBomTrackerPages(pageTracker?.pages ?? [], totalPages);
   const completedPages = pages.filter((page) => page.pageNumber <= totalPages && page.completed).length;
+  const highestTouchedPage = pages.reduce((maxPage, page) => (
+    page.completed || page.note.trim()
+      ? Math.max(maxPage, page.pageNumber)
+      : maxPage
+  ), 0);
+  const requestedCurrentPage = clampBomTrackerPageCount(pageTracker?.currentPage ?? 0);
+  const currentPage = totalPages > 0
+    ? Math.min(totalPages, requestedCurrentPage > 0 ? requestedCurrentPage : highestTouchedPage)
+    : 0;
+  const currentPageEntry = currentPage > 0
+    ? pages.find((page) => page.pageNumber === currentPage) ?? null
+    : null;
 
   return {
     totalPages,
     completedPages,
+    currentPage,
+    currentPageEntry,
+    highestTouchedPage,
+    pages,
   };
 }
 
@@ -250,6 +267,7 @@ function BomPageTrackerSummaryPill({
 }) {
   const summary = getBomPageTrackerSummary(pageTracker);
   const ready = summary.totalPages > 0;
+  const hasCurrentPage = ready && summary.currentPage > 0;
 
   return (
     <span
@@ -262,8 +280,38 @@ function BomPageTrackerSummaryPill({
       )}
     >
       <CircleCheck className={cn("h-3.5 w-3.5", ready ? "text-emerald-300" : "text-slate-400")} />
-      {ready ? `已完成 ${summary.completedPages} / ${summary.totalPages} 頁` : "頁數未設定"}
+      {ready
+        ? hasCurrentPage
+          ? `目前第 ${summary.currentPage} / ${summary.totalPages} 頁 · 已完成 ${summary.completedPages} 頁`
+          : `已完成 ${summary.completedPages} / ${summary.totalPages} 頁`
+        : "頁數未設定"}
     </span>
+  );
+}
+
+function BomPageTrackerStatCard({
+  label,
+  value,
+  hint,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "slate" | "emerald" | "cyan";
+}) {
+  const toneClassName = tone === "emerald"
+    ? "border-emerald-400/18 bg-emerald-400/[0.08]"
+    : tone === "cyan"
+      ? "border-cyan-400/18 bg-cyan-400/[0.08]"
+      : "border-blue-400/12 bg-[#0b1322]";
+
+  return (
+    <div className={cn("rounded-xl border px-3 py-3", toneClassName)}>
+      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className="mt-2 text-xl font-black text-slate-50">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-400">{hint}</p>
+    </div>
   );
 }
 
@@ -2148,6 +2196,7 @@ function BomPageTrackerDialog({
   onSave: (workspaceId: string, pageTracker: BomPageTracker) => Promise<void>;
 }) {
   const [totalPagesInput, setTotalPagesInput] = useState("0");
+  const [currentPageInput, setCurrentPageInput] = useState("0");
   const [pages, setPages] = useState<BomPageTrackerPage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -2156,6 +2205,7 @@ function BomPageTrackerDialog({
 
     const summary = getBomPageTrackerSummary(workspace.pageTracker);
     setTotalPagesInput(String(summary.totalPages));
+    setCurrentPageInput(String(summary.currentPage));
     setPages(syncBomTrackerPages(workspace.pageTracker?.pages ?? [], summary.totalPages));
     setIsSaving(false);
   }, [open, workspace?.id, workspace?.pageTracker?.updatedAt]);
@@ -2163,6 +2213,9 @@ function BomPageTrackerDialog({
   if (!workspace) return null;
 
   const totalPages = clampBomTrackerPageCount(Number(totalPagesInput || 0));
+  const currentPage = totalPages > 0
+    ? Math.min(totalPages, clampBomTrackerPageCount(Number(currentPageInput || 0)))
+    : 0;
   const syncedPages = syncBomTrackerPages(pages, totalPages);
   const visiblePages = syncedPages.filter((page) => page.pageNumber <= totalPages);
   const completedPages = visiblePages.filter((page) => page.completed).length;
@@ -2181,6 +2234,7 @@ function BomPageTrackerDialog({
     try {
       await onSave(workspace.id, {
         totalPages,
+        currentPage,
         pages: syncedPages,
         updatedAt: new Date().toISOString(),
       });
@@ -2211,29 +2265,54 @@ function BomPageTrackerDialog({
                   {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆料件
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <BomPageTrackerSummaryPill pageTracker={{ totalPages, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
+                  <BomPageTrackerSummaryPill pageTracker={{ totalPages, currentPage, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
                   <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-100">
                     完成率 {completionRate}%
                   </span>
+                  {currentPage > 0 && (
+                    <span className="rounded-full border border-blue-400/25 bg-blue-400/10 px-3 py-1 text-xs font-bold text-blue-100">
+                      目前做到第 {currentPage} 頁
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="w-full max-w-[220px] space-y-2">
-                <Label htmlFor="bom-total-pages">總頁數</Label>
-                <Input
-                  id="bom-total-pages"
-                  type="number"
-                  min={0}
-                  max={MAX_BOM_TRACKER_PAGES}
-                  step={1}
-                  value={totalPagesInput}
-                  onChange={(event) => setTotalPagesInput(event.target.value)}
-                  placeholder="例如 12"
-                  className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100"
-                />
-                <p className="text-xs leading-5 text-slate-500">
-                  可填 0 到 {MAX_BOM_TRACKER_PAGES} 頁；若頁數調小，原本後面頁面的備註會先保留不刪掉。
-                </p>
+              <div className="grid w-full gap-3 md:max-w-[440px] md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="bom-total-pages">總頁數</Label>
+                  <Input
+                    id="bom-total-pages"
+                    type="number"
+                    min={0}
+                    max={MAX_BOM_TRACKER_PAGES}
+                    step={1}
+                    value={totalPagesInput}
+                    onChange={(event) => setTotalPagesInput(event.target.value)}
+                    placeholder="例如 12"
+                    className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100"
+                  />
+                  <p className="text-xs leading-5 text-slate-500">
+                    可填 0 到 {MAX_BOM_TRACKER_PAGES} 頁；若頁數調小，原本後面頁面的備註會先保留不刪掉。
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bom-current-page">目前做到第幾頁</Label>
+                  <Input
+                    id="bom-current-page"
+                    type="number"
+                    min={0}
+                    max={Math.max(totalPages, MAX_BOM_TRACKER_PAGES)}
+                    step={1}
+                    value={currentPageInput}
+                    onChange={(event) => setCurrentPageInput(event.target.value)}
+                    placeholder={totalPages > 0 ? `1 ~ ${totalPages}` : "先設定總頁數"}
+                    disabled={totalPages === 0}
+                    className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <p className="text-xs leading-5 text-slate-500">
+                    這裡記錄你現在畫到哪一頁；主畫面會直接顯示這個進度。
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -2266,7 +2345,9 @@ function BomPageTrackerDialog({
                       key={page.pageNumber}
                       className={cn(
                         "rounded-2xl border px-4 py-3 transition-colors",
-                        page.completed
+                        page.pageNumber === currentPage
+                          ? "border-cyan-300/30 bg-cyan-400/[0.08]"
+                          : page.completed
                           ? "border-emerald-400/20 bg-emerald-400/[0.08]"
                           : "border-blue-400/10 bg-[#10192c]",
                       )}
@@ -2275,15 +2356,43 @@ function BomPageTrackerDialog({
                         <label className="flex min-w-[150px] cursor-pointer items-center gap-3">
                           <Checkbox
                             checked={page.completed}
-                            onCheckedChange={(value) => updatePage(page.pageNumber, { completed: value === true })}
+                            onCheckedChange={(value) => {
+                              updatePage(page.pageNumber, { completed: value === true });
+                              if (value === true && (currentPage === 0 || page.pageNumber > currentPage)) {
+                                setCurrentPageInput(String(page.pageNumber));
+                              }
+                            }}
                             className="border-blue-400/40 data-[state=checked]:bg-emerald-500 data-[state=checked]:text-slate-950"
                           />
                           <span className="text-base font-black text-slate-100">第 {page.pageNumber} 頁</span>
                         </label>
 
+                        <div className="flex flex-wrap items-center gap-2">
+                          {page.pageNumber === currentPage ? (
+                            <span className="rounded-full border border-cyan-300/35 bg-cyan-400/16 px-2.5 py-1 text-xs font-bold text-cyan-100">
+                              目前頁
+                            </span>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPageInput(String(page.pageNumber))}
+                              className="h-8 border-cyan-400/20 bg-cyan-400/10 px-3 text-xs font-bold text-cyan-100 hover:bg-cyan-400/16"
+                            >
+                              設為目前頁
+                            </Button>
+                          )}
+                        </div>
+
                         <Input
                           value={page.note}
-                          onChange={(event) => updatePage(page.pageNumber, { note: event.target.value })}
+                          onChange={(event) => {
+                            updatePage(page.pageNumber, { note: event.target.value });
+                            if (currentPage === 0 || page.pageNumber > currentPage) {
+                              setCurrentPageInput(String(page.pageNumber));
+                            }
+                          }}
                           placeholder="例如：已完成、待補圖、等 RD 回覆、已送審"
                           className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100 placeholder:text-slate-500"
                         />
@@ -2480,7 +2589,7 @@ function BomManagerDialog({
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">頁數追蹤</p>
                         <p className="mt-1.5 text-[13px] font-semibold leading-5 text-slate-200">
                           {pageTrackerSummary.totalPages > 0
-                            ? `已完成 ${pageTrackerSummary.completedPages} / ${pageTrackerSummary.totalPages} 頁`
+                            ? `${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`
                             : "尚未設定頁數"}
                         </p>
                       </div>
@@ -2495,7 +2604,7 @@ function BomManagerDialog({
                       onClick={() => onOpenPageTracker(workspace.id)}
                       className="h-9 border-emerald-400/25 bg-emerald-400/10 px-3 text-[13px] font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
                     >
-                      頁數追蹤
+                      頁數設定
                     </Button>
                     {!isActive && (
                       <Button
@@ -3232,6 +3341,14 @@ export function MaterialRequestPage() {
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
   const pageTrackerWorkspace = bomWorkspaces.find((workspace) => workspace.id === (pageTrackerWorkspaceId ?? activeBomId)) ?? activeWorkspace;
   const basePayload = activeWorkspace.payload;
+  const activePageTrackerSummary = useMemo(
+    () => getBomPageTrackerSummary(activeWorkspace.pageTracker),
+    [activeWorkspace.pageTracker],
+  );
+  const [pageTrackerQuickTotalInput, setPageTrackerQuickTotalInput] = useState("0");
+  const [pageTrackerQuickCurrentInput, setPageTrackerQuickCurrentInput] = useState("0");
+  const [pageTrackerQuickSaving, setPageTrackerQuickSaving] = useState(false);
+  const activePageTrackerCurrentNote = activePageTrackerSummary.currentPageEntry?.note.trim() ?? "";
 
   const dataset = useMemo<MaterialDataset>(
     () => buildMaterialDataset(basePayload),
@@ -3249,6 +3366,12 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => markedGroupKeySet.has(group.key)).length,
     [dataset.groups, markedGroupKeySet],
   );
+
+  useEffect(() => {
+    setPageTrackerQuickTotalInput(String(activePageTrackerSummary.totalPages));
+    setPageTrackerQuickCurrentInput(String(activePageTrackerSummary.currentPage));
+    setPageTrackerQuickSaving(false);
+  }, [activeWorkspace.id, activeWorkspace.pageTracker?.updatedAt, activePageTrackerSummary.currentPage, activePageTrackerSummary.totalPages]);
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (storedWorkspaces.length === 0) {
@@ -3652,6 +3775,15 @@ export function MaterialRequestPage() {
     }
   }, [filteredGroups, searchTokens.length]);
 
+  const pageTrackerQuickTotalPages = clampBomTrackerPageCount(Number(pageTrackerQuickTotalInput || 0));
+  const pageTrackerQuickCurrentPage = pageTrackerQuickTotalPages > 0
+    ? Math.min(pageTrackerQuickTotalPages, clampBomTrackerPageCount(Number(pageTrackerQuickCurrentInput || 0)))
+    : 0;
+  const pageTrackerQuickDirty = (
+    pageTrackerQuickTotalPages !== activePageTrackerSummary.totalPages ||
+    pageTrackerQuickCurrentPage !== activePageTrackerSummary.currentPage
+  );
+
   const toggleExpanded = (key: string) => {
     setExpandedKey((current) => (current === key ? null : key));
   };
@@ -3854,7 +3986,7 @@ export function MaterialRequestPage() {
       await saveBomWorkspacePageTracker(workspaceId, pageTracker);
       toast({
         title: "頁數追蹤已更新",
-        description: `${workspace.name} · 已完成 ${pageTrackerSummary.completedPages} / ${pageTrackerSummary.totalPages} 頁`,
+        description: `${workspace.name} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
       });
     } catch (error) {
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
@@ -3864,6 +3996,20 @@ export function MaterialRequestPage() {
         variant: "destructive",
       });
       throw error;
+    }
+  };
+
+  const saveQuickBomPageTracker = async () => {
+    setPageTrackerQuickSaving(true);
+    try {
+      await saveBomPageTracker(activeWorkspace.id, {
+        totalPages: pageTrackerQuickTotalPages,
+        currentPage: pageTrackerQuickCurrentPage,
+        pages: syncBomTrackerPages(activeWorkspace.pageTracker?.pages ?? [], pageTrackerQuickTotalPages),
+        updatedAt: new Date().toISOString(),
+      });
+    } finally {
+      setPageTrackerQuickSaving(false);
     }
   };
 
@@ -4090,7 +4236,9 @@ export function MaterialRequestPage() {
                       <div className="flex max-w-[30rem] flex-col py-1 text-left">
                         <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
                         <span className="mt-1 text-xs leading-5 text-slate-400">
-                          {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)} · {pageTrackerSummary.totalPages > 0 ? `已完成 ${pageTrackerSummary.completedPages}/${pageTrackerSummary.totalPages} 頁` : "頁數未設定"}
+                          {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)} · {pageTrackerSummary.totalPages > 0
+                            ? `${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage}/${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`
+                            : "頁數未設定"}
                         </span>
                       </div>
                     </SelectItem>
@@ -4101,7 +4249,7 @@ export function MaterialRequestPage() {
             <span className="inline-flex h-10 items-center rounded-lg border border-sky-300/16 bg-sky-400/10 px-3 text-sm font-bold text-sky-100">{bomWorkspaces.length} 個 BOM</span>
             <BomPageTrackerSummaryPill pageTracker={activeWorkspace.pageTracker} className="h-10" />
             <Button type="button" variant="outline" size="sm" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-10 border-emerald-400/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
-              <CircleCheck className="mr-2 h-4 w-4" />頁數追蹤
+              <CircleCheck className="mr-2 h-4 w-4" />逐頁勾選
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-slate-500/30 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
@@ -4113,6 +4261,110 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-10 border-rose-400/24 bg-rose-500/10 px-3 text-sm font-bold text-rose-100 hover:bg-rose-500/18 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
           </div>
         </div>
+
+        <section className="mt-3 rounded-2xl border border-cyan-400/14 bg-[linear-gradient(180deg,#10192c_0%,#0b1322_100%)] p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
+              <p className="mt-1 text-sm leading-6 text-slate-400">
+                直接在這裡設定這份 BOM 一共有幾頁，並記錄你目前畫到第幾頁。需要逐頁勾選和備註時，再按右邊按鈕展開。
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <BomPageTrackerStatCard
+                  label="總頁數"
+                  value={activePageTrackerSummary.totalPages > 0 ? `${activePageTrackerSummary.totalPages} 頁` : "未設定"}
+                  hint="先填 BOM 一共有幾頁。"
+                  tone={activePageTrackerSummary.totalPages > 0 ? "cyan" : "slate"}
+                />
+                <BomPageTrackerStatCard
+                  label="目前做到"
+                  value={activePageTrackerSummary.currentPage > 0 ? `第 ${activePageTrackerSummary.currentPage} 頁` : "尚未指定"}
+                  hint="主畫面會一直顯示這個進度。"
+                  tone={activePageTrackerSummary.currentPage > 0 ? "emerald" : "slate"}
+                />
+                <BomPageTrackerStatCard
+                  label="已完成"
+                  value={activePageTrackerSummary.totalPages > 0 ? `${activePageTrackerSummary.completedPages} / ${activePageTrackerSummary.totalPages} 頁` : "0 / 0 頁"}
+                  hint="逐頁勾選後會自動累計。"
+                  tone={activePageTrackerSummary.completedPages > 0 ? "emerald" : "slate"}
+                />
+              </div>
+            </div>
+
+            <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-blue-400/14 bg-[#0b1322] p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="page-tracker-quick-total">總頁數</Label>
+                  <Input
+                    id="page-tracker-quick-total"
+                    type="number"
+                    min={0}
+                    max={MAX_BOM_TRACKER_PAGES}
+                    step={1}
+                    value={pageTrackerQuickTotalInput}
+                    onChange={(event) => setPageTrackerQuickTotalInput(event.target.value)}
+                    placeholder="例如 12"
+                    className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="page-tracker-quick-current">目前做到第幾頁</Label>
+                  <Input
+                    id="page-tracker-quick-current"
+                    type="number"
+                    min={0}
+                    max={Math.max(pageTrackerQuickTotalPages, MAX_BOM_TRACKER_PAGES)}
+                    step={1}
+                    value={pageTrackerQuickCurrentInput}
+                    onChange={(event) => setPageTrackerQuickCurrentInput(event.target.value)}
+                    placeholder={pageTrackerQuickTotalPages > 0 ? `1 ~ ${pageTrackerQuickTotalPages}` : "先填總頁數"}
+                    disabled={pageTrackerQuickTotalPages === 0}
+                    className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void saveQuickBomPageTracker()}
+                  disabled={!canManageBomPageTracker || pageTrackerQuickSaving || !pageTrackerQuickDirty}
+                  className="h-10 bg-cyan-500 px-4 font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+                >
+                  {pageTrackerQuickSaving ? "儲存中..." : activePageTrackerSummary.totalPages > 0 ? "更新頁數進度" : "儲存頁數設定"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openBomPageTrackerDialog(activeWorkspace.id)}
+                  disabled={!canManageBomPageTracker}
+                  className="h-10 border-emerald-400/25 bg-emerald-400/10 px-4 font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500"
+                >
+                  逐頁勾選 / 備註
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-blue-400/12 bg-[#111a2c] px-3 py-3 text-sm">
+                {activePageTrackerSummary.totalPages === 0 ? (
+                  <p className="leading-6 text-amber-200">這份 BOM 還沒設定頁數。先填總頁數後按「儲存頁數設定」，下面才會知道你目前做到哪一頁。</p>
+                ) : activePageTrackerSummary.currentPage > 0 ? (
+                  <>
+                    <p className="font-bold text-slate-100">
+                      目前進度：第 {activePageTrackerSummary.currentPage} / {activePageTrackerSummary.totalPages} 頁
+                    </p>
+                    <p className="mt-1 leading-6 text-slate-400">
+                      {activePageTrackerCurrentNote
+                        ? `目前頁備註：${activePageTrackerCurrentNote}`
+                        : "目前這一頁還沒填備註，可以按「逐頁勾選 / 備註」補上說明。"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="leading-6 text-slate-400">總頁數已設定，但還沒指定目前做到第幾頁。填好之後主畫面會直接顯示進度。</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
 
         <div className="mt-3 flex flex-wrap gap-2 border-t border-cyan-400/10 pt-3 text-sm">
           <button type="button" onClick={clearFilters} className={cn("rounded-lg border px-3 py-1.5 font-bold transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50 shadow-[0_10px_24px_rgba(56,189,248,0.12)]" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料總數 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
