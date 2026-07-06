@@ -12,6 +12,7 @@ export interface BomPageTrackerPage {
 
 export interface BomPageTracker {
   totalPages: number;
+  currentPage?: number;
   pages: BomPageTrackerPage[];
   updatedAt: string;
 }
@@ -100,6 +101,10 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
   const tracker = raw as Partial<BomPageTracker>;
   const totalPagesValue = Number(tracker.totalPages ?? 0);
   const totalPages = Number.isFinite(totalPagesValue) ? Math.max(0, Math.trunc(totalPagesValue)) : 0;
+  const currentPageValue = Number(tracker.currentPage ?? 0);
+  const currentPage = Number.isFinite(currentPageValue)
+    ? Math.max(0, Math.trunc(currentPageValue))
+    : 0;
   const pageMap = new Map<number, BomPageTrackerPage>();
 
   if (Array.isArray(tracker.pages)) {
@@ -121,6 +126,7 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
 
   return {
     totalPages,
+    currentPage: totalPages > 0 ? Math.min(totalPages, currentPage) : 0,
     pages: [...pageMap.values()].sort((left, right) => left.pageNumber - right.pageNumber),
     updatedAt: typeof tracker.updatedAt === "string" ? tracker.updatedAt : fallbackUpdatedAt,
   } satisfies BomPageTracker;
