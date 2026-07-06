@@ -3015,7 +3015,7 @@ function CompactAlternativeRows({
             className={cn(
               "border-b border-blue-400/10 text-slate-200",
               preferred
-                ? "bg-emerald-400/[0.09] shadow-[inset_4px_0_0_rgba(52,211,153,0.75)]"
+                ? "bg-violet-400/[0.10] shadow-[inset_4px_0_0_rgba(167,139,250,0.82)]"
                 : index % 2 === 0
                   ? "bg-[#0a1526] hover:bg-blue-400/[0.07]"
                   : "bg-[#0c182a] hover:bg-blue-400/[0.07]"
@@ -3024,7 +3024,7 @@ function CompactAlternativeRows({
             <td className="border-r border-blue-400/10 px-3 py-3.5 text-center align-middle">
               <div className="flex flex-col items-center justify-center">
                 <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
-                <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Alt</span>
+                <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/85">Alt</span>
               </div>
             </td>
 
@@ -3046,17 +3046,17 @@ function CompactAlternativeRows({
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
               <div className="flex items-center gap-3 pl-8">
-                <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-emerald-400 text-emerald-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
+                <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-violet-300 text-violet-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[15px] font-bold text-slate-50">{record.manufacturer || "未填廠商"}</p>
                     {preferred && (
-                      <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                      <span className="rounded-full border border-violet-300/28 bg-violet-400/15 px-2.5 py-1 text-xs font-bold text-violet-200">
                         可用替代・OK + 00
                       </span>
                     )}
                   </div>
-                  <p className={cn("mt-1 text-xs", preferred ? "text-emerald-300" : "text-slate-400")}>替代料 #{index + 1}</p>
+                  <p className={cn("mt-1 text-xs", preferred ? "text-violet-200" : "text-slate-400")}>替代料 #{index + 1}</p>
                 </div>
               </div>
             </td>
@@ -4486,7 +4486,7 @@ export function MaterialRequestPage() {
                         {primaryAlternative && <InlineVirtualAlternativeEditor value={primaryAlternative.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(primaryAlternative, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded bg-emerald-400/15 px-2.5 py-1 text-sm font-bold text-emerald-300">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
