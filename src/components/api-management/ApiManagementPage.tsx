@@ -57,10 +57,10 @@ export function ApiManagementPage() {
                 <h1 className="text-3xl font-black tracking-tight text-slate-50">
                   API 控制台
                 </h1>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
+                {false ? <p className="mt-2 text-sm leading-6 text-slate-300">
                   這裡是整個網站對外串接的控制區。你可以管理金鑰、直接測試內外部 API，
                   並整理交給外部系統的串接文件。AI 對話入口獨立放在工作區，不放在這裡。
-                </p>
+                </p> : null}
               </div>
             </div>
 
