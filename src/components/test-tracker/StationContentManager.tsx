@@ -49,16 +49,16 @@ interface StationContentManagerProps {
 }
 
 const defaultTheme: StationContentTheme = {
-  contentPanel: "border-border/70 bg-card/95",
-  contentHeader: "border-border/70 bg-background/35",
-  contentSurface: "border-border/70 bg-background/35",
-  contentForm: "border-border/70 bg-background/35",
-  contentCard: "border-border/70 bg-card/85 hover:border-primary/25 hover:bg-primary/[0.03]",
-  contentEmpty: "border-border/70 bg-background/25",
-  contentButton: "border-primary/25 bg-primary/15 text-primary hover:bg-primary/22",
-  contentButtonGhost: "border-border/70 bg-background/55 text-foreground hover:bg-secondary/80",
-  contentIcon: "border-primary/25 bg-primary/10 text-primary",
-  contentBadge: "border-primary/25 bg-primary/10 text-primary",
+  contentPanel: "border-sky-300/18 bg-slate-950/88 shadow-[0_24px_70px_-48px_rgba(56,189,248,0.62)]",
+  contentHeader: "border-sky-300/14 bg-gradient-to-r from-sky-400/[0.12] via-slate-900/70 to-cyan-400/[0.05]",
+  contentSurface: "border-sky-300/14 bg-sky-400/[0.045]",
+  contentForm: "border-sky-300/14 bg-sky-400/[0.045]",
+  contentCard: "border-sky-300/14 bg-slate-950/78 hover:border-sky-200/36 hover:bg-sky-400/[0.07]",
+  contentEmpty: "border-sky-300/16 bg-sky-400/[0.045]",
+  contentButton: "border-cyan-200/35 bg-cyan-300/[0.18] text-cyan-50 hover:bg-cyan-300/[0.26]",
+  contentButtonGhost: "border-slate-500/38 bg-slate-900/72 text-slate-100 hover:border-cyan-200/35 hover:bg-cyan-300/[0.13] hover:text-cyan-50",
+  contentIcon: "border-cyan-200/34 bg-cyan-300/[0.15] text-cyan-50",
+  contentBadge: "border-cyan-200/34 bg-cyan-300/[0.15] text-cyan-50",
 };
 
 export function StationContentManager({ 
@@ -192,11 +192,11 @@ export function StationContentManager({
   };
 
   return (
-    <Card className={activeTheme.contentPanel}>
-      <CardHeader className={cn("border-b", activeTheme.contentHeader)}>
-        <div className="flex items-center justify-between">
+    <Card className={cn("overflow-hidden rounded-[1.35rem] backdrop-blur-xl", activeTheme.contentPanel)}>
+      <CardHeader className={cn("border-b px-5 py-4", activeTheme.contentHeader)}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-3 text-lg sm:text-lg">
-            <span className={cn("flex h-10 w-10 items-center justify-center rounded-xl border", activeTheme.contentIcon)}>
+            <span className={cn("flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_12px_28px_-18px_rgba(34,211,238,0.8)]", activeTheme.contentIcon)}>
               <FileText className="h-5 w-5" />
             </span>
             <div className="flex flex-col">
@@ -208,15 +208,15 @@ export function StationContentManager({
             onClick={openAddDialog}
             variant="outline"
             size="sm"
-            className={cn("text-sm shadow-sm", activeTheme.contentButton)}
+            className={cn("h-10 rounded-xl px-4 text-sm font-semibold shadow-[0_14px_34px_-22px_rgba(34,211,238,0.72)] transition-all duration-200 hover:-translate-y-0.5 active:translate-y-px", activeTheme.contentButton)}
           >
             <Plus className="h-4 w-4 mr-2" />
             新增內容
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3">
+      <CardContent className="space-y-4 p-4 sm:p-5">
+        <div className="relative space-y-3 before:absolute before:left-[1.15rem] before:top-4 before:bottom-4 before:w-px before:bg-gradient-to-b before:from-cyan-200/50 before:via-sky-400/20 before:to-transparent">
           {contents.length === 0 ? (
             <div className={cn("rounded-2xl border p-8 text-center text-muted-foreground", activeTheme.contentEmpty)}>
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -228,27 +228,35 @@ export function StationContentManager({
               const fullContent = content.content?.trim() || "尚未填寫流程內容";
 
               return (
-                <Card key={content.id} className={cn("relative transition-colors", activeTheme.contentCard)}>
-                  <CardContent className="p-4">
+                <Card
+                  key={content.id}
+                  className={cn(
+                    "group relative overflow-hidden rounded-2xl transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_60px_-44px_rgba(56,189,248,0.86)] active:translate-y-px",
+                    "before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-cyan-200/80 before:via-sky-400/55 before:to-transparent",
+                    activeTheme.contentCard
+                  )}
+                  style={{ animationDelay: `${index * 45}ms` }}
+                >
+                  <CardContent className="p-4 pl-5 sm:p-5 sm:pl-6">
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 rounded-2xl border border-transparent px-2 py-2">
+                        <div className="min-w-0 flex-1 rounded-2xl border border-transparent px-2 py-1">
                           <div className="flex min-w-0 items-center gap-2">
-                            <Badge variant="outline" className={cn("shrink-0 text-xs", activeTheme.contentBadge)}>
+                            <Badge variant="outline" className={cn("grid h-8 min-w-8 shrink-0 place-items-center rounded-full px-2 text-xs font-bold shadow-[0_10px_22px_-16px_rgba(34,211,238,0.8)]", activeTheme.contentBadge)}>
                               {index + 1}
                             </Badge>
-                            <h4 className="truncate text-sm font-medium">{content.title}</h4>
+                            <h4 className="truncate text-[15px] font-semibold tracking-[0.01em] text-slate-50">{content.title}</h4>
                           </div>
-                          <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">
+                          <p className="mt-3 line-clamp-4 whitespace-pre-wrap rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2 text-[13px] leading-6 text-slate-300/90 transition-colors duration-200 group-hover:border-cyan-200/15 group-hover:text-slate-100">
                             {fullContent}
                           </p>
                         </div>
-                        <div className="flex shrink-0 gap-1">
+                        <div className="flex shrink-0 gap-2">
                           <Button
                             onClick={() => openEditDialog(content)}
                             variant="outline"
                             size="sm"
-                            className={cn("h-8 w-8 p-0", activeTheme.contentButtonGhost)}
+                            className={cn("h-9 w-9 rounded-xl p-0 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-px", activeTheme.contentButtonGhost)}
                             title={`編輯 ${content.title}`}
                           >
                             <Edit className="h-3 w-3" />
@@ -257,7 +265,7 @@ export function StationContentManager({
                             onClick={() => handleDelete(content.id)}
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-9 w-9 rounded-xl border border-red-300/18 bg-red-400/[0.07] p-0 text-red-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-red-200/35 hover:bg-red-400/[0.14] hover:text-red-50 active:translate-y-px"
                             title={`刪除 ${content.title}`}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -268,7 +276,7 @@ export function StationContentManager({
                         <HoverCardTrigger asChild>
                           <button
                             type="button"
-                            className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300/78 transition-colors duration-200 hover:border-primary/20 hover:bg-primary/[0.08] hover:text-slate-100"
+                            className="inline-flex rounded-full border border-cyan-200/15 bg-cyan-300/[0.07] px-3 py-1 text-[11px] font-medium text-cyan-50/82 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-cyan-300/[0.12] hover:text-cyan-50 active:translate-y-px"
                           >
                             移入查看完整內容
                           </button>
@@ -312,10 +320,10 @@ export function StationContentManager({
       </CardContent>
 
       <Dialog open={isEditorOpen} onOpenChange={handleDialogChange}>
-        <DialogContent className={cn("overflow-hidden border p-0 sm:max-w-2xl", activeTheme.contentPanel)}>
+        <DialogContent className={cn("overflow-hidden rounded-[1.35rem] border p-0 shadow-[0_30px_90px_-46px_rgba(56,189,248,0.72)] backdrop-blur-2xl sm:max-w-2xl", activeTheme.contentPanel)}>
           <DialogHeader className={cn("border-b px-6 py-5", activeTheme.contentHeader)}>
             <div className="flex items-start gap-3">
-              <span className={cn("mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border", activeTheme.contentIcon)}>
+              <span className={cn("mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_12px_28px_-18px_rgba(34,211,238,0.8)]", activeTheme.contentIcon)}>
                 {isEditing ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
               </span>
               <div className="space-y-1">
@@ -351,7 +359,7 @@ export function StationContentManager({
                 placeholder="請輸入流程段落標題"
                 value={formValues.title}
                 onChange={(e) => setFormValues({ ...formValues, title: e.target.value })}
-                className="h-11 text-sm"
+                className="h-11 rounded-xl border-sky-300/18 bg-slate-950/70 text-sm text-slate-50 placeholder:text-slate-500 focus-visible:ring-cyan-300/45"
               />
             </div>
 
@@ -366,7 +374,7 @@ export function StationContentManager({
                 value={formValues.content}
                 onChange={(e) => setFormValues({ ...formValues, content: e.target.value })}
                 rows={12}
-                className="min-h-[320px] resize-y text-sm leading-7"
+                className="min-h-[320px] resize-y rounded-xl border-sky-300/18 bg-slate-950/70 text-sm leading-7 text-slate-50 placeholder:text-slate-500 focus-visible:ring-cyan-300/45"
               />
             </div>
           </div>
