@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, Edit, UserPlus, Shield, LogOut, Users, Settings, Target, Network, Clock3, Lock, UserCog } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Network, Clock3, Lock, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
@@ -42,19 +42,11 @@ interface SystemUser {
   password_hash?: string;
 }
 
-interface ProductionTarget {
-  id: string;
-  daily_target: number;
-  weekly_target: number;
-  target_date: string;
-}
-
-type AdminTab = "users" | "engineers" | "targets" | "api-management";
+type AdminTab = "users" | "engineers" | "api-management";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
-  const [productionTargets, setProductionTargets] = useState<ProductionTarget[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTeam, setFilterTeam] = useState("all-teams");
@@ -63,11 +55,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [userStatusFilter, setUserStatusFilter] = useState("all-status");
   const [isEngineerDialogOpen, setIsEngineerDialogOpen] = useState(false);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
-  const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
-  const [newTarget, setNewTarget] = useState({ daily_target: 10, weekly_target: 50 });
-  const [editingTarget, setEditingTarget] = useState<string | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
@@ -83,7 +72,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   }, [initialTab]);
 
   const loadAllData = async () => {
-    await Promise.all([loadEngineers(), loadSystemUsers(), loadProductionTargets()]);
+    await Promise.all([loadEngineers(), loadSystemUsers()]);
   };
 
   const loadEngineers = async () => {
@@ -117,24 +106,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       toast({
         title: "載入失敗",
         description: "無法載入系統用戶資料",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const loadProductionTargets = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('production_targets')
-        .select('*')
-        .order('target_date', { ascending: false });
-
-      if (error) throw error;
-      if (data) setProductionTargets(data);
-    } catch (error) {
-      toast({
-        title: "載入失敗",
-        description: "無法載入生產目標資料",
         variant: "destructive"
       });
     }
@@ -218,57 +189,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         variant: "destructive"
       });
     }
-  };
-
-  const handleUpdateTarget = async () => {
-    try {
-      let targetData = {
-        ...newTarget,
-        target_date: new Date().toISOString().split('T')[0]
-      };
-
-      if (editingTarget) {
-        const { error } = await supabase
-          .from('production_targets')
-          .update(targetData)
-          .eq('id', editingTarget);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('production_targets')
-          .insert([targetData]);
-        if (error) throw error;
-      }
-
-      toast({
-        title: "更新成功",
-        description: "生產目標已成功更新，儀表板將自動同步"
-      });
-
-      setIsTargetDialogOpen(false);
-      setEditingTarget(null);
-      setNewTarget({ daily_target: 10, weekly_target: 50 });
-      loadProductionTargets();
-      
-      // Trigger dashboard refresh by dispatching custom event
-      const event = new CustomEvent('dataUpdate', { detail: { type: 'production_targets' } });
-      window.dispatchEvent(event);
-    } catch (error) {
-      toast({
-        title: "更新失敗",
-        description: "無法更新生產目標",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEditTarget = (target: ProductionTarget) => {
-    setEditingTarget(target.id);
-    setNewTarget({
-      daily_target: target.daily_target,
-      weekly_target: target.weekly_target
-    });
-    setIsTargetDialogOpen(true);
   };
 
   const handleToggleEngineerStatus = async (id: string, currentStatus: string) => {
@@ -502,7 +422,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
@@ -510,10 +430,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           <TabsTrigger value="engineers">
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
-          </TabsTrigger>
-          <TabsTrigger value="targets">
-            <Target className="h-4 w-4 mr-2" />
-            生產目標
           </TabsTrigger>
           <TabsTrigger value="api-management">
             <Network className="h-4 w-4 mr-2" />
@@ -995,82 +911,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </Card>
         </TabsContent>
 
-        {/* Production Targets Tab */}
-        <TabsContent value="targets" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">生產目標設定</h2>
-            <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Settings className="h-4 w-4 mr-2" />
-                  設定目標
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingTarget ? "編輯生產目標" : "設定生產目標"}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>每日目標 (台)</Label>
-                    <Input 
-                      type="number"
-                      value={newTarget.daily_target}
-                      onChange={(e) => setNewTarget({...newTarget, daily_target: parseInt(e.target.value) || 0})}
-                      placeholder="請輸入每日目標..."
-                    />
-                  </div>
-                  <div>
-                    <Label>每週目標 (台)</Label>
-                    <Input 
-                      type="number"
-                      value={newTarget.weekly_target}
-                      onChange={(e) => setNewTarget({...newTarget, weekly_target: parseInt(e.target.value) || 0})}
-                      placeholder="請輸入每週目標..."
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => {
-                      setIsTargetDialogOpen(false);
-                      setEditingTarget(null);
-                      setNewTarget({ daily_target: 10, weekly_target: 50 });
-                    }}>
-                      取消
-                    </Button>
-                    <Button onClick={handleUpdateTarget}>
-                      {editingTarget ? "更新" : "新增"}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {productionTargets.map((target) => (
-                  <div key={target.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                        <Target className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">目標日期: {target.target_date}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          每日目標: {target.daily_target} 台 | 每週目標: {target.weekly_target} 台
-                        </p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleEditTarget(target)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
         <TabsContent value="api-management" className="space-y-6">
           <ApiManagementPage />
         </TabsContent>
