@@ -4,9 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
 
+export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
+
 export interface BomPageTrackerPage {
   pageNumber: number;
-  completed: boolean;
+  status: BomPageTrackerStatus;
+  completed?: boolean;
   note: string;
 }
 
@@ -118,7 +121,11 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
 
       pageMap.set(pageNumber, {
         pageNumber,
-        completed: candidate.completed === true,
+        status: candidate.status === "done" || candidate.status === "pending" || candidate.status === "done_missing"
+          ? candidate.status
+          : candidate.completed === true
+            ? "done"
+            : "pending",
         note: typeof candidate.note === "string" ? candidate.note : "",
       });
     });
