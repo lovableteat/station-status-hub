@@ -297,7 +297,7 @@ export function UserPermissionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl overflow-hidden p-0">
+      <DialogContent className="w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden p-0">
         <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_28%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.94))] px-6 py-5">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-2">
@@ -333,7 +333,7 @@ export function UserPermissionsDialog({
           </div>
         </div>
 
-        <div className="max-h-[76vh] overflow-y-auto px-6 py-6">
+        <div className="max-h-[68vh] overflow-y-auto px-6 py-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
             <section className="space-y-6">
               <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
