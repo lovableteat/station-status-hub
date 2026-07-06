@@ -4,10 +4,23 @@ import { supabase } from "@/integrations/supabase/client";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
 
+export interface BomPageTrackerPage {
+  pageNumber: number;
+  completed: boolean;
+  note: string;
+}
+
+export interface BomPageTracker {
+  totalPages: number;
+  pages: BomPageTrackerPage[];
+  updatedAt: string;
+}
+
 export interface BomWorkspace {
   id: string;
   name: string;
   payload: MaterialWorkbookPayload;
+  pageTracker?: BomPageTracker;
   updatedAt: string;
 }
 
@@ -48,6 +61,7 @@ const WORKSPACE_TABLE = "material_bom_workspaces";
 const RECORD_TABLE = "material_bom_records";
 const PREFERENCE_TABLE = "ui_table_preferences";
 const PREFERENCE_KEY_PREFIX = "material-bom-workspace:";
+const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 
@@ -74,6 +88,42 @@ function isMissingCollaborativeTables(error: unknown) {
 
 function getPreferenceRowKey(workspaceId: string) {
   return `${PREFERENCE_KEY_PREFIX}${workspaceId}`;
+}
+
+function getPageTrackerRowKey(workspaceId: string) {
+  return `${PAGE_TRACKER_KEY_PREFIX}${workspaceId}`;
+}
+
+function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
+  if (!raw || typeof raw !== "object") return undefined;
+
+  const tracker = raw as Partial<BomPageTracker>;
+  const totalPagesValue = Number(tracker.totalPages ?? 0);
+  const totalPages = Number.isFinite(totalPagesValue) ? Math.max(0, Math.trunc(totalPagesValue)) : 0;
+  const pageMap = new Map<number, BomPageTrackerPage>();
+
+  if (Array.isArray(tracker.pages)) {
+    tracker.pages.forEach((page) => {
+      if (!page || typeof page !== "object") return;
+
+      const candidate = page as Partial<BomPageTrackerPage>;
+      const pageNumberValue = Number(candidate.pageNumber ?? 0);
+      const pageNumber = Number.isFinite(pageNumberValue) ? Math.trunc(pageNumberValue) : 0;
+      if (pageNumber < 1) return;
+
+      pageMap.set(pageNumber, {
+        pageNumber,
+        completed: candidate.completed === true,
+        note: typeof candidate.note === "string" ? candidate.note : "",
+      });
+    });
+  }
+
+  return {
+    totalPages,
+    pages: [...pageMap.values()].sort((left, right) => left.pageNumber - right.pageNumber),
+    updatedAt: typeof tracker.updatedAt === "string" ? tracker.updatedAt : fallbackUpdatedAt,
+  } satisfies BomPageTracker;
 }
 
 function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string) {
@@ -104,6 +154,7 @@ function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string) {
       recordCount: payload.records.length,
       records: payload.records as MaterialWorkbookRecord[],
     },
+    pageTracker: normalizePageTracker(workspace.pageTracker, fallbackUpdatedAt),
     updatedAt: typeof workspace.updatedAt === "string" ? workspace.updatedAt : fallbackUpdatedAt,
   } satisfies BomWorkspace;
 }
@@ -190,7 +241,11 @@ function toRecordRows(workspace: BomWorkspace) {
   })) satisfies BomRecordRow[];
 }
 
-function buildWorkspaceFromRows(workspaceRow: BomWorkspaceRow, recordRows: BomRecordRow[]): BomWorkspace {
+function buildWorkspaceFromRows(
+  workspaceRow: BomWorkspaceRow,
+  recordRows: BomRecordRow[],
+  pageTracker?: BomPageTracker,
+): BomWorkspace {
   const records = [...recordRows]
     .sort((left, right) => left.order_index - right.order_index)
     .map((row) => row.data);
@@ -207,6 +262,7 @@ function buildWorkspaceFromRows(workspaceRow: BomWorkspaceRow, recordRows: BomRe
         recordCount: records.length,
         records,
       },
+      pageTracker,
       updatedAt: workspaceRow.updated_at,
     };
 }
@@ -258,13 +314,36 @@ async function repairRemoteWorkspaceRecordCounts(
   );
 }
 
+async function loadPageTrackerMap() {
+  const { data, error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .select("table_key, column_order, updated_at")
+    .like("table_key", `${PAGE_TRACKER_KEY_PREFIX}%`);
+
+  if (error) throw error;
+
+  const pageTrackerByWorkspace = new Map<string, BomPageTracker>();
+  for (const row of (data ?? []) as BomPreferenceRow[]) {
+    const workspaceId = row.table_key.replace(PAGE_TRACKER_KEY_PREFIX, "");
+    if (!workspaceId) continue;
+
+    const pageTracker = normalizePageTracker(row.column_order, row.updated_at);
+    if (pageTracker) {
+      pageTrackerByWorkspace.set(workspaceId, pageTracker);
+    }
+  }
+
+  return pageTrackerByWorkspace;
+}
+
 async function loadRemoteBomWorkspaces() {
-  const [workspaceResponse, recordRows] = await Promise.all([
+  const [workspaceResponse, recordRows, pageTrackerByWorkspace] = await Promise.all([
     supabaseClient
       .from(WORKSPACE_TABLE)
       .select("id, name, source_file, sheet_name, generated_at, record_count, updated_at")
       .order("updated_at", { ascending: false }),
     loadAllRemoteRecordRows(),
+    loadPageTrackerMap(),
   ]);
 
   if (workspaceResponse.error) throw workspaceResponse.error;
@@ -283,7 +362,11 @@ async function loadRemoteBomWorkspaces() {
 
   return sortWorkspaces(
     ((workspaceResponse.data ?? []) as BomWorkspaceRow[]).map((workspaceRow) =>
-      buildWorkspaceFromRows(workspaceRow, rowsByWorkspace.get(workspaceRow.id) ?? [])
+      buildWorkspaceFromRows(
+        workspaceRow,
+        rowsByWorkspace.get(workspaceRow.id) ?? [],
+        pageTrackerByWorkspace.get(workspaceRow.id),
+      )
     )
   );
 }
@@ -346,11 +429,31 @@ async function savePreferenceBackedWorkspace(workspace: BomWorkspace) {
   if (error) throw error;
 }
 
+async function saveRemotePageTracker(workspaceId: string, pageTracker: BomPageTracker) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .upsert({
+      table_key: getPageTrackerRowKey(workspaceId),
+      column_order: pageTracker,
+    }, { onConflict: "table_key" });
+
+  if (error) throw error;
+}
+
 async function removePreferenceBackedWorkspace(id: string) {
   const { error } = await supabaseClient
     .from(PREFERENCE_TABLE)
     .delete()
     .eq("table_key", getPreferenceRowKey(id));
+
+  if (error) throw error;
+}
+
+async function removeRemotePageTracker(id: string) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .delete()
+    .eq("table_key", getPageTrackerRowKey(id));
 
   if (error) throw error;
 }
@@ -385,20 +488,39 @@ async function migrateLegacyBomWorkspaces(
 }
 
 async function loadRecoveryBomWorkspaces() {
-  const [preferenceWorkspaces, legacyWorkspaces] = await Promise.all([
+  const [preferenceWorkspaces, legacyWorkspaces, pageTrackerByWorkspace] = await Promise.all([
     loadPreferenceBackedBomWorkspaces().catch(() => []),
     loadLegacyBomWorkspaces(),
+    loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
   ]);
+  const mergedPreferenceWorkspaces = preferenceWorkspaces.map((workspace) => ({
+    ...workspace,
+    pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+  }));
+  const mergedLegacyWorkspaces = legacyWorkspaces.map((workspace) => ({
+    ...workspace,
+    pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+  }));
 
   try {
     return await migrateLegacyBomWorkspaces(
-      preferenceWorkspaces,
+      mergedPreferenceWorkspaces,
       savePreferenceBackedWorkspace,
-      loadPreferenceBackedBomWorkspaces,
+      async () => {
+        const [workspaces, latestPageTrackerByWorkspace] = await Promise.all([
+          loadPreferenceBackedBomWorkspaces(),
+          loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
+        ]);
+
+        return workspaces.map((workspace) => ({
+          ...workspace,
+          pageTracker: latestPageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+        }));
+      },
     );
   } catch {
     const merged = new Map<string, BomWorkspace>();
-    for (const workspace of [...preferenceWorkspaces, ...legacyWorkspaces]) {
+    for (const workspace of [...mergedPreferenceWorkspaces, ...mergedLegacyWorkspaces]) {
       const current = merged.get(workspace.id);
       if (!current || toTimestamp(workspace.updatedAt) > toTimestamp(current.updatedAt)) {
         merged.set(workspace.id, workspace);
@@ -457,6 +579,10 @@ export async function saveBomWorkspace(workspace: BomWorkspace) {
     await deleteRecordIds(workspace.id, obsoleteRecordIds);
   }
 
+  if (workspace.pageTracker) {
+    await saveRemotePageTracker(workspace.id, workspace.pageTracker);
+  }
+
   await upsertWorkspaceRow(workspace);
   await removeLegacyBomWorkspace(workspace.id);
 }
@@ -480,6 +606,10 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
   await removeLegacyBomWorkspace(workspace.id);
 }
 
+export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker) {
+  await saveRemotePageTracker(workspaceId, pageTracker);
+}
+
 export async function removeBomWorkspace(id: string) {
   const { error } = await supabaseClient
     .from(WORKSPACE_TABLE)
@@ -488,6 +618,10 @@ export async function removeBomWorkspace(id: string) {
 
   if (error) throw error;
 
+  await Promise.allSettled([
+    removePreferenceBackedWorkspace(id),
+    removeRemotePageTracker(id),
+  ]);
   await removeLegacyBomWorkspace(id);
 }
 
@@ -510,7 +644,7 @@ export function subscribeBomWorkspaceChanges(onChange: () => void) {
     .on("postgres_changes", { event: "*", schema: "public", table: RECORD_TABLE }, emitChange)
     .on("postgres_changes", { event: "*", schema: "public", table: PREFERENCE_TABLE }, (payload: any) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
-      if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX))) {
+      if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX))) {
         emitChange();
       }
     })
