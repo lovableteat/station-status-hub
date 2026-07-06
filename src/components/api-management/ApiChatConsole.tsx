@@ -85,16 +85,18 @@ interface SavedConversation {
   keyLabel: string;
 }
 
+type WorkspaceLibraryKind = "prompt" | "draft";
+
 const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
 const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
 const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
 const LEGACY_ASSISTANT_SYSTEM_PROMPT =
   "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。";
 const DEFAULT_QUERY_SYSTEM_PROMPT = [
-  "你是站點管理系統的資料查詢引擎，不要扮演聊天助理。",
-  "請只根據使用者輸入、上傳圖片內容與本次對話上下文回答，不要主動延伸成生活建議或無關推薦。",
-  "若資訊不足，直接說明缺少哪些資料、欄位或篩選條件，不要自行猜測。",
-  "請用繁體中文回答，優先輸出查詢結果、重點整理與依據，內容要簡短精準。",
+  "你是使用者專屬的 AI 助理，請用繁體中文回覆。",
+  "你可以支援資料查詢、工作討論、學習說明、內容整理與一般對話，但都要以使用者當前需求為主。",
+  "當使用者在查資料或要你比對欄位時，請優先整理結果、重點與依據；若資訊不足，直接說缺少哪些資料，不要自行亂猜。",
+  "不要主動岔題，也不要塞入無關建議；除非使用者要求，否則保持回答簡潔實用。",
 ].join(" ");
 const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
@@ -480,10 +482,14 @@ export function ApiChatConsole({
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
   const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false);
+  const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
   const [promptDialogTitle, setPromptDialogTitle] = useState("");
   const [promptDialogContent, setPromptDialogContent] = useState("");
   const [draftDialogTitle, setDraftDialogTitle] = useState("");
   const [draftDialogContent, setDraftDialogContent] = useState("");
+  const [libraryApplyKind, setLibraryApplyKind] = useState<WorkspaceLibraryKind>("prompt");
+  const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
+  const [libraryApplyContent, setLibraryApplyContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [uploadedImages, setUploadedImages] = useState<GeneratedImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -844,9 +850,23 @@ export function ApiChatConsole({
     toast.success("草稿已儲存");
   };
 
-  const loadSavedItem = (content: string) => {
+  const openLibraryApplyDialog = (item: SavedWorkspaceItem, kind: WorkspaceLibraryKind) => {
+    setLibraryApplyKind(kind);
+    setLibraryApplyTitle(item.title);
+    setLibraryApplyContent(item.content);
+    setLibraryApplyDialogOpen(true);
+  };
+
+  const applyLibraryItemToDraft = () => {
+    const content = libraryApplyContent.trim();
+    if (!content) {
+      toast.error("請先填入要套用的內容");
+      return;
+    }
+
     setDraftMessage(content);
-    toast.success("已帶入輸入框");
+    setLibraryApplyDialogOpen(false);
+    toast.success("已套用到 AI 輸入框，尚未自動送出");
   };
 
   const restoreConversation = (conversation: SavedConversation) => {
@@ -1088,6 +1108,60 @@ export function ApiChatConsole({
             >
               <Save className="mr-2 h-4 w-4" />
               儲存草稿
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={libraryApplyDialogOpen} onOpenChange={setLibraryApplyDialogOpen}>
+        <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-2xl font-black text-slate-50">
+              {libraryApplyKind === "prompt" ? "調整提示詞後套用" : "調整草稿後套用"}
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-400">
+              先在這裡修改內容，再套用到 AI 輸入框。套用後不會自動送出，你可以繼續補字再問。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">名稱</Label>
+              <Input
+                value={libraryApplyTitle}
+                onChange={(event) => setLibraryApplyTitle(event.target.value)}
+                placeholder={libraryApplyKind === "prompt" ? "提示詞名稱" : "草稿名稱"}
+                className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-slate-200">要套用給 AI 的內容</Label>
+              <Textarea
+                value={libraryApplyContent}
+                onChange={(event) => setLibraryApplyContent(event.target.value)}
+                placeholder="先在這裡調整內容，再套用到輸入框"
+                className="min-h-[240px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLibraryApplyDialogOpen(false)}
+              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={applyLibraryItemToDraft}
+              disabled={!libraryApplyContent.trim()}
+              className="h-11 rounded-2xl bg-cyan-500 px-5 font-bold text-slate-950 shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              套用到 AI 輸入框
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1336,7 +1410,7 @@ export function ApiChatConsole({
                 </div>
                 <div>
                   <p className="text-lg font-black text-slate-50">資料查詢空間</p>
-                  <p className="text-xs text-slate-400">單純查資料 / 整理結果</p>
+                  <p className="text-xs text-slate-400">查資料 / 對話學習 / 整理結果</p>
                 </div>
               </div>
 
@@ -1438,7 +1512,7 @@ export function ApiChatConsole({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-100">提示詞庫</p>
-                    <p className="text-xs text-slate-400">點一下直接帶入輸入框</p>
+                    <p className="text-xs text-slate-400">先開視窗調整，再套用給 AI</p>
                   </div>
                   <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
                     {savedPrompts.length}
@@ -1457,7 +1531,7 @@ export function ApiChatConsole({
                       >
                         <button
                           type="button"
-                          onClick={() => loadSavedItem(item.content)}
+                          onClick={() => openLibraryApplyDialog(item, "prompt")}
                           className="w-full text-left"
                         >
                           <div className="flex items-start gap-2">
@@ -1476,10 +1550,10 @@ export function ApiChatConsole({
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => loadSavedItem(item.content)}
+                            onClick={() => openLibraryApplyDialog(item, "prompt")}
                             className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
                           >
-                            套用
+                            開啟調整
                           </Button>
                           <Button
                             type="button"
@@ -1500,7 +1574,7 @@ export function ApiChatConsole({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-100">草稿庫</p>
-                    <p className="text-xs text-slate-400">保留尚未送出的內容</p>
+                    <p className="text-xs text-slate-400">先開視窗調整，再套用給 AI</p>
                   </div>
                   <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
                     {savedDrafts.length}
@@ -1519,7 +1593,7 @@ export function ApiChatConsole({
                       >
                         <button
                           type="button"
-                          onClick={() => loadSavedItem(item.content)}
+                          onClick={() => openLibraryApplyDialog(item, "draft")}
                           className="w-full text-left"
                         >
                           <div className="flex items-start gap-2">
@@ -1538,10 +1612,10 @@ export function ApiChatConsole({
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => loadSavedItem(item.content)}
+                            onClick={() => openLibraryApplyDialog(item, "draft")}
                             className="h-8 rounded-xl border-violet-300/16 bg-violet-400/8 text-xs font-bold text-violet-100 hover:bg-violet-400/14 hover:text-white"
                           >
-                            套用
+                            開啟調整
                           </Button>
                           <Button
                             type="button"
