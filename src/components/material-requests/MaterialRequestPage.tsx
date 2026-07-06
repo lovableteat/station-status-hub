@@ -27,12 +27,9 @@ import {
   History,
   ImagePlus,
   Layers3,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Plus,
   RotateCcw,
-  Rows3,
   Search,
   Star,
   TriangleAlert,
@@ -61,11 +58,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import seedPayload from "@/data/materialRequestSeed.json";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/utils/apiExportUtils";
@@ -161,7 +156,6 @@ const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
-const BOM_SIDEBAR_COLLAPSED_KEY = "station-status-hub:material-bom-sidebar-collapsed:v1";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
@@ -530,16 +524,6 @@ function saveMarkedGroups(bomId: string, values: string[]) {
     );
   } catch {
     // Ignore browser storage failures and keep current session state usable.
-  }
-}
-
-function loadBomSidebarCollapsed() {
-  if (typeof window === "undefined") return false;
-
-  try {
-    return window.localStorage.getItem(BOM_SIDEBAR_COLLAPSED_KEY) === "true";
-  } catch {
-    return false;
   }
 }
 
@@ -3149,234 +3133,12 @@ function CompactAlternativeRows({
   );
 }
 
-function BomWorkspaceSidebarPanel({
-  activeBomId,
-  activeWorkspace,
-  workspaces,
-  totalCount,
-  query,
-  collapsed,
-  isMobile,
-  isCollaborativeReady,
-  onQueryChange,
-  onSelect,
-  onToggleCollapse,
-  onOpenManager,
-  onDeleteActive,
-}: {
-  activeBomId: string;
-  activeWorkspace: BomWorkspace;
-  workspaces: BomWorkspace[];
-  totalCount: number;
-  query: string;
-  collapsed: boolean;
-  isMobile: boolean;
-  isCollaborativeReady: boolean;
-  onQueryChange: (value: string) => void;
-  onSelect: (bomId: string) => void;
-  onToggleCollapse?: () => void;
-  onOpenManager: () => void;
-  onDeleteActive: () => void;
-}) {
-  const showBody = isMobile || !collapsed;
-
-  return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-[28px] border border-cyan-400/14 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_28%),linear-gradient(180deg,#0d1728_0%,#08111d_100%)] shadow-[0_24px_60px_rgba(2,8,23,0.32)]",
-        showBody ? "w-full" : "w-[92px]",
-      )}
-    >
-      <div className="border-b border-cyan-400/10 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className={cn("min-w-0", !showBody && "sr-only")}>
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-cyan-300">BOM Navigator</p>
-            <h3 className="mt-1 text-lg font-black text-slate-50">BOM 側邊欄</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-400">切版本、看更新時間、直接切到對應 BOM。</p>
-          </div>
-
-          {onToggleCollapse ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onToggleCollapse}
-              className="h-10 w-10 rounded-xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/18 hover:text-white"
-              title={collapsed ? "展開 BOM 側欄" : "收合 BOM 側欄"}
-            >
-              {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
-            </Button>
-          ) : null}
-        </div>
-
-        {showBody ? (
-          <>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl border border-cyan-400/10 bg-[#091321] px-3 py-2.5">
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">總 BOM</p>
-                <p className="mt-1 text-lg font-black text-slate-50">{totalCount}</p>
-              </div>
-              <div className="rounded-2xl border border-cyan-400/10 bg-[#091321] px-3 py-2.5">
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">目前</p>
-                <p className="mt-1 truncate text-sm font-bold text-cyan-100">{activeWorkspace.payload.sheetName}</p>
-              </div>
-            </div>
-
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
-              <Input
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="搜尋 BOM 名稱或工作表"
-                className="h-10 rounded-xl border-cyan-400/18 bg-[#091321] pl-10 text-sm text-slate-100 placeholder:text-slate-500"
-              />
-            </div>
-          </>
-        ) : (
-          <div className="mt-3 flex justify-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/14 bg-cyan-400/10 text-cyan-100">
-              <Rows3 className="h-4.5 w-4.5" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="max-h-[calc(100vh-21rem)] overflow-y-auto p-3">
-        <div className="space-y-2">
-          {workspaces.length > 0 ? (
-            workspaces.map((workspace, index) => {
-              const isActive = workspace.id === activeBomId;
-
-              return (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  onClick={() => onSelect(workspace.id)}
-                  className={cn(
-                    "group relative w-full rounded-2xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/45",
-                    showBody ? "px-3 py-3.5" : "flex h-14 items-center justify-center px-2 py-2",
-                    isActive
-                      ? "border-cyan-300/32 bg-cyan-400/[0.14] shadow-[0_18px_36px_rgba(14,165,233,0.16)]"
-                      : "border-slate-500/22 bg-[#091321] hover:border-cyan-300/24 hover:bg-cyan-400/[0.08]",
-                  )}
-                  title={workspace.name}
-                >
-                  {showBody ? (
-                    <>
-                      <div className="flex items-start gap-3">
-                        <div className={cn("mt-0.5 flex h-10 w-10 flex-none items-center justify-center rounded-2xl border", isActive ? "border-cyan-300/28 bg-cyan-400/18 text-cyan-100" : "border-slate-500/20 bg-slate-900/35 text-slate-400")}>
-                          <FileSpreadsheet className="h-4.5 w-4.5" />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-slate-50">{workspace.name}</p>
-                              <p className="mt-1 truncate text-xs text-slate-400">{workspace.payload.sheetName}</p>
-                            </div>
-                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-black", isActive ? "border border-cyan-300/28 bg-cyan-400/15 text-cyan-100" : "border border-slate-500/20 bg-slate-900/35 text-slate-400")}>
-                              #{index + 1}
-                            </span>
-                          </div>
-
-                          <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-400">
-                            <span className="inline-flex items-center gap-1.5">
-                              <Layers3 className="h-3.5 w-3.5 text-sky-300" />
-                              {workspace.payload.recordCount.toLocaleString()} 筆
-                            </span>
-                            <span className="inline-flex items-center gap-1.5 truncate">
-                              <History className="h-3.5 w-3.5 text-cyan-300" />
-                              {formatTimestamp(workspace.updatedAt)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl border", isActive ? "border-cyan-300/28 bg-cyan-400/18 text-cyan-100" : "border-slate-500/20 bg-slate-900/35 text-slate-400")}>
-                        <FileSpreadsheet className="h-4.5 w-4.5" />
-                      </div>
-                      <span className={cn("absolute right-1.5 top-1.5 min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-black", isActive ? "bg-cyan-300 text-slate-950" : "bg-slate-700 text-slate-200")}>
-                        {index + 1}
-                      </span>
-                    </>
-                  )}
-                </button>
-              );
-            })
-          ) : (
-            <div className="rounded-2xl border border-dashed border-slate-500/22 bg-[#091321] px-3 py-6 text-center text-sm text-slate-500">
-              找不到符合的 BOM。
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-cyan-400/10 p-3">
-        {showBody ? (
-          <div className="grid gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onOpenManager}
-              disabled={!isCollaborativeReady}
-              className="h-10 justify-start rounded-xl border-slate-500/24 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/24 hover:bg-sky-400/10 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
-            >
-              <Layers3 className="mr-2 h-4 w-4" />
-              BOM 管理
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onDeleteActive}
-              disabled={!isCollaborativeReady}
-              className="h-10 justify-start rounded-xl border-rose-400/22 bg-rose-500/10 px-3 text-sm font-bold text-rose-100 hover:bg-rose-500/16 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
-            >
-              <History className="mr-2 h-4 w-4" />
-              刪除目前 BOM
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onOpenManager}
-              disabled={!isCollaborativeReady}
-              className="h-10 w-10 rounded-xl border border-slate-500/24 bg-slate-900/35 text-slate-200 hover:border-sky-300/24 hover:bg-sky-400/10 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
-              title="BOM 管理"
-            >
-              <Layers3 className="h-4.5 w-4.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onDeleteActive}
-              disabled={!isCollaborativeReady}
-              className="h-10 w-10 rounded-xl border border-rose-400/22 bg-rose-500/10 text-rose-100 hover:bg-rose-500/16 hover:text-white disabled:border-slate-600 disabled:text-slate-500"
-              title="刪除目前 BOM"
-            >
-              <History className="h-4.5 w-4.5" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
   const [markedGroupKeys, setMarkedGroupKeys] = useState<string[]>(() => loadMarkedGroups(loadActiveBomId()));
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
-  const [bomSidebarCollapsed, setBomSidebarCollapsed] = useState(loadBomSidebarCollapsed);
-  const [bomSidebarMobileOpen, setBomSidebarMobileOpen] = useState(false);
-  const [bomSidebarQuery, setBomSidebarQuery] = useState("");
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
@@ -3397,8 +3159,6 @@ export function MaterialRequestPage() {
   const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
-  const isMobile = useIsMobile();
-  const deferredBomSidebarQuery = useDeferredValue(bomSidebarQuery);
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const isCollaborativeReady = collaborationStatus === "remote";
@@ -3519,22 +3279,8 @@ export function MaterialRequestPage() {
   }, [activeBomId]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(BOM_SIDEBAR_COLLAPSED_KEY, bomSidebarCollapsed ? "true" : "false");
-    } catch {
-      // Ignore storage failures and keep the current in-memory sidebar state.
-    }
-  }, [bomSidebarCollapsed]);
-
-  useEffect(() => {
     setMarkedGroupKeys(loadMarkedGroups(activeBomId));
   }, [activeBomId]);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setBomSidebarMobileOpen(false);
-    }
-  }, [isMobile]);
 
   useEffect(() => {
     setMarkedGroupKeys((current) => {
@@ -3588,22 +3334,6 @@ export function MaterialRequestPage() {
     () => [...bomWorkspaces].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [bomWorkspaces]
   );
-  const visibleBomWorkspaces = useMemo(() => {
-    const keyword = deferredBomSidebarQuery.trim().toLowerCase();
-    if (!keyword) return orderedBomWorkspaces;
-
-    return orderedBomWorkspaces.filter((workspace) => {
-      const haystack = [
-        workspace.name,
-        workspace.payload.sheetName,
-        workspace.payload.sourceFile,
-      ]
-        .map((value) => value?.toLowerCase() ?? "")
-        .join(" ");
-
-      return haystack.includes(keyword);
-    });
-  }, [deferredBomSidebarQuery, orderedBomWorkspaces]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const groupRuntimeIndex = useMemo(() => {
@@ -4088,7 +3818,6 @@ export function MaterialRequestPage() {
 
   const switchActiveBom = (value: string) => {
     setActiveBomId(value);
-    setBomSidebarMobileOpen(false);
     setQuery("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
@@ -4275,22 +4004,6 @@ export function MaterialRequestPage() {
 
         <div className="mt-3 flex flex-col gap-3 border-t border-cyan-400/10 pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => isMobile ? setBomSidebarMobileOpen(true) : setBomSidebarCollapsed((current) => !current)}
-              className="h-10 border-sky-300/20 bg-sky-400/10 px-3 text-sm font-bold text-sky-100 hover:border-sky-300/28 hover:bg-sky-400/18 hover:text-white"
-            >
-              {isMobile ? (
-                <Rows3 className="mr-2 h-4 w-4" />
-              ) : bomSidebarCollapsed ? (
-                <PanelLeftOpen className="mr-2 h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="mr-2 h-4 w-4" />
-              )}
-              {isMobile ? "BOM 清單" : bomSidebarCollapsed ? "展開側欄" : "收合側欄"}
-            </Button>
             <span className="inline-flex h-10 items-center text-sm font-bold text-slate-200">切換 BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
               <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/24 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:min-w-[24rem] sm:flex-[1_1_28rem]">
@@ -4470,60 +4183,8 @@ export function MaterialRequestPage() {
         </div>
       </header>
 
-      <Sheet open={bomSidebarMobileOpen} onOpenChange={setBomSidebarMobileOpen}>
-        <SheetContent side="left" className="w-[22rem] border-cyan-400/16 bg-[#050b16] p-0 text-slate-100 sm:max-w-[22rem]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>BOM 側邊欄</SheetTitle>
-          </SheetHeader>
-          <div className="h-full p-3">
-            <BomWorkspaceSidebarPanel
-              activeBomId={activeBomId}
-              activeWorkspace={activeWorkspace}
-              workspaces={visibleBomWorkspaces}
-              totalCount={orderedBomWorkspaces.length}
-              query={bomSidebarQuery}
-              collapsed={false}
-              isMobile
-              isCollaborativeReady={isCollaborativeReady}
-              onQueryChange={setBomSidebarQuery}
-              onSelect={switchActiveBom}
-              onOpenManager={() => {
-                setBomManagerOpen(true);
-                setBomSidebarMobileOpen(false);
-              }}
-              onDeleteActive={() => {
-                setBomSidebarMobileOpen(false);
-                void deleteActiveBom();
-              }}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <div className="mt-3 flex items-start gap-3">
-        <aside className={cn("hidden shrink-0 transition-[width] duration-200 lg:block", bomSidebarCollapsed ? "w-[92px]" : "w-[320px]")}>
-          <div className="sticky top-3">
-            <BomWorkspaceSidebarPanel
-              activeBomId={activeBomId}
-              activeWorkspace={activeWorkspace}
-              workspaces={visibleBomWorkspaces}
-              totalCount={orderedBomWorkspaces.length}
-              query={bomSidebarQuery}
-              collapsed={bomSidebarCollapsed}
-              isMobile={false}
-              isCollaborativeReady={isCollaborativeReady}
-              onQueryChange={setBomSidebarQuery}
-              onSelect={switchActiveBom}
-              onToggleCollapse={() => setBomSidebarCollapsed((current) => !current)}
-              onOpenManager={() => setBomManagerOpen(true)}
-              onDeleteActive={() => {
-                void deleteActiveBom();
-              }}
-            />
-          </div>
-        </aside>
-
-        <div className="min-w-0 flex-1">
+      <div className="mt-3">
+        <div className="min-w-0">
       <section className="rounded-2xl border border-cyan-400/10 bg-[linear-gradient(180deg,#0c1627_0%,#09111d_100%)] p-3 shadow-[0_18px_44px_rgba(2,8,23,0.18)]">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
