@@ -346,16 +346,16 @@ function BomPageTrackerStatCard({
   tone?: "slate" | "emerald" | "cyan";
 }) {
   const toneClassName = tone === "emerald"
-    ? "border-emerald-400/18 bg-emerald-400/[0.08]"
+    ? "border-emerald-300/26 bg-emerald-300/[0.14]"
     : tone === "cyan"
-      ? "border-cyan-400/18 bg-cyan-400/[0.08]"
-      : "border-blue-400/12 bg-[#0b1322]";
+      ? "border-cyan-300/26 bg-cyan-300/[0.14]"
+      : "border-sky-300/18 bg-[#162338]";
 
   return (
     <div className={cn("rounded-xl border px-3 py-3", toneClassName)}>
-      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</p>
       <p className="mt-2 text-xl font-black text-slate-50">{value}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-400">{hint}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-300">{hint}</p>
     </div>
   );
 }
@@ -3178,7 +3178,7 @@ export function MaterialRequestPage() {
   const [pageTrackerQuickTotalInput, setPageTrackerQuickTotalInput] = useState("0");
   const [pageTrackerQuickCurrentInput, setPageTrackerQuickCurrentInput] = useState("0");
   const [pageTrackerQuickSaving, setPageTrackerQuickSaving] = useState(false);
-  const [pageTrackerPanelCollapsed, setPageTrackerPanelCollapsed] = useState(false);
+  const [pageTrackerPanelCollapsed, setPageTrackerPanelCollapsed] = useState(true);
   const activePageTrackerCurrentNote = activePageTrackerSummary.currentPageEntry?.note.trim() ?? "";
   const activePageTrackerCurrentStatus = activePageTrackerSummary.currentPageEntry?.status ?? "pending";
   const activePageTrackerCurrentStatusMeta = getBomPageStatusMeta(activePageTrackerCurrentStatus);
@@ -4048,11 +4048,11 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <section className="mt-3 rounded-2xl border border-cyan-400/14 bg-[linear-gradient(180deg,#10192c_0%,#0b1322_100%)] p-4">
+        <section className="mt-3 rounded-2xl border border-cyan-300/20 bg-[linear-gradient(180deg,#16253b_0%,#101c30_100%)] p-4 shadow-[0_16px_36px_rgba(8,15,30,0.18)]">
           <div className="flex flex-col gap-3 border-b border-cyan-400/10 pb-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
-              <p className="mt-1 text-sm leading-6 text-slate-400">
+              <p className="mt-1 text-sm leading-6 text-slate-300">
                 直接設定總頁數、目前做到第幾頁；若要逐頁切狀態與備註，再展開細節。
               </p>
             </div>
@@ -4061,7 +4061,7 @@ export function MaterialRequestPage() {
               variant="outline"
               size="sm"
               onClick={() => setPageTrackerPanelCollapsed((current) => !current)}
-              className="h-10 border-cyan-400/20 bg-cyan-400/10 px-4 text-sm font-bold text-cyan-100 hover:bg-cyan-400/16"
+              className="h-10 border-cyan-300/24 bg-cyan-300/14 px-4 text-sm font-bold text-cyan-50 hover:bg-cyan-300/22"
             >
               {pageTrackerPanelCollapsed ? (
                 <ChevronDown className="mr-2 h-4 w-4" />
@@ -4096,7 +4096,7 @@ export function MaterialRequestPage() {
           {!pageTrackerPanelCollapsed && (
             <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
-                <div className="rounded-xl border border-blue-400/12 bg-[#111a2c] px-3 py-3 text-sm">
+                <div className="rounded-xl border border-sky-300/18 bg-[#1b2a42] px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   {activePageTrackerSummary.totalPages === 0 ? (
                     <p className="leading-6 text-amber-200">這份 BOM 還沒設定頁數。先填總頁數後按「儲存頁數設定」，下面才會知道你目前做到哪一頁。</p>
                   ) : activePageTrackerSummary.currentPage > 0 ? (
@@ -4104,22 +4104,22 @@ export function MaterialRequestPage() {
                       <p className="font-bold text-slate-100">
                         目前進度：第 {activePageTrackerSummary.currentPage} / {activePageTrackerSummary.totalPages} 頁
                       </p>
-                      <p className="mt-1 leading-6 text-slate-400">
+                      <p className="mt-1 leading-6 text-slate-300">
                         目前狀態：{activePageTrackerCurrentStatusMeta.label}
                       </p>
-                      <p className="mt-1 leading-6 text-slate-400">
+                      <p className="mt-1 leading-6 text-slate-300">
                         {activePageTrackerCurrentNote
                           ? `目前頁備註：${activePageTrackerCurrentNote}`
                           : "目前這一頁還沒填備註，可以按「逐頁勾選 / 備註」補上說明。"}
                       </p>
                     </>
                   ) : (
-                    <p className="leading-6 text-slate-400">總頁數已設定，但還沒指定目前做到第幾頁。填好之後主畫面會直接顯示進度。</p>
+                    <p className="leading-6 text-slate-300">總頁數已設定，但還沒指定目前做到第幾頁。填好之後主畫面會直接顯示進度。</p>
                   )}
                 </div>
               </div>
 
-              <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-blue-400/14 bg-[#0b1322] p-4">
+              <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-sky-300/18 bg-[#16253b] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="page-tracker-quick-total">總頁數</Label>
@@ -4132,7 +4132,7 @@ export function MaterialRequestPage() {
                       value={pageTrackerQuickTotalInput}
                       onChange={(event) => setPageTrackerQuickTotalInput(event.target.value)}
                       placeholder="例如 12"
-                      className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100"
+                      className="h-10 border-sky-300/18 bg-[#21324c] text-slate-100"
                     />
                   </div>
                   <div className="space-y-2">
@@ -4147,7 +4147,7 @@ export function MaterialRequestPage() {
                       onChange={(event) => setPageTrackerQuickCurrentInput(event.target.value)}
                       placeholder={pageTrackerQuickTotalPages > 0 ? `1 ~ ${pageTrackerQuickTotalPages}` : "先填總頁數"}
                       disabled={pageTrackerQuickTotalPages === 0}
-                      className="h-10 border-blue-400/20 bg-[#111f36] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-10 border-sky-300/18 bg-[#21324c] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
                 </div>
