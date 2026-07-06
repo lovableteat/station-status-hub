@@ -211,8 +211,8 @@ const Index = () => {
       },
       {
         id: "ai-chat" as const,
-        label: "AI 對話空間",
-        description: "直接進入 AI 對話工作區，延續上下文、生成圖片並與模型持續互動。",
+        label: "資料查詢空間",
+        description: "直接進入資料查詢工作區，用 API 查資料、整理結果與擷取圖片文字。",
         icon: MessageSquareText,
         visible: canViewModule("api-management"),
       },
