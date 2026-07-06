@@ -20,11 +20,18 @@ export interface BomPageTracker {
   updatedAt: string;
 }
 
+export interface BomTableColorTheme {
+  primary: string;
+  alternative: string;
+  secondary: string;
+}
+
 export interface BomWorkspace {
   id: string;
   name: string;
   payload: MaterialWorkbookPayload;
   pageTracker?: BomPageTracker;
+  tableColorTheme?: BomTableColorTheme;
   updatedAt: string;
 }
 
@@ -66,6 +73,7 @@ const RECORD_TABLE = "material_bom_records";
 const PREFERENCE_TABLE = "ui_table_preferences";
 const PREFERENCE_KEY_PREFIX = "material-bom-workspace:";
 const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
+const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 
@@ -96,6 +104,10 @@ function getPreferenceRowKey(workspaceId: string) {
 
 function getPageTrackerRowKey(workspaceId: string) {
   return `${PAGE_TRACKER_KEY_PREFIX}${workspaceId}`;
+}
+
+function getTableColorThemeRowKey(workspaceId: string) {
+  return `${TABLE_COLOR_THEME_KEY_PREFIX}${workspaceId}`;
 }
 
 function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
@@ -139,6 +151,29 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
   } satisfies BomPageTracker;
 }
 
+function normalizeTableColorTheme(raw: unknown) {
+  if (!raw || typeof raw !== "object") return undefined;
+
+  const candidate = raw as Partial<BomTableColorTheme>;
+  const normalizeColor = (value: unknown) => (
+    typeof value === "string" && /^#([0-9a-f]{6})$/i.test(value.trim())
+      ? value.trim().toUpperCase()
+      : ""
+  );
+
+  const primary = normalizeColor(candidate.primary);
+  const alternative = normalizeColor(candidate.alternative);
+  const secondary = normalizeColor(candidate.secondary);
+
+  if (!primary || !alternative || !secondary) return undefined;
+
+  return {
+    primary,
+    alternative,
+    secondary,
+  } satisfies BomTableColorTheme;
+}
+
 function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string) {
   if (!raw || typeof raw !== "object") return null;
 
@@ -168,6 +203,7 @@ function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string) {
       records: payload.records as MaterialWorkbookRecord[],
     },
     pageTracker: normalizePageTracker(workspace.pageTracker, fallbackUpdatedAt),
+    tableColorTheme: normalizeTableColorTheme(workspace.tableColorTheme),
     updatedAt: typeof workspace.updatedAt === "string" ? workspace.updatedAt : fallbackUpdatedAt,
   } satisfies BomWorkspace;
 }
@@ -258,6 +294,7 @@ function buildWorkspaceFromRows(
   workspaceRow: BomWorkspaceRow,
   recordRows: BomRecordRow[],
   pageTracker?: BomPageTracker,
+  tableColorTheme?: BomTableColorTheme,
 ): BomWorkspace {
   const records = [...recordRows]
     .sort((left, right) => left.order_index - right.order_index)
@@ -272,12 +309,13 @@ function buildWorkspaceFromRows(
         generatedAt: workspaceRow.generated_at,
         // Prefer the material rows we actually loaded so stale workspace metadata
         // cannot desynchronize the visible counts from the rendered table.
-        recordCount: records.length,
-        records,
-      },
-      pageTracker,
-      updatedAt: workspaceRow.updated_at,
-    };
+      recordCount: records.length,
+      records,
+    },
+    pageTracker,
+    tableColorTheme,
+    updatedAt: workspaceRow.updated_at,
+  };
 }
 
 async function loadAllRemoteRecordRows() {
@@ -349,14 +387,37 @@ async function loadPageTrackerMap() {
   return pageTrackerByWorkspace;
 }
 
+async function loadTableColorThemeMap() {
+  const { data, error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .select("table_key, column_order, updated_at")
+    .like("table_key", `${TABLE_COLOR_THEME_KEY_PREFIX}%`);
+
+  if (error) throw error;
+
+  const themeByWorkspace = new Map<string, BomTableColorTheme>();
+  for (const row of (data ?? []) as BomPreferenceRow[]) {
+    const workspaceId = row.table_key.replace(TABLE_COLOR_THEME_KEY_PREFIX, "");
+    if (!workspaceId) continue;
+
+    const theme = normalizeTableColorTheme(row.column_order);
+    if (theme) {
+      themeByWorkspace.set(workspaceId, theme);
+    }
+  }
+
+  return themeByWorkspace;
+}
+
 async function loadRemoteBomWorkspaces() {
-  const [workspaceResponse, recordRows, pageTrackerByWorkspace] = await Promise.all([
+  const [workspaceResponse, recordRows, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
     supabaseClient
       .from(WORKSPACE_TABLE)
       .select("id, name, source_file, sheet_name, generated_at, record_count, updated_at")
       .order("updated_at", { ascending: false }),
     loadAllRemoteRecordRows(),
     loadPageTrackerMap(),
+    loadTableColorThemeMap(),
   ]);
 
   if (workspaceResponse.error) throw workspaceResponse.error;
@@ -379,6 +440,7 @@ async function loadRemoteBomWorkspaces() {
         workspaceRow,
         rowsByWorkspace.get(workspaceRow.id) ?? [],
         pageTrackerByWorkspace.get(workspaceRow.id),
+        tableColorThemeByWorkspace.get(workspaceRow.id),
       )
     )
   );
@@ -453,6 +515,17 @@ async function saveRemotePageTracker(workspaceId: string, pageTracker: BomPageTr
   if (error) throw error;
 }
 
+async function saveRemoteTableColorTheme(workspaceId: string, tableColorTheme: BomTableColorTheme) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .upsert({
+      table_key: getTableColorThemeRowKey(workspaceId),
+      column_order: tableColorTheme,
+    }, { onConflict: "table_key" });
+
+  if (error) throw error;
+}
+
 async function removePreferenceBackedWorkspace(id: string) {
   const { error } = await supabaseClient
     .from(PREFERENCE_TABLE)
@@ -467,6 +540,15 @@ async function removeRemotePageTracker(id: string) {
     .from(PREFERENCE_TABLE)
     .delete()
     .eq("table_key", getPageTrackerRowKey(id));
+
+  if (error) throw error;
+}
+
+async function removeRemoteTableColorTheme(id: string) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .delete()
+    .eq("table_key", getTableColorThemeRowKey(id));
 
   if (error) throw error;
 }
@@ -501,18 +583,21 @@ async function migrateLegacyBomWorkspaces(
 }
 
 async function loadRecoveryBomWorkspaces() {
-  const [preferenceWorkspaces, legacyWorkspaces, pageTrackerByWorkspace] = await Promise.all([
+  const [preferenceWorkspaces, legacyWorkspaces, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
     loadPreferenceBackedBomWorkspaces().catch(() => []),
     loadLegacyBomWorkspaces(),
     loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
+    loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
   ]);
   const mergedPreferenceWorkspaces = preferenceWorkspaces.map((workspace) => ({
     ...workspace,
     pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+    tableColorTheme: tableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
   }));
   const mergedLegacyWorkspaces = legacyWorkspaces.map((workspace) => ({
     ...workspace,
     pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+    tableColorTheme: tableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
   }));
 
   try {
@@ -524,10 +609,14 @@ async function loadRecoveryBomWorkspaces() {
           loadPreferenceBackedBomWorkspaces(),
           loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
         ]);
+        const latestTableColorThemeByWorkspace = await loadTableColorThemeMap().catch(
+          () => new Map<string, BomTableColorTheme>(),
+        );
 
         return workspaces.map((workspace) => ({
           ...workspace,
           pageTracker: latestPageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
+          tableColorTheme: latestTableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
         }));
       },
     );
@@ -596,6 +685,10 @@ export async function saveBomWorkspace(workspace: BomWorkspace) {
     await saveRemotePageTracker(workspace.id, workspace.pageTracker);
   }
 
+  if (workspace.tableColorTheme) {
+    await saveRemoteTableColorTheme(workspace.id, workspace.tableColorTheme);
+  }
+
   await upsertWorkspaceRow(workspace);
   await removeLegacyBomWorkspace(workspace.id);
 }
@@ -623,6 +716,10 @@ export async function saveBomWorkspacePageTracker(workspaceId: string, pageTrack
   await saveRemotePageTracker(workspaceId, pageTracker);
 }
 
+export async function saveBomWorkspaceTableColorTheme(workspaceId: string, tableColorTheme: BomTableColorTheme) {
+  await saveRemoteTableColorTheme(workspaceId, tableColorTheme);
+}
+
 export async function removeBomWorkspace(id: string) {
   const { error } = await supabaseClient
     .from(WORKSPACE_TABLE)
@@ -634,6 +731,7 @@ export async function removeBomWorkspace(id: string) {
   await Promise.allSettled([
     removePreferenceBackedWorkspace(id),
     removeRemotePageTracker(id),
+    removeRemoteTableColorTheme(id),
   ]);
   await removeLegacyBomWorkspace(id);
 }
@@ -657,7 +755,7 @@ export function subscribeBomWorkspaceChanges(onChange: () => void) {
     .on("postgres_changes", { event: "*", schema: "public", table: RECORD_TABLE }, emitChange)
     .on("postgres_changes", { event: "*", schema: "public", table: PREFERENCE_TABLE }, (payload: any) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
-      if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX))) {
+      if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX) || value.startsWith(TABLE_COLOR_THEME_KEY_PREFIX))) {
         emitChange();
       }
     })

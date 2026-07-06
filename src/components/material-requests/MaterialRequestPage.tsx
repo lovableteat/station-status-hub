@@ -11,6 +11,7 @@
   useState,
 } from "react";
 import { startTransition } from "react";
+import type { CSSProperties } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -92,6 +93,8 @@ import {
   saveBomWorkspaceRecord,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
+import type { BomTableColorTheme } from "./materialBomStorage";
+import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
@@ -190,9 +193,73 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
 const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 250, 220, 130];
 const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 180, 110];
 const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 520, 420, 260];
+const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
+  primary: "#0F5D74",
+  alternative: "#343B73",
+  secondary: "#10243D",
+};
 const FILTER_OPTION_ROW_HEIGHT = 38;
 const FILTER_OPTION_LIST_HEIGHT = 224;
 const FILTER_OPTION_OVERSCAN = 8;
+
+const BOM_TABLE_COLOR_FIELDS: Array<{
+  key: keyof BomTableColorTheme;
+  label: string;
+  description: string;
+}> = [
+  { key: "primary", label: "主料", description: "主料列與首筆主資料背景。" },
+  { key: "alternative", label: "替代料", description: "替代料列與可用替代背景。" },
+  { key: "secondary", label: "其餘料", description: "其他替代料或未首選列背景。" },
+];
+
+function normalizeBomTableColorTheme(theme: Partial<BomTableColorTheme> | null | undefined): BomTableColorTheme {
+  const pickColor = (value: unknown, fallback: string) => (
+    typeof value === "string" && /^#([0-9a-f]{6})$/i.test(value.trim())
+      ? value.trim().toUpperCase()
+      : fallback
+  );
+
+  return {
+    primary: pickColor(theme?.primary, DEFAULT_BOM_TABLE_COLOR_THEME.primary),
+    alternative: pickColor(theme?.alternative, DEFAULT_BOM_TABLE_COLOR_THEME.alternative),
+    secondary: pickColor(theme?.secondary, DEFAULT_BOM_TABLE_COLOR_THEME.secondary),
+  };
+}
+
+function hexToRgb(value: string) {
+  const normalized = value.replace("#", "");
+  const parsed = Number.parseInt(normalized, 16);
+
+  return {
+    r: (parsed >> 16) & 255,
+    g: (parsed >> 8) & 255,
+    b: parsed & 255,
+  };
+}
+
+function withAlpha(value: string, alpha: number) {
+  const { r, g, b } = hexToRgb(value);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function buildTableRowStyle(
+  color: string,
+  options?: {
+    backgroundAlpha?: number;
+    hoverAlpha?: number;
+    accentAlpha?: number;
+  },
+): CSSProperties {
+  const backgroundAlpha = options?.backgroundAlpha ?? 0.16;
+  const hoverAlpha = options?.hoverAlpha ?? 0.24;
+  const accentAlpha = options?.accentAlpha ?? 0.92;
+
+  return {
+    "--material-row-bg": withAlpha(color, backgroundAlpha),
+    "--material-row-hover": withAlpha(color, hoverAlpha),
+    "--material-row-accent": withAlpha(color, accentAlpha),
+  } as CSSProperties;
+}
 
 function getMarkedGroupsStorageKey(bomId: string) {
   return `${MARKED_GROUPS_KEY_PREFIX}${bomId}`;
@@ -448,6 +515,7 @@ function createDefaultBomWorkspace(): BomWorkspace {
     id: DEFAULT_BOM_ID,
     name: payload.sourceFile,
     payload: { ...payload, recordCount: records.length, records },
+    tableColorTheme: DEFAULT_BOM_TABLE_COLOR_THEME,
     updatedAt: payload.generatedAt,
   };
 }
@@ -567,6 +635,7 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       recordCount: records.length,
     },
     pageTracker: existingWorkspace?.pageTracker,
+    tableColorTheme: existingWorkspace?.tableColorTheme,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -2982,6 +3051,7 @@ function CompactAlternativeRows({
   primaryRecord,
   itemValue,
   isMarked,
+  colorTheme,
   onCopy,
   onView,
   onEdit,
@@ -2994,6 +3064,7 @@ function CompactAlternativeRows({
   primaryRecord: MaterialRecord;
   itemValue: number;
   isMarked: boolean;
+  colorTheme: BomTableColorTheme;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
   onEdit: (record: MaterialRecord) => void;
@@ -3008,17 +3079,23 @@ function CompactAlternativeRows({
     <>
       {alternatives.map((record, index) => {
         const preferred = record.isPreferred;
+        const rowColor = preferred ? colorTheme.alternative : colorTheme.secondary;
+        const rowStyle = {
+          ...buildTableRowStyle(rowColor, {
+            backgroundAlpha: preferred ? 0.18 : 0.12,
+            hoverAlpha: preferred ? 0.26 : 0.18,
+            accentAlpha: 0.9,
+          }),
+          boxShadow: `inset 4px 0 0 ${withAlpha(rowColor, 0.9)}`,
+        } as CSSProperties;
 
         return (
           <tr
             key={record.id}
+            style={rowStyle}
             className={cn(
-              "border-b border-blue-400/10 text-slate-200",
-              preferred
-                ? "bg-violet-400/[0.10] shadow-[inset_4px_0_0_rgba(167,139,250,0.82)]"
-                : index % 2 === 0
-                  ? "bg-[#0a1526] hover:bg-blue-400/[0.07]"
-                  : "bg-[#0c182a] hover:bg-blue-400/[0.07]"
+              "border-b border-blue-400/10 text-slate-200 transition-colors",
+              "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]"
             )}
           >
             <td className="border-r border-blue-400/10 px-3 py-3.5 text-center align-middle">
@@ -3046,17 +3123,28 @@ function CompactAlternativeRows({
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
               <div className="flex items-center gap-3 pl-8">
-                <span className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "bg-violet-300 text-violet-950" : "bg-slate-700 text-slate-200")}>{index + 1}</span>
+                <span
+                  className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "text-slate-950" : "text-slate-100")}
+                  style={{ backgroundColor: preferred ? withAlpha(colorTheme.alternative, 0.92) : withAlpha(colorTheme.secondary, 0.46) }}
+                >
+                  {index + 1}
+                </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[15px] font-bold text-slate-50">{record.manufacturer || "未填廠商"}</p>
                     {preferred && (
-                      <span className="rounded-full border border-violet-300/28 bg-violet-400/15 px-2.5 py-1 text-xs font-bold text-violet-200">
+                      <span
+                        className="rounded-full px-2.5 py-1 text-xs font-bold text-slate-50"
+                        style={{
+                          border: `1px solid ${withAlpha(colorTheme.alternative, 0.45)}`,
+                          backgroundColor: withAlpha(colorTheme.alternative, 0.28),
+                        }}
+                      >
                         可用替代・OK + 00
                       </span>
                     )}
                   </div>
-                  <p className={cn("mt-1 text-xs", preferred ? "text-violet-200" : "text-slate-400")}>替代料 #{index + 1}</p>
+                  <p className={cn("mt-1 text-xs", preferred ? "text-slate-200" : "text-slate-400")}>替代料 #{index + 1}</p>
                 </div>
               </div>
             </td>
@@ -3128,6 +3216,99 @@ function CompactAlternativeRows({
   );
 }
 
+function BomTableColorDialog({
+  open,
+  theme,
+  workspaceName,
+  onOpenChange,
+  onThemeChange,
+  onReset,
+  onApply,
+}: {
+  open: boolean;
+  theme: BomTableColorTheme;
+  workspaceName: string;
+  onOpenChange: (open: boolean) => void;
+  onThemeChange: (key: keyof BomTableColorTheme, value: string) => void;
+  onReset: () => void;
+  onApply: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-blue-400/20 bg-[#0a1324] text-slate-100 sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-black text-white">自訂表格配色</DialogTitle>
+          <DialogDescription className="text-sm leading-6 text-slate-400">
+            目前只會套用到 BOM「{workspaceName}」，會同步儲存並分享給開啟這份 BOM 的其他人。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4">
+          {BOM_TABLE_COLOR_FIELDS.map((field) => (
+            <div
+              key={field.key}
+              className="rounded-2xl border border-blue-400/15 bg-slate-950/40 p-4"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label className="text-sm font-bold text-slate-100">{field.label}</Label>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">{field.description}</p>
+                </div>
+                <span
+                  className="h-10 w-10 flex-none rounded-xl border border-white/10 shadow-[0_0_24px_rgba(15,23,42,0.24)]"
+                  style={{ backgroundColor: theme[field.key] }}
+                />
+              </div>
+
+              <div className="mt-4 flex items-center gap-3">
+                <Input
+                  type="color"
+                  value={theme[field.key]}
+                  onChange={(event) => onThemeChange(field.key, event.target.value)}
+                  className="h-12 w-16 cursor-pointer border-blue-400/20 bg-[#0c1b31] p-1"
+                />
+                <Input
+                  value={theme[field.key]}
+                  readOnly
+                  className="h-12 border-blue-400/20 bg-[#0c1b31] font-mono text-base font-bold tracking-[0.04em] text-slate-100"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onReset}
+            className="border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20"
+          >
+            還原預設
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="border-slate-500/25 bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={onApply}
+              className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+            >
+              套用到目前 BOM
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
@@ -3142,6 +3323,8 @@ export function MaterialRequestPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [columnWidths, setColumnWidths] = useState(loadColumnWidths);
+  const [tableColorDialogOpen, setTableColorDialogOpen] = useState(false);
+  const [tableColorDraft, setTableColorDraft] = useState<BomTableColorTheme>(DEFAULT_BOM_TABLE_COLOR_THEME);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -3164,6 +3347,10 @@ export function MaterialRequestPage() {
   );
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const activeTableColorTheme = useMemo(
+    () => normalizeBomTableColorTheme(activeWorkspace.tableColorTheme),
+    [activeWorkspace.tableColorTheme],
+  );
   const pageTrackerWorkspace = bomWorkspaces.find((workspace) => workspace.id === (pageTrackerWorkspaceId ?? activeBomId)) ?? activeWorkspace;
   const basePayload = activeWorkspace.payload;
   const activePageTrackerSummary = useMemo(
@@ -3182,6 +3369,11 @@ export function MaterialRequestPage() {
     () => buildMaterialDataset(basePayload),
     [basePayload]
   );
+
+  useEffect(() => {
+    if (!tableColorDialogOpen) return;
+    setTableColorDraft(activeTableColorTheme);
+  }, [activeTableColorTheme, tableColorDialogOpen]);
   const validGroupKeys = useMemo(
     () => new Set(dataset.groups.map((group) => group.key)),
     [dataset.groups],
@@ -3923,11 +4115,59 @@ export function MaterialRequestPage() {
       : [...current, groupKey]);
   };
 
+  const handleTableColorFieldChange = (key: keyof BomTableColorTheme, value: string) => {
+    const nextValue = value.trim().toUpperCase();
+    setTableColorDraft((current) => ({
+      ...current,
+      [key]: /^#([0-9A-F]{6})$/.test(nextValue) ? nextValue : current[key],
+    }));
+  };
+
+  const resetTableColorTheme = () => {
+    setTableColorDraft(DEFAULT_BOM_TABLE_COLOR_THEME);
+  };
+
+  const applyTableColorTheme = async () => {
+    const nextTheme = normalizeBomTableColorTheme(tableColorDraft);
+
+    setBomWorkspaces((current) => current.map((workspace) => (
+      workspace.id === activeWorkspace.id
+        ? { ...workspace, tableColorTheme: nextTheme }
+        : workspace
+    )));
+    setTableColorDialogOpen(false);
+
+    try {
+      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme);
+      toast({
+        title: "表格配色已更新",
+        description: `已套用到 BOM「${activeWorkspace.name}」，其他人開啟同一份 BOM 也會看到相同配色。`,
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "表格配色儲存失敗",
+        description: "共享配色尚未寫入資料庫，請稍後再試。",
+      });
+    }
+  };
+
   return (
     <div className="material-sheet-theme min-h-full bg-[#050b16] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <BomTableColorDialog
+        open={tableColorDialogOpen}
+        theme={tableColorDraft}
+        workspaceName={activeWorkspace.name}
+        onOpenChange={setTableColorDialogOpen}
+        onThemeChange={handleTableColorFieldChange}
+        onReset={resetTableColorTheme}
+        onApply={() => {
+          void applyTableColorTheme();
+        }}
+      />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
@@ -4220,6 +4460,18 @@ export function MaterialRequestPage() {
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTableColorDraft(activeTableColorTheme);
+                setTableColorDialogOpen(true);
+              }}
+              className="border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
+            >
+              自訂表格配色
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
             {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
           </div>
@@ -4290,15 +4542,24 @@ export function MaterialRequestPage() {
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
-                const rowAccentClass = mustApply
-                  ? "bg-amber-400"
-                  : primaryReady
-                    ? "bg-emerald-400"
-                    : "bg-cyan-400";
+                const primaryRowColor = activeTableColorTheme.primary;
+                const mainRowStyle = buildTableRowStyle(primaryRowColor, {
+                  backgroundAlpha: mustApply ? 0.2 : primaryReady ? 0.17 : 0.14,
+                  hoverAlpha: mustApply ? 0.28 : primaryReady ? 0.23 : 0.19,
+                  accentAlpha: 0.95,
+                });
 
                 return (
                   <tbody key={group.key}>
-                    <tr onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)} className={cn("border-b border-blue-400/15 text-slate-200 transition-colors", secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default", mustApply ? "bg-amber-400/[0.13] hover:bg-amber-400/[0.18]" : primaryReady ? "bg-emerald-400/[0.08] hover:bg-emerald-400/[0.13]" : "bg-cyan-400/[0.09] hover:bg-cyan-400/[0.14]") }>
+                    <tr
+                      onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)}
+                      style={mainRowStyle}
+                      className={cn(
+                        "border-b border-blue-400/15 text-slate-200 transition-colors",
+                        secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default",
+                        "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]",
+                      )}
+                    >
                       <td className="border-r border-blue-400/10 px-3 py-3 text-center align-middle">
                         <div className="flex flex-col items-center justify-center">
                           <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
@@ -4321,7 +4582,10 @@ export function MaterialRequestPage() {
                         </button>
                       </td>
                       <td className="relative overflow-hidden border-r border-blue-400/10 px-4 py-3">
-                        <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", rowAccentClass)} />
+                        <span
+                          aria-hidden
+                          className="absolute inset-y-0 left-0 w-1 bg-[var(--material-row-accent)]"
+                        />
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
                           <div className="min-w-0">
@@ -4503,6 +4767,7 @@ export function MaterialRequestPage() {
                         primaryRecord={primaryAlternative}
                         itemValue={itemValue}
                         isMarked={isMarked}
+                        colorTheme={activeTableColorTheme}
                         onCopy={handleCopy}
                         onView={(record) => openRecord(record, "view")}
                         onEdit={(record) => openRecord(record, "edit")}
