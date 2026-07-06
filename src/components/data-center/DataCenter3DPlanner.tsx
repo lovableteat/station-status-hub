@@ -325,6 +325,10 @@ const RackShell = memo(function RackShell({
     () => new THREE.BoxGeometry(RACK_BASE_WIDTH, RACK_BASE_HEIGHT, RACK_BASE_DEPTH),
     []
   );
+  const baseOutlineGeometry = useMemo(
+    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(RACK_BASE_WIDTH, RACK_BASE_HEIGHT, RACK_BASE_DEPTH)),
+    []
+  );
   const topGeometry = useMemo(() => new THREE.BoxGeometry(0.78, 0.08, 1.12), []);
   const sideRailGeometry = useMemo(() => new THREE.BoxGeometry(0.03, 2.04, 0.04), []);
 
@@ -332,10 +336,11 @@ const RackShell = memo(function RackShell({
     () => () => {
       frameGeometry.dispose();
       baseGeometry.dispose();
+      baseOutlineGeometry.dispose();
       topGeometry.dispose();
       sideRailGeometry.dispose();
     },
-    [baseGeometry, frameGeometry, sideRailGeometry, topGeometry]
+    [baseGeometry, baseOutlineGeometry, frameGeometry, sideRailGeometry, topGeometry]
   );
 
   return (
@@ -349,13 +354,18 @@ const RackShell = memo(function RackShell({
     >
       <mesh geometry={baseGeometry} position={[0, -1.05, 0]} receiveShadow>
         <meshStandardMaterial
-          color={isSelected ? "#164e63" : "#0f1b2f"}
-          emissive={isSelected ? "#0f4c81" : "#000000"}
-          emissiveIntensity={isSelected ? 0.22 : 0}
-          metalness={0.12}
-          roughness={0.88}
+          color={isSelected ? "#164e63" : tone.frame}
+          emissive={isSelected ? "#0f4c81" : tone.frame}
+          emissiveIntensity={isSelected ? 0.28 : 0.14}
+          transparent
+          opacity={isSelected ? 0.98 : 0.88}
+          metalness={0.18}
+          roughness={0.72}
         />
       </mesh>
+      <lineSegments geometry={baseOutlineGeometry} position={[0, -1.05, 0]}>
+        <lineBasicMaterial color={isSelected ? "#d7fbff" : tone.frame} />
+      </lineSegments>
 
       <mesh castShadow receiveShadow>
         <boxGeometry args={[RACK_BODY_WIDTH, RACK_BODY_HEIGHT, RACK_BODY_DEPTH]} />
@@ -430,14 +440,16 @@ const ImportedRack = memo(function ImportedRack({
 }) {
   const tone = getRackTone(rack.status);
   const footprint = useMemo(() => new THREE.BoxGeometry(1.02, 0.08, 1.36), []);
+  const footprintOutline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 0.08, 1.36)), []);
   const cage = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.86, 2.26, 1.26)), []);
 
   useEffect(
     () => () => {
       footprint.dispose();
+      footprintOutline.dispose();
       cage.dispose();
     },
-    [cage, footprint]
+    [cage, footprint, footprintOutline]
   );
 
   return (
@@ -451,13 +463,18 @@ const ImportedRack = memo(function ImportedRack({
     >
       <mesh geometry={footprint} position={[0, 0.04, 0]} receiveShadow>
         <meshStandardMaterial
-          color={isSelected ? "#0f3850" : "#121c2f"}
-          emissive={isSelected ? "#155e75" : "#000000"}
-          emissiveIntensity={isSelected ? 0.2 : 0}
-          metalness={0.14}
-          roughness={0.84}
+          color={isSelected ? "#0f3850" : tone.frame}
+          emissive={isSelected ? "#155e75" : tone.frame}
+          emissiveIntensity={isSelected ? 0.22 : 0.14}
+          transparent
+          opacity={isSelected ? 0.98 : 0.86}
+          metalness={0.18}
+          roughness={0.74}
         />
       </mesh>
+      <lineSegments geometry={footprintOutline} position={[0, 0.04, 0]}>
+        <lineBasicMaterial color={isSelected ? "#dffcff" : tone.frame} />
+      </lineSegments>
 
       <group position={[0, 0.02, 0]}>
         <ImportedStepAssembly model={importedModel} />
