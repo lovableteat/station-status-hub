@@ -11,6 +11,7 @@ function looksLikeImageModel(model?: string | null) {
 
 export function ApiChatWorkspacePage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState<null | string>(null);
 
   useEffect(() => {
     const loadApiKeys = async () => {
@@ -54,11 +55,31 @@ export function ApiChatWorkspacePage() {
     void loadApiKeys();
   }, []);
 
-  const selectedApiKey = useMemo(() => apiKeys[0] ?? null, [apiKeys]);
+  useEffect(() => {
+    if (!apiKeys.length) {
+      setSelectedApiKeyId(null);
+      return;
+    }
+
+    setSelectedApiKeyId((current) =>
+      current && apiKeys.some((item) => item.id === current) ? current : apiKeys[0].id
+    );
+  }, [apiKeys]);
+
+  const selectedApiKey = useMemo(
+    () => apiKeys.find((item) => item.id === selectedApiKeyId) ?? apiKeys[0] ?? null,
+    [apiKeys, selectedApiKeyId]
+  );
 
   return (
     <div className="min-h-[calc(100vh-132px)] w-full px-3 py-3 md:px-5 md:py-4">
-      <ApiChatConsole selectedApiKey={selectedApiKey} mode="chat-only" />
+      <ApiChatConsole
+        selectedApiKey={selectedApiKey}
+        availableApiKeys={apiKeys}
+        selectedApiKeyId={selectedApiKeyId}
+        onSelectApiKey={setSelectedApiKeyId}
+        mode="chat-only"
+      />
     </div>
   );
 }
