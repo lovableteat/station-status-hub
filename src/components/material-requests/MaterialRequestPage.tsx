@@ -565,6 +565,18 @@ function createBomId(fileName: string, payload: MaterialWorkbookPayload) {
   return `bom:${normalizedFileName}:${fingerprint}`;
 }
 
+function mergeTrackingHistories(
+  existingHistory: MaterialTrackingHistoryEntry[] = [],
+  importedHistory: MaterialTrackingHistoryEntry[] = []
+) {
+  const existingById = new Map(existingHistory.map((entry) => [entry.id, entry]));
+  const importedIds = new Set(importedHistory.map((entry) => entry.id));
+  const importedEntries = importedHistory.map((entry) => ({ ...existingById.get(entry.id), ...entry }));
+  const preservedExistingEntries = existingHistory.filter((entry) => !importedIds.has(entry.id));
+
+  return [...importedEntries, ...preservedExistingEntries];
+}
+
 function loadActiveBomId() {
   if (typeof window === "undefined") return DEFAULT_BOM_ID;
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
@@ -613,12 +625,12 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       virtualAlternative: record.virtualAlternative?.trim()
         ? record.virtualAlternative
         : existingRecord?.virtualAlternative ?? "",
-      trackingStatus: record.trackingStatus?.trim()
-        ? record.trackingStatus
-        : existingRecord?.trackingStatus ?? "",
-      trackingHistory: record.trackingHistory?.length
-        ? record.trackingHistory
-        : existingRecord?.trackingHistory ?? [],
+      trackingStatus: existingRecord?.trackingStatus?.trim()
+        ? existingRecord.trackingStatus
+        : record.trackingStatus?.trim()
+          ? record.trackingStatus
+          : "",
+      trackingHistory: mergeTrackingHistories(existingRecord?.trackingHistory, record.trackingHistory),
     };
   });
   const preservedManualRecords = (existingWorkspace?.payload.records ?? []).filter((record) =>
@@ -740,6 +752,8 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
           getTrackingWorkflowStatus(record),
           latestEntry?.note ?? "",
           latestEntry?.createdBy ?? "",
+          latestEntry?.virtualPartNumber ?? "",
+          latestEntry?.requestInfo ?? "",
         ];
       });
     }
@@ -784,6 +798,8 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
         getTrackingWorkflowStatus(record),
         latestTrackingEntry?.note ?? "",
         latestTrackingEntry?.createdBy ?? "",
+        latestTrackingEntry?.virtualPartNumber ?? "",
+        latestTrackingEntry?.requestInfo ?? "",
       ];
 
       return values;
@@ -1787,6 +1803,14 @@ function TrackingHistoryCell({
           {historyCount} 筆紀錄
           {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
         </p>
+        {(latestEntry?.virtualPartNumber || latestEntry?.requestInfo) && (
+          <p className="mt-2 line-clamp-2 text-xs font-semibold text-cyan-100/90">
+            {[
+              latestEntry?.virtualPartNumber ? `虛擬料 ${latestEntry.virtualPartNumber}` : "",
+              latestEntry?.requestInfo ? `單號 ${latestEntry.requestInfo}` : "",
+            ].filter(Boolean).join(" · ")}
+          </p>
+        )}
       </div>
       <History className={cn("mt-1 h-4 w-4 flex-none opacity-90 transition-opacity group-hover:opacity-100", cardTone.icon)} />
     </button>
@@ -1808,6 +1832,8 @@ function TrackingHistoryDialog({
   const [status, setStatus] = useState<(typeof TRACKING_STATUS_OPTIONS)[number] | "">("");
   const [note, setNote] = useState("");
   const [createdBy, setCreatedBy] = useState("");
+  const [virtualPartNumber, setVirtualPartNumber] = useState("");
+  const [requestInfo, setRequestInfo] = useState("");
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
   const latestEntry = record ? getLatestTrackingEntry(record) : null;
@@ -1833,6 +1859,8 @@ function TrackingHistoryDialog({
     setStatus("");
     setNote("");
     setCreatedBy("");
+    setVirtualPartNumber("");
+    setRequestInfo("");
     setImages([]);
     setPreviewImage(null);
   }, [open, record?.id]);
@@ -1879,6 +1907,8 @@ function TrackingHistoryDialog({
       note: note.trim(),
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
+      virtualPartNumber: virtualPartNumber.trim(),
+      requestInfo: requestInfo.trim(),
       images,
     });
     onOpenChange(false);
@@ -1893,6 +1923,8 @@ function TrackingHistoryDialog({
       note: latestEntry?.note?.trim() || "已手動標記完成",
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
+      virtualPartNumber: latestEntry?.virtualPartNumber?.trim() || record.virtualAlternative?.trim() || "",
+      requestInfo: latestEntry?.requestInfo?.trim() || "",
       images: [],
     });
     onOpenChange(false);
@@ -1942,6 +1974,22 @@ function TrackingHistoryDialog({
                   {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
                   {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
                 </div>
+                {(latestEntry?.virtualPartNumber || latestEntry?.requestInfo) && (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {latestEntry?.virtualPartNumber && (
+                      <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Virtual PN / 虛擬料</p>
+                        <p className="mt-1 break-all text-sm font-bold text-slate-100">{latestEntry.virtualPartNumber}</p>
+                      </div>
+                    )}
+                    {latestEntry?.requestInfo && (
+                      <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">單號 / 申請狀態資訊</p>
+                        <p className="mt-1 break-all text-sm font-bold text-slate-100">{latestEntry.requestInfo}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
                   <div className="flex items-center gap-2">
@@ -1967,6 +2015,14 @@ function TrackingHistoryDialog({
                     <div className="space-y-2">
                       <Label htmlFor="tracking-owner-input">更新人</Label>
                       <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="例如：採購 / RD / Peggy" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-virtual-pn-input">虛擬料</Label>
+                      <Input id="tracking-virtual-pn-input" value={virtualPartNumber} onChange={(event) => setVirtualPartNumber(event.target.value)} placeholder="Excel Virtual PN / TX P/N" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-request-info-input">申請狀態資訊</Label>
+                      <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request no." className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="tracking-note-input">追蹤說明</Label>
@@ -2043,6 +2099,8 @@ function TrackingHistoryDialog({
                           <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
                             {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
                             {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
+                            {entry.virtualPartNumber && <span>虛擬料 {entry.virtualPartNumber}</span>}
+                            {entry.requestInfo && <span>單號 {entry.requestInfo}</span>}
                             {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
                           </div>
                         </div>
@@ -2203,12 +2261,12 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
-        <DialogHeader>
-          <DialogTitle className="text-2xl text-slate-50">上傳說明</DialogTitle>
-          <DialogDescription className="text-[15px] leading-6 text-slate-400">
-            這裡不是教你做 Excel 格式研究，而是告訴你這個網站要怎麼餵資料、怎麼看結果、出錯時先檢查哪裡。
-          </DialogDescription>
-        </DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-slate-50">上傳說明</DialogTitle>
+            <DialogDescription className="text-[15px] leading-6 text-slate-400">
+              先用範本整理欄位，再確認 Excel 欄位會對應到網站哪個位置；匯入後再用篩選與狀態追蹤檢查結果。
+            </DialogDescription>
+          </DialogHeader>
 
         <div className="space-y-5 py-2 text-[15px]">
           <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.07] p-5">
@@ -2225,8 +2283,40 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             </div>
           </section>
 
+          <section className="rounded-2xl border border-sky-400/25 bg-sky-400/[0.06] p-5">
+            <h3 className="text-lg font-bold text-sky-200">2. 範本欄位與網站欄位對應</h3>
+            <p className="mt-1 leading-6 text-slate-400">
+              表頭不用完全同名，但建議照範本命名。下面是目前系統會優先辨識的欄位與匯入後的位置。
+            </p>
+            <div className="mt-4 overflow-hidden rounded-xl border border-sky-400/15">
+              <div className="grid grid-cols-[1fr_1fr_1.4fr] bg-sky-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-sky-200">
+                <span>Excel 欄位</span>
+                <span>網站位置</span>
+                <span>用途</span>
+              </div>
+              {[
+                ["Name / Part Name", "主料 / 廠商", "料件名稱，表格第一欄會用來辨識同一組主料。"],
+                ["Qty", "數量", "顯示該料件或該組 location 的數量。"],
+                ["Ref Des / location", "REF DES", "電路板上的 location，例如 C418、J10、U73。"],
+                ["Manufacturer Part Number", "MPN", "廠商料號，主料與替代料都會讀這個欄位。"],
+                ["Manufacturer", "廠商", "廠商名稱，會跟 MPN 一起顯示。"],
+                ["Sourcing Status", "料況", "Approved、Obsolete、NRND 等供應狀態。"],
+                ["TX P/N / Virtual PN", "TX / 虛擬料", "虛擬料號，會同步帶進狀態追蹤視窗的「虛擬料」。"],
+                ["Status", "狀態追蹤：追蹤說明", "不是料況，會成為追蹤視窗內的說明內容。"],
+                ["單號", "狀態追蹤：申請狀態資訊", "申請單、ticket 或 request number。"],
+                ["EE", "狀態追蹤：更新人", "負責更新或提供狀態的人。"],
+              ].map(([excelField, appField, usage]) => (
+                <div key={excelField} className="grid grid-cols-[1fr_1fr_1.4fr] border-t border-sky-400/10 px-4 py-3 text-sm">
+                  <span className="font-bold text-slate-100">{excelField}</span>
+                  <span className="font-semibold text-cyan-200">{appField}</span>
+                  <span className="leading-6 text-slate-400">{usage}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5">
-            <h3 className="text-lg font-bold text-blue-200">2. Excel 要怎麼排，網站才看得懂</h3>
+            <h3 className="text-lg font-bold text-blue-200">3. Excel 要怎麼排，網站才看得懂</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
                 ["一列只放一個廠商料", "同一個 location 如果有 3 個候選 MPN，就要拆成 3 列，不要把 3 個料號塞在同一格。"],
@@ -2234,8 +2324,8 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["有藍色起始列就照藍色分組", "如果你的 Excel 有用底色標主料，網站會優先用這個規則；下一個藍色列出現前，都算同一組。"],
                 ["Ref Des / location 要寫清楚", "像 `C418`、`J10`、`U73` 這些位號是網站判斷焊位的核心欄位，能填就一定要填。"],
                 ["同一組的圖面資料要一致", "Part Spec、Schematic_Part、PCB_Footprint 這些資料，在同一主料與替代料群組裡不要亂變。"],
-                ["狀態欄請用固定字", "建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
-                ["TX 與追蹤欄可後補", "TX、狀態追蹤不一定要在 Excel 就填好，匯入後也能直接在網站上補。"],
+                ["料況欄請用固定字", "Sourcing Status 建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
+                ["TX 與追蹤欄可後補", "TX P/N、Status、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補。"],
                 ["一個 BOM 一個檔案", "不同板子、不同版本請分開存，檔名最好帶專案名與版次，不然後面很難查。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
@@ -2247,7 +2337,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-emerald-200">3. 上傳後系統怎麼判斷</h3>
+            <h3 className="text-lg font-bold text-emerald-200">4. 上傳後系統怎麼判斷</h3>
             <div className="mt-4 space-y-3 leading-6 text-slate-300">
               <p><strong className="text-slate-100">先找主工作表：</strong>如果檔案裡有很多 sheet，系統會挑欄位最完整、有效資料最多的那一張來讀。</p>
               <p><strong className="text-slate-100">再判斷分組：</strong>有藍色列就先照藍色列；沒有藍色列才退回用 Ref Group、Ref Des、料名等欄位去猜。</p>
@@ -2257,7 +2347,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5">
-            <h3 className="text-lg font-bold text-amber-200">4. 實際操作流程</h3>
+            <h3 className="text-lg font-bold text-amber-200">5. 實際操作流程</h3>
             <ol className="mt-3 space-y-2 leading-6 text-slate-300">
               <li>1. 先把單一專案 / 單一版本 BOM 整理成一個 Excel 檔。</li>
               <li>2. 按「上傳 BOM」匯入；可以一次選多個檔，但每個檔都會變成一個獨立 BOM 工作區。</li>
@@ -2269,7 +2359,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </section>
 
           <section className="rounded-2xl border border-rose-400/25 bg-rose-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-rose-200">5. 常見錯誤先看這裡</h3>
+            <h3 className="text-lg font-bold text-rose-200">6. 常見錯誤先看這裡</h3>
             <div className="mt-3 space-y-3 leading-6 text-slate-300">
               <p><strong className="text-slate-100">搜不到資料：</strong>先按右上角或表頭的「清除」，很多時候是舊篩選還留著，不是真的沒有資料。</p>
               <p><strong className="text-slate-100">同一個 location 看起來重複：</strong>先回原始 BOM 看是不是同一個位號被展開成多個候選料，或同一顆料被分配到多個位號。</p>
@@ -3691,6 +3781,8 @@ export function MaterialRequestPage() {
             getTrackingWorkflowStatus(record),
             latestTrackingEntry?.note ?? "",
             latestTrackingEntry?.createdBy ?? "",
+            latestTrackingEntry?.virtualPartNumber ?? "",
+            latestTrackingEntry?.requestInfo ?? "",
           ]),
           specification: createCachedColumnValues([
             group.partSpec,
@@ -4175,26 +4267,33 @@ export function MaterialRequestPage() {
   const handleExport = () => {
     const rows = filteredGroups.flatMap((group, groupIndex) =>
       getMatchingRecords(group)
-        .map((record) => ({
-          Item: getGroupItemValue(group, groupIndex + 1),
-          我的標記: markedGroupKeySet.has(group.key) ? "★" : "",
-          Ref_Group: group.displayRef,
-          REF_DES: record.refDes || group.primaryRecord.refDes,
-          電路料名稱: group.name,
-          模組: group.assemblyName,
-          Qty: group.qty,
-          Symbol: group.schematicPart,
-          Footprint: group.footprint,
-          廠商: record.manufacturer,
-          Manufacturer_PN: record.manufacturerPartNumber,
-          Manufacturer_PN_2: record.manufacturerPartNumberAlt,
-          TX: record.virtualAlternative ?? "",
-          狀態追蹤: record.trackingStatus ?? "",
-          Sourcing_Status: record.sourcingStatus,
-          建料狀態: getActionLabel(record.actionKind),
-          內部料號: record.partNumber,
-          規格: record.partSpec,
-        }))
+        .map((record) => {
+          const latestTrackingEntry = getLatestTrackingEntry(record);
+
+          return {
+            Item: getGroupItemValue(group, groupIndex + 1),
+            我的標記: markedGroupKeySet.has(group.key) ? "★" : "",
+            Ref_Group: group.displayRef,
+            REF_DES: record.refDes || group.primaryRecord.refDes,
+            電路料名稱: group.name,
+            模組: group.assemblyName,
+            Qty: group.qty,
+            Symbol: group.schematicPart,
+            Footprint: group.footprint,
+            廠商: record.manufacturer,
+            Manufacturer_PN: record.manufacturerPartNumber,
+            Manufacturer_PN_2: record.manufacturerPartNumberAlt,
+            TX: record.virtualAlternative ?? "",
+            虛擬料: latestTrackingEntry?.virtualPartNumber ?? record.virtualAlternative ?? "",
+            狀態追蹤: latestTrackingEntry?.note ?? record.trackingStatus ?? "",
+            申請狀態資訊: latestTrackingEntry?.requestInfo ?? "",
+            更新人: latestTrackingEntry?.createdBy ?? "",
+            Sourcing_Status: record.sourcingStatus,
+            建料狀態: getActionLabel(record.actionKind),
+            內部料號: record.partNumber,
+            規格: record.partSpec,
+          };
+        })
     );
 
     if (!rows.length) {
