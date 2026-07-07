@@ -735,6 +735,10 @@ export function ApiChatConsole({
       !loading
   );
 
+  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
+  const hasConversationContent =
+    messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
+
   useEffect(() => {
     if (!isChatOnly || !conversationsLoaded || !hasHydratedConversationRef.current) return;
 
@@ -968,9 +972,6 @@ export function ApiChatConsole({
     };
   };
 
-  const hasConversationContent =
-    messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
-
   const persistCurrentConversation = () => {
     if (messages.length === 0 && draftMessage.trim().length === 0) return false;
 
@@ -1150,7 +1151,6 @@ export function ApiChatConsole({
     setUploadedAttachments((current) => current.filter((attachment) => attachment.id !== id));
   };
 
-  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
   const totalMessages = messages.length.toString();
   const modeLabel = isGeminiProvider ? "可對話" : "待擴充";
   const chatHeightClass = isChatOnly
