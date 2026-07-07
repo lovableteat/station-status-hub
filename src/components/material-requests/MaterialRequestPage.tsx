@@ -577,6 +577,32 @@ function mergeTrackingHistories(
   return [...importedEntries, ...preservedExistingEntries];
 }
 
+function hasTrackingContent(entry: MaterialTrackingHistoryEntry) {
+  return [
+    entry.status,
+    entry.note,
+    entry.createdBy,
+    entry.virtualPartNumber,
+    entry.requestInfo,
+  ].some((value) => String(value ?? "").trim().length > 0);
+}
+
+function hasImportedTrackingData(record: Pick<MaterialWorkbookRecord, "trackingStatus" | "trackingHistory" | "virtualAlternative">) {
+  return Boolean(
+    record.trackingStatus?.trim()
+      || record.virtualAlternative?.trim()
+      || (record.trackingHistory ?? []).some(hasTrackingContent)
+  );
+}
+
+function getBestTrackingRecord(records: MaterialRecord[], fallback: MaterialRecord) {
+  return records.find((record) =>
+    record.trackingStatus?.trim()
+      || record.virtualAlternative?.trim()
+      || (record.trackingHistory ?? []).some(hasTrackingContent)
+  ) ?? fallback;
+}
+
 function loadActiveBomId() {
   if (typeof window === "undefined") return DEFAULT_BOM_ID;
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
@@ -618,6 +644,8 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
   const mergedRecords = payload.records.map((record) => {
     importedRecordIds.add(record.id);
     const existingRecord = existingRecords.get(record.id);
+    const importedHasTrackingData = hasImportedTrackingData(record);
+    const mergedTrackingHistory = mergeTrackingHistories(existingRecord?.trackingHistory, record.trackingHistory);
 
     return {
       ...existingRecord,
@@ -625,12 +653,14 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       virtualAlternative: record.virtualAlternative?.trim()
         ? record.virtualAlternative
         : existingRecord?.virtualAlternative ?? "",
-      trackingStatus: existingRecord?.trackingStatus?.trim()
-        ? existingRecord.trackingStatus
-        : record.trackingStatus?.trim()
-          ? record.trackingStatus
-          : "",
-      trackingHistory: mergeTrackingHistories(existingRecord?.trackingHistory, record.trackingHistory),
+      trackingStatus: importedHasTrackingData
+        ? (record.trackingStatus?.trim() || "新增追蹤")
+        : existingRecord?.trackingStatus?.trim()
+          ? existingRecord.trackingStatus
+          : record.trackingStatus?.trim()
+            ? record.trackingStatus
+            : "",
+      trackingHistory: mergedTrackingHistory,
     };
   });
   const preservedManualRecords = (existingWorkspace?.payload.records ?? []).filter((record) =>
@@ -3941,11 +3971,13 @@ export function MaterialRequestPage() {
       const matchingRecords = getMatchingRecords(group);
       const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
       const secondaryAlternatives = matchingRecords.slice(primaryAlternative ? 1 : 0);
+      const trackingRecord = getBestTrackingRecord(matchingRecords.length > 0 ? matchingRecords : group.records, primaryAlternative);
 
       return {
         group,
         matchingRecords,
         primaryAlternative,
+        trackingRecord,
         secondaryAlternatives,
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
       };
@@ -4742,7 +4774,7 @@ export function MaterialRequestPage() {
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
+              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
                 const noAlternative = uniqueMpnCount <= 1;
@@ -4963,7 +4995,7 @@ export function MaterialRequestPage() {
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        {primaryAlternative && <TrackingHistoryCell record={primaryAlternative} onOpen={openTrackingDialog} />}
+                        {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />資料更新</Button>
