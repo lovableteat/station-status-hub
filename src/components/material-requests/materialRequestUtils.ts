@@ -42,6 +42,8 @@ export interface MaterialTrackingHistoryEntry {
   note?: string;
   createdAt: string;
   createdBy?: string;
+  virtualPartNumber?: string;
+  requestInfo?: string;
   images?: MaterialTrackingHistoryImage[];
 }
 
@@ -131,6 +133,8 @@ type MaterialField =
   | "mpn2"
   | "virtualAlternative"
   | "trackingStatus"
+  | "trackingCreatedBy"
+  | "trackingRequestInfo"
   | "manufacturer"
   | "sourcingStatus"
   | "refGroup"
@@ -151,10 +155,12 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
-  virtualAlternative: ["TX", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
-  trackingStatus: ["Tracking Status", "Process Status", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
+  virtualAlternative: ["TX", "TX P/N", "TX PN", "Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬料", "虛擬替代料", "虛擬料號"],
+  trackingStatus: ["Status", "Tracking Status", "Process Status", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
+  trackingCreatedBy: ["EE", "Updated By", "Updater", "Owner", "更新人"],
+  trackingRequestInfo: ["單號", "Request Number", "Request No", "Ticket", "Ticket No", "Application Status", "Application Status Info", "申請狀態資訊"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
-  sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
+  sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "供料狀態", "核准狀態", "料件狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
   lv: ["LV", "Version", "版本", "版次"],
   remark: ["Remark", "Remarks", "Comment", "Note", "備註", "申請狀態"],
@@ -300,8 +306,44 @@ function normalizeTrackingHistoryEntry(raw: unknown): MaterialTrackingHistoryEnt
     note: normalizeText(entry.note),
     createdAt: normalizeText(entry.createdAt),
     createdBy: normalizeText(entry.createdBy),
+    virtualPartNumber: normalizeText(entry.virtualPartNumber),
+    requestInfo: normalizeText(entry.requestInfo),
     images,
   };
+}
+
+function createImportedTrackingHistoryEntry({
+  sheetName,
+  rowIndex,
+  statusNote,
+  createdBy,
+  virtualPartNumber,
+  requestInfo,
+}: {
+  sheetName: string;
+  rowIndex: number;
+  statusNote: unknown;
+  createdBy: unknown;
+  virtualPartNumber: unknown;
+  requestInfo: unknown;
+}) {
+  const note = normalizeText(statusNote);
+  const updater = normalizeText(createdBy);
+  const virtualPn = normalizeText(virtualPartNumber);
+  const request = normalizeText(requestInfo);
+
+  if (!note && !updater && !virtualPn && !request) return [];
+
+  return [{
+    id: `imported-tracking-${sheetName}-${rowIndex + 1}`,
+    status: "新增追蹤",
+    note,
+    createdAt: "",
+    createdBy: updater,
+    virtualPartNumber: virtualPn,
+    requestInfo: request,
+    images: [],
+  }] satisfies MaterialTrackingHistoryEntry[];
 }
 
 export function getTrackingHistory(record: Pick<MaterialWorkbookRecord, "trackingHistory">) {
@@ -485,6 +527,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
         entry.status,
         entry.note,
         entry.createdBy,
+        entry.virtualPartNumber,
+        entry.requestInfo,
         ...(entry.images ?? []).map((image) => image.name),
       ]),
       raw.manufacturer,
@@ -775,6 +819,15 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     const refGroup = useBlueGroupRows
       ? firstNonEmpty(currentGroupRef, rowRefGroup, refDes)
       : rowRefGroup;
+    const virtualAlternative = normalizeText(getFieldValue(row, fields, "virtualAlternative"));
+    const trackingHistory = createImportedTrackingHistoryEntry({
+      sheetName,
+      rowIndex: index,
+      statusNote: getFieldValue(row, fields, "trackingStatus"),
+      createdBy: getFieldValue(row, fields, "trackingCreatedBy"),
+      virtualPartNumber: virtualAlternative,
+      requestInfo: getFieldValue(row, fields, "trackingRequestInfo"),
+    });
 
     records.push({
       id: `${sheetName}-${index}`,
@@ -789,8 +842,9 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       refDes,
       manufacturerPartNumber: mpn1,
       manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
-      virtualAlternative: normalizeText(getFieldValue(row, fields, "virtualAlternative")),
-      trackingStatus: normalizeText(getFieldValue(row, fields, "trackingStatus")),
+      virtualAlternative,
+      trackingStatus: trackingHistory.length > 0 ? "新增追蹤" : "",
+      trackingHistory,
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
       refGroup,
