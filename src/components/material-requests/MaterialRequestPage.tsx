@@ -2296,6 +2296,8 @@ function BomPageTrackerDialog({
 }) {
   const [totalPagesInput, setTotalPagesInput] = useState("0");
   const [currentPageInput, setCurrentPageInput] = useState("0");
+  const [rangeStartInput, setRangeStartInput] = useState("1");
+  const [rangeEndInput, setRangeEndInput] = useState("1");
   const [pages, setPages] = useState<BomPageTrackerPage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -2305,6 +2307,13 @@ function BomPageTrackerDialog({
     const summary = getBomPageTrackerSummary(workspace.pageTracker);
     setTotalPagesInput(String(summary.totalPages));
     setCurrentPageInput(String(summary.currentPage));
+    const defaultRangePage = summary.currentPage > 0
+      ? summary.currentPage
+      : summary.totalPages > 0
+        ? 1
+        : 0;
+    setRangeStartInput(String(defaultRangePage));
+    setRangeEndInput(String(defaultRangePage));
     setPages(syncBomTrackerPages(workspace.pageTracker?.pages ?? [], summary.totalPages));
     setIsSaving(false);
   }, [open, workspace?.id, workspace?.pageTracker?.updatedAt]);
@@ -2314,6 +2323,15 @@ function BomPageTrackerDialog({
   const totalPages = clampBomTrackerPageCount(Number(totalPagesInput || 0));
   const currentPage = totalPages > 0
     ? Math.min(totalPages, clampBomTrackerPageCount(Number(currentPageInput || 0)))
+    : 0;
+  const rawRangeStart = clampBomTrackerPageCount(Number(rangeStartInput || 0));
+  const rawRangeEnd = clampBomTrackerPageCount(Number(rangeEndInput || 0));
+  const rangeStartPage = totalPages > 0 && rawRangeStart > 0 ? Math.min(totalPages, rawRangeStart) : 0;
+  const rangeEndPage = totalPages > 0 && rawRangeEnd > 0 ? Math.min(totalPages, rawRangeEnd) : 0;
+  const rangeSelectionStart = rangeStartPage > 0 && rangeEndPage > 0 ? Math.min(rangeStartPage, rangeEndPage) : 0;
+  const rangeSelectionEnd = rangeStartPage > 0 && rangeEndPage > 0 ? Math.max(rangeStartPage, rangeEndPage) : 0;
+  const rangeSelectionCount = rangeSelectionStart > 0 && rangeSelectionEnd > 0
+    ? rangeSelectionEnd - rangeSelectionStart + 1
     : 0;
   const syncedPages = syncBomTrackerPages(pages, totalPages);
   const visiblePages = syncedPages.filter((page) => page.pageNumber <= totalPages);
@@ -2326,6 +2344,24 @@ function BomPageTrackerDialog({
         page.pageNumber === pageNumber ? { ...page, ...patch } : page
       )
     );
+  };
+
+  const applyRangeStatus = (status: BomPageTrackerStatus) => {
+    if (rangeSelectionCount === 0) return;
+
+    startTransition(() => {
+      setPages((current) =>
+        syncBomTrackerPages(current, Math.max(totalPages, rangeSelectionEnd)).map((page) => (
+          page.pageNumber >= rangeSelectionStart && page.pageNumber <= rangeSelectionEnd
+            ? { ...page, status }
+            : page
+        ))
+      );
+    });
+
+    if (status !== "pending" && (currentPage === 0 || rangeSelectionEnd > currentPage)) {
+      setCurrentPageInput(String(rangeSelectionEnd));
+    }
   };
 
   const handleSave = async () => {
@@ -2437,8 +2473,81 @@ function BomPageTrackerDialog({
                 </p>
               </div>
             ) : (
-              <ScrollArea className="mt-4 h-[52vh] rounded-2xl border border-blue-400/15 bg-[#0b1322]">
-                <div className="space-y-3 p-3">
+              <div className="mt-4 space-y-4">
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                    <div>
+                      <p className="text-base font-black text-slate-50">批次套用頁數狀態</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-400">
+                        填好起訖頁後，可以整段一起標成已完成，不用一頁頁點。原本備註會保留，只改狀態。
+                      </p>
+                    </div>
+                    {rangeSelectionCount > 0 ? (
+                      <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-bold text-emerald-100">
+                        目前選取第 {rangeSelectionStart} ~ {rangeSelectionEnd} 頁，共 {rangeSelectionCount} 頁
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-slate-500/25 bg-slate-500/10 px-3 py-1 text-xs font-bold text-slate-300">
+                        先填起始頁與結束頁
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,140px)_minmax(0,140px)_1fr]">
+                    <div className="space-y-2">
+                      <Label htmlFor="bom-range-start">起始頁</Label>
+                      <Input
+                        id="bom-range-start"
+                        type="number"
+                        min={1}
+                        max={Math.max(totalPages, 1)}
+                        step={1}
+                        value={rangeStartInput}
+                        onChange={(event) => setRangeStartInput(event.target.value)}
+                        placeholder="例如 1"
+                        className="h-10 border-emerald-400/20 bg-[#111f36] text-slate-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bom-range-end">結束頁</Label>
+                      <Input
+                        id="bom-range-end"
+                        type="number"
+                        min={1}
+                        max={Math.max(totalPages, 1)}
+                        step={1}
+                        value={rangeEndInput}
+                        onChange={(event) => setRangeEndInput(event.target.value)}
+                        placeholder={totalPages > 0 ? `1 ~ ${totalPages}` : "先填總頁數"}
+                        className="h-10 border-emerald-400/20 bg-[#111f36] text-slate-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>一鍵套用狀態</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {BOM_PAGE_STATUS_OPTIONS.map((option) => (
+                          <Button
+                            key={`range-${option.value}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => applyRangeStatus(option.value)}
+                            disabled={rangeSelectionCount === 0}
+                            className={cn(
+                              "h-10 px-4 text-xs font-bold disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/20 disabled:text-slate-500",
+                              option.idleClassName,
+                            )}
+                          >
+                            第 {rangeSelectionStart || "?"} ~ {rangeSelectionEnd || "?"} 頁設為{option.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <ScrollArea className="h-[52vh] rounded-2xl border border-blue-400/15 bg-[#0b1322]">
+                  <div className="space-y-3 p-3">
                   {visiblePages.map((page) => (
                     (() => {
                       const statusMeta = getBomPageStatusMeta(page.status);
@@ -2517,8 +2626,9 @@ function BomPageTrackerDialog({
                       );
                     })()
                   ))}
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
             )}
           </section>
         </div>
