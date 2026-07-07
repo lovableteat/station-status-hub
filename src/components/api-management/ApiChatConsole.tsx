@@ -4,9 +4,11 @@ import {
   Bookmark,
   Bot,
   CheckCircle2,
+  FileText,
   ImageIcon,
   KeyRound,
   MessageSquareText,
+  Paperclip,
   Plus,
   Send,
   Sparkles,
@@ -52,8 +54,19 @@ interface GeneratedImage {
   mimeType: string;
 }
 
+interface UploadedAttachment {
+  id: string;
+  inlineData: string;
+  kind: "file" | "image";
+  mimeType: string;
+  name: string;
+  size: number;
+  src?: string;
+}
+
 interface ChatMessage {
   id: string;
+  attachments?: UploadedAttachment[];
   role: "user" | "assistant";
   content: string;
   createdAt: number;
@@ -99,6 +112,7 @@ interface SavedConversation {
 }
 
 const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
+const AUTO_SAVED_CONVERSATION_ID = "conversation-active-workspace";
 const SHARED_PROMPT_CATEGORY = "ai_prompt";
 const SHARED_PROMPT_PLATFORM = "api-chat";
 const LEGACY_ASSISTANT_SYSTEM_PROMPT =
@@ -111,8 +125,25 @@ const DEFAULT_QUERY_SYSTEM_PROMPT = [
 ].join(" ");
 const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
-const MAX_UPLOAD_IMAGE_COUNT = 4;
-const MAX_UPLOAD_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
+const MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024;
+const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
+  "csv",
+  "doc",
+  "docx",
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
+  "bmp",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "txt",
+]);
 
 interface GeminiResponsePart {
   text?: string;
@@ -134,9 +165,11 @@ function createMessage(
   role: ChatMessage["role"],
   content: string,
   state: ChatMessage["state"] = "normal",
-  images: GeneratedImage[] = []
+  images: GeneratedImage[] = [],
+  attachments: UploadedAttachment[] = []
 ): ChatMessage {
   return {
+    attachments,
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role,
     content,
@@ -167,6 +200,35 @@ function formatSavedItemTime(value: number) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatFileSize(value: number) {
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+  return `${value} B`;
+}
+
+function getFileExtension(name: string) {
+  return name.split(".").pop()?.trim().toLowerCase() ?? "";
+}
+
+function isSupportedAttachment(file: File) {
+  if (file.type.startsWith("image/")) return true;
+  return SUPPORTED_ATTACHMENT_EXTENSIONS.has(getFileExtension(file.name));
+}
+
+function buildAttachmentFingerprint(attachment: UploadedAttachment) {
+  return [
+    attachment.kind,
+    attachment.mimeType,
+    attachment.name,
+    attachment.size,
+    attachment.inlineData.slice(0, 48),
+  ].join(":");
 }
 
 function mapSharedPromptRowToItem(row: SharedPromptRow): SavedWorkspaceItem {
@@ -207,6 +269,7 @@ function createSavedConversation(params: {
     draftMessage: params.draftMessage,
     messages: params.messages.map((message) => ({
       ...message,
+      attachments: [],
       images: [],
     })),
     provider: params.provider,
@@ -225,13 +288,24 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
-async function createUploadedImageFromFile(file: File): Promise<GeneratedImage> {
-  const src = await readFileAsDataUrl(file);
+async function createUploadedAttachmentFromFile(file: File): Promise<UploadedAttachment> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const dataUrlMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!dataUrlMatch) {
+    throw new Error("附件讀取失敗");
+  }
+
+  const mimeType = dataUrlMatch[1] || file.type || "application/octet-stream";
+  const kind = mimeType.startsWith("image/") ? "image" : "file";
 
   return {
     id: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    src,
-    mimeType: file.type || "image/png",
+    inlineData: dataUrlMatch[2],
+    kind,
+    mimeType,
+    name: file.name || `attachment-${Date.now()}`,
+    size: file.size,
+    src: kind === "image" ? dataUrl : undefined,
   };
 }
 
@@ -436,6 +510,25 @@ function MessageCard({ message }: { message: ChatMessage }) {
           <div className="whitespace-pre-wrap break-words">{message.content}</div>
         ) : null}
 
+        {message.attachments?.length ? (
+          <div className={cn("flex flex-wrap gap-2", message.content ? "mt-4" : "")}>
+            {message.attachments.map((attachment, index) => (
+              <div
+                key={attachment.id}
+                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 px-3 py-2 text-xs text-slate-200"
+              >
+                {attachment.kind === "image" ? (
+                  <ImageIcon className="h-3.5 w-3.5 text-cyan-200" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5 text-cyan-200" />
+                )}
+                <span className="max-w-[180px] truncate">{attachment.name || `附件 ${index + 1}`}</span>
+                <span className="text-slate-500">{formatFileSize(attachment.size)}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {message.images?.length ? (
           <div className={cn("grid gap-3", message.content ? "mt-4" : "", message.images.length > 1 ? "md:grid-cols-2" : "")}>
             {message.images.map((image, index) => (
@@ -497,11 +590,13 @@ export function ApiChatConsole({
   const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
   const [libraryApplyContent, setLibraryApplyContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [uploadedImages, setUploadedImages] = useState<GeneratedImage[]>([]);
+  const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const hasHydratedConversationRef = useRef(false);
   const { user } = useUser();
 
   const isChatOnly = mode === "chat-only";
@@ -521,7 +616,7 @@ export function ApiChatConsole({
     setBaseUrl(selectedMetadata?.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
     setMessages([]);
     setDraftMessage("");
-    setUploadedImages([]);
+    setUploadedAttachments([]);
     setConnectionState(null);
   }, [selectedApiKey, selectedMetadata]);
 
@@ -539,23 +634,6 @@ export function ApiChatConsole({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
-
-  useEffect(() => {
-    if (!isChatOnly || typeof window === "undefined") return;
-
-    const onPaste = (event: ClipboardEvent) => {
-      if (!event.clipboardData?.items?.length) return;
-      void (async () => {
-        const handled = await handleClipboardPaste(event.clipboardData.items);
-        if (handled) {
-          event.preventDefault();
-        }
-      })();
-    };
-
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [isChatOnly, uploadedImages.length]);
 
   useEffect(() => {
     if (!isChatOnly || typeof window === "undefined") return;
@@ -590,6 +668,7 @@ export function ApiChatConsole({
       console.error("Failed to load saved conversations:", error);
       setSavedConversations([]);
     }
+    setConversationsLoaded(true);
 
     void loadSharedPrompts();
 
@@ -618,6 +697,24 @@ export function ApiChatConsole({
     );
   }, [isChatOnly, savedConversations]);
 
+  useEffect(() => {
+    if (!isChatOnly || !conversationsLoaded || hasHydratedConversationRef.current) return;
+
+    const activeConversation = savedConversations.find(
+      (item) => item.id === AUTO_SAVED_CONVERSATION_ID
+    );
+
+    if (activeConversation) {
+      setMessages(activeConversation.messages);
+      setDraftMessage(activeConversation.draftMessage);
+      setProvider(activeConversation.provider || "gemini");
+      setModel(activeConversation.model || "gemini-2.5-flash");
+      setConnectionState(null);
+    }
+
+    hasHydratedConversationRef.current = true;
+  }, [conversationsLoaded, isChatOnly, savedConversations]);
+
   const normalizedProvider = provider.trim().toLowerCase();
   const isGeminiProvider = normalizedProvider === "gemini";
   const imageCapable = looksLikeImageModel(model.trim());
@@ -634,18 +731,49 @@ export function ApiChatConsole({
       provider.trim() &&
       model.trim() &&
       baseUrl.trim() &&
-      (draftMessage.trim() || uploadedImages.length > 0) &&
+      (draftMessage.trim() || uploadedAttachments.length > 0) &&
       !loading
   );
+
+  useEffect(() => {
+    if (!isChatOnly || !conversationsLoaded || !hasHydratedConversationRef.current) return;
+
+    if (!hasConversationContent) {
+      setSavedConversations((current) =>
+        current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID)
+      );
+      return;
+    }
+
+    const snapshot = createCurrentConversationSnapshot(AUTO_SAVED_CONVERSATION_ID);
+    setSavedConversations((current) => [
+      snapshot,
+      ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID).slice(0, 23),
+    ]);
+  }, [
+    activeKeyLabel,
+    conversationsLoaded,
+    draftMessage,
+    hasConversationContent,
+    isChatOnly,
+    messages,
+    model,
+    provider,
+    uploadedAttachments,
+  ]);
 
   const buildGeminiContents = (history: ChatMessage[]) =>
     history.map((message) => {
       const parts: GeminiRequestPart[] = message.content ? [{ text: message.content }] : [];
 
       if (message.role === "user") {
-        message.images?.forEach((image) => {
-          const imagePart = imageToGeminiRequestPart(image);
-          if (imagePart) parts.push(imagePart);
+        message.attachments?.forEach((attachment) => {
+          parts.push({
+            inlineData: {
+              mimeType: attachment.mimeType,
+              data: attachment.inlineData,
+            },
+          });
         });
       }
 
@@ -732,10 +860,10 @@ export function ApiChatConsole({
 
   const handleSend = async () => {
     const typedContent = draftMessage.trim();
-    const content = typedContent || (uploadedImages.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
+    const content = typedContent || (uploadedAttachments.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
 
     if (!content) {
-      toast.error("請先輸入對話內容或上傳圖片");
+      toast.error("請先輸入對話內容或上傳附件");
       return;
     }
 
@@ -744,13 +872,16 @@ export function ApiChatConsole({
       return;
     }
 
-    const userImages = [...uploadedImages];
-    const userMessage = createMessage("user", content, "normal", userImages);
+    const userAttachments = [...uploadedAttachments];
+    const userImages = userAttachments
+      .filter((item) => item.kind === "image" && item.src)
+      .map((item) => ({ id: item.id, src: item.src as string, mimeType: item.mimeType }));
+    const userMessage = createMessage("user", content, "normal", userImages, userAttachments);
     const nextHistory = [...messages, userMessage];
 
     setMessages(nextHistory);
     setDraftMessage("");
-    setUploadedImages([]);
+    setUploadedAttachments([]);
     setLoading(true);
 
     try {
@@ -818,21 +949,34 @@ export function ApiChatConsole({
     };
   };
 
+  const createCurrentConversationSnapshot = (id?: string): SavedConversation => {
+    const snapshot = createSavedConversation({
+      messages,
+      draftMessage,
+      provider,
+      model,
+      keyLabel: activeKeyLabel,
+    });
+
+    return {
+      ...snapshot,
+      id: id ?? snapshot.id,
+      title:
+        id === AUTO_SAVED_CONVERSATION_ID
+          ? snapshot.title || "目前進行中的對話"
+          : snapshot.title,
+    };
+  };
+
   const hasConversationContent =
-    messages.length > 0 || draftMessage.trim().length > 0 || uploadedImages.length > 0;
+    messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
 
   const persistCurrentConversation = () => {
     if (messages.length === 0 && draftMessage.trim().length === 0) return false;
 
     setSavedConversations((current) => [
-      createSavedConversation({
-        messages,
-        draftMessage,
-        provider,
-        model,
-        keyLabel: activeKeyLabel,
-      }),
-      ...current,
+      createCurrentConversationSnapshot(),
+      ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID),
     ].slice(0, 24));
 
     return true;
@@ -846,7 +990,7 @@ export function ApiChatConsole({
     const archived = persistCurrentConversation();
     setMessages([]);
     setDraftMessage("");
-    setUploadedImages([]);
+    setUploadedAttachments([]);
     setConnectionState(null);
     setNewConversationDialogOpen(false);
     toast.success(archived ? "已建立新對話，上一段內容已保留" : "已建立新對話");
@@ -939,22 +1083,22 @@ export function ApiChatConsole({
 
   const appendUploadedFiles = async (files: File[]) => {
     if (!files.length) return;
-    const availableSlots = MAX_UPLOAD_IMAGE_COUNT - uploadedImages.length;
+    const availableSlots = MAX_UPLOAD_ATTACHMENT_COUNT - uploadedAttachments.length;
 
     if (availableSlots <= 0) {
-      toast.error(`一次最多上傳 ${MAX_UPLOAD_IMAGE_COUNT} 張圖片`);
+      toast.error(`一次最多加入 ${MAX_UPLOAD_ATTACHMENT_COUNT} 個附件`);
       return;
     }
 
     const selectedFiles = files.slice(0, availableSlots);
     const validFiles = selectedFiles.filter((file) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error(`${file.name} 不是圖片檔`);
+      if (!isSupportedAttachment(file)) {
+        toast.error(`${file.name} 不是支援的格式`);
         return false;
       }
 
-      if (file.size > MAX_UPLOAD_IMAGE_BYTES) {
-        toast.error(`${file.name} 超過 8MB`);
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
+        toast.error(`${file.name} 超過 15MB`);
         return false;
       }
 
@@ -964,12 +1108,21 @@ export function ApiChatConsole({
     if (!validFiles.length) return;
 
     try {
-      const images = await Promise.all(validFiles.map(createUploadedImageFromFile));
-      setUploadedImages((current) => [...current, ...images].slice(0, MAX_UPLOAD_IMAGE_COUNT));
-      toast.success(`已加入 ${images.length} 張圖片，可直接送出擷取文字`);
+      const attachments = await Promise.all(validFiles.map(createUploadedAttachmentFromFile));
+      setUploadedAttachments((current) => {
+        const seen = new Set(current.map(buildAttachmentFingerprint));
+        const deduped = attachments.filter((attachment) => {
+          const fingerprint = buildAttachmentFingerprint(attachment);
+          if (seen.has(fingerprint)) return false;
+          seen.add(fingerprint);
+          return true;
+        });
+        return [...current, ...deduped].slice(0, MAX_UPLOAD_ATTACHMENT_COUNT);
+      });
+      toast.success(`已加入 ${attachments.length} 個附件`);
     } catch (error) {
       console.error(error);
-      toast.error("圖片讀取失敗");
+      toast.error("附件讀取失敗");
     }
   };
 
@@ -993,8 +1146,8 @@ export function ApiChatConsole({
     return true;
   };
 
-  const removeUploadedImage = (id: string) => {
-    setUploadedImages((current) => current.filter((image) => image.id !== id));
+  const removeUploadedAttachment = (id: string) => {
+    setUploadedAttachments((current) => current.filter((attachment) => attachment.id !== id));
   };
 
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
@@ -1034,16 +1187,16 @@ export function ApiChatConsole({
             </div>
             <div className="rounded-[22px] border border-amber-300/14 bg-amber-400/8 px-4 py-4">
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-100/80">
-                Images
+                Attachments
               </p>
-              <p className="mt-2 text-2xl font-black text-slate-50">{uploadedImages.length}</p>
-              <p className="mt-1 text-xs text-slate-400">尚未送出的圖片會直接清空。</p>
+              <p className="mt-2 text-2xl font-black text-slate-50">{uploadedAttachments.length}</p>
+              <p className="mt-1 text-xs text-slate-400">尚未送出的附件會直接清空。</p>
             </div>
           </div>
 
           <div className="rounded-[24px] border border-white/8 bg-white/5 px-4 py-4 text-sm leading-6 text-slate-300">
             {hasConversationContent
-              ? "按下確認後會切到全新對話；文字與聊天紀錄會保留到左側清單，未送出的圖片會直接移除。"
+              ? "按下確認後會切到全新對話；文字與聊天紀錄會保留到左側清單，未送出的附件會直接移除。"
               : "目前沒有未儲存內容，按下確認後會直接建立乾淨的新對話。"}
           </div>
 
@@ -1283,7 +1436,7 @@ export function ApiChatConsole({
               title="查詢輸入"
               description={
                 isChatOnly
-                  ? "可直接貼查詢條件、料號、欄位需求，或上傳圖片擷取文字。"
+                  ? "可直接貼查詢條件、料號、欄位需求，或上傳附件擷取內容。"
                   : "支援連續查詢，也能拿 API 設定一起驗證回覆結果。"
               }
             />
@@ -1316,7 +1469,7 @@ export function ApiChatConsole({
               <input
                 ref={imageInputRef}
                 type="file"
-                accept="image/*"
+                accept=".csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.xls,.xlsx,.ppt,.pptx,.txt,image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 multiple
                 className="hidden"
                 onChange={(event) => {
@@ -1327,19 +1480,19 @@ export function ApiChatConsole({
               <div className="rounded-[24px] border border-cyan-300/14 bg-[linear-gradient(135deg,rgba(34,211,238,0.12),rgba(15,23,42,0.88))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-2">
-                    <p className="text-sm font-black text-slate-50">圖片上傳與手動截圖</p>
+                    <p className="text-sm font-black text-slate-50">附件上傳與手動截圖</p>
                     <p className="text-xs leading-5 text-slate-300">
-                      可直接上傳圖片，也支援你手動截圖後直接貼上。貼上後會自動加入這次查詢。
+                      可直接上傳圖片、PDF、PPT、Excel、Word、TXT，也支援你手動截圖後直接貼上。
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-200">
                       <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
                         支援 Ctrl+V / 貼上截圖
                       </span>
                       <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
-                        最多 {MAX_UPLOAD_IMAGE_COUNT} 張
+                        最多 {MAX_UPLOAD_ATTACHMENT_COUNT} 個附件
                       </span>
                       <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
-                        單張上限 8MB
+                        單檔上限 15MB
                       </span>
                     </div>
                   </div>
@@ -1347,40 +1500,57 @@ export function ApiChatConsole({
                     type="button"
                     variant="outline"
                     onClick={() => imageInputRef.current?.click()}
-                    disabled={loading || uploadedImages.length >= MAX_UPLOAD_IMAGE_COUNT}
+                    disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
                     className="h-11 rounded-2xl border-cyan-300/24 bg-[#17314a]/70 px-5 font-bold text-cyan-50 transition-all duration-200 hover:bg-[#204766] hover:text-white active:scale-[0.99]"
                   >
-                    <Upload className="mr-2 h-4 w-4" />
-                    上傳圖片 / 截圖
+                    <Paperclip className="mr-2 h-4 w-4" />
+                    上傳附件 / 截圖
                   </Button>
                 </div>
               </div>
 
-              {uploadedImages.length ? (
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  {uploadedImages.map((image, index) => (
-                    <div
-                      key={image.id}
-                      className="group relative overflow-hidden rounded-2xl border border-cyan-300/14 bg-[#07101c]"
-                    >
-                      <img
-                        src={image.src}
-                        alt={`待辨識圖片 ${index + 1}`}
-                        className="h-28 w-full object-cover opacity-90"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-slate-950/78 px-3 py-2 text-xs text-slate-200 backdrop-blur">
-                        <span>圖片 {index + 1}</span>
+              {uploadedAttachments.length ? (
+                <div className="space-y-2">
+                  <div className="flex max-h-[196px] flex-col gap-2 overflow-y-auto pr-1">
+                    {uploadedAttachments.map((attachment, index) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center gap-3 rounded-2xl border border-cyan-300/14 bg-[#07101c] px-3 py-3"
+                      >
+                        {attachment.kind === "image" && attachment.src ? (
+                          <img
+                            src={attachment.src}
+                            alt={`待上傳圖片 ${index + 1}`}
+                            className="h-16 w-16 rounded-xl border border-white/10 bg-slate-950/40 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-cyan-100">
+                            <FileText className="h-6 w-6" />
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-slate-100">
+                            {attachment.name}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                            <span>{attachment.kind === "image" ? "圖片" : "檔案"}</span>
+                            <span>{attachment.mimeType}</span>
+                            <span>{formatFileSize(attachment.size)}</span>
+                          </div>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => removeUploadedImage(image.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
-                          aria-label={`移除圖片 ${index + 1}`}
+                          onClick={() => removeUploadedAttachment(attachment.id)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+                          aria-label={`移除附件 ${index + 1}`}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
@@ -1397,7 +1567,7 @@ export function ApiChatConsole({
                     }
                   })();
                 }}
-                placeholder="例如：查這批料號的狀態差異，或直接 Ctrl+V 貼上手動截圖後輸入「請擷取圖中文字」。"
+                placeholder="例如：查這批料號的狀態差異，或上傳 PDF / Excel / PPT，或直接 Ctrl+V 貼上手動截圖。"
                 className="min-h-[168px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#0b1525_0%,#0d182a_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <div className="flex flex-wrap gap-2 text-xs text-slate-400">
@@ -1406,6 +1576,9 @@ export function ApiChatConsole({
                 </span>
                 <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
                   可貼上手動截圖
+                </span>
+                <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
+                  可上傳 PDF / PPT / Excel
                 </span>
                 <span
                   className={cn(
@@ -1442,7 +1615,7 @@ export function ApiChatConsole({
                     </p>
                     <p className="mt-1 text-xs leading-5 text-slate-300">
                       {isChatOnly
-                        ? "輸入文字、上傳圖片，或直接貼上手動截圖後就能送出。結果會留在這個工作區持續追問。"
+                        ? "輸入文字、上傳附件，或直接貼上手動截圖後就能送出。結果會留在這個工作區持續追問。"
                         : "你也可以先測試 API，再正式送出查詢。"}
                     </p>
                   </div>
@@ -1454,7 +1627,7 @@ export function ApiChatConsole({
                       {draftMessage.trim() ? "已輸入文字" : "尚未輸入文字"}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-slate-200">
-                      已附圖片 {uploadedImages.length} 張
+                      已附附件 {uploadedAttachments.length} 個
                     </span>
                     <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
                       {provider || "-"} / {model || "-"}
@@ -1483,8 +1656,8 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100vh-132px)] w-full gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:sticky xl:top-4 xl:h-[calc(100vh-164px)] xl:overflow-hidden">
+        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="h-full rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:self-stretch">
             <div className="flex h-full flex-col gap-4">
             <div className="space-y-4 border-b border-white/8 pb-4">
               <div className="flex items-center gap-3">
@@ -1647,7 +1820,7 @@ export function ApiChatConsole({
 
             <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
-                Current API
+                目前模型
               </p>
               <p className="mt-2 truncate text-sm font-bold text-slate-100">{activeKeyLabel}</p>
               <p className="mt-1 text-xs text-slate-400">
