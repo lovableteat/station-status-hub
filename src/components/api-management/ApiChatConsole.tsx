@@ -4,12 +4,10 @@ import {
   Bookmark,
   Bot,
   CheckCircle2,
-  FileText,
   ImageIcon,
   KeyRound,
   MessageSquareText,
   Plus,
-  Save,
   Send,
   Sparkles,
   Trash2,
@@ -32,13 +30,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUser } from "@/components/auth/UserContext";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 interface ApiChatConsoleProps {
   selectedApiKey?: ApiKeyRecord | null;
+  availableApiKeys?: ApiKeyRecord[];
+  selectedApiKeyId?: null | string;
+  onSelectApiKey?: (id: string) => void;
   mode?: "full" | "chat-only";
 }
 
@@ -73,6 +77,15 @@ interface SavedWorkspaceItem {
   content: string;
   savedAt: number;
 }
+interface SharedPromptRow {
+  command: string;
+  created_at: string;
+  created_by: null | string;
+  description: string;
+  id: string;
+  name: string;
+  updated_at: string;
+}
 
 interface SavedConversation {
   id: string;
@@ -85,11 +98,9 @@ interface SavedConversation {
   keyLabel: string;
 }
 
-type WorkspaceLibraryKind = "prompt" | "draft";
-
-const SAVED_PROMPTS_STORAGE_KEY = "api-chat:saved-prompts";
-const SAVED_DRAFTS_STORAGE_KEY = "api-chat:saved-drafts";
 const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
+const SHARED_PROMPT_CATEGORY = "ai_prompt";
+const SHARED_PROMPT_PLATFORM = "api-chat";
 const LEGACY_ASSISTANT_SYSTEM_PROMPT =
   "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。";
 const DEFAULT_QUERY_SYSTEM_PROMPT = [
@@ -158,15 +169,12 @@ function formatSavedItemTime(value: number) {
   }).format(new Date(value));
 }
 
-function createSavedWorkspaceItem(content: string, customTitle?: string): SavedWorkspaceItem {
-  const trimmed = content.trim();
-  const firstLine = customTitle?.trim() || trimmed.split(/\r?\n/)[0] || "未命名內容";
-
+function mapSharedPromptRowToItem(row: SharedPromptRow): SavedWorkspaceItem {
   return {
-    id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: firstLine.slice(0, 32),
-    content: trimmed,
-    savedAt: Date.now(),
+    id: row.id,
+    title: row.name,
+    content: row.command,
+    savedAt: new Date(row.updated_at || row.created_at).getTime(),
   };
 }
 
@@ -468,6 +476,9 @@ function MessageCard({ message }: { message: ChatMessage }) {
 
 export function ApiChatConsole({
   selectedApiKey,
+  availableApiKeys = [],
+  selectedApiKeyId,
+  onSelectApiKey,
   mode = "full",
 }: ApiChatConsoleProps) {
   const [apiKey, setApiKey] = useState("");
@@ -477,17 +488,12 @@ export function ApiChatConsole({
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_QUERY_SYSTEM_PROMPT);
   const [draftMessage, setDraftMessage] = useState("");
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
-  const [savedDrafts, setSavedDrafts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
-  const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false);
   const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
   const [promptDialogTitle, setPromptDialogTitle] = useState("");
   const [promptDialogContent, setPromptDialogContent] = useState("");
-  const [draftDialogTitle, setDraftDialogTitle] = useState("");
-  const [draftDialogContent, setDraftDialogContent] = useState("");
-  const [libraryApplyKind, setLibraryApplyKind] = useState<WorkspaceLibraryKind>("prompt");
   const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
   const [libraryApplyContent, setLibraryApplyContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -496,6 +502,7 @@ export function ApiChatConsole({
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const { user } = useUser();
 
   const isChatOnly = mode === "chat-only";
 
@@ -536,33 +543,72 @@ export function ApiChatConsole({
   useEffect(() => {
     if (!isChatOnly || typeof window === "undefined") return;
 
-    try {
-      const promptPayload = window.localStorage.getItem(SAVED_PROMPTS_STORAGE_KEY);
-      const draftPayload = window.localStorage.getItem(SAVED_DRAFTS_STORAGE_KEY);
-      const conversationPayload = window.localStorage.getItem(SAVED_CONVERSATIONS_STORAGE_KEY);
+    const onPaste = (event: ClipboardEvent) => {
+      if (!event.clipboardData?.items?.length) return;
+      void (async () => {
+        const handled = await handleClipboardPaste(event.clipboardData.items);
+        if (handled) {
+          event.preventDefault();
+        }
+      })();
+    };
 
-      setSavedPrompts(promptPayload ? (JSON.parse(promptPayload) as SavedWorkspaceItem[]) : []);
-      setSavedDrafts(draftPayload ? (JSON.parse(draftPayload) as SavedWorkspaceItem[]) : []);
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [isChatOnly, uploadedImages.length]);
+
+  useEffect(() => {
+    if (!isChatOnly || typeof window === "undefined") return;
+    let mounted = true;
+
+    const loadSharedPrompts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("command_library")
+          .select("id,name,command,description,created_by,created_at,updated_at")
+          .eq("category", SHARED_PROMPT_CATEGORY)
+          .eq("platform", SHARED_PROMPT_PLATFORM)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false });
+
+        if (error) throw error;
+        if (!mounted) return;
+
+        setSavedPrompts(((data ?? []) as SharedPromptRow[]).map(mapSharedPromptRowToItem));
+      } catch (error) {
+        console.error("Failed to load shared prompts:", error);
+        if (mounted) setSavedPrompts([]);
+      }
+    };
+
+    try {
+      const conversationPayload = window.localStorage.getItem(SAVED_CONVERSATIONS_STORAGE_KEY);
       setSavedConversations(
         conversationPayload ? (JSON.parse(conversationPayload) as SavedConversation[]) : []
       );
     } catch (error) {
-      console.error("Failed to load saved AI workspace items:", error);
-      setSavedPrompts([]);
-      setSavedDrafts([]);
+      console.error("Failed to load saved conversations:", error);
       setSavedConversations([]);
     }
+
+    void loadSharedPrompts();
+
+    const channel = supabase
+      .channel("api-chat-shared-prompts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "command_library" },
+        () => {
+          void loadSharedPrompts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      void supabase.removeChannel(channel);
+    };
   }, [isChatOnly]);
-
-  useEffect(() => {
-    if (!isChatOnly || typeof window === "undefined") return;
-    window.localStorage.setItem(SAVED_PROMPTS_STORAGE_KEY, JSON.stringify(savedPrompts));
-  }, [isChatOnly, savedPrompts]);
-
-  useEffect(() => {
-    if (!isChatOnly || typeof window === "undefined") return;
-    window.localStorage.setItem(SAVED_DRAFTS_STORAGE_KEY, JSON.stringify(savedDrafts));
-  }, [isChatOnly, savedDrafts]);
 
   useEffect(() => {
     if (!isChatOnly || typeof window === "undefined") return;
@@ -814,44 +860,39 @@ export function ApiChatConsole({
   };
 
   const saveCurrentPrompt = () => {
-    const content = promptDialogContent.trim();
-    if (!content) {
-      toast.error("請先填入提示詞內容");
-      return;
-    }
+    void (async () => {
+      const content = promptDialogContent.trim();
+      if (!content) {
+        toast.error("請先填入提示詞內容");
+        return;
+      }
 
-    setSavedPrompts((current) => [
-      createSavedWorkspaceItem(content, promptDialogTitle),
-      ...current,
-    ].slice(0, 20));
-    setSavePromptDialogOpen(false);
-    toast.success("提示詞已儲存");
+      const title = promptDialogTitle.trim() || content.split(/\r?\n/)[0] || "未命名提示詞";
+      const { error } = await supabase.from("command_library").insert({
+        category: SHARED_PROMPT_CATEGORY,
+        platform: SHARED_PROMPT_PLATFORM,
+        name: title.slice(0, 32),
+        command: content,
+        description: "AI 查詢共享提示詞",
+        created_by: user?.username || user?.displayName || null,
+        examples: null,
+        notes: null,
+        tags: ["shared", "ai-workspace", "prompt"],
+        is_active: true,
+      });
+
+      if (error) {
+        console.error("Failed to save shared prompt:", error);
+        toast.error("共享提示詞儲存失敗");
+        return;
+      }
+
+      setSavePromptDialogOpen(false);
+      toast.success("共享提示詞已儲存");
+    })();
   };
 
-  const openSaveDraftDialog = () => {
-    const draft = buildWorkspaceItemDraft("新草稿");
-    setDraftDialogTitle(draft.title);
-    setDraftDialogContent(draft.content);
-    setSaveDraftDialogOpen(true);
-  };
-
-  const saveCurrentDraft = () => {
-    const content = draftDialogContent.trim();
-    if (!content) {
-      toast.error("請先填入草稿內容");
-      return;
-    }
-
-    setSavedDrafts((current) => [
-      createSavedWorkspaceItem(content, draftDialogTitle),
-      ...current,
-    ].slice(0, 20));
-    setSaveDraftDialogOpen(false);
-    toast.success("草稿已儲存");
-  };
-
-  const openLibraryApplyDialog = (item: SavedWorkspaceItem, kind: WorkspaceLibraryKind) => {
-    setLibraryApplyKind(kind);
+  const openLibraryApplyDialog = (item: SavedWorkspaceItem) => {
     setLibraryApplyTitle(item.title);
     setLibraryApplyContent(item.content);
     setLibraryApplyDialogOpen(true);
@@ -879,20 +920,25 @@ export function ApiChatConsole({
   };
 
   const removeSavedPrompt = (id: string) => {
-    setSavedPrompts((current) => current.filter((item) => item.id !== id));
-  };
+    void (async () => {
+      const { error } = await supabase.from("command_library").delete().eq("id", id);
+      if (error) {
+        console.error("Failed to delete shared prompt:", error);
+        toast.error("刪除共享提示詞失敗");
+        return;
+      }
 
-  const removeSavedDraft = (id: string) => {
-    setSavedDrafts((current) => current.filter((item) => item.id !== id));
+      setSavedPrompts((current) => current.filter((item) => item.id !== id));
+      toast.success("共享提示詞已刪除");
+    })();
   };
 
   const removeSavedConversation = (id: string) => {
     setSavedConversations((current) => current.filter((item) => item.id !== id));
   };
 
-  const handleImageUpload = async (files: FileList | null) => {
-    if (!files?.length) return;
-
+  const appendUploadedFiles = async (files: File[]) => {
+    if (!files.length) return;
     const availableSlots = MAX_UPLOAD_IMAGE_COUNT - uploadedImages.length;
 
     if (availableSlots <= 0) {
@@ -900,7 +946,7 @@ export function ApiChatConsole({
       return;
     }
 
-    const selectedFiles = Array.from(files).slice(0, availableSlots);
+    const selectedFiles = files.slice(0, availableSlots);
     const validFiles = selectedFiles.filter((file) => {
       if (!file.type.startsWith("image/")) {
         toast.error(`${file.name} 不是圖片檔`);
@@ -925,6 +971,26 @@ export function ApiChatConsole({
       console.error(error);
       toast.error("圖片讀取失敗");
     }
+  };
+
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    await appendUploadedFiles(Array.from(files));
+  };
+
+  const handleClipboardPaste = async (items: ClipboardItem[] | DataTransferItemList) => {
+    const imageFiles: File[] = [];
+
+    Array.from(items).forEach((item) => {
+      const file = "getAsFile" in item ? item.getAsFile() : null;
+      if (file && file.type.startsWith("image/")) {
+        imageFiles.push(file);
+      }
+    });
+
+    if (!imageFiles.length) return false;
+    await appendUploadedFiles(imageFiles);
+    return true;
   };
 
   const removeUploadedImage = (id: string) => {
@@ -1004,9 +1070,9 @@ export function ApiChatConsole({
       <Dialog open={savePromptDialogOpen} onOpenChange={setSavePromptDialogOpen}>
         <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
           <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">儲存提示詞</DialogTitle>
+            <DialogTitle className="text-2xl font-black text-slate-50">儲存共享提示詞</DialogTitle>
             <DialogDescription className="text-sm leading-6 text-slate-400">
-              在視窗裡先確認標題與內容，再存進提示詞庫。之後點提示詞庫卡片就能直接帶回輸入框。
+              在視窗裡先確認標題與內容，再存進共享提示詞庫。其他使用者重新開頁後也能直接使用。
             </DialogDescription>
           </DialogHeader>
 
@@ -1032,7 +1098,7 @@ export function ApiChatConsole({
                 className="min-h-[220px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <p className="text-xs text-slate-500">
-                建議把常用格式、回覆要求或固定流程寫完整，之後套用時才不需要重打。
+                建議把常用格式、回覆要求或固定流程寫完整，之後所有人都能直接套用。
               </p>
             </div>
           </div>
@@ -1053,65 +1119,7 @@ export function ApiChatConsole({
               className="h-11 rounded-2xl bg-cyan-500 px-5 font-bold text-slate-950 shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Bookmark className="mr-2 h-4 w-4" />
-              儲存提示詞
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={saveDraftDialogOpen} onOpenChange={setSaveDraftDialogOpen}>
-        <DialogContent className="max-w-2xl border-violet-300/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
-          <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">儲存草稿</DialogTitle>
-            <DialogDescription className="text-sm leading-6 text-slate-400">
-              這裡適合保留還沒發出去的長文、待整理需求或圖片搭配的說明文字。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">草稿名稱</Label>
-              <Input
-                data-ai-surface="true"
-                value={draftDialogTitle}
-                onChange={(event) => setDraftDialogTitle(event.target.value)}
-                placeholder="例如：主管簡報用草稿"
-                className="h-12 rounded-2xl border-violet-300/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-violet-300/22 focus:ring-2 focus:ring-violet-400/18"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">草稿內容</Label>
-              <Textarea
-                data-ai-surface="true"
-                value={draftDialogContent}
-                onChange={(event) => setDraftDialogContent(event.target.value)}
-                placeholder="請直接輸入要保留的草稿內容"
-                className="min-h-[220px] rounded-[24px] border-violet-300/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-violet-300/22 focus:ring-2 focus:ring-violet-400/18"
-              />
-              <p className="text-xs text-slate-500">
-                草稿會保留在左側草稿庫，之後可以一鍵帶回輸入框繼續編輯或直接送出。
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setSaveDraftDialogOpen(false)}
-              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
-            >
-              取消
-            </Button>
-            <Button
-              type="button"
-              onClick={saveCurrentDraft}
-              disabled={!draftDialogContent.trim()}
-              className="h-11 rounded-2xl bg-[linear-gradient(135deg,#8b5cf6_0%,#6366f1_100%)] px-5 font-bold text-white shadow-[0_18px_44px_-28px_rgba(139,92,246,0.55)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              儲存草稿
+              儲存共享提示詞
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1120,9 +1128,7 @@ export function ApiChatConsole({
       <Dialog open={libraryApplyDialogOpen} onOpenChange={setLibraryApplyDialogOpen}>
         <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
           <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">
-              {libraryApplyKind === "prompt" ? "調整提示詞後套用" : "調整草稿後套用"}
-            </DialogTitle>
+            <DialogTitle className="text-2xl font-black text-slate-50">調整提示詞後套用</DialogTitle>
             <DialogDescription className="text-sm leading-6 text-slate-400">
               先在這裡修改內容，再套用到 AI 輸入框。套用後不會自動送出，你可以繼續補字再問。
             </DialogDescription>
@@ -1134,7 +1140,7 @@ export function ApiChatConsole({
               <Input
                 value={libraryApplyTitle}
                 onChange={(event) => setLibraryApplyTitle(event.target.value)}
-                placeholder={libraryApplyKind === "prompt" ? "提示詞名稱" : "草稿名稱"}
+                placeholder="提示詞名稱"
                 className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
             </div>
@@ -1189,6 +1195,28 @@ export function ApiChatConsole({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isChatOnly ? (
+            <div className="min-w-[240px]">
+              <Select
+                value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
+                onValueChange={(value) => onSelectApiKey?.(value)}
+              >
+                <SelectTrigger className="h-9 rounded-full border-white/10 bg-white/5 px-3 text-left text-slate-100">
+                  <SelectValue placeholder="選擇模型" />
+                </SelectTrigger>
+                <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
+                  {availableApiKeys.map((apiKey) => {
+                    const metadata = normalizeApiKeyPermissions(apiKey.permissions).metadata;
+                    return (
+                      <SelectItem key={apiKey.id} value={apiKey.id}>
+                        {apiKey.key_name} · {metadata.provider || "-"} / {metadata.model || "-"}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
             {truncateMiddle(activeKeyLabel)}
           </Badge>
@@ -1296,23 +1324,36 @@ export function ApiChatConsole({
                   event.currentTarget.value = "";
                 }}
               />
-              <div className="flex flex-col gap-2 rounded-[22px] border border-cyan-400/10 bg-cyan-400/5 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-black text-slate-100">圖片文字擷取</p>
-                  <p className="text-xs leading-5 text-slate-400">
-                    上傳截圖後可直接送出，AI 會擷取圖片文字。
-                  </p>
+              <div className="rounded-[24px] border border-cyan-300/14 bg-[linear-gradient(135deg,rgba(34,211,238,0.12),rgba(15,23,42,0.88))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-black text-slate-50">圖片上傳與手動截圖</p>
+                    <p className="text-xs leading-5 text-slate-300">
+                      可直接上傳圖片，也支援你手動截圖後直接貼上。貼上後會自動加入這次查詢。
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-200">
+                      <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
+                        支援 Ctrl+V / 貼上截圖
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
+                        最多 {MAX_UPLOAD_IMAGE_COUNT} 張
+                      </span>
+                      <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
+                        單張上限 8MB
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={loading || uploadedImages.length >= MAX_UPLOAD_IMAGE_COUNT}
+                    className="h-11 rounded-2xl border-cyan-300/24 bg-[#17314a]/70 px-5 font-bold text-cyan-50 transition-all duration-200 hover:bg-[#204766] hover:text-white active:scale-[0.99]"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    上傳圖片 / 截圖
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={loading || uploadedImages.length >= MAX_UPLOAD_IMAGE_COUNT}
-                  className="h-10 rounded-2xl border-cyan-300/22 bg-cyan-400/10 px-4 font-bold text-cyan-100 transition-all duration-200 hover:bg-cyan-400/16 hover:text-white active:scale-[0.99]"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  上傳圖片
-                </Button>
               </div>
 
               {uploadedImages.length ? (
@@ -1347,15 +1388,24 @@ export function ApiChatConsole({
                 data-ai-surface="true"
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
-                placeholder="例如：查這批料號的狀態差異，或上傳圖片後輸入「請擷取圖中文字」。"
-                className="min-h-[160px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#08101d_0%,#09111c_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                onPaste={(event) => {
+                  if (!event.clipboardData?.items?.length) return;
+                  void (async () => {
+                    const handled = await handleClipboardPaste(event.clipboardData.items);
+                    if (handled) {
+                      event.preventDefault();
+                    }
+                  })();
+                }}
+                placeholder="例如：查這批料號的狀態差異，或直接 Ctrl+V 貼上手動截圖後輸入「請擷取圖中文字」。"
+                className="min-h-[168px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#0b1525_0%,#0d182a_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
               <div className="flex flex-wrap gap-2 text-xs text-slate-400">
                 <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
                   可連續追問
                 </span>
                 <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-                  可上傳圖片抽文字
+                  可貼上手動截圖
                 </span>
                 <span
                   className={cn(
@@ -1371,25 +1421,53 @@ export function ApiChatConsole({
             </div>
 
             <div className="flex flex-col justify-between gap-3">
-              <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#0a1220_0%,#09101b_100%)] px-4 py-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
-                  Status
-                </p>
-                <p className="mt-2 text-sm font-bold text-slate-100">
-                  {canSend ? "可以送出" : "等待輸入"}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-slate-400">
-                  {isChatOnly
-                    ? "輸入訊息後按下送出，查詢結果會直接留在這個工作區。"
-                    : "你也可以先做 API 測試，再開始正式查詢。"}
-                </p>
+              <div className="rounded-[28px] border border-cyan-300/12 bg-[linear-gradient(180deg,#132238_0%,#0f1c2f_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(2,8,23,0.18)]">
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border",
+                      canSend
+                        ? "border-emerald-300/24 bg-emerald-400/14 text-emerald-100"
+                        : "border-white/10 bg-white/6 text-slate-300"
+                    )}
+                  >
+                    <Send className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+                      查詢狀態
+                    </p>
+                    <p className="mt-2 text-base font-black text-slate-50">
+                      {canSend ? "可以送出查詢" : "等待你輸入內容"}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                      {isChatOnly
+                        ? "輸入文字、上傳圖片，或直接貼上手動截圖後就能送出。結果會留在這個工作區持續追問。"
+                        : "你也可以先測試 API，再正式送出查詢。"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                    <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-slate-200">
+                      {draftMessage.trim() ? "已輸入文字" : "尚未輸入文字"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-slate-200">
+                      已附圖片 {uploadedImages.length} 張
+                    </span>
+                    <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
+                      {provider || "-"} / {model || "-"}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <Button
                 type="button"
                 onClick={() => void handleSend()}
                 disabled={!canSend}
-                className="h-14 rounded-[24px] bg-[linear-gradient(135deg,#22d3ee_0%,#7c3aed_100%)] font-bold text-white shadow-[0_18px_40px_-24px_rgba(34,211,238,0.55)] transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
+                className="h-14 rounded-[24px] bg-[linear-gradient(135deg,#38bdf8_0%,#22d3ee_48%,#34d399_100%)] font-bold text-slate-950 shadow-[0_18px_40px_-24px_rgba(56,189,248,0.55)] transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:bg-[linear-gradient(135deg,#334155_0%,#475569_100%)] disabled:text-slate-300"
               >
                 <Send className="mr-2 h-4 w-4" />
                 {loading ? "送出中..." : "送出查詢"}
@@ -1436,16 +1514,7 @@ export function ApiChatConsole({
                   className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                 >
                   <Bookmark className="mr-2 h-4 w-4" />
-                  存成提示詞
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={openSaveDraftDialog}
-                  className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  存成草稿
+                  儲存共享提示詞
                 </Button>
               </div>
             </div>
@@ -1516,8 +1585,8 @@ export function ApiChatConsole({
               <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-slate-100">提示詞庫</p>
-                    <p className="text-xs text-slate-400">先開視窗調整，再套用給 AI</p>
+                    <p className="text-sm font-black text-slate-100">共享提示詞</p>
+                    <p className="text-xs text-slate-400">所有使用者共用，先開視窗調整再套用給 AI</p>
                   </div>
                   <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
                     {savedPrompts.length}
@@ -1526,7 +1595,7 @@ export function ApiChatConsole({
                 <div className="space-y-2">
                   {savedPrompts.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
-                      目前還沒有儲存提示詞
+                      目前還沒有共享提示詞
                     </div>
                   ) : (
                     savedPrompts.map((item) => (
@@ -1536,7 +1605,7 @@ export function ApiChatConsole({
                       >
                         <button
                           type="button"
-                          onClick={() => openLibraryApplyDialog(item, "prompt")}
+                          onClick={() => openLibraryApplyDialog(item)}
                           className="w-full text-left"
                         >
                           <div className="flex items-start gap-2">
@@ -1555,7 +1624,7 @@ export function ApiChatConsole({
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => openLibraryApplyDialog(item, "prompt")}
+                            onClick={() => openLibraryApplyDialog(item)}
                             className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
                           >
                             開啟調整
@@ -1564,68 +1633,6 @@ export function ApiChatConsole({
                             type="button"
                             variant="outline"
                             onClick={() => removeSavedPrompt(item.id)}
-                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
-                          >
-                            刪除
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black text-slate-100">草稿庫</p>
-                    <p className="text-xs text-slate-400">先開視窗調整，再套用給 AI</p>
-                  </div>
-                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
-                    {savedDrafts.length}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  {savedDrafts.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
-                      目前還沒有儲存草稿
-                    </div>
-                  ) : (
-                    savedDrafts.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-violet-300/16 hover:bg-white/8"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openLibraryApplyDialog(item, "draft")}
-                          className="w-full text-left"
-                        >
-                          <div className="flex items-start gap-2">
-                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-100">
-                                {item.title}
-                              </p>
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {formatSavedItemTime(item.savedAt)}
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => openLibraryApplyDialog(item, "draft")}
-                            className="h-8 rounded-xl border-violet-300/16 bg-violet-400/8 text-xs font-bold text-violet-100 hover:bg-violet-400/14 hover:text-white"
-                          >
-                            開啟調整
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => removeSavedDraft(item.id)}
                             className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
                           >
                             刪除
