@@ -49,16 +49,16 @@ interface StationContentManagerProps {
 }
 
 const defaultTheme: StationContentTheme = {
-  contentPanel: "border-sky-300/18 bg-slate-950/88 shadow-[0_24px_70px_-48px_rgba(56,189,248,0.62)]",
-  contentHeader: "border-sky-300/14 bg-gradient-to-r from-sky-400/[0.12] via-slate-900/70 to-cyan-400/[0.05]",
-  contentSurface: "border-sky-300/14 bg-sky-400/[0.045]",
-  contentForm: "border-sky-300/14 bg-sky-400/[0.045]",
-  contentCard: "border-sky-300/14 bg-slate-950/78 hover:border-sky-200/36 hover:bg-sky-400/[0.07]",
-  contentEmpty: "border-sky-300/16 bg-sky-400/[0.045]",
-  contentButton: "border-cyan-200/35 bg-cyan-300/[0.18] text-cyan-50 hover:bg-cyan-300/[0.26]",
-  contentButtonGhost: "border-slate-500/38 bg-slate-900/72 text-slate-100 hover:border-cyan-200/35 hover:bg-cyan-300/[0.13] hover:text-cyan-50",
-  contentIcon: "border-cyan-200/34 bg-cyan-300/[0.15] text-cyan-50",
-  contentBadge: "border-cyan-200/34 bg-cyan-300/[0.15] text-cyan-50",
+  contentPanel: "border-sky-200/38 bg-gradient-to-br from-slate-900/96 via-sky-950/88 to-cyan-500/[0.16] shadow-[0_24px_70px_-38px_rgba(56,189,248,0.76)]",
+  contentHeader: "border-sky-200/30 bg-gradient-to-r from-sky-400/[0.20] via-slate-900/74 to-cyan-400/[0.14]",
+  contentSurface: "border-sky-200/26 bg-sky-400/[0.10]",
+  contentForm: "border-sky-200/26 bg-sky-400/[0.10]",
+  contentCard: "border-sky-200/30 bg-gradient-to-br from-sky-400/[0.12] via-slate-900/86 to-cyan-400/[0.08] hover:border-sky-100/55 hover:bg-sky-300/[0.18]",
+  contentEmpty: "border-sky-200/26 bg-sky-400/[0.10]",
+  contentButton: "border-cyan-100/45 bg-cyan-300/[0.28] text-white hover:bg-cyan-300/[0.38]",
+  contentButtonGhost: "border-sky-200/34 bg-sky-300/[0.12] text-sky-50 hover:border-cyan-100/55 hover:bg-cyan-300/[0.22] hover:text-white",
+  contentIcon: "border-cyan-100/55 bg-cyan-300/[0.28] text-white",
+  contentBadge: "border-cyan-100/55 bg-cyan-300/[0.28] text-white",
 };
 
 export function StationContentManager({ 
@@ -231,8 +231,8 @@ export function StationContentManager({
                 <Card
                   key={content.id}
                   className={cn(
-                    "group relative overflow-hidden rounded-2xl transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_60px_-44px_rgba(56,189,248,0.86)] active:translate-y-px",
-                    "before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-cyan-200/80 before:via-sky-400/55 before:to-transparent",
+                    "group relative overflow-hidden rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_64px_-38px_rgba(56,189,248,0.95),inset_0_1px_0_rgba(255,255,255,0.08)] active:translate-y-px",
+                    "before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-gradient-to-b before:from-cyan-100 before:via-sky-300 before:to-cyan-400/30",
                     activeTheme.contentCard
                   )}
                   style={{ animationDelay: `${index * 45}ms` }}
@@ -242,12 +242,12 @@ export function StationContentManager({
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1 rounded-2xl border border-transparent px-2 py-1">
                           <div className="flex min-w-0 items-center gap-2">
-                            <Badge variant="outline" className={cn("grid h-8 min-w-8 shrink-0 place-items-center rounded-full px-2 text-xs font-bold shadow-[0_10px_22px_-16px_rgba(34,211,238,0.8)]", activeTheme.contentBadge)}>
+                            <Badge variant="outline" className={cn("grid h-8 min-w-8 shrink-0 place-items-center rounded-full px-2 text-xs font-bold shadow-[0_0_0_1px_rgba(255,255,255,0.10),0_10px_26px_-14px_rgba(34,211,238,0.95)]", activeTheme.contentBadge)}>
                               {index + 1}
                             </Badge>
                             <h4 className="truncate text-[15px] font-semibold tracking-[0.01em] text-slate-50">{content.title}</h4>
                           </div>
-                          <p className="mt-3 line-clamp-4 whitespace-pre-wrap rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2 text-[13px] leading-6 text-slate-300/90 transition-colors duration-200 group-hover:border-cyan-200/15 group-hover:text-slate-100">
+                          <p className="mt-3 line-clamp-4 whitespace-pre-wrap rounded-xl border border-sky-200/12 bg-slate-950/42 px-3 py-2 text-[13px] leading-6 text-slate-200/95 transition-colors duration-200 group-hover:border-cyan-100/28 group-hover:bg-slate-950/58 group-hover:text-white">
                             {fullContent}
                           </p>
                         </div>
@@ -256,7 +256,7 @@ export function StationContentManager({
                             onClick={() => openEditDialog(content)}
                             variant="outline"
                             size="sm"
-                            className={cn("h-9 w-9 rounded-xl p-0 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-px", activeTheme.contentButtonGhost)}
+                            className={cn("h-9 w-9 rounded-xl p-0 shadow-[0_10px_24px_-18px_rgba(125,211,252,0.75)] transition-all duration-200 hover:-translate-y-0.5 active:translate-y-px", activeTheme.contentButtonGhost)}
                             title={`編輯 ${content.title}`}
                           >
                             <Edit className="h-3 w-3" />
@@ -265,7 +265,7 @@ export function StationContentManager({
                             onClick={() => handleDelete(content.id)}
                             variant="ghost"
                             size="sm"
-                            className="h-9 w-9 rounded-xl border border-red-300/18 bg-red-400/[0.07] p-0 text-red-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-red-200/35 hover:bg-red-400/[0.14] hover:text-red-50 active:translate-y-px"
+                            className="h-9 w-9 rounded-xl border border-red-200/34 bg-red-400/[0.14] p-0 text-red-100 shadow-[0_10px_24px_-18px_rgba(248,113,113,0.65)] transition-all duration-200 hover:-translate-y-0.5 hover:border-red-100/55 hover:bg-red-400/[0.24] hover:text-white active:translate-y-px"
                             title={`刪除 ${content.title}`}
                           >
                             <Trash2 className="h-3 w-3" />
