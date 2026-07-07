@@ -22,6 +22,76 @@
 
   <body>
     <div id="root"></div>
-    <script type="module" src="./boot.js"></script>
+    <script>
+      (function () {
+        const RETRY_KEY = "station-status-hub:boot-retry";
+        const FALLBACK_TITLE = "\u9801\u9762\u91cd\u65b0\u540c\u6b65\u4e2d";
+        const FALLBACK_MESSAGE =
+          "\u525b\u525b\u5075\u6e2c\u5230\u700f\u89bd\u5668\u62ff\u5230\u820a\u7248\u8cc7\u6e90\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u91cd\u6574\u4e00\u6b21\u3002\u5982\u679c\u4f60\u9084\u662f\u770b\u5230\u7a7a\u767d\u9801\uff0c\u8acb\u518d\u6309\u4e00\u6b21\u91cd\u65b0\u6574\u7406\u3002";
+        const FALLBACK_BUTTON = "\u91cd\u65b0\u6574\u7406\u9801\u9762";
+
+        function renderFallbackMessage() {
+          const root = document.getElementById("root");
+          if (!root || root.children.length > 0) return;
+
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#08111f;color:#e2e8f0;font-family:Arial,sans-serif;">' +
+            '<div style="max-width:560px;border:1px solid rgba(148,163,184,.18);border-radius:24px;padding:28px;background:rgba(15,23,42,.88);box-shadow:0 24px 80px rgba(2,8,23,.34);">' +
+            '<div style="font-size:28px;font-weight:700;margin-bottom:12px;">' +
+            FALLBACK_TITLE +
+            "</div>" +
+            '<div style="font-size:15px;line-height:1.8;color:#cbd5e1;">' +
+            FALLBACK_MESSAGE +
+            "</div>" +
+            '<button onclick="window.location.reload()" style="margin-top:18px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#38bdf8;color:#082032;font-size:14px;font-weight:700;cursor:pointer;">' +
+            FALLBACK_BUTTON +
+            "</button>" +
+            "</div></div>";
+        }
+
+        function retryBoot(reason) {
+          const hasRetried = sessionStorage.getItem(RETRY_KEY) === "1";
+          if (hasRetried) {
+            console.warn("station-status-hub boot retry already used:", reason);
+            renderFallbackMessage();
+            return;
+          }
+
+          sessionStorage.setItem(RETRY_KEY, "1");
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("reload", Date.now().toString());
+          window.location.replace(nextUrl.toString());
+        }
+
+        window.addEventListener(
+          "error",
+          function (event) {
+            const target = event.target;
+            if (
+              target &&
+              target.tagName === "SCRIPT" &&
+              typeof target.src === "string" &&
+              target.src.includes("/assets/index-")
+            ) {
+              retryBoot("asset-load-error");
+            }
+          },
+          true
+        );
+
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            const root = document.getElementById("root");
+            const hasRendered = !!root && root.children.length > 0;
+            if (hasRendered) {
+              sessionStorage.removeItem(RETRY_KEY);
+              return;
+            }
+            retryBoot("empty-root-after-load");
+          }, 2200);
+        });
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

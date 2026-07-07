@@ -5,9 +5,6 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
   base: "/station-status-hub/",
-  build: {
-    manifest: "asset-manifest.json",
-  },
   server: {
     host: "::",
     port: 8080,
