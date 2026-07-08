@@ -173,7 +173,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "供料狀態", "核准狀態", "料件狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
   lv: ["LV", "Version", "版本", "版次"],
-  remark: ["Remark", "Remarks", "Comment", "Note", "備註", "申請狀態"],
+  remark: [],
   partNumber: ["Part Number", "Internal Part Number", "Internal PN", "PN", "內部料號", "公司料號"],
   partName: ["Part Name", "Internal Part Name", "內部料名", "料號名稱"],
   partSpec: ["Part Spec", "Specification", "Spec", "規格", "料件規格"],
@@ -935,7 +935,8 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
       refGroup,
       lv: normalizeCellValue(getFieldValue(row, fields, "lv")),
-      remark: normalizeText(getFieldValue(row, fields, "remark")),
+      // Keep remark as an app-managed field instead of importing CIS/Remark from BOM files.
+      remark: "",
       partNumber,
       partName,
       partSpec: normalizeText(getFieldValue(row, fields, "partSpec")),
