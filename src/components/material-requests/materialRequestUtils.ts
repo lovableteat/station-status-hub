@@ -42,7 +42,6 @@ export interface MaterialTrackingHistoryEntry {
   note?: string;
   createdAt: string;
   createdBy?: string;
-  virtualPartNumber?: string;
   requestInfo?: string;
   images?: MaterialTrackingHistoryImage[];
 }
@@ -306,7 +305,6 @@ function normalizeTrackingHistoryEntry(raw: unknown): MaterialTrackingHistoryEnt
     note: normalizeText(entry.note),
     createdAt: normalizeText(entry.createdAt),
     createdBy: normalizeText(entry.createdBy),
-    virtualPartNumber: normalizeText(entry.virtualPartNumber),
     requestInfo: normalizeText(entry.requestInfo),
     images,
   };
@@ -317,30 +315,26 @@ function createImportedTrackingHistoryEntry({
   rowIndex,
   statusNote,
   createdBy,
-  virtualPartNumber,
   requestInfo,
 }: {
   sheetName: string;
   rowIndex: number;
   statusNote: unknown;
   createdBy: unknown;
-  virtualPartNumber: unknown;
   requestInfo: unknown;
 }) {
   const note = normalizeText(statusNote);
   const updater = normalizeText(createdBy);
-  const virtualPn = normalizeText(virtualPartNumber);
   const request = normalizeText(requestInfo);
 
-  if (!note && !updater && !virtualPn && !request) return [];
+  if (!note && !updater && !request) return [];
 
   return [{
     id: `imported-tracking-${sheetName}-${rowIndex + 1}`,
-    status: "新增追蹤",
+    status: note ? "處理中" : "新增追蹤",
     note,
     createdAt: "",
     createdBy: updater,
-    virtualPartNumber: virtualPn,
     requestInfo: request,
     images: [],
   }] satisfies MaterialTrackingHistoryEntry[];
@@ -527,7 +521,6 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
         entry.status,
         entry.note,
         entry.createdBy,
-        entry.virtualPartNumber,
         entry.requestInfo,
         ...(entry.images ?? []).map((image) => image.name),
       ]),
@@ -657,6 +650,14 @@ function resolveHeaderFields(row: unknown[]) {
       }
     });
   });
+
+  const trackingStatusIndex = fields.get("trackingStatus");
+  if (!fields.has("trackingRequestInfo") && trackingStatusIndex != null) {
+    const nextColumnIndex = trackingStatusIndex + 1;
+    if (nextColumnIndex < row.length && !normalizeHeader(row[nextColumnIndex])) {
+      fields.set("trackingRequestInfo", nextColumnIndex);
+    }
+  }
 
   return fields;
 }
@@ -825,7 +826,6 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       rowIndex: index,
       statusNote: getFieldValue(row, fields, "trackingStatus"),
       createdBy: getFieldValue(row, fields, "trackingCreatedBy"),
-      virtualPartNumber: virtualAlternative,
       requestInfo: getFieldValue(row, fields, "trackingRequestInfo"),
     });
 
@@ -843,7 +843,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       manufacturerPartNumber: mpn1,
       manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
       virtualAlternative,
-      trackingStatus: trackingHistory.length > 0 ? "新增追蹤" : "",
+      trackingStatus: trackingHistory[0]?.status ?? "",
       trackingHistory,
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),

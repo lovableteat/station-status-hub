@@ -571,7 +571,11 @@ function mergeTrackingHistories(
 ) {
   const existingById = new Map(existingHistory.map((entry) => [entry.id, entry]));
   const importedIds = new Set(importedHistory.map((entry) => entry.id));
-  const importedEntries = importedHistory.map((entry) => ({ ...existingById.get(entry.id), ...entry }));
+  const importedEntries = importedHistory.map((entry) => {
+    const existingEntry = existingById.get(entry.id) as (MaterialTrackingHistoryEntry & { virtualPartNumber?: string }) | undefined;
+    const { virtualPartNumber: _legacyVirtualPartNumber, ...safeExistingEntry } = existingEntry ?? {};
+    return { ...safeExistingEntry, ...entry };
+  });
   const preservedExistingEntries = existingHistory.filter((entry) => !importedIds.has(entry.id));
 
   return [...importedEntries, ...preservedExistingEntries];
@@ -582,15 +586,13 @@ function hasTrackingContent(entry: MaterialTrackingHistoryEntry) {
     entry.status,
     entry.note,
     entry.createdBy,
-    entry.virtualPartNumber,
     entry.requestInfo,
   ].some((value) => String(value ?? "").trim().length > 0);
 }
 
-function hasImportedTrackingData(record: Pick<MaterialWorkbookRecord, "trackingStatus" | "trackingHistory" | "virtualAlternative">) {
+function hasImportedTrackingData(record: Pick<MaterialWorkbookRecord, "trackingStatus" | "trackingHistory">) {
   return Boolean(
     record.trackingStatus?.trim()
-      || record.virtualAlternative?.trim()
       || (record.trackingHistory ?? []).some(hasTrackingContent)
   );
 }
@@ -598,7 +600,6 @@ function hasImportedTrackingData(record: Pick<MaterialWorkbookRecord, "trackingS
 function getBestTrackingRecord(records: MaterialRecord[], fallback: MaterialRecord) {
   return records.find((record) =>
     record.trackingStatus?.trim()
-      || record.virtualAlternative?.trim()
       || (record.trackingHistory ?? []).some(hasTrackingContent)
   ) ?? fallback;
 }
@@ -782,7 +783,6 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
           getTrackingWorkflowStatus(record),
           latestEntry?.note ?? "",
           latestEntry?.createdBy ?? "",
-          latestEntry?.virtualPartNumber ?? "",
           latestEntry?.requestInfo ?? "",
         ];
       });
@@ -828,7 +828,6 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
         getTrackingWorkflowStatus(record),
         latestTrackingEntry?.note ?? "",
         latestTrackingEntry?.createdBy ?? "",
-        latestTrackingEntry?.virtualPartNumber ?? "",
         latestTrackingEntry?.requestInfo ?? "",
       ];
 
@@ -860,6 +859,15 @@ function formatTimestamp(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function isExternalUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function formatRelativeTimestamp(value: string) {
@@ -1106,7 +1114,14 @@ function normalizeTrackingWorkflowStatus(status: string) {
 
 function getTrackingWorkflowStatus(record: MaterialRecord) {
   const latestEntry = getLatestTrackingEntry(record);
-  return normalizeTrackingWorkflowStatus(latestEntry?.status || record.trackingStatus || "");
+  const workflowStatus = normalizeTrackingWorkflowStatus(latestEntry?.status || record.trackingStatus || "");
+  const hasImportedStatusContent = Boolean(
+    latestEntry?.note?.trim()
+      || latestEntry?.createdBy?.trim()
+      || latestEntry?.requestInfo?.trim()
+  );
+
+  return workflowStatus === "新增追蹤" && hasImportedStatusContent ? "處理中" : workflowStatus;
 }
 
 function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
@@ -1234,18 +1249,34 @@ function ExcelFilterPopover({
   );
   const [draftSearchValue, setDraftSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
-  const optionValueSet = useMemo(() => new Set(options.map((option) => option.value)), [options]);
+  const wasOpenRef = useRef(false);
+  const selectedValuesRef = useRef(selectedValues);
+  const deferredDraftSearchValue = useDeferredValue(draftSearchValue);
+  const allOptionValues = useMemo(() => options.map((option) => option.value), [options]);
+  const optionValueSet = useMemo(() => new Set(allOptionValues), [allOptionValues]);
   const appliedSelectedValues = useMemo(
     () => normalizeColumnFilterSelection(selectedValues),
     [selectedValues],
   );
 
   useEffect(() => {
-    if (open) {
-      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
+    selectedValuesRef.current = selectedValues;
+  }, [selectedValues]);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValuesRef.current));
       setDraftSearchValue("");
       setMergeSearchSelection(true);
       setScrollTop(0);
+    }
+
+    wasOpenRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
     }
   }, [open, selectedValues]);
 
@@ -1264,16 +1295,16 @@ function ExcelFilterPopover({
 
   const effectiveSelected = useMemo(
     () => draftSelectedValues === null
-      ? options.map((option) => option.value)
+      ? allOptionValues
       : normalizeColumnFilterSelection(draftSelectedValues) ?? [],
-    [draftSelectedValues, options],
+    [allOptionValues, draftSelectedValues],
   );
   const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
   const hiddenSelectedValues = useMemo(
     () => draftSelectedValues === null
       ? []
       : effectiveSelected.filter((value) => !optionValueSet.has(value)),
-    [draftSelectedValues, optionValueSet, options],
+    [draftSelectedValues, effectiveSelected, optionValueSet],
   );
   const selectedCount = appliedSelectedValues === null ? options.length : appliedSelectedValues.length;
   const triggerSummary = appliedSelectedValues === null ? "全部" : `${selectedCount}項`;
@@ -1281,7 +1312,7 @@ function ExcelFilterPopover({
   const filteredOptions = useMemo(() => {
     if (!isPanelReady) return options;
 
-    const searchTokens = parseSearchTokens(draftSearchValue);
+    const searchTokens = parseSearchTokens(deferredDraftSearchValue);
     const next = options.filter((option) => {
       if (searchTokens.length === 0) return true;
 
@@ -1292,7 +1323,7 @@ function ExcelFilterPopover({
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [draftSearchValue, isPanelReady, options, sortDirection]);
+  }, [deferredDraftSearchValue, isPanelReady, options, sortDirection]);
 
   const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
   const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
@@ -1312,14 +1343,14 @@ function ExcelFilterPopover({
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
   const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length} 項`;
   const exactMatchingCount = useMemo(() => {
-    const searchTokens = parseSearchTokens(draftSearchValue);
+    const searchTokens = parseSearchTokens(deferredDraftSearchValue);
     return options.filter((option) => {
       if (searchTokens.length === 0) return true;
       const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
       return searchTokens.every((token) => searchableText.includes(token));
     }).length;
-  }, [draftSearchValue, options]);
-  const searchHasValue = draftSearchValue.trim().length > 0;
+  }, [deferredDraftSearchValue, options]);
+  const searchHasValue = deferredDraftSearchValue.trim().length > 0;
   const currentVisibleValues = useMemo(
     () => filteredOptions.map((option) => option.value),
     [filteredOptions],
@@ -1351,9 +1382,12 @@ function ExcelFilterPopover({
   };
 
   const commitSelection = () => {
-    onSelectedValuesChange(draftSelectedValues === null
+    const nextSelection = draftSelectedValues === null
       ? null
-      : normalizeColumnFilterSelection(draftSelectedValues));
+      : normalizeColumnFilterSelection(draftSelectedValues);
+    startTransition(() => {
+      onSelectedValuesChange(nextSelection);
+    });
     setOpen(false);
   };
 
@@ -1371,7 +1405,7 @@ function ExcelFilterPopover({
 
   const toggleValue = (value: string, checked: boolean) => {
     const current = draftSelectedValues === null
-      ? options.map((option) => option.value)
+      ? allOptionValues
       : effectiveSelected;
     const next = checked
       ? Array.from(new Set([...current, value]))
@@ -1386,7 +1420,7 @@ function ExcelFilterPopover({
 
   const toggleVisibleSelection = (checked: boolean) => {
     const current = draftSelectedValues === null
-      ? options.map((option) => option.value)
+      ? allOptionValues
       : effectiveSelected;
 
     if (checked) {
@@ -1403,7 +1437,7 @@ function ExcelFilterPopover({
 
   useEffect(() => {
     setScrollTop(0);
-  }, [draftSearchValue, filteredOptions.length, sortDirection]);
+  }, [deferredDraftSearchValue, filteredOptions.length, sortDirection]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -1833,12 +1867,9 @@ function TrackingHistoryCell({
           {historyCount} 筆紀錄
           {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
         </p>
-        {(latestEntry?.virtualPartNumber || latestEntry?.requestInfo) && (
+        {latestEntry?.requestInfo && (
           <p className="mt-2 line-clamp-2 text-xs font-semibold text-cyan-100/90">
-            {[
-              latestEntry?.virtualPartNumber ? `虛擬料 ${latestEntry.virtualPartNumber}` : "",
-              latestEntry?.requestInfo ? `單號 ${latestEntry.requestInfo}` : "",
-            ].filter(Boolean).join(" · ")}
+            單號 {latestEntry.requestInfo}
           </p>
         )}
       </div>
@@ -1862,7 +1893,6 @@ function TrackingHistoryDialog({
   const [status, setStatus] = useState<(typeof TRACKING_STATUS_OPTIONS)[number] | "">("");
   const [note, setNote] = useState("");
   const [createdBy, setCreatedBy] = useState("");
-  const [virtualPartNumber, setVirtualPartNumber] = useState("");
   const [requestInfo, setRequestInfo] = useState("");
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
@@ -1889,7 +1919,6 @@ function TrackingHistoryDialog({
     setStatus("");
     setNote("");
     setCreatedBy("");
-    setVirtualPartNumber("");
     setRequestInfo("");
     setImages([]);
     setPreviewImage(null);
@@ -1937,7 +1966,6 @@ function TrackingHistoryDialog({
       note: note.trim(),
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
-      virtualPartNumber: virtualPartNumber.trim(),
       requestInfo: requestInfo.trim(),
       images,
     });
@@ -1953,7 +1981,6 @@ function TrackingHistoryDialog({
       note: latestEntry?.note?.trim() || "已手動標記完成",
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
-      virtualPartNumber: latestEntry?.virtualPartNumber?.trim() || record.virtualAlternative?.trim() || "",
       requestInfo: latestEntry?.requestInfo?.trim() || "",
       images: [],
     });
@@ -2004,20 +2031,23 @@ function TrackingHistoryDialog({
                   {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
                   {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
                 </div>
-                {(latestEntry?.virtualPartNumber || latestEntry?.requestInfo) && (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {latestEntry?.virtualPartNumber && (
-                      <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-2">
-                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Virtual PN / 虛擬料</p>
-                        <p className="mt-1 break-all text-sm font-bold text-slate-100">{latestEntry.virtualPartNumber}</p>
-                      </div>
-                    )}
-                    {latestEntry?.requestInfo && (
-                      <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2">
-                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">單號 / 申請狀態資訊</p>
+                {latestEntry?.requestInfo && (
+                  <div className="mt-3">
+                    <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2">
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">單號 / 申請狀態資訊</p>
+                      {isExternalUrl(latestEntry.requestInfo) ? (
+                        <a
+                          href={latestEntry.requestInfo}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 block break-all text-sm font-bold text-cyan-100 underline decoration-cyan-300/60 underline-offset-4 hover:text-cyan-50"
+                        >
+                          {latestEntry.requestInfo}
+                        </a>
+                      ) : (
                         <p className="mt-1 break-all text-sm font-bold text-slate-100">{latestEntry.requestInfo}</p>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -2046,13 +2076,9 @@ function TrackingHistoryDialog({
                       <Label htmlFor="tracking-owner-input">更新人</Label>
                       <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="例如：採購 / RD / Peggy" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tracking-virtual-pn-input">虛擬料</Label>
-                      <Input id="tracking-virtual-pn-input" value={virtualPartNumber} onChange={(event) => setVirtualPartNumber(event.target.value)} placeholder="Excel Virtual PN / TX P/N" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
-                    </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="tracking-request-info-input">申請狀態資訊</Label>
-                      <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request no." className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                      <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request URL" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="tracking-note-input">追蹤說明</Label>
@@ -2129,8 +2155,18 @@ function TrackingHistoryDialog({
                           <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
                             {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
                             {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
-                            {entry.virtualPartNumber && <span>虛擬料 {entry.virtualPartNumber}</span>}
-                            {entry.requestInfo && <span>單號 {entry.requestInfo}</span>}
+                            {entry.requestInfo && (
+                              isExternalUrl(entry.requestInfo) ? (
+                                <a
+                                  href={entry.requestInfo}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-cyan-100 underline decoration-cyan-300/60 underline-offset-4 hover:text-cyan-50"
+                                >
+                                  單號連結
+                                </a>
+                              ) : <span>單號 {entry.requestInfo}</span>
+                            )}
                             {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
                           </div>
                         </div>
@@ -2331,7 +2367,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["Manufacturer Part Number", "MPN", "廠商料號，主料與替代料都會讀這個欄位。"],
                 ["Manufacturer", "廠商", "廠商名稱，會跟 MPN 一起顯示。"],
                 ["Sourcing Status", "料況", "Approved、Obsolete、NRND 等供應狀態。"],
-                ["TX P/N / Virtual PN", "TX / 虛擬料", "虛擬料號，會同步帶進狀態追蹤視窗的「虛擬料」。"],
+                ["TX P/N / Virtual PN", "TX", "虛擬料號，匯入後只會顯示在表格 TX 欄位，不會寫入狀態追蹤。"],
                 ["Status", "狀態追蹤：追蹤說明", "不是料況，會成為追蹤視窗內的說明內容。"],
                 ["單號", "狀態追蹤：申請狀態資訊", "申請單、ticket 或 request number。"],
                 ["EE", "狀態追蹤：更新人", "負責更新或提供狀態的人。"],
@@ -3811,7 +3847,6 @@ export function MaterialRequestPage() {
             getTrackingWorkflowStatus(record),
             latestTrackingEntry?.note ?? "",
             latestTrackingEntry?.createdBy ?? "",
-            latestTrackingEntry?.virtualPartNumber ?? "",
             latestTrackingEntry?.requestInfo ?? "",
           ]),
           specification: createCachedColumnValues([
@@ -4316,7 +4351,6 @@ export function MaterialRequestPage() {
             Manufacturer_PN: record.manufacturerPartNumber,
             Manufacturer_PN_2: record.manufacturerPartNumberAlt,
             TX: record.virtualAlternative ?? "",
-            虛擬料: latestTrackingEntry?.virtualPartNumber ?? record.virtualAlternative ?? "",
             狀態追蹤: latestTrackingEntry?.note ?? record.trackingStatus ?? "",
             申請狀態資訊: latestTrackingEntry?.requestInfo ?? "",
             更新人: latestTrackingEntry?.createdBy ?? "",
