@@ -160,7 +160,7 @@ const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
 
-const PAGE_SIZE_OPTIONS = [50, 100, 200];
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500, 1000];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v7";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
@@ -444,6 +444,9 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     virtualAlternative: record.virtualAlternative ?? "",
     trackingStatus: record.trackingStatus ?? "",
     trackingHistory: record.trackingHistory ?? [],
+    trackingNote: record.trackingNote ?? "",
+    requestTicket: record.requestTicket ?? "",
+    requestUrl: record.requestUrl ?? "",
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     refGroup: record.refGroup,
@@ -475,6 +478,9 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     virtualAlternative: "",
     trackingStatus: "",
     trackingHistory: [],
+    trackingNote: "",
+    requestTicket: "",
+    requestUrl: "",
     manufacturer: "",
     sourcingStatus: "",
     refGroup: group?.displayRef ?? "",
@@ -544,6 +550,9 @@ function createBomSignature(payload: MaterialWorkbookPayload) {
     record.refGroup,
     record.lv,
     record.remark,
+    record.trackingNote,
+    record.requestTicket,
+    record.requestUrl,
     record.partNumber,
     record.partName,
     record.partSpec,
@@ -619,6 +628,15 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       trackingHistory: record.trackingHistory?.length
         ? record.trackingHistory
         : existingRecord?.trackingHistory ?? [],
+      trackingNote: record.trackingNote?.trim()
+        ? record.trackingNote
+        : existingRecord?.trackingNote ?? "",
+      requestTicket: record.requestTicket?.trim()
+        ? record.requestTicket
+        : existingRecord?.requestTicket ?? "",
+      requestUrl: record.requestUrl?.trim()
+        ? record.requestUrl
+        : existingRecord?.requestUrl ?? "",
     };
   });
   const preservedManualRecords = (existingWorkspace?.payload.records ?? []).filter((record) =>
@@ -1061,6 +1079,43 @@ function normalizeTrackingWorkflowStatus(status: string) {
 function getTrackingWorkflowStatus(record: MaterialRecord) {
   const latestEntry = getLatestTrackingEntry(record);
   return normalizeTrackingWorkflowStatus(latestEntry?.status || record.trackingStatus || "");
+}
+
+function normalizeRequestUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(trimmed)) return `https://${trimmed}`;
+
+  return "";
+}
+
+function getTrackingRequestMeta(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus" | "requestTicket" | "requestUrl">) {
+  const latestEntry = getLatestTrackingEntry(record);
+  const rawUrl = latestEntry?.requestUrl?.trim() || record.requestUrl?.trim() || "";
+  const ticket = latestEntry?.requestTicket?.trim() || record.requestTicket?.trim() || rawUrl;
+  const url = normalizeRequestUrl(rawUrl || ticket);
+
+  return {
+    ticket,
+    url,
+  };
+}
+
+function hasTrackingActivity(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus" | "requestTicket" | "requestUrl">) {
+  const latestEntry = getLatestTrackingEntry(record);
+  return Boolean(
+    (record.trackingHistory?.length ?? 0) > 0
+    || record.trackingStatus?.trim()
+    || record.requestTicket?.trim()
+    || record.requestUrl?.trim()
+    || latestEntry?.note?.trim()
+  );
+}
+
+function workspaceHasTrackingActivity(workspace: BomWorkspace) {
+  return workspace.payload.records.some((record) => hasTrackingActivity(record));
 }
 
 function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
@@ -1752,6 +1807,7 @@ function TrackingHistoryCell({
   onOpen: (record: MaterialRecord) => void;
 }) {
   const latestEntry = getLatestTrackingEntry(record);
+  const requestMeta = getTrackingRequestMeta(record);
   const workflowStatus = getTrackingWorkflowStatus(record);
   const cardTone = getTrackingStatusCardTone(workflowStatus);
   const historyCount = record.trackingHistory?.length
@@ -1787,6 +1843,26 @@ function TrackingHistoryCell({
           {historyCount} 筆紀錄
           {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
         </p>
+        {requestMeta.ticket && (
+          <div className="mt-2">
+            {requestMeta.url ? (
+              <a
+                href={requestMeta.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex max-w-full items-center rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-100 hover:bg-amber-400/24"
+                title={requestMeta.url}
+              >
+                單號 {requestMeta.ticket}
+              </a>
+            ) : (
+              <span className="inline-flex max-w-full items-center rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-100">
+                單號 {requestMeta.ticket}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <History className={cn("mt-1 h-4 w-4 flex-none opacity-90 transition-opacity group-hover:opacity-100", cardTone.icon)} />
     </button>
@@ -1807,6 +1883,8 @@ function TrackingHistoryDialog({
   const { toast } = useToast();
   const [status, setStatus] = useState<(typeof TRACKING_STATUS_OPTIONS)[number] | "">("");
   const [note, setNote] = useState("");
+  const [requestTicket, setRequestTicket] = useState("");
+  const [requestUrl, setRequestUrl] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
@@ -1832,6 +1910,8 @@ function TrackingHistoryDialog({
     if (!open) return;
     setStatus("");
     setNote("");
+    setRequestTicket(record?.requestTicket ?? "");
+    setRequestUrl(record?.requestUrl ?? "");
     setCreatedBy("");
     setImages([]);
     setPreviewImage(null);
@@ -1877,6 +1957,8 @@ function TrackingHistoryDialog({
       id: createTrackingHistoryId(),
       status: status.trim(),
       note: note.trim(),
+      requestTicket: requestTicket.trim(),
+      requestUrl: normalizeRequestUrl(requestUrl.trim()),
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
       images,
@@ -1891,6 +1973,8 @@ function TrackingHistoryDialog({
       id: createTrackingHistoryId(),
       status: "已完成",
       note: latestEntry?.note?.trim() || "已手動標記完成",
+      requestTicket: requestTicket.trim() || latestEntry?.requestTicket?.trim() || record.requestTicket?.trim() || "",
+      requestUrl: normalizeRequestUrl(requestUrl.trim() || latestEntry?.requestUrl?.trim() || record.requestUrl?.trim() || ""),
       createdAt: new Date().toISOString(),
       createdBy: createdBy.trim(),
       images: [],
@@ -1941,6 +2025,7 @@ function TrackingHistoryDialog({
                   <span>歷史筆數 {historyEntries.length}</span>
                   {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
                   {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
+                  {getTrackingRequestMeta(record).ticket && <span>單號 {getTrackingRequestMeta(record).ticket}</span>}
                 </div>
 
                 <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
@@ -1963,6 +2048,14 @@ function TrackingHistoryDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-ticket-input">單號</Label>
+                      <Input id="tracking-ticket-input" value={requestTicket} onChange={(event) => setRequestTicket(event.target.value)} placeholder="例如：Excel 單號 / ticket 編號" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tracking-request-url-input">連結</Label>
+                      <Input id="tracking-request-url-input" value={requestUrl} onChange={(event) => setRequestUrl(event.target.value)} placeholder="貼上 request URL，可留空" className="border-blue-400/25 bg-[#071522] text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="tracking-owner-input">更新人</Label>
@@ -2043,6 +2136,7 @@ function TrackingHistoryDialog({
                           <div className={cn("mt-2 flex flex-wrap gap-2 text-xs", entryTone.meta)}>
                             {entry.createdAt ? <span>{formatTimestamp(entry.createdAt)}</span> : <span>舊版狀態</span>}
                             {entry.createdBy && <span>更新人 {entry.createdBy}</span>}
+                            {entry.requestTicket && <span>單號 {entry.requestTicket}</span>}
                             {(entry.images?.length ?? 0) > 0 && <span>{entry.images?.length} 張圖片</span>}
                           </div>
                         </div>
@@ -2058,6 +2152,23 @@ function TrackingHistoryDialog({
                         <p className={cn("mt-3 whitespace-pre-wrap rounded-xl px-3 py-3 text-sm leading-6", entryTone.note)}>
                           {entry.note}
                         </p>
+                      )}
+
+                      {entry.requestTicket && (
+                        entry.requestUrl ? (
+                          <a
+                            href={normalizeRequestUrl(entry.requestUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex rounded-full border border-amber-300/35 bg-amber-400/16 px-3 py-1.5 text-sm font-bold text-amber-100 hover:bg-amber-400/24"
+                          >
+                            開啟單號：{entry.requestTicket}
+                          </a>
+                        ) : (
+                          <div className="mt-3 inline-flex rounded-full border border-amber-300/35 bg-amber-400/16 px-3 py-1.5 text-sm font-bold text-amber-100">
+                            單號：{entry.requestTicket}
+                          </div>
+                        )
                       )}
 
                       {entry.images && entry.images.length > 0 && (
@@ -2756,13 +2867,20 @@ function BomManagerDialog({
           ) : filteredWorkspaces.map((workspace, index) => {
             const isActive = workspace.id === activeBomId;
             const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
+            const hasTracking = workspaceHasTrackingActivity(workspace);
 
             return (
               <div
                 key={workspace.id}
                 className={cn(
                   "rounded-2xl border px-4 py-4 transition-colors",
-                  isActive ? "border-cyan-300/40 bg-cyan-400/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]" : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
+                  isActive
+                    ? hasTracking
+                      ? "border-amber-300/45 bg-amber-400/12 shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+                      : "border-cyan-300/40 bg-cyan-400/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]"
+                    : hasTracking
+                      ? "border-amber-400/24 bg-amber-400/[0.07] hover:bg-amber-400/[0.11]"
+                      : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
                 )}
               >
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -2776,6 +2894,11 @@ function BomManagerDialog({
                       {isActive && (
                         <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2 py-0.5 text-[11px] font-black text-cyan-100">
                           目前使用中
+                        </span>
+                      )}
+                      {hasTracking && (
+                        <span className="rounded-full border border-amber-300/35 bg-amber-400/16 px-2 py-0.5 text-[11px] font-black text-amber-100">
+                          含狀態追蹤
                         </span>
                       )}
                       {!isActive && index === 0 && (
@@ -2968,6 +3091,14 @@ function MaterialRecordDialog({
                 <Label htmlFor="material-virtual-alternative">TX</Label>
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="material-request-ticket">單號</Label>
+                <Input id="material-request-ticket" disabled={readOnly} value={form.requestTicket ?? ""} onChange={(event) => updateField("requestTicket", event.target.value)} placeholder="例如 Excel 單號 / ticket" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="material-request-url">單號連結</Label>
+                <Input id="material-request-url" disabled={readOnly} value={form.requestUrl ?? ""} onChange={(event) => updateField("requestUrl", event.target.value)} placeholder="可貼上 request URL" />
+              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>狀態追蹤</Label>
                 <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3">
@@ -2977,6 +3108,11 @@ function MaterialRecordDialog({
                   </p>
                   {latestTrackingEntry?.createdAt && (
                     <p className="mt-2 text-xs text-slate-400">最後更新：{formatTimestamp(latestTrackingEntry.createdAt)}</p>
+                  )}
+                  {getTrackingRequestMeta(form).ticket && (
+                    <p className="mt-2 text-xs text-amber-200">
+                      單號：{getTrackingRequestMeta(form).ticket}
+                    </p>
                   )}
                 </div>
               </div>
@@ -4016,7 +4152,10 @@ export function MaterialRequestPage() {
 
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     try {
-      await saveRecordToActiveBom(record);
+      await saveRecordToActiveBom({
+        ...record,
+        requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
+      });
       setEditorOpen(false);
       toast({
         title: editorMode === "create" ? "料件已新增" : "料件已更新",
@@ -4055,6 +4194,8 @@ export function MaterialRequestPage() {
       ...toWorkbookRecord(record),
       trackingStatus: entry.status,
       trackingHistory: [...currentHistory, entry],
+      requestTicket: entry.requestTicket?.trim() || record.requestTicket || "",
+      requestUrl: normalizeRequestUrl(entry.requestUrl?.trim() || record.requestUrl || ""),
     }).then(() => {
       toast({
         title: "狀態追蹤已更新",
@@ -4190,6 +4331,8 @@ export function MaterialRequestPage() {
           Manufacturer_PN_2: record.manufacturerPartNumberAlt,
           TX: record.virtualAlternative ?? "",
           狀態追蹤: record.trackingStatus ?? "",
+          單號: getTrackingRequestMeta(record).ticket,
+          申請連結: getTrackingRequestMeta(record).url,
           Sourcing_Status: record.sourcingStatus,
           建料狀態: getActionLabel(record.actionKind),
           內部料號: record.partNumber,
@@ -4361,11 +4504,19 @@ export function MaterialRequestPage() {
               <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
                 {orderedBomWorkspaces.map((workspace) => {
                   const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
+                  const hasTracking = workspaceHasTrackingActivity(workspace);
 
                   return (
                     <SelectItem key={workspace.id} value={workspace.id}>
                       <div className="flex max-w-[30rem] flex-col py-1 text-left">
-                        <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="line-clamp-2 break-all font-semibold leading-5 text-slate-100">{workspace.name}</span>
+                          {hasTracking && (
+                            <span className="rounded-full border border-amber-300/35 bg-amber-400/16 px-2 py-0.5 text-[10px] font-black text-amber-100">
+                              追蹤
+                            </span>
+                          )}
+                        </div>
                         <span className="mt-1 text-xs leading-5 text-slate-400">
                           {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatTimestamp(workspace.updatedAt)} · {pageTrackerSummary.totalPages > 0
                             ? `${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage}/${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`
