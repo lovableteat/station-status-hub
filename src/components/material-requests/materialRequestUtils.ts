@@ -163,7 +163,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
   virtualAlternative: ["TX", "TX P/N", "TX PN", "Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "PEGA P/N", "PEGA PN", "虛擬料", "虛擬替代料", "虛擬料號"],
-  trackingStatus: ["Status", "Tracking Status", "Process Status", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
+  trackingStatus: ["Tracking Status", "Process Status", "料號狀態追蹤", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
   trackingCreatedBy: ["EE", "Updated By", "Updater", "Owner", "更新人"],
   trackingRequestInfo: ["單號", "Request Number", "Request No", "Ticket", "Ticket No", "Application Status", "Application Status Info", "申請狀態資訊"],
   trackingNote: ["Tracking Note", "Tracking Notes", "Status Note", "Material Tracking", "Part Tracking", "料號追蹤", "追蹤說明"],
@@ -356,7 +356,7 @@ function createImportedTrackingHistoryEntry({
   const updater = normalizeText(createdBy);
   const request = normalizeText(requestInfo);
 
-  if (!status && !note && !updater && !request) return [];
+  if (!note && !request) return [];
 
   return [{
     id: `imported-tracking-${sheetName}-${rowIndex + 1}`,
