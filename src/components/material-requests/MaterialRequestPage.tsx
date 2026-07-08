@@ -2464,7 +2464,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["Manufacturer Part Number", "MPN", "廠商料號，主料與替代料都會讀這個欄位。"],
                 ["Manufacturer", "廠商", "廠商名稱，會跟 MPN 一起顯示。"],
                 ["Sourcing Status", "料況", "Approved、Obsolete、NRND 等供應狀態。"],
-                ["TX P/N / Virtual PN", "TX", "虛擬料號，填在主料或替代料都可以；主表 TX 會優先顯示同組裡有值的那一筆，不會寫入狀態追蹤。"],
+                ["Virtual PN / PEGA P/N / TX P/N", "TX", "匯入優先順序是 Virtual PN，再來 PEGA P/N，最後才是 TX P/N；填在主料或替代料都可以，不會寫入狀態追蹤。"],
                 ["料號追蹤 / Tracking Note", "狀態追蹤：追蹤說明", "有內容才會建立匯入追蹤；不要再把料況或 CIS/Remark 放進這裡。"],
                 ["單號", "狀態追蹤：申請狀態資訊", "申請單、ticket 或 request number。"],
                 ["EE", "狀態追蹤：更新人", "只會當成追蹤紀錄的更新人；如果沒有料號追蹤或單號，單填 EE 不會變成黃色追蹤。"],
@@ -2489,7 +2489,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["同一組的圖面資料要一致", "Part Spec、Schematic_Part、PCB_Footprint 這些資料，在同一主料與替代料群組裡不要亂變。"],
                 ["CIS/Remark 不會匯入追蹤", "CIS/Remark 只保留在你的 Excel 參考，網站不會再把它當成狀態追蹤說明。"],
                 ["料況欄請用固定字", "Sourcing Status 建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
-                ["TX 與追蹤欄可後補", "TX P/N、料號追蹤、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補；同組任一列填 Virtual PN，主表 TX 都會顯示。"],
+                ["TX 與追蹤欄可後補", "Virtual PN、PEGA P/N、料號追蹤、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補；主表 TX 會依序吃 Virtual PN、PEGA P/N、TX P/N。"],
                 ["同檔名會覆蓋前一個", "如果你重新上傳同檔名 Excel，網站會直接更新原本那個 BOM；要保留舊版請先改檔名。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
@@ -2506,7 +2506,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <p><strong className="text-slate-100">先找主工作表：</strong>如果檔案裡有很多 sheet，系統會挑欄位最完整、有效資料最多的那一張來讀。</p>
               <p><strong className="text-slate-100">再判斷分組：</strong>有藍色列就先照藍色列；沒有藍色列才退回用 Ref Group、Ref Des、料名等欄位去猜。</p>
               <p><strong className="text-slate-100">再判斷可用料：</strong>一列如果有可用的內部料號，或你已經填了 TX，系統就不會把它當成完全無料。</p>
-              <p><strong className="text-slate-100">TX 怎麼顯示：</strong>同一組主料與替代料只要有任一列填了 `Virtual PN`，主表 TX 會優先顯示該值。</p>
+              <p><strong className="text-slate-100">TX 怎麼顯示：</strong>同一組主料與替代料只要有任一列有值，主表 TX 會依序優先顯示 `Virtual PN`、`PEGA P/N`、`TX P/N`。</p>
               <p><strong className="text-slate-100">黃色追蹤何時出現：</strong>只有 `料號追蹤` 或 `單號` 有內容時，才會建立匯入追蹤；單填 `EE` 不會變黃。</p>
               <p><strong className="text-slate-100">你看到的主料總表：</strong>是一行一個主料群組，展開後才會看到下面所有替代料與追蹤資訊。</p>
             </div>
@@ -2528,6 +2528,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <h3 className="text-lg font-bold text-rose-200">6. 常見錯誤先看這裡</h3>
             <div className="mt-3 space-y-3 leading-6 text-slate-300">
               <p><strong className="text-slate-100">搜不到資料：</strong>先按右上角或表頭的「清除」，很多時候是舊篩選還留著，不是真的沒有資料。</p>
+              <p><strong className="text-slate-100">TX 沒顯示：</strong>先確認 Excel 欄名是不是 `Virtual PN`、`PEGA P/N` 或 `TX P/N`；系統會先吃 `Virtual PN`，空白才退回後面的欄位。</p>
               <p><strong className="text-slate-100">同一個 location 看起來重複：</strong>先回原始 BOM 看是不是同一個位號被展開成多個候選料，或同一顆料被分配到多個位號。</p>
               <p><strong className="text-slate-100">上傳後分組怪怪的：</strong>通常是主料與替代料沒有排在一起、藍色列沒標好，或 Ref Des / Ref Group 本身就不完整。</p>
               <p><strong className="text-slate-100">TX 被清空：</strong>現在空白送出前會跳確認框，若看到提示請確認是不是要故意留白，不要直接略過。</p>
