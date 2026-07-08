@@ -765,6 +765,10 @@ function getUniqueMpnCount(group: MaterialGroup) {
   return getUniqueMpnCountForRecords(group.records);
 }
 
+function getBestVirtualAlternativeRecord(records: MaterialRecord[], fallback: MaterialRecord | null) {
+  return records.find((record) => record.virtualAlternative?.trim()) ?? fallback;
+}
+
 function splitRefDesignators(...values: string[]) {
   return Array.from(new Set(
     values
@@ -4164,6 +4168,10 @@ export function MaterialRequestPage() {
     () => visibleGroups.map((group) => {
       const matchingRecords = getMatchingRecords(group);
       const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
+      const virtualAlternativeRecord = getBestVirtualAlternativeRecord(
+        matchingRecords.length > 0 ? matchingRecords : group.records,
+        primaryAlternative,
+      );
       const secondaryAlternatives = matchingRecords.slice(primaryAlternative ? 1 : 0);
       const trackingRecord = getBestTrackingRecord(matchingRecords.length > 0 ? matchingRecords : group.records, primaryAlternative);
 
@@ -4171,6 +4179,7 @@ export function MaterialRequestPage() {
         group,
         matchingRecords,
         primaryAlternative,
+        virtualAlternativeRecord,
         trackingRecord,
         secondaryAlternatives,
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
@@ -4983,7 +4992,7 @@ export function MaterialRequestPage() {
                 <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
+              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
                 const noAlternative = uniqueMpnCount <= 1;
@@ -5197,7 +5206,7 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        {primaryAlternative && <InlineVirtualAlternativeEditor value={primaryAlternative.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(primaryAlternative, value)} />}
+                        {virtualAlternativeRecord && <InlineVirtualAlternativeEditor value={virtualAlternativeRecord.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(virtualAlternativeRecord, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
