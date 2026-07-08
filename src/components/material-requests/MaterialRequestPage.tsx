@@ -680,6 +680,9 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
       requestUrl: record.requestUrl?.trim()
         ? record.requestUrl
         : existingRecord?.requestUrl ?? "",
+      remark: record.remark?.trim()
+        ? record.remark
+        : existingRecord?.remark ?? "",
     };
   });
   const preservedManualRecords = (existingWorkspace?.payload.records ?? []).filter((record) =>
