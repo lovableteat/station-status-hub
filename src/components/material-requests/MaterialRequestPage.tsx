@@ -526,52 +526,14 @@ function createDefaultBomWorkspace(): BomWorkspace {
   };
 }
 
-function hashBomSignature(value: string) {
-  let hash = 2166136261;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return (hash >>> 0).toString(36);
-}
-
-function createBomSignature(payload: MaterialWorkbookPayload) {
-  const signature = payload.records.map((record) => [
-    record.sectionName,
-    record.assemblyName,
-    record.name,
-    String(record.qty ?? ""),
-    record.refDes,
-    record.manufacturerPartNumber,
-    record.manufacturerPartNumberAlt,
-    record.manufacturer,
-    record.refGroup,
-    record.lv,
-    record.remark,
-    record.trackingNote,
-    record.requestTicket,
-    record.requestUrl,
-    record.partNumber,
-    record.partName,
-    record.partSpec,
-    record.schematicPart,
-    record.pcbFootprint,
-  ].map((value) => String(value ?? "").trim()).join("\u001f")).join("\u001e");
-
-  return `${payload.sheetName}\u001d${payload.recordCount}\u001d${signature}`;
-}
-
-function createBomId(fileName: string, payload: MaterialWorkbookPayload) {
+function createBomId(fileName: string) {
   const normalizedFileName = fileName
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "bom";
-  const fingerprint = hashBomSignature(createBomSignature(payload));
 
-  return `bom:${normalizedFileName}:${fingerprint}`;
+  return `bom:${normalizedFileName}`;
 }
 
 function isImportedTrackingEntry(entry: MaterialTrackingHistoryEntry) {
@@ -2529,7 +2491,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["CIS/Remark 不會匯入追蹤", "CIS/Remark 只保留在你的 Excel 參考，網站不會再把它當成狀態追蹤說明。"],
                 ["料況欄請用固定字", "Sourcing Status 建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
                 ["TX 與追蹤欄可後補", "TX P/N、料號追蹤、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補；同組任一列填 Virtual PN，主表 TX 都會顯示。"],
-                ["一個 BOM 一個檔案", "不同板子、不同版本請分開存，檔名最好帶專案名與版次，不然後面很難查。"],
+                ["同檔名會覆蓋前一個", "如果你重新上傳同檔名 Excel，網站會直接更新原本那個 BOM；要保留舊版請先改檔名。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
                   <p className="font-bold text-slate-100">{title}</p>
@@ -2555,7 +2517,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <h3 className="text-lg font-bold text-amber-200">5. 實際操作流程</h3>
             <ol className="mt-3 space-y-2 leading-6 text-slate-300">
               <li>1. 先把單一專案 / 單一版本 BOM 整理成一個 Excel 檔。</li>
-              <li>2. 按「上傳 BOM」匯入；可以一次選多個檔，但每個檔都會變成一個獨立 BOM 工作區。</li>
+              <li>2. 按「上傳 BOM」匯入；可以一次選多個檔。相同檔名會覆蓋原本 BOM，不同檔名才會建立新的 BOM 工作區。</li>
               <li>3. 匯入後先看上方統計數字，再用表頭篩選檢查 `REF DES`、`MPN`、`內部料號`、`TX`、`狀態追蹤`。</li>
               <li>4. 如果某組料需要補 `TX` 可直接在表格內填；如果要補 `料號追蹤`、`單號` 或圖片，就到「狀態追蹤」欄位新增紀錄。</li>
               <li>5. 要切不同版本或不同專案，直接用上方 BOM 切換器，或進 `BOM管理` 看所有歷史 BOM。</li>
@@ -4255,7 +4217,7 @@ export function MaterialRequestPage() {
 
       for (const file of files) {
         const payload = await parseMaterialWorkbookFile(file);
-        const workspaceId = createBomId(file.name, payload);
+        const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
         const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
         await saveBomWorkspace(workspace);
