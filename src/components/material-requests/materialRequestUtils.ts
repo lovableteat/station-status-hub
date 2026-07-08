@@ -136,6 +136,8 @@ type MaterialField =
   | "mpn1"
   | "mpn2"
   | "virtualAlternative"
+  | "virtualPn"
+  | "pegaPartNumber"
   | "trackingStatus"
   | "trackingCreatedBy"
   | "trackingRequestInfo"
@@ -162,7 +164,9 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
-  virtualAlternative: ["TX", "TX P/N", "TX PN", "Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "PEGA P/N", "PEGA PN", "虛擬料", "虛擬替代料", "虛擬料號"],
+  virtualAlternative: ["TX", "TX P/N", "TX PN", "虛擬料", "虛擬替代料", "虛擬料號"],
+  virtualPn: ["Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN"],
+  pegaPartNumber: ["PEGA P/N", "PEGA PN"],
   trackingStatus: ["Tracking Status", "Process Status", "料號狀態追蹤", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
   trackingCreatedBy: ["EE", "Updated By", "Updater", "Owner", "更新人"],
   trackingRequestInfo: ["單號", "Request Number", "Request No", "Ticket", "Ticket No", "Application Status", "Application Status Info", "申請狀態資訊"],
@@ -221,6 +225,13 @@ function normalizeCellValue(value: unknown) {
 
 function firstNonEmpty(...values: unknown[]) {
   return values.map(normalizeText).find(Boolean) ?? "";
+}
+
+function firstNonPlaceholder(...values: unknown[]) {
+  return values
+    .map(normalizeText)
+    .find((value) => value && value !== "-" && value !== "--")
+    ?? "";
 }
 
 function uniqueValues(values: unknown[]) {
@@ -897,7 +908,11 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     const refGroup = useBlueGroupRows
       ? firstNonEmpty(currentGroupRef, rowRefGroup, refDes)
       : rowRefGroup;
-    const virtualAlternative = normalizeText(getFieldValue(row, fields, "virtualAlternative"));
+    const virtualAlternative = firstNonPlaceholder(
+      getFieldValue(row, fields, "virtualPn"),
+      getFieldValue(row, fields, "pegaPartNumber"),
+      getFieldValue(row, fields, "virtualAlternative"),
+    );
     const importedTrackingText = firstNonEmpty(trackingNote, getFieldValue(row, fields, "trackingStatus"));
     const importedRequestInfo = firstNonEmpty(
       getFieldValue(row, fields, "trackingRequestInfo"),
