@@ -16,6 +16,9 @@ export interface MaterialWorkbookRecord {
   virtualAlternative?: string;
   trackingStatus?: string;
   trackingHistory?: MaterialTrackingHistoryEntry[];
+  trackingNote?: string;
+  requestTicket?: string;
+  requestUrl?: string;
   manufacturer: string;
   sourcingStatus: string;
   refGroup: string;
@@ -40,6 +43,8 @@ export interface MaterialTrackingHistoryEntry {
   id: string;
   status: string;
   note?: string;
+  requestTicket?: string;
+  requestUrl?: string;
   createdAt: string;
   createdBy?: string;
   images?: MaterialTrackingHistoryImage[];
@@ -131,6 +136,9 @@ type MaterialField =
   | "mpn2"
   | "virtualAlternative"
   | "trackingStatus"
+  | "trackingNote"
+  | "requestTicket"
+  | "requestUrl"
   | "manufacturer"
   | "sourcingStatus"
   | "refGroup"
@@ -153,6 +161,8 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
   virtualAlternative: ["TX", "Virtual Alternative", "Virtual Alternate", "Virtual MPN", "虛擬替代料", "虛擬料號"],
   trackingStatus: ["Tracking Status", "Process Status", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
+  requestTicket: ["Ticket", "Ticket No", "Ticket Number", "單號", "申請單號", "Excel 單號", "Request Ticket", "Request No"],
+  requestUrl: ["Request URL", "Ticket URL", "Link", "URL", "申請連結", "單號連結", "Request Link"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "Status", "供料狀態", "核准狀態", "料件狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
@@ -298,6 +308,8 @@ function normalizeTrackingHistoryEntry(raw: unknown): MaterialTrackingHistoryEnt
     id: normalizeText(entry.id) || `tracking-${Math.random().toString(36).slice(2, 10)}`,
     status,
     note: normalizeText(entry.note),
+    requestTicket: normalizeText(entry.requestTicket),
+    requestUrl: normalizeText(entry.requestUrl),
     createdAt: normalizeText(entry.createdAt),
     createdBy: normalizeText(entry.createdBy),
     images,
@@ -312,24 +324,29 @@ export function getTrackingHistory(record: Pick<MaterialWorkbookRecord, "trackin
     .filter((entry): entry is MaterialTrackingHistoryEntry => Boolean(entry));
 }
 
-export function getLatestTrackingEntry(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus">) {
+export function getLatestTrackingEntry(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus" | "trackingNote" | "requestTicket" | "requestUrl">) {
   const history = getTrackingHistory(record);
   if (history.length > 0) return history[history.length - 1];
 
-  const legacyStatus = normalizeText(record.trackingStatus);
-  if (!legacyStatus) return null;
+  const legacyNote = normalizeText(record.trackingNote);
+  const legacyStatus = normalizeText(record.trackingStatus) || (legacyNote ? "處理中" : "新增追蹤");
+  const legacyTicket = normalizeText(record.requestTicket);
+  const legacyUrl = normalizeText(record.requestUrl);
+  if (!legacyStatus && !legacyNote && !legacyTicket && !legacyUrl) return null;
 
   return {
     id: "legacy-tracking-status",
-    status: legacyStatus,
-    note: "",
+    status: legacyStatus || "新增追蹤",
+    note: legacyNote,
+    requestTicket: legacyTicket,
+    requestUrl: legacyUrl,
     createdAt: "",
     createdBy: "",
     images: [],
   } satisfies MaterialTrackingHistoryEntry;
 }
 
-export function getLatestTrackingStatus(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus">) {
+export function getLatestTrackingStatus(record: Pick<MaterialWorkbookRecord, "trackingHistory" | "trackingStatus" | "trackingNote" | "requestTicket" | "requestUrl">) {
   return getLatestTrackingEntry(record)?.status ?? "";
 }
 
@@ -428,6 +445,9 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const trackingStatus = getLatestTrackingStatus({
     trackingHistory,
     trackingStatus: raw.trackingStatus,
+    trackingNote: raw.trackingNote,
+    requestTicket: raw.requestTicket,
+    requestUrl: raw.requestUrl,
   });
   const mpnCandidates = uniqueValues([
     manufacturerPartNumber,
@@ -481,9 +501,14 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       manufacturerPartNumberAlt,
       raw.virtualAlternative,
       trackingStatus,
+      raw.trackingNote,
+      raw.requestTicket,
+      raw.requestUrl,
       ...trackingHistory.flatMap((entry) => [
         entry.status,
         entry.note,
+        entry.requestTicket,
+        entry.requestUrl,
         entry.createdBy,
         ...(entry.images ?? []).map((image) => image.name),
       ]),
@@ -607,6 +632,13 @@ function resolveHeaderFields(row: unknown[]) {
     const normalized = normalizeHeader(header);
     if (!normalized) return;
 
+    if (["料號追蹤", "追蹤說明", "trackingnote", "trackingnotes", "materialtracking", "parttracking"].includes(normalized)) {
+      if (!fields.has("trackingNote")) {
+        fields.set("trackingNote", index);
+      }
+      return;
+    }
+
     (Object.keys(NORMALIZED_FIELD_ALIASES) as MaterialField[]).forEach((field) => {
       if (!fields.has(field) && NORMALIZED_FIELD_ALIASES[field].has(normalized)) {
         fields.set(field, index);
@@ -639,7 +671,16 @@ function getFieldValue(row: unknown[], fields: Map<MaterialField, number>, field
   return index == null ? "" : row[index];
 }
 
+function getFieldAddress(rowIndex: number, fields: Map<MaterialField, number>, field: MaterialField) {
+  const columnIndex = fields.get(field);
+  return columnIndex == null ? null : XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+}
+
 interface StyledWorksheetCell extends XLSX.CellObject {
+  l?: {
+    Target?: string;
+    target?: string;
+  };
   s?: {
     patternType?: string;
     fgColor?: {
@@ -648,6 +689,19 @@ interface StyledWorksheetCell extends XLSX.CellObject {
       tint?: number;
     };
   };
+}
+
+function getHyperlinkValue(
+  worksheet: XLSX.WorkSheet,
+  rowIndex: number,
+  fields: Map<MaterialField, number>,
+  field: MaterialField,
+) {
+  const address = getFieldAddress(rowIndex, fields, field);
+  if (!address) return "";
+
+  const cell = worksheet[address] as StyledWorksheetCell | undefined;
+  return normalizeText(cell?.l?.Target ?? cell?.l?.target ?? "");
 }
 
 function isBlueGroupStartRow(
@@ -764,6 +818,11 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     }
 
     const refDes = normalizeText(getFieldValue(row, fields, "refDes"));
+    const trackingNote = normalizeText(getFieldValue(row, fields, "trackingNote"));
+    const requestTicket = normalizeText(getFieldValue(row, fields, "requestTicket"));
+    const requestUrl = getHyperlinkValue(worksheet, index, fields, "requestTicket")
+      || getHyperlinkValue(worksheet, index, fields, "requestUrl")
+      || normalizeText(getFieldValue(row, fields, "requestUrl"));
     const rowRefGroup = firstNonEmpty(getFieldValue(row, fields, "refGroup"), refDes);
     const isGroupStart = useBlueGroupRows && blueGroupRows.has(index);
 
@@ -791,6 +850,9 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
       manufacturerPartNumberAlt: normalizeText(getFieldValue(row, fields, "mpn2")),
       virtualAlternative: normalizeText(getFieldValue(row, fields, "virtualAlternative")),
       trackingStatus: normalizeText(getFieldValue(row, fields, "trackingStatus")),
+      trackingNote,
+      requestTicket,
+      requestUrl,
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
       refGroup,
