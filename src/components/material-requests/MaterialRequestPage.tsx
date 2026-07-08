@@ -574,6 +574,10 @@ function createBomId(fileName: string, payload: MaterialWorkbookPayload) {
   return `bom:${normalizedFileName}:${fingerprint}`;
 }
 
+function isImportedTrackingEntry(entry: MaterialTrackingHistoryEntry) {
+  return entry.id.startsWith("imported-tracking-");
+}
+
 function mergeTrackingHistories(
   existingHistory: MaterialTrackingHistoryEntry[] = [],
   importedHistory: MaterialTrackingHistoryEntry[] = []
@@ -585,7 +589,9 @@ function mergeTrackingHistories(
     const { virtualPartNumber: _legacyVirtualPartNumber, ...safeExistingEntry } = existingEntry ?? {};
     return { ...safeExistingEntry, ...entry };
   });
-  const preservedExistingEntries = existingHistory.filter((entry) => !importedIds.has(entry.id));
+  const preservedExistingEntries = existingHistory.filter((entry) =>
+    !importedIds.has(entry.id) && !isImportedTrackingEntry(entry)
+  );
 
   return [...importedEntries, ...preservedExistingEntries];
 }
@@ -594,8 +600,9 @@ function hasTrackingContent(entry: MaterialTrackingHistoryEntry) {
   return [
     entry.status,
     entry.note,
-    entry.createdBy,
     entry.requestInfo,
+    entry.requestTicket,
+    entry.requestUrl,
   ].some((value) => String(value ?? "").trim().length > 0);
 }
 
@@ -655,7 +662,15 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
     importedRecordIds.add(record.id);
     const existingRecord = existingRecords.get(record.id);
     const importedHasTrackingData = hasImportedTrackingData(record);
+    const existingHadImportedTracking = (existingRecord?.trackingHistory ?? []).some(isImportedTrackingEntry);
     const mergedTrackingHistory = mergeTrackingHistories(existingRecord?.trackingHistory, record.trackingHistory);
+    const latestMergedTrackingEntry = getLatestTrackingEntry({
+      trackingHistory: mergedTrackingHistory,
+      trackingStatus: "",
+      trackingNote: "",
+      requestTicket: "",
+      requestUrl: "",
+    });
 
     return {
       ...existingRecord,
@@ -665,21 +680,22 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
         : existingRecord?.virtualAlternative ?? "",
       trackingStatus: importedHasTrackingData
         ? (record.trackingStatus?.trim() || "新增追蹤")
-        : existingRecord?.trackingStatus?.trim()
-          ? existingRecord.trackingStatus
-          : record.trackingStatus?.trim()
-            ? record.trackingStatus
-            : "",
+        : latestMergedTrackingEntry?.status?.trim()
+          || (existingHadImportedTracking ? "" : existingRecord?.trackingStatus?.trim() || "")
+          || "",
       trackingHistory: mergedTrackingHistory,
       trackingNote: record.trackingNote?.trim()
         ? record.trackingNote
-        : existingRecord?.trackingNote ?? "",
+        : latestMergedTrackingEntry?.note?.trim()
+          || (existingHadImportedTracking ? "" : existingRecord?.trackingNote ?? ""),
       requestTicket: record.requestTicket?.trim()
         ? record.requestTicket
-        : existingRecord?.requestTicket ?? "",
+        : latestMergedTrackingEntry?.requestTicket?.trim()
+          || (existingHadImportedTracking ? "" : existingRecord?.requestTicket ?? ""),
       requestUrl: record.requestUrl?.trim()
         ? record.requestUrl
-        : existingRecord?.requestUrl ?? "",
+        : latestMergedTrackingEntry?.requestUrl?.trim()
+          || (existingHadImportedTracking ? "" : existingRecord?.requestUrl ?? ""),
       remark: record.remark?.trim()
         ? record.remark
         : existingRecord?.remark ?? "",
@@ -2484,9 +2500,9 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["Manufacturer", "廠商", "廠商名稱，會跟 MPN 一起顯示。"],
                 ["Sourcing Status", "料況", "Approved、Obsolete、NRND 等供應狀態。"],
                 ["TX P/N / Virtual PN", "TX", "虛擬料號，匯入後只會顯示在表格 TX 欄位，不會寫入狀態追蹤。"],
-                ["Status", "狀態追蹤：追蹤說明", "不是料況，會成為追蹤視窗內的說明內容。"],
+                ["料號追蹤 / Tracking Note", "狀態追蹤：追蹤說明", "有內容才會建立匯入追蹤；不要再把料況或 CIS/Remark 放進這裡。"],
                 ["單號", "狀態追蹤：申請狀態資訊", "申請單、ticket 或 request number。"],
-                ["EE", "狀態追蹤：更新人", "負責更新或提供狀態的人。"],
+                ["EE", "狀態追蹤：更新人", "只會當成追蹤紀錄的更新人；如果沒有料號追蹤或單號，單填 EE 不會變成黃色追蹤。"],
               ].map(([excelField, appField, usage]) => (
                 <div key={excelField} className="grid grid-cols-[1fr_1fr_1.4fr] border-t border-sky-400/10 px-4 py-3 text-sm">
                   <span className="font-bold text-slate-100">{excelField}</span>
@@ -2506,8 +2522,9 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 ["有藍色起始列就照藍色分組", "如果你的 Excel 有用底色標主料，網站會優先用這個規則；下一個藍色列出現前，都算同一組。"],
                 ["Ref Des / location 要寫清楚", "像 `C418`、`J10`、`U73` 這些位號是網站判斷焊位的核心欄位，能填就一定要填。"],
                 ["同一組的圖面資料要一致", "Part Spec、Schematic_Part、PCB_Footprint 這些資料，在同一主料與替代料群組裡不要亂變。"],
+                ["CIS/Remark 不會匯入追蹤", "CIS/Remark 只保留在你的 Excel 參考，網站不會再把它當成狀態追蹤說明。"],
                 ["料況欄請用固定字", "Sourcing Status 建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
-                ["TX 與追蹤欄可後補", "TX P/N、Status、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補。"],
+                ["TX 與追蹤欄可後補", "TX P/N、料號追蹤、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補。"],
                 ["一個 BOM 一個檔案", "不同板子、不同版本請分開存，檔名最好帶專案名與版次，不然後面很難查。"],
               ].map(([title, description]) => (
                 <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
@@ -2524,6 +2541,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               <p><strong className="text-slate-100">先找主工作表：</strong>如果檔案裡有很多 sheet，系統會挑欄位最完整、有效資料最多的那一張來讀。</p>
               <p><strong className="text-slate-100">再判斷分組：</strong>有藍色列就先照藍色列；沒有藍色列才退回用 Ref Group、Ref Des、料名等欄位去猜。</p>
               <p><strong className="text-slate-100">再判斷可用料：</strong>一列如果有可用的內部料號，或你已經填了 TX，系統就不會把它當成完全無料。</p>
+              <p><strong className="text-slate-100">黃色追蹤何時出現：</strong>只有 `料號追蹤` 或 `單號` 有內容時，才會建立匯入追蹤；單填 `EE` 不會變黃。</p>
               <p><strong className="text-slate-100">你看到的主料總表：</strong>是一行一個主料群組，展開後才會看到下面所有替代料與追蹤資訊。</p>
             </div>
           </section>
