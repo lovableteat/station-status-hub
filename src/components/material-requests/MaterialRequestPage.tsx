@@ -637,9 +637,8 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
     return {
       ...existingRecord,
       ...record,
-      virtualAlternative: record.virtualAlternative?.trim()
-        ? record.virtualAlternative
-        : existingRecord?.virtualAlternative ?? "",
+      // For same-file uploads, TX should reflect the latest Excel exactly, including clearing old values.
+      virtualAlternative: record.virtualAlternative?.trim() ?? "",
       trackingStatus: importedHasTrackingData
         ? (record.trackingStatus?.trim() || "新增追蹤")
         : latestMergedTrackingEntry?.status?.trim()
