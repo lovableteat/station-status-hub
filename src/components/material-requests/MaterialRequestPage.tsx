@@ -4567,7 +4567,7 @@ export function MaterialRequestPage() {
   };
 
   return (
-    <div className="material-sheet-theme min-h-full bg-[#050b16] p-4 text-slate-100 sm:p-5 lg:p-6">
+    <div className="material-sheet-theme min-h-full bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_28%),linear-gradient(180deg,#08111f_0%,#0d1a2d_48%,#091320_100%)] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
@@ -4587,7 +4587,7 @@ export function MaterialRequestPage() {
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
 
-      <header className="overflow-hidden rounded-2xl border border-cyan-400/14 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.10),transparent_30%),linear-gradient(180deg,#122033_0%,#0c1626_100%)] p-4 shadow-[0_20px_60px_rgba(2,8,23,0.24)]">
+      <header className="overflow-hidden rounded-2xl border border-cyan-300/22 bg-[radial-gradient(circle_at_top_right,rgba(103,232,249,0.18),transparent_28%),radial-gradient(circle_at_left,rgba(59,130,246,0.14),transparent_26%),linear-gradient(180deg,#172a45_0%,#11213a_52%,#0d1b30_100%)] p-4 shadow-[0_24px_70px_rgba(6,23,48,0.34)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
@@ -4705,7 +4705,7 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <section className="mt-3 rounded-2xl border border-cyan-300/20 bg-[linear-gradient(180deg,#16253b_0%,#101c30_100%)] p-4 shadow-[0_16px_36px_rgba(8,15,30,0.18)]">
+        <section className="mt-3 rounded-2xl border border-cyan-300/24 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.10),transparent_34%),linear-gradient(180deg,#1b3152_0%,#142744_58%,#112038_100%)] p-4 shadow-[0_18px_40px_rgba(10,24,48,0.24)]">
           <div className="flex flex-col gap-3 border-b border-cyan-400/10 pb-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
@@ -4753,7 +4753,7 @@ export function MaterialRequestPage() {
           {!pageTrackerPanelCollapsed && (
             <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
-                <div className="rounded-xl border border-sky-300/18 bg-[#1b2a42] px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="rounded-xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(45,79,126,0.92),rgba(23,40,68,0.96))] px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   {activePageTrackerSummary.totalPages === 0 ? (
                     <p className="leading-6 text-amber-200">這份 BOM 還沒設定頁數。先填總頁數後按「儲存頁數設定」，下面才會知道你目前做到哪一頁。</p>
                   ) : activePageTrackerSummary.currentPage > 0 ? (
@@ -4776,7 +4776,7 @@ export function MaterialRequestPage() {
                 </div>
               </div>
 
-              <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-sky-300/18 bg-[#16253b] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(33,57,95,0.96),rgba(22,38,63,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="page-tracker-quick-total">總頁數</Label>
@@ -4789,7 +4789,7 @@ export function MaterialRequestPage() {
                       value={pageTrackerQuickTotalInput}
                       onChange={(event) => setPageTrackerQuickTotalInput(event.target.value)}
                       placeholder="例如 12"
-                      className="h-10 border-sky-300/18 bg-[#21324c] text-slate-100"
+                      className="h-10 border-sky-300/24 bg-[linear-gradient(180deg,#2a4164_0%,#243754_100%)] text-slate-100"
                     />
                   </div>
                   <div className="space-y-2">
@@ -4804,7 +4804,7 @@ export function MaterialRequestPage() {
                       onChange={(event) => setPageTrackerQuickCurrentInput(event.target.value)}
                       placeholder={pageTrackerQuickTotalPages > 0 ? `1 ~ ${pageTrackerQuickTotalPages}` : "先填總頁數"}
                       disabled={pageTrackerQuickTotalPages === 0}
-                      className="h-10 border-sky-300/18 bg-[#21324c] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-10 border-sky-300/24 bg-[linear-gradient(180deg,#2a4164_0%,#243754_100%)] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -4842,7 +4842,7 @@ export function MaterialRequestPage() {
 
       <div className="mt-3">
         <div className="min-w-0">
-      <section className="rounded-2xl border border-cyan-400/10 bg-[linear-gradient(180deg,#0c1627_0%,#09111d_100%)] p-3 shadow-[0_18px_44px_rgba(2,8,23,0.18)]">
+      <section className="rounded-2xl border border-cyan-300/18 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.10),transparent_30%),linear-gradient(180deg,#14233a_0%,#0f1b2f_100%)] p-3 shadow-[0_20px_48px_rgba(6,20,40,0.24)]">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
@@ -4850,12 +4850,12 @@ export function MaterialRequestPage() {
               value={query}
               onCommit={setQuery}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
-              className="h-10 border-cyan-400/18 bg-[#111b2a] pl-12 text-[15px] text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-400"
+              className="h-10 border-cyan-300/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-cyan-400"
             />
           </div>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-10 border-slate-500/28 bg-[#111b2a] text-sm text-slate-200">
+            <SelectTrigger className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] text-sm text-slate-200">
               <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
             </SelectTrigger>
             <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -4867,7 +4867,7 @@ export function MaterialRequestPage() {
             </SelectContent>
           </Select>
 
-          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-500/28 bg-[#111b2a] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
+          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
@@ -4875,8 +4875,8 @@ export function MaterialRequestPage() {
         </div>
       </section>
 
-      <section className="mt-3 overflow-hidden rounded-xl border border-blue-400/15 bg-[#0b1527]">
-        <div className="flex items-center justify-between border-b border-blue-400/15 bg-[#101d33] px-4 py-3">
+      <section className="mt-3 overflow-hidden rounded-xl border border-blue-300/20 bg-[linear-gradient(180deg,#12203a_0%,#0d172a_100%)] shadow-[0_18px_44px_rgba(9,20,38,0.22)]">
+        <div className="flex items-center justify-between border-b border-blue-300/18 bg-[linear-gradient(90deg,rgba(43,83,150,0.38),rgba(28,49,86,0.84))] px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
@@ -4902,7 +4902,7 @@ export function MaterialRequestPage() {
         <div className="max-h-[70vh] overflow-auto">
           <table className="table-fixed border-collapse text-[15px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }}>
             <thead className="sticky top-0 z-20">
-              <tr className="bg-[#244b96] text-left text-[15px] font-bold text-white shadow-sm">
+              <tr className="bg-[linear-gradient(90deg,#3b82f6_0%,#2563eb_45%,#1d4ed8_100%)] text-left text-[15px] font-bold text-white shadow-sm">
                 {[
                   "Item",
                   "標記",
@@ -4929,7 +4929,7 @@ export function MaterialRequestPage() {
                   </ResizableHeader>
                 ))}
               </tr>
-              <tr className="bg-[#102b57] text-slate-100">
+              <tr className="bg-[linear-gradient(90deg,rgba(24,55,108,0.96),rgba(17,42,82,0.96))] text-slate-100">
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     項次
