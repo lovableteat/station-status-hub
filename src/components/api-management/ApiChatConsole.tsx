@@ -598,6 +598,7 @@ export function ApiChatConsole({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const hasHydratedConversationRef = useRef(false);
+  const previousSelectedApiKeyIdRef = useRef<null | string>(null);
   const { user } = useUser();
 
   const isChatOnly = mode === "chat-only";
@@ -611,15 +612,30 @@ export function ApiChatConsole({
   useEffect(() => {
     if (!selectedApiKey) return;
 
+    const nextApiKeyId = selectedApiKey.id;
+    const previousApiKeyId = previousSelectedApiKeyIdRef.current;
+    const switchedApiKey = Boolean(previousApiKeyId && previousApiKeyId !== nextApiKeyId);
+
     setApiKey(selectedApiKey.api_key);
     setProvider(selectedMetadata?.provider || "gemini");
     setModel(selectedMetadata?.model || "gemini-2.5-flash");
     setBaseUrl(selectedMetadata?.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
+
+    previousSelectedApiKeyIdRef.current = nextApiKeyId;
+
+    if (!switchedApiKey) return;
+
     setMessages([]);
     setDraftMessage("");
     setUploadedAttachments([]);
     setConnectionState(null);
-  }, [selectedApiKey, selectedMetadata]);
+    toast.success("已切換 API Key，已開始新對話");
+  }, [
+    selectedApiKey,
+    selectedMetadata?.baseUrl,
+    selectedMetadata?.model,
+    selectedMetadata?.provider,
+  ]);
 
   useEffect(() => {
     setSystemPrompt((current) => {
