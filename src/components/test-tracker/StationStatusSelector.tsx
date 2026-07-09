@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -13,10 +14,15 @@ interface StationStatusSelectorProps {
 export function StationStatusSelector({ systemId, currentStatus, onUpdate }: StationStatusSelectorProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const handleStatusChange = async (newStatus: string) => {
     setIsUpdating(true);
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const { error } = await supabase
         .from('test_systems')
         .update({ 
@@ -26,6 +32,7 @@ export function StationStatusSelector({ systemId, currentStatus, onUpdate }: Sta
                   newStatus === '進行中' ? 'On-going' : 
                   newStatus === '未開始' ? 'Not Start' : 'On-going'
         })
+        .eq('project_id', activeProjectId)
         .eq('id', systemId);
 
       if (error) throw error;

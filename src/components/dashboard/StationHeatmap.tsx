@@ -1,10 +1,7 @@
 
-import React from "react";
 import { cn } from "@/lib/utils";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -36,18 +33,6 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
   const { systems, stations, testItems, progress } = useUnifiedData();
   
   // 獲取站點時間記錄數據
-  const [stationTimeRecords, setStationTimeRecords] = React.useState<any[]>([]);
-  
-  React.useEffect(() => {
-    const fetchStationTimeRecords = async () => {
-      const { data } = await supabase
-        .from('station_time_records')
-        .select('*');
-      if (data) setStationTimeRecords(data);
-    };
-    fetchStationTimeRecords();
-  }, []);
-
   // 只包含Station 0-3的站點
   const targetStations = stations
     .filter(station => 
