@@ -12,6 +12,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { MentionInput } from "@/components/common/MentionInput";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { AttachmentManager } from "./AttachmentManager";
 
@@ -67,13 +68,14 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
   const { toast } = useToast();
   const { sendMentionNotifications } = useMentionNotifications();
   const { user } = useUser();
+  const { activeProjectId } = useTestProject();
 
   useEffect(() => {
     loadEngineers();
     loadSystems();
     loadStations();
     loadTestItems();
-  }, []);
+  }, [activeProjectId]);
 
   useEffect(() => {
     if (formData.station_id) {
@@ -102,9 +104,15 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   const loadSystems = async () => {
     try {
+      if (!activeProjectId) {
+        setSystems([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_systems')
         .select('id, system_name, serial_number')
+        .eq('project_id', activeProjectId)
         .order('system_name');
       
       if (error) throw error;
@@ -116,9 +124,15 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   const loadStations = async () => {
     try {
+      if (!activeProjectId) {
+        setStations([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_flow_stations')
         .select('id, station_name')
+        .eq('project_id', activeProjectId)
         .order('station_order');
       
       if (error) throw error;
@@ -130,9 +144,15 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
 
   const loadTestItems = async () => {
     try {
+      if (!activeProjectId) {
+        setTestItems([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_flow_items')
         .select('id, item_name, station_id')
+        .eq('project_id', activeProjectId)
         .order('item_order');
       
       if (error) throw error;
@@ -179,9 +199,14 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
     setIsSubmitting(true);
     
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const updateData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
+        project_id: activeProjectId,
         priority: formData.priority,
         priority_manual: true,
         status: formData.status,
@@ -200,6 +225,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       const { error } = await supabase
         .from('issues')
         .update(updateData)
+        .eq('project_id', activeProjectId)
         .eq('id', issue.id);
 
       if (error) {
@@ -268,6 +294,7 @@ export function IssueEditDialog({ issue, onUpdate, onDelete, onClose }: IssueEdi
       const { error } = await supabase
         .from('issues')
         .delete()
+        .eq('project_id', activeProjectId)
         .eq('id', issue.id);
 
       if (error) {

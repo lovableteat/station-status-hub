@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { UserProvider } from "@/components/auth/UserContext";
+import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import TestTrackerPage from "./pages/TestTrackerPage";
@@ -21,19 +22,21 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <UserProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <HashRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/test-tracker" element={<TestTrackerPage />} />
-              <Route path="/api-management" element={<ApiManagementPage />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </HashRouter>
-        </TooltipProvider>
+        <TestProjectProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <HashRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/test-tracker" element={<TestTrackerPage />} />
+                <Route path="/api-management" element={<ApiManagementPage />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </HashRouter>
+          </TooltipProvider>
+        </TestProjectProvider>
       </UserProvider>
     </QueryClientProvider>
   );

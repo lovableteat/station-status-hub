@@ -5,6 +5,7 @@ import { Play, Square, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface ManualTimeTrackerProps {
   systemId: string;
@@ -26,6 +27,7 @@ export default function ManualTimeTracker({
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
   const { user } = useUser();
+  const { activeProjectId } = useTestProject();
 
   // 計算處理時長
   const calculateDuration = () => {
@@ -42,6 +44,11 @@ export default function ManualTimeTracker({
     
     try {
       setIsUpdating(true);
+
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const currentTime = new Date().toISOString();
       
       console.log('開始計時 - 參數:', { 
@@ -58,6 +65,7 @@ export default function ManualTimeTracker({
       const { data, error } = await supabase
         .from('test_progress')
         .insert({
+          project_id: activeProjectId,
           system_id: systemId,
           station_id: stationId,
           item_id: itemId,
@@ -84,6 +92,7 @@ export default function ManualTimeTracker({
             completed_at: null,
             notes: ''
           })
+          .eq('project_id', activeProjectId)
           .eq('system_id', systemId)
           .eq('station_id', stationId)
           .eq('item_id', itemId)
@@ -145,6 +154,11 @@ export default function ManualTimeTracker({
     
     try {
       setIsUpdating(true);
+
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const currentTime = new Date().toISOString();
       
       // 計算實際小時數
@@ -171,6 +185,7 @@ export default function ManualTimeTracker({
           progress_percent: 100,
           actual_hours: actualHours
         })
+        .eq('project_id', activeProjectId)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
         .eq('item_id', itemId)
