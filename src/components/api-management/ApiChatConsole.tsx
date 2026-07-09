@@ -1467,7 +1467,7 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="rounded-[28px] border border-cyan-300/12 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]">
           <input
             ref={imageInputRef}
             type="file"
@@ -1548,14 +1548,14 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#21242a_0%,#1a1d22_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="rounded-[30px] border border-cyan-300/14 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.12),transparent_30%),linear-gradient(180deg,#162338_0%,#0d1626_100%)] px-4 py-3 shadow-[0_18px_40px_rgba(8,47,73,0.22),inset_0_1px_0_rgba(255,255,255,0.05)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                className="h-11 w-11 shrink-0 rounded-2xl border border-white/8 bg-white/4 p-0 text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                className="h-11 w-11 shrink-0 rounded-2xl border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(14,165,233,0.18),rgba(8,47,73,0.2))] p-0 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-[linear-gradient(180deg,rgba(34,211,238,0.22),rgba(8,47,73,0.24))] disabled:opacity-50"
               >
                 <Plus className="h-5 w-5" />
               </Button>
@@ -1566,22 +1566,22 @@ export function ApiChatConsole({
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
                   placeholder="問問 Gemini，或直接 Ctrl+V 貼上截圖"
-                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-50 shadow-none placeholder:text-slate-300/85 focus-visible:ring-0"
                 />
-                <div className="mt-2 text-[12px] text-slate-500">
+                <div className="mt-2 text-[12px] text-slate-400">
                   直接輸入問題、貼上截圖，或補上附件後送出。
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-2 md:justify-end">
-                <div className="rounded-full border border-white/8 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="rounded-full border border-cyan-300/14 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(14,116,144,0.12))] px-4 py-2 text-sm font-semibold text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   {model || "Gemini"}
                 </div>
                 <Button
                   type="button"
                   onClick={() => void handleSend()}
                   disabled={!canSend}
-                  className="h-11 min-w-11 rounded-2xl bg-white px-4 font-bold text-slate-950 shadow-[0_12px_28px_rgba(255,255,255,0.14)] transition-all duration-200 hover:bg-slate-100 active:scale-[0.99] disabled:bg-slate-600 disabled:text-slate-300"
+                  className="h-11 min-w-11 rounded-2xl border border-cyan-200/30 bg-[linear-gradient(135deg,#67e8f9_0%,#38bdf8_45%,#0ea5e9_100%)] px-4 font-bold text-slate-950 shadow-[0_16px_36px_rgba(14,165,233,0.32)] transition-all duration-200 hover:brightness-105 active:scale-[0.99] disabled:border-slate-600 disabled:bg-slate-700 disabled:text-slate-300 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
