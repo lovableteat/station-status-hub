@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface SystemManagerProps {
   onSystemUpdate: (newSystemId?: string) => void;
@@ -23,8 +24,18 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
   const [creationProgress, setCreationProgress] = useState(0);
   const retryCountRef = useRef(0);
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const handleAddSystem = async () => {
+    if (!activeProjectId) {
+      toast({
+        title: "Project required",
+        description: "Select a project before creating systems.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!newSystemName.trim()) {
       toast({
         title: "錯誤",
@@ -43,6 +54,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
 
         // 樂觀更新 - 先顯示進度指示器
         const tempSystemData = {
+          project_id: activeProjectId,
           system_name: newSystemName.trim(),
           assigned_engineer: newSystemEngineer.trim() || null,
           serial_number: newSystemSerial.trim() || null,
@@ -150,9 +162,14 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
     try {
       setIsDeletingAll(true);
 
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const { data: systemsToDelete, error: fetchError } = await supabase
         .from('test_systems')
         .select('id, system_name')
+        .eq('project_id', activeProjectId)
         .order('system_name');
 
       if (fetchError) {

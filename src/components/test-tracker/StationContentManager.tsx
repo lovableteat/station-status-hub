@@ -19,6 +19,7 @@ import { Plus, Edit, Save, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface StationContent {
   id: string;
@@ -69,6 +70,7 @@ export function StationContentManager({
   onUpdate 
 }: StationContentManagerProps) {
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<StationContent | null>(null);
   const [formValues, setFormValues] = useState({ title: "", content: "" });
@@ -133,11 +135,16 @@ export function StationContentManager({
           description: "流程內容已更新"
         });
       } else {
+        if (!activeProjectId) {
+          throw new Error("No active project");
+        }
+
         const maxOrder = contents.length > 0 ? Math.max(...contents.map((content) => content.order_num)) : 0;
 
         const { error } = await supabase
           .from("station_contents")
           .insert({
+            project_id: activeProjectId,
             station_id: stationId,
             title: formValues.title.trim(),
             content: formValues.content.trim(),
