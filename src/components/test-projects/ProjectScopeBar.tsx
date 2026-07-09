@@ -4,6 +4,7 @@ import {
   CopyPlus,
   FolderKanban,
   Layers3,
+  Pencil,
   Plus,
   RefreshCcw,
   Trash2,
@@ -72,13 +73,20 @@ export function ProjectScopeBar() {
     projects,
     refreshProjects,
     setActiveProjectId,
+    updateProject,
   } = useTestProject();
   const [isManagerOpen, setIsManagerOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUpdatingProject, setIsUpdatingProject] = useState(false);
+  const [projectPendingEditId, setProjectPendingEditId] = useState<string | null>(
+    null
+  );
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectDescription, setEditProjectDescription] = useState("");
   const [projectPendingDeleteId, setProjectPendingDeleteId] = useState<string | null>(
     null
   );
@@ -102,10 +110,24 @@ export function ProjectScopeBar() {
     [projectPendingDeleteId, projects]
   );
 
+  const projectPendingEdit = useMemo(
+    () =>
+      projectPendingEditId
+        ? projects.find((project) => project.id === projectPendingEditId) ?? null
+        : null,
+    [projectPendingEditId, projects]
+  );
+
   const resetCreateForm = (preferredSourceProjectId?: string | null) => {
     setProjectName("");
     setProjectDescription("");
     setCloneSourceProjectId(preferredSourceProjectId ?? EMPTY_TEMPLATE_VALUE);
+  };
+
+  const closeEditProjectDialog = () => {
+    setProjectPendingEditId(null);
+    setEditProjectName("");
+    setEditProjectDescription("");
   };
 
   const handleManagerOpenChange = (open: boolean) => {
@@ -186,6 +208,53 @@ export function ProjectScopeBar() {
     }
 
     setProjectPendingDeleteId(null);
+  };
+
+  const handleOpenEditProject = (project: TestProject) => {
+    setProjectPendingEditId(project.id);
+    setEditProjectName(project.name);
+    setEditProjectDescription(project.description ?? "");
+  };
+
+  const handleUpdateProject = async () => {
+    if (!projectPendingEdit) {
+      return;
+    }
+
+    const normalizedName = editProjectName.trim();
+    const normalizedDescription = editProjectDescription.trim();
+
+    if (!normalizedName) {
+      toast({
+        title: "需要專案名稱",
+        description: "請先輸入新的專案名稱。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentDescription = projectPendingEdit.description?.trim() ?? "";
+    if (
+      normalizedName === projectPendingEdit.name &&
+      normalizedDescription === currentDescription
+    ) {
+      closeEditProjectDialog();
+      return;
+    }
+
+    setIsUpdatingProject(true);
+    const updatedProject = await updateProject({
+      description: normalizedDescription,
+      name: normalizedName,
+      projectId: projectPendingEdit.id,
+    });
+    setIsUpdatingProject(false);
+
+    if (!updatedProject) {
+      return;
+    }
+
+    closeEditProjectDialog();
   };
 
   return (
@@ -454,6 +523,14 @@ export function ProjectScopeBar() {
                                 )}
                                 <Button
                                   variant="outline"
+                                  className="rounded-2xl border-primary/20 text-primary hover:bg-primary/10 hover:text-primary"
+                                  onClick={() => handleOpenEditProject(project)}
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  改名
+                                </Button>
+                                <Button
+                                  variant="outline"
                                   className="rounded-2xl border-red-500/25 text-red-200 hover:bg-red-500/10 hover:text-red-100"
                                   disabled={projects.length <= 1}
                                   onClick={() => setProjectPendingDeleteId(project.id)}
@@ -479,6 +556,62 @@ export function ProjectScopeBar() {
           </Dialog>
         </div>
       </div>
+
+      <Dialog
+        open={!!projectPendingEdit}
+        onOpenChange={(open) => {
+          if (!open && !isUpdatingProject) {
+            closeEditProjectDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="space-y-2">
+            <DialogTitle>修改專案名稱</DialogTitle>
+            <DialogDescription>
+              只會更新專案主資料，不會清除你目前這個專案底下的任何機台、進度或維修紀錄。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-project-name">專案名稱</Label>
+              <Input
+                id="edit-project-name"
+                value={editProjectName}
+                onChange={(event) => setEditProjectName(event.target.value)}
+                placeholder="輸入新的專案名稱"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-project-description">專案說明</Label>
+              <Textarea
+                id="edit-project-description"
+                rows={4}
+                value={editProjectDescription}
+                onChange={(event) =>
+                  setEditProjectDescription(event.target.value)
+                }
+                placeholder="可一起更新專案說明"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={isUpdatingProject}
+              onClick={closeEditProjectDialog}
+            >
+              取消
+            </Button>
+            <Button disabled={isUpdatingProject} onClick={handleUpdateProject}>
+              {isUpdatingProject ? "更新中..." : "儲存名稱"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!projectPendingDelete}

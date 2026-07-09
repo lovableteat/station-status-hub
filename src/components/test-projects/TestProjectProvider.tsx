@@ -22,6 +22,12 @@ interface CreateTestProjectInput {
   cloneFromProjectId?: string | null;
 }
 
+interface UpdateTestProjectInput {
+  projectId: string;
+  name: string;
+  description?: string;
+}
+
 interface TestProjectContextValue {
   activeProject: TestProject | null;
   activeProjectId: string | null;
@@ -31,6 +37,7 @@ interface TestProjectContextValue {
   projects: TestProject[];
   refreshProjects: () => Promise<void>;
   setActiveProjectId: (projectId: string) => void;
+  updateProject: (input: UpdateTestProjectInput) => Promise<TestProject | null>;
 }
 
 const TestProjectContext = createContext<TestProjectContextValue | undefined>(
@@ -148,6 +155,65 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     [refreshProjects, setActiveProjectId, toast]
   );
 
+  const updateProject = useCallback(
+    async ({ projectId, name, description }: UpdateTestProjectInput) => {
+      const projectToUpdate =
+        projects.find((project) => project.id === projectId) ?? null;
+
+      if (!projectToUpdate) {
+        toast({
+          title: "找不到專案",
+          description: "你要修改的專案已不存在或剛被移除。",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("test_projects")
+          .update({
+            description: description?.trim() || null,
+            name: name.trim(),
+          })
+          .eq("id", projectId)
+          .select("*")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        await refreshProjects();
+
+        toast({
+          title: "專案已更新",
+          description: `${data.name} 的名稱與說明已更新完成。`,
+        });
+
+        return data as TestProject;
+      } catch (error) {
+        console.error("Failed to update test project:", error);
+
+        const message =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "23505"
+            ? "已有相同名稱的專案，請改用其他名稱。"
+            : "無法更新你選取的專案，請稍後再試。";
+
+        toast({
+          title: "專案更新失敗",
+          description: message,
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [projects, refreshProjects, toast]
+  );
+
   const deleteProject = useCallback(
     async (projectId: string) => {
       const projectToArchive =
@@ -236,6 +302,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       projects,
       refreshProjects,
       setActiveProjectId,
+      updateProject,
     }),
     [
       activeProject,
@@ -246,6 +313,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       projects,
       refreshProjects,
       setActiveProjectId,
+      updateProject,
     ]
   );
 
