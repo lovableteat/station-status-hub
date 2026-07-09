@@ -594,6 +594,7 @@ export function ApiChatConsole({
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
+  const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const hasHydratedConversationRef = useRef(false);
@@ -1147,6 +1148,35 @@ export function ApiChatConsole({
     return true;
   };
 
+  useEffect(() => {
+    const handleGlobalPaste = (event: ClipboardEvent) => {
+      if (!event.clipboardData?.items?.length) return;
+
+      const consoleElement = chatConsoleRef.current;
+      if (!consoleElement) return;
+
+      const activeElement = document.activeElement;
+      const isConsoleFocused = activeElement instanceof Node
+        ? consoleElement.contains(activeElement)
+        : false;
+      const isPageFocused = activeElement === document.body || activeElement === null;
+
+      if (!isConsoleFocused && !isPageFocused) return;
+
+      void (async () => {
+        const handled = await handleClipboardPaste(event.clipboardData!.items);
+        if (handled) {
+          event.preventDefault();
+        }
+      })();
+    };
+
+    document.addEventListener("paste", handleGlobalPaste);
+    return () => {
+      document.removeEventListener("paste", handleGlobalPaste);
+    };
+  }, [uploadedAttachments.length]);
+
   const removeUploadedAttachment = (id: string) => {
     setUploadedAttachments((current) => current.filter((attachment) => attachment.id !== id));
   };
@@ -1333,7 +1363,10 @@ export function ApiChatConsole({
   );
 
   const conversationPanel = (
-    <div className="rounded-[36px] border border-cyan-400/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.05),transparent_28%),linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)]">
+    <div
+      ref={chatConsoleRef}
+      className="rounded-[36px] border border-cyan-400/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.05),transparent_28%),linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)]"
+    >
       <div className="flex flex-col gap-3 border-b border-white/8 px-2 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
@@ -1558,15 +1591,6 @@ export function ApiChatConsole({
                 data-ai-surface="true"
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
-                onPaste={(event) => {
-                  if (!event.clipboardData?.items?.length) return;
-                  void (async () => {
-                    const handled = await handleClipboardPaste(event.clipboardData.items);
-                    if (handled) {
-                      event.preventDefault();
-                    }
-                  })();
-                }}
                 placeholder="例如：查這批料號的狀態差異，或上傳 PDF / Excel / PPT，或直接 Ctrl+V 貼上手動截圖。"
                 className="min-h-[168px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#0b1525_0%,#0d182a_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
               />
