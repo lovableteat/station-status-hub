@@ -8,6 +8,7 @@ import { Plus, Upload, X, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface NewIssue {
   title: string;
@@ -74,6 +75,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
   const [engineers, setEngineers] = useState<Array<{id: string, name: string}>>([]);
 
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   useEffect(() => {
     if (isOpen) {
@@ -82,7 +84,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
       loadTestItems();
       loadEngineers();
     }
-  }, [isOpen]);
+  }, [activeProjectId, isOpen]);
 
   useEffect(() => {
     if (newIssue.station_id) {
@@ -92,9 +94,15 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
 
   const loadSystems = async () => {
     try {
+      if (!activeProjectId) {
+        setSystems([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_systems')
         .select('id, system_name, serial_number')
+        .eq('project_id', activeProjectId)
         .order('system_name');
       
       if (error) throw error;
@@ -106,9 +114,15 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
 
   const loadStations = async () => {
     try {
+      if (!activeProjectId) {
+        setStations([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_flow_stations')
         .select('id, station_name')
+        .eq('project_id', activeProjectId)
         .order('station_order');
       
       if (error) throw error;
@@ -120,9 +134,15 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
 
   const loadTestItems = async () => {
     try {
+      if (!activeProjectId) {
+        setTestItems([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_flow_items')
         .select('id, item_name, station_id')
+        .eq('project_id', activeProjectId)
         .order('item_order');
       
       if (error) throw error;
@@ -239,9 +259,14 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
     try {
       setIsLoading(true);
 
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const { data, error } = await supabase
         .from('issues')
         .insert([{
+          project_id: activeProjectId,
           title: newIssue.title,
           description: newIssue.description,
           priority: newIssue.priority,

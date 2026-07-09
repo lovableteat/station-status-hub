@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { CheckSquare, Loader2 } from "lucide-react";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -32,10 +33,15 @@ export function SystemCompleteButton({
   const [isCompleting, setIsCompleting] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { activeProjectId } = useTestProject();
 
   const handleCompleteSystem = async () => {
     try {
       setIsCompleting(true);
+
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
 
       // 獲取Station 0-4的站點 (根據系統邏輯)
       const targetStations = stations.filter(station => 
@@ -49,6 +55,7 @@ export function SystemCompleteButton({
       const { data: existingProgress, error: fetchError } = await supabase
         .from('test_progress')
         .select('*')
+        .eq('project_id', activeProjectId)
         .eq('system_id', systemId);
 
       if (fetchError) {
@@ -68,6 +75,7 @@ export function SystemCompleteButton({
           );
 
           const progressData = {
+            project_id: activeProjectId,
             system_id: systemId,
             station_id: station.id,
             item_id: item.id,
@@ -112,6 +120,7 @@ export function SystemCompleteButton({
               started_at: update.started_at,
               completed_at: update.completed_at
             })
+            .eq('project_id', activeProjectId)
             .eq('id', update.id);
 
           if (error) {
@@ -141,6 +150,7 @@ export function SystemCompleteButton({
           overall_progress: 100,
           actual_completed_at: currentTime
         })
+        .eq('project_id', activeProjectId)
         .eq('id', systemId);
 
       if (systemError) {

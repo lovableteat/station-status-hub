@@ -15,6 +15,7 @@ import {
   History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface ProductionRecord {
   id: string;
@@ -43,14 +44,37 @@ export function ProductionHistory() {
   const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   useEffect(() => {
     loadProductionData();
-  }, []);
+  }, [activeProjectId]);
 
   const loadProductionData = async () => {
     try {
       setLoading(true);
+
+      if (!activeProjectId) {
+        setRecords([]);
+        setBottlenecks([]);
+        return;
+      }
+
+      const { data: projectSystems, error: projectSystemsError } = await supabase
+        .from('test_systems')
+        .select('id')
+        .eq('project_id', activeProjectId);
+
+      if (projectSystemsError) {
+        throw projectSystemsError;
+      }
+
+      const systemIds = (projectSystems || []).map((system) => system.id);
+      if (systemIds.length === 0) {
+        setRecords([]);
+        setBottlenecks([]);
+        return;
+      }
       
       // Load production records with rework history
       const { data: progressData } = await supabase
@@ -60,6 +84,8 @@ export function ProductionHistory() {
           test_systems(system_name),
           test_flow_stations(station_name)
         `)
+        .eq('project_id', activeProjectId)
+        .in('system_id', systemIds)
         .order('updated_at', { ascending: false });
 
       if (progressData) {
@@ -141,13 +167,18 @@ export function ProductionHistory() {
     setBottlenecks(bottleneckData);
   };
 
-  const handleRework = async (systemId: string, stationId: string) => {
+  const handleRework = async (progressRecordId: string) => {
     try {
+      if (!activeProjectId) {
+        return;
+      }
+
       // Find the specific progress record to update
       const { data: progressRecord } = await supabase
         .from('test_progress')
         .select('*')
-        .eq('system_id', systemId)
+        .eq('project_id', activeProjectId)
+        .eq('id', progressRecordId)
         .single();
 
       if (progressRecord) {
@@ -159,6 +190,7 @@ export function ProductionHistory() {
             notes: (progressRecord.notes || '') + ' [返工 ' + new Date().toLocaleString() + ']',
             started_at: new Date().toISOString()
           })
+          .eq('project_id', activeProjectId)
           .eq('id', progressRecord.id);
 
         toast({
@@ -346,7 +378,7 @@ export function ProductionHistory() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleRework(record.system_id, record.id)}
+                            onClick={() => handleRework(record.id)}
                           >
                             再次返工
                           </Button>

@@ -12,6 +12,7 @@ import { useNotificationReplies } from "@/hooks/useNotificationReplies";
 import { NotificationReplyDialog } from "@/components/common/NotificationReplyDialog";
 import { NotificationConversationView } from "@/components/issues/NotificationConversationView";
 import { NotificationCard } from "@/components/common/NotificationCard";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,6 +46,7 @@ interface UserNotification {
 
 export function RealtimeNotifications() {
   const { user } = useUser();
+  const { activeProjectId } = useTestProject();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
   const [userNotifications, setUserNotifications] = useState<UserNotification[]>([]);
@@ -105,6 +107,11 @@ export function RealtimeNotifications() {
   }, [user]);
 
   useEffect(() => {
+    setNotifications([]);
+    setUnreadCount(userNotifications.filter((notification) => !notification.is_read).length);
+  }, [activeProjectId]);
+
+  useEffect(() => {
     const handleOpenNotifications = () => {
       setIsOpen(true);
     };
@@ -123,6 +130,10 @@ export function RealtimeNotifications() {
     const channel = supabase
       .channel('notification_updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'test_systems' }, (payload) => {
+        if (!activeProjectId || payload.new.project_id !== activeProjectId) {
+          return;
+        }
+
         addNotification({
           type: 'system_update',
           title: '新系統已加入',
@@ -131,6 +142,10 @@ export function RealtimeNotifications() {
         });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'test_systems' }, (payload) => {
+        if (!activeProjectId || payload.new.project_id !== activeProjectId) {
+          return;
+        }
+
         if (payload.new.status === 'Done' && payload.old.status !== 'Done') {
           addNotification({
             type: 'test_completed',
@@ -141,6 +156,10 @@ export function RealtimeNotifications() {
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'issues' }, (payload) => {
+        if (!activeProjectId || payload.new.project_id !== activeProjectId) {
+          return;
+        }
+
         addNotification({
           type: 'issue_created',
           title: '新問題回報',
@@ -149,6 +168,10 @@ export function RealtimeNotifications() {
         });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'test_progress' }, (payload) => {
+        if (!activeProjectId || payload.new.project_id !== activeProjectId) {
+          return;
+        }
+
         if (payload.new.status === 'Done' && payload.old.status !== 'Done') {
           addNotification({
             type: 'user_action',
@@ -220,7 +243,7 @@ export function RealtimeNotifications() {
       console.log('Cleaning up real-time subscription...');
       supabase.removeChannel(channel);
     };
-  }, [user, toast]);
+  }, [activeProjectId, user, toast]);
 
   const addNotification = (notification: Omit<RealtimeNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotification: RealtimeNotification = {

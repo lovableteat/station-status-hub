@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Check, X, Clock, Play, Square, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TestItem {
@@ -54,12 +55,17 @@ export function MobileProgressInput({
   const [status, setStatus] = useState<string>('Not Start');
   const [notes, setNotes] = useState<string>('');
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const stationItems = items.filter(item => item.station_id === stationId)
     .sort((a, b) => a.item_order - b.item_order);
 
   const handleQuickAction = async (itemId: string, action: 'start' | 'complete' | 'issue') => {
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const currentProgress = getProgressForSystemItem(systemId, stationId, itemId);
       const now = new Date().toISOString();
       
@@ -68,6 +74,7 @@ export function MobileProgressInput({
       switch (action) {
         case 'start':
           updateData = {
+            project_id: activeProjectId,
             system_id: systemId,
             station_id: stationId,
             item_id: itemId,
@@ -80,6 +87,7 @@ export function MobileProgressInput({
           
         case 'complete':
           updateData = {
+            project_id: activeProjectId,
             system_id: systemId,
             station_id: stationId,
             item_id: itemId,
@@ -95,6 +103,7 @@ export function MobileProgressInput({
           
         case 'issue':
           updateData = {
+            project_id: activeProjectId,
             system_id: systemId,
             station_id: stationId,
             item_id: itemId,
@@ -112,6 +121,7 @@ export function MobileProgressInput({
         const { error } = await supabase
           .from('test_progress')
           .update(updateData)
+          .eq('project_id', activeProjectId)
           .eq('id', currentProgress.id);
         
         if (error) throw error;
@@ -145,6 +155,10 @@ export function MobileProgressInput({
     if (!selectedItem) return;
     
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const currentProgress = getProgressForSystemItem(systemId, stationId, selectedItem);
       const now = new Date().toISOString();
       
@@ -152,6 +166,7 @@ export function MobileProgressInput({
                             status === 'On-going' ? 50 : 0;
       
       const updateData: any = {
+        project_id: activeProjectId,
         system_id: systemId,
         station_id: stationId,
         item_id: selectedItem,
@@ -173,6 +188,7 @@ export function MobileProgressInput({
         const { error } = await supabase
           .from('test_progress')
           .update(updateData)
+          .eq('project_id', activeProjectId)
           .eq('id', currentProgress.id);
         
         if (error) throw error;

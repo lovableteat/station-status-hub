@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Download, FileText } from "lucide-react";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useToast } from "@/hooks/use-toast";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { cn } from "@/lib/utils";
@@ -90,6 +91,7 @@ export function TestTracker() {
     completed_at?: string;
   }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
     return progress.find(p => 
@@ -190,6 +192,7 @@ export function TestTracker() {
         const { error } = await supabase
           .from('test_progress')
           .delete()
+          .eq('project_id', activeProjectId)
           .eq('id', existingProgress.id);
 
         if (error) throw error;

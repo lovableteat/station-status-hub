@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { BackButton } from '@/components/common/BackButton';
+import { useTestProject } from '@/components/test-projects/TestProjectProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Monitor, Settings, Zap, Server, Database, Network } from 'lucide-react';
 
@@ -35,17 +36,24 @@ export function CabinetTestTracker() {
   const [systems, setSystems] = useState<CabinetSystem[]>([]);
   const [slots, setSlots] = useState<CabinetSlot[]>([]);
   const [loading, setLoading] = useState(true);
+  const { activeProjectId } = useTestProject();
 
   useEffect(() => {
     loadSystems();
     generateSlots();
-  }, []);
+  }, [activeProjectId]);
 
   const loadSystems = async () => {
     try {
+      if (!activeProjectId) {
+        setSystems([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('test_systems')
         .select('*')
+        .eq('project_id', activeProjectId)
         .eq('model', 'GB300')
         .order('serial_number');
 

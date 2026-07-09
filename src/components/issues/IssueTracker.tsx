@@ -27,6 +27,7 @@ import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueTableView } from "./IssueTableView";
 import { IssueAnalyticsPanel } from "./IssueAnalyticsPanel";
 import { BackButton } from "@/components/common/BackButton";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface Issue {
   id: string;
@@ -72,11 +73,12 @@ export function IssueTracker() {
   const [activeView, setActiveView] = useState("list");
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   // 處理 URL 參數以自動開啟特定問題
   useEffect(() => {
     loadIssues();
-  }, []);
+  }, [activeProjectId]);
 
   // 單獨處理 URL 參數跳轉
   useEffect(() => {
@@ -104,6 +106,12 @@ export function IssueTracker() {
   const loadIssues = async () => {
     try {
       setLoading(true);
+
+      if (!activeProjectId) {
+        setIssues([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('issues')
         .select(`
@@ -122,6 +130,7 @@ export function IssueTracker() {
             description
           )
         `)
+        .eq('project_id', activeProjectId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

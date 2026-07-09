@@ -1,12 +1,21 @@
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
-import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
 import { useStationStatus } from "./useStationStatus";
 
 interface UnifiedSystem {
   id: string;
+  project_id: string;
   system_name: string;
   assigned_engineer: string;
   current_station: string;
@@ -23,6 +32,7 @@ interface UnifiedSystem {
 
 interface UnifiedStation {
   id: string;
+  project_id: string;
   station_name: string;
   station_order: number;
   description?: string;
@@ -31,6 +41,7 @@ interface UnifiedStation {
 
 interface UnifiedTestItem {
   id: string;
+  project_id: string;
   station_id: string;
   item_name: string;
   item_order: number;
@@ -40,6 +51,7 @@ interface UnifiedTestItem {
 
 interface UnifiedProgress {
   id: string;
+  project_id: string;
   system_id: string;
   station_id: string;
   item_id: string;
@@ -53,6 +65,7 @@ interface UnifiedProgress {
 
 interface StationContent {
   id: string;
+  project_id: string;
   title: string;
   content: string;
   order_num: number;
@@ -63,8 +76,8 @@ interface StationStatus {
   id: string;
   name: string;
   status: "idle" | "working" | "warning" | "error" | "complete";
-  current_system?: string; // 保留向後兼容性
-  current_systems: UnifiedSystem[]; // 新增：所有在該站點的系統
+  current_system?: string;
+  current_systems: UnifiedSystem[];
   efficiency: number;
   last_update: string;
   total_systems: number;
@@ -81,6 +94,7 @@ interface StationStatus {
 
 export function useUnifiedData() {
   const { user } = useUser();
+  const { activeProjectId, isLoadingProjects } = useTestProject();
   const [systems, setSystems] = useState<UnifiedSystem[]>([]);
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
@@ -90,207 +104,278 @@ export function useUnifiedData() {
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
-  // Use the optimized station status hook
   const stationStatuses = useStationStatus(systems, stations, progress);
 
-  // Incremental update functions for specific tables
-  const updateSystems = useCallback(async (payload: any) => {
-    setIsUpdating(true);
-    try {
-      if (payload.eventType === 'DELETE') {
-        setSystems(prev => prev.filter(item => item.id !== payload.old.id));
-      } else if (payload.eventType === 'INSERT') {
-        setSystems(prev => [...prev, payload.new]);
-      } else if (payload.eventType === 'UPDATE') {
-        setSystems(prev => prev.map(item => 
-          item.id === payload.new.id ? { ...item, ...payload.new } : item
-        ));
-      }
-    } finally {
-      setTimeout(() => setIsUpdating(false), 500);
+  const loadAllData = useCallback(async () => {
+    if (!activeProjectId) {
+      setSystems([]);
+      setStations([]);
+      setTestItems([]);
+      setProgress([]);
+      setStationContents([]);
+      setIsLoading(false);
+      return;
     }
-  }, []);
 
-  const updateProgressData = useCallback(async (payload: any) => {
-    setIsUpdating(true);
-    try {
-      if (payload.eventType === 'DELETE') {
-        setProgress(prev => prev.filter(item => item.id !== payload.old.id));
-      } else if (payload.eventType === 'INSERT') {
-        setProgress(prev => [...prev, payload.new]);
-      } else if (payload.eventType === 'UPDATE') {
-        setProgress(prev => prev.map(item => 
-          item.id === payload.new.id ? { ...item, ...payload.new } : item
-        ));
-      }
-    } finally {
-      setTimeout(() => setIsUpdating(false), 500);
-    }
-  }, []);
-
-  const updateStations = useCallback(async (payload: any) => {
-    setIsUpdating(true);
-    try {
-      if (payload.eventType === 'DELETE') {
-        setStations(prev => prev.filter(item => item.id !== payload.old.id));
-      } else if (payload.eventType === 'INSERT') {
-        setStations(prev => [...prev, payload.new].sort((a, b) => a.station_order - b.station_order));
-      } else if (payload.eventType === 'UPDATE') {
-        setStations(prev => prev.map(item => 
-          item.id === payload.new.id ? { ...item, ...payload.new } : item
-        ).sort((a, b) => a.station_order - b.station_order));
-      }
-    } finally {
-      setTimeout(() => setIsUpdating(false), 500);
-    }
-  }, []);
-
-  const updateTestItems = useCallback(async (payload: any) => {
-    setIsUpdating(true);
-    try {
-      if (payload.eventType === 'DELETE') {
-        setTestItems(prev => prev.filter(item => item.id !== payload.old.id));
-      } else if (payload.eventType === 'INSERT') {
-        setTestItems(prev => [...prev, payload.new].sort((a, b) => a.item_order - b.item_order));
-      } else if (payload.eventType === 'UPDATE') {
-        setTestItems(prev => prev.map(item => 
-          item.id === payload.new.id ? { ...item, ...payload.new } : item
-        ).sort((a, b) => a.item_order - b.item_order));
-      }
-    } finally {
-      setTimeout(() => setIsUpdating(false), 500);
-    }
-  }, []);
-
-  const updateStationContents = useCallback(async (payload: any) => {
-    setIsUpdating(true);
-    try {
-      if (payload.eventType === 'DELETE') {
-        setStationContents(prev => prev.filter(item => item.id !== payload.old.id));
-      } else if (payload.eventType === 'INSERT') {
-        setStationContents(prev => [...prev, payload.new].sort((a, b) => a.order_num - b.order_num));
-      } else if (payload.eventType === 'UPDATE') {
-        setStationContents(prev => prev.map(item => 
-          item.id === payload.new.id ? { ...item, ...payload.new } : item
-        ).sort((a, b) => a.order_num - b.order_num));
-      }
-    } finally {
-      setTimeout(() => setIsUpdating(false), 500);
-    }
-  }, []);
-
-  // Debounced reload function as fallback for complex updates
-  const debouncedReload = useCallback(
-    (() => {
-      let timeoutId: NodeJS.Timeout;
-      return () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          loadAllData();
-        }, 300);
-      };
-    })(),
-    []
-  );
-
-  const loadAllData = useCallback(async (systemIdToOptimize?: string) => {
     setIsLoading(true);
+
     try {
-      
-      // 批量載入資料，減少資料庫查詢次數
-      const [systemsRes, stationsRes, itemsRes, progressRes, contentsRes] = await Promise.all([
-        supabase.from('test_systems').select('*').order('system_name'),
-        supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('test_progress').select('*'),
-        supabase.from('station_contents').select('*').order('order_num')
+      const [systemsRes, stationsRes, itemsRes, contentsRes] = await Promise.all([
+        supabase
+          .from("test_systems")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("system_name"),
+        supabase
+          .from("test_flow_stations")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("station_order"),
+        supabase
+          .from("test_flow_items")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("item_order"),
+        supabase
+          .from("station_contents")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("order_num"),
       ]);
 
-      if (systemsRes.data) setSystems(systemsRes.data);
-      if (stationsRes.data) setStations(stationsRes.data);
-      if (itemsRes.data) setTestItems(itemsRes.data);
-      if (progressRes.data) setProgress(progressRes.data);
-      if (contentsRes.data) setStationContents(contentsRes.data);
+      if (systemsRes.error) throw systemsRes.error;
+      if (stationsRes.error) throw stationsRes.error;
+      if (itemsRes.error) throw itemsRes.error;
+      if (contentsRes.error) throw contentsRes.error;
 
+      const nextSystems = (systemsRes.data ?? []) as UnifiedSystem[];
+      const nextStations = (stationsRes.data ?? []) as UnifiedStation[];
+      const nextItems = (itemsRes.data ?? []) as UnifiedTestItem[];
+      const nextContents = (contentsRes.data ?? []) as StationContent[];
+
+      setSystems(nextSystems);
+      setStations(nextStations);
+      setTestItems(nextItems);
+      setStationContents(nextContents);
+
+      const systemIds = nextSystems.map((system) => system.id);
+      if (systemIds.length === 0) {
+        setProgress([]);
+      } else {
+        const { data: progressData, error: progressError } = await supabase
+          .from("test_progress")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .in("system_id", systemIds);
+
+        if (progressError) {
+          throw progressError;
+        }
+
+        setProgress((progressData ?? []) as UnifiedProgress[]);
+      }
     } catch (error) {
-      console.error('載入統一資料錯誤:', error);
+      console.error("Failed to load project-scoped station data:", error);
       toast({
-        title: "載入失敗",
-        description: "無法載入系統資料",
-        variant: "destructive"
+        title: "Load failed",
+        description: "Unable to load the selected project data.",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [activeProjectId, toast]);
 
-  const updateProgress = useCallback(async (
-    systemId: string,
-    stationId: string,
-    itemId: string,
-    updates: Partial<UnifiedProgress>
-  ) => {
-    try {
-      const existingProgress = progress.find(p => 
-        p.system_id === systemId && 
-        p.station_id === stationId && 
-        p.item_id === itemId
+  const handleProjectScopedRealtime = useCallback(
+    (
+      payload: any,
+      setter: Dispatch<SetStateAction<any[]>>,
+      sortFn?: (left: any, right: any) => number
+    ) => {
+      const recordProjectId = payload.new?.project_id ?? payload.old?.project_id;
+      const isCurrentProject = recordProjectId === activeProjectId;
+
+      setIsUpdating(true);
+
+      try {
+        setter((previous) => {
+          if (payload.eventType === "DELETE") {
+            return previous.filter((item) => item.id !== payload.old.id);
+          }
+
+          if (!isCurrentProject) {
+            return previous;
+          }
+
+          if (payload.eventType === "INSERT") {
+            const next = [...previous, payload.new];
+            return sortFn ? next.sort(sortFn) : next;
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const next = previous.map((item) =>
+              item.id === payload.new.id ? { ...item, ...payload.new } : item
+            );
+            return sortFn ? next.sort(sortFn) : next;
+          }
+
+          return previous;
+        });
+      } finally {
+        setTimeout(() => setIsUpdating(false), 500);
+      }
+    },
+    [activeProjectId]
+  );
+
+  const updateSystems = useCallback(
+    (payload: any) => {
+      handleProjectScopedRealtime(payload, setSystems);
+    },
+    [handleProjectScopedRealtime]
+  );
+
+  const updateStations = useCallback(
+    (payload: any) => {
+      handleProjectScopedRealtime(
+        payload,
+        setStations,
+        (left, right) => left.station_order - right.station_order
       );
+    },
+    [handleProjectScopedRealtime]
+  );
 
-      let result;
-      if (existingProgress) {
-        result = await supabase
-          .from('test_progress')
-          .update({
-            ...updates,
-            assigned_to: user?.username || updates.assigned_to || 'system'
-          })
-          .eq('id', existingProgress.id);
-      } else {
-        result = await supabase
-          .from('test_progress')
-          .insert({
-            system_id: systemId,
-            station_id: stationId,
+  const updateTestItems = useCallback(
+    (payload: any) => {
+      handleProjectScopedRealtime(
+        payload,
+        setTestItems,
+        (left, right) => left.item_order - right.item_order
+      );
+    },
+    [handleProjectScopedRealtime]
+  );
+
+  const updateStationContents = useCallback(
+    (payload: any) => {
+      handleProjectScopedRealtime(
+        payload,
+        setStationContents,
+        (left, right) => left.order_num - right.order_num
+      );
+    },
+    [handleProjectScopedRealtime]
+  );
+
+  const updateProgressRecords = useCallback(
+    (payload: any) => {
+      handleProjectScopedRealtime(payload, setProgress);
+    },
+    [handleProjectScopedRealtime]
+  );
+
+  const updateProgress = useCallback(
+    async (
+      systemId: string,
+      stationId: string,
+      itemId: string,
+      updates: Partial<UnifiedProgress>
+    ) => {
+      try {
+        if (!activeProjectId) {
+          return false;
+        }
+
+        const existingProgress = progress.find(
+          (item) =>
+            item.system_id === systemId &&
+            item.station_id === stationId &&
+            item.item_id === itemId
+        );
+
+        let result;
+
+        if (existingProgress) {
+          result = await supabase
+            .from("test_progress")
+            .update({
+              ...updates,
+              assigned_to: user?.username || updates.assigned_to || "system",
+            })
+            .eq("id", existingProgress.id);
+        } else {
+          result = await supabase.from("test_progress").insert({
+            assigned_to: user?.username || "system",
             item_id: itemId,
-            assigned_to: user?.username || 'system',
-            ...updates
+            project_id: activeProjectId,
+            station_id: stationId,
+            system_id: systemId,
+            ...updates,
           });
-      }
+        }
 
-      if (result.error) {
-        throw result.error;
-      }
+        if (result.error) {
+          throw result.error;
+        }
 
-      // 不立即重新載入整個資料集，讓實時更新處理
-      return true;
-    } catch (error) {
-      console.error('進度更新錯誤:', error);
-      return false;
-    }
-  }, [progress, user]);
+        return true;
+      } catch (error) {
+        console.error("Failed to update project-scoped progress:", error);
+        return false;
+      }
+    },
+    [activeProjectId, progress, user]
+  );
 
   useEffect(() => {
+    if (isLoadingProjects) {
+      return;
+    }
+
     loadAllData();
-    
-    // 設置實時更新，減少日誌輸出
+
     const channel = supabase
-      .channel('unified_data_changes')
-      // 核心表格使用增量更新
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_systems' }, updateSystems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_progress' }, updateProgressData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_stations' }, updateStations)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_flow_items' }, updateTestItems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_contents' }, updateStationContents)
-      // 其他表格使用防抖重載
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_time_records' }, debouncedReload)
+      .channel("unified_data_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "test_systems" },
+        updateSystems
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "test_progress" },
+        updateProgressRecords
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "test_flow_stations" },
+        updateStations
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "test_flow_items" },
+        updateTestItems
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "station_contents" },
+        updateStationContents
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadAllData]);
+  }, [
+    isLoadingProjects,
+    loadAllData,
+    updateProgressRecords,
+    updateStationContents,
+    updateStations,
+    updateSystems,
+    updateTestItems,
+  ]);
 
   return {
     systems,
@@ -302,6 +387,6 @@ export function useUnifiedData() {
     isLoading,
     isUpdating,
     refetch: loadAllData,
-    updateProgress
+    updateProgress,
   };
 }

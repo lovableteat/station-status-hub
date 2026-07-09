@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { RotateCcw } from "lucide-react";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -24,15 +25,21 @@ export function SystemResetDialog({ systemId, systemName, onReset }: SystemReset
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const handleReset = async () => {
     try {
       setIsResetting(true);
+
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
       
       // 重置測試進度紀錄
       const { error: progressError } = await supabase
         .from('test_progress')
         .delete()
+        .eq('project_id', activeProjectId)
         .eq('system_id', systemId);
 
       if (progressError) throw progressError;
@@ -47,6 +54,7 @@ export function SystemResetDialog({ systemId, systemName, onReset }: SystemReset
           actual_started_at: null,
           actual_completed_at: null
         })
+        .eq('project_id', activeProjectId)
         .eq('id', systemId);
 
       if (systemError) throw systemError;
