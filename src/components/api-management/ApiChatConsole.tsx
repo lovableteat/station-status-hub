@@ -1464,211 +1464,121 @@ export function ApiChatConsole({
         </div>
 
         <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0d1627_0%,#0a1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
-          <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <SectionTitle
-              title="查詢輸入"
-              description={
-                isChatOnly
-                  ? "可直接貼查詢條件、料號、欄位需求，或上傳附件擷取內容。"
-                  : "支援連續查詢，也能拿 API 設定一起驗證回覆結果。"
-              }
-            />
-            <div className="flex gap-2">
-              {!isChatOnly ? (
-                <Button
-                  type="button"
-                  onClick={() => void handleConnectionTest()}
-                  disabled={loading || !requestUrl}
-                  className="h-10 rounded-2xl bg-emerald-500 px-4 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99]"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {loading ? "測試中..." : "測試連線"}
-                </Button>
-              ) : null}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept=".csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.xls,.xlsx,.ppt,.pptx,.txt,image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              void handleImageUpload(event.currentTarget.files);
+              event.currentTarget.value = "";
+            }}
+          />
+
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            {!isChatOnly ? (
               <Button
                 type="button"
-                variant="outline"
-                onClick={requestResetConversation}
-                className="h-10 rounded-2xl border-cyan-400/16 bg-transparent px-4 font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
+                onClick={() => void handleConnectionTest()}
+                disabled={loading || !requestUrl}
+                className="h-10 rounded-2xl bg-emerald-500 px-4 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99]"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                清空對話
+                <Sparkles className="mr-2 h-4 w-4" />
+                {loading ? "測試中..." : "測試連線"}
               </Button>
-            </div>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={requestResetConversation}
+              className="h-10 rounded-2xl border-cyan-400/16 bg-transparent px-4 font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              清空對話
+            </Button>
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_196px]">
-            <div className="space-y-3">
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept=".csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.xls,.xlsx,.ppt,.pptx,.txt,image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  void handleImageUpload(event.currentTarget.files);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <div className="rounded-[24px] border border-cyan-300/14 bg-[linear-gradient(135deg,rgba(34,211,238,0.12),rgba(15,23,42,0.88))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm font-black text-slate-50">附件上傳與手動截圖</p>
-                    <p className="text-xs leading-5 text-slate-300">
-                      可直接上傳圖片、PDF、PPT、Excel、Word、TXT，也支援你手動截圖後直接貼上。
-                    </p>
-                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-200">
-                      <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
-                        支援 Ctrl+V / 貼上截圖
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1">
-                        最多 {MAX_UPLOAD_ATTACHMENT_COUNT} 個附件
-                      </span>
-                      <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
-                        單檔上限 15MB
-                      </span>
+          {uploadedAttachments.length ? (
+            <div className="mb-3 flex max-h-[176px] flex-col gap-2 overflow-y-auto pr-1">
+              {uploadedAttachments.map((attachment, index) => (
+                <div
+                  key={attachment.id}
+                  className="flex items-center gap-3 rounded-2xl border border-cyan-300/12 bg-[#0b1421] px-3 py-3"
+                >
+                  {attachment.kind === "image" && attachment.src ? (
+                    <img
+                      src={attachment.src}
+                      alt={`待上傳圖片 ${index + 1}`}
+                      className="h-14 w-14 rounded-xl border border-white/10 bg-slate-950/40 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-cyan-100">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-slate-100">{attachment.name}</p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                      <span>{attachment.kind === "image" ? "圖片" : "檔案"}</span>
+                      <span>{formatFileSize(attachment.size)}</span>
                     </div>
                   </div>
-                  <Button
+
+                  <button
                     type="button"
-                    variant="outline"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                    className="h-11 rounded-2xl border-cyan-300/24 bg-[#17314a]/70 px-5 font-bold text-cyan-50 transition-all duration-200 hover:bg-[#204766] hover:text-white active:scale-[0.99]"
+                    onClick={() => removeUploadedAttachment(attachment.id)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+                    aria-label={`移除附件 ${index + 1}`}
                   >
-                    <Paperclip className="mr-2 h-4 w-4" />
-                    上傳附件 / 截圖
-                  </Button>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-
-              {uploadedAttachments.length ? (
-                <div className="space-y-2">
-                  <div className="flex max-h-[196px] flex-col gap-2 overflow-y-auto pr-1">
-                    {uploadedAttachments.map((attachment, index) => (
-                      <div
-                        key={attachment.id}
-                        className="flex items-center gap-3 rounded-2xl border border-cyan-300/14 bg-[#07101c] px-3 py-3"
-                      >
-                        {attachment.kind === "image" && attachment.src ? (
-                          <img
-                            src={attachment.src}
-                            alt={`待上傳圖片 ${index + 1}`}
-                            className="h-16 w-16 rounded-xl border border-white/10 bg-slate-950/40 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-cyan-100">
-                            <FileText className="h-6 w-6" />
-                          </div>
-                        )}
-
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-slate-100">
-                            {attachment.name}
-                          </p>
-                          <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                            <span>{attachment.kind === "image" ? "圖片" : "檔案"}</span>
-                            <span>{attachment.mimeType}</span>
-                            <span>{formatFileSize(attachment.size)}</span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removeUploadedAttachment(attachment.id)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
-                          aria-label={`移除附件 ${index + 1}`}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <Textarea
-                data-ai-surface="true"
-                value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
-                placeholder="例如：查這批料號的狀態差異，或上傳 PDF / Excel / PPT，或直接 Ctrl+V 貼上手動截圖。"
-                className="min-h-[168px] rounded-[26px] border-cyan-400/14 bg-[linear-gradient(180deg,#0b1525_0%,#0d182a_100%)] text-[15px] leading-7 text-slate-100 transition-all duration-200 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-              />
-              <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-                  可連續追問
-                </span>
-                <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-                  可貼上手動截圖
-                </span>
-                <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">
-                  可上傳 PDF / PPT / Excel
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-3 py-1",
-                    imageCapable
-                      ? "border border-violet-300/18 bg-violet-400/10 text-violet-100"
-                      : "border border-white/8 bg-white/5"
-                  )}
-                >
-                  {imageCapable ? "可生成圖片與讀圖" : "可讀圖片抽文字"}
-                </span>
-              </div>
+              ))}
             </div>
+          ) : null}
 
-            <div className="flex flex-col justify-between gap-3">
-              <div className="rounded-[28px] border border-cyan-300/12 bg-[linear-gradient(180deg,#132238_0%,#0f1c2f_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(2,8,23,0.18)]">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border",
-                      canSend
-                        ? "border-emerald-300/24 bg-emerald-400/14 text-emerald-100"
-                        : "border-white/10 bg-white/6 text-slate-300"
-                    )}
-                  >
-                    <Send className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
-                      查詢狀態
-                    </p>
-                    <p className="mt-2 text-base font-black text-slate-50">
-                      {canSend ? "可以送出查詢" : "等待你輸入內容"}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-300">
-                      {isChatOnly
-                        ? "輸入文字、上傳附件，或直接貼上手動截圖後就能送出。結果會留在這個工作區持續追問。"
-                        : "你也可以先測試 API，再正式送出查詢。"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-2">
-                  <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                    <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-slate-200">
-                      {draftMessage.trim() ? "已輸入文字" : "尚未輸入文字"}
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-slate-200">
-                      已附附件 {uploadedAttachments.length} 個
-                    </span>
-                    <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100">
-                      {provider || "-"} / {model || "-"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
+          <div className="rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#22252c_0%,#1b1d23_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <Button
                 type="button"
-                onClick={() => void handleSend()}
-                disabled={!canSend}
-                className="h-14 rounded-[24px] bg-[linear-gradient(135deg,#38bdf8_0%,#22d3ee_48%,#34d399_100%)] font-bold text-slate-950 shadow-[0_18px_40px_-24px_rgba(56,189,248,0.55)] transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:bg-[linear-gradient(135deg,#334155_0%,#475569_100%)] disabled:text-slate-300"
+                variant="ghost"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
+                className="h-12 w-12 shrink-0 rounded-2xl border border-white/8 bg-white/4 p-0 text-slate-100 hover:bg-white/10 disabled:opacity-50"
               >
-                <Send className="mr-2 h-4 w-4" />
-                {loading ? "送出中..." : "送出查詢"}
+                <Plus className="h-6 w-6" />
               </Button>
+
+              <div className="min-w-0 flex-1">
+                <Textarea
+                  data-ai-surface="true"
+                  value={draftMessage}
+                  onChange={(event) => setDraftMessage(event.target.value)}
+                  placeholder="問問 Gemini，或直接 Ctrl+V 貼上截圖"
+                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[15px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                />
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">Ctrl+V 貼圖</span>
+                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
+                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">15MB 內</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 md:justify-end">
+                <div className="rounded-full border border-white/8 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
+                  {model || "Gemini"}
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={!canSend}
+                  className="h-12 min-w-12 rounded-2xl bg-white px-4 font-bold text-slate-950 shadow-[0_12px_28px_rgba(255,255,255,0.14)] transition-all duration-200 hover:bg-slate-100 active:scale-[0.99] disabled:bg-slate-600 disabled:text-slate-300"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
