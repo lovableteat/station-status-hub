@@ -29,6 +29,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
+import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
@@ -417,7 +418,10 @@ const Index = () => {
               />
             )}
 
-            <div className="flex min-h-[calc(100vh-92px)] gap-4 px-4 pb-4 pt-4">
+            <div className="space-y-4 px-4 pb-4 pt-4">
+              <ProjectScopeBar />
+
+              <div className="flex min-h-[calc(100vh-148px)] gap-4">
               <Sidebar
                 activeModule={activeStationModule}
                 onModuleChange={handleStationNavigation}
@@ -432,6 +436,7 @@ const Index = () => {
               <main className={cn("min-w-0 flex-1 overflow-auto", isMobile && "pt-14")}>
                 {renderStationContent()}
               </main>
+              </div>
             </div>
           </div>
         );

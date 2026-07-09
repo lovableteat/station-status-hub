@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { getEffectivePriority, IssuePriority } from "@/lib/issuePriority";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface Issue {
   id: string;
@@ -146,6 +147,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   const dragSrcRef = useRef<ColumnKey | null>(null);
   const { toast } = useToast();
   const { sendMentionNotifications } = useMentionNotifications();
+  const { activeProjectId } = useTestProject();
 
   // 載入欄位順序
   useEffect(() => {
@@ -274,7 +276,15 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
 
   const handleAssigneeChange = async (issueId: string, newAssignee: string) => {
     try {
-      const { error } = await supabase.from('issues').update({ assigned_to: newAssignee }).eq('id', issueId);
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
+      const { error } = await supabase
+        .from('issues')
+        .update({ assigned_to: newAssignee })
+        .eq('project_id', activeProjectId)
+        .eq('id', issueId);
       if (error) throw error;
       if (newAssignee !== 'unassigned') {
         const issue = issues.find(i => i.id === issueId);
@@ -298,9 +308,14 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
 
   const handleInlinePriorityChange = async (issueId: string, value: IssuePriority) => {
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const { error } = await supabase
         .from('issues')
         .update({ priority: value, priority_manual: true })
+        .eq('project_id', activeProjectId)
         .eq('id', issueId);
       if (error) throw error;
       toast({ title: "優先級已更新", description: "已標記為手動設定" });

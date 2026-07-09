@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { BackButton } from "@/components/common/BackButton";
 import { cn } from "@/lib/utils";
 
@@ -160,10 +161,19 @@ export function FlowInfo() {
   const [editingNewStation, setEditingNewStation] = useState<TestStation | null>(null);
 
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   useEffect(() => {
+    if (!activeProjectId) {
+      setStations([]);
+      setItems([]);
+      setStationContents([]);
+      setSystems([]);
+      return;
+    }
+
     loadData();
-  }, []);
+  }, [activeProjectId]);
 
   useEffect(() => {
     if (stations.length === 0) {
@@ -178,11 +188,30 @@ export function FlowInfo() {
 
   const loadData = async () => {
     try {
+      if (!activeProjectId) {
+        return;
+      }
+
       const [stationsRes, itemsRes, contentsRes, systemsRes] = await Promise.all([
-        supabase.from('test_flow_stations').select('*').order('station_order'),
-        supabase.from('test_flow_items').select('*').order('item_order'),
-        supabase.from('station_contents').select('*').order('order_num'),
-        supabase.from('test_systems').select('*')
+        supabase
+          .from('test_flow_stations')
+          .select('*')
+          .eq('project_id', activeProjectId)
+          .order('station_order'),
+        supabase
+          .from('test_flow_items')
+          .select('*')
+          .eq('project_id', activeProjectId)
+          .order('item_order'),
+        supabase
+          .from('station_contents')
+          .select('*')
+          .eq('project_id', activeProjectId)
+          .order('order_num'),
+        supabase
+          .from('test_systems')
+          .select('*')
+          .eq('project_id', activeProjectId)
       ]);
 
       if (stationsRes.data) setStations(stationsRes.data);
@@ -275,6 +304,10 @@ export function FlowInfo() {
 
   const handleSaveNewStation = async () => {
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       if (editingNewStation) {
         // Update existing station
         await supabase
@@ -293,6 +326,7 @@ export function FlowInfo() {
         await supabase
           .from('test_flow_stations')
           .insert({
+            project_id: activeProjectId,
             station_name: newStationForm.station_name,
             station_order: newStationForm.station_order,
             description: newStationForm.description,

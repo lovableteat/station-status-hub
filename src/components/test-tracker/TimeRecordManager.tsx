@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Clock, RotateCcw, Trash2 } from "lucide-react";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,6 +32,7 @@ export function TimeRecordManager({
   const [completedAt, setCompletedAt] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   // 當對話框打開時，重新初始化時間值
   const handleDialogOpen = (open: boolean) => {
@@ -46,6 +48,11 @@ export function TimeRecordManager({
     
     try {
       setIsUpdating(true);
+
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const updates: any = {};
       
       if (startedAt) {
@@ -71,6 +78,7 @@ export function TimeRecordManager({
       const { error } = await supabase
         .from('test_progress')
         .update(updates)
+        .eq('project_id', activeProjectId)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
         .eq('item_id', itemId);
@@ -106,12 +114,17 @@ export function TimeRecordManager({
     
     try {
       setIsUpdating(true);
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       const { error } = await supabase
         .from('test_progress')
         .update({
           started_at: null,
           completed_at: null
         })
+        .eq('project_id', activeProjectId)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
         .eq('item_id', itemId);

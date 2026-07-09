@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface TestStation {
   id: string;
@@ -45,9 +46,14 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
     item_order: 1
   });
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
 
   const handleSave = async () => {
     try {
+      if (!activeProjectId) {
+        throw new Error("No active project");
+      }
+
       if (editingItem) {
         // Update existing item
         await supabase
@@ -67,6 +73,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
         await supabase
           .from('test_flow_items')
           .insert({
+            project_id: activeProjectId,
             item_name: formData.item_name,
             station_id: formData.station_id,
             description: formData.description,
@@ -96,6 +103,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
       const { data: relatedProgress } = await supabase
         .from('test_progress')
         .select('id')
+        .eq('project_id', activeProjectId)
         .eq('item_id', itemId);
 
       if (relatedProgress && relatedProgress.length > 0) {
@@ -103,6 +111,7 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
         await supabase
           .from('test_progress')
           .delete()
+          .eq('project_id', activeProjectId)
           .eq('item_id', itemId);
       }
 
