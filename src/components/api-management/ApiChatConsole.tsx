@@ -1365,29 +1365,29 @@ export function ApiChatConsole({
   const conversationPanel = (
     <div
       ref={chatConsoleRef}
-      className="rounded-[36px] border border-cyan-400/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.05),transparent_28%),linear-gradient(180deg,#0f1729_0%,#0a111d_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)]"
+      className="rounded-[34px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_24%),linear-gradient(180deg,#121a2a_0%,#0b1220_100%)] p-5 shadow-[0_32px_90px_rgba(2,8,23,0.34)]"
     >
-      <div className="flex flex-col gap-3 border-b border-white/8 px-2 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
-            <Bot className="h-5 w-5" />
+      <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <MessageSquareText className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-lg font-black text-slate-50">查詢視窗</p>
-            <p className="text-sm leading-6 text-slate-400">
-              保留本次上下文，適合連續查詢、比對欄位與擷取圖片文字。
+            <p className="text-xl font-black tracking-[-0.02em] text-slate-50">查詢視窗</p>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              保留本次上下文，適合連續查詢、比對欄位、擷取圖片文字與持續追問。
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           {isChatOnly ? (
-            <div className="min-w-[240px]">
+            <div className="min-w-[240px] max-w-[340px]">
               <Select
                 value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
                 onValueChange={(value) => onSelectApiKey?.(value)}
               >
-                <SelectTrigger className="h-9 rounded-full border-white/10 bg-white/5 px-3 text-left text-slate-100">
+                <SelectTrigger className="h-10 rounded-2xl border-white/10 bg-white/5 px-4 text-left text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -1403,22 +1403,10 @@ export function ApiChatConsole({
               </Select>
             </div>
           ) : null}
-          <Badge className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1 text-cyan-100 hover:bg-cyan-400/10">
-            {truncateMiddle(activeKeyLabel)}
-          </Badge>
-          <Badge className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200 hover:bg-white/5">
-            {provider || "-"} / {model || "-"}
-          </Badge>
-          <Badge
-            className={cn(
-              "rounded-full px-3 py-1 hover:bg-transparent",
-              imageCapable
-                ? "border border-violet-300/18 bg-violet-400/10 text-violet-100"
-                : "border border-white/10 bg-white/5 text-slate-300"
-            )}
-          >
-            {imageCapable ? "可生成圖片" : "可讀圖片"}
-          </Badge>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">目前模型</p>
+            <p className="mt-1 text-sm font-semibold text-slate-100">{provider || "gemini"} / {model || "-"}</p>
+          </div>
         </div>
       </div>
 
@@ -1427,19 +1415,19 @@ export function ApiChatConsole({
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
 
-        <div className="rounded-[30px] border border-cyan-400/10 bg-[linear-gradient(180deg,#08101d_0%,#091322_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0c1524_0%,#0b1321_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
           <div className={cn("space-y-4 overflow-y-auto pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
-              <div className="flex min-h-[500px] items-center justify-center rounded-[26px] border border-dashed border-cyan-400/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_35%),#0b1423] px-8 text-center">
-                <div className="max-w-xl space-y-4">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-cyan-400/16 bg-cyan-400/8 text-cyan-100">
+              <div className="flex min-h-[500px] items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
+                <div className="max-w-xl space-y-5">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
                     <MessageSquareText className="h-7 w-7" />
                   </div>
                   <div>
                     <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
                     <p className="mt-2 text-sm leading-7 text-slate-400">
                       {isChatOnly
-                        ? "直接在下方輸入要查的內容，系統會依本次上下文回傳查詢結果、整理重點或圖片文字。"
+                        ? "直接在下方輸入問題，或貼上截圖與附件。系統會依這次對話上下文持續回答。"
                         : "可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。"}
                     </p>
                   </div>
@@ -1463,7 +1451,7 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0d1627_0%,#0a1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
           <input
             ref={imageInputRef}
             type="file"
@@ -1476,7 +1464,12 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">Ctrl+V 貼圖</span>
+              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
+              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">15MB 內</span>
+            </div>
             {!isChatOnly ? (
               <Button
                 type="button"
@@ -1539,7 +1532,7 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#22252c_0%,#1b1d23_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#21242a_0%,#1a1d22_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <Button
                 type="button"
@@ -1557,17 +1550,15 @@ export function ApiChatConsole({
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
                   placeholder="問問 Gemini，或直接 Ctrl+V 貼上截圖"
-                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[15px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                  className="min-h-[82px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
                 />
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">Ctrl+V 貼圖</span>
-                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
-                  <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">15MB 內</span>
+                <div className="mt-2 text-[12px] text-slate-500">
+                  直接輸入問題、貼上截圖，或補上附件後送出。
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-2 md:justify-end">
-                <div className="rounded-full border border-white/8 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
+                <div className="rounded-full border border-white/8 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   {model || "Gemini"}
                 </div>
                 <Button
@@ -1590,24 +1581,24 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="h-full rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] p-4 shadow-[0_26px_72px_rgba(2,8,23,0.28)] xl:self-stretch">
-            <div className="flex h-full flex-col gap-4">
-            <div className="space-y-4 border-b border-white/8 pb-4">
+        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="h-full rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#11192a_0%,#0b1220_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)] xl:self-stretch">
+            <div className="flex h-full flex-col gap-5">
+            <div className="space-y-4 border-b border-white/8 pb-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/18 bg-cyan-400/10 text-cyan-100">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-cyan-100">
                   <MessageSquareText className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-lg font-black text-slate-50">資料查詢空間</p>
-                  <p className="text-xs text-slate-400">查資料 / 對話學習 / 整理結果</p>
+                  <p className="text-xs leading-5 text-slate-400">查資料、對話學習、整理結果</p>
                 </div>
               </div>
 
               <Button
                 type="button"
                 onClick={requestResetConversation}
-                className="h-11 w-full justify-start rounded-2xl bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400"
+                className="h-11 w-full justify-start rounded-2xl bg-cyan-500 font-bold text-slate-950 shadow-[0_16px_30px_rgba(34,211,238,0.18)] hover:bg-cyan-400"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 新對話
@@ -1627,7 +1618,7 @@ export function ApiChatConsole({
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+              <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-100">對話紀錄</p>
@@ -1689,7 +1680,7 @@ export function ApiChatConsole({
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+              <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-100">共享提示詞</p>
@@ -1752,7 +1743,7 @@ export function ApiChatConsole({
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/8 bg-[#0b1423] p-3">
+            <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
                 目前模型
               </p>
