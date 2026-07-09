@@ -1184,7 +1184,7 @@ export function ApiChatConsole({
   const totalMessages = messages.length.toString();
   const modeLabel = isGeminiProvider ? "可對話" : "待擴充";
   const chatHeightClass = isChatOnly
-    ? "min-h-[520px] max-h-[calc(100vh-310px)]"
+    ? "min-h-0 flex-1"
     : "min-h-[560px] max-h-[560px]";
 
   const workspaceDialogs = (
@@ -1365,7 +1365,7 @@ export function ApiChatConsole({
   const conversationPanel = (
     <div
       ref={chatConsoleRef}
-      className="rounded-[34px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_24%),linear-gradient(180deg,#121a2a_0%,#0b1220_100%)] p-5 shadow-[0_32px_90px_rgba(2,8,23,0.34)]"
+      className="flex min-h-[720px] flex-col rounded-[34px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_24%),linear-gradient(180deg,#121a2a_0%,#0b1220_100%)] p-5 shadow-[0_32px_90px_rgba(2,8,23,0.34)]"
     >
       <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
@@ -1410,15 +1410,15 @@ export function ApiChatConsole({
         </div>
       </div>
 
-      <div className="mt-4 space-y-4">
+      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
         {connectionState ? (
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
 
-        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0c1524_0%,#0b1321_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="flex min-h-0 flex-1 flex-col rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0c1524_0%,#0b1321_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
           <div className={cn("space-y-4 overflow-y-auto pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
-              <div className="flex min-h-[500px] items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
+              <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
                 <div className="max-w-xl space-y-5">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
                     <MessageSquareText className="h-7 w-7" />
@@ -1451,7 +1451,7 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-4 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
+        <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_20px_44px_rgba(2,8,23,0.18),inset_0_1px_0_rgba(255,255,255,0.02)]">
           <input
             ref={imageInputRef}
             type="file"
@@ -1485,7 +1485,7 @@ export function ApiChatConsole({
               type="button"
               variant="outline"
               onClick={requestResetConversation}
-              className="h-10 rounded-2xl border-cyan-400/16 bg-transparent px-4 font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
+              className="h-9 rounded-2xl border-cyan-400/16 bg-transparent px-4 text-sm font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               清空對話
@@ -1532,16 +1532,16 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,#21242a_0%,#1a1d22_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#21242a_0%,#1a1d22_100%)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                className="h-12 w-12 shrink-0 rounded-2xl border border-white/8 bg-white/4 p-0 text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                className="h-11 w-11 shrink-0 rounded-2xl border border-white/8 bg-white/4 p-0 text-slate-100 hover:bg-white/10 disabled:opacity-50"
               >
-                <Plus className="h-6 w-6" />
+                <Plus className="h-5 w-5" />
               </Button>
 
               <div className="min-w-0 flex-1">
@@ -1550,7 +1550,7 @@ export function ApiChatConsole({
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
                   placeholder="問問 Gemini，或直接 Ctrl+V 貼上截圖"
-                  className="min-h-[82px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
                 />
                 <div className="mt-2 text-[12px] text-slate-500">
                   直接輸入問題、貼上截圖，或補上附件後送出。
@@ -1565,7 +1565,7 @@ export function ApiChatConsole({
                   type="button"
                   onClick={() => void handleSend()}
                   disabled={!canSend}
-                  className="h-12 min-w-12 rounded-2xl bg-white px-4 font-bold text-slate-950 shadow-[0_12px_28px_rgba(255,255,255,0.14)] transition-all duration-200 hover:bg-slate-100 active:scale-[0.99] disabled:bg-slate-600 disabled:text-slate-300"
+                  className="h-11 min-w-11 rounded-2xl bg-white px-4 font-bold text-slate-950 shadow-[0_12px_28px_rgba(255,255,255,0.14)] transition-all duration-200 hover:bg-slate-100 active:scale-[0.99] disabled:bg-slate-600 disabled:text-slate-300"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -1581,7 +1581,7 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-5 xl:grid-cols-[264px_minmax(0,1fr)]">
           <aside className="h-full rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#11192a_0%,#0b1220_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)] xl:self-stretch">
             <div className="flex h-full flex-col gap-5">
             <div className="space-y-4 border-b border-white/8 pb-5">
