@@ -163,7 +163,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       if (!projectToUpdate) {
         toast({
           title: "找不到專案",
-          description: "你要修改的專案已不存在或剛被移除。",
+          description: "要修改的專案已不存在，請重新整理後再試一次。",
           variant: "destructive",
         });
         return null;
@@ -200,8 +200,8 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
           error !== null &&
           "code" in error &&
           error.code === "23505"
-            ? "已有相同名稱的專案，請改用其他名稱。"
-            : "無法更新你選取的專案，請稍後再試。";
+            ? "更新失敗：已有相同名稱的專案，請改用其他名稱。"
+            : "系統無法更新專案，請稍後再試。";
 
         toast({
           title: "專案更新失敗",

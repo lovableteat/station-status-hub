@@ -422,20 +422,20 @@ const Index = () => {
               <ProjectScopeBar />
 
               <div className="flex min-h-[calc(100vh-148px)] gap-4">
-              <Sidebar
-                activeModule={activeStationModule}
-                onModuleChange={handleStationNavigation}
-                isOpen={sidebarOpen}
-                onToggle={() => setSidebarOpen((value) => !value)}
-                isMobile={isMobile}
-                desktopStickyClass="top-[108px] h-[calc(100vh-124px)]"
-                mobileHeaderOffsetClass="top-[92px]"
-                mobilePanelOffsetClass="top-[148px]"
-              />
+                <Sidebar
+                  activeModule={activeStationModule}
+                  onModuleChange={handleStationNavigation}
+                  isOpen={sidebarOpen}
+                  onToggle={() => setSidebarOpen((value) => !value)}
+                  isMobile={isMobile}
+                  desktopStickyClass="top-[108px] h-[calc(100vh-124px)]"
+                  mobileHeaderOffsetClass="top-[92px]"
+                  mobilePanelOffsetClass="top-[148px]"
+                />
 
-              <main className={cn("min-w-0 flex-1 overflow-auto", isMobile && "pt-14")}>
-                {renderStationContent()}
-              </main>
+                <main className={cn("min-w-0 flex-1 overflow-auto", isMobile && "pt-14")}>
+                  {renderStationContent()}
+                </main>
               </div>
             </div>
           </div>
