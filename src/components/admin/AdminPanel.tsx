@@ -402,19 +402,27 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">後台管理</h1>
           <p className="text-muted-foreground">歡迎，{user?.displayName || user?.username} (超級管理員)</p>
         </div>
         <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={() => setActiveTab("api-management")}>
+        <Button
+          variant="outline"
+          onClick={() => setActiveTab("api-management")}
+          className="border-cyan-300/30 bg-[#182641] text-slate-100 hover:bg-[#223352] hover:text-white"
+        >
           <Network className="h-4 w-4 mr-2" />
           API 管理
         </Button>
-        <Button variant="outline" onClick={logout}>
+        <Button
+          variant="outline"
+          onClick={logout}
+          className="border-cyan-300/20 bg-[#141f36] text-slate-100 hover:bg-[#1e2b45] hover:text-white"
+        >
           <LogOut className="h-4 w-4 mr-2" />
           登出
         </Button>
@@ -422,8 +430,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="users">
+        <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-cyan-300/20 bg-[#16233c] p-1.5 text-slate-300">
+          <TabsTrigger
+            value="users"
+            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-300/25 data-[state=active]:bg-cyan-400/15 data-[state=active]:text-cyan-50"
+          >
             <Users className="h-4 w-4 mr-2" />
             用戶管理
           </TabsTrigger>
@@ -431,7 +442,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
           </TabsTrigger> : null}
-          <TabsTrigger value="api-management">
+          <TabsTrigger
+            value="api-management"
+            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-300/25 data-[state=active]:bg-cyan-400/15 data-[state=active]:text-cyan-50"
+          >
             <Network className="h-4 w-4 mr-2" />
             API 管理
           </TabsTrigger>
