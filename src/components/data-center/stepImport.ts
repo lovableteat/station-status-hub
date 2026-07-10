@@ -1,17 +1,55 @@
 import occtimportjs from "occt-import-js";
 import occtWasmUrl from "occt-import-js/dist/occt-import-js.wasm?url";
 
-import type { ImportedStepDimensions, ImportedStepModel, ImportedStepPart } from "./dataCenterTypes";
+import type {
+  ImportedStepBounds,
+  ImportedStepDimensions,
+  ImportedStepModel,
+  ImportedStepPart,
+  ModelUpAxis,
+} from "./dataCenterTypes";
 
 function roundMm(value: number) {
   return Math.max(0, Math.round(value * 10) / 10);
 }
 
-function getDimensionsFromBounds(min: [number, number, number], max: [number, number, number]): ImportedStepDimensions {
+function detectUpAxis(spans: [number, number, number]): ModelUpAxis {
+  const largest = Math.max(...spans);
+  if (spans[0] === largest) return "x";
+  if (spans[1] === largest) return "y";
+  return "z";
+}
+
+function getCanonicalDimensions(
+  bounds: ImportedStepBounds,
+  upAxis: ModelUpAxis
+): ImportedStepDimensions {
+  const spans: [number, number, number] = [
+    bounds.max[0] - bounds.min[0],
+    bounds.max[1] - bounds.min[1],
+    bounds.max[2] - bounds.min[2],
+  ];
+
+  if (upAxis === "x") {
+    return {
+      widthMm: roundMm(spans[1]),
+      depthMm: roundMm(spans[2]),
+      heightMm: roundMm(spans[0]),
+    };
+  }
+
+  if (upAxis === "y") {
+    return {
+      widthMm: roundMm(spans[0]),
+      depthMm: roundMm(spans[2]),
+      heightMm: roundMm(spans[1]),
+    };
+  }
+
   return {
-    widthMm: roundMm(max[0] - min[0]),
-    depthMm: roundMm(max[1] - min[1]),
-    heightMm: roundMm(max[2] - min[2]),
+    widthMm: roundMm(spans[0]),
+    depthMm: roundMm(spans[1]),
+    heightMm: roundMm(spans[2]),
   };
 }
 
@@ -24,53 +62,82 @@ export async function importStepModel(file: File): Promise<ImportedStepModel> {
   const result = occt.ReadStepFile(fileBuffer, {
     linearUnit: "millimeter",
     linearDeflectionType: "bounding_box_ratio",
-    linearDeflection: 0.002,
-    angularDeflection: 0.3,
+    linearDeflection: 0.004,
+    angularDeflection: 0.4,
   });
 
   if (!result.success || !result.meshes.length) {
-    throw new Error("STEP 檔案無法解析，請確認模型內容正常，或重新輸出一次 STEP。");
+    throw new Error("STEP 解析失敗，檔案沒有可顯示的 3D 組立資料。");
   }
 
-  const boundsMin: [number, number, number] = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
-  const boundsMax: [number, number, number] = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  const bounds: ImportedStepBounds = {
+    min: [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY],
+    max: [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY],
+  };
 
-  const parts: ImportedStepPart[] = result.meshes.map((mesh, index) => {
-    const position = Float32Array.from(mesh.attributes.position.array);
-    const normal = mesh.attributes.normal ? Float32Array.from(mesh.attributes.normal.array) : undefined;
-    const meshIndex = Uint32Array.from(mesh.index.array);
+  const parts: ImportedStepPart[] = [];
+
+  result.meshes.forEach((mesh, index) => {
+    const rawPositions = mesh.attributes?.position?.array ?? [];
+    const rawIndices = mesh.index?.array ?? [];
+    if (!rawPositions.length || !rawIndices.length) {
+      return;
+    }
+
+    const position = Float32Array.from(rawPositions);
+    const normal = mesh.attributes.normal
+      ? Float32Array.from(mesh.attributes.normal.array)
+      : undefined;
+    const meshIndex = Uint32Array.from(rawIndices);
 
     for (let offset = 0; offset < position.length; offset += 3) {
       const x = position[offset];
       const y = position[offset + 1];
       const z = position[offset + 2];
 
-      if (x < boundsMin[0]) boundsMin[0] = x;
-      if (y < boundsMin[1]) boundsMin[1] = y;
-      if (z < boundsMin[2]) boundsMin[2] = z;
-
-      if (x > boundsMax[0]) boundsMax[0] = x;
-      if (y > boundsMax[1]) boundsMax[1] = y;
-      if (z > boundsMax[2]) boundsMax[2] = z;
+      if (x < bounds.min[0]) bounds.min[0] = x;
+      if (y < bounds.min[1]) bounds.min[1] = y;
+      if (z < bounds.min[2]) bounds.min[2] = z;
+      if (x > bounds.max[0]) bounds.max[0] = x;
+      if (y > bounds.max[1]) bounds.max[1] = y;
+      if (z > bounds.max[2]) bounds.max[2] = z;
     }
 
-    return {
+    parts.push({
       id: `${file.name}-part-${index}`,
       name: mesh.name || `Part ${index + 1}`,
       color: mesh.color,
       position,
       normal,
       index: meshIndex,
-    };
+    });
   });
 
-  const dimensions = getDimensionsFromBounds(boundsMin, boundsMax);
+  if (!parts.length || !bounds.min.every(Number.isFinite) || !bounds.max.every(Number.isFinite)) {
+    throw new Error(
+      "此 AP242 STEP 在瀏覽器轉檔器中沒有產生網格。請先轉為 GLB 再匯入；公司 MGX Rev7 模型已完成內建轉檔。"
+    );
+  }
+
+  const spans: [number, number, number] = [
+    bounds.max[0] - bounds.min[0],
+    bounds.max[1] - bounds.min[1],
+    bounds.max[2] - bounds.min[2],
+  ];
+  const upAxis = detectUpAxis(spans);
+  const dimensions = getCanonicalDimensions(bounds, upAxis);
+
+  if (!dimensions.widthMm || !dimensions.depthMm || !dimensions.heightMm) {
+    throw new Error("STEP 尺寸無效，請檢查模型單位與座標軸。");
+  }
 
   return {
-    id: `step-${Date.now()}`,
+    id: `step-${crypto.randomUUID()}`,
     fileName: file.name,
     importedAt: new Date().toISOString(),
     sourceUnit: "millimeter",
+    upAxis,
+    bounds,
     parts,
     dimensions,
     calibratedDimensions: dimensions,
