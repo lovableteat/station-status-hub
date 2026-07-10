@@ -1,10 +1,13 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import {
   AlertTriangle,
   ArrowRight,
   Bookmark,
   Bot,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   History,
   ImageIcon,
@@ -129,7 +132,7 @@ const DEFAULT_QUERY_SYSTEM_PROMPT = [
 const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
-const MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024;
 const RETRYABLE_GEMINI_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const GEMINI_DEMAND_ERROR_PATTERN =
   /high demand|resource exhausted|quota|rate limit|too many requests|temporarily unavailable|overloaded|service unavailable/i;
@@ -691,10 +694,13 @@ export function ApiChatConsole({
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const composerDragDepthRef = useRef(0);
   const hasHydratedConversationRef = useRef(false);
   const previousSelectedApiKeyIdRef = useRef<null | string>(null);
   const { user } = useUser();
@@ -1405,7 +1411,7 @@ export function ApiChatConsole({
       }
 
       if (file.size > MAX_UPLOAD_FILE_BYTES) {
-        toast.error(`${file.name} 超過 15MB`);
+        toast.error(`${file.name} 超過 100MB`);
         return false;
       }
 
@@ -1436,6 +1442,46 @@ export function ApiChatConsole({
   const handleFileUpload = async (files: FileList | null) => {
     if (!files?.length) return;
     await appendUploadedFiles(Array.from(files));
+  };
+
+  const isFileDragPayload = (event: ReactDragEvent<HTMLElement>) =>
+    Array.from(event.dataTransfer?.types ?? []).includes("Files");
+
+  const handleComposerDragEnter = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (loading || !isFileDragPayload(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setIsDragOverComposer(true);
+  };
+
+  const handleComposerDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (loading || !isFileDragPayload(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    if (!isDragOverComposer) {
+      setIsDragOverComposer(true);
+    }
+  };
+
+  const handleComposerDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (loading || !isFileDragPayload(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) {
+      setIsDragOverComposer(false);
+    }
+  };
+
+  const handleComposerDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (loading || !isFileDragPayload(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = 0;
+    setIsDragOverComposer(false);
+    void handleFileUpload(event.dataTransfer.files);
   };
 
   const handleClipboardPaste = async (items: ClipboardItem[] | DataTransferItemList) => {
@@ -1481,6 +1527,23 @@ export function ApiChatConsole({
       document.removeEventListener("paste", handleGlobalPaste);
     };
   }, [uploadedAttachments.length]);
+
+  useEffect(() => {
+    if (!isDragOverComposer) return;
+
+    const resetComposerDragState = () => {
+      composerDragDepthRef.current = 0;
+      setIsDragOverComposer(false);
+    };
+
+    window.addEventListener("dragend", resetComposerDragState);
+    window.addEventListener("drop", resetComposerDragState);
+
+    return () => {
+      window.removeEventListener("dragend", resetComposerDragState);
+      window.removeEventListener("drop", resetComposerDragState);
+    };
+  }, [isDragOverComposer]);
 
   const removeUploadedAttachment = (id: string) => {
     setUploadedAttachments((current) => current.filter((attachment) => attachment.id !== id));
@@ -1917,11 +1980,11 @@ export function ApiChatConsole({
           </div>
 
           {uploadedAttachments.length ? (
-            <div className="mb-3 flex max-h-[176px] flex-col gap-2 overflow-y-auto pr-1">
+            <div className="mb-3 grid max-h-[232px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
               {uploadedAttachments.map((attachment, index) => (
                 <div
                   key={attachment.id}
-                  className="flex items-center gap-3 rounded-2xl border border-cyan-300/12 bg-[#0b1421] px-3 py-3"
+                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-cyan-300/12 bg-[#0b1421] px-3 py-3"
                 >
                   {attachment.kind === "image" && attachment.src ? (
                     <img
@@ -1956,7 +2019,18 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] px-3 py-3 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] focus-within:border-blue-300/70 focus-within:ring-2 focus-within:ring-blue-400/20">
+          <div
+            onDragEnter={handleComposerDragEnter}
+            onDragOver={handleComposerDragOver}
+            onDragLeave={handleComposerDragLeave}
+            onDrop={handleComposerDrop}
+            className={cn(
+              "rounded-[20px] border px-3 py-3 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2",
+              isDragOverComposer
+                ? "border-cyan-300/70 bg-[linear-gradient(180deg,#21466a_0%,#183450_100%)] ring-2 ring-cyan-300/25"
+                : "border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] focus-within:border-blue-300/70 focus-within:ring-blue-400/20"
+            )}
+          >
             <div className="flex items-center gap-2 md:gap-3">
               <div className="flex shrink-0 items-center self-stretch">
                 <Button
@@ -1999,6 +2073,12 @@ export function ApiChatConsole({
               </div>
             </div>
 
+            {isDragOverComposer ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-cyan-300/40 bg-cyan-300/8 px-4 py-3 text-sm font-bold text-cyan-100">
+                放開以上傳 PDF / PPT / Excel / Word / 圖片
+              </div>
+            ) : null}
+
           </div>
         </div>
       </div>
@@ -2010,9 +2090,9 @@ export function ApiChatConsole({
       <>
         {workspaceDialogs}
         <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-blue-400/20 bg-[linear-gradient(180deg,#0c1526_0%,#0a1220_100%)] shadow-[0_24px_70px_rgba(2,8,23,0.42)] lg:order-1">
+          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081C2D] shadow-[0_24px_70px_rgba(2,8,23,0.42)] lg:order-1">
             <div className="flex h-full min-h-0 flex-col">
-              <div className="border-b border-blue-400/16 bg-[linear-gradient(180deg,rgba(18,31,52,0.72),rgba(11,19,33,0.4))] p-5">
+              <div className="border-b border-[#163653] bg-[#081C2D] p-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
                     <Search className="h-5 w-5" />
@@ -2036,14 +2116,14 @@ export function ApiChatConsole({
                   type="button"
                   variant="ghost"
                   onClick={openSavePromptDialog}
-                  className="mt-2 h-12 w-full justify-start rounded-xl border border-blue-400/22 bg-[linear-gradient(180deg,rgba(21,39,65,0.88),rgba(14,28,48,0.92))] px-4 text-base font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#183253] hover:text-white"
+                  className="mt-2 h-12 w-full justify-start rounded-xl border border-[#214669] bg-[#10283d] px-4 text-base font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#16324b] hover:text-white"
                 >
                   <Bookmark className="mr-2 h-5 w-5" />
                   新增共享提示詞
                 </Button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[linear-gradient(180deg,#0c1525_0%,#0a1220_100%)] px-4 py-4">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#081C2D] px-4 py-4">
                 <section aria-labelledby="conversation-history-title">
                   <div className="mb-2 flex items-center justify-between gap-3 px-1">
                     <div className="flex items-center gap-2">
@@ -2056,7 +2136,7 @@ export function ApiChatConsole({
                   </div>
                   <div className="space-y-1.5">
                     {savedConversations.length === 0 ? (
-                      <p className="rounded-xl border border-white/5 bg-[#101b2d] px-3 py-4 text-sm leading-6 text-slate-400">
+                      <p className="rounded-xl border border-[#173654] bg-[#0C2235] px-3 py-4 text-sm leading-6 text-slate-400">
                         對話會自動保留在這裡
                       </p>
                     ) : (
@@ -2089,7 +2169,7 @@ export function ApiChatConsole({
                 {savedPrompts.length > 0 ? (
                   <section
                     aria-labelledby="shared-prompts-title"
-                    className="rounded-[20px] border border-blue-300/30 bg-blue-400/[0.08] p-3.5"
+                    className="rounded-[20px] border border-[#1d4262] bg-[#0C2235] p-3.5"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
@@ -2098,14 +2178,14 @@ export function ApiChatConsole({
                           共享提示詞庫
                         </p>
                       </div>
-                      <span className="rounded-full border border-blue-300/25 bg-blue-400/10 px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
+                      <span className="rounded-full border border-[#2b5377] bg-[#14324c] px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
                         {savedPrompts.length}
                       </span>
                     </div>
 
                     <div className="mt-3 space-y-2">
                       {savedPrompts.map((item) => (
-                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-slate-600/50 bg-slate-950/20 hover:border-blue-300/50 hover:bg-blue-400/10">
+                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-[#1e425f] bg-[#10263a] hover:border-blue-300/50 hover:bg-[#16324a]">
                           <button
                             type="button"
                             onClick={() => openLibraryApplyDialog(item)}
@@ -2132,8 +2212,8 @@ export function ApiChatConsole({
                 ) : null}
               </div>
 
-              <div className="border-t border-blue-400/16 bg-[linear-gradient(180deg,rgba(9,16,28,0.3),rgba(7,12,22,0.72))] p-4">
-                <div className="rounded-xl border border-blue-400/18 bg-[linear-gradient(180deg,#101a2c_0%,#0b1423_100%)] px-4 py-3">
+              <div className="border-t border-[#163653] bg-[#081C2D] p-4">
+                <div className="rounded-xl border border-[#214669] bg-[#0C2235] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-bold text-slate-300">目前使用模型</p>
                     <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
