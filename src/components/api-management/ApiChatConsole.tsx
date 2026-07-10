@@ -2123,7 +2123,10 @@ export function ApiChatConsole({
                     size="icon"
                     onClick={() => setSidebarCollapsed((value) => !value)}
                     aria-label={sidebarCollapsed ? "展開資料查詢空間" : "收合資料查詢空間"}
-                    className="h-10 w-10 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] hover:text-white"
+                    className={cn(
+                      "shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] hover:text-white",
+                      sidebarCollapsed ? "h-12 w-12" : "h-10 w-10"
+                    )}
                   >
                     {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                   </Button>
@@ -2263,7 +2266,7 @@ export function ApiChatConsole({
                 <div
                   className={cn(
                     "rounded-xl border border-[#214669] bg-[#0C2235]",
-                    sidebarCollapsed ? "flex items-center justify-center px-0 py-4" : "px-4 py-3"
+                    sidebarCollapsed ? "flex h-12 w-full items-center justify-center px-0 py-0" : "px-4 py-3"
                   )}
                 >
                   {sidebarCollapsed ? (
