@@ -474,7 +474,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </DialogHeader>
 
                 <div className="space-y-5">
-                  <div className="rounded-2xl border border-primary/15 bg-primary/10 p-4 text-sm text-muted-foreground">
+                  <div className="rounded-2xl border border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(59,130,246,0.08)_48%,rgba(15,23,42,0.88))] p-4 text-sm text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     新帳號建立時只輸入一次密碼，系統會立即轉成加密雜湊保存。若後續需要交接，請使用「編輯」直接重設新密碼。
                   </div>
 
@@ -540,52 +540,52 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-primary/15 bg-primary/10">
+            <Card className="border-cyan-300/18 bg-[linear-gradient(145deg,rgba(34,211,238,0.16),rgba(37,99,235,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Accounts</div>
-                  <div className="mt-2 text-3xl font-semibold text-foreground">{totalUsers}</div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-cyan-100/75">Accounts</div>
+                  <div className="mt-2 text-3xl font-semibold text-slate-50">{totalUsers}</div>
                   <p className="mt-1 text-sm text-muted-foreground">目前後台可管理帳號總數</p>
                 </div>
-                <Users className="h-10 w-10 text-primary" />
+                <Users className="h-10 w-10 text-cyan-200" />
               </CardContent>
             </Card>
 
-            <Card className="border-emerald-400/15 bg-emerald-500/10">
+            <Card className="border-emerald-300/18 bg-[linear-gradient(145deg,rgba(16,185,129,0.18),rgba(20,184,166,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Active</div>
-                  <div className="mt-2 text-3xl font-semibold text-foreground">{activeUsers}</div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-emerald-100/75">Active</div>
+                  <div className="mt-2 text-3xl font-semibold text-slate-50">{activeUsers}</div>
                   <p className="mt-1 text-sm text-muted-foreground">目前可以登入並操作的帳號</p>
                 </div>
-                <Shield className="h-10 w-10 text-emerald-300" />
+                <Shield className="h-10 w-10 text-emerald-200" />
               </CardContent>
             </Card>
 
-            <Card className="border-amber-400/15 bg-amber-500/10">
+            <Card className="border-amber-300/18 bg-[linear-gradient(145deg,rgba(245,158,11,0.18),rgba(251,191,36,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Privileged</div>
-                  <div className="mt-2 text-3xl font-semibold text-foreground">{privilegedUsers}</div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-amber-100/80">Privileged</div>
+                  <div className="mt-2 text-3xl font-semibold text-slate-50">{privilegedUsers}</div>
                   <p className="mt-1 text-sm text-muted-foreground">具管理級權限的帳號數量</p>
                 </div>
-                <UserCog className="h-10 w-10 text-amber-300" />
+                <UserCog className="h-10 w-10 text-amber-200" />
               </CardContent>
             </Card>
 
-            <Card className="border-sky-400/15 bg-sky-500/10">
+            <Card className="border-sky-300/18 bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(99,102,241,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Workspace Access</div>
-                  <div className="mt-2 text-3xl font-semibold text-foreground">{workspaceConfiguredUsers}</div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-sky-100/80">Workspace Access</div>
+                  <div className="mt-2 text-3xl font-semibold text-slate-50">{workspaceConfiguredUsers}</div>
                   <p className="mt-1 text-sm text-muted-foreground">已配置工作區入口與網站權限</p>
                 </div>
-                <Lock className="h-10 w-10 text-sky-300" />
+                <Lock className="h-10 w-10 text-sky-200" />
               </CardContent>
             </Card>
           </div>
 
-          <Card className="border-border/70 bg-card/85">
+          <Card className="border-cyan-300/16 bg-[linear-gradient(180deg,rgba(22,35,60,0.96),rgba(16,24,40,0.96))] shadow-[0_22px_56px_rgba(8,15,40,0.22)]">
             <CardContent className="space-y-4 pt-6">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
                 <div className="relative">
@@ -631,7 +631,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 bg-card/85">
+          <Card className="border-cyan-300/16 bg-[linear-gradient(180deg,rgba(20,31,54,0.96),rgba(14,22,37,0.96))] shadow-[0_24px_60px_rgba(8,15,40,0.24)]">
             <CardContent className="pt-5">
               <div className="space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
@@ -641,12 +641,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <div
                       key={systemUser.id}
-                      className="rounded-[24px] border border-border/70 bg-secondary/20 p-4 transition-colors hover:border-primary/30 hover:bg-secondary/30"
+                      className="rounded-[24px] border border-cyan-300/14 bg-[linear-gradient(145deg,rgba(28,42,70,0.96),rgba(17,26,44,0.96))] p-4 transition-colors hover:border-cyan-300/28 hover:bg-[linear-gradient(145deg,rgba(34,52,87,0.98),rgba(21,32,55,0.98))]"
                     >
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div className="flex min-w-0 flex-1 gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-                            <Shield className="h-4.5 w-4.5 text-primary" />
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/24 bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(59,130,246,0.08))]">
+                            <Shield className="h-4.5 w-4.5 text-cyan-100" />
                           </div>
 
                           <div className="min-w-0 flex-1 space-y-3">
@@ -664,21 +664,21 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             </div>
 
                             <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
-                              <div className="rounded-2xl border border-border/60 bg-background/55 p-3">
+                              <div className="rounded-2xl border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(22,35,60,0.92),rgba(13,20,34,0.92))] p-3">
                                 <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                                   帳號
                                 </div>
                                 <div className="mt-2 font-medium text-foreground">{systemUser.username}</div>
                               </div>
 
-                              <div className="rounded-2xl border border-border/60 bg-background/55 p-3">
+                              <div className="rounded-2xl border border-violet-300/12 bg-[linear-gradient(180deg,rgba(31,26,58,0.88),rgba(15,20,34,0.92))] p-3">
                                 <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                                   建立者
                                 </div>
                                 <div className="mt-2 font-medium text-foreground">{systemUser.created_by}</div>
                               </div>
 
-                              <div className="rounded-2xl border border-border/60 bg-background/55 p-3">
+                              <div className="rounded-2xl border border-amber-300/12 bg-[linear-gradient(180deg,rgba(58,39,18,0.5),rgba(17,22,37,0.92))] p-3">
                                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                                   <Clock3 className="h-3.5 w-3.5" />
                                   建立時間
@@ -689,7 +689,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-border/60 bg-background/55 px-3 py-3">
+                            <div className="rounded-2xl border border-emerald-300/12 bg-[linear-gradient(180deg,rgba(17,54,46,0.32),rgba(14,22,37,0.92))] px-3 py-3">
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <div>
                                   <div className="text-sm font-semibold text-foreground">網站與工作區權限</div>
@@ -718,7 +718,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
 
                         <div className="xl:w-[240px] xl:shrink-0">
-                          <div className="space-y-2 rounded-[24px] border border-border/40 bg-background/20 p-3">
+                          <div className="space-y-2 rounded-[24px] border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(24,37,62,0.9),rgba(14,21,35,0.9))] p-3">
                             <div className="hidden rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
                               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                                 <Lock className="h-4 w-4 text-amber-300" />
@@ -777,7 +777,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 })}
 
                 {filteredSystemUsers.length === 0 ? (
-                  <div className="rounded-[28px] border border-dashed border-border/80 bg-background/35 px-6 py-16 text-center">
+                  <div className="rounded-[28px] border border-dashed border-cyan-300/20 bg-[linear-gradient(180deg,rgba(22,35,60,0.92),rgba(14,22,37,0.92))] px-6 py-16 text-center">
                     <div className="text-lg font-semibold text-foreground">找不到符合條件的用戶</div>
                     <p className="mt-2 text-sm text-muted-foreground">
                       請調整搜尋關鍵字、角色或狀態篩選，再重新檢查。
