@@ -184,55 +184,55 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card className="border-blue-400/15 bg-[#10192e]">
+        <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/80">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-100/90">
               Total Keys
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.total}</p>
-            <p className="mt-2 text-sm text-slate-400">目前系統內已建立的 API 金鑰數量。</p>
+            <p className="mt-2 text-sm text-slate-300">目前系統內已建立的 API 金鑰數量。</p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-400/15 bg-[#10192e]">
+        <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-200/80">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-100/90">
               Active
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.active}</p>
-            <p className="mt-2 text-sm text-slate-400">目前可直接使用的 API 金鑰數量。</p>
+            <p className="mt-2 text-sm text-slate-300">目前可直接使用的 API 金鑰數量。</p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-400/15 bg-[#10192e]">
+        <Card className="border-amber-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-200/80">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/90">
               Expiring Soon
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.expiringSoon}</p>
-            <p className="mt-2 text-sm text-slate-400">14 天內到期的金鑰數量。</p>
+            <p className="mt-2 text-sm text-slate-300">14 天內到期的金鑰數量。</p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-400/15 bg-[#10192e]">
+        <Card className="border-violet-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-200/80">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-100/90">
               Usage Count
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.usageCount}</p>
-            <p className="mt-2 text-sm text-slate-400">所有 API 金鑰累積呼叫次數。</p>
+            <p className="mt-2 text-sm text-slate-300">所有 API 金鑰累積呼叫次數。</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-blue-400/15 bg-[#10192e]">
-        <CardHeader className="flex flex-col gap-4 border-b border-blue-400/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
+        <CardHeader className="flex flex-col gap-4 border-b border-cyan-300/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
               <ShieldCheck className="h-6 w-6 text-cyan-300" />
               API 金鑰管理
             </CardTitle>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
+            <p className="mt-2 text-sm leading-6 text-slate-300">
               在這裡可新增、編輯、停用與刪除 API 金鑰。需要測試時可直接從列表把金鑰帶去測試頁。
             </p>
           </div>
@@ -240,7 +240,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           <Button
             type="button"
             onClick={openCreateDialog}
-            className="bg-cyan-500 text-slate-950 hover:bg-cyan-400"
+            className="bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
           >
             <Plus className="mr-2 h-4 w-4" />
             建立新金鑰
@@ -249,36 +249,36 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
         <CardContent className="pt-5">
           {loading ? (
-            <div className="py-12 text-center text-sm text-slate-400">讀取中...</div>
+            <div className="py-12 text-center text-sm text-slate-300">讀取中...</div>
           ) : apiKeys.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-blue-400/20 bg-[#0b1423] px-6 py-12 text-center">
-              <KeyRound className="mx-auto h-12 w-12 text-slate-500" />
+            <div className="rounded-3xl border border-dashed border-cyan-300/24 bg-[#111d33] px-6 py-12 text-center">
+              <KeyRound className="mx-auto h-12 w-12 text-cyan-100/60" />
               <p className="mt-4 text-lg font-bold text-slate-100">目前沒有 API 金鑰</p>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-slate-300">
                 你可以先新增 API key，再補上 provider、model 和 base URL。
               </p>
               <Button
                 type="button"
                 onClick={openCreateDialog}
-                className="mt-6 bg-cyan-500 text-slate-950 hover:bg-cyan-400"
+                className="mt-6 bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 立即新增
               </Button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-blue-400/10 bg-[#0b1423]">
+            <div className="overflow-hidden rounded-3xl border border-cyan-300/12 bg-[#111d33]">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-blue-400/10 hover:bg-transparent">
-                    <TableHead className="text-slate-400">名稱 / 服務商</TableHead>
-                    <TableHead className="text-slate-400">金鑰</TableHead>
-                    <TableHead className="text-slate-400">狀態</TableHead>
-                    <TableHead className="text-slate-400">模型</TableHead>
-                    <TableHead className="text-slate-400">權限</TableHead>
-                    <TableHead className="text-slate-400">使用次數</TableHead>
-                    <TableHead className="text-slate-400">最後使用</TableHead>
-                    <TableHead className="text-right text-slate-400">操作</TableHead>
+                  <TableRow className="border-cyan-300/10 hover:bg-transparent">
+                    <TableHead className="text-slate-300">名稱 / 服務商</TableHead>
+                    <TableHead className="text-slate-300">金鑰</TableHead>
+                    <TableHead className="text-slate-300">狀態</TableHead>
+                    <TableHead className="text-slate-300">模型</TableHead>
+                    <TableHead className="text-slate-300">權限</TableHead>
+                    <TableHead className="text-slate-300">使用次數</TableHead>
+                    <TableHead className="text-slate-300">最後使用</TableHead>
+                    <TableHead className="text-right text-slate-300">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -287,7 +287,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                     return (
                       <TableRow
                         key={apiKey.id}
-                        className="border-blue-400/10 text-slate-200 hover:bg-blue-400/[0.04]"
+                        className="border-cyan-300/10 text-slate-100 hover:bg-cyan-300/[0.05]"
                       >
                         <TableCell className="align-top">
                           <div>
@@ -310,7 +310,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 </Badge>
                               ) : null}
                             </div>
-                            <p className="mt-2 text-sm text-slate-400">
+                            <p className="mt-2 text-sm text-slate-300">
                               {apiKey.description || "未填寫說明"}
                             </p>
                           </div>
@@ -318,7 +318,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">
                           <div className="flex items-start gap-2">
-                            <code className="max-w-[26rem] rounded-lg border border-blue-400/10 bg-[#10192e] px-3 py-2 font-mono text-xs leading-6 text-cyan-100">
+                            <code className="max-w-[26rem] rounded-lg border border-cyan-300/12 bg-[#182640] px-3 py-2 font-mono text-xs leading-6 text-cyan-50">
                               {maskApiKey(apiKey.api_key, visibleKeys.has(apiKey.id))}
                             </code>
                             <div className="flex items-center gap-1">
@@ -327,7 +327,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => toggleKeyVisibility(apiKey.id)}
-                                className="h-8 w-8 text-slate-400 hover:bg-blue-400/10 hover:text-white"
+                                className="h-8 w-8 text-slate-300 hover:bg-cyan-300/12 hover:text-white"
                               >
                                 {visibleKeys.has(apiKey.id) ? (
                                   <EyeOff className="h-4 w-4" />
@@ -340,7 +340,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => void copyToClipboard(apiKey.api_key)}
-                                className="h-8 w-8 text-slate-400 hover:bg-blue-400/10 hover:text-white"
+                                className="h-8 w-8 text-slate-300 hover:bg-cyan-300/12 hover:text-white"
                               >
                                 <Copy className="h-4 w-4" />
                               </Button>
@@ -380,8 +380,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                         <TableCell className="align-top">{apiKey.usage_count ?? 0}</TableCell>
 
                         <TableCell className="align-top">
-                          <div className="inline-flex items-center gap-2 text-sm text-slate-300">
-                            <Clock3 className="h-3.5 w-3.5 text-slate-500" />
+                            <div className="inline-flex items-center gap-2 text-sm text-slate-200">
+                              <Clock3 className="h-3.5 w-3.5 text-cyan-100/55" />
                             {formatDateTime(apiKey.last_used_at, "從未使用")}
                           </div>
                         </TableCell>
@@ -435,7 +435,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               <AlertDialogContent className="border-blue-400/20 bg-[#0f182b] text-slate-100">
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>確認刪除 API 金鑰？</AlertDialogTitle>
-                                  <AlertDialogDescription className="text-slate-400">
+                                  <AlertDialogDescription className="text-slate-300">
                                     刪除後這把 key 就不能再使用，而且不會自動恢復。
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>

@@ -277,13 +277,13 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
   if (isGeminiKey && selectedApiKey && selectedMetadata) {
     return (
       <div className="space-y-5">
-        <Card className="border-blue-400/15 bg-[#10192e]">
-          <CardHeader className="border-b border-blue-400/10 pb-5">
+        <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
+          <CardHeader className="border-b border-emerald-300/10 pb-5">
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
               <Sparkles className="h-6 w-6 text-emerald-300" />
               外部 API 測試
             </CardTitle>
-            <p className="text-sm leading-6 text-slate-400">
+            <p className="text-sm leading-6 text-slate-300">
               你現在選的是外部服務金鑰。這裡會直接對{" "}
               {selectedMetadata.provider} 發真實測試請求。
             </p>
@@ -291,24 +291,24 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
 
           <CardContent className="space-y-5 pt-5">
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   金鑰名稱
                 </p>
                 <p className="mt-2 text-sm font-bold text-slate-100">
                   {selectedApiKey.key_name}
                 </p>
               </div>
-              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Provider
                 </p>
                 <p className="mt-2 text-sm font-bold text-slate-100">
                   {selectedMetadata.provider}
                 </p>
               </div>
-              <div className="rounded-2xl border border-blue-400/15 bg-[#0b1423] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Model
                 </p>
                 <p className="mt-2 text-sm font-bold text-slate-100">
@@ -328,7 +328,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                       value={apiKey}
                       onChange={(event) => setApiKey(event.target.value)}
                       placeholder="可直接貼上要測試的 Gemini API Key"
-                      className="h-11 border-blue-400/20 bg-[#0b1423] pl-10 text-slate-100 placeholder:text-slate-500"
+                      className="h-11 border-cyan-300/18 bg-[#111d33] pl-10 text-slate-50 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -341,12 +341,12 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                     value={providerPrompt}
                     onChange={(event) => setProviderPrompt(event.target.value)}
                     placeholder="輸入你要測試模型回應的內容"
-                    className="min-h-[120px] border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
+                    className="min-h-[120px] border-cyan-300/18 bg-[#111d33] text-slate-50 placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-blue-400/15 bg-[#0b1423] p-5">
+              <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
                 <div className="flex items-start gap-3">
                   <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-200">
                     <Waypoints className="h-5 w-5" />
@@ -355,15 +355,15 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                     <p className="text-sm font-black text-slate-50">
                       POST /models/{selectedMetadata.model}:generateContent
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
                       這裡會用目前金鑰直接打 Gemini generateContent，
                       確認金鑰、模型與路徑是否正常。
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-blue-400/10 bg-[#10192e] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                <div className="mt-5 rounded-2xl border border-cyan-300/12 bg-[#182640] p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                     Request URL
                   </p>
                   <p className="mt-2 break-all text-sm leading-6 text-cyan-100">
@@ -377,13 +377,13 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   </Badge>
                   <Badge
                     variant="outline"
-                    className="border-blue-400/15 bg-transparent text-slate-300"
+                    className="border-cyan-300/15 bg-transparent text-slate-200"
                   >
                     POST
                   </Badge>
                   <Badge
                     variant="outline"
-                    className="border-blue-400/15 bg-transparent text-slate-300"
+                    className="border-cyan-300/15 bg-transparent text-slate-200"
                   >
                     JSON
                   </Badge>
@@ -396,7 +396,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                 type="button"
                 onClick={() => void handleGeminiTest()}
                 disabled={providerLoading || !apiKey.trim()}
-                className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                className="bg-emerald-400 text-slate-950 shadow-[0_12px_24px_rgba(74,222,128,0.22)] hover:bg-emerald-300"
               >
                 <Play className="mr-2 h-4 w-4" />
                 {providerLoading ? "測試中..." : "測試 Gemini API"}
@@ -416,7 +416,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                 value={providerResponse}
                 readOnly
                 placeholder="送出測試後，這裡會顯示實際 API 回應。"
-                className="min-h-[320px] border-blue-400/20 bg-[#06101c] font-mono text-sm leading-7 text-slate-100 placeholder:text-slate-500"
+                className="min-h-[320px] border-cyan-300/18 bg-[#0d1729] font-mono text-sm leading-7 text-slate-100 placeholder:text-slate-400"
               />
             </div>
           </CardContent>
@@ -427,13 +427,13 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
 
   return (
     <div className="space-y-5">
-      <Card className="border-blue-400/15 bg-[#10192e]">
-        <CardHeader className="border-b border-blue-400/10 pb-5">
+      <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
+        <CardHeader className="border-b border-emerald-300/10 pb-5">
           <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
             <Database className="h-6 w-6 text-emerald-300" />
             內部 API 測試
           </CardTitle>
-          <p className="text-sm leading-6 text-slate-400">
+          <p className="text-sm leading-6 text-slate-300">
             輸入內部 API key 後測試正式端點，確認回傳資料正確再交給外部系統串接。
           </p>
         </CardHeader>
@@ -450,7 +450,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                     value={apiKey}
                     onChange={(event) => setApiKey(event.target.value)}
                     placeholder="輸入內部 API key"
-                    className="h-11 border-blue-400/20 bg-[#0b1423] pl-10 text-slate-100 placeholder:text-slate-500"
+                    className="h-11 border-cyan-300/18 bg-[#111d33] pl-10 text-slate-50 placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -458,10 +458,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
               <div className="space-y-2">
                 <Label className="text-sm font-bold text-slate-300">選擇端點</Label>
                 <Select value={selectedEndpointKey} onValueChange={setSelectedEndpointKey}>
-                  <SelectTrigger className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100">
+                  <SelectTrigger className="h-11 border-cyan-300/18 bg-[#111d33] text-slate-50">
                     <SelectValue placeholder="選擇 API 端點" />
                   </SelectTrigger>
-                  <SelectContent className="border-blue-400/20 bg-[#10192e] text-slate-100">
+                  <SelectContent className="border-cyan-300/20 bg-[#17253d] text-slate-50">
                     {previewEndpoints.map((endpoint) => (
                       <SelectItem key={endpoint.key} value={endpoint.key}>
                         {endpoint.method} {endpoint.path}
@@ -480,13 +480,13 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                     value={queryValue}
                     onChange={(event) => setQueryValue(event.target.value)}
                     placeholder={selectedEndpoint.queryParamPlaceholder}
-                    className="h-11 border-blue-400/20 bg-[#0b1423] text-slate-100 placeholder:text-slate-500"
+                    className="h-11 border-cyan-300/18 bg-[#111d33] text-slate-50 placeholder:text-slate-400"
                   />
                 </div>
               )}
             </div>
 
-            <div className="rounded-3xl border border-blue-400/15 bg-[#0b1423] p-5">
+            <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
               <div className="flex items-start gap-3">
                 <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-200">
                   <Waypoints className="h-5 w-5" />
@@ -495,14 +495,14 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   <p className="text-sm font-black text-slate-50">
                     {selectedEndpoint?.method} {selectedEndpoint?.path}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
                     {selectedEndpoint?.description}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-blue-400/10 bg-[#10192e] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+              <div className="mt-5 rounded-2xl border border-cyan-300/12 bg-[#182640] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Response
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
@@ -516,13 +516,13 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                 </Badge>
                 <Badge
                   variant="outline"
-                  className="border-blue-400/15 bg-transparent text-slate-300"
+                  className="border-cyan-300/15 bg-transparent text-slate-200"
                 >
                   JSON
                 </Badge>
                 <Badge
                   variant="outline"
-                  className="border-blue-400/15 bg-transparent text-slate-300"
+                  className="border-cyan-300/15 bg-transparent text-slate-200"
                 >
                   GET
                 </Badge>
@@ -531,14 +531,14 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
           </div>
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <code className="overflow-hidden rounded-xl border border-blue-400/15 bg-[#0b1423] px-3 py-2 text-sm text-cyan-100">
+            <code className="overflow-hidden rounded-xl border border-cyan-300/15 bg-[#111d33] px-3 py-2 text-sm text-cyan-50">
               {requestUrl}
             </code>
             <Button
               type="button"
               onClick={handleInternalPreview}
               disabled={!apiKey.trim() || !selectedEndpoint}
-              className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+              className="bg-emerald-400 text-slate-950 shadow-[0_12px_24px_rgba(74,222,128,0.22)] hover:bg-emerald-300"
             >
               <Play className="mr-2 h-4 w-4" />
               測試內部 API
