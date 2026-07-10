@@ -301,10 +301,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'super_admin': return 'bg-red-500 text-white';
-      case 'admin': return 'bg-orange-500 text-white';
-      case 'engineer': return 'bg-blue-500 text-white';
-      default: return 'bg-muted text-muted-foreground';
+      case 'super_admin': return 'border-rose-200/45 bg-rose-300/18 text-rose-50';
+      case 'admin': return 'border-amber-200/45 bg-amber-300/18 text-amber-50';
+      case 'engineer': return 'border-sky-200/45 bg-sky-300/18 text-sky-50';
+      default: return 'border-slate-200/22 bg-white/[0.05] text-slate-200';
     }
   };
 
@@ -325,8 +325,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
   const getStatusTone = (status: string) =>
     status === "active"
-      ? "border-emerald-400/35 bg-emerald-500/12 text-emerald-100"
-      : "border-white/10 bg-secondary/70 text-muted-foreground";
+      ? "border-emerald-200/45 bg-emerald-300/18 text-emerald-50"
+      : "border-slate-200/20 bg-slate-200/10 text-slate-300";
 
   const formatCreatedAt = (value: string) => {
     const date = new Date(value);
@@ -642,97 +642,146 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   const isProtected = isProtectedSystemUser(systemUser);
 
                   return (
-                    <div
+                    <article
                       key={systemUser.id}
-                      className="rounded-[24px] border border-sky-300/34 bg-[linear-gradient(135deg,rgba(72,187,255,0.16)_0%,rgba(99,102,241,0.14)_34%,rgba(34,211,238,0.1)_65%,rgba(17,26,44,0.94)_100%)] p-4 shadow-[0_18px_50px_rgba(56,189,248,0.12),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 hover:border-cyan-200/55 hover:shadow-[0_22px_60px_rgba(56,189,248,0.18),inset_0_1px_0_rgba(255,255,255,0.09)]"
+                      className="group rounded-[30px] border border-sky-300/32 bg-[linear-gradient(145deg,rgba(55,88,150,0.28),rgba(48,65,120,0.18)_26%,rgba(35,44,80,0.96)_58%,rgba(16,24,39,0.98)_100%)] p-5 shadow-[0_22px_60px_rgba(15,23,42,0.26),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-200/52 hover:shadow-[0_28px_80px_rgba(56,189,248,0.16),inset_0_1px_0_rgba(255,255,255,0.12)]"
                     >
-                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="flex min-w-0 flex-1 gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/45 bg-[linear-gradient(145deg,rgba(125,211,252,0.32),rgba(59,130,246,0.16))] shadow-[0_10px_24px_rgba(56,189,248,0.16)]">
-                            <Shield className="h-4.5 w-4.5 text-white" />
+                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_220px]">
+                        <div className="space-y-4">
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="flex min-w-0 items-start gap-4">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-cyan-200/45 bg-[linear-gradient(145deg,rgba(186,230,253,0.34),rgba(59,130,246,0.14))] shadow-[0_12px_28px_rgba(56,189,248,0.18)]">
+                                <Shield className="h-5 w-5 text-white" />
+                              </div>
+
+                              <div className="min-w-0 space-y-3">
+                                <div className="flex flex-wrap items-center gap-2.5">
+                                  <h3 className="text-lg font-semibold tracking-tight text-slate-50">
+                                    {systemUser.display_name || systemUser.username}
+                                  </h3>
+                                  <Badge className={getRoleColor(systemUser.role)}>
+                                    {getRoleLabel(systemUser.role)}
+                                  </Badge>
+                                  <Badge className={getStatusTone(systemUser.status)}>
+                                    {getStatusLabel(systemUser.status)}
+                                  </Badge>
+                                  {isProtected ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="border-white/16 bg-white/[0.05] text-slate-200"
+                                    >
+                                      保留帳號
+                                    </Badge>
+                                  ) : null}
+                                </div>
+
+                                <p className="text-sm leading-6 text-slate-300">
+                                  管理帳號卡集中顯示身分、建立資訊與工作區權限，方便快速檢查是否可用。
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-cyan-200/22 bg-white/[0.04] px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/72">
+                                Workspace
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-slate-50">
+                                {workspaceBadges.length > 0
+                                  ? `${workspaceBadges.length} 個工作區`
+                                  : "未配置"}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="min-w-0 flex-1 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-base font-semibold text-foreground">
-                                {systemUser.display_name || systemUser.username}
-                              </h3>
-                              <Badge className={getRoleColor(systemUser.role)}>
-                                {getRoleLabel(systemUser.role)}
-                              </Badge>
-                              <Badge className={getStatusTone(systemUser.status)}>
-                                {getStatusLabel(systemUser.status)}
-                              </Badge>
-                              {isProtected ? <Badge variant="outline">保留帳號</Badge> : null}
-                            </div>
-
-                            <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
-                              <div className="rounded-2xl border border-cyan-200/30 bg-[linear-gradient(180deg,rgba(70,115,196,0.22),rgba(17,31,54,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                                <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/80">
-                                  帳號
-                                </div>
-                                <div className="mt-2 font-medium text-foreground">{systemUser.username}</div>
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="rounded-[22px] border border-cyan-200/24 bg-[linear-gradient(180deg,rgba(122,162,255,0.18),rgba(18,31,54,0.92))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/78">
+                                帳號
                               </div>
-
-                              <div className="rounded-2xl border border-violet-200/28 bg-[linear-gradient(180deg,rgba(109,40,217,0.2),rgba(21,25,44,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                                <div className="text-[11px] uppercase tracking-[0.22em] text-violet-100/82">
-                                  建立者
-                                </div>
-                                <div className="mt-2 font-medium text-foreground">{systemUser.created_by}</div>
-                              </div>
-
-                              <div className="rounded-2xl border border-amber-200/30 bg-[linear-gradient(180deg,rgba(251,191,36,0.18),rgba(32,24,19,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-amber-100/80">
-                                  <Clock3 className="h-3.5 w-3.5" />
-                                  建立時間
-                                </div>
-                                <div className="mt-2 font-medium text-foreground">
-                                  {formatCreatedAt(systemUser.created_at)}
-                                </div>
+                              <div className="mt-2 text-lg font-semibold text-slate-50">
+                                {systemUser.username}
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-emerald-200/28 bg-[linear-gradient(180deg,rgba(52,211,153,0.18),rgba(16,35,34,0.92))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                              <div className="mb-3 flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold text-foreground">網站與工作區權限</div>
-                                  <div className="hidden text-sm text-muted-foreground">
-                                    工作區入口與角色已合併顯示，超管可直接點右側按鈕調整。
-                                  </div>
+                            <div className="rounded-[22px] border border-violet-200/24 bg-[linear-gradient(180deg,rgba(129,78,255,0.18),rgba(26,25,52,0.92))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-violet-100/80">
+                                建立者
+                              </div>
+                              <div className="mt-2 text-lg font-semibold text-slate-50">
+                                {systemUser.created_by}
+                              </div>
+                            </div>
+
+                            <div className="rounded-[22px] border border-amber-200/24 bg-[linear-gradient(180deg,rgba(245,158,11,0.2),rgba(39,27,18,0.92))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-amber-100/80">
+                                <Clock3 className="h-3.5 w-3.5" />
+                                建立時間
+                              </div>
+                              <div className="mt-2 text-lg font-semibold text-slate-50">
+                                {formatCreatedAt(systemUser.created_at)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-[26px] border border-emerald-200/22 bg-[linear-gradient(180deg,rgba(16,185,129,0.16),rgba(18,37,35,0.94))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-slate-50">
+                                  網站與工作區權限
                                 </div>
-                                <Badge variant="outline">
-                                  {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
+                                <div className="mt-1 text-sm text-slate-300">
+                                  工作區入口與角色已合併顯示，超管可直接從右側操作列調整。
+                                </div>
+                              </div>
+
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-200/26 bg-emerald-300/10 text-emerald-50"
+                              >
+                                {workspaceBadges.length > 0
+                                  ? `${workspaceBadges.length} 個工作區`
+                                  : "尚未配置"}
+                              </Badge>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              {workspaceBadges.length > 0 ? (
+                                workspaceBadges.map((workspace) => (
+                                  <Badge
+                                    key={`${systemUser.id}-${workspace.id}`}
+                                    variant="outline"
+                                    className="border-white/14 bg-white/[0.05] text-slate-100"
+                                  >
+                                    {workspace.label} · {workspace.level}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="border-white/14 bg-white/[0.05] text-slate-200"
+                                >
+                                  尚未設定工作區權限
                                 </Badge>
-                              </div>
-
-                              <div className="flex flex-wrap gap-2">
-                                {workspaceBadges.length > 0 ? (
-                                  workspaceBadges.map((workspace) => (
-                                    <Badge key={`${systemUser.id}-${workspace.id}`} variant="outline">
-                                      {workspace.label} · {workspace.level}
-                                    </Badge>
-                                  ))
-                                ) : (
-                                  <Badge variant="outline">尚未設定工作區權限</Badge>
-                                )}
-                              </div>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="xl:w-[240px] xl:shrink-0">
-                          <div className="space-y-2 rounded-[24px] border border-sky-200/28 bg-[linear-gradient(180deg,rgba(53,88,148,0.18),rgba(18,28,48,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                            <div className="hidden rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <Lock className="h-4 w-4 text-amber-300" />
-                                密碼安全
+                        <aside className="rounded-[26px] border border-sky-200/24 bg-[linear-gradient(180deg,rgba(64,104,178,0.2),rgba(18,28,48,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                          <div className="flex h-full flex-col justify-between gap-4">
+                            <div>
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-sky-100/74">
+                                Actions
                               </div>
-                              <p className="mt-2 text-sm text-muted-foreground">
-                                系統僅保存加密雜湊，不保存任何明文密碼。若需要交接或臨時登入，請直接按「編輯」重設新密碼。
+                              <div className="mt-2 text-base font-semibold text-slate-50">
+                                帳號管理操作
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-slate-300">
+                                啟停狀態、網站權限與密碼重設都集中在這裡，避免在卡片內四散。
                               </p>
                             </div>
 
-                            <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                            <div className="grid gap-2">
                               {systemUser.username !== "liu52417" ? (
                                 <Button
                                   variant="outline"
@@ -740,7 +789,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                   onClick={() =>
                                     handleToggleUserStatus(systemUser.id, systemUser.status)
                                   }
-                                  className="border-sky-200/30 bg-white/[0.03] text-slate-100 hover:border-rose-200/45 hover:bg-rose-300/10"
+                                  className="border-rose-200/28 bg-white/[0.03] text-slate-100 hover:border-rose-200/50 hover:bg-rose-300/10"
                                 >
                                   {systemUser.status === "active" ? "停用帳號" : "重新啟用"}
                                 </Button>
@@ -779,10 +828,20 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                 onDelete={handleDeleteUser}
                               />
                             </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-3">
+                              <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+                                <Lock className="h-4 w-4 text-amber-300" />
+                                密碼安全
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-slate-300">
+                                系統只保存加密雜湊；若要交接或臨時登入，請直接重設新密碼。
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </aside>
                       </div>
-                    </div>
+                    </article>
                   );
                 })}
 
