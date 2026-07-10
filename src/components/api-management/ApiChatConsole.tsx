@@ -2253,11 +2253,11 @@ export function ApiChatConsole({
               </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col items-center gap-3 bg-[#081C2D] px-3 py-4">
-                  <div className="flex h-12 w-full items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
                     <History className="h-4 w-4" />
                   </div>
                   {savedPrompts.length > 0 ? (
-                    <div className="flex h-12 w-full items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
                       <LibraryBig className="h-4 w-4" />
                     </div>
                   ) : null}
@@ -2268,7 +2268,7 @@ export function ApiChatConsole({
                 <div
                   className={cn(
                     "rounded-xl border border-[#214669] bg-[#0C2235]",
-                    sidebarCollapsed ? "flex h-12 w-full items-center justify-center px-0 py-0" : "px-4 py-3"
+                    sidebarCollapsed ? "mx-auto flex h-12 w-12 items-center justify-center px-0 py-0" : "px-4 py-3"
                   )}
                 >
                   {sidebarCollapsed ? (
