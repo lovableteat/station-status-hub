@@ -1,210 +1,294 @@
-import { memo, Suspense, useEffect, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Html, OrbitControls, Text } from "@react-three/drei";
+import {
+  memo,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import { cn } from "@/lib/utils";
 
 import type {
+  CameraPreset,
+  DataCenterLayer,
   ImportedStepModel,
-  RackDevice,
+  RackDeviceHealth,
+  RackModelDefinition,
   RackPlan,
   RackStatus,
 } from "./dataCenterTypes";
 
 interface DataCenter3DPlannerProps {
   racks: RackPlan[];
+  models: Record<string, RackModelDefinition>;
   selectedRackId: string;
+  activeLayer: DataCenterLayer;
+  showLabels: boolean;
+  cameraPreset: CameraPreset;
+  cameraRequestId: number;
   onSelectRack: (rackId: string) => void;
-  importedModel?: ImportedStepModel | null;
 }
 
-const RACK_CENTER_Y = 1.08;
-const RACK_FRAME_WIDTH = 0.76;
-const RACK_FRAME_HEIGHT = 2.12;
-const RACK_FRAME_DEPTH = 1.16;
-const RACK_BODY_WIDTH = 0.7;
-const RACK_BODY_HEIGHT = 2.06;
-const RACK_BODY_DEPTH = 1.08;
-const RACK_BASE_WIDTH = 0.94;
-const RACK_BASE_HEIGHT = 0.07;
-const RACK_BASE_DEPTH = 1.3;
-const DEVICE_MAP_WIDTH = 0.58;
-const DEVICE_MAP_HEIGHT = 1.82;
-const DEVICE_MAP_Z = 0.558;
+const STATUS_LABELS: Record<RackStatus, string> = {
+  allocated: "運行中",
+  reserved: "預留",
+  available: "可配置",
+  blocked: "受阻",
+};
 
-function getRackTone(status: RackStatus) {
-  switch (status) {
-    case "allocated":
-      return {
-        frame: "#18b8d9",
-        fill: "#0e2a39",
-      };
-    case "reserved":
-      return {
-        frame: "#f5c15d",
-        fill: "#2b2417",
-      };
-    case "available":
-      return {
-        frame: "#7dd3fc",
-        fill: "#14263f",
-      };
-    case "blocked":
-      return {
-        frame: "#e879f9",
-        fill: "#2c1835",
-      };
-    default:
-      return {
-        frame: "#94a3b8",
-        fill: "#132031",
-      };
+const HEALTH_LABELS: Record<RackDeviceHealth, string> = {
+  healthy: "正常",
+  warning: "注意",
+  critical: "異常",
+  offline: "離線",
+};
+
+const HEALTH_ORDER: Record<RackDeviceHealth, number> = {
+  healthy: 0,
+  warning: 1,
+  offline: 2,
+  critical: 3,
+};
+
+function getRackHealth(rack: RackPlan): RackDeviceHealth {
+  return rack.devices.reduce<RackDeviceHealth>((worst, device) => {
+    return HEALTH_ORDER[device.health] > HEALTH_ORDER[worst] ? device.health : worst;
+  }, "healthy");
+}
+
+function getStatusColor(status: RackStatus) {
+  const colors: Record<RackStatus, string> = {
+    allocated: "#2dd4bf",
+    reserved: "#fbbf24",
+    available: "#60a5fa",
+    blocked: "#fb7185",
+  };
+  return colors[status];
+}
+
+function getLayerColor(rack: RackPlan, layer: DataCenterLayer) {
+  if (layer === "health") {
+    const colors: Record<RackDeviceHealth, string> = {
+      healthy: "#34d399",
+      warning: "#fbbf24",
+      critical: "#fb7185",
+      offline: "#94a3b8",
+    };
+    return colors[getRackHealth(rack)];
   }
-}
 
-function getRackStatusLabel(status: RackStatus) {
-  switch (status) {
-    case "allocated":
-      return "已配置";
-    case "reserved":
-      return "預留";
-    case "available":
-      return "可用";
-    case "blocked":
-      return "阻塞";
-    default:
-      return status;
+  if (layer === "power") {
+    return rack.powerKw >= 18 ? "#f59e0b" : rack.powerKw >= 12 ? "#facc15" : "#fde68a";
   }
+
+  if (layer === "network") {
+    return rack.uplinks >= 4 ? "#22d3ee" : "#60a5fa";
+  }
+
+  if (layer === "cooling") {
+    return rack.temperatureC >= 30
+      ? "#fb7185"
+      : rack.temperatureC >= 26
+        ? "#fbbf24"
+        : "#38bdf8";
+  }
+
+  return getStatusColor(rack.status);
 }
 
-function getDeviceTone(device: RackDevice) {
-  const typeColor: Record<RackDevice["type"], string> = {
-    "compute-tray": "#2dd4bf",
-    "switch-tray": "#38bdf8",
-    "tor-switch": "#f59e0b",
-    psu: "#f472b6",
-    management: "#a78bfa",
-    "storage-tray": "#22c55e",
-  };
+function SelectionCage({
+  dimensions,
+  color,
+  selected,
+  hovered,
+}: {
+  dimensions: RackModelDefinition["dimensions"];
+  color: string;
+  selected: boolean;
+  hovered: boolean;
+}) {
+  const width = dimensions.widthMm / 1000;
+  const depth = dimensions.depthMm / 1000;
+  const height = dimensions.heightMm / 1000;
+  const geometry = useMemo(
+    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(width + 0.1, height + 0.1, depth + 0.1)),
+    [depth, height, width]
+  );
 
-  const healthEmissive: Record<RackDevice["health"], string> = {
-    healthy: "#0b6a5f",
-    warning: "#7c5a07",
-    critical: "#7f1d1d",
-    offline: "#334155",
-  };
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
-  return {
-    color: typeColor[device.type],
-    emissive: healthEmissive[device.health],
-  };
+  if (!selected && !hovered) return null;
+
+  return (
+    <group position={[0, height / 2, 0]}>
+      <lineSegments geometry={geometry}>
+        <lineBasicMaterial color={selected ? "#dffbff" : color} transparent opacity={0.92} />
+      </lineSegments>
+      <mesh>
+        <boxGeometry args={[width + 0.16, height + 0.16, depth + 0.16]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={selected ? 0.055 : 0.025}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
 }
 
-function getImportedScale(model: ImportedStepModel) {
-  const widthRatio =
-    model.dimensions.widthMm > 0
-      ? model.calibratedDimensions.widthMm / model.dimensions.widthMm
-      : 1;
-  const depthRatio =
-    model.dimensions.depthMm > 0
-      ? model.calibratedDimensions.depthMm / model.dimensions.depthMm
-      : 1;
-  const heightRatio =
-    model.dimensions.heightMm > 0
-      ? model.calibratedDimensions.heightMm / model.dimensions.heightMm
-      : 1;
+const ProceduralRackModel = memo(function ProceduralRackModel({
+  definition,
+  accent,
+}: {
+  definition: RackModelDefinition;
+  accent: string;
+}) {
+  const width = definition.dimensions.widthMm / 1000;
+  const depth = definition.dimensions.depthMm / 1000;
+  const height = definition.dimensions.heightMm / 1000;
+  const innerHeight = height * 0.88;
 
-  return [widthRatio * 0.001, depthRatio * 0.001, heightRatio * 0.001] as const;
-}
+  return (
+    <group>
+      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width, height, depth]} />
+        <meshStandardMaterial color="#13283a" metalness={0.52} roughness={0.42} />
+      </mesh>
+      <mesh position={[0, height / 2, depth / 2 + 0.006]}>
+        <planeGeometry args={[width * 0.82, innerHeight]} />
+        <meshStandardMaterial color="#07111b" metalness={0.65} roughness={0.24} />
+      </mesh>
+      {Array.from({ length: 12 }, (_, index) => {
+        const y = height * 0.1 + (innerHeight / 12) * (index + 0.5);
+        return (
+          <mesh key={index} position={[0, y, depth / 2 + 0.012]}>
+            <boxGeometry args={[width * 0.72, 0.025, 0.018]} />
+            <meshStandardMaterial
+              color={index % 4 === 0 ? accent : "#35546d"}
+              emissive={index % 4 === 0 ? accent : "#000000"}
+              emissiveIntensity={index % 4 === 0 ? 0.3 : 0}
+              roughness={0.35}
+            />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 0.035, 0]} receiveShadow>
+        <boxGeometry args={[width + 0.12, 0.07, depth + 0.12]} />
+        <meshStandardMaterial color="#0a1825" metalness={0.48} roughness={0.58} />
+      </mesh>
+    </group>
+  );
+});
 
-function getImportedBounds(model: ImportedStepModel) {
-  const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
-  const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+const GlbRackModel = memo(function GlbRackModel({
+  definition,
+}: {
+  definition: RackModelDefinition;
+}) {
+  const gltf = useGLTF(definition.assetUrl ?? "") as { scene: THREE.Group };
+  const prepared = useMemo(() => {
+    const clone = gltf.scene.clone(true);
+    clone.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(clone);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    const desiredHeight = definition.dimensions.heightMm / 1000;
+    const scale = size.y > 0 ? desiredHeight / size.y : 1;
 
-  model.parts.forEach((part) => {
-    const positions = part.position;
-    for (let index = 0; index < positions.length; index += 3) {
-      const x = positions[index];
-      const y = positions[index + 1];
-      const z = positions[index + 2];
+    clone.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
 
-      if (x < min.x) min.x = x;
-      if (y < min.y) min.y = y;
-      if (z < min.z) min.z = z;
-
-      if (x > max.x) max.x = x;
-      if (y > max.y) max.y = y;
-      if (z > max.z) max.z = z;
-    }
-  });
-
-  if (!Number.isFinite(min.x) || !Number.isFinite(max.x)) {
     return {
-      centerX: 0,
-      centerY: 0,
-      minZ: 0,
+      clone,
+      position: [-center.x, -bounds.min.y, -center.z] as [number, number, number],
+      scale,
+    };
+  }, [definition.dimensions.heightMm, gltf.scene]);
+
+  return (
+    <group scale={prepared.scale}>
+      <primitive object={prepared.clone} position={prepared.position} />
+    </group>
+  );
+});
+
+function getStepTransform(model: ImportedStepModel) {
+  const { min, max } = model.bounds;
+  const center: [number, number, number] = [
+    (min[0] + max[0]) / 2,
+    (min[1] + max[1]) / 2,
+    (min[2] + max[2]) / 2,
+  ];
+  const heightScale = model.dimensions.heightMm
+    ? model.calibratedDimensions.heightMm / model.dimensions.heightMm
+    : 1;
+
+  if (model.upAxis === "x") {
+    return {
+      offset: [-min[0], -center[1], -center[2]] as [number, number, number],
+      rotation: [0, 0, Math.PI / 2] as [number, number, number],
+      scale: heightScale * 0.001,
+    };
+  }
+
+  if (model.upAxis === "z") {
+    return {
+      offset: [-center[0], -center[1], -min[2]] as [number, number, number],
+      rotation: [-Math.PI / 2, 0, 0] as [number, number, number],
+      scale: heightScale * 0.001,
     };
   }
 
   return {
-    centerX: (min.x + max.x) / 2,
-    centerY: (min.y + max.y) / 2,
-    minZ: min.z,
+    offset: [-center[0], -min[1], -center[2]] as [number, number, number],
+    rotation: [0, 0, 0] as [number, number, number],
+    scale: heightScale * 0.001,
   };
 }
 
-const ImportedStepAssembly = memo(function ImportedStepAssembly({
-  model,
-}: {
-  model: ImportedStepModel;
-}) {
-  const parts = useMemo(
+const StepRackModel = memo(function StepRackModel({ model }: { model: ImportedStepModel }) {
+  const geometries = useMemo(
     () =>
       model.parts.map((part) => {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(part.position, 3));
         if (part.normal) {
           geometry.setAttribute("normal", new THREE.BufferAttribute(part.normal, 3));
+        } else {
+          geometry.computeVertexNormals();
         }
         geometry.setIndex(new THREE.BufferAttribute(part.index, 1));
         geometry.computeBoundingSphere();
-
-        return {
-          id: part.id,
-          name: part.name,
-          color: part.color,
-          geometry,
-        };
+        return { ...part, geometry };
       }),
     [model.parts]
   );
+  const transform = useMemo(() => getStepTransform(model), [model]);
 
   useEffect(
     () => () => {
-      parts.forEach((part) => {
-        part.geometry.dispose();
-      });
+      geometries.forEach((part) => part.geometry.dispose());
     },
-    [parts]
+    [geometries]
   );
 
-  const bounds = useMemo(() => getImportedBounds(model), [model]);
-  const scale = useMemo(() => getImportedScale(model), [model]);
-
   return (
-    <group rotation={[-Math.PI / 2, 0, 0]} scale={scale}>
-      <group position={[-bounds.centerX, -bounds.centerY, -bounds.minZ]}>
-        {parts.map((part) => (
+    <group rotation={transform.rotation} scale={transform.scale}>
+      <group position={transform.offset}>
+        {geometries.map((part) => (
           <mesh key={part.id} geometry={part.geometry} castShadow receiveShadow>
             <meshStandardMaterial
-              color={
-                part.color
-                  ? new THREE.Color(part.color[0], part.color[1], part.color[2]).getHex()
-                  : "#9fb6d4"
-              }
-              metalness={0.22}
-              roughness={0.54}
-              envMapIntensity={0.6}
+              color={part.color ? new THREE.Color(...part.color) : "#9cb6c9"}
+              metalness={0.28}
+              roughness={0.5}
             />
           </mesh>
         ))}
@@ -213,244 +297,86 @@ const ImportedStepAssembly = memo(function ImportedStepAssembly({
   );
 });
 
-const RackLabel = memo(function RackLabel({
+function RackSceneCard({
   rack,
-  isSelected,
+  definition,
+  selected,
 }: {
   rack: RackPlan;
-  isSelected: boolean;
+  definition: RackModelDefinition;
+  selected: boolean;
 }) {
+  const health = getRackHealth(rack);
+  const color = getLayerColor(rack, "health");
+  const height = definition.dimensions.heightMm / 1000;
+
   return (
-    <Html position={[0, RACK_FRAME_HEIGHT / 2 + 0.28, 0]} center distanceFactor={11} transform={false}>
+    <Html
+      position={[0, height + (selected ? 0.48 : 0.28), 0]}
+      center
+      zIndexRange={[30, 5]}
+    >
       <div
-        className={cn(
-          "pointer-events-none min-w-[136px] rounded-2xl border px-3 py-2 text-center shadow-[0_16px_36px_-24px_hsl(196_90%_55%/0.62)] backdrop-blur-md",
-          isSelected
-            ? "border-cyan-300/55 bg-slate-950/88 text-cyan-50"
-            : "border-slate-300/12 bg-slate-950/78 text-slate-100"
-        )}
+        className={
+          selected
+            ? "pointer-events-none min-w-[190px] rounded-2xl border border-cyan-300/45 bg-[#06111d]/94 p-3 text-left text-white shadow-[0_20px_55px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl"
+            : "pointer-events-none min-w-[122px] rounded-xl border border-white/15 bg-[#06111d]/88 px-3 py-2 text-white shadow-xl backdrop-blur-lg"
+        }
       >
-        <div className="text-sm font-bold tracking-[0.02em]">{rack.cabinet}</div>
-        <div className="mt-1 text-[11px] font-semibold text-slate-300">
-          {getRackStatusLabel(rack.status)} / {rack.devices.length} 台
+        <div className="flex items-center justify-between gap-3">
+          <span className={selected ? "text-sm font-bold" : "text-xs font-bold"}>{rack.cabinet}</span>
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+            {HEALTH_LABELS[health]}
+          </span>
         </div>
+        {selected ? (
+          <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/10 pt-2 text-[10px] text-slate-300">
+            <span>{rack.powerKw} kW</span>
+            <span>{rack.temperatureC}°C</span>
+            <span>{rack.utilizationPercent}%</span>
+          </div>
+        ) : null}
       </div>
     </Html>
   );
-});
+}
 
-const RackFloorLabel = memo(function RackFloorLabel({
+function RackVisual({
   rack,
-  isSelected,
-}: {
-  rack: RackPlan;
-  isSelected: boolean;
-}) {
-  return (
-    <Text
-      position={[0, -RACK_CENTER_Y + 0.04, 0.78]}
-      rotation={[-Math.PI / 2, 0, 0]}
-      fontSize={0.12}
-      letterSpacing={0.02}
-      color={isSelected ? "#d8fbff" : "#89bff2"}
-      outlineWidth={0.006}
-      outlineColor="#05111c"
-      anchorX="center"
-      anchorY="middle"
-    >
-      {rack.cabinet}
-    </Text>
-  );
-});
-
-const RackDeviceMap = memo(function RackDeviceMap({
-  rack,
-  isSelected,
-}: {
-  rack: RackPlan;
-  isSelected: boolean;
-}) {
-  const unitHeight = DEVICE_MAP_HEIGHT / Math.max(rack.capacityU, 1);
-
-  return (
-    <group position={[0, 0, DEVICE_MAP_Z]}>
-      <mesh position={[0, 0, -0.012]}>
-        <planeGeometry args={[DEVICE_MAP_WIDTH, DEVICE_MAP_HEIGHT]} />
-        <meshStandardMaterial
-          color={isSelected ? "#0d2239" : "#071321"}
-          transparent
-          opacity={0.94}
-          roughness={0.32}
-          metalness={0.16}
-        />
-      </mesh>
-
-      {rack.devices.map((device) => {
-        const { color, emissive } = getDeviceTone(device);
-        const height = Math.max(unitHeight * device.slotSpan - 0.012, unitHeight * 0.72);
-        const y = -DEVICE_MAP_HEIGHT / 2 + unitHeight * (device.slotStart - 1 + device.slotSpan / 2);
-
-        return (
-          <mesh key={device.id} position={[0, y, 0.012]}>
-            <boxGeometry args={[DEVICE_MAP_WIDTH - 0.05, height, 0.03]} />
-            <meshStandardMaterial
-              color={color}
-              emissive={emissive}
-              emissiveIntensity={isSelected ? 0.72 : 0.45}
-              roughness={0.36}
-              metalness={0.24}
-            />
-          </mesh>
-        );
-      })}
-    </group>
-  );
-});
-
-const RackShell = memo(function RackShell({
-  rack,
-  isSelected,
+  definition,
+  activeLayer,
+  selected,
+  hovered,
+  showLabel,
   onSelect,
+  onHover,
 }: {
   rack: RackPlan;
-  isSelected: boolean;
+  definition: RackModelDefinition;
+  activeLayer: DataCenterLayer;
+  selected: boolean;
+  hovered: boolean;
+  showLabel: boolean;
   onSelect: (rackId: string) => void;
+  onHover: (rackId: string | null) => void;
 }) {
-  const tone = getRackTone(rack.status);
-  const frameGeometry = useMemo(
-    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(RACK_FRAME_WIDTH, RACK_FRAME_HEIGHT, RACK_FRAME_DEPTH)),
-    []
-  );
-  const baseGeometry = useMemo(
-    () => new THREE.BoxGeometry(RACK_BASE_WIDTH, RACK_BASE_HEIGHT, RACK_BASE_DEPTH),
-    []
-  );
-  const baseOutlineGeometry = useMemo(
-    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(RACK_BASE_WIDTH, RACK_BASE_HEIGHT, RACK_BASE_DEPTH)),
-    []
-  );
-  const topGeometry = useMemo(() => new THREE.BoxGeometry(0.78, 0.08, 1.12), []);
-  const sideRailGeometry = useMemo(() => new THREE.BoxGeometry(0.03, 2.04, 0.04), []);
+  const color = getLayerColor(rack, activeLayer);
+  const width = definition.dimensions.widthMm / 1000;
+  const depth = definition.dimensions.depthMm / 1000;
+  const height = definition.dimensions.heightMm / 1000;
 
-  useEffect(
-    () => () => {
-      frameGeometry.dispose();
-      baseGeometry.dispose();
-      baseOutlineGeometry.dispose();
-      topGeometry.dispose();
-      sideRailGeometry.dispose();
-    },
-    [baseGeometry, baseOutlineGeometry, frameGeometry, sideRailGeometry, topGeometry]
-  );
+  const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    onHover(rack.id);
+    document.body.style.cursor = "pointer";
+  };
 
-  return (
-    <group
-      position={[rack.positionX, RACK_CENTER_Y, rack.positionZ]}
-      rotation={[0, (rack.rotation * Math.PI) / 180, 0]}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect(rack.id);
-      }}
-    >
-      <mesh geometry={baseGeometry} position={[0, -1.05, 0]} receiveShadow>
-        <meshStandardMaterial
-          color={isSelected ? "#164e63" : tone.frame}
-          emissive={isSelected ? "#0f4c81" : tone.frame}
-          emissiveIntensity={isSelected ? 0.28 : 0.14}
-          transparent
-          opacity={isSelected ? 0.98 : 0.88}
-          metalness={0.18}
-          roughness={0.72}
-        />
-      </mesh>
-      <lineSegments geometry={baseOutlineGeometry} position={[0, -1.05, 0]}>
-        <lineBasicMaterial color={isSelected ? "#d7fbff" : tone.frame} />
-      </lineSegments>
-
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[RACK_BODY_WIDTH, RACK_BODY_HEIGHT, RACK_BODY_DEPTH]} />
-        <meshStandardMaterial
-          color={tone.fill}
-          transparent
-          opacity={isSelected ? 0.52 : 0.32}
-          metalness={0.2}
-          roughness={0.6}
-        />
-      </mesh>
-
-      <mesh geometry={topGeometry} position={[0, 1.01, 0]} castShadow receiveShadow>
-        <meshStandardMaterial
-          color={isSelected ? "#17314c" : "#101b2b"}
-          emissive={isSelected ? "#0f4c81" : "#000000"}
-          emissiveIntensity={isSelected ? 0.16 : 0}
-          metalness={0.24}
-          roughness={0.52}
-        />
-      </mesh>
-
-      {[
-        [-0.31, 0, -0.5],
-        [0.31, 0, -0.5],
-        [-0.31, 0, 0.5],
-        [0.31, 0, 0.5],
-      ].map(([x, y, z], index) => (
-        <mesh key={index} geometry={sideRailGeometry} position={[x, y, z]} castShadow>
-          <meshStandardMaterial
-            color={isSelected ? "#daf9ff" : tone.frame}
-            emissive={isSelected ? "#155e75" : "#000000"}
-            emissiveIntensity={isSelected ? 0.34 : 0}
-            metalness={0.48}
-            roughness={0.28}
-          />
-        </mesh>
-      ))}
-
-      <lineSegments geometry={frameGeometry}>
-        <lineBasicMaterial color={isSelected ? "#c7f9ff" : tone.frame} />
-      </lineSegments>
-
-      <mesh position={[0, 0, 0.52]}>
-        <planeGeometry args={[0.64, 1.92]} />
-        <meshStandardMaterial
-          color={isSelected ? "#12243a" : "#09121f"}
-          emissive={isSelected ? "#134a8d" : "#000000"}
-          emissiveIntensity={isSelected ? 0.22 : 0}
-          metalness={0.5}
-          roughness={0.2}
-        />
-      </mesh>
-
-      <RackDeviceMap rack={rack} isSelected={isSelected} />
-      <RackLabel rack={rack} isSelected={isSelected} />
-      <RackFloorLabel rack={rack} isSelected={isSelected} />
-    </group>
-  );
-});
-
-const ImportedRack = memo(function ImportedRack({
-  rack,
-  isSelected,
-  importedModel,
-  onSelect,
-}: {
-  rack: RackPlan;
-  isSelected: boolean;
-  importedModel: ImportedStepModel;
-  onSelect: (rackId: string) => void;
-}) {
-  const tone = getRackTone(rack.status);
-  const footprint = useMemo(() => new THREE.BoxGeometry(1.02, 0.08, 1.36), []);
-  const footprintOutline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 0.08, 1.36)), []);
-  const cage = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.86, 2.26, 1.26)), []);
-
-  useEffect(
-    () => () => {
-      footprint.dispose();
-      footprintOutline.dispose();
-      cage.dispose();
-    },
-    [cage, footprint, footprintOutline]
-  );
+  const handlePointerOut = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    onHover(null);
+    document.body.style.cursor = "default";
+  };
 
   return (
     <group
@@ -460,171 +386,345 @@ const ImportedRack = memo(function ImportedRack({
         event.stopPropagation();
         onSelect(rack.id);
       }}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
     >
-      <mesh geometry={footprint} position={[0, 0.04, 0]} receiveShadow>
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[Math.max(width, 0.55), Math.max(height, 1.6), Math.max(depth, 0.8)]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      <Suspense fallback={<ProceduralRackModel definition={definition} accent={color} />}>
+        {definition.source === "step" && definition.stepModel ? (
+          <StepRackModel model={definition.stepModel} />
+        ) : definition.assetUrl ? (
+          <GlbRackModel definition={definition} />
+        ) : (
+          <ProceduralRackModel definition={definition} accent={color} />
+        )}
+      </Suspense>
+
+      <mesh position={[0, 0.018, 0]} receiveShadow>
+        <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
         <meshStandardMaterial
-          color={isSelected ? "#0f3850" : tone.frame}
-          emissive={isSelected ? "#155e75" : tone.frame}
-          emissiveIntensity={isSelected ? 0.22 : 0.14}
+          color={color}
+          emissive={color}
+          emissiveIntensity={selected ? 0.3 : 0.12}
           transparent
-          opacity={isSelected ? 0.98 : 0.86}
-          metalness={0.18}
-          roughness={0.74}
+          opacity={selected ? 0.8 : 0.42}
+          roughness={0.75}
         />
       </mesh>
-      <lineSegments geometry={footprintOutline} position={[0, 0.04, 0]}>
-        <lineBasicMaterial color={isSelected ? "#dffcff" : tone.frame} />
-      </lineSegments>
 
-      <group position={[0, 0.02, 0]}>
-        <ImportedStepAssembly model={importedModel} />
-      </group>
+      <SelectionCage
+        dimensions={definition.dimensions}
+        color={color}
+        selected={selected}
+        hovered={hovered}
+      />
 
-      <group position={[0, 1.12, 0]}>
-        <lineSegments geometry={cage}>
-          <lineBasicMaterial color={isSelected ? "#e0fbff" : tone.frame} />
-        </lineSegments>
-      </group>
-
-      <RackLabel rack={rack} isSelected={isSelected} />
-      <RackFloorLabel rack={rack} isSelected={isSelected} />
+      {showLabel ? <RackSceneCard rack={rack} definition={definition} selected={selected} /> : null}
     </group>
   );
-});
+}
+
+function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; activeLayer: DataCenterLayer }) {
+  if (activeLayer === "network") {
+    return (
+      <group>
+        <mesh position={[0, 0.15, -5.3]}>
+          <boxGeometry args={[2.2, 0.3, 0.65]} />
+          <meshStandardMaterial color="#0e7490" emissive="#22d3ee" emissiveIntensity={0.35} />
+        </mesh>
+        {racks.map((rack) => (
+          <Line
+            key={rack.id}
+            points={[
+              [0, 0.22, -5.3],
+              [rack.positionX, 0.22, rack.positionZ],
+            ]}
+            color="#22d3ee"
+            lineWidth={1.2}
+            transparent
+            opacity={0.52}
+          />
+        ))}
+      </group>
+    );
+  }
+
+  if (activeLayer === "power") {
+    return (
+      <group>
+        <Line points={[[-6.4, 0.1, -4.15], [6.4, 0.1, -4.15]]} color="#f59e0b" lineWidth={2} />
+        <Line points={[[-6.4, 0.1, 4.15], [6.4, 0.1, 4.15]]} color="#60a5fa" lineWidth={2} />
+        {racks.map((rack) => {
+          const busZ = rack.positionZ < 0 ? -4.15 : 4.15;
+          return (
+            <Line
+              key={rack.id}
+              points={[
+                [rack.positionX, 0.1, busZ],
+                [rack.positionX, 0.1, rack.positionZ],
+              ]}
+              color={rack.positionZ < 0 ? "#f59e0b" : "#60a5fa"}
+              lineWidth={1.3}
+              transparent
+              opacity={0.72}
+            />
+          );
+        })}
+      </group>
+    );
+  }
+
+  if (activeLayer === "cooling") {
+    return (
+      <group>
+        {[-1.05, 1.05].map((z) => (
+          <mesh key={z} position={[0, 0.03, z]} receiveShadow>
+            <boxGeometry args={[13.5, 0.04, 1.55]} />
+            <meshStandardMaterial
+              color="#0284c7"
+              emissive="#0ea5e9"
+              emissiveIntensity={0.2}
+              transparent
+              opacity={0.34}
+            />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  return null;
+}
+
+function FacilityShell({ activeLayer }: { activeLayer: DataCenterLayer }) {
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[18, 13]} />
+        <meshStandardMaterial
+          color={activeLayer === "health" ? "#07100f" : "#060b12"}
+          roughness={0.95}
+          metalness={0.08}
+        />
+      </mesh>
+      <gridHelper args={[18, 36, "#1e5b78", "#102638"]} position={[0, 0.012, 0]} />
+
+      {[-6.7, 6.7].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          {[-3.6, -1.2, 1.2, 3.6].map((z) => (
+            <mesh key={z} position={[0, 0.62, z]} castShadow receiveShadow>
+              <boxGeometry args={[0.7, 1.24, 1.05]} />
+              <meshStandardMaterial color="#0d2535" metalness={0.4} roughness={0.48} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      <mesh position={[0, 1.7, -6.35]} receiveShadow>
+        <boxGeometry args={[18, 3.4, 0.12]} />
+        <meshStandardMaterial color="#06111c" metalness={0.18} roughness={0.82} />
+      </mesh>
+    </group>
+  );
+}
+
+function CameraRig({
+  racks,
+  selectedRackId,
+  preset,
+  requestId,
+}: {
+  racks: RackPlan[];
+  selectedRackId: string;
+  preset: CameraPreset;
+  requestId: number;
+}) {
+  const { camera } = useThree();
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const desiredPosition = useRef(new THREE.Vector3(10, 7, 11));
+  const desiredTarget = useRef(new THREE.Vector3(0, 0.8, 0));
+  const animating = useRef(false);
+
+  useEffect(() => {
+    const selected = racks.find((rack) => rack.id === selectedRackId);
+    if (preset === "top") {
+      desiredPosition.current.set(0.01, 15, 0.01);
+      desiredTarget.current.set(0, 0, 0);
+    } else if (preset === "front") {
+      desiredPosition.current.set(0, 4.2, 12.5);
+      desiredTarget.current.set(0, 1, 0);
+    } else if (preset === "focus" && selected) {
+      desiredPosition.current.set(selected.positionX + 3.5, 3.2, selected.positionZ + 4.3);
+      desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
+    } else {
+      desiredPosition.current.set(10, 7, 11);
+      desiredTarget.current.set(0, 0.8, 0);
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      camera.position.copy(desiredPosition.current);
+      controlsRef.current?.target.copy(desiredTarget.current);
+      controlsRef.current?.update();
+      animating.current = false;
+    } else {
+      animating.current = true;
+    }
+  }, [camera, preset, racks, requestId, selectedRackId]);
+
+  useFrame(() => {
+    if (!animating.current || !controlsRef.current) return;
+
+    camera.position.lerp(desiredPosition.current, 0.085);
+    controlsRef.current.target.lerp(desiredTarget.current, 0.1);
+    controlsRef.current.update();
+
+    if (
+      camera.position.distanceTo(desiredPosition.current) < 0.025 &&
+      controlsRef.current.target.distanceTo(desiredTarget.current) < 0.025
+    ) {
+      camera.position.copy(desiredPosition.current);
+      controlsRef.current.target.copy(desiredTarget.current);
+      animating.current = false;
+    }
+  });
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableDamping
+      dampingFactor={0.08}
+      enablePan
+      enableZoom
+      minDistance={2.6}
+      maxDistance={24}
+      maxPolarAngle={Math.PI / 2.02}
+      target={[0, 0.8, 0]}
+    />
+  );
+}
 
 function PlannerScene({
   racks,
+  models,
   selectedRackId,
-  importedModel,
+  activeLayer,
+  showLabels,
+  cameraPreset,
+  cameraRequestId,
   onSelectRack,
 }: DataCenter3DPlannerProps) {
+  const [hoveredRackId, setHoveredRackId] = useState<string | null>(null);
+
+  useEffect(
+    () => () => {
+      document.body.style.cursor = "default";
+    },
+    []
+  );
+
   return (
     <>
-      <color attach="background" args={["#08111d"]} />
-      <fog attach="fog" args={["#08111d", 14, 28]} />
-
-      <ambientLight intensity={0.72} />
-      <hemisphereLight intensity={0.48} color="#d7f6ff" groundColor="#08111d" />
+      <color attach="background" args={["#03070c"]} />
+      <fog attach="fog" args={["#03070c", 14, 28]} />
+      <ambientLight intensity={0.58} />
+      <hemisphereLight intensity={0.65} color="#c9f6ff" groundColor="#020409" />
       <directionalLight
         castShadow
-        intensity={1.2}
-        position={[8, 12, 5]}
+        intensity={1.35}
+        position={[7, 10, 6]}
         shadow-mapSize-width={1536}
         shadow-mapSize-height={1536}
       />
-      <pointLight intensity={0.34} position={[-7, 5, -6]} color="#4dd4ff" />
+      <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
+      <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[24, 24]} />
-        <meshStandardMaterial color="#0a1422" roughness={0.96} metalness={0.08} />
-      </mesh>
-
-      <gridHelper args={[24, 24, "#2b6cb0", "#122235"]} position={[0, 0.01, 0]} />
-
-      <Text
-        position={[-10.2, 0.04, -10.2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.22}
-        color="#4cc9f0"
-        anchorX="left"
-        anchorY="middle"
-        outlineWidth={0.008}
-        outlineColor="#03111d"
-      >
-        FRONT / 機櫃正面
-      </Text>
+      <FacilityShell activeLayer={activeLayer} />
+      <InfrastructureLayer racks={racks} activeLayer={activeLayer} />
 
       {racks.map((rack) => {
-        const isSelected = rack.id === selectedRackId;
-
-        if (isSelected && importedModel) {
-          return (
-            <ImportedRack
-              key={rack.id}
-              rack={rack}
-              isSelected={isSelected}
-              importedModel={importedModel}
-              onSelect={onSelectRack}
-            />
-          );
-        }
+        const definition = models[rack.modelId] ?? models["generic-42u"];
+        const health = getRackHealth(rack);
+        const selected = rack.id === selectedRackId;
+        const hovered = rack.id === hoveredRackId;
+        const showLabel = showLabels && (selected || hovered || health !== "healthy");
 
         return (
-          <RackShell
+          <RackVisual
             key={rack.id}
             rack={rack}
-            isSelected={isSelected}
+            definition={definition}
+            activeLayer={activeLayer}
+            selected={selected}
+            hovered={hovered}
+            showLabel={showLabel}
             onSelect={onSelectRack}
+            onHover={setHoveredRackId}
           />
         );
       })}
+
+      <CameraRig
+        racks={racks}
+        selectedRackId={selectedRackId}
+        preset={cameraPreset}
+        requestId={cameraRequestId}
+      />
     </>
   );
 }
 
-export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
-  const selectedRack = useMemo(
-    () => props.racks.find((rack) => rack.id === props.selectedRackId) ?? props.racks[0],
-    [props.racks, props.selectedRackId]
-  );
+function ModelLoadingOverlay() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
 
   return (
-    <div className="relative h-[640px] overflow-hidden rounded-[30px] border border-cyan-300/12 bg-[radial-gradient(circle_at_top,hsl(210_60%_18%),hsl(223_48%_8%)_68%)] shadow-[0_28px_80px_-56px_hsl(197_92%_55%/0.48)]">
-      <div className="pointer-events-none absolute left-4 top-4 z-10 flex flex-wrap items-center gap-2">
-        <div className="rounded-full border border-cyan-300/30 bg-slate-950/72 px-3 py-1 text-[11px] font-semibold text-cyan-100 backdrop-blur-md">
-          3D 機櫃總覽
+    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-[#02060b]/72 backdrop-blur-sm">
+      <div className="w-[260px] rounded-2xl border border-cyan-300/25 bg-[#07131f]/95 p-4 shadow-[0_24px_70px_-30px_rgba(34,211,238,0.75)]">
+        <div className="flex items-center justify-between text-xs font-semibold text-cyan-50">
+          <span>正在載入 3D 機櫃</span>
+          <span className="tabular-nums text-cyan-200">{Math.round(progress)}%</span>
         </div>
-        <div className="rounded-full border border-slate-300/12 bg-slate-950/72 px-3 py-1 text-[11px] text-slate-200 backdrop-blur-md">
-          色塊 = 已裝設備 / 外框 = 機櫃
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(90deg,#0ea5e9,#22d3ee,#34d399)] transition-[width] duration-300"
+            style={{ width: `${progress}%` }}
+          />
         </div>
-      </div>
-
-      <div className="pointer-events-none absolute bottom-4 left-4 z-10 rounded-3xl border border-slate-300/12 bg-slate-950/72 px-4 py-3 backdrop-blur-md">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Status Legend</div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-200">
-          {[
-            { color: "#18b8d9", label: "已配置" },
-            { color: "#f5c15d", label: "預留" },
-            { color: "#7dd3fc", label: "可用" },
-            { color: "#e879f9", label: "阻塞" },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-              <span>{item.label}</span>
-            </div>
+        <div className="mt-3 flex gap-1.5">
+          {[0, 1, 2, 3].map((index) => (
+            <span
+              key={index}
+              className="h-1.5 flex-1 animate-pulse rounded-full bg-cyan-300/30 motion-reduce:animate-none"
+              style={{ animationDelay: `${index * 120}ms` }}
+            />
           ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {selectedRack ? (
-        <div className="pointer-events-none absolute right-4 top-4 z-10 rounded-3xl border border-cyan-300/18 bg-slate-950/74 px-4 py-3 text-right backdrop-blur-md">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">目前選取</div>
-          <div className="mt-2 text-lg font-bold text-slate-50">{selectedRack.cabinet}</div>
-          <div className="mt-1 text-xs text-slate-300">
-            {getRackStatusLabel(selectedRack.status)} / {selectedRack.devices.length} 台設備
-          </div>
-          <div className="mt-1 text-xs text-slate-400">
-            X {selectedRack.positionX.toFixed(1)} / Z {selectedRack.positionZ.toFixed(1)} / {selectedRack.aisle}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-full border border-slate-300/12 bg-slate-950/72 px-4 py-2 text-xs text-slate-200 backdrop-blur-md">
-        拖曳旋轉 / 滾輪縮放 / 點機櫃看詳情
+export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
+  return (
+    <div className="relative h-full min-h-[460px] overflow-hidden bg-[#03070c]">
+      <ModelLoadingOverlay />
+      <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-white/12 bg-black/70 px-4 py-2 text-[11px] font-medium text-slate-300 shadow-xl backdrop-blur-xl sm:block">
+        左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選機櫃查看資料
       </div>
-
-      <Canvas shadows camera={{ position: [8.2, 6.8, 9.8], fov: 34 }} dpr={[1, 1.5]}>
+      <Canvas
+        shadows
+        dpr={[1, 1.5]}
+        camera={{ position: [10, 7, 11], fov: 36, near: 0.1, far: 80 }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+      >
         <Suspense fallback={null}>
           <PlannerScene {...props} />
-          <OrbitControls
-            makeDefault
-            enablePan
-            enableZoom
-            minDistance={5.5}
-            maxDistance={20}
-            maxPolarAngle={Math.PI / 2.08}
-            target={[0, 1.2, 0]}
-          />
         </Suspense>
       </Canvas>
     </div>
