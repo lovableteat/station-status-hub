@@ -2105,7 +2105,7 @@ export function ApiChatConsole({
           >
             <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-[#163653] bg-[#081C2D] p-5">
-                <div className={cn("flex", sidebarCollapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-3")}>
+                <div className={cn("flex", sidebarCollapsed ? "flex-col-reverse items-center gap-3" : "items-start justify-between gap-3")}>
                   <div className={cn("flex items-center gap-3", sidebarCollapsed && "flex-col gap-2 text-center")}>
                     <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
                       <Search className="h-5 w-5" />
@@ -2124,8 +2124,10 @@ export function ApiChatConsole({
                     onClick={() => setSidebarCollapsed((value) => !value)}
                     aria-label={sidebarCollapsed ? "展開資料查詢空間" : "收合資料查詢空間"}
                     className={cn(
-                      "shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] hover:text-white",
-                      sidebarCollapsed ? "h-12 w-12" : "h-10 w-10"
+                      "shrink-0 rounded-xl text-white hover:text-white",
+                      sidebarCollapsed
+                        ? "h-12 w-12 border border-emerald-300/30 bg-emerald-500 shadow-[0_12px_28px_-14px_rgba(16,185,129,0.9)] hover:bg-emerald-400"
+                        : "h-10 w-10 border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b]"
                     )}
                   >
                     {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
