@@ -2010,9 +2010,9 @@ export function ApiChatConsole({
       <>
         {workspaceDialogs}
         <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-blue-300/25 bg-[#111e32] shadow-[0_24px_70px_rgba(2,8,23,0.34)] lg:order-1">
+          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-blue-400/20 bg-[linear-gradient(180deg,#0c1526_0%,#0a1220_100%)] shadow-[0_24px_70px_rgba(2,8,23,0.42)] lg:order-1">
             <div className="flex h-full min-h-0 flex-col">
-              <div className="border-b border-blue-300/20 p-5">
+              <div className="border-b border-blue-400/16 bg-[linear-gradient(180deg,rgba(18,31,52,0.72),rgba(11,19,33,0.4))] p-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
                     <Search className="h-5 w-5" />
@@ -2036,14 +2036,14 @@ export function ApiChatConsole({
                   type="button"
                   variant="ghost"
                   onClick={openSavePromptDialog}
-                  className="mt-2 h-12 w-full justify-start rounded-xl border border-blue-300/30 bg-blue-400/10 px-4 text-base font-bold text-blue-100 hover:border-blue-300/60 hover:bg-blue-400/20 hover:text-white"
+                  className="mt-2 h-12 w-full justify-start rounded-xl border border-blue-400/22 bg-[linear-gradient(180deg,rgba(21,39,65,0.88),rgba(14,28,48,0.92))] px-4 text-base font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#183253] hover:text-white"
                 >
                   <Bookmark className="mr-2 h-5 w-5" />
                   新增共享提示詞
                 </Button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[linear-gradient(180deg,#0c1525_0%,#0a1220_100%)] px-4 py-4">
                 <section aria-labelledby="conversation-history-title">
                   <div className="mb-2 flex items-center justify-between gap-3 px-1">
                     <div className="flex items-center gap-2">
@@ -2056,7 +2056,7 @@ export function ApiChatConsole({
                   </div>
                   <div className="space-y-1.5">
                     {savedConversations.length === 0 ? (
-                      <p className="rounded-xl bg-slate-950/20 px-3 py-4 text-sm leading-6 text-slate-400">
+                      <p className="rounded-xl border border-white/5 bg-[#101b2d] px-3 py-4 text-sm leading-6 text-slate-400">
                         對話會自動保留在這裡
                       </p>
                     ) : (
@@ -2132,8 +2132,8 @@ export function ApiChatConsole({
                 ) : null}
               </div>
 
-              <div className="border-t border-blue-300/20 p-4">
-                <div className="rounded-xl border border-blue-300/20 bg-slate-950/30 px-4 py-3">
+              <div className="border-t border-blue-400/16 bg-[linear-gradient(180deg,rgba(9,16,28,0.3),rgba(7,12,22,0.72))] p-4">
+                <div className="rounded-xl border border-blue-400/18 bg-[linear-gradient(180deg,#101a2c_0%,#0b1423_100%)] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-bold text-slate-300">目前使用模型</p>
                     <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
