@@ -14,6 +14,12 @@ export type DeploymentStepStatus = "done" | "active" | "pending";
 
 export type MaintenanceStatus = "open" | "in-progress" | "done";
 
+export type DataCenterLayer = "overview" | "health" | "power" | "network" | "cooling";
+
+export type CameraPreset = "overview" | "top" | "front" | "focus";
+
+export type ModelUpAxis = "x" | "y" | "z";
+
 export interface RackDevice {
   id: string;
   name: string;
@@ -54,8 +60,11 @@ export interface RackPlan {
   row: string;
   cabinet: string;
   status: RackStatus;
+  modelId: string;
   powerKw: number;
   coolingKw: number;
+  temperatureC: number;
+  utilizationPercent: number;
   uplinks: number;
   owner: string;
   positionX: number;
@@ -105,12 +114,33 @@ export interface ImportedStepDimensions {
   heightMm: number;
 }
 
+export interface ImportedStepBounds {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
 export interface ImportedStepModel {
   id: string;
   fileName: string;
   importedAt: string;
   sourceUnit: "millimeter";
+  upAxis: ModelUpAxis;
+  bounds: ImportedStepBounds;
   parts: ImportedStepPart[];
   dimensions: ImportedStepDimensions;
   calibratedDimensions: ImportedStepDimensions;
+}
+
+export interface RackModelDefinition {
+  id: string;
+  manufacturer: string;
+  name: string;
+  revision: string;
+  source: "builtin-glb" | "uploaded-glb" | "step" | "procedural";
+  dimensions: ImportedStepDimensions;
+  upAxis: ModelUpAxis;
+  assetUrl?: string;
+  sourceFileName?: string;
+  stepModel?: ImportedStepModel;
+  isCalibrated: boolean;
 }
