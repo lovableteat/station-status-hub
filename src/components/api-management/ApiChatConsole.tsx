@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
   Bookmark,
   Bot,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   History,
   ImageIcon,
   KeyRound,
+  LibraryBig,
   MessageSquareText,
   Paperclip,
   Plus,
@@ -18,7 +20,6 @@ import {
   Sparkles,
   Trash2,
   TableProperties,
-  Upload,
   X,
   User,
 } from "lucide-react";
@@ -150,6 +151,26 @@ const QUERY_STARTERS = [
     title: "擷取圖片文字",
     description: "保留表格結構、料號與關鍵代碼",
     prompt: DEFAULT_IMAGE_OCR_PROMPT,
+  },
+] as const;
+const SHARED_PROMPT_TEMPLATES = [
+  {
+    title: "每日異常摘要",
+    description: "整理異常與處理順序",
+    content:
+      "請整理我提供的機台資料，依嚴重程度列出異常站點、影響範圍、可能原因與建議處理順序，最後用表格摘要。",
+  },
+  {
+    title: "附件差異比對",
+    description: "比對 Excel、PDF 或清單",
+    content:
+      "請比對我上傳的附件，整理欄位差異、缺漏資料、重複項目與需要人工確認的內容，並清楚標示資料來源。",
+  },
+  {
+    title: "文件重點擷取",
+    description: "擷取圖片與文件內容",
+    content:
+      "請擷取我上傳圖片或文件中的文字、表格、料號與關鍵代碼，保留原本欄位關係，最後用繁體中文整理重點。",
   },
 ] as const;
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
@@ -1076,7 +1097,7 @@ export function ApiChatConsole({
       }
 
       setSavePromptDialogOpen(false);
-      toast.success("共享提示詞已儲存");
+      toast.success("已儲存到左側共享提示詞庫，點選名稱即可調整並套用");
     })();
   };
 
@@ -1170,7 +1191,7 @@ export function ApiChatConsole({
     }
   };
 
-  const handleImageUpload = async (files: FileList | null) => {
+  const handleFileUpload = async (files: FileList | null) => {
     if (!files?.length) return;
     await appendUploadedFiles(Array.from(files));
   };
@@ -1232,41 +1253,41 @@ export function ApiChatConsole({
   const workspaceDialogs = (
     <>
       <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
-        <DialogContent className="max-w-xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-2xl overflow-y-auto border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">建立新對話</DialogTitle>
-            <DialogDescription className="text-sm leading-6 text-slate-400">
+            <DialogTitle className="text-3xl font-black tracking-tight text-white">建立新對話</DialogTitle>
+            <DialogDescription className="text-base leading-7 text-slate-300">
               這個動作會把目前視窗清空。若你已經有聊天內容或輸入中的文字，系統會先自動存到左側的對話紀錄。
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[22px] border border-cyan-400/14 bg-cyan-400/8 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-100/80">
+            <div className="rounded-[20px] border border-cyan-300/30 bg-cyan-400/12 px-5 py-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">
                 Messages
               </p>
-              <p className="mt-2 text-2xl font-black text-slate-50">{messages.length}</p>
-              <p className="mt-1 text-xs text-slate-400">目前已經建立的對話訊息。</p>
+              <p className="mt-2 text-3xl font-black text-white">{messages.length}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">目前已經建立的對話訊息。</p>
             </div>
-            <div className="rounded-[22px] border border-violet-300/14 bg-violet-400/8 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-100/80">
+            <div className="rounded-[20px] border border-violet-300/30 bg-violet-400/12 px-5 py-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-100">
                 Draft
               </p>
-              <p className="mt-2 text-2xl font-black text-slate-50">
+              <p className="mt-2 text-3xl font-black text-white">
                 {draftMessage.trim().length ? "已填寫" : "空白"}
               </p>
-              <p className="mt-1 text-xs text-slate-400">輸入框尚未送出的內容狀態。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">輸入框尚未送出的內容狀態。</p>
             </div>
-            <div className="rounded-[22px] border border-amber-300/14 bg-amber-400/8 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-100/80">
+            <div className="rounded-[20px] border border-amber-300/30 bg-amber-400/12 px-5 py-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-100">
                 Attachments
               </p>
-              <p className="mt-2 text-2xl font-black text-slate-50">{uploadedAttachments.length}</p>
-              <p className="mt-1 text-xs text-slate-400">尚未送出的附件會直接清空。</p>
+              <p className="mt-2 text-3xl font-black text-white">{uploadedAttachments.length}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">尚未送出的附件會直接清空。</p>
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-white/8 bg-white/5 px-4 py-4 text-sm leading-6 text-slate-300">
+          <div className="rounded-[20px] border border-blue-300/25 bg-blue-500/10 px-5 py-4 text-base leading-7 text-blue-50">
             {hasConversationContent
               ? "按下確認後會切到全新對話；文字與聊天紀錄會保留到左側清單，未送出的附件會直接移除。"
               : "目前沒有未儲存內容，按下確認後會直接建立乾淨的新對話。"}
@@ -1277,14 +1298,14 @@ export function ApiChatConsole({
               type="button"
               variant="outline"
               onClick={() => setNewConversationDialogOpen(false)}
-              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+              className="h-12 rounded-xl border-slate-500/50 bg-slate-800/70 px-6 text-base font-bold text-slate-100 hover:bg-slate-700 hover:text-white"
             >
               取消
             </Button>
             <Button
               type="button"
               onClick={resetConversation}
-              className="h-11 rounded-2xl bg-[linear-gradient(135deg,#22d3ee_0%,#7c3aed_100%)] px-5 font-bold text-white shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:brightness-110"
+              className="h-12 rounded-xl bg-[linear-gradient(135deg,#38bdf8_0%,#6366f1_100%)] px-6 text-base font-bold text-white shadow-[0_18px_44px_-22px_rgba(56,189,248,0.65)] hover:brightness-110"
             >
               確認建立
             </Button>
@@ -1293,47 +1314,95 @@ export function ApiChatConsole({
       </Dialog>
 
       <Dialog open={savePromptDialogOpen} onOpenChange={setSavePromptDialogOpen}>
-        <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
-          <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">儲存共享提示詞</DialogTitle>
-            <DialogDescription className="text-sm leading-6 text-slate-400">
-              在視窗裡先確認標題與內容，再存進共享提示詞庫。其他使用者重新開頁後也能直接使用。
+        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
+          <DialogHeader className="shrink-0 space-y-3">
+            <DialogTitle className="flex items-center gap-3 text-3xl font-black tracking-tight text-white">
+              <LibraryBig className="h-7 w-7 text-blue-300" />
+              建立共享提示詞
+            </DialogTitle>
+            <DialogDescription className="text-base leading-7 text-slate-300">
+              把常用查詢方式存進團隊提示詞庫。儲存後，所有使用者都能從左側「共享提示詞庫」點選並套用。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">提示詞名稱</Label>
-              <Input
-                data-ai-surface="true"
-                value={promptDialogTitle}
-                onChange={(event) => setPromptDialogTitle(event.target.value)}
-                placeholder="例如：每日異常摘要"
-                className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-              />
+          <div className="min-h-0 space-y-5 overflow-y-auto pr-2">
+            <div className="grid gap-3 rounded-[20px] border border-blue-300/25 bg-blue-500/10 p-4 sm:grid-cols-3">
+            {[
+              ["1", "填寫", "輸入名稱與完整指令"],
+              ["2", "儲存", "加入左側共享提示詞庫"],
+              ["3", "套用", "點選名稱後放入輸入框"],
+            ].map(([step, title, description]) => (
+              <div key={step} className="flex items-start gap-3 rounded-2xl bg-slate-950/25 px-4 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-400 text-sm font-black text-slate-950">
+                  {step}
+                </span>
+                <div>
+                  <p className="text-base font-bold text-white">{title}</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-300">{description}</p>
+                </div>
+              </div>
+            ))}
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">提示詞內容</Label>
-              <Textarea
-                data-ai-surface="true"
-                value={promptDialogContent}
-                onChange={(event) => setPromptDialogContent(event.target.value)}
-                placeholder="請直接輸入要保存的提示詞內容"
-                className="min-h-[220px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-              />
-              <p className="text-xs text-slate-500">
-                建議把常用格式、回覆要求或固定流程寫完整，之後所有人都能直接套用。
-              </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-300" />
+                <p className="text-base font-black text-white">不知道怎麼寫？從範本開始</p>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {SHARED_PROMPT_TEMPLATES.map((template) => (
+                  <button
+                    key={template.title}
+                    type="button"
+                    onClick={() => {
+                      setPromptDialogTitle(template.title);
+                      setPromptDialogContent(template.content);
+                    }}
+                    className="rounded-2xl border border-slate-500/50 bg-slate-950/25 px-4 py-3 text-left transition-colors hover:border-blue-300/60 hover:bg-blue-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                  >
+                    <span className="text-base font-black text-white">{template.title}</span>
+                    <span className="mt-1 block text-sm leading-5 text-slate-300">
+                      {template.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-base font-bold text-white">提示詞名稱</Label>
+                <Input
+                  data-ai-surface="true"
+                  value={promptDialogTitle}
+                  onChange={(event) => setPromptDialogTitle(event.target.value)}
+                  placeholder="例如：每日異常摘要"
+                  className="h-[52px] rounded-xl border-slate-500/60 bg-[#0b1628] px-4 text-base text-white placeholder:text-slate-400 hover:border-blue-300/60 focus:ring-2 focus:ring-blue-400/30"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base font-bold text-white">提示詞內容</Label>
+                <Textarea
+                  data-ai-surface="true"
+                  value={promptDialogContent}
+                  onChange={(event) => setPromptDialogContent(event.target.value)}
+                  placeholder="請直接輸入要保存的提示詞內容"
+                  className="min-h-[220px] rounded-[18px] border-slate-500/60 bg-[#0b1628] px-4 py-3 text-base leading-7 text-white placeholder:text-slate-400 hover:border-blue-300/60 focus:ring-2 focus:ring-blue-400/30"
+                />
+                <p className="text-sm leading-6 text-slate-300">
+                  建議寫清楚資料範圍、輸出格式與判斷規則，例如：「整理異常站點，依嚴重度排序並列出建議處置」。
+                </p>
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-blue-300/20 pt-4 sm:justify-end">
             <Button
               type="button"
               variant="outline"
               onClick={() => setSavePromptDialogOpen(false)}
-              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+              className="h-12 rounded-xl border-slate-500/50 bg-slate-800/70 px-6 text-base font-bold text-slate-100 hover:bg-slate-700 hover:text-white"
             >
               取消
             </Button>
@@ -1341,52 +1410,59 @@ export function ApiChatConsole({
               type="button"
               onClick={saveCurrentPrompt}
               disabled={!promptDialogContent.trim()}
-              className="h-11 rounded-2xl bg-cyan-500 px-5 font-bold text-slate-950 shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Bookmark className="mr-2 h-4 w-4" />
-              儲存共享提示詞
+              儲存到提示詞庫
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={libraryApplyDialogOpen} onOpenChange={setLibraryApplyDialogOpen}>
-        <DialogContent className="max-w-2xl border-cyan-400/20 bg-[linear-gradient(180deg,#0f1729_0%,#09111d_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.46)]">
+        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="space-y-3">
-            <DialogTitle className="text-2xl font-black text-slate-50">調整提示詞後套用</DialogTitle>
-            <DialogDescription className="text-sm leading-6 text-slate-400">
-              先在這裡修改內容，再套用到 AI 輸入框。套用後不會自動送出，你可以繼續補字再問。
+            <DialogTitle className="flex items-center gap-3 text-3xl font-black tracking-tight text-white">
+              <LibraryBig className="h-7 w-7 text-blue-300" />
+              套用共享提示詞
+            </DialogTitle>
+            <DialogDescription className="text-base leading-7 text-slate-300">
+              確認內容後放入 AI 輸入框。系統不會自動送出，你仍可補上站點、日期或附件說明。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">名稱</Label>
-              <Input
-                value={libraryApplyTitle}
-                onChange={(event) => setLibraryApplyTitle(event.target.value)}
-                placeholder="提示詞名稱"
-                className="h-12 rounded-2xl border-cyan-400/14 bg-[#09111f] text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
-              />
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-2">
+            <div className="rounded-[18px] border border-blue-300/25 bg-blue-500/10 px-5 py-4">
+              <p className="text-sm font-bold text-blue-200">已選擇提示詞</p>
+              <p className="mt-1 text-xl font-black text-white">{libraryApplyTitle || "未命名提示詞"}</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-200">要套用給 AI 的內容</Label>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <Label className="text-base font-bold text-white">本次要套用的內容</Label>
+                <span className="text-sm text-slate-300">可先修改，不會覆蓋共享版本</span>
+              </div>
               <Textarea
+                data-ai-surface="true"
                 value={libraryApplyContent}
                 onChange={(event) => setLibraryApplyContent(event.target.value)}
                 placeholder="先在這裡調整內容，再套用到輸入框"
-                className="min-h-[240px] rounded-[24px] border-cyan-400/14 bg-[#09111f] text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/22 focus:ring-2 focus:ring-cyan-400/18"
+                className="min-h-[260px] rounded-[18px] border-slate-500/60 bg-[#0b1628] px-4 py-3 text-base leading-7 text-white placeholder:text-slate-400 hover:border-blue-300/60 focus:ring-2 focus:ring-blue-400/30"
               />
+            </div>
+
+            <div className="flex items-start gap-3 rounded-[18px] border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              套用後會回到主畫面並把內容放進輸入框；確認資料範圍後，再按送出即可。
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-blue-300/20 pt-4 sm:justify-end">
             <Button
               type="button"
               variant="outline"
               onClick={() => setLibraryApplyDialogOpen(false)}
-              className="h-11 rounded-2xl border-white/10 bg-white/5 px-5 text-slate-200 hover:bg-white/10 hover:text-white"
+              className="h-12 rounded-xl border-slate-500/50 bg-slate-800/70 px-6 text-base font-bold text-slate-100 hover:bg-slate-700 hover:text-white"
             >
               取消
             </Button>
@@ -1394,9 +1470,10 @@ export function ApiChatConsole({
               type="button"
               onClick={applyLibraryItemToDraft}
               disabled={!libraryApplyContent.trim()}
-              className="h-11 rounded-2xl bg-cyan-500 px-5 font-bold text-slate-950 shadow-[0_18px_44px_-28px_rgba(34,211,238,0.55)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              套用到 AI 輸入框
+              放入 AI 輸入框（不送出）
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1408,7 +1485,7 @@ export function ApiChatConsole({
     <div
       ref={chatConsoleRef}
       className={cn(
-        "flex flex-col overflow-hidden border border-slate-700/60 bg-[linear-gradient(180deg,#111a2a_0%,#0a111d_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.32)]",
+        "flex flex-col overflow-hidden border border-blue-300/25 bg-[linear-gradient(180deg,#17243a_0%,#0e192a_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.38)]",
         isChatOnly
           ? "h-[calc(100dvh-285px)] min-h-[520px] rounded-[28px] md:h-[calc(100dvh-210px)] lg:h-full"
           : "min-h-[720px] rounded-[34px] p-5"
@@ -1416,23 +1493,23 @@ export function ApiChatConsole({
     >
       <div
         className={cn(
-          "flex shrink-0 flex-col gap-4 border-b border-slate-700/60 lg:flex-row lg:items-center lg:justify-between",
-          isChatOnly ? "bg-[#111b2c]/80 px-5 py-4 md:px-6" : "pb-5"
+          "flex shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
+          isChatOnly ? "bg-[#18263d] px-5 py-4 md:px-6" : "pb-5"
         )}
       >
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-400/20 bg-blue-500/10 text-blue-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <MessageSquareText className="h-5 w-5" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100 shadow-[0_12px_28px_-18px_rgba(96,165,250,0.8)]">
+            <MessageSquareText className="h-5.5 w-5.5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-lg font-bold tracking-[-0.02em] text-slate-50">AI 資料助理</p>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/8 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
+              <p className="text-xl font-black tracking-[-0.02em] text-white">AI 資料助理</p>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/35 bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-100">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 已就緒
               </span>
             </div>
-            <p className="mt-0.5 text-sm leading-6 text-slate-400">
+            <p className="mt-1 text-base leading-7 text-slate-300">
               查詢、比對、摘要與圖片文字擷取，都會保留本次對話脈絡。
             </p>
           </div>
@@ -1445,7 +1522,7 @@ export function ApiChatConsole({
                 value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
                 onValueChange={(value) => onSelectApiKey?.(value)}
               >
-                <SelectTrigger aria-label="選擇 AI 模型" className="h-11 rounded-xl border-slate-600/70 bg-slate-900/60 px-3 text-left text-slate-100 shadow-none focus:ring-2 focus:ring-blue-400/30">
+                <SelectTrigger aria-label="選擇 AI 模型" className="h-12 rounded-xl border-blue-300/30 bg-slate-950/45 px-4 text-left text-base font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40">
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -1470,9 +1547,9 @@ export function ApiChatConsole({
               </Button>
             </div>
           ) : null}
-          <div className="hidden rounded-xl border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-right shadow-none 2xl:block">
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">目前模型</p>
-            <p className="mt-1 text-sm font-semibold text-slate-100">{provider || "gemini"} / {model || "-"}</p>
+          <div className="hidden rounded-xl border border-blue-300/25 bg-slate-950/40 px-4 py-2.5 text-right shadow-none 2xl:block">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-200">目前模型</p>
+            <p className="mt-1 text-base font-bold text-white">{provider || "gemini"} / {model || "-"}</p>
           </div>
         </div>
       </div>
@@ -1484,26 +1561,26 @@ export function ApiChatConsole({
 
         <div
           className={cn(
-            "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.055),transparent_34%),#0a121f]",
+            "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(96,165,250,0.1),transparent_38%),#0e192a]",
             isChatOnly ? "px-4 py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
           <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
               isChatOnly ? (
-                <div className="flex min-h-[300px] flex-1 items-center justify-center px-1 py-5 md:px-6 2xl:py-2">
+                <div className="flex min-h-[300px] flex-1 items-center justify-center px-1 py-5 md:px-6 2xl:py-0">
                   <div className="w-full max-w-3xl text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-400/25 bg-[linear-gradient(145deg,rgba(59,130,246,0.22),rgba(14,165,233,0.08))] text-blue-100 shadow-[0_18px_45px_-22px_rgba(59,130,246,0.65)] 2xl:h-12 2xl:w-12 2xl:rounded-2xl">
-                      <Search className="h-6 w-6 2xl:h-5 2xl:w-5" />
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-400/25 bg-[linear-gradient(145deg,rgba(59,130,246,0.22),rgba(14,165,233,0.08))] text-blue-100 shadow-[0_18px_45px_-22px_rgba(59,130,246,0.65)] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
+                      <Search className="h-6 w-6 2xl:h-4.5 2xl:w-4.5" />
                     </div>
-                    <p className="mt-5 text-2xl font-bold tracking-[-0.035em] text-slate-50 md:text-3xl 2xl:mt-3">
+                    <p className="mt-5 text-3xl font-black tracking-[-0.035em] text-white md:text-4xl 2xl:mt-1">
                       今天想查什麼？
                     </p>
-                    <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-400">
+                    <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-300 2xl:mt-1">
                       直接描述你的問題，或從常用任務開始。你也可以貼上截圖與文件一起分析。
                     </p>
 
-                    <div className="mt-7 grid gap-3 text-left md:grid-cols-3 2xl:mt-4">
+                    <div className="mt-7 grid gap-3 text-left md:grid-cols-3 2xl:mt-2">
                       {QUERY_STARTERS.map((starter) => {
                         const StarterIcon =
                           starter.icon === "table"
@@ -1517,15 +1594,15 @@ export function ApiChatConsole({
                             key={starter.title}
                             type="button"
                             onClick={() => setDraftMessage(starter.prompt)}
-                            className="group min-h-[116px] rounded-2xl border border-slate-700/70 bg-slate-900/45 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-blue-500/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 2xl:min-h-[96px] 2xl:p-3"
+                            className="group min-h-[124px] rounded-2xl border border-blue-300/30 bg-[#14233a] p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_-28px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300/60 hover:bg-[#192b47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 2xl:min-h-[76px] 2xl:px-2.5 2xl:py-2"
                           >
                             <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-400/15 bg-blue-500/10 text-blue-200 transition-colors group-hover:bg-blue-500/20">
-                                <StarterIcon className="h-4 w-4" />
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-400/15 text-blue-100 transition-colors group-hover:bg-blue-400/25 2xl:h-8 2xl:w-8 2xl:rounded-lg">
+                                <StarterIcon className="h-5 w-5 2xl:h-4 2xl:w-4" />
                               </span>
-                              <span className="text-sm font-bold text-slate-100">{starter.title}</span>
+                              <span className="text-base font-black text-white">{starter.title}</span>
                             </div>
-                            <span className="mt-3 block text-xs leading-5 text-slate-400 2xl:mt-2">
+                            <span className="mt-3 block text-sm leading-6 text-slate-300 2xl:mt-1 2xl:leading-5">
                               {starter.description}
                             </span>
                           </button>
@@ -1582,18 +1659,18 @@ export function ApiChatConsole({
             multiple
             className="hidden"
             onChange={(event) => {
-              void handleImageUpload(event.currentTarget.files);
+              void handleFileUpload(event.currentTarget.files);
               event.currentTarget.value = "";
             }}
           />
 
           <div className="mb-2.5 hidden flex-wrap items-center justify-between gap-2 sm:flex">
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+            <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-300">
               <span>Ctrl+V 貼上圖片</span>
               <span className="h-3 w-px bg-slate-700" />
               <span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
               <span className="h-3 w-px bg-slate-700" />
-              <span>單檔 15MB 內</span>
+              <span>PDF / PPT / Excel / Word / 圖片</span>
             </div>
             {!isChatOnly ? (
               <Button
@@ -1610,7 +1687,7 @@ export function ApiChatConsole({
               type="button"
               variant="outline"
               onClick={requestResetConversation}
-              className="h-9 rounded-xl border-slate-700/80 bg-transparent px-3 text-xs font-semibold text-slate-400 transition-all duration-200 hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
+              className="h-10 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               清空對話
@@ -1639,7 +1716,7 @@ export function ApiChatConsole({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-slate-100">{attachment.name}</p>
                     <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                      <span>{attachment.kind === "image" ? "圖片" : "檔案"}</span>
+                      <span>{attachment.kind === "image" ? "圖片" : getFileExtension(attachment.name).toUpperCase() || "檔案"}</span>
                       <span>{formatFileSize(attachment.size)}</span>
                     </div>
                   </div>
@@ -1657,17 +1734,18 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[20px] border border-slate-600/80 bg-[linear-gradient(180deg,#162238_0%,#111b2d_100%)] px-3 py-3 shadow-[0_18px_45px_-26px_rgba(37,99,235,0.55),inset_0_1px_0_rgba(255,255,255,0.045)] focus-within:border-blue-400/55 focus-within:ring-2 focus-within:ring-blue-500/10">
+          <div className="rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] px-3 py-3 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] focus-within:border-blue-300/70 focus-within:ring-2 focus-within:ring-blue-400/20">
             <div className="flex items-end gap-2 md:gap-3">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                aria-label="新增附件"
-                className="h-11 w-11 shrink-0 rounded-xl border border-slate-600/80 bg-slate-800/70 p-0 text-slate-200 shadow-none hover:border-blue-400/40 hover:bg-blue-500/15 hover:text-blue-100 disabled:opacity-50"
+                aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
+                className="h-12 w-12 shrink-0 rounded-xl border border-blue-300/35 bg-blue-400/15 p-0 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:w-auto sm:px-4"
               >
-                <Plus className="h-5 w-5" />
+                <Paperclip className="h-5 w-5" />
+                <span className="ml-2 hidden text-sm font-bold sm:inline">上傳檔案</span>
               </Button>
 
               <div className="min-w-0 flex-1">
@@ -1677,15 +1755,18 @@ export function ApiChatConsole({
                   onChange={(event) => setDraftMessage(event.target.value)}
                   aria-label="輸入查詢內容"
                   placeholder="輸入問題、貼上資料，或描述你想整理的內容..."
-                  className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-50 shadow-none placeholder:text-slate-300/85 focus-visible:ring-0"
+                  className="min-h-[76px] border-0 bg-transparent px-0 py-1 text-[17px] leading-7 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0"
                 />
-                <div className="mt-1 hidden text-[11px] text-slate-500 sm:block">
-                  回覆可能有誤，重要資料請再次確認。
+                <div className="mt-1 text-xs leading-5 text-slate-300 sm:text-sm sm:leading-6">
+                  <span className="sm:hidden">PDF / PPT / Excel / 圖片，單檔 15MB</span>
+                  <span className="hidden sm:inline">
+                    支援 PDF、PPT/PPTX、Excel/XLSX、Word、CSV 與圖片，單檔上限 15MB。
+                  </span>
                 </div>
               </div>
 
               <div className="flex shrink-0 items-center justify-end gap-2">
-                <div className="hidden max-w-[180px] truncate rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-300 shadow-none sm:block">
+                <div className="hidden max-w-[200px] truncate rounded-lg border border-blue-300/25 bg-slate-950/45 px-3 py-2 text-sm font-bold text-slate-100 shadow-none sm:block">
                   {model || "Gemini"}
                 </div>
                 <Button
@@ -1709,24 +1790,24 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-slate-700/60 bg-[#0c1422] shadow-[0_24px_70px_rgba(2,8,23,0.28)] lg:order-1">
+        <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-blue-300/25 bg-[#111e32] shadow-[0_24px_70px_rgba(2,8,23,0.34)] lg:order-1">
             <div className="flex h-full min-h-0 flex-col">
-              <div className="border-b border-slate-700/60 p-4">
+              <div className="border-b border-blue-300/20 p-5">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[13px] border border-blue-400/20 bg-blue-500/10 text-blue-200">
-                    <Search className="h-4.5 w-4.5" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
+                    <Search className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-50">資料查詢空間</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">AI KNOWLEDGE WORKSPACE</p>
+                    <p className="text-xl font-black text-white">資料查詢空間</p>
+                    <p className="mt-1 text-xs font-bold tracking-wide text-blue-200">AI KNOWLEDGE WORKSPACE</p>
                   </div>
                 </div>
 
                 <Button
                   type="button"
                   onClick={requestResetConversation}
-                  className="mt-4 h-11 w-full justify-start rounded-xl bg-blue-500 px-3 font-bold text-white shadow-[0_12px_28px_-16px_rgba(59,130,246,0.9)] hover:bg-blue-400"
+                  className="mt-5 h-12 w-full justify-start rounded-xl bg-blue-500 px-4 text-base font-black text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   建立新對話
@@ -1736,27 +1817,27 @@ export function ApiChatConsole({
                   type="button"
                   variant="ghost"
                   onClick={openSavePromptDialog}
-                  className="mt-2 h-10 w-full justify-start rounded-xl px-3 text-sm font-medium text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                  className="mt-2 h-12 w-full justify-start rounded-xl border border-blue-300/30 bg-blue-400/10 px-4 text-base font-bold text-blue-100 hover:border-blue-300/60 hover:bg-blue-400/20 hover:text-white"
                 >
-                  <Bookmark className="mr-2 h-4 w-4" />
-                  儲存為共享提示詞
+                  <Bookmark className="mr-2 h-5 w-5" />
+                  新增共享提示詞
                 </Button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-4">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
                 <section aria-labelledby="conversation-history-title">
                   <div className="mb-2 flex items-center justify-between gap-3 px-1">
                     <div className="flex items-center gap-2">
-                      <History className="h-3.5 w-3.5 text-slate-500" />
-                      <p id="conversation-history-title" className="text-xs font-bold text-slate-300">
+                      <History className="h-4 w-4 text-blue-200" />
+                      <p id="conversation-history-title" className="text-sm font-black text-slate-100">
                         最近對話
                       </p>
                     </div>
-                    <span className="text-[11px] tabular-nums text-slate-500">{savedConversations.length}</span>
+                    <span className="text-xs font-bold tabular-nums text-slate-300">{savedConversations.length}</span>
                   </div>
                   <div className="space-y-1.5">
                     {savedConversations.length === 0 ? (
-                      <p className="rounded-xl px-3 py-4 text-xs leading-5 text-slate-600">
+                      <p className="rounded-xl bg-slate-950/20 px-3 py-4 text-sm leading-6 text-slate-400">
                         對話會自動保留在這裡
                       </p>
                     ) : (
@@ -1767,8 +1848,8 @@ export function ApiChatConsole({
                             onClick={() => restoreConversation(item)}
                             className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
                           >
-                            <p className="truncate text-sm font-medium text-slate-200">{item.title}</p>
-                            <p className="mt-1 truncate text-[11px] text-slate-500">
+                            <p className="truncate text-base font-bold text-slate-100">{item.title}</p>
+                            <p className="mt-1 truncate text-xs text-slate-300">
                               {formatSavedItemTime(item.savedAt)} · {item.model}
                             </p>
                           </button>
@@ -1786,37 +1867,77 @@ export function ApiChatConsole({
                   </div>
                 </section>
 
-                <section aria-labelledby="shared-prompts-title">
-                  <div className="mb-2 flex items-center justify-between gap-3 px-1">
-                    <div className="flex items-center gap-2">
-                      <Bookmark className="h-3.5 w-3.5 text-slate-500" />
-                      <p id="shared-prompts-title" className="text-xs font-bold text-slate-300">
-                        共享提示詞
-                      </p>
+                <section
+                  aria-labelledby="shared-prompts-title"
+                  className="rounded-[20px] border border-blue-300/30 bg-blue-400/[0.08] p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <LibraryBig className="mt-0.5 h-5 w-5 shrink-0 text-blue-200" />
+                      <div>
+                        <p id="shared-prompts-title" className="text-base font-black text-white">
+                          共享提示詞庫
+                        </p>
+                        <p className="mt-1 text-sm leading-5 text-slate-300">
+                          點選提示詞，調整後套用到輸入框
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-[11px] tabular-nums text-slate-500">{savedPrompts.length}</span>
+                    <span className="rounded-full border border-blue-300/25 bg-blue-400/10 px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
+                      {savedPrompts.length}
+                    </span>
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="mt-3 rounded-2xl border border-slate-600/50 bg-slate-950/25 p-3">
+                    <p className="text-sm font-black text-blue-100">怎麼使用？</p>
+                    <div className="mt-2 space-y-2">
+                      {[
+                        ["1", "按上方「新增共享提示詞」建立常用指令"],
+                        ["2", "從提示詞庫點選要使用的名稱"],
+                        ["3", "確認內容後放入輸入框，再按送出"],
+                      ].map(([step, description]) => (
+                        <div key={step} className="flex items-start gap-2.5 text-sm leading-5 text-slate-300">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-400 text-xs font-black text-slate-950">
+                            {step}
+                          </span>
+                          <span>{description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
                     {savedPrompts.length === 0 ? (
-                      <p className="rounded-xl px-3 py-4 text-xs leading-5 text-slate-600">
-                        儲存常用指令，讓團隊快速套用
-                      </p>
+                      <div className="rounded-2xl border border-dashed border-blue-300/30 bg-blue-400/[0.06] p-3 text-center">
+                        <p className="text-sm leading-6 text-slate-300">目前還沒有提示詞</p>
+                        <Button
+                          type="button"
+                          onClick={openSavePromptDialog}
+                          className="mt-2 h-11 w-full rounded-xl bg-blue-400 text-sm font-black text-slate-950 hover:bg-blue-300"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          建立第一個提示詞
+                        </Button>
+                      </div>
                     ) : (
                       savedPrompts.map((item) => (
-                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-transparent hover:border-slate-700/70 hover:bg-slate-800/55">
+                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-slate-600/50 bg-slate-950/20 hover:border-blue-300/50 hover:bg-blue-400/10">
                           <button
                             type="button"
                             onClick={() => openLibraryApplyDialog(item)}
-                            className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+                            className="min-w-0 flex-1 rounded-xl px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                           >
-                            <p className="truncate text-sm font-medium text-slate-200">{item.title}</p>
-                            <p className="mt-1 text-[11px] text-slate-500">{formatSavedItemTime(item.savedAt)}</p>
+                            <p className="truncate text-base font-black text-white">{item.title}</p>
+                            <span className="mt-1.5 flex items-center gap-1 text-sm font-bold text-blue-200">
+                              調整並套用
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </span>
                           </button>
                           <button
                             type="button"
                             onClick={() => removeSavedPrompt(item.id)}
                             aria-label={`刪除共享提示詞：${item.title}`}
-                            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+                            className="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 opacity-100 hover:bg-rose-500/15 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -1827,14 +1948,14 @@ export function ApiChatConsole({
                 </section>
               </div>
 
-              <div className="border-t border-slate-700/60 p-3">
-                <div className="rounded-xl bg-slate-900/55 px-3 py-3">
+              <div className="border-t border-blue-300/20 p-4">
+                <div className="rounded-xl border border-blue-300/20 bg-slate-950/30 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-semibold text-slate-500">目前使用模型</p>
+                    <p className="text-sm font-bold text-slate-300">目前使用模型</p>
                     <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
                   </div>
-                  <p className="mt-1.5 truncate text-xs font-bold text-slate-200">{activeKeyLabel}</p>
-                  <p className="mt-1 truncate text-[11px] text-slate-500">
+                  <p className="mt-1.5 truncate text-base font-black text-white">{activeKeyLabel}</p>
+                  <p className="mt-1 truncate text-sm text-slate-300">
                     {provider || "-"} / {model || "-"}
                   </p>
                 </div>
