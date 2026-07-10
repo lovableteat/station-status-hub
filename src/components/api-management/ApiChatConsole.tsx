@@ -1972,7 +1972,7 @@ export function ApiChatConsole({
                 </Button>
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 rounded-[16px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <Textarea
                   data-ai-surface="true"
                   value={draftMessage}
@@ -1999,12 +1999,6 @@ export function ApiChatConsole({
               </div>
             </div>
 
-            <div className="mt-2 text-xs leading-5 text-slate-300 sm:text-sm sm:leading-6">
-              <span className="sm:hidden">PDF / PPT / Excel / 圖片，單檔 15MB</span>
-              <span className="hidden sm:inline">
-                支援 PDF、PPT/PPTX、Excel/XLSX、Word、CSV 與圖片，單檔上限 15MB。
-              </span>
-            </div>
           </div>
         </div>
       </div>
