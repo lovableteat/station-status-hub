@@ -1,18 +1,46 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
-  Bot,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Box,
+  Boxes,
   Cable,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleGauge,
   Cpu,
-  Gauge,
+  Eye,
+  EyeOff,
+  FileBox,
+  Focus,
   HardDrive,
-  MapPinned,
+  Layers3,
+  LayoutDashboard,
+  Menu,
+  Move3d,
   Network,
-  RefreshCw,
-  Ruler,
+  PackagePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  PencilRuler,
+  Plus,
+  RotateCw,
   Search,
   Server,
   ShieldCheck,
+  Snowflake,
+  Thermometer,
   Upload,
+  Wifi,
   Wrench,
   Zap,
   type LucideIcon,
@@ -20,1411 +48,1404 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
+import {
+  BUILT_IN_RACK_MODELS,
+  INITIAL_SITE_PLANS,
+  createRackFromModel,
+} from "./dataCenterSeed";
 import { importStepModel } from "./stepImport";
 import type {
-  DeploymentStepStatus,
+  CameraPreset,
+  DataCenterLayer,
   ImportedStepDimensions,
-  ImportedStepModel,
-  MaintenanceStatus,
   RackDevice,
   RackDeviceHealth,
-  RackDeviceType,
+  RackModelDefinition,
   RackPlan,
   RackStatus,
   SitePlan,
 } from "./dataCenterTypes";
 
-const DEFAULT_RACK_DIMENSIONS: ImportedStepDimensions = {
-  widthMm: 600,
-  depthMm: 1200,
-  heightMm: 2200,
+const LAYOUT_STORAGE_KEY = "data-center-digital-twin-layout-v2";
+const MAX_MODEL_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_BROWSER_STEP_BYTES = 25 * 1024 * 1024;
+
+const STATUS_LABELS: Record<RackStatus, string> = {
+  allocated: "運行中",
+  reserved: "預留",
+  available: "可配置",
+  blocked: "受阻",
 };
 
-function device(input: RackDevice): RackDevice {
-  return input;
-}
+const HEALTH_LABELS: Record<RackDeviceHealth, string> = {
+  healthy: "正常",
+  warning: "注意",
+  critical: "異常",
+  offline: "離線",
+};
 
-function rack(input: RackPlan): RackPlan {
-  return input;
-}
+const HEALTH_ORDER: Record<RackDeviceHealth, number> = {
+  healthy: 0,
+  warning: 1,
+  offline: 2,
+  critical: 3,
+};
 
-const sitePlans: SitePlan[] = [
-  {
-    id: "frankfurt-dc1",
-    label: "Frankfurt DC-1",
-    country: "Germany",
-    phase: "Pre-deployment",
-    targetDate: "2026-09",
-    powerBudgetKw: 84,
-    coolingBudgetKw: 76,
-    networkReady: "Dual 100G uplink reserved / OOB route verified",
-    siteManager: "NOC Germany",
-    checklist: [
-      { id: "power", label: "A / B PDU 供電確認", done: true },
-      { id: "uplink", label: "TOR uplink 路徑確認", done: true },
-      { id: "hvac", label: "冷通道間隙確認", done: false },
-      { id: "mpls", label: "跨站 MPLS 開通", done: false },
-    ],
-    racks: [
-      rack({
-        id: "fra-a01",
-        zone: "Zone A",
-        row: "A",
-        cabinet: "CAB-A01",
-        status: "allocated",
-        powerKw: 18,
-        coolingKw: 15,
-        uplinks: 4,
-        owner: "GB300 Batch-1",
-        positionX: -3.2,
-        positionZ: -2.4,
-        rotation: 0,
-        capacityU: 42,
-        coordinates: "Hall A / Row A / Position 01",
-        aisle: "Cold aisle",
-        sop: ["先裝 TOR", "確認 PDU A/B", "建立 Redfish 基線"],
-        deploymentSteps: [
-          { id: "fra-a01-step-1", title: "機櫃到位", owner: "Facility", status: "done" },
-          { id: "fra-a01-step-2", title: "PDU A/B 接線完成", owner: "Power", status: "done" },
-          { id: "fra-a01-step-3", title: "TOR uplink 驗證", owner: "Network", status: "active" },
-          { id: "fra-a01-step-4", title: "Compute Tray 上架", owner: "Platform", status: "pending" },
-        ],
-        maintenance: [
-          {
-            id: "fra-a01-maint-1",
-            title: "CT-02 風扇轉速觀察中",
-            owner: "Field Engineer",
-            status: "in-progress",
-            updatedAt: "2026/07/05 09:20",
-            detail: "首次上電後，持續觀察 tray 溫度與風扇曲線。",
-          },
-        ],
-        devices: [
-          device({
-            id: "fra-a01-tor",
-            name: "TOR Switch A01",
-            type: "tor-switch",
-            health: "healthy",
-            slotStart: 40,
-            slotSpan: 2,
-            serial: "TOR-FRA-A01-01",
-            assetTag: "NW-TOR-0001",
-            model: "Mellanox SN4700",
-            role: "Leaf / Uplink",
-            network: "4x100G / fabric-a",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "tor-a01-oob",
-            redfish: "Enabled",
-            note: "前方上層網路設備",
-          }),
-          device({
-            id: "fra-a01-sw",
-            name: "Switch Tray A01",
-            type: "switch-tray",
-            health: "healthy",
-            slotStart: 37,
-            slotSpan: 2,
-            serial: "SWT-FRA-A01-01",
-            assetTag: "NW-SWT-0031",
-            model: "Switch Tray Rev.C",
-            role: "Fanout",
-            network: "24x25G",
-            powerFeed: "PDU-A",
-            bmc: "swt-a01-01",
-            redfish: "Enabled",
-            note: "上層 switch tray",
-          }),
-          device({
-            id: "fra-a01-ct1",
-            name: "Compute Tray CT-01",
-            type: "compute-tray",
-            health: "healthy",
-            slotStart: 28,
-            slotSpan: 4,
-            serial: "CT-FRA-A01-01",
-            assetTag: "CMP-8801",
-            model: "GB300 Compute Tray",
-            role: "GPU group 01",
-            network: "2x100G + BMC",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "ct-a01-01-bmc",
-            redfish: "Enabled",
-            note: "主運算模組",
-          }),
-          device({
-            id: "fra-a01-ct2",
-            name: "Compute Tray CT-02",
-            type: "compute-tray",
-            health: "warning",
-            slotStart: 23,
-            slotSpan: 4,
-            serial: "CT-FRA-A01-02",
-            assetTag: "CMP-8802",
-            model: "GB300 Compute Tray",
-            role: "GPU group 02",
-            network: "2x100G + BMC",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "ct-a01-02-bmc",
-            redfish: "Enabled",
-            note: "需觀察散熱表現",
-          }),
-          device({
-            id: "fra-a01-psu-a",
-            name: "PSU Feed A",
-            type: "psu",
-            health: "healthy",
-            slotStart: 4,
-            slotSpan: 2,
-            serial: "PSU-FRA-A01-A",
-            assetTag: "PWR-1101",
-            model: "3.2kW PSU",
-            role: "Power path A",
-            network: "N/A",
-            powerFeed: "PDU-A",
-            bmc: "rack-a01-pwr-a",
-            redfish: "Enabled",
-            note: "左側電源路徑",
-          }),
-          device({
-            id: "fra-a01-psu-b",
-            name: "PSU Feed B",
-            type: "psu",
-            health: "healthy",
-            slotStart: 1,
-            slotSpan: 2,
-            serial: "PSU-FRA-A01-B",
-            assetTag: "PWR-1102",
-            model: "3.2kW PSU",
-            role: "Power path B",
-            network: "N/A",
-            powerFeed: "PDU-B",
-            bmc: "rack-a01-pwr-b",
-            redfish: "Enabled",
-            note: "右側電源路徑",
-          }),
-        ],
-      }),
-      rack({
-        id: "fra-a02",
-        zone: "Zone A",
-        row: "A",
-        cabinet: "CAB-A02",
-        status: "reserved",
-        powerKw: 16,
-        coolingKw: 13,
-        uplinks: 4,
-        owner: "GB300 Batch-2",
-        positionX: -1.2,
-        positionZ: -2.4,
-        rotation: 0,
-        capacityU: 42,
-        coordinates: "Hall A / Row A / Position 02",
-        aisle: "Cold aisle",
-        sop: ["保留 uplink", "準備 Tray 標籤"],
-        deploymentSteps: [
-          { id: "fra-a02-step-1", title: "電力預留", owner: "Power", status: "active" },
-          { id: "fra-a02-step-2", title: "Compute Tray 等待到貨", owner: "Platform", status: "pending" },
-        ],
-        maintenance: [],
-        devices: [
-          device({
-            id: "fra-a02-tor",
-            name: "TOR Switch A02",
-            type: "tor-switch",
-            health: "healthy",
-            slotStart: 40,
-            slotSpan: 2,
-            serial: "TOR-FRA-A02-01",
-            assetTag: "NW-TOR-0002",
-            model: "Mellanox SN4700",
-            role: "Leaf / Uplink",
-            network: "4x100G / fabric-b",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "tor-a02-oob",
-            redfish: "Enabled",
-            note: "預留 TOR",
-          }),
-        ],
-      }),
-      rack({
-        id: "fra-b01",
-        zone: "Zone B",
-        row: "B",
-        cabinet: "CAB-B01",
-        status: "available",
-        powerKw: 8,
-        coolingKw: 5,
-        uplinks: 2,
-        owner: "Standby / Service",
-        positionX: -3.2,
-        positionZ: 0.4,
-        rotation: 90,
-        capacityU: 42,
-        coordinates: "Hall A / Row B / Position 01",
-        aisle: "Service aisle",
-        sop: ["確認備援狀態", "維持 OOB 可達"],
-        deploymentSteps: [{ id: "fra-b01-step-1", title: "Standby rack ready", owner: "Service", status: "done" }],
-        maintenance: [
-          {
-            id: "fra-b01-maint-1",
-            title: "季度保養完成",
-            owner: "Service Team",
-            status: "done",
-            updatedAt: "2026/07/03 16:30",
-            detail: "巡檢完成，無異常。",
-          },
-        ],
-        devices: [
-          device({
-            id: "fra-b01-mgmt",
-            name: "Management Switch",
-            type: "management",
-            health: "healthy",
-            slotStart: 38,
-            slotSpan: 1,
-            serial: "MGMT-FRA-B01-01",
-            assetTag: "MGMT-8821",
-            model: "OOB Switch 24P",
-            role: "OOB staging",
-            network: "1G OOB",
-            powerFeed: "PDU-A",
-            bmc: "mgmt-b01",
-            redfish: "N/A",
-            note: "管理網交換器",
-          }),
-        ],
-      }),
-      rack({
-        id: "fra-c01",
-        zone: "Zone C",
-        row: "C",
-        cabinet: "CAB-C01",
-        status: "blocked",
-        powerKw: 0,
-        coolingKw: 0,
-        uplinks: 0,
-        owner: "Awaiting HVAC clearance",
-        positionX: -1.2,
-        positionZ: 2.6,
-        rotation: 180,
-        capacityU: 42,
-        coordinates: "Hall A / Row C / Position 01",
-        aisle: "Hot aisle",
-        sop: ["待空調放行前不可部署設備"],
-        deploymentSteps: [
-          { id: "fra-c01-step-1", title: "HVAC clearance", owner: "Facility", status: "active" },
-          { id: "fra-c01-step-2", title: "Grounding re-check", owner: "Facility", status: "pending" },
-        ],
-        maintenance: [
-          {
-            id: "fra-c01-maint-1",
-            title: "機櫃待現場放行",
-            owner: "Facility",
-            status: "open",
-            updatedAt: "2026/07/05 10:05",
-            detail: "冷通道與地板孔位尚未完成複驗。",
-          },
-        ],
-        devices: [],
-      }),
-    ],
-  },
-  {
-    id: "phoenix-dc2",
-    label: "Phoenix DC-2",
-    country: "United States",
-    phase: "Pilot live",
-    targetDate: "2026-08",
-    powerBudgetKw: 96,
-    coolingBudgetKw: 88,
-    networkReady: "Dual 400G live / OOB active",
-    siteManager: "US Infra Ops",
-    checklist: [
-      { id: "feed", label: "A / B feed verified", done: true },
-      { id: "fabric", label: "Fabric ready", done: true },
-      { id: "runbook", label: "Runbook published", done: true },
-      { id: "spare", label: "Spare tray stock pending", done: false },
-    ],
-    racks: [
-      rack({
-        id: "phx-d11",
-        zone: "Zone D",
-        row: "D",
-        cabinet: "CAB-D11",
-        status: "allocated",
-        powerKw: 20,
-        coolingKw: 17,
-        uplinks: 4,
-        owner: "Inference / Serving",
-        positionX: 2.8,
-        positionZ: -1.6,
-        rotation: 0,
-        capacityU: 42,
-        coordinates: "Hall B / Row D / Position 11",
-        aisle: "Cold aisle",
-        sop: ["Serving rack baseline complete", "同步 BMC inventory"],
-        deploymentSteps: [
-          { id: "phx-d11-step-1", title: "Pilot rack live", owner: "Platform", status: "done" },
-          { id: "phx-d11-step-2", title: "BMC inventory sync", owner: "Platform", status: "active" },
-        ],
-        maintenance: [
-          {
-            id: "phx-d11-maint-1",
-            title: "Switch tray fan RPM review",
-            owner: "Service Team",
-            status: "open",
-            updatedAt: "2026/07/05 07:48",
-            detail: "需對比 golden rack 風扇曲線。",
-          },
-        ],
-        devices: [
-          device({
-            id: "phx-d11-tor",
-            name: "TOR Switch D11",
-            type: "tor-switch",
-            health: "healthy",
-            slotStart: 40,
-            slotSpan: 2,
-            serial: "TOR-PHX-D11-01",
-            assetTag: "NW-TOR-0101",
-            model: "Mellanox SN5600",
-            role: "Leaf / Uplink",
-            network: "8x100G / serving",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "tor-d11",
-            redfish: "Enabled",
-            note: "正式線上 TOR",
-          }),
-          device({
-            id: "phx-d11-ct1",
-            name: "Compute Tray CT-11",
-            type: "compute-tray",
-            health: "healthy",
-            slotStart: 28,
-            slotSpan: 4,
-            serial: "CT-PHX-D11-11",
-            assetTag: "CMP-9811",
-            model: "GB300 Compute Tray",
-            role: "Serving node 11",
-            network: "2x100G + BMC",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "ct-d11-11-bmc",
-            redfish: "Enabled",
-            note: "正式線上運算節點",
-          }),
-          device({
-            id: "phx-d11-ct2",
-            name: "Compute Tray CT-12",
-            type: "compute-tray",
-            health: "critical",
-            slotStart: 23,
-            slotSpan: 4,
-            serial: "CT-PHX-D11-12",
-            assetTag: "CMP-9812",
-            model: "GB300 Compute Tray",
-            role: "Serving node 12",
-            network: "2x100G + BMC",
-            powerFeed: "PDU-A / PDU-B",
-            bmc: "ct-d11-12-bmc",
-            redfish: "Enabled",
-            note: "GPU issue under review",
-          }),
-        ],
-      }),
-    ],
-  },
+const LAYER_OPTIONS: Array<{
+  id: DataCenterLayer;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+}> = [
+  { id: "overview", label: "營運總覽", description: "機櫃配置與狀態", icon: LayoutDashboard, color: "#38bdf8" },
+  { id: "health", label: "健康狀態", description: "異常、警告與離線", icon: Activity, color: "#34d399" },
+  { id: "power", label: "電力路徑", description: "PDU A/B 與負載", icon: Zap, color: "#fbbf24" },
+  { id: "network", label: "網路拓撲", description: "Fabric 與 uplink", icon: Network, color: "#22d3ee" },
+  { id: "cooling", label: "冷卻分布", description: "冷通道與溫度", icon: Snowflake, color: "#60a5fa" },
 ];
 
-function getRackStatusLabel(status: RackStatus) {
-  switch (status) {
-    case "allocated":
-      return "已配置";
-    case "reserved":
-      return "預留";
-    case "available":
-      return "可用";
-    case "blocked":
-      return "阻塞";
-    default:
-      return status;
-  }
-}
+function readInitialSites() {
+  if (typeof window === "undefined") return INITIAL_SITE_PLANS;
 
-function getRackStatusTone(status: RackStatus) {
-  switch (status) {
-    case "allocated":
-      return "border-emerald-300/25 bg-emerald-400/10 text-emerald-100";
-    case "reserved":
-      return "border-amber-300/25 bg-amber-400/10 text-amber-100";
-    case "available":
-      return "border-sky-300/25 bg-sky-400/10 text-sky-100";
-    case "blocked":
-      return "border-rose-300/25 bg-rose-400/10 text-rose-100";
-    default:
-      return "border-border bg-card text-foreground";
-  }
-}
-
-function getDeviceTypeLabel(type: RackDeviceType) {
-  switch (type) {
-    case "compute-tray":
-      return "Compute Tray";
-    case "switch-tray":
-      return "Switch Tray";
-    case "tor-switch":
-      return "TOR Switch";
-    case "psu":
-      return "PSU";
-    case "management":
-      return "Management";
-    case "storage-tray":
-      return "Storage Tray";
-    default:
-      return type;
-  }
-}
-
-function getDeviceTypeIcon(type: RackDeviceType): LucideIcon {
-  switch (type) {
-    case "compute-tray":
-      return Cpu;
-    case "switch-tray":
-    case "tor-switch":
-    case "management":
-      return Network;
-    case "psu":
-      return Zap;
-    case "storage-tray":
-      return HardDrive;
-    default:
-      return Server;
-  }
-}
-
-function getDeviceHealthLabel(health: RackDeviceHealth) {
-  switch (health) {
-    case "healthy":
-      return "正常";
-    case "warning":
-      return "注意";
-    case "critical":
-      return "異常";
-    case "offline":
-      return "離線";
-    default:
-      return health;
-  }
-}
-
-function getDeviceTone(health: RackDeviceHealth) {
-  switch (health) {
-    case "healthy":
-      return "border-emerald-300/20 bg-emerald-400/10";
-    case "warning":
-      return "border-amber-300/20 bg-amber-400/10";
-    case "critical":
-      return "border-rose-300/20 bg-rose-400/10";
-    case "offline":
-      return "border-slate-400/20 bg-slate-500/10";
-    default:
-      return "border-border bg-card";
-  }
-}
-
-function getStepTone(status: DeploymentStepStatus) {
-  switch (status) {
-    case "done":
-      return "border-emerald-300/20 bg-emerald-400/10 text-emerald-50";
-    case "active":
-      return "border-sky-300/20 bg-sky-400/10 text-sky-50";
-    case "pending":
-      return "border-border bg-background/45 text-muted-foreground";
-    default:
-      return "border-border bg-background/45 text-muted-foreground";
-  }
-}
-
-function getStepLabel(status: DeploymentStepStatus) {
-  switch (status) {
-    case "done":
-      return "已完成";
-    case "active":
-      return "進行中";
-    case "pending":
-      return "待處理";
-    default:
-      return status;
-  }
-}
-
-function getMaintenanceTone(status: MaintenanceStatus) {
-  switch (status) {
-    case "done":
-      return "border-violet-300/20 bg-violet-400/10";
-    case "in-progress":
-      return "border-amber-300/20 bg-amber-400/10";
-    case "open":
-      return "border-slate-400/20 bg-slate-500/10";
-    default:
-      return "border-border bg-background/45";
-  }
-}
-
-function getMaintenanceLabel(status: MaintenanceStatus) {
-  switch (status) {
-    case "done":
-      return "已完成";
-    case "in-progress":
-      return "處理中";
-    case "open":
-      return "無狀態";
-    default:
-      return status;
-  }
-}
-
-function getSlotLabel(device: RackDevice) {
-  const slotEnd = device.slotStart + device.slotSpan - 1;
-  return device.slotSpan === 1 ? `U${device.slotStart}` : `U${device.slotStart}-U${slotEnd}`;
-}
-
-function getSiteReadiness(checklist: SitePlan["checklist"]) {
-  if (!checklist.length) {
-    return 0;
-  }
-
-  const doneCount = checklist.filter((item) => item.done).length;
-  return Math.round((doneCount / checklist.length) * 100);
-}
-
-function formatDimensionLabel(dimensions: ImportedStepDimensions) {
-  return `${Math.round(dimensions.widthMm)} x ${Math.round(dimensions.depthMm)} x ${Math.round(dimensions.heightMm)} mm`;
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card className="rounded-[24px] border border-primary/15 bg-[linear-gradient(180deg,hsl(223_26%_16%),hsl(224_24%_13%))]">
-      <CardContent className="flex items-start justify-between gap-4 p-5">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/75">{label}</div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{value}</div>
-          <div className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</div>
-        </div>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function DeploymentPlanningCenter() {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedSiteId, setSelectedSiteId] = useState(sitePlans[0].id);
-  const [selectedRackId, setSelectedRackId] = useState(sitePlans[0].racks[0].id);
-  const [selectedDeviceId, setSelectedDeviceId] = useState(sitePlans[0].racks[0].devices[0]?.id ?? "");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [importedModel, setImportedModel] = useState<ImportedStepModel | null>(null);
-  const [isImportingModel, setIsImportingModel] = useState(false);
-  const [targetDimensions, setTargetDimensions] = useState<ImportedStepDimensions>(DEFAULT_RACK_DIMENSIONS);
-  const [importError, setImportError] = useState("");
-
-  const selectedSite = useMemo(
-    () => sitePlans.find((site) => site.id === selectedSiteId) ?? sitePlans[0],
-    [selectedSiteId]
-  );
-
-  useEffect(() => {
-    const nextRack = selectedSite.racks.find((currentRack) => currentRack.id === selectedRackId);
-    if (!nextRack) {
-      setSelectedRackId(selectedSite.racks[0]?.id ?? "");
-    }
-  }, [selectedRackId, selectedSite]);
-
-  const selectedRack = useMemo(
-    () => selectedSite.racks.find((currentRack) => currentRack.id === selectedRackId) ?? selectedSite.racks[0],
-    [selectedRackId, selectedSite]
-  );
-
-  useEffect(() => {
-    const hasSelectedDevice = selectedRack.devices.some((currentDevice) => currentDevice.id === selectedDeviceId);
-    if (!hasSelectedDevice) {
-      setSelectedDeviceId(selectedRack.devices[0]?.id ?? "");
-    }
-  }, [selectedDeviceId, selectedRack]);
-
-  const selectedDevice = useMemo(
-    () => selectedRack.devices.find((currentDevice) => currentDevice.id === selectedDeviceId) ?? selectedRack.devices[0],
-    [selectedDeviceId, selectedRack]
-  );
-
-  const readinessPercent = useMemo(() => getSiteReadiness(selectedSite.checklist), [selectedSite.checklist]);
-  const totalDevices = useMemo(() => selectedSite.racks.reduce((sum, currentRack) => sum + currentRack.devices.length, 0), [selectedSite.racks]);
-  const activeAlerts = useMemo(
-    () => selectedSite.racks.flatMap((currentRack) => currentRack.devices).filter((currentDevice) => currentDevice.health !== "healthy").length,
-    [selectedSite.racks]
-  );
-  const plannedPower = useMemo(() => selectedSite.racks.reduce((sum, currentRack) => sum + currentRack.powerKw, 0), [selectedSite.racks]);
-
-  const deployedRacks = selectedSite.racks.filter((currentRack) => currentRack.status === "allocated").length;
-
-  const searchResults = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
-    if (!keyword) {
-      return [];
-    }
-
-    return selectedSite.racks.flatMap((currentRack) => {
-      const rackMatch =
-        currentRack.cabinet.toLowerCase().includes(keyword) ||
-        currentRack.owner.toLowerCase().includes(keyword) ||
-        currentRack.coordinates.toLowerCase().includes(keyword);
-
-      const deviceMatches = currentRack.devices.filter((currentDevice) =>
-        [
-          currentDevice.name,
-          currentDevice.serial,
-          currentDevice.assetTag,
-          currentDevice.model,
-          currentDevice.role,
-          currentDevice.bmc,
-          currentDevice.redfish,
-          getSlotLabel(currentDevice),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(keyword)
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return INITIAL_SITE_PLANS;
+    const parsed = JSON.parse(raw) as SitePlan[];
+    const valid =
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(
+        (site) =>
+          Array.isArray(site.racks) &&
+          site.racks.every(
+            (rack) =>
+              typeof rack.modelId === "string" &&
+              typeof rack.temperatureC === "number" &&
+              typeof rack.utilizationPercent === "number"
+          )
       );
 
-      return [
-        ...(rackMatch
-          ? [
-              {
-                id: `rack-${currentRack.id}`,
-                kind: "rack" as const,
-                rackId: currentRack.id,
-                deviceId: undefined,
-                title: currentRack.cabinet,
-                subtitle: `${currentRack.zone} / Row ${currentRack.row} / ${currentRack.owner}`,
-                detail: currentRack.coordinates,
-              },
-            ]
-          : []),
-        ...deviceMatches.map((currentDevice) => ({
-          id: `device-${currentDevice.id}`,
-          kind: "device" as const,
-          rackId: currentRack.id,
-          deviceId: currentDevice.id,
-          title: currentDevice.name,
-          subtitle: `${currentRack.cabinet} / ${getSlotLabel(currentDevice)} / ${getDeviceTypeLabel(currentDevice.type)}`,
-          detail: `${currentDevice.assetTag} / ${currentDevice.serial}`,
-        })),
-      ];
-    });
-  }, [searchTerm, selectedSite.racks]);
+    if (!valid) return INITIAL_SITE_PLANS;
 
-  const sortedDevices = useMemo(
-    () =>
-      [...selectedRack.devices].sort((left, right) => {
-        const leftTop = left.slotStart + left.slotSpan - 1;
-        const rightTop = right.slotStart + right.slotSpan - 1;
-        return rightTop - leftTop;
-      }),
-    [selectedRack.devices]
+    return parsed.map((site) => ({
+      ...site,
+      racks: site.racks.map((rack) => ({
+        ...rack,
+        modelId: BUILT_IN_RACK_MODELS[rack.modelId] ? rack.modelId : "generic-42u",
+      })),
+    }));
+  } catch {
+    return INITIAL_SITE_PLANS;
+  }
+}
+
+function getRackHealth(rack: RackPlan): RackDeviceHealth {
+  return rack.devices.reduce<RackDeviceHealth>((worst, device) => {
+    return HEALTH_ORDER[device.health] > HEALTH_ORDER[worst] ? device.health : worst;
+  }, "healthy");
+}
+
+function getHealthTone(health: RackDeviceHealth) {
+  const tones: Record<RackDeviceHealth, string> = {
+    healthy: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100",
+    warning: "border-amber-300/30 bg-amber-400/12 text-amber-100",
+    critical: "border-rose-300/35 bg-rose-400/14 text-rose-100",
+    offline: "border-slate-300/20 bg-slate-400/10 text-slate-200",
+  };
+  return tones[health];
+}
+
+function getStatusTone(status: RackStatus) {
+  const tones: Record<RackStatus, string> = {
+    allocated: "border-cyan-300/25 bg-cyan-400/10 text-cyan-100",
+    reserved: "border-amber-300/25 bg-amber-400/10 text-amber-100",
+    available: "border-blue-300/25 bg-blue-400/10 text-blue-100",
+    blocked: "border-rose-300/30 bg-rose-400/12 text-rose-100",
+  };
+  return tones[status];
+}
+
+function formatDimensions(dimensions: ImportedStepDimensions) {
+  return `${dimensions.widthMm.toLocaleString()} × ${dimensions.depthMm.toLocaleString()} × ${dimensions.heightMm.toLocaleString()} mm`;
+}
+
+function getDeviceIcon(type: RackDevice["type"]): LucideIcon {
+  const icons: Record<RackDevice["type"], LucideIcon> = {
+    "compute-tray": Cpu,
+    "switch-tray": Network,
+    "tor-switch": Wifi,
+    psu: Zap,
+    management: CircleGauge,
+    "storage-tray": HardDrive,
+  };
+  return icons[type];
+}
+
+function IconTooltipButton({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+  className,
+}: {
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          onClick={onClick}
+          className={cn(
+            "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+            active
+              ? "border-cyan-300/45 bg-cyan-400/18 text-cyan-50 shadow-[0_12px_30px_-18px_rgba(34,211,238,0.95)]"
+              : "border-white/12 bg-white/[0.045] text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-400/10 hover:text-white",
+            className
+          )}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="border-white/10 bg-[#07131f] text-slate-100">
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
+}
 
-  const handleRackSelect = (rackId: string) => {
-    const nextRack = selectedSite.racks.find((currentRack) => currentRack.id === rackId);
-    setSelectedRackId(rackId);
-    setSelectedDeviceId(nextRack?.devices[0]?.id ?? "");
-  };
+interface SceneNavigatorProps {
+  sites: SitePlan[];
+  selectedSiteId: string;
+  onSiteChange: (siteId: string) => void;
+  racks: RackPlan[];
+  models: Record<string, RackModelDefinition>;
+  selectedRackId: string;
+  onRackSelect: (rackId: string) => void;
+  activeLayer: DataCenterLayer;
+  onLayerChange: (layer: DataCenterLayer) => void;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
 
-  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+function SceneNavigator({
+  sites,
+  selectedSiteId,
+  onSiteChange,
+  racks,
+  models,
+  selectedRackId,
+  onRackSelect,
+  activeLayer,
+  onLayerChange,
+  searchTerm,
+  onSearchChange,
+  collapsed = false,
+  onToggleCollapse,
+}: SceneNavigatorProps) {
+  const filteredRacks = racks.filter((rack) => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return true;
+    const model = models[rack.modelId];
+    return [rack.cabinet, rack.owner, rack.zone, rack.row, model?.manufacturer, model?.name]
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
 
-    if (!file) {
-      return;
-    }
-
-    const lowerName = file.name.toLowerCase();
-    if (!lowerName.endsWith(".stp") && !lowerName.endsWith(".step")) {
-      setImportError("目前只接受 .STP 或 .STEP 檔案。");
-      toast({
-        title: "檔案格式不支援",
-        description: "請匯入 .STP 或 .STEP 的 3D 模型檔案。",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setIsImportingModel(true);
-      setImportError("");
-      const model = await importStepModel(file);
-      setImportedModel(model);
-      setTargetDimensions(model.dimensions);
-      toast({
-        title: "3D 模型匯入完成",
-        description: `${file.name} 已載入，現在可以用毫米尺寸校正成現場實體大小。`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "STEP 模型匯入失敗。";
-      setImportError(message);
-      toast({
-        title: "匯入失敗",
-        description: message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsImportingModel(false);
-    }
-  };
-
-  const applyCalibration = () => {
-    if (!importedModel) {
-      return;
-    }
-
-    setImportedModel({
-      ...importedModel,
-      calibratedDimensions: {
-        widthMm: Math.max(1, targetDimensions.widthMm),
-        depthMm: Math.max(1, targetDimensions.depthMm),
-        heightMm: Math.max(1, targetDimensions.heightMm),
-      },
-    });
-
-    toast({
-      title: "尺寸校正完成",
-      description: "模型已依照輸入的實體毫米尺寸重新縮放。",
-    });
-  };
-
-  const resetCalibration = () => {
-    if (!importedModel) {
-      return;
-    }
-
-    setTargetDimensions(importedModel.dimensions);
-    setImportedModel({
-      ...importedModel,
-      calibratedDimensions: importedModel.dimensions,
-    });
-  };
+  if (collapsed) {
+    return (
+      <div className="flex h-full flex-col items-center gap-2 py-3">
+        {onToggleCollapse ? (
+          <IconTooltipButton label="展開場景導覽" icon={PanelLeftOpen} onClick={onToggleCollapse} />
+        ) : null}
+        <div className="my-1 h-px w-8 bg-white/10" />
+        {LAYER_OPTIONS.map((layer) => (
+          <IconTooltipButton
+            key={layer.id}
+            label={layer.label}
+            icon={layer.icon}
+            active={activeLayer === layer.id}
+            onClick={() => onLayerChange(layer.id)}
+          />
+        ))}
+        <div className="my-1 h-px w-8 bg-white/10" />
+        <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.035] text-slate-300">
+          <Boxes className="h-[18px] w-[18px]" />
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#07131f] bg-cyan-400 px-1 text-[9px] font-bold text-slate-950">
+            {racks.length}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
-      <input ref={fileInputRef} type="file" accept=".stp,.step" className="hidden" onChange={handleImportFile} />
-
-      <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(135deg,hsl(223_30%_16%),hsl(223_28%_12%)_52%,hsl(196_55%_15%)_100%)] shadow-[0_32px_90px_-52px_hsl(var(--primary)/0.72)]">
-        <CardContent className="space-y-5 p-5 sm:p-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-3">
-              <Badge className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-cyan-100 shadow-none">
-                Rack Digital Twin
-              </Badge>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground">Data-center</h1>
-                <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
-                  這裡以 3D 視覺化管理實體機櫃、Compute Tray、Switch Tray、PSU 與 TOR Switch。
-                  你可以匯入 STP / STEP 模型，再用毫米尺寸校正，讓畫面大小與現場實際設備一致。
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="rounded-full border-emerald-300/25 bg-emerald-400/10 text-emerald-100">
-                  {deployedRacks} 個已配置機櫃
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-primary/15 bg-background/35 text-foreground">
-                  {selectedSite.racks.length} 櫃 / {totalDevices} 台設備
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-amber-300/25 bg-amber-400/10 text-amber-100">
-                  {activeAlerts} 個告警
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-primary/15 bg-background/35 text-foreground">
-                  Manager / {selectedSite.siteManager}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[1fr_1.2fr] xl:min-w-[640px]">
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/75">Site</div>
-                <Select
-                  value={selectedSiteId}
-                  onValueChange={(value) => {
-                    setSelectedSiteId(value);
-                    const nextSite = sitePlans.find((site) => site.id === value);
-                    const nextRack = nextSite?.racks[0];
-                    setSelectedRackId(nextRack?.id ?? "");
-                    setSelectedDeviceId(nextRack?.devices[0]?.id ?? "");
-                    setImportedModel(null);
-                    setImportError("");
-                    setSearchTerm("");
-                  }}
-                >
-                  <SelectTrigger className="h-12 rounded-2xl border-primary/15 bg-background/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sitePlans.map((site) => (
-                      <SelectItem key={site.id} value={site.id}>
-                        {site.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/75">快速搜尋</div>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="搜尋機櫃、設備、Asset Tag、Serial、BMC"
-                    className="h-12 rounded-2xl border-primary/15 bg-background/30 pl-10"
-                  />
-                </div>
-              </div>
-            </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-[62px] shrink-0 items-center justify-between border-b border-white/10 px-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <Layers3 className="h-4 w-4 text-cyan-300" />
+            場景導覽
           </div>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200/65">
+            Digital Twin Layers
+          </p>
+        </div>
+        {onToggleCollapse ? (
+          <IconTooltipButton
+            label="收合場景導覽"
+            icon={PanelLeftClose}
+            onClick={onToggleCollapse}
+            className="h-9 w-9"
+          />
+        ) : null}
+      </div>
 
-          <div className="grid gap-4 lg:grid-cols-4">
-            <SummaryCard
-              icon={MapPinned}
-              label="Target Site"
-              value={selectedSite.label}
-              detail={`${selectedSite.country} / ${selectedSite.phase} / ETA ${selectedSite.targetDate}`}
-            />
-            <SummaryCard
-              icon={Server}
-              label="Rack Capacity"
-              value={`${selectedSite.racks.length} racks`}
-              detail={`全站共 ${totalDevices} 台設備，目前選中機櫃容量 ${selectedRack.capacityU}U`}
-            />
-            <SummaryCard
-              icon={Zap}
-              label="Power Load"
-              value={`${plannedPower} kW`}
-              detail={`Power ${selectedSite.powerBudgetKw} kW / Cooling ${selectedSite.coolingBudgetKw} kW`}
-            />
-            <SummaryCard icon={ShieldCheck} label="Readiness" value={`${readinessPercent}%`} detail={selectedSite.networkReady} />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="shrink-0 space-y-3 border-b border-white/10 p-3">
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">站點</span>
+          <Select value={selectedSiteId} onValueChange={onSiteChange}>
+            <SelectTrigger className="h-10 rounded-xl border-cyan-300/18 bg-[#0b1b29] text-sm text-slate-100">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="border-white/12 bg-[#07131f] text-slate-100">
+              {sites.map((site) => (
+                <SelectItem key={site.id} value={site.id}>
+                  {site.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
 
-      <div className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
-        <Card className="rounded-[28px] border border-cyan-300/10 bg-[linear-gradient(180deg,hsl(223_30%_15%),hsl(223_34%_11%))]">
-          <CardHeader className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-2xl tracking-[-0.03em]">3D 機櫃視圖</CardTitle>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  點選機櫃可切換視角。匯入 STEP 後，模型會套用到目前選中的機櫃，並依校正尺寸等比例顯示。
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="rounded-full bg-cyan-400 px-4 text-slate-950 hover:bg-cyan-300"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImportingModel}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {isImportingModel ? "匯入中..." : "匯入 STP"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full border-primary/15 bg-background/30"
-                  onClick={resetCalibration}
-                  disabled={!importedModel}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  還原尺寸
-                </Button>
-              </div>
+        <label className="relative block">
+          <span className="sr-only">搜尋機櫃</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Input
+            value={searchTerm}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="搜尋機櫃或廠牌"
+            className="h-10 rounded-xl border-white/12 bg-black/25 pl-9 text-sm text-white placeholder:text-slate-500"
+          />
+        </label>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-5 p-3">
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">圖層</span>
+              <span className="text-[10px] text-slate-500">{LAYER_OPTIONS.length} layers</span>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <DataCenter3DPlanner
-              racks={selectedSite.racks}
-              selectedRackId={selectedRack.id}
-              importedModel={importedModel}
-              onSelectRack={handleRackSelect}
-            />
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {selectedSite.racks.map((currentRack) => {
-                const isActive = currentRack.id === selectedRack.id;
+            <div className="space-y-1.5">
+              {LAYER_OPTIONS.map((layer) => {
+                const Icon = layer.icon;
+                const selected = activeLayer === layer.id;
                 return (
                   <button
-                    key={currentRack.id}
+                    key={layer.id}
                     type="button"
-                    onClick={() => handleRackSelect(currentRack.id)}
+                    onClick={() => onLayerChange(layer.id)}
                     className={cn(
-                      "rounded-[22px] border px-4 py-4 text-left transition-all",
-                      getRackStatusTone(currentRack.status),
-                      isActive && "ring-1 ring-cyan-300/60 shadow-[0_18px_42px_-28px_hsl(191_91%_55%/0.6)]"
+                      "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                      selected
+                        ? "border-cyan-300/35 bg-[linear-gradient(90deg,rgba(14,116,144,0.28),rgba(14,116,144,0.08))] text-white"
+                        : "border-transparent bg-white/[0.025] text-slate-300 hover:border-white/12 hover:bg-white/[0.055]"
                     )}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-lg font-semibold text-foreground">{currentRack.cabinet}</div>
-                      <Badge variant="outline" className="rounded-full border-current/25 bg-background/20">
-                        {getRackStatusLabel(currentRack.status)}
-                      </Badge>
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
+                      style={{ borderColor: `${layer.color}55`, backgroundColor: `${layer.color}18`, color: layer.color }}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold">{layer.label}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-slate-500">{layer.description}</span>
+                    </span>
+                    {selected ? <Check className="h-3.5 w-3.5 text-cyan-200" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">機櫃</span>
+              <Badge className="border-white/12 bg-white/[0.045] text-[9px] text-slate-300 shadow-none">
+                {filteredRacks.length} / {racks.length}
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              {filteredRacks.map((rack) => {
+                const health = getRackHealth(rack);
+                const selected = rack.id === selectedRackId;
+                const model = models[rack.modelId] ?? models["generic-42u"];
+                return (
+                  <button
+                    key={rack.id}
+                    type="button"
+                    onClick={() => onRackSelect(rack.id)}
+                    className={cn(
+                      "w-full cursor-pointer rounded-xl border p-3 text-left transition-all duration-200",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                      selected
+                        ? "border-cyan-300/42 bg-cyan-400/12 shadow-[0_14px_34px_-24px_rgba(34,211,238,0.95)]"
+                        : "border-white/9 bg-black/16 hover:border-white/18 hover:bg-white/[0.045]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-slate-50">{rack.cabinet}</span>
+                      <span className={cn("rounded-full border px-2 py-1 text-[9px] font-bold", getHealthTone(health))}>
+                        {HEALTH_LABELS[health]}
+                      </span>
                     </div>
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      {currentRack.zone} / Row {currentRack.row} / {currentRack.owner}
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <div>{currentRack.powerKw} kW</div>
-                      <div>{currentRack.devices.length} devices</div>
-                      <div>{currentRack.aisle}</div>
-                      <div>{currentRack.uplinks} uplinks</div>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-400">
+                      <span>{rack.row} Row</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-600" />
+                      <span className="truncate">{model.name}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+          </section>
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
 
-        <div className="space-y-5">
-          <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(222_29%_15%),hsl(223_28%_12%))]">
-            <CardHeader>
-              <CardTitle className="text-xl tracking-[-0.03em]">目前機櫃</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className={cn("rounded-[22px] border p-4", getRackStatusTone(selectedRack.status))}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-2xl font-semibold tracking-tight text-foreground">{selectedRack.cabinet}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      {selectedRack.zone} / Row {selectedRack.row} / {selectedRack.coordinates}
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="rounded-full border-current/25 bg-background/20">
-                    {getRackStatusLabel(selectedRack.status)}
-                  </Badge>
-                </div>
+interface RackInspectorProps {
+  rack: RackPlan;
+  model: RackModelDefinition;
+  canEdit: boolean;
+  layoutEditing: boolean;
+  onLayoutEditingChange: (value: boolean) => void;
+  onFocus: () => void;
+  onOpenModels: () => void;
+  onNudge: (x: number, z: number) => void;
+  onRotate: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Owner</div>
-                    <div className="mt-2 text-sm font-medium text-foreground">{selectedRack.owner}</div>
-                  </div>
-                  <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Aisle</div>
-                    <div className="mt-2 text-sm font-medium text-foreground">{selectedRack.aisle}</div>
-                  </div>
-                  <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Power / Cooling</div>
-                    <div className="mt-2 text-sm font-medium text-foreground">
-                      {selectedRack.powerKw} kW / {selectedRack.coolingKw} kW
+function RackInspector({
+  rack,
+  model,
+  canEdit,
+  layoutEditing,
+  onLayoutEditingChange,
+  onFocus,
+  onOpenModels,
+  onNudge,
+  onRotate,
+  collapsed = false,
+  onToggleCollapse,
+}: RackInspectorProps) {
+  const health = getRackHealth(rack);
+  const sortedDevices = [...rack.devices].sort((left, right) => right.slotStart - left.slotStart);
+
+  if (collapsed) {
+    return (
+      <div className="flex h-full flex-col items-center gap-2 py-3">
+        {onToggleCollapse ? (
+          <IconTooltipButton label="展開機櫃詳情" icon={PanelRightOpen} onClick={onToggleCollapse} />
+        ) : null}
+        <div className="my-1 h-px w-8 bg-white/10" />
+        <IconTooltipButton label="聚焦機櫃" icon={Focus} onClick={onFocus} />
+        <IconTooltipButton label="模型與尺寸" icon={Box} onClick={onOpenModels} />
+        {canEdit ? (
+          <IconTooltipButton
+            label={layoutEditing ? "結束編排" : "編排機櫃"}
+            icon={Move3d}
+            active={layoutEditing}
+            onClick={() => onLayoutEditingChange(!layoutEditing)}
+          />
+        ) : null}
+        <div className="mt-auto mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.035]">
+          <span className={cn("h-2.5 w-2.5 rounded-full", health === "healthy" ? "bg-emerald-400" : health === "critical" ? "bg-rose-400" : "bg-amber-400")} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-[62px] shrink-0 items-center justify-between border-b border-white/10 px-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <Server className="h-4 w-4 text-cyan-300" />
+            機櫃詳情
+          </div>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200/65">
+            Rack Inspector
+          </p>
+        </div>
+        {onToggleCollapse ? (
+          <IconTooltipButton
+            label="收合機櫃詳情"
+            icon={PanelRightClose}
+            onClick={onToggleCollapse}
+            className="h-9 w-9"
+          />
+        ) : null}
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-4 p-4">
+          <section className="rounded-2xl border border-cyan-300/18 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_52%),rgba(255,255,255,0.025)] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xl font-black tracking-[-0.03em] text-white">{rack.cabinet}</div>
+                <div className="mt-1 text-xs text-slate-400">{rack.zone} · Row {rack.row}</div>
+              </div>
+              <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-bold", getHealthTone(health))}>
+                {HEALTH_LABELS[health]}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[
+                { label: "POWER", value: `${rack.powerKw} kW`, icon: Zap, color: "text-amber-200" },
+                { label: "TEMP", value: `${rack.temperatureC}°C`, icon: Thermometer, color: "text-sky-200" },
+                { label: "LOAD", value: `${rack.utilizationPercent}%`, icon: CircleGauge, color: "text-emerald-200" },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <div key={metric.label} className="rounded-xl border border-white/9 bg-black/25 p-2.5">
+                    <div className={cn("flex items-center gap-1 text-[9px] font-bold", metric.color)}>
+                      <Icon className="h-3 w-3" />
+                      {metric.label}
                     </div>
+                    <div className="mt-1.5 text-xs font-bold tabular-nums text-white">{metric.value}</div>
                   </div>
-                  <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">3D Position</div>
-                    <div className="mt-2 text-sm font-medium text-foreground">
-                      X {selectedRack.positionX.toFixed(1)} / Z {selectedRack.positionZ.toFixed(1)}
-                    </div>
-                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">模型</span>
+              {model.isCalibrated ? (
+                <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-200">
+                  <ShieldCheck className="h-3 w-3" /> 已校正
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onOpenModels}
+              className="w-full cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition-colors hover:border-cyan-300/25 hover:bg-cyan-400/[0.07]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-200">
+                  <Box className="h-5 w-5" />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold text-white">{model.name}</div>
+                  <div className="mt-0.5 truncate text-[10px] text-slate-400">{model.manufacturer} · {model.revision}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-500" />
+              </div>
+              <div className="mt-3 rounded-lg bg-black/25 px-2.5 py-2 text-[10px] tabular-nums text-cyan-100/80">
+                {formatDimensions(model.dimensions)}
+              </div>
+            </button>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">設備</span>
+              <Badge className="border-white/10 bg-white/[0.04] text-[9px] text-slate-300 shadow-none">
+                {rack.devices.length} devices
+              </Badge>
+            </div>
+            <div className="space-y-1.5">
+              {sortedDevices.map((device) => {
+                const Icon = getDeviceIcon(device.type);
+                return (
+                  <div key={device.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.045] text-slate-300">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-slate-100">{device.name}</div>
+                      <div className="mt-0.5 text-[9px] text-slate-500">U{device.slotStart} · {device.assetTag}</div>
+                    </div>
+                    <span className={cn("h-2 w-2 rounded-full", device.health === "healthy" ? "bg-emerald-400" : device.health === "critical" ? "bg-rose-400" : device.health === "offline" ? "bg-slate-500" : "bg-amber-400")} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {rack.maintenance.length ? (
+            <section className="rounded-2xl border border-rose-300/22 bg-rose-400/[0.08] p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-100">
+                <AlertTriangle className="h-4 w-4" />
+                {rack.maintenance[0].title}
+              </div>
+              <p className="mt-2 text-[10px] leading-5 text-rose-100/65">{rack.maintenance[0].detail}</p>
+            </section>
+          ) : null}
+
+          {canEdit ? (
+            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-white">
+                    <PencilRuler className="h-4 w-4 text-cyan-300" />
+                    編排模式
+                  </div>
+                  <p className="mt-1 text-[9px] text-slate-500">以 250mm 網格移動，比例不變形</p>
+                </div>
+                <button
+                  type="button"
+                  aria-pressed={layoutEditing}
+                  onClick={() => onLayoutEditingChange(!layoutEditing)}
+                  className={cn(
+                    "relative h-7 w-12 cursor-pointer rounded-full border transition-colors",
+                    layoutEditing ? "border-cyan-300/50 bg-cyan-400/30" : "border-white/15 bg-white/[0.06]"
+                  )}
+                >
+                  <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform", layoutEditing ? "translate-x-5" : "translate-x-1")} />
+                  <span className="sr-only">切換編排模式</span>
+                </button>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Site readiness</span>
-                  <span className="font-medium text-foreground">{readinessPercent}%</span>
-                </div>
-                <Progress value={readinessPercent} className="h-2 bg-primary/10" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(199_42%_15%),hsl(223_26%_12%))]">
-            <CardHeader className="space-y-2">
-              <CardTitle className="text-xl tracking-[-0.03em]">STP / STEP 匯入</CardTitle>
-              <div className="text-sm text-muted-foreground">
-                匯入機櫃或 Tray 的 STEP 模型後，可以用毫米尺寸校正，確保 3D 圖與實際設備大小一致。
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[22px] border border-primary/10 bg-background/35 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">{importedModel ? importedModel.fileName : "尚未匯入 3D 模型"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {importedModel
-                        ? `原始尺寸 ${formatDimensionLabel(importedModel.dimensions)}`
-                        : "支援 .stp / .step，可匯入機櫃外觀或單一 Tray 模型。"}
-                    </div>
+              {layoutEditing ? (
+                <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <span />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0, -0.25)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-cyan-400/10">Z−</Button>
+                    <span />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(-0.25, 0)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-cyan-400/10">X−</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={onRotate} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-100 hover:bg-cyan-400/15"><RotateCw className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0.25, 0)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-cyan-400/10">X＋</Button>
+                    <span />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0, 0.25)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-cyan-400/10">Z＋</Button>
+                    <span />
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-2xl border-cyan-300/20 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isImportingModel}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    重新匯入
-                  </Button>
+                  <div className="text-center text-[9px] tabular-nums text-slate-500">
+                    X {rack.positionX.toFixed(2)}m · Z {rack.positionZ.toFixed(2)}m · {rack.rotation}°
+                  </div>
                 </div>
-                {importError ? (
-                  <div className="mt-3 rounded-2xl border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{importError}</div>
-                ) : null}
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </ScrollArea>
+
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 p-3">
+        <Button type="button" variant="outline" onClick={onFocus} className="h-10 rounded-xl border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
+          <Focus className="mr-2 h-4 w-4" /> 聚焦
+        </Button>
+        <Button type="button" variant="outline" onClick={onOpenModels} className="h-10 rounded-xl border-white/12 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08]">
+          <Box className="mr-2 h-4 w-4" /> 模型
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface ModelLibraryProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  models: Record<string, RackModelDefinition>;
+  selectedRack: RackPlan;
+  canEdit: boolean;
+  isImporting: boolean;
+  importError: string;
+  manufacturer: string;
+  modelName: string;
+  revision: string;
+  dimensions: ImportedStepDimensions;
+  selectedModelId: string;
+  onManufacturerChange: (value: string) => void;
+  onModelNameChange: (value: string) => void;
+  onRevisionChange: (value: string) => void;
+  onDimensionsChange: (dimensions: ImportedStepDimensions) => void;
+  onSelectedModelChange: (modelId: string) => void;
+  onChooseFile: () => void;
+  onAssignModel: () => void;
+  onAddRack: () => void;
+}
+
+function ModelLibrary({
+  open,
+  onOpenChange,
+  models,
+  selectedRack,
+  canEdit,
+  isImporting,
+  importError,
+  manufacturer,
+  modelName,
+  revision,
+  dimensions,
+  selectedModelId,
+  onManufacturerChange,
+  onModelNameChange,
+  onRevisionChange,
+  onDimensionsChange,
+  onSelectedModelChange,
+  onChooseFile,
+  onAssignModel,
+  onAddRack,
+}: ModelLibraryProps) {
+  const selectedModel = models[selectedModelId] ?? models["generic-42u"];
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-[min(94vw,600px)] flex-col border-l border-cyan-300/18 bg-[linear-gradient(180deg,#081725,#040a11)] p-0 text-slate-100 sm:max-w-[600px]">
+        <SheetHeader className="shrink-0 border-b border-white/10 px-6 py-5 text-left">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-400/12 text-cyan-200">
+              <Boxes className="h-5 w-5" />
+            </div>
+            <div>
+              <SheetTitle className="text-xl font-black tracking-[-0.03em] text-white">機櫃模型型錄</SheetTitle>
+              <SheetDescription className="mt-1 text-xs text-slate-400">
+                管理不同廠牌模型，所有場景一律以毫米校正後等比例顯示。
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-6 p-6">
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white">可用模型</h3>
+                  <p className="mt-1 text-[10px] text-slate-500">選取後可套用到 {selectedRack.cabinet}，或新增一座機櫃。</p>
+                </div>
+                <Badge className="border-cyan-300/18 bg-cyan-400/8 text-[10px] text-cyan-100 shadow-none">
+                  {Object.keys(models).length} models
+                </Badge>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Width (mm)</div>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={targetDimensions.widthMm}
-                    onChange={(event) =>
-                      setTargetDimensions((prev) => ({
-                        ...prev,
-                        widthMm: Number(event.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Depth (mm)</div>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={targetDimensions.depthMm}
-                    onChange={(event) =>
-                      setTargetDimensions((prev) => ({
-                        ...prev,
-                        depthMm: Number(event.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Height (mm)</div>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={targetDimensions.heightMm}
-                    onChange={(event) =>
-                      setTargetDimensions((prev) => ({
-                        ...prev,
-                        heightMm: Number(event.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
+              <div className="space-y-2">
+                {Object.values(models).map((model) => {
+                  const selected = model.id === selectedModelId;
+                  return (
+                    <button
+                      key={model.id}
+                      type="button"
+                      onClick={() => onSelectedModelChange(model.id)}
+                      className={cn(
+                        "w-full cursor-pointer rounded-2xl border p-4 text-left transition-all duration-200",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        selected
+                          ? "border-cyan-300/42 bg-cyan-400/12 shadow-[0_16px_42px_-26px_rgba(34,211,238,0.95)]"
+                          : "border-white/10 bg-white/[0.025] hover:border-white/20 hover:bg-white/[0.05]"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-cyan-300/30 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-black/20 text-slate-400")}>
+                          {model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-white">{model.name}</span>
+                            {model.isCalibrated ? (
+                              <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold text-emerald-100">已校正</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 text-[10px] text-slate-400">{model.manufacturer} · {model.revision}</div>
+                          <div className="mt-2 text-[10px] tabular-nums text-cyan-100/75">{formatDimensions(model.dimensions)}</div>
+                        </div>
+                        <span className={cn("mt-1 flex h-5 w-5 items-center justify-center rounded-full border", selected ? "border-cyan-300 bg-cyan-400 text-slate-950" : "border-white/20 text-transparent")}>
+                          <Check className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button type="button" disabled={!canEdit || selectedRack.modelId === selectedModelId} onClick={onAssignModel} className="h-11 rounded-xl bg-cyan-400 font-bold text-slate-950 hover:bg-cyan-300 disabled:bg-slate-700 disabled:text-slate-400">
+                  <Check className="mr-2 h-4 w-4" /> 套用至 {selectedRack.cabinet}
+                </Button>
+                <Button type="button" disabled={!canEdit} onClick={onAddRack} variant="outline" className="h-11 rounded-xl border-cyan-300/22 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/14">
+                  <PackagePlus className="mr-2 h-4 w-4" /> 放入新機櫃
+                </Button>
+              </div>
+            </section>
+
+            <Separator className="bg-white/10" />
+
+            <section className={cn(!canEdit && "opacity-55")}>
+              <div className="mb-3">
+                <h3 className="text-sm font-bold text-white">匯入其他公司模型</h3>
+                <p className="mt-1 text-[10px] leading-5 text-slate-500">
+                  支援 GLB 與 STEP/STP，單檔上限 100MB。大型 AP242 請先轉 GLB，避免瀏覽器長時間卡住。
+                </p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button type="button" className="rounded-2xl bg-cyan-400 text-slate-950 hover:bg-cyan-300" onClick={applyCalibration} disabled={!importedModel}>
-                  <Ruler className="mr-2 h-4 w-4" />
-                  套用實體尺寸
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-2xl border-primary/15 bg-background/35"
-                  onClick={() => setTargetDimensions(DEFAULT_RACK_DIMENSIONS)}
-                >
-                  標準機櫃 600 x 1200 x 2200
-                </Button>
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">廠牌</span>
+                  <Input value={manufacturer} disabled={!canEdit} onChange={(event) => onManufacturerChange(event.target.value)} className="h-10 border-white/12 bg-black/25 text-white" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">型號</span>
+                  <Input value={modelName} disabled={!canEdit} onChange={(event) => onModelNameChange(event.target.value)} className="h-10 border-white/12 bg-black/25 text-white" />
+                </label>
               </div>
 
-              {importedModel ? (
-                <div className="rounded-[22px] border border-primary/10 bg-background/35 p-4 text-sm text-muted-foreground">
-                  <div>原始模型 / {formatDimensionLabel(importedModel.dimensions)}</div>
-                  <div className="mt-2">校正後尺寸 / {formatDimensionLabel(importedModel.calibratedDimensions)}</div>
-                  <div className="mt-2">零件數量 / {importedModel.parts.length}</div>
+              <label className="mt-3 block space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">版本</span>
+                <Input value={revision} disabled={!canEdit} onChange={(event) => onRevisionChange(event.target.value)} className="h-10 border-white/12 bg-black/25 text-white" />
+              </label>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {([
+                  ["widthMm", "寬 mm"],
+                  ["depthMm", "深 mm"],
+                  ["heightMm", "高 mm"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={dimensions[key]}
+                      disabled={!canEdit}
+                      onChange={(event) => onDimensionsChange({ ...dimensions, [key]: Math.max(1, Number(event.target.value) || 1) })}
+                      className="h-10 border-white/12 bg-black/25 px-2 text-xs tabular-nums text-white"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-blue-300/16 bg-blue-400/[0.07] px-3 py-2 text-[10px] leading-5 text-blue-100/70">
+                GLB 以高度做單一比例縮放，不會分別拉伸 X / Y / Z；STEP 會自動偵測最長軸為高度並讀取毫米尺寸。
+              </div>
+
+              <button
+                type="button"
+                disabled={!canEdit || isImporting}
+                onClick={onChooseFile}
+                className="mt-3 flex min-h-24 w-full cursor-pointer items-center justify-center rounded-2xl border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.1),transparent_68%)] px-4 text-center transition-colors hover:border-cyan-300/55 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span>
+                  {isImporting ? (
+                    <>
+                      <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-200/30 border-t-cyan-200 motion-reduce:animate-none" />
+                      </span>
+                      <span className="mt-2 block text-xs font-bold text-cyan-50">正在解析模型</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mx-auto h-5 w-5 text-cyan-200" />
+                      <span className="mt-2 block text-xs font-bold text-white">選擇 GLB / STEP / STP</span>
+                      <span className="mt-1 block text-[10px] text-slate-500">模型只在目前工作階段使用</span>
+                    </>
+                  )}
+                </span>
+              </button>
+
+              {importError ? (
+                <div role="alert" className="mt-3 rounded-xl border border-rose-300/25 bg-rose-400/10 px-3 py-2 text-[10px] leading-5 text-rose-100">
+                  {importError}
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+            </section>
 
-          <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(223_28%_15%),hsl(223_28%_12%))]">
-            <CardHeader className="space-y-2">
-              <CardTitle className="text-xl tracking-[-0.03em]">搜尋結果</CardTitle>
-              <div className="text-sm text-muted-foreground">可以快速定位機櫃、設備、Asset Tag、Serial 或 BMC 名稱。</div>
-            </CardHeader>
-            <CardContent>
-              {searchTerm.trim() ? (
-                searchResults.length ? (
-                  <ScrollArea className="h-[320px] pr-3">
-                    <div className="space-y-3">
-                      {searchResults.map((result) => (
-                        <button
-                          key={result.id}
-                          type="button"
-                          onClick={() => {
-                            handleRackSelect(result.rackId);
-                            if (result.deviceId) {
-                              setSelectedDeviceId(result.deviceId);
-                            }
-                          }}
-                          className="w-full rounded-[20px] border border-primary/10 bg-background/35 px-4 py-3 text-left transition-colors hover:border-cyan-300/30 hover:bg-background/55"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="rounded-full border-primary/15 bg-primary/5">
-                              {result.kind === "rack" ? "Rack" : "Device"}
-                            </Badge>
-                            <div className="text-sm font-semibold text-foreground">{result.title}</div>
-                          </div>
-                          <div className="mt-2 text-sm text-muted-foreground">{result.subtitle}</div>
-                          <div className="mt-1 text-xs text-muted-foreground/75">{result.detail}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <div className="rounded-[22px] border border-primary/10 bg-background/35 px-4 py-5 text-sm text-muted-foreground">
-                    找不到符合條件的機櫃或設備。
-                  </div>
-                )
-              ) : (
-                <div className="rounded-[22px] border border-primary/10 bg-background/35 px-4 py-5 text-sm text-muted-foreground">
-                  例如可搜尋 CAB-A01、TOR、CT-02、PWR-1102、BMC。
+            <section className="rounded-2xl border border-emerald-300/16 bg-emerald-400/[0.06] p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                <div>
+                  <div className="text-xs font-bold text-emerald-50">比例規則</div>
+                  <p className="mt-1 text-[10px] leading-5 text-emerald-100/60">
+                    場景世界單位固定為公尺，模型資料固定保存毫米；座標原點統一放在機櫃底部中心，旋轉只使用 Y 軸。
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            </section>
+          </div>
+        </ScrollArea>
+
+        <div className="shrink-0 border-t border-white/10 bg-black/20 px-6 py-3">
+          <div className="flex items-center justify-between text-[10px] text-slate-500">
+            <span>目前選取：{selectedModel.name}</span>
+            <span className="tabular-nums">{formatDimensions(selectedModel.dimensions)}</span>
+          </div>
         </div>
-      </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
-      <div className="grid gap-5 xl:grid-cols-[0.95fr_1fr_0.85fr]">
-        <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(223_28%_15%),hsl(223_28%_12%))]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-[-0.03em]">Rack Front / U 位</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[560px] pr-3">
-              <div className="space-y-3">
-                {sortedDevices.length ? (
-                  sortedDevices.map((currentDevice) => {
-                    const Icon = getDeviceTypeIcon(currentDevice.type);
-                    const isActive = currentDevice.id === selectedDevice?.id;
+function useDesktopDataCenterLayout() {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
+  );
 
-                    return (
-                      <button
-                        key={currentDevice.id}
-                        type="button"
-                        onClick={() => setSelectedDeviceId(currentDevice.id)}
-                        className={cn(
-                          "w-full rounded-[22px] border px-4 py-4 text-left transition-all",
-                          getDeviceTone(currentDevice.health),
-                          isActive && "ring-1 ring-cyan-300/60 shadow-[0_18px_38px_-28px_hsl(191_91%_55%/0.58)]"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-background/35 text-primary">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-foreground">{currentDevice.name}</span>
-                                <Badge variant="outline" className="rounded-full border-primary/15 bg-background/30">
-                                  {getDeviceTypeLabel(currentDevice.type)}
-                                </Badge>
-                              </div>
-                              <div className="mt-1 text-sm text-muted-foreground">{currentDevice.model}</div>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="rounded-full border-primary/15 bg-background/30 text-foreground">
-                            {getSlotLabel(currentDevice)}
-                          </Badge>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-[22px] border border-primary/10 bg-background/35 px-4 py-5 text-sm text-muted-foreground">
-                    這個機櫃目前沒有設備資料。
-                  </div>
-                )}
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const syncLayout = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+
+    setIsDesktop(mediaQuery.matches);
+    mediaQuery.addEventListener("change", syncLayout);
+    return () => mediaQuery.removeEventListener("change", syncLayout);
+  }, []);
+
+  return isDesktop;
+}
+
+export function DeploymentPlanningCenter() {
+  const { toast } = useToast();
+  const { canEditModule } = usePermissions();
+  const canEdit = canEditModule("data");
+  const isDesktopLayout = useDesktopDataCenterLayout();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadedUrlsRef = useRef<string[]>([]);
+
+  const [sites, setSites] = useState<SitePlan[]>(readInitialSites);
+  const [models, setModels] = useState<Record<string, RackModelDefinition>>(BUILT_IN_RACK_MODELS);
+  const [selectedSiteId, setSelectedSiteId] = useState(sites[0].id);
+  const [selectedRackId, setSelectedRackId] = useState(sites[0].racks[0].id);
+  const [activeLayer, setActiveLayer] = useState<DataCenterLayer>("overview");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [layoutEditing, setLayoutEditing] = useState(false);
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
+  const [cameraRequestId, setCameraRequestId] = useState(0);
+  const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState("nv-mgx-rack-v1-2-rev7");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [manufacturer, setManufacturer] = useState("New Vendor");
+  const [modelName, setModelName] = useState("Rack Model");
+  const [revision, setRevision] = useState("Rev.A");
+  const [importDimensions, setImportDimensions] = useState<ImportedStepDimensions>({
+    widthMm: 600,
+    depthMm: 1200,
+    heightMm: 2200,
+  });
+
+  const selectedSite = useMemo(
+    () => sites.find((site) => site.id === selectedSiteId) ?? sites[0],
+    [selectedSiteId, sites]
+  );
+  const selectedRack = useMemo(
+    () => selectedSite.racks.find((rack) => rack.id === selectedRackId) ?? selectedSite.racks[0],
+    [selectedRackId, selectedSite]
+  );
+  const selectedModel = models[selectedRack.modelId] ?? models["generic-42u"];
+
+  useEffect(() => {
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(sites));
+  }, [sites]);
+
+  useEffect(
+    () => () => {
+      uploadedUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!selectedSite.racks.some((rack) => rack.id === selectedRackId)) {
+      setSelectedRackId(selectedSite.racks[0]?.id ?? "");
+    }
+  }, [selectedRackId, selectedSite]);
+
+  const totalPower = selectedSite.racks.reduce((sum, rack) => sum + rack.powerKw, 0);
+  const alertCount = selectedSite.racks.filter((rack) => getRackHealth(rack) !== "healthy").length;
+  const activeLayerOption = LAYER_OPTIONS.find((layer) => layer.id === activeLayer) ?? LAYER_OPTIONS[0];
+
+  const requestCamera = (preset: CameraPreset) => {
+    setCameraPreset(preset);
+    setCameraRequestId((value) => value + 1);
+  };
+
+  const handleRackSelect = (rackId: string) => {
+    setSelectedRackId(rackId);
+    setMobileRightOpen(false);
+    requestCamera("focus");
+  };
+
+  const handleSiteChange = (siteId: string) => {
+    const site = sites.find((item) => item.id === siteId);
+    setSelectedSiteId(siteId);
+    setSelectedRackId(site?.racks[0]?.id ?? "");
+    setSearchTerm("");
+    requestCamera("overview");
+  };
+
+  const updateSelectedRack = (updater: (rack: RackPlan) => RackPlan) => {
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) => (rack.id === selectedRackId ? updater(rack) : rack)),
+            }
+          : site
+      )
+    );
+  };
+
+  const getFootprint = (rack: RackPlan) => {
+    const definition = models[rack.modelId] ?? models["generic-42u"];
+    const rotated = Math.abs(rack.rotation % 180) === 90;
+    return {
+      width: (rotated ? definition.dimensions.depthMm : definition.dimensions.widthMm) / 1000,
+      depth: (rotated ? definition.dimensions.widthMm : definition.dimensions.depthMm) / 1000,
+    };
+  };
+
+  const moveSelectedRack = (deltaX: number, deltaZ: number) => {
+    if (!canEdit || !layoutEditing) return;
+
+    const nextX = Math.max(-7.4, Math.min(7.4, selectedRack.positionX + deltaX));
+    const nextZ = Math.max(-5.5, Math.min(5.5, selectedRack.positionZ + deltaZ));
+    const footprint = getFootprint(selectedRack);
+    const collision = selectedSite.racks.some((rack) => {
+      if (rack.id === selectedRack.id) return false;
+      const other = getFootprint(rack);
+      return (
+        Math.abs(nextX - rack.positionX) < (footprint.width + other.width) / 2 + 0.16 &&
+        Math.abs(nextZ - rack.positionZ) < (footprint.depth + other.depth) / 2 + 0.16
+      );
+    });
+
+    if (collision) {
+      toast({
+        title: "位置有碰撞",
+        description: "機櫃實際尺寸已重疊，請改用其他網格位置。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateSelectedRack((rack) => ({ ...rack, positionX: nextX, positionZ: nextZ }));
+  };
+
+  const rotateSelectedRack = () => {
+    if (!canEdit || !layoutEditing) return;
+    updateSelectedRack((rack) => ({ ...rack, rotation: (rack.rotation + 90) % 360 }));
+  };
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !canEdit) return;
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension || !["glb", "stp", "step"].includes(extension)) {
+      setImportError("僅支援 .glb、.stp 與 .step 模型檔。");
+      return;
+    }
+    if (file.size > MAX_MODEL_FILE_BYTES) {
+      setImportError("模型超過 100MB，請先降低細節或壓縮後再匯入。");
+      return;
+    }
+    if ((extension === "stp" || extension === "step") && file.size > MAX_BROWSER_STEP_BYTES) {
+      setImportError(
+        "大型 AP242 STEP 不適合在瀏覽器即時轉檔。請先轉為 Meshopt/Draco GLB；公司 MGX Rev7 已完成內建轉檔。"
+      );
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      setImportError("");
+      const id = `uploaded-${crypto.randomUUID()}`;
+      let definition: RackModelDefinition;
+
+      if (extension === "glb") {
+        const assetUrl = URL.createObjectURL(file);
+        uploadedUrlsRef.current.push(assetUrl);
+        definition = {
+          id,
+          manufacturer: manufacturer.trim() || "Imported Vendor",
+          name: modelName.trim() || file.name.replace(/\.glb$/i, ""),
+          revision: revision.trim() || "Imported",
+          source: "uploaded-glb",
+          assetUrl,
+          sourceFileName: file.name,
+          dimensions: importDimensions,
+          upAxis: "y",
+          isCalibrated: true,
+        };
+      } else {
+        const stepModel = await importStepModel(file);
+        definition = {
+          id,
+          manufacturer: manufacturer.trim() || "Imported Vendor",
+          name: modelName.trim() || file.name.replace(/\.(stp|step)$/i, ""),
+          revision: revision.trim() || "Imported",
+          source: "step",
+          sourceFileName: file.name,
+          dimensions: stepModel.dimensions,
+          upAxis: stepModel.upAxis,
+          stepModel,
+          isCalibrated: true,
+        };
+        setImportDimensions(stepModel.dimensions);
+      }
+
+      setModels((current) => ({ ...current, [id]: definition }));
+      setSelectedModelId(id);
+      toast({
+        title: "模型已加入型錄",
+        description: `${definition.manufacturer} ${definition.name} 已按實際尺寸建立。`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "模型匯入失敗。";
+      setImportError(message);
+      toast({ title: "模型匯入失敗", description: message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const assignSelectedModel = () => {
+    if (!canEdit || !models[selectedModelId]) return;
+    updateSelectedRack((rack) => ({ ...rack, modelId: selectedModelId }));
+    toast({
+      title: "機櫃模型已更新",
+      description: `${selectedRack.cabinet} 已套用 ${models[selectedModelId].name}。`,
+    });
+  };
+
+  const addRackFromSelectedModel = () => {
+    if (!canEdit || !models[selectedModelId]) return;
+    const definition = models[selectedModelId];
+    const baseRack = createRackFromModel(definition, selectedSite);
+    const slot = selectedSite.racks.length;
+    const nextRack = {
+      ...baseRack,
+      positionX: ((slot % 5) - 2) * 1.7,
+      positionZ: 4.75 + Math.floor(slot / 5) * 1.5,
+    };
+
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId ? { ...site, racks: [...site.racks, nextRack] } : site
+      )
+    );
+    setSelectedRackId(nextRack.id);
+    setLayoutEditing(true);
+    setModelLibraryOpen(false);
+    requestCamera("focus");
+    toast({
+      title: "新機櫃已放入場景",
+      description: `${nextRack.cabinet} 使用 ${definition.name}，可在編排模式調整位置。`,
+    });
+  };
+
+  const navigatorProps: SceneNavigatorProps = {
+    sites,
+    selectedSiteId,
+    onSiteChange: handleSiteChange,
+    racks: selectedSite.racks,
+    models,
+    selectedRackId,
+    onRackSelect: handleRackSelect,
+    activeLayer,
+    onLayerChange: setActiveLayer,
+    searchTerm,
+    onSearchChange: setSearchTerm,
+  };
+
+  const inspectorProps: RackInspectorProps = {
+    rack: selectedRack,
+    model: selectedModel,
+    canEdit,
+    layoutEditing,
+    onLayoutEditingChange: setLayoutEditing,
+    onFocus: () => requestCamera("focus"),
+    onOpenModels: () => {
+      setSelectedModelId(selectedRack.modelId);
+      setModelLibraryOpen(true);
+    },
+    onNudge: moveSelectedRack,
+    onRotate: rotateSelectedRack,
+  };
+
+  const desktopGridClass = leftCollapsed
+    ? rightCollapsed
+      ? "lg:grid-cols-[68px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[68px_minmax(0,1fr)_330px]"
+    : rightCollapsed
+      ? "lg:grid-cols-[252px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[252px_minmax(0,1fr)_330px]";
+
+  return (
+    <TooltipProvider delayDuration={180}>
+      <div className="flex min-h-[calc(100dvh-92px)] flex-col overflow-hidden bg-[#02060b] text-slate-100 lg:h-[calc(100dvh-92px)] lg:min-h-[620px]">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".glb,.stp,.step"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+
+        <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-3 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-4 py-3 shadow-[0_14px_50px_-34px_rgba(34,211,238,0.65)] lg:h-[78px] lg:flex-nowrap lg:px-5 lg:py-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/30 bg-[linear-gradient(145deg,rgba(14,165,233,0.28),rgba(13,148,136,0.12))] text-cyan-100 shadow-[0_18px_38px_-24px_rgba(34,211,238,0.95)]">
+              <Boxes className="h-5 w-5" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071420] bg-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-lg font-black tracking-[-0.035em] text-white sm:text-xl">Data Center Digital Twin</h1>
+                <Badge className="hidden border-emerald-300/20 bg-emerald-400/10 text-[9px] font-bold text-emerald-100 shadow-none sm:inline-flex">LIVE</Badge>
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+              <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200/65">Physical rack operations · millimeter calibrated</p>
+            </div>
+          </div>
 
-        <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(222_31%_15%),hsl(223_28%_12%))]">
-          <CardHeader className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-xl tracking-[-0.03em]">設備定位</CardTitle>
-              {selectedDevice ? (
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="rounded-full border-primary/15 bg-background/30">
-                    {getDeviceTypeLabel(selectedDevice.type)}
-                  </Badge>
-                  <Badge variant="outline" className={cn("rounded-full", getDeviceTone(selectedDevice.health))}>
-                    {getDeviceHealthLabel(selectedDevice.health)}
-                  </Badge>
+          <div className="ml-auto hidden items-center gap-2 xl:flex">
+            {[
+              { label: "RACKS", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
+              { label: "ALERTS", value: alertCount, icon: AlertTriangle, color: alertCount ? "text-amber-200" : "text-emerald-200" },
+              { label: "POWER", value: `${totalPower.toFixed(1)} kW`, icon: Zap, color: "text-amber-200" },
+            ].map((metric) => {
+              const Icon = metric.icon;
+              return (
+                <div key={metric.label} className="flex h-11 min-w-[100px] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3">
+                  <Icon className={cn("h-4 w-4", metric.color)} />
+                  <div>
+                    <div className="text-[8px] font-bold tracking-[0.16em] text-slate-500">{metric.label}</div>
+                    <div className="mt-0.5 text-xs font-bold tabular-nums text-white">{metric.value}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSelectedModelId(selectedRack.modelId);
+                setModelLibraryOpen(true);
+              }}
+              className="h-11 rounded-xl border-cyan-300/22 bg-cyan-400/8 px-3 text-xs font-bold text-cyan-50 hover:bg-cyan-400/15"
+            >
+              <Box className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">模型型錄</span>
+              <span className="sm:hidden">模型</span>
+            </Button>
+            {canEdit ? (
+              <Button
+                type="button"
+                onClick={() => setLayoutEditing((value) => !value)}
+                className={cn(
+                  "h-11 rounded-xl px-3 text-xs font-bold",
+                  layoutEditing
+                    ? "bg-amber-300 text-amber-950 hover:bg-amber-200"
+                    : "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                )}
+              >
+                <Move3d className="mr-2 h-4 w-4" />
+                {layoutEditing ? "編排中" : "編排場景"}
+              </Button>
+            ) : null}
+          </div>
+        </header>
+
+        {isDesktopLayout ? (
+        <div className={cn("grid min-h-0 flex-1 transition-[grid-template-columns] duration-300 ease-out", desktopGridClass)}>
+          <aside className="min-w-0 overflow-hidden border-r border-cyan-300/12 bg-[linear-gradient(180deg,#07131f,#040b12)]">
+            <SceneNavigator {...navigatorProps} collapsed={leftCollapsed} onToggleCollapse={() => setLeftCollapsed((value) => !value)} />
+          </aside>
+
+          <main className="relative min-w-0 overflow-hidden bg-black">
+            <DataCenter3DPlanner
+              racks={selectedSite.racks}
+              models={models}
+              selectedRackId={selectedRackId}
+              activeLayer={activeLayer}
+              showLabels={showLabels}
+              cameraPreset={cameraPreset}
+              cameraRequestId={cameraRequestId}
+              onSelectRack={handleRackSelect}
+            />
+
+            <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center gap-2">
+              <div className="flex h-11 items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 shadow-xl backdrop-blur-xl">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${activeLayerOption.color}1f`, color: activeLayerOption.color }}>
+                  <activeLayerOption.icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-[10px] font-bold text-white">{activeLayerOption.label}</div>
+                  <div className="text-[8px] text-slate-500">{activeLayerOption.description}</div>
+                </div>
+              </div>
+
+              {layoutEditing ? (
+                <div className="flex h-11 items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/12 px-3 text-[10px] font-bold text-amber-100 shadow-xl backdrop-blur-xl">
+                  <Move3d className="h-4 w-4" /> 250mm 編排網格
                 </div>
               ) : null}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {selectedDevice ? (
-              <>
-                <div className="rounded-[24px] border border-primary/15 bg-background/35 p-4">
-                  <div className="text-2xl font-semibold tracking-tight text-foreground">{selectedDevice.name}</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {selectedRack.cabinet} / {getSlotLabel(selectedDevice)} / {selectedDevice.model}
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Asset Tag</div>
-                      <div className="mt-2 text-sm font-medium text-foreground">{selectedDevice.assetTag}</div>
-                    </div>
-                    <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Serial</div>
-                      <div className="mt-2 text-sm font-medium text-foreground">{selectedDevice.serial}</div>
-                    </div>
-                    <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">BMC</div>
-                      <div className="mt-2 text-sm font-medium text-foreground">{selectedDevice.bmc}</div>
-                    </div>
-                    <div className="rounded-2xl border border-primary/10 bg-background/35 p-3">
-                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Redfish</div>
-                      <div className="mt-2 text-sm font-medium text-foreground">{selectedDevice.redfish}</div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-[22px] border border-primary/15 bg-background/35 p-4">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Cable className="h-4 w-4 text-primary" />
-                      <span className="font-medium">設備連線 / 角色</span>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      <div>Role / {selectedDevice.role}</div>
-                      <div>Network / {selectedDevice.network}</div>
-                      <div>Power / {selectedDevice.powerFeed}</div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[22px] border border-primary/15 bg-background/35 p-4">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Gauge className="h-4 w-4 text-primary" />
-                      <span className="font-medium">現場定位資訊</span>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      <div>Site / {selectedSite.label}</div>
-                      <div>Rack / {selectedRack.cabinet}</div>
-                      <div>Coordinate / {selectedRack.coordinates}</div>
-                      <div>U 位 / {getSlotLabel(selectedDevice)}</div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-[22px] border border-primary/15 bg-background/35 px-4 py-5 text-sm text-muted-foreground">
-                請先選擇一台設備。
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[28px] border border-primary/15 bg-[linear-gradient(180deg,hsl(223_28%_15%),hsl(223_28%_12%))]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-[-0.03em]">部署與維護</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-foreground">
-                <Server className="h-4 w-4 text-primary" />
-                <span className="font-medium">部署步驟</span>
-              </div>
-              {selectedRack.deploymentSteps.map((step) => (
-                <div key={step.id} className={cn("rounded-[20px] border px-4 py-3 text-sm", getStepTone(step.status))}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-foreground">{step.title}</span>
-                    <Badge variant="outline" className="rounded-full border-current/25 bg-background/20">
-                      {getStepLabel(step.status)}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">Owner / {step.owner}</div>
-                </div>
+            <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-white/12 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+              {([
+                ["overview", Boxes, "斜角總覽"],
+                ["top", LayoutDashboard, "俯視"],
+                ["front", Menu, "正視"],
+                ["focus", Focus, "聚焦選取"],
+              ] as Array<[CameraPreset, LucideIcon, string]>).map(([preset, Icon, label]) => (
+                <Tooltip key={preset}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={label}
+                      onClick={() => requestCamera(preset)}
+                      className={cn(
+                        "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white",
+                        cameraPreset === preset && "bg-cyan-400/16 text-cyan-100"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="border-white/10 bg-[#07131f] text-slate-100">{label}</TooltipContent>
+                </Tooltip>
               ))}
+              <div className="mx-0.5 h-6 w-px bg-white/10" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={showLabels ? "隱藏浮動資訊" : "顯示浮動資訊"}
+                    onClick={() => setShowLabels((value) => !value)}
+                    className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    {showLabels ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="border-white/10 bg-[#07131f] text-slate-100">浮動資訊卡</TooltipContent>
+              </Tooltip>
             </div>
 
-            <Separator className="bg-primary/10" />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-foreground">
-                <Wrench className="h-4 w-4 text-primary" />
-                <span className="font-medium">維護紀錄</span>
-              </div>
-              {selectedRack.maintenance.length ? (
-                selectedRack.maintenance.map((record) => (
-                  <div key={record.id} className={cn("rounded-[20px] border px-4 py-3", getMaintenanceTone(record.status))}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium text-foreground">{record.title}</div>
-                      <Badge variant="outline" className="rounded-full border-current/25 bg-background/20">
-                        {getMaintenanceLabel(record.status)}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {record.owner} / {record.updatedAt}
-                    </div>
-                    <div className="mt-2 text-sm text-muted-foreground">{record.detail}</div>
-                  </div>
-                ))
+            <div className="absolute bottom-4 left-4 z-20 hidden items-center gap-2 rounded-xl border border-white/10 bg-black/68 px-3 py-2 text-[9px] text-slate-400 shadow-xl backdrop-blur-xl 2xl:flex">
+              {activeLayer === "health" ? (
+                <>
+                  {(["healthy", "warning", "critical", "offline"] as RackDeviceHealth[]).map((health) => (
+                    <span key={health} className="flex items-center gap-1.5">
+                      <span className={cn("h-2 w-2 rounded-full", health === "healthy" ? "bg-emerald-400" : health === "warning" ? "bg-amber-400" : health === "critical" ? "bg-rose-400" : "bg-slate-500")} />
+                      {HEALTH_LABELS[health]}
+                    </span>
+                  ))}
+                </>
               ) : (
-                <div className="rounded-[20px] border border-primary/10 bg-background/35 px-4 py-4 text-sm text-muted-foreground">
-                  目前沒有維護紀錄。
-                </div>
+                <>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activeLayerOption.color }} />
+                  {activeLayerOption.description}
+                </>
               )}
             </div>
+          </main>
 
-            <Separator className="bg-primary/10" />
+          <aside className="min-w-0 overflow-hidden border-l border-cyan-300/12 bg-[linear-gradient(180deg,#07131f,#040b12)]">
+            <RackInspector {...inspectorProps} collapsed={rightCollapsed} onToggleCollapse={() => setRightCollapsed((value) => !value)} />
+          </aside>
+        </div>
+        ) : (
+        <div className="relative h-[640px] flex-none bg-black">
+          <DataCenter3DPlanner
+            racks={selectedSite.racks}
+            models={models}
+            selectedRackId={selectedRackId}
+            activeLayer={activeLayer}
+            showLabels={showLabels}
+            cameraPreset={cameraPreset}
+            cameraRequestId={cameraRequestId}
+            onSelectRack={handleRackSelect}
+          />
+          <div className="absolute left-3 top-3 z-20 flex gap-2">
+            <IconTooltipButton label="場景導覽" icon={PanelLeftOpen} onClick={() => setMobileLeftOpen(true)} />
+            <IconTooltipButton label="機櫃詳情" icon={PanelRightOpen} onClick={() => setMobileRightOpen(true)} />
+          </div>
+          <div className="absolute right-3 top-3 z-20 flex gap-2">
+            <IconTooltipButton label="聚焦" icon={Focus} onClick={() => requestCamera("focus")} />
+            <IconTooltipButton label={showLabels ? "隱藏資訊卡" : "顯示資訊卡"} icon={showLabels ? Eye : EyeOff} onClick={() => setShowLabels((value) => !value)} />
+          </div>
+        </div>
+        )}
 
-            <div className="rounded-[22px] border border-cyan-300/10 bg-cyan-400/5 p-4">
-              <div className="flex items-center gap-2 text-foreground">
-                <Bot className="h-4 w-4 text-cyan-200" />
-                <span className="font-medium">後續擴充方向</span>
-              </div>
-              <div className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground">
-                <div>支援 STEP / STP 機櫃與 Tray 模型的標準化匯入。</div>
-                <div>加入設備搜尋、序號定位、BMC / Redfish 快速跳轉。</div>
-                <div>串接部署 SOP、維修紀錄與現場照片，形成完整維運履歷。</div>
-                <div>延伸整合 BMC / Redfish / 設備狀態 API，建立真正的 Data Center Digital Twin。</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
+          <SheetContent side="left" className="w-[min(90vw,330px)] border-r border-cyan-300/15 bg-[#06111c] p-0 text-slate-100 sm:max-w-[330px]">
+            <SceneNavigator {...navigatorProps} />
+          </SheetContent>
+        </Sheet>
+
+        <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
+          <SheetContent side="right" className="w-[min(92vw,360px)] border-l border-cyan-300/15 bg-[#06111c] p-0 text-slate-100 sm:max-w-[360px]">
+            <RackInspector {...inspectorProps} />
+          </SheetContent>
+        </Sheet>
+
+        <ModelLibrary
+          open={modelLibraryOpen}
+          onOpenChange={setModelLibraryOpen}
+          models={models}
+          selectedRack={selectedRack}
+          canEdit={canEdit}
+          isImporting={isImporting}
+          importError={importError}
+          manufacturer={manufacturer}
+          modelName={modelName}
+          revision={revision}
+          dimensions={importDimensions}
+          selectedModelId={selectedModelId}
+          onManufacturerChange={setManufacturer}
+          onModelNameChange={setModelName}
+          onRevisionChange={setRevision}
+          onDimensionsChange={setImportDimensions}
+          onSelectedModelChange={setSelectedModelId}
+          onChooseFile={() => fileInputRef.current?.click()}
+          onAssignModel={assignSelectedModel}
+          onAddRack={addRackFromSelectedModel}
+        />
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
