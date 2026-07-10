@@ -5,14 +5,19 @@ import {
   Bot,
   CheckCircle2,
   FileText,
+  FileSearch,
+  History,
   ImageIcon,
   KeyRound,
   MessageSquareText,
   Paperclip,
   Plus,
+  ScanText,
+  Search,
   Send,
   Sparkles,
   Trash2,
+  TableProperties,
   Upload,
   X,
   User,
@@ -127,6 +132,26 @@ const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
 const MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024;
+const QUERY_STARTERS = [
+  {
+    icon: "search",
+    title: "查詢機台現況",
+    description: "快速整理狀態、異常與待處理項目",
+    prompt: "請整理目前機台狀態，列出異常、影響範圍與建議處理順序。",
+  },
+  {
+    icon: "table",
+    title: "比對附件資料",
+    description: "找出欄位差異、缺漏與重複資料",
+    prompt: "請比對我接下來上傳的資料，整理欄位差異、缺漏值與重複項目。",
+  },
+  {
+    icon: "scan",
+    title: "擷取圖片文字",
+    description: "保留表格結構、料號與關鍵代碼",
+    prompt: DEFAULT_IMAGE_OCR_PROMPT,
+  },
+] as const;
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   "csv",
   "doc",
@@ -649,6 +674,7 @@ export function ApiChatConsole({
   }, []);
 
   useEffect(() => {
+    if (!messages.length && !loading) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
 
@@ -1381,29 +1407,45 @@ export function ApiChatConsole({
   const conversationPanel = (
     <div
       ref={chatConsoleRef}
-      className="flex min-h-[720px] flex-col rounded-[34px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_24%),linear-gradient(180deg,#121a2a_0%,#0b1220_100%)] p-5 shadow-[0_32px_90px_rgba(2,8,23,0.34)]"
+      className={cn(
+        "flex flex-col overflow-hidden border border-slate-700/60 bg-[linear-gradient(180deg,#111a2a_0%,#0a111d_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.32)]",
+        isChatOnly
+          ? "h-[calc(100dvh-285px)] min-h-[520px] rounded-[28px] md:h-[calc(100dvh-210px)] lg:h-full"
+          : "min-h-[720px] rounded-[34px] p-5"
+      )}
     >
-      <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <div
+        className={cn(
+          "flex shrink-0 flex-col gap-4 border-b border-slate-700/60 lg:flex-row lg:items-center lg:justify-between",
+          isChatOnly ? "bg-[#111b2c]/80 px-5 py-4 md:px-6" : "pb-5"
+        )}
+      >
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-400/20 bg-blue-500/10 text-blue-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <MessageSquareText className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xl font-black tracking-[-0.02em] text-slate-50">查詢視窗</p>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
-              保留本次上下文，適合連續查詢、比對欄位、擷取圖片文字與持續追問。
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-bold tracking-[-0.02em] text-slate-50">AI 資料助理</p>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/8 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                已就緒
+              </span>
+            </div>
+            <p className="mt-0.5 text-sm leading-6 text-slate-400">
+              查詢、比對、摘要與圖片文字擷取，都會保留本次對話脈絡。
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           {isChatOnly ? (
-            <div className="min-w-[240px] max-w-[340px]">
+            <div className="flex min-w-[220px] max-w-[320px] items-center gap-2">
               <Select
                 value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
                 onValueChange={(value) => onSelectApiKey?.(value)}
               >
-                <SelectTrigger className="h-10 rounded-2xl border-white/10 bg-white/5 px-4 text-left text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <SelectTrigger aria-label="選擇 AI 模型" className="h-11 rounded-xl border-slate-600/70 bg-slate-900/60 px-3 text-left text-slate-100 shadow-none focus:ring-2 focus:ring-blue-400/30">
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -1417,38 +1459,96 @@ export function ApiChatConsole({
                   })}
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={requestResetConversation}
+                aria-label="清空對話"
+                className="h-11 w-11 shrink-0 rounded-xl border border-slate-700/70 bg-slate-900/50 p-0 text-slate-400 hover:bg-rose-500/10 hover:text-rose-100 sm:hidden"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           ) : null}
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="hidden rounded-xl border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-right shadow-none 2xl:block">
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">目前模型</p>
             <p className="mt-1 text-sm font-semibold text-slate-100">{provider || "gemini"} / {model || "-"}</p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
+      <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly ? "gap-0" : "mt-4 gap-4")}>
         {connectionState ? (
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
 
-        <div className="flex min-h-0 flex-1 flex-col rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#0c1524_0%,#0b1321_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-          <div className={cn("space-y-4 overflow-y-auto pr-1", chatHeightClass)}>
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.055),transparent_34%),#0a121f]",
+            isChatOnly ? "px-4 py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+          )}
+        >
+          <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
-              <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
-                <div className="max-w-xl space-y-5">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
-                    <MessageSquareText className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
-                    <p className="mt-2 text-sm leading-7 text-slate-400">
-                      {isChatOnly
-                        ? "直接在下方輸入問題，或貼上截圖與附件。系統會依這次對話上下文持續回答。"
-                        : "可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。"}
+              isChatOnly ? (
+                <div className="flex min-h-[300px] flex-1 items-center justify-center px-1 py-5 md:px-6 2xl:py-2">
+                  <div className="w-full max-w-3xl text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-400/25 bg-[linear-gradient(145deg,rgba(59,130,246,0.22),rgba(14,165,233,0.08))] text-blue-100 shadow-[0_18px_45px_-22px_rgba(59,130,246,0.65)] 2xl:h-12 2xl:w-12 2xl:rounded-2xl">
+                      <Search className="h-6 w-6 2xl:h-5 2xl:w-5" />
+                    </div>
+                    <p className="mt-5 text-2xl font-bold tracking-[-0.035em] text-slate-50 md:text-3xl 2xl:mt-3">
+                      今天想查什麼？
                     </p>
+                    <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-400">
+                      直接描述你的問題，或從常用任務開始。你也可以貼上截圖與文件一起分析。
+                    </p>
+
+                    <div className="mt-7 grid gap-3 text-left md:grid-cols-3 2xl:mt-4">
+                      {QUERY_STARTERS.map((starter) => {
+                        const StarterIcon =
+                          starter.icon === "table"
+                            ? TableProperties
+                            : starter.icon === "scan"
+                              ? ScanText
+                              : FileSearch;
+
+                        return (
+                          <button
+                            key={starter.title}
+                            type="button"
+                            onClick={() => setDraftMessage(starter.prompt)}
+                            className="group min-h-[116px] rounded-2xl border border-slate-700/70 bg-slate-900/45 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-blue-500/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 2xl:min-h-[96px] 2xl:p-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-400/15 bg-blue-500/10 text-blue-200 transition-colors group-hover:bg-blue-500/20">
+                                <StarterIcon className="h-4 w-4" />
+                              </span>
+                              <span className="text-sm font-bold text-slate-100">{starter.title}</span>
+                            </div>
+                            <span className="mt-3 block text-xs leading-5 text-slate-400 2xl:mt-2">
+                              {starter.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
+                  <div className="max-w-xl space-y-5">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
+                      <MessageSquareText className="h-7 w-7" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
+                      <p className="mt-2 text-sm leading-7 text-slate-400">
+                        可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
             ) : (
               messages.map((message) => <MessageCard key={message.id} message={message} />)
             )}
@@ -1467,7 +1567,14 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-cyan-300/12 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <div
+          className={cn(
+            "border-cyan-300/12",
+            isChatOnly
+              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-4 py-4 md:px-6"
+              : "rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
+          )}
+        >
           <input
             ref={imageInputRef}
             type="file"
@@ -1480,11 +1587,13 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">Ctrl+V 貼圖</span>
-              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
-              <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1">15MB 內</span>
+          <div className="mb-2.5 hidden flex-wrap items-center justify-between gap-2 sm:flex">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+              <span>Ctrl+V 貼上圖片</span>
+              <span className="h-3 w-px bg-slate-700" />
+              <span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
+              <span className="h-3 w-px bg-slate-700" />
+              <span>單檔 15MB 內</span>
             </div>
             {!isChatOnly ? (
               <Button
@@ -1501,7 +1610,7 @@ export function ApiChatConsole({
               type="button"
               variant="outline"
               onClick={requestResetConversation}
-              className="h-9 rounded-2xl border-cyan-400/16 bg-transparent px-4 text-sm font-bold text-slate-300 transition-all duration-200 hover:bg-cyan-400/8 hover:text-white active:scale-[0.99]"
+              className="h-9 rounded-xl border-slate-700/80 bg-transparent px-3 text-xs font-semibold text-slate-400 transition-all duration-200 hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               清空對話
@@ -1548,14 +1657,15 @@ export function ApiChatConsole({
             </div>
           ) : null}
 
-          <div className="rounded-[30px] border border-cyan-300/14 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.12),transparent_30%),linear-gradient(180deg,#162338_0%,#0d1626_100%)] px-4 py-3 shadow-[0_18px_40px_rgba(8,47,73,0.22),inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="rounded-[20px] border border-slate-600/80 bg-[linear-gradient(180deg,#162238_0%,#111b2d_100%)] px-3 py-3 shadow-[0_18px_45px_-26px_rgba(37,99,235,0.55),inset_0_1px_0_rgba(255,255,255,0.045)] focus-within:border-blue-400/55 focus-within:ring-2 focus-within:ring-blue-500/10">
+            <div className="flex items-end gap-2 md:gap-3">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                className="h-11 w-11 shrink-0 rounded-2xl border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(14,165,233,0.18),rgba(8,47,73,0.2))] p-0 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-[linear-gradient(180deg,rgba(34,211,238,0.22),rgba(8,47,73,0.24))] disabled:opacity-50"
+                aria-label="新增附件"
+                className="h-11 w-11 shrink-0 rounded-xl border border-slate-600/80 bg-slate-800/70 p-0 text-slate-200 shadow-none hover:border-blue-400/40 hover:bg-blue-500/15 hover:text-blue-100 disabled:opacity-50"
               >
                 <Plus className="h-5 w-5" />
               </Button>
@@ -1565,23 +1675,25 @@ export function ApiChatConsole({
                   data-ai-surface="true"
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
-                  placeholder="問問 Gemini，或直接 Ctrl+V 貼上截圖"
+                  aria-label="輸入查詢內容"
+                  placeholder="輸入問題、貼上資料，或描述你想整理的內容..."
                   className="min-h-[72px] border-0 bg-transparent px-0 py-1 text-[16px] leading-7 text-slate-50 shadow-none placeholder:text-slate-300/85 focus-visible:ring-0"
                 />
-                <div className="mt-2 text-[12px] text-slate-400">
-                  直接輸入問題、貼上截圖，或補上附件後送出。
+                <div className="mt-1 hidden text-[11px] text-slate-500 sm:block">
+                  回覆可能有誤，重要資料請再次確認。
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 md:justify-end">
-                <div className="rounded-full border border-cyan-300/14 bg-[linear-gradient(180deg,rgba(34,211,238,0.12),rgba(14,116,144,0.12))] px-4 py-2 text-sm font-semibold text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                <div className="hidden max-w-[180px] truncate rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-300 shadow-none sm:block">
                   {model || "Gemini"}
                 </div>
                 <Button
                   type="button"
                   onClick={() => void handleSend()}
                   disabled={!canSend}
-                  className="h-11 min-w-11 rounded-2xl border border-cyan-200/30 bg-[linear-gradient(135deg,#67e8f9_0%,#38bdf8_45%,#0ea5e9_100%)] px-4 font-bold text-slate-950 shadow-[0_16px_36px_rgba(14,165,233,0.32)] transition-all duration-200 hover:brightness-105 active:scale-[0.99] disabled:border-slate-600 disabled:bg-slate-700 disabled:text-slate-300 disabled:shadow-none"
+                  aria-label="送出查詢"
+                  className="h-11 min-w-11 rounded-xl border border-blue-300/30 bg-blue-500 px-4 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -1597,181 +1709,140 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100vh-132px)] w-full items-stretch gap-5 xl:grid-cols-[264px_minmax(0,1fr)]">
-          <aside className="h-full rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,#11192a_0%,#0b1220_100%)] p-4 shadow-[0_28px_80px_rgba(2,8,23,0.28)] xl:self-stretch">
-            <div className="flex h-full flex-col gap-5">
-            <div className="space-y-4 border-b border-white/8 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-cyan-100">
-                  <MessageSquareText className="h-5 w-5" />
+        <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-slate-700/60 bg-[#0c1422] shadow-[0_24px_70px_rgba(2,8,23,0.28)] lg:order-1">
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="border-b border-slate-700/60 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[13px] border border-blue-400/20 bg-blue-500/10 text-blue-200">
+                    <Search className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-50">資料查詢空間</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">AI KNOWLEDGE WORKSPACE</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-black text-slate-50">資料查詢空間</p>
-                  <p className="text-xs leading-5 text-slate-400">查資料、對話學習、整理結果</p>
-                </div>
-              </div>
 
-              <Button
-                type="button"
-                onClick={requestResetConversation}
-                className="h-11 w-full justify-start rounded-2xl bg-cyan-500 font-bold text-slate-950 shadow-[0_16px_30px_rgba(34,211,238,0.18)] hover:bg-cyan-400"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                新對話
-              </Button>
-
-              <div className="grid gap-2">
                 <Button
                   type="button"
-                  variant="outline"
+                  onClick={requestResetConversation}
+                  className="mt-4 h-11 w-full justify-start rounded-xl bg-blue-500 px-3 font-bold text-white shadow-[0_12px_28px_-16px_rgba(59,130,246,0.9)] hover:bg-blue-400"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  建立新對話
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
                   onClick={openSavePromptDialog}
-                  className="h-10 justify-start rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                  className="mt-2 h-10 w-full justify-start rounded-xl px-3 text-sm font-medium text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
                 >
                   <Bookmark className="mr-2 h-4 w-4" />
-                  儲存共享提示詞
+                  儲存為共享提示詞
                 </Button>
               </div>
-            </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-              <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black text-slate-100">對話紀錄</p>
-                    <p className="text-xs text-slate-400">保留最近建立的查詢紀錄</p>
-                  </div>
-                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
-                    {savedConversations.length}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  {savedConversations.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
-                      目前還沒有對話紀錄
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-4">
+                <section aria-labelledby="conversation-history-title">
+                  <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <History className="h-3.5 w-3.5 text-slate-500" />
+                      <p id="conversation-history-title" className="text-xs font-bold text-slate-300">
+                        最近對話
+                      </p>
                     </div>
-                  ) : (
-                    savedConversations.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-cyan-300/16 hover:bg-white/8"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => restoreConversation(item)}
-                          className="w-full text-left"
-                        >
-                          <div className="flex items-start gap-2">
-                            <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-100">
-                                {item.title}
-                              </p>
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {formatSavedItemTime(item.savedAt)} · {item.provider} / {item.model}
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <Button
+                    <span className="text-[11px] tabular-nums text-slate-500">{savedConversations.length}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {savedConversations.length === 0 ? (
+                      <p className="rounded-xl px-3 py-4 text-xs leading-5 text-slate-600">
+                        對話會自動保留在這裡
+                      </p>
+                    ) : (
+                      savedConversations.map((item) => (
+                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-transparent hover:border-slate-700/70 hover:bg-slate-800/55">
+                          <button
                             type="button"
-                            variant="outline"
                             onClick={() => restoreConversation(item)}
-                            className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
+                            className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
                           >
-                            恢復
-                          </Button>
-                          <Button
+                            <p className="truncate text-sm font-medium text-slate-200">{item.title}</p>
+                            <p className="mt-1 truncate text-[11px] text-slate-500">
+                              {formatSavedItemTime(item.savedAt)} · {item.model}
+                            </p>
+                          </button>
+                          <button
                             type="button"
-                            variant="outline"
                             onClick={() => removeSavedConversation(item.id)}
-                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
+                            aria-label={`刪除對話：${item.title}`}
+                            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                           >
-                            刪除
-                          </Button>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black text-slate-100">共享提示詞</p>
-                    <p className="text-xs text-slate-400">所有使用者共用，先開視窗調整再套用給 AI</p>
+                      ))
+                    )}
                   </div>
-                  <Badge className="border-white/10 bg-white/5 text-slate-300 hover:bg-white/5">
-                    {savedPrompts.length}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  {savedPrompts.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">
-                      目前還沒有共享提示詞
+                </section>
+
+                <section aria-labelledby="shared-prompts-title">
+                  <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <Bookmark className="h-3.5 w-3.5 text-slate-500" />
+                      <p id="shared-prompts-title" className="text-xs font-bold text-slate-300">
+                        共享提示詞
+                      </p>
                     </div>
-                  ) : (
-                    savedPrompts.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-white/8 bg-white/5 p-3 transition-colors hover:border-cyan-300/16 hover:bg-white/8"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openLibraryApplyDialog(item)}
-                          className="w-full text-left"
-                        >
-                          <div className="flex items-start gap-2">
-                            <Bookmark className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-100">
-                                {item.title}
-                              </p>
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {formatSavedItemTime(item.savedAt)}
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <Button
+                    <span className="text-[11px] tabular-nums text-slate-500">{savedPrompts.length}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {savedPrompts.length === 0 ? (
+                      <p className="rounded-xl px-3 py-4 text-xs leading-5 text-slate-600">
+                        儲存常用指令，讓團隊快速套用
+                      </p>
+                    ) : (
+                      savedPrompts.map((item) => (
+                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-transparent hover:border-slate-700/70 hover:bg-slate-800/55">
+                          <button
                             type="button"
-                            variant="outline"
                             onClick={() => openLibraryApplyDialog(item)}
-                            className="h-8 rounded-xl border-cyan-300/16 bg-cyan-400/8 text-xs font-bold text-cyan-100 hover:bg-cyan-400/14 hover:text-white"
+                            className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
                           >
-                            開啟調整
-                          </Button>
-                          <Button
+                            <p className="truncate text-sm font-medium text-slate-200">{item.title}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">{formatSavedItemTime(item.savedAt)}</p>
+                          </button>
+                          <button
                             type="button"
-                            variant="outline"
                             onClick={() => removeSavedPrompt(item.id)}
-                            className="h-8 rounded-xl border-rose-300/16 bg-rose-500/8 text-xs font-bold text-rose-100 hover:bg-rose-500/14 hover:text-white"
+                            aria-label={`刪除共享提示詞：${item.title}`}
+                            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                           >
-                            刪除
-                          </Button>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              <div className="border-t border-slate-700/60 p-3">
+                <div className="rounded-xl bg-slate-900/55 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold text-slate-500">目前使用模型</p>
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                  </div>
+                  <p className="mt-1.5 truncate text-xs font-bold text-slate-200">{activeKeyLabel}</p>
+                  <p className="mt-1 truncate text-[11px] text-slate-500">
+                    {provider || "-"} / {model || "-"}
+                  </p>
                 </div>
               </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/8 bg-[#0d1524] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
-                目前模型
-              </p>
-              <p className="mt-2 truncate text-sm font-bold text-slate-100">{activeKeyLabel}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {provider || "-"} / {model || "-"}
-              </p>
-            </div>
             </div>
           </aside>
 
-          <div className="min-w-0">{conversationPanel}</div>
+          <div className="order-1 min-h-0 min-w-0 lg:order-2">{conversationPanel}</div>
         </div>
       </>
     );
