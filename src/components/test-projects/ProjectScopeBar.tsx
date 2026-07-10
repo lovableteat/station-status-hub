@@ -401,8 +401,7 @@ export function ProjectScopeBar() {
                                 會複製流程範本
                               </div>
                               <p className="mt-1">
-                                新專案會從{" "}
-                                <strong>{cloneSourceProject.name}</strong>{" "}
+                                新專案會從 <strong>{cloneSourceProject.name}</strong>{" "}
                                 複製站點、測項與站點內容。
                               </p>
                             </div>
@@ -626,9 +625,7 @@ export function ProjectScopeBar() {
             <AlertDialogTitle>確認刪除專案</AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
               <p>
-                你要刪除的是
-                {" "}
-                <strong>{projectPendingDelete?.name ?? "未指定專案"}</strong>。
+                你要刪除的是 <strong>{projectPendingDelete?.name ?? "未指定專案"}</strong>。
               </p>
               <p>
                 這裡的刪除是安全封存：專案會從切換清單中移除，但資料庫裡既有紀錄不會被物理清掉。
