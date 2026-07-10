@@ -9,6 +9,32 @@ function looksLikeImageModel(model?: string | null) {
   return /image|nano banana/i.test(model ?? "");
 }
 
+function getApiKeyTimeValue(value?: null | string) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortAvailableApiKeys(records: ApiKeyRecord[]) {
+  return [...records].sort((left, right) => {
+    const leftMetadata = normalizeApiKeyPermissions(left.permissions).metadata;
+    const rightMetadata = normalizeApiKeyPermissions(right.permissions).metadata;
+    const leftImage = looksLikeImageModel(leftMetadata.model);
+    const rightImage = looksLikeImageModel(rightMetadata.model);
+
+    if (leftImage !== rightImage) {
+      return leftImage ? 1 : -1;
+    }
+
+    const lastUsedDifference = getApiKeyTimeValue(left.last_used_at) - getApiKeyTimeValue(right.last_used_at);
+    if (lastUsedDifference !== 0) {
+      return lastUsedDifference;
+    }
+
+    return (left.usage_count ?? 0) - (right.usage_count ?? 0);
+  });
+}
+
 export function ApiChatWorkspacePage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<null | string>(null);
@@ -33,19 +59,7 @@ export function ApiChatWorkspacePage() {
           );
         });
 
-        setApiKeys(
-          availableKeys.sort((left, right) => {
-            const leftImage = looksLikeImageModel(
-              normalizeApiKeyPermissions(left.permissions).metadata.model
-            );
-            const rightImage = looksLikeImageModel(
-              normalizeApiKeyPermissions(right.permissions).metadata.model
-            );
-
-            if (leftImage === rightImage) return 0;
-            return leftImage ? -1 : 1;
-          })
-        );
+        setApiKeys(sortAvailableApiKeys(availableKeys));
       } catch (error) {
         console.error("Failed to load API chat keys:", error);
         setApiKeys([]);
@@ -53,6 +67,21 @@ export function ApiChatWorkspacePage() {
     };
 
     void loadApiKeys();
+
+    const channel = supabase
+      .channel("api-chat-api-keys")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "api_keys" },
+        () => {
+          void loadApiKeys();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
