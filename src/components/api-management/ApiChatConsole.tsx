@@ -6,7 +6,6 @@ import {
   Bot,
   CheckCircle2,
   FileText,
-  FileSearch,
   History,
   ImageIcon,
   KeyRound,
@@ -14,12 +13,10 @@ import {
   MessageSquareText,
   Paperclip,
   Plus,
-  ScanText,
   Search,
   Send,
   Sparkles,
   Trash2,
-  TableProperties,
   X,
   User,
 } from "lucide-react";
@@ -133,26 +130,6 @@ const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
 const MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024;
-const QUERY_STARTERS = [
-  {
-    icon: "search",
-    title: "查詢機台現況",
-    description: "快速整理狀態、異常與待處理項目",
-    prompt: "請整理目前機台狀態，列出異常、影響範圍與建議處理順序。",
-  },
-  {
-    icon: "table",
-    title: "比對附件資料",
-    description: "找出欄位差異、缺漏與重複資料",
-    prompt: "請比對我接下來上傳的資料，整理欄位差異、缺漏值與重複項目。",
-  },
-  {
-    icon: "scan",
-    title: "擷取圖片文字",
-    description: "保留表格結構、料號與關鍵代碼",
-    prompt: DEFAULT_IMAGE_OCR_PROMPT,
-  },
-] as const;
 const SHARED_PROMPT_TEMPLATES = [
   {
     title: "每日異常摘要",
@@ -1577,38 +1554,8 @@ export function ApiChatConsole({
                       今天想查什麼？
                     </p>
                     <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-300 2xl:mt-1">
-                      直接描述你的問題，或從常用任務開始。你也可以貼上截圖與文件一起分析。
+                      直接描述你的問題，也可以貼上截圖與文件一起分析。
                     </p>
-
-                    <div className="mt-7 grid gap-3 text-left md:grid-cols-3 2xl:mt-2">
-                      {QUERY_STARTERS.map((starter) => {
-                        const StarterIcon =
-                          starter.icon === "table"
-                            ? TableProperties
-                            : starter.icon === "scan"
-                              ? ScanText
-                              : FileSearch;
-
-                        return (
-                          <button
-                            key={starter.title}
-                            type="button"
-                            onClick={() => setDraftMessage(starter.prompt)}
-                            className="group min-h-[124px] rounded-2xl border border-blue-300/30 bg-[#14233a] p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_-28px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300/60 hover:bg-[#192b47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 2xl:min-h-[76px] 2xl:px-2.5 2xl:py-2"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-400/15 text-blue-100 transition-colors group-hover:bg-blue-400/25 2xl:h-8 2xl:w-8 2xl:rounded-lg">
-                                <StarterIcon className="h-5 w-5 2xl:h-4 2xl:w-4" />
-                              </span>
-                              <span className="text-base font-black text-white">{starter.title}</span>
-                            </div>
-                            <span className="mt-3 block text-sm leading-6 text-slate-300 2xl:mt-1 2xl:leading-5">
-                              {starter.description}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 </div>
               ) : (
@@ -1867,60 +1814,25 @@ export function ApiChatConsole({
                   </div>
                 </section>
 
-                <section
-                  aria-labelledby="shared-prompts-title"
-                  className="rounded-[20px] border border-blue-300/30 bg-blue-400/[0.08] p-3.5"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2.5">
-                      <LibraryBig className="mt-0.5 h-5 w-5 shrink-0 text-blue-200" />
-                      <div>
+                {savedPrompts.length > 0 ? (
+                  <section
+                    aria-labelledby="shared-prompts-title"
+                    className="rounded-[20px] border border-blue-300/30 bg-blue-400/[0.08] p-3.5"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <LibraryBig className="h-5 w-5 shrink-0 text-blue-200" />
                         <p id="shared-prompts-title" className="text-base font-black text-white">
                           共享提示詞庫
                         </p>
-                        <p className="mt-1 text-sm leading-5 text-slate-300">
-                          點選提示詞，調整後套用到輸入框
-                        </p>
                       </div>
+                      <span className="rounded-full border border-blue-300/25 bg-blue-400/10 px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
+                        {savedPrompts.length}
+                      </span>
                     </div>
-                    <span className="rounded-full border border-blue-300/25 bg-blue-400/10 px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
-                      {savedPrompts.length}
-                    </span>
-                  </div>
 
-                  <div className="mt-3 rounded-2xl border border-slate-600/50 bg-slate-950/25 p-3">
-                    <p className="text-sm font-black text-blue-100">怎麼使用？</p>
-                    <div className="mt-2 space-y-2">
-                      {[
-                        ["1", "按上方「新增共享提示詞」建立常用指令"],
-                        ["2", "從提示詞庫點選要使用的名稱"],
-                        ["3", "確認內容後放入輸入框，再按送出"],
-                      ].map(([step, description]) => (
-                        <div key={step} className="flex items-start gap-2.5 text-sm leading-5 text-slate-300">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-400 text-xs font-black text-slate-950">
-                            {step}
-                          </span>
-                          <span>{description}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    {savedPrompts.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-blue-300/30 bg-blue-400/[0.06] p-3 text-center">
-                        <p className="text-sm leading-6 text-slate-300">目前還沒有提示詞</p>
-                        <Button
-                          type="button"
-                          onClick={openSavePromptDialog}
-                          className="mt-2 h-11 w-full rounded-xl bg-blue-400 text-sm font-black text-slate-950 hover:bg-blue-300"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          建立第一個提示詞
-                        </Button>
-                      </div>
-                    ) : (
-                      savedPrompts.map((item) => (
+                    <div className="mt-3 space-y-2">
+                      {savedPrompts.map((item) => (
                         <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-slate-600/50 bg-slate-950/20 hover:border-blue-300/50 hover:bg-blue-400/10">
                           <button
                             type="button"
@@ -1942,10 +1854,10 @@ export function ApiChatConsole({
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </section>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
               </div>
 
               <div className="border-t border-blue-300/20 p-4">
