@@ -566,6 +566,34 @@ function SectionTitle({
   );
 }
 
+function QueryLoadingCard() {
+  return (
+    <div className="flex gap-3">
+      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/18 bg-emerald-400/10 text-emerald-100">
+        <Bot className="h-4.5 w-4.5" />
+      </div>
+      <div className="max-w-[88%] overflow-hidden rounded-[24px] border border-emerald-400/12 bg-[linear-gradient(180deg,#09110f_0%,#05080a_100%)] px-5 py-4 text-slate-200 shadow-[0_16px_36px_rgba(0,0,0,0.28)]">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-emerald-100">查詢中</span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/90 animate-pulse [animation-delay:180ms]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:360ms]" />
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          <div className="h-2 rounded-full bg-white/6">
+            <div className="h-2 w-2/3 rounded-full bg-[linear-gradient(90deg,rgba(16,185,129,0.15),rgba(52,211,153,0.7),rgba(16,185,129,0.15))] animate-pulse" />
+          </div>
+          <div className="h-2 rounded-full bg-white/6">
+            <div className="h-2 w-1/2 rounded-full bg-[linear-gradient(90deg,rgba(16,185,129,0.12),rgba(110,231,183,0.58),rgba(16,185,129,0.12))] animate-pulse [animation-delay:240ms]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MessageCard({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
@@ -1876,7 +1904,7 @@ export function ApiChatConsole({
 
         <div
           className={cn(
-            "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(96,165,250,0.1),transparent_38%),#0e192a]",
+            "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.08),transparent_28%),#030508]",
             isChatOnly ? "px-4 py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
@@ -1885,7 +1913,7 @@ export function ApiChatConsole({
               isChatOnly ? (
                 <div className="flex min-h-[300px] flex-1 items-center justify-center px-1 py-5 md:px-6 2xl:py-0">
                   <div className="w-full max-w-3xl text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-blue-400/25 bg-[linear-gradient(145deg,rgba(59,130,246,0.22),rgba(14,165,233,0.08))] text-blue-100 shadow-[0_18px_45px_-22px_rgba(59,130,246,0.65)] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
                       <Search className="h-6 w-6 2xl:h-4.5 2xl:w-4.5" />
                     </div>
                     <p className="mt-5 text-3xl font-black tracking-[-0.035em] text-white md:text-4xl 2xl:mt-1">
@@ -1897,7 +1925,7 @@ export function ApiChatConsole({
                   </div>
                 </div>
               ) : (
-                <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),#0d1523] px-8 text-center">
+                <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.08),transparent_22%),#040608] px-8 text-center">
                   <div className="max-w-xl space-y-5">
                     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
                       <MessageSquareText className="h-7 w-7" />
@@ -1915,16 +1943,7 @@ export function ApiChatConsole({
               messages.map((message) => <MessageCard key={message.id} message={message} />)
             )}
 
-            {loading ? (
-              <div className="flex gap-3">
-                <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/16 bg-cyan-400/10 text-cyan-100">
-                  <Bot className="h-4.5 w-4.5" />
-                </div>
-                <div className="max-w-[88%] rounded-[24px] border border-cyan-400/10 bg-[linear-gradient(180deg,#10192e_0%,#0b1423_100%)] px-5 py-4 text-[15px] leading-7 text-slate-300">
-                  查詢中...
-                </div>
-              </div>
-            ) : null}
+            {loading ? <QueryLoadingCard /> : null}
             <div ref={messagesEndRef} />
           </div>
         </div>
