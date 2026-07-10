@@ -402,7 +402,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_28%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_24%)] p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -430,10 +430,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-cyan-300/20 bg-[#16233c] p-1.5 text-slate-300">
+        <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-sky-200/28 bg-[linear-gradient(180deg,rgba(37,56,92,0.94),rgba(21,34,58,0.96))] p-1.5 text-slate-200 shadow-[0_14px_36px_rgba(56,189,248,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
           <TabsTrigger
             value="users"
-            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-300/25 data-[state=active]:bg-cyan-400/15 data-[state=active]:text-cyan-50"
+            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-200/45 data-[state=active]:bg-[linear-gradient(135deg,rgba(125,211,252,0.22),rgba(59,130,246,0.16))] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(56,189,248,0.14)]"
           >
             <Users className="h-4 w-4 mr-2" />
             用戶管理
@@ -444,7 +444,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </TabsTrigger> : null}
           <TabsTrigger
             value="api-management"
-            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-300/25 data-[state=active]:bg-cyan-400/15 data-[state=active]:text-cyan-50"
+            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-200/45 data-[state=active]:bg-[linear-gradient(135deg,rgba(125,211,252,0.22),rgba(59,130,246,0.16))] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(56,189,248,0.14)]"
           >
             <Network className="h-4 w-4 mr-2" />
             API 管理
@@ -463,12 +463,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="border border-cyan-100/38 bg-[linear-gradient(135deg,rgba(186,230,253,0.38),rgba(96,165,250,0.28))] text-slate-950 shadow-[0_14px_32px_rgba(56,189,248,0.22)] hover:brightness-110">
                   <Plus className="h-4 w-4 mr-2" />
                   新增用戶
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl border border-cyan-200/26 bg-[linear-gradient(180deg,rgba(33,49,82,0.98),rgba(17,27,45,0.98))] text-slate-100 shadow-[0_28px_80px_rgba(15,23,42,0.48)]">
                 <DialogHeader>
                   <DialogTitle>新增系統用戶</DialogTitle>
                 </DialogHeader>
@@ -482,6 +482,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                     <div className="space-y-2">
                       <Label>用戶名</Label>
                       <Input
+                        className="border-cyan-200/22 bg-white/[0.03] text-slate-50 placeholder:text-slate-400"
                         value={newUser.username}
                         onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                         placeholder="例如 vin、andy、pm_karen"
@@ -491,6 +492,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                     <div className="space-y-2">
                       <Label>顯示名稱</Label>
                       <Input
+                        className="border-cyan-200/22 bg-white/[0.03] text-slate-50 placeholder:text-slate-400"
                         value={newUser.displayName}
                         onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
                         placeholder="畫面上顯示的名稱"
@@ -503,10 +505,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         value={newUser.role}
                         onValueChange={(value) => setNewUser({ ...newUser, role: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="border-cyan-200/22 bg-white/[0.03] text-slate-50">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="border-cyan-200/22 bg-[#213152] text-slate-50">
                           {user?.role === "super_admin" ? (
                             <SelectItem value="super_admin">超級管理員</SelectItem>
                           ) : null}
@@ -520,6 +522,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                     <div className="space-y-2">
                       <Label>初始密碼</Label>
                       <Input
+                        className="border-cyan-200/22 bg-white/[0.03] text-slate-50 placeholder:text-slate-400"
                         type="password"
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
@@ -529,7 +532,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   </div>
 
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>
+                    <Button variant="outline" onClick={() => setIsUserDialogOpen(false)} className="border-slate-200/18 bg-white/[0.03] text-slate-100 hover:border-cyan-200/35 hover:bg-cyan-300/10">
                       取消
                     </Button>
                     <Button onClick={handleAddUser}>建立帳號</Button>
@@ -589,9 +592,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             <CardContent className="space-y-4 pt-6">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-100/65" />
                   <Input
-                    className="pl-10"
+                    className="border-cyan-200/20 bg-white/[0.03] pl-10 text-slate-50 placeholder:text-slate-400"
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
                     placeholder="搜尋帳號、顯示名稱、建立者或工作區"
@@ -599,10 +602,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </div>
 
                 <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-cyan-200/20 bg-white/[0.03] text-slate-50">
                     <SelectValue placeholder="角色" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
                     <SelectItem value="all-roles">全部角色</SelectItem>
                     <SelectItem value="super_admin">超級管理員</SelectItem>
                     <SelectItem value="admin">管理員</SelectItem>
@@ -612,10 +615,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </Select>
 
                 <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-cyan-200/20 bg-white/[0.03] text-slate-50">
                     <SelectValue placeholder="狀態" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
                     <SelectItem value="all-status">全部狀態</SelectItem>
                     <SelectItem value="active">啟用</SelectItem>
                     <SelectItem value="inactive">停用</SelectItem>
@@ -623,7 +626,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </Select>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200/80">
                 <Badge variant="outline">顯示 {filteredSystemUsers.length} / {totalUsers} 位用戶</Badge>
                 <Badge variant="outline">密碼保存方式：加密雜湊</Badge>
                 <Badge variant="outline">明文回看：停用</Badge>
@@ -641,12 +644,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <div
                       key={systemUser.id}
-                      className="rounded-[24px] border border-cyan-300/14 bg-[linear-gradient(145deg,rgba(28,42,70,0.96),rgba(17,26,44,0.96))] p-4 transition-colors hover:border-cyan-300/28 hover:bg-[linear-gradient(145deg,rgba(34,52,87,0.98),rgba(21,32,55,0.98))]"
+                      className="rounded-[24px] border border-sky-300/34 bg-[linear-gradient(135deg,rgba(72,187,255,0.16)_0%,rgba(99,102,241,0.14)_34%,rgba(34,211,238,0.1)_65%,rgba(17,26,44,0.94)_100%)] p-4 shadow-[0_18px_50px_rgba(56,189,248,0.12),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 hover:border-cyan-200/55 hover:shadow-[0_22px_60px_rgba(56,189,248,0.18),inset_0_1px_0_rgba(255,255,255,0.09)]"
                     >
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div className="flex min-w-0 flex-1 gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/24 bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(59,130,246,0.08))]">
-                            <Shield className="h-4.5 w-4.5 text-cyan-100" />
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/45 bg-[linear-gradient(145deg,rgba(125,211,252,0.32),rgba(59,130,246,0.16))] shadow-[0_10px_24px_rgba(56,189,248,0.16)]">
+                            <Shield className="h-4.5 w-4.5 text-white" />
                           </div>
 
                           <div className="min-w-0 flex-1 space-y-3">
@@ -664,22 +667,22 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             </div>
 
                             <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
-                              <div className="rounded-2xl border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(22,35,60,0.92),rgba(13,20,34,0.92))] p-3">
-                                <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                              <div className="rounded-2xl border border-cyan-200/30 bg-[linear-gradient(180deg,rgba(70,115,196,0.22),rgba(17,31,54,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                                <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/80">
                                   帳號
                                 </div>
                                 <div className="mt-2 font-medium text-foreground">{systemUser.username}</div>
                               </div>
 
-                              <div className="rounded-2xl border border-violet-300/12 bg-[linear-gradient(180deg,rgba(31,26,58,0.88),rgba(15,20,34,0.92))] p-3">
-                                <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                              <div className="rounded-2xl border border-violet-200/28 bg-[linear-gradient(180deg,rgba(109,40,217,0.2),rgba(21,25,44,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                                <div className="text-[11px] uppercase tracking-[0.22em] text-violet-100/82">
                                   建立者
                                 </div>
                                 <div className="mt-2 font-medium text-foreground">{systemUser.created_by}</div>
                               </div>
 
-                              <div className="rounded-2xl border border-amber-300/12 bg-[linear-gradient(180deg,rgba(58,39,18,0.5),rgba(17,22,37,0.92))] p-3">
-                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                              <div className="rounded-2xl border border-amber-200/30 bg-[linear-gradient(180deg,rgba(251,191,36,0.18),rgba(32,24,19,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-amber-100/80">
                                   <Clock3 className="h-3.5 w-3.5" />
                                   建立時間
                                 </div>
@@ -689,7 +692,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-emerald-300/12 bg-[linear-gradient(180deg,rgba(17,54,46,0.32),rgba(14,22,37,0.92))] px-3 py-3">
+                            <div className="rounded-2xl border border-emerald-200/28 bg-[linear-gradient(180deg,rgba(52,211,153,0.18),rgba(16,35,34,0.92))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <div>
                                   <div className="text-sm font-semibold text-foreground">網站與工作區權限</div>
@@ -718,7 +721,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
 
                         <div className="xl:w-[240px] xl:shrink-0">
-                          <div className="space-y-2 rounded-[24px] border border-cyan-300/12 bg-[linear-gradient(180deg,rgba(24,37,62,0.9),rgba(14,21,35,0.9))] p-3">
+                          <div className="space-y-2 rounded-[24px] border border-sky-200/28 bg-[linear-gradient(180deg,rgba(53,88,148,0.18),rgba(18,28,48,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                             <div className="hidden rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
                               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                                 <Lock className="h-4 w-4 text-amber-300" />
@@ -737,11 +740,17 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                   onClick={() =>
                                     handleToggleUserStatus(systemUser.id, systemUser.status)
                                   }
+                                  className="border-sky-200/30 bg-white/[0.03] text-slate-100 hover:border-rose-200/45 hover:bg-rose-300/10"
                                 >
                                   {systemUser.status === "active" ? "停用帳號" : "重新啟用"}
                                 </Button>
                               ) : (
-                                <Button variant="outline" size="sm" disabled>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled
+                                  className="border-slate-200/12 bg-white/[0.02] text-slate-400"
+                                >
                                   主系統帳號
                                 </Button>
                               )}
@@ -754,6 +763,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                   setSelectedUsername(systemUser.username);
                                   setPermissionsDialogOpen(true);
                                 }}
+                                className="border-cyan-200/30 bg-white/[0.03] text-slate-100 hover:border-cyan-100/50 hover:bg-cyan-300/10"
                               >
                                 <Shield className="h-4 w-4 mr-1" />
                                 網站權限
