@@ -2089,40 +2089,75 @@ export function ApiChatConsole({
     return (
       <>
         {workspaceDialogs}
-        <div className="grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081C2D] shadow-[0_24px_70px_rgba(2,8,23,0.42)] lg:order-1">
+        <div
+          className={cn(
+            "grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)]",
+            sidebarCollapsed
+              ? "lg:grid-cols-[88px_minmax(0,1fr)]"
+              : "lg:grid-cols-[320px_minmax(0,1fr)]"
+          )}
+        >
+          <aside
+            className={cn(
+              "order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081C2D] shadow-[0_24px_70px_rgba(2,8,23,0.42)] transition-all duration-300 lg:order-1",
+              sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[320px]"
+            )}
+          >
             <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-[#163653] bg-[#081C2D] p-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
-                    <Search className="h-5 w-5" />
+                <div className={cn("flex", sidebarCollapsed ? "flex-col items-center gap-3" : "items-start justify-between gap-3")}>
+                  <div className={cn("flex items-center gap-3", sidebarCollapsed && "flex-col gap-2 text-center")}>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
+                      <Search className="h-5 w-5" />
+                    </div>
+                    {!sidebarCollapsed ? (
+                      <div className="min-w-0">
+                        <p className="text-xl font-black text-white">資料查詢空間</p>
+                        <p className="mt-1 text-xs font-bold tracking-wide text-blue-200">AI KNOWLEDGE WORKSPACE</p>
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xl font-black text-white">資料查詢空間</p>
-                    <p className="mt-1 text-xs font-bold tracking-wide text-blue-200">AI KNOWLEDGE WORKSPACE</p>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSidebarCollapsed((value) => !value)}
+                    aria-label={sidebarCollapsed ? "展開資料查詢空間" : "收合資料查詢空間"}
+                    className="h-10 w-10 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] hover:text-white"
+                  >
+                    {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                  </Button>
                 </div>
 
                 <Button
                   type="button"
                   onClick={requestResetConversation}
-                  className="mt-5 h-12 w-full justify-start rounded-xl bg-blue-500 px-4 text-base font-black text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400"
+                  className={cn(
+                    "mt-5 h-12 rounded-xl bg-blue-500 font-black text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400",
+                    sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
+                  )}
+                  aria-label="建立新對話"
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  建立新對話
+                  <Plus className={cn("h-4 w-4", !sidebarCollapsed && "mr-2")} />
+                  {!sidebarCollapsed ? "建立新對話" : null}
                 </Button>
 
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={openSavePromptDialog}
-                  className="mt-2 h-12 w-full justify-start rounded-xl border border-[#214669] bg-[#10283d] px-4 text-base font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#16324b] hover:text-white"
+                  className={cn(
+                    "mt-2 h-12 rounded-xl border border-[#214669] bg-[#10283d] font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#16324b] hover:text-white",
+                    sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
+                  )}
+                  aria-label="新增共享提示詞"
                 >
-                  <Bookmark className="mr-2 h-5 w-5" />
-                  新增共享提示詞
+                  <Bookmark className={cn("h-5 w-5", !sidebarCollapsed && "mr-2")} />
+                  {!sidebarCollapsed ? "新增共享提示詞" : null}
                 </Button>
               </div>
 
+              {!sidebarCollapsed ? (
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#081C2D] px-4 py-4">
                 <section aria-labelledby="conversation-history-title">
                   <div className="mb-2 flex items-center justify-between gap-3 px-1">
@@ -2211,22 +2246,45 @@ export function ApiChatConsole({
                   </section>
                 ) : null}
               </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col items-center gap-3 bg-[#081C2D] px-3 py-4">
+                  <div className="flex h-12 w-full items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
+                    <History className="h-4 w-4" />
+                  </div>
+                  {savedPrompts.length > 0 ? (
+                    <div className="flex h-12 w-full items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
+                      <LibraryBig className="h-4 w-4" />
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               <div className="border-t border-[#163653] bg-[#081C2D] p-4">
-                <div className="rounded-xl border border-[#214669] bg-[#0C2235] px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-slate-300">目前使用模型</p>
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
-                  </div>
-                  <p className="mt-1.5 truncate text-base font-black text-white">{activeKeyLabel}</p>
-                  <p className="mt-1 truncate text-sm text-slate-300">
-                    {provider || "-"} / {model || "-"}
-                  </p>
-                  {availableApiKeys.length > 1 ? (
-                    <p className="mt-2 text-xs leading-5 text-emerald-200">
-                      多人共用時會自動輪替可用 Key，並暫時避開高流量路由。
-                    </p>
-                  ) : null}
+                <div
+                  className={cn(
+                    "rounded-xl border border-[#214669] bg-[#0C2235]",
+                    sidebarCollapsed ? "flex items-center justify-center px-0 py-4" : "px-4 py-3"
+                  )}
+                >
+                  {sidebarCollapsed ? (
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-slate-300">目前使用模型</p>
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                      </div>
+                      <p className="mt-1.5 truncate text-base font-black text-white">{activeKeyLabel}</p>
+                      <p className="mt-1 truncate text-sm text-slate-300">
+                        {provider || "-"} / {model || "-"}
+                      </p>
+                      {availableApiKeys.length > 1 ? (
+                        <p className="mt-2 text-xs leading-5 text-emerald-200">
+                          多人共用時會自動輪替可用 Key，並暫時避開高流量路由。
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
