@@ -130,6 +130,11 @@ const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
 const MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024;
+const RETRYABLE_GEMINI_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const GEMINI_DEMAND_ERROR_PATTERN =
+  /high demand|resource exhausted|quota|rate limit|too many requests|temporarily unavailable|overloaded|service unavailable/i;
+const GEMINI_RETRY_DELAYS_MS = [900, 1800];
+const GEMINI_KEY_COOLDOWN_MS = 90 * 1000;
 const SHARED_PROMPT_TEMPLATES = [
   {
     title: "每日異常摘要",
@@ -180,8 +185,77 @@ interface GeminiResponsePart {
   };
 }
 
+interface GeminiRequestTarget {
+  id: string;
+  apiKey: string;
+  baseUrl: string;
+  cooldownUntil: number;
+  isSelected: boolean;
+  keyLabel: string;
+  lastUsedAt: null | string;
+  model: string;
+  provider: string;
+  usageCount: number;
+}
+
+interface GeminiAttemptFailure {
+  demandRelated: boolean;
+  endpoint: string;
+  keyLabel: string;
+  message: string;
+  model: string;
+  retryable: boolean;
+  status?: number;
+  targetId: string;
+}
+
 function looksLikeImageModel(model: string) {
   return /image|nano banana/i.test(model);
+}
+
+function buildGeminiRequestUrl(target: Pick<GeminiRequestTarget, "apiKey" | "baseUrl" | "model">) {
+  return `${target.baseUrl.replace(/\/$/, "")}/models/${target.model.trim()}:generateContent?key=${encodeURIComponent(
+    target.apiKey.trim()
+  )}`;
+}
+
+function getTimeValue(value: null | string | undefined) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function normalizeGeminiErrorMessage(result: unknown, status?: number) {
+  if (
+    result &&
+    typeof result === "object" &&
+    "error" in result &&
+    result.error &&
+    typeof result.error === "object" &&
+    "message" in result.error &&
+    typeof result.error.message === "string" &&
+    result.error.message
+  ) {
+    return result.error.message;
+  }
+
+  return status ? `Gemini API 失敗，HTTP ${status}` : "Gemini API 失敗";
+}
+
+function isDemandRelatedGeminiFailure(status: number | undefined, message: string) {
+  return status === 429 || status === 503 || GEMINI_DEMAND_ERROR_PATTERN.test(message);
+}
+
+function isRetryableGeminiFailure(status: number | undefined, message: string) {
+  return (
+    (typeof status === "number" && RETRYABLE_GEMINI_STATUS_CODES.has(status)) ||
+    isDemandRelatedGeminiFailure(status, message) ||
+    /failed to fetch|networkerror|network request failed|timeout/i.test(message)
+  );
 }
 
 function createMessage(
@@ -616,6 +690,7 @@ export function ApiChatConsole({
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
+  const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>({});
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -758,14 +833,103 @@ export function ApiChatConsole({
 
   const normalizedProvider = provider.trim().toLowerCase();
   const isGeminiProvider = normalizedProvider === "gemini";
-  const imageCapable = looksLikeImageModel(model.trim());
+  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
 
   const requestUrl = useMemo(() => {
     if (!apiKey.trim() || !model.trim() || !baseUrl.trim()) return "";
-    return `${baseUrl.replace(/\/$/, "")}/models/${model.trim()}:generateContent?key=${encodeURIComponent(
-      apiKey.trim()
-    )}`;
+    return buildGeminiRequestUrl({
+      apiKey: apiKey.trim(),
+      baseUrl: baseUrl.trim(),
+      model: model.trim(),
+    });
   }, [apiKey, model, baseUrl]);
+
+  const geminiTargets = useMemo(() => {
+    const manualTarget: GeminiRequestTarget | null =
+      apiKey.trim() && provider.trim() && model.trim() && baseUrl.trim()
+        ? {
+            id: selectedApiKey?.id ?? "manual-current",
+            apiKey: apiKey.trim(),
+            baseUrl: baseUrl.trim(),
+            cooldownUntil: keyCooldowns[selectedApiKey?.id ?? "manual-current"] ?? 0,
+            isSelected: true,
+            keyLabel: activeKeyLabel,
+            lastUsedAt: selectedApiKey?.last_used_at ?? null,
+            model: model.trim(),
+            provider: provider.trim(),
+            usageCount: selectedApiKey?.usage_count ?? 0,
+          }
+        : null;
+
+    const knownTargets = availableApiKeys
+      .map((record) => {
+        const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
+        if (
+          !record.api_key.trim() ||
+          metadata.provider.trim().toLowerCase() !== "gemini" ||
+          !metadata.model.trim() ||
+          !metadata.baseUrl.trim()
+        ) {
+          return null;
+        }
+
+        return {
+          id: record.id,
+          apiKey: record.api_key.trim(),
+          baseUrl: metadata.baseUrl.trim(),
+          cooldownUntil: keyCooldowns[record.id] ?? 0,
+          isSelected: record.id === (selectedApiKeyId ?? selectedApiKey?.id ?? null),
+          keyLabel: record.key_name,
+          lastUsedAt: record.last_used_at,
+          model: metadata.model.trim(),
+          provider: metadata.provider.trim(),
+          usageCount: record.usage_count ?? 0,
+        } satisfies GeminiRequestTarget;
+      })
+      .filter((target): target is GeminiRequestTarget => Boolean(target));
+
+    const seen = new Set<string>();
+    const mergedTargets = [manualTarget, ...knownTargets].filter((target): target is GeminiRequestTarget => {
+      if (!target) return false;
+      const fingerprint = [target.apiKey, target.baseUrl, target.model].join("::");
+      if (seen.has(fingerprint)) return false;
+      seen.add(fingerprint);
+      return true;
+    });
+
+    return mergedTargets.sort((left, right) => {
+      const leftCooling = left.cooldownUntil > Date.now() ? 1 : 0;
+      const rightCooling = right.cooldownUntil > Date.now() ? 1 : 0;
+      if (leftCooling !== rightCooling) return leftCooling - rightCooling;
+
+      const leftPreferredModel = left.model === model.trim() ? 0 : 1;
+      const rightPreferredModel = right.model === model.trim() ? 0 : 1;
+      if (leftPreferredModel !== rightPreferredModel) return leftPreferredModel - rightPreferredModel;
+
+      if (left.isSelected !== right.isSelected) return left.isSelected ? -1 : 1;
+
+      const leftImageModel = looksLikeImageModel(left.model) ? 1 : 0;
+      const rightImageModel = looksLikeImageModel(right.model) ? 1 : 0;
+      if (leftImageModel !== rightImageModel) return leftImageModel - rightImageModel;
+
+      const lastUsedDifference = getTimeValue(left.lastUsedAt) - getTimeValue(right.lastUsedAt);
+      if (lastUsedDifference !== 0) return lastUsedDifference;
+
+      return left.usageCount - right.usageCount;
+    });
+  }, [
+    activeKeyLabel,
+    apiKey,
+    availableApiKeys,
+    baseUrl,
+    keyCooldowns,
+    model,
+    provider,
+    selectedApiKey?.id,
+    selectedApiKey?.last_used_at,
+    selectedApiKey?.usage_count,
+    selectedApiKeyId,
+  ]);
 
   const canSend = Boolean(
     apiKey.trim() &&
@@ -776,7 +940,6 @@ export function ApiChatConsole({
       !loading
   );
 
-  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
   const hasConversationContent =
     messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
 
@@ -828,79 +991,181 @@ export function ApiChatConsole({
       };
     });
 
+  const markApiKeyUsage = async (target: GeminiRequestTarget) => {
+    if (target.id === "manual-current" || !target.apiKey.trim()) return;
+
+    const { error } = await supabase.rpc("validate_and_update_api_key", {
+      key_to_check: target.apiKey.trim(),
+    });
+
+    if (error) {
+      console.error("Failed to update API key usage:", error);
+    }
+  };
+
   const runGeminiRequest = async (
     history: ChatMessage[],
     bannerTitle: string,
     showSuccessBanner = true
   ) => {
-    const startedAt = Date.now();
+    const requestContents = buildGeminiContents(history);
+    const availableTargets = geminiTargets.filter(
+      (target) =>
+        target.provider.trim().toLowerCase() === "gemini" &&
+        target.apiKey.trim() &&
+        target.model.trim() &&
+        target.baseUrl.trim()
+    );
+    const targetsToTry = (availableTargets.length ? availableTargets : []).slice(0, 5);
+    const attemptedLabels: string[] = [];
+    let lastFailure: GeminiAttemptFailure | null = null;
 
-    const response = await fetch(requestUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        systemInstruction: systemPrompt.trim()
-          ? {
-              parts: [{ text: systemPrompt.trim() }],
-            }
-          : undefined,
-        contents: buildGeminiContents(history),
-      }),
+    if (!targetsToTry.length) {
+      throw new Error("目前沒有可用的 Gemini API Key 或模型設定");
+    }
+
+    for (const [targetIndex, target] of targetsToTry.entries()) {
+      const startedAt = Date.now();
+      const requestUrlForTarget = buildGeminiRequestUrl(target);
+      const allowRetryOnSameTarget = target.cooldownUntil <= Date.now();
+      const maxAttemptsForTarget = allowRetryOnSameTarget ? GEMINI_RETRY_DELAYS_MS.length + 1 : 1;
+
+      for (let attemptIndex = 0; attemptIndex < maxAttemptsForTarget; attemptIndex += 1) {
+        try {
+          await markApiKeyUsage(target);
+
+          const response = await fetch(requestUrlForTarget, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              systemInstruction: systemPrompt.trim()
+                ? {
+                    parts: [{ text: systemPrompt.trim() }],
+                  }
+                : undefined,
+              contents: requestContents,
+            }),
+          });
+
+          const result = await response.json().catch(() => null);
+          const durationMs = Date.now() - startedAt;
+
+          if (!response.ok) {
+            const errorMessage = normalizeGeminiErrorMessage(result, response.status);
+            throw {
+              demandRelated: isDemandRelatedGeminiFailure(response.status, errorMessage),
+              endpoint: requestUrlForTarget,
+              keyLabel: target.keyLabel,
+              message: errorMessage,
+              model: target.model,
+              retryable: isRetryableGeminiFailure(response.status, errorMessage),
+              status: response.status,
+              targetId: target.id,
+            } satisfies GeminiAttemptFailure;
+          }
+
+          const parsed = extractGeminiResponse(result);
+          const fallbackText =
+            parsed.text || (parsed.images.length === 0 ? JSON.stringify(result, null, 2) : "");
+          const usedFallbackTarget = targetIndex > 0 || attemptIndex > 0;
+
+          setKeyCooldowns((current) => {
+            if (!current[target.id]) return current;
+            const next = { ...current };
+            delete next[target.id];
+            return next;
+          });
+
+          if (showSuccessBanner) {
+            setConnectionState({
+              status: "success",
+              title: `${bannerTitle}成功`,
+              message: usedFallbackTarget
+                ? `主要模型繁忙，系統已自動切換到 ${target.keyLabel} / ${target.model} 並完成查詢。`
+                : parsed.images.length > 0
+                  ? "API 已正常回應，並回傳可直接顯示的圖片結果。"
+                  : "API 已正常回應，你可以直接繼續查詢。",
+              endpoint: requestUrlForTarget,
+              provider: target.provider || "gemini",
+              model: target.model || "-",
+              durationMs,
+            });
+          }
+
+          return {
+            text: fallbackText,
+            images: parsed.images,
+          };
+        } catch (error) {
+          const failure =
+            error &&
+            typeof error === "object" &&
+            "message" in error &&
+            "targetId" in error
+              ? (error as GeminiAttemptFailure)
+              : ({
+                  demandRelated: false,
+                  endpoint: requestUrlForTarget,
+                  keyLabel: target.keyLabel,
+                  message:
+                    error instanceof Error ? error.message : "Gemini API 呼叫失敗，請稍後再試",
+                  model: target.model,
+                  retryable: isRetryableGeminiFailure(
+                    undefined,
+                    error instanceof Error ? error.message : ""
+                  ),
+                  targetId: target.id,
+                } satisfies GeminiAttemptFailure);
+
+          attemptedLabels.push(`${failure.keyLabel} / ${failure.model}`);
+          lastFailure = failure;
+
+          if (failure.demandRelated) {
+            setKeyCooldowns((current) => ({
+              ...current,
+              [failure.targetId]: Date.now() + GEMINI_KEY_COOLDOWN_MS,
+            }));
+          }
+
+          const isLastTryForTarget = attemptIndex >= maxAttemptsForTarget - 1;
+          const hasNextTarget = targetIndex < targetsToTry.length - 1;
+
+          if (!failure.retryable) {
+            break;
+          }
+
+          if (!isLastTryForTarget) {
+            await sleep(GEMINI_RETRY_DELAYS_MS[attemptIndex] ?? GEMINI_RETRY_DELAYS_MS.at(-1) ?? 1800);
+            continue;
+          }
+
+          if (failure.demandRelated && hasNextTarget) {
+            break;
+          }
+        }
+      }
+    }
+
+    const attemptedSummary = attemptedLabels.length
+      ? `已嘗試 ${Array.from(new Set(attemptedLabels)).join("、")}`
+      : "尚未找到可用的查詢路由";
+    const userFacingMessage = lastFailure?.demandRelated
+      ? `目前 Gemini 查詢量過高，${attemptedSummary}，請稍後再試或新增更多可輪替的 API Key。`
+      : lastFailure?.message || "資料查詢失敗";
+
+    setConnectionState({
+      status: "error",
+      title: `${bannerTitle}失敗`,
+      message: userFacingMessage,
+      endpoint: lastFailure?.endpoint || requestUrl,
+      provider: provider || "gemini",
+      model: model || "-",
+      durationMs: 0,
     });
 
-    const result = await response.json().catch(() => null);
-    const durationMs = Date.now() - startedAt;
-
-    if (!response.ok) {
-      const errorMessage =
-        (result &&
-          typeof result === "object" &&
-          "error" in result &&
-          result.error &&
-          typeof result.error === "object" &&
-          "message" in result.error &&
-          typeof result.error.message === "string" &&
-          result.error.message) ||
-        `Gemini API 失敗，HTTP ${response.status}`;
-
-      setConnectionState({
-        status: "error",
-        title: `${bannerTitle}失敗`,
-        message: errorMessage,
-        endpoint: requestUrl,
-        provider: provider || "gemini",
-        model: model || "-",
-        durationMs,
-      });
-
-      throw new Error(errorMessage);
-    }
-
-    const parsed = extractGeminiResponse(result);
-    const fallbackText =
-      parsed.text || (parsed.images.length === 0 ? JSON.stringify(result, null, 2) : "");
-
-    if (showSuccessBanner) {
-      setConnectionState({
-        status: "success",
-        title: `${bannerTitle}成功`,
-        message:
-          parsed.images.length > 0
-            ? "API 已正常回應，並回傳可直接顯示的圖片結果。"
-            : "API 已正常回應，你可以直接繼續查詢。",
-        endpoint: requestUrl,
-        provider: provider || "gemini",
-        model: model || "-",
-        durationMs,
-      });
-    }
-
-    return {
-      text: fallbackText,
-      images: parsed.images,
-    };
+    throw new Error(userFacingMessage);
   };
 
   const handleSend = async () => {
@@ -1492,14 +1757,17 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[minmax(280px,1fr)_280px] lg:justify-end">
           {isChatOnly ? (
-            <div className="flex min-w-[220px] max-w-[320px] items-center gap-2">
+            <div className="flex items-center gap-2">
               <Select
                 value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
                 onValueChange={(value) => onSelectApiKey?.(value)}
               >
-                <SelectTrigger aria-label="選擇 AI 模型" className="h-12 rounded-xl border-blue-300/30 bg-slate-950/45 px-4 text-left text-base font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40">
+                <SelectTrigger
+                  aria-label="選擇 AI 模型"
+                  className="h-12 w-full rounded-xl border-blue-300/30 bg-slate-950/45 px-4 text-left text-base font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40"
+                >
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -1524,9 +1792,16 @@ export function ApiChatConsole({
               </Button>
             </div>
           ) : null}
-          <div className="hidden rounded-xl border border-blue-300/25 bg-slate-950/40 px-4 py-2.5 text-right shadow-none 2xl:block">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-200">目前模型</p>
-            <p className="mt-1 text-base font-bold text-white">{provider || "gemini"} / {model || "-"}</p>
+          <div className="hidden h-12 items-center justify-between rounded-xl border border-blue-300/25 bg-slate-950/40 px-4 text-left shadow-none 2xl:flex">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">目前模型</p>
+              <p className="truncate text-sm font-bold text-white">{provider || "gemini"} / {model || "-"}</p>
+            </div>
+            {availableApiKeys.length > 1 ? (
+              <span className="ml-3 shrink-0 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100">
+                自動輪替
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1682,18 +1957,20 @@ export function ApiChatConsole({
           ) : null}
 
           <div className="rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] px-3 py-3 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] focus-within:border-blue-300/70 focus-within:ring-2 focus-within:ring-blue-400/20">
-            <div className="flex items-end gap-2 md:gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
-                className="h-12 w-12 shrink-0 rounded-xl border border-blue-300/35 bg-blue-400/15 p-0 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:w-auto sm:px-4"
-              >
-                <Paperclip className="h-5 w-5" />
-                <span className="ml-2 hidden text-sm font-bold sm:inline">上傳檔案</span>
-              </Button>
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="flex shrink-0 items-center self-stretch">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
+                  aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
+                  className="h-12 min-w-12 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:px-4"
+                >
+                  <Paperclip className="h-5 w-5 shrink-0" />
+                  <span className="ml-2 hidden text-sm font-bold sm:inline">上傳檔案</span>
+                </Button>
+              </div>
 
               <div className="min-w-0 flex-1">
                 <Textarea
@@ -1701,19 +1978,13 @@ export function ApiChatConsole({
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
                   aria-label="輸入查詢內容"
-                  placeholder="輸入問題、貼上資料，或描述你想整理的內容..."
-                  className="min-h-[76px] border-0 bg-transparent px-0 py-1 text-[17px] leading-7 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0"
+                  placeholder=""
+                  className="min-h-[74px] border-0 bg-transparent px-0 py-0 text-[17px] leading-7 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0"
                 />
-                <div className="mt-1 text-xs leading-5 text-slate-300 sm:text-sm sm:leading-6">
-                  <span className="sm:hidden">PDF / PPT / Excel / 圖片，單檔 15MB</span>
-                  <span className="hidden sm:inline">
-                    支援 PDF、PPT/PPTX、Excel/XLSX、Word、CSV 與圖片，單檔上限 15MB。
-                  </span>
-                </div>
               </div>
 
-              <div className="flex shrink-0 items-center justify-end gap-2">
-                <div className="hidden max-w-[200px] truncate rounded-lg border border-blue-300/25 bg-slate-950/45 px-3 py-2 text-sm font-bold text-slate-100 shadow-none sm:block">
+              <div className="flex shrink-0 items-center gap-2 self-stretch">
+                <div className="hidden h-12 max-w-[220px] items-center truncate rounded-xl border border-blue-300/25 bg-slate-950/45 px-3 text-sm font-bold text-slate-100 shadow-none sm:flex">
                   {model || "Gemini"}
                 </div>
                 <Button
@@ -1721,11 +1992,18 @@ export function ApiChatConsole({
                   onClick={() => void handleSend()}
                   disabled={!canSend}
                   aria-label="送出查詢"
-                  className="h-11 min-w-11 rounded-xl border border-blue-300/30 bg-blue-500 px-4 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+            </div>
+
+            <div className="mt-2 text-xs leading-5 text-slate-300 sm:text-sm sm:leading-6">
+              <span className="sm:hidden">PDF / PPT / Excel / 圖片，單檔 15MB</span>
+              <span className="hidden sm:inline">
+                支援 PDF、PPT/PPTX、Excel/XLSX、Word、CSV 與圖片，單檔上限 15MB。
+              </span>
             </div>
           </div>
         </div>
@@ -1870,6 +2148,11 @@ export function ApiChatConsole({
                   <p className="mt-1 truncate text-sm text-slate-300">
                     {provider || "-"} / {model || "-"}
                   </p>
+                  {availableApiKeys.length > 1 ? (
+                    <p className="mt-2 text-xs leading-5 text-emerald-200">
+                      多人共用時會自動輪替可用 Key，並暫時避開高流量路由。
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
