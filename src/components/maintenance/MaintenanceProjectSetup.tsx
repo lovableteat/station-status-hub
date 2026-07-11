@@ -51,7 +51,7 @@ export function MaintenanceProjectSetup({
             done: hasPublishedFlow,
             icon: GitBranch,
             label: "確認 L10 流程",
-            copy: hasPublishedFlow ? "已發布流程，可開始建立機台。" : "先建立站點與測項並發布 v1。",
+            copy: hasPublishedFlow ? "流程已就緒，可開始建立機台。" : "先建立站點與測項，儲存後立即生效。",
           },
           {
             done: false,
