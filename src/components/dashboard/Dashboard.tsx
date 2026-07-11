@@ -287,6 +287,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const bottleneckStation = [...stationRows].sort(
     (left, right) => right.queue - left.queue || right.hours - left.hours
   )[0];
+  const stationQueueTotal = stationRows.reduce((sum, station) => sum + station.queue, 0);
   const attentionSystems = useMemo(
     () =>
       includedSystems
@@ -457,33 +458,58 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </section>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="maintenance-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-5 py-4">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="maintenance-panel self-start overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-4 py-3">
             <div>
               <h2 className="text-base font-semibold text-[#f3f8fc]">站點產能與瓶頸</h2>
               <p className="mt-1 text-xs text-[#9eb8ca]">目前瓶頸：{bottleneckStation?.name || "尚無資料"}</p>
             </div>
-            <Activity className="h-5 w-5 text-cyan-200" />
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
+                WIP {stationQueueTotal} 台
+              </Badge>
+              <Activity className="h-5 w-5 text-cyan-200" />
+            </div>
           </div>
           <div className="grid divide-y divide-[#2a526f]/55 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-            {stationRows.map((station, index) => (
-              <button
-                key={station.id}
-                type="button"
-                className="min-w-0 px-4 py-4 text-left hover:bg-[#10263a]"
-                onClick={() => onNavigate?.("test-tracker", { station: station.id })}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-data flex h-7 w-7 items-center justify-center rounded-lg bg-[#10263a] text-xs text-cyan-100">{index + 1}</span>
-                  <span className="font-data text-lg font-semibold text-[#f3f8fc]">{station.queue}<small className="ml-1 text-[10px] font-normal text-[#8fb0c5]">台</small></span>
-                </div>
-                <div className="mt-3 truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
-                <div className="mt-1 text-xs text-[#8fb0c5]">單站預估 {station.hours.toFixed(1)}h</div>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-[#9eb8ca]"><span>整體完成</span><span>{station.averageProgress}%</span></div>
-                <Progress value={station.averageProgress} className="mt-1.5 h-1.5 bg-[#193149] [&>div]:bg-[#39c6e8]" />
-              </button>
-            ))}
+            {stationRows.map((station, index) => {
+              const queueShare = stationQueueTotal
+                ? Math.round((station.queue / stationQueueTotal) * 100)
+                : 0;
+              const isBottleneck = station.id === bottleneckStation?.id && station.queue > 0;
+
+              return (
+                <button
+                  key={station.id}
+                  type="button"
+                  className={cn(
+                    "min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-[#10263a]",
+                    isBottleneck && "bg-amber-300/[0.06]"
+                  )}
+                  onClick={() => onNavigate?.("test-tracker", { station: station.id })}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-data flex h-7 w-7 items-center justify-center rounded-lg bg-[#10263a] text-xs text-cyan-100">{index + 1}</span>
+                    <div className="flex items-center gap-2">
+                      {isBottleneck && (
+                        <Badge variant="outline" className="h-6 border-amber-300/35 bg-amber-300/10 px-2 text-[10px] text-amber-100">
+                          瓶頸
+                        </Badge>
+                      )}
+                      <span className="font-data text-lg font-semibold text-[#f3f8fc]">{station.queue}<small className="ml-1 text-[10px] font-normal text-[#8fb0c5]">台</small></span>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
+                  <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]">
+                    <span>單站預估 {station.hours.toFixed(1)}h</span>
+                    <span>WIP {queueShare}%</span>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-[#9eb8ca]"><span>整體完成</span><span className="font-data text-[#d9e8f2]">{station.averageProgress}%</span></div>
+                  <Progress value={station.averageProgress} className="mt-1.5 h-1.5 bg-[#193149] [&>div]:bg-[#39c6e8]" />
+                </button>
+              );
+            })}
           </div>
         </section>
 
