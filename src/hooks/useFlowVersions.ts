@@ -111,6 +111,8 @@ export function useFlowVersions() {
     () =>
       versions.find((version) => version.id === activeProject?.active_flow_version_id) ??
       versions.find((version) => version.status === "published") ??
+      versions.find((version) => version.status === "draft") ??
+      versions[0] ??
       null,
     [activeProject?.active_flow_version_id, versions]
   );

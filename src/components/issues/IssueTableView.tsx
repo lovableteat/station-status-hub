@@ -613,19 +613,20 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
         {editingIssue && (
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
             <DialogContent
-              className="max-w-6xl max-h-[85vh] overflow-y-auto"
+              className="h-[min(90vh,820px)] max-w-[1280px] overflow-hidden border-[#2a526f] bg-[#071522] p-0"
               onPointerDownOutside={(e) => e.preventDefault()}
               onEscapeKeyDown={(e) => e.preventDefault()}
               onInteractOutside={(e) => e.preventDefault()}
               onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
             >
-              <DialogHeader><DialogTitle>編輯問題</DialogTitle></DialogHeader>
+              <DialogHeader className="sr-only"><DialogTitle>編輯問題</DialogTitle></DialogHeader>
               <IssueEditDialog
                 issue={editingIssue}
                 onUpdate={handleEditComplete}
                 onDelete={handleEditComplete}
                 onClose={() => setIsEditDialogOpen(false)}
+                onAttachmentUpdate={onUpdate}
               />
             </DialogContent>
           </Dialog>
