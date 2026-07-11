@@ -20,6 +20,8 @@ export type CameraPreset = "overview" | "top" | "front" | "focus";
 
 export type ModelUpAxis = "x" | "y" | "z";
 
+export type DataCenterAssetKind = "rack" | "l10";
+
 export interface RackDevice {
   id: string;
   name: string;
@@ -61,6 +63,8 @@ export interface RackPlan {
   cabinet: string;
   status: RackStatus;
   modelId: string;
+  l10ModelId: string;
+  l10Count: number;
   powerKw: number;
   coolingKw: number;
   temperatureC: number;
@@ -133,6 +137,7 @@ export interface ImportedStepModel {
 
 export interface RackModelDefinition {
   id: string;
+  kind: DataCenterAssetKind;
   manufacturer: string;
   name: string;
   revision: string;
@@ -142,5 +147,7 @@ export interface RackModelDefinition {
   assetUrl?: string;
   sourceFileName?: string;
   stepModel?: ImportedStepModel;
+  rackUnits?: number;
+  isPlaceholder?: boolean;
   isCalibrated: boolean;
 }

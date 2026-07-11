@@ -13,6 +13,7 @@ const companyModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-ra
 export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   "nv-mgx-rack-v1-2-rev7": {
     id: "nv-mgx-rack-v1-2-rev7",
+    kind: "rack",
     manufacturer: "NVIDIA / Internal",
     name: "MGX Rack V1.2",
     revision: "REV 7",
@@ -29,6 +30,7 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   },
   "generic-42u": {
     id: "generic-42u",
+    kind: "rack",
     manufacturer: "Open Rack",
     name: "Generic 42U",
     revision: "Standard",
@@ -43,6 +45,7 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   },
   "partner-48u": {
     id: "partner-48u",
+    kind: "rack",
     manufacturer: "Partner Vendor",
     name: "High Density 48U",
     revision: "Reference",
@@ -54,6 +57,23 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     },
     upAxis: "y",
     isCalibrated: true,
+  },
+  "l10-placeholder": {
+    id: "l10-placeholder",
+    kind: "l10",
+    manufacturer: "Internal Planning",
+    name: "L10 暫代模組",
+    revision: "Pre-STP",
+    source: "procedural",
+    dimensions: {
+      widthMm: 560,
+      depthMm: 780,
+      heightMm: 160,
+    },
+    upAxis: "y",
+    rackUnits: 4,
+    isPlaceholder: true,
+    isCalibrated: false,
   },
 };
 
@@ -106,8 +126,10 @@ function createRack(input: {
   powerKw?: number;
   temperatureC?: number;
   utilizationPercent?: number;
+  l10Count?: number;
 }): RackPlan {
   const health = input.health ?? "healthy";
+  const status = input.status ?? "allocated";
   const devices: RackDevice[] = [
     createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
     createDevice(input.id, 2, "switch-tray", health === "critical" ? "warning" : "healthy", 38, 2),
@@ -121,8 +143,10 @@ function createRack(input: {
     zone: input.row === "A" ? "Compute Zone" : "Expansion Zone",
     row: input.row,
     cabinet: input.cabinet,
-    status: input.status ?? "allocated",
+    status,
     modelId: input.modelId ?? "nv-mgx-rack-v1-2-rev7",
+    l10ModelId: "l10-placeholder",
+    l10Count: input.l10Count ?? (status === "available" ? 0 : 4),
     powerKw: input.powerKw ?? 16.8,
     coolingKw: Math.round((input.powerKw ?? 16.8) * 0.88 * 10) / 10,
     temperatureC: input.temperatureC ?? 24.2,
@@ -159,21 +183,21 @@ function createRack(input: {
 }
 
 const taipeiRacks: RackPlan[] = [
-  createRack({ id: "tpe-a01", cabinet: "TPE-A01", row: "A", positionX: -4.2, positionZ: -2.35, powerKw: 18.4, utilizationPercent: 86 }),
-  createRack({ id: "tpe-a02", cabinet: "TPE-A02", row: "A", positionX: -1.4, positionZ: -2.35, health: "warning", temperatureC: 28.6, utilizationPercent: 91 }),
-  createRack({ id: "tpe-a03", cabinet: "TPE-A03", row: "A", positionX: 1.4, positionZ: -2.35, powerKw: 17.1, utilizationPercent: 78 }),
-  createRack({ id: "tpe-a04", cabinet: "TPE-A04", row: "A", positionX: 4.2, positionZ: -2.35, status: "reserved", modelId: "partner-48u", powerKw: 8.2, utilizationPercent: 32 }),
-  createRack({ id: "tpe-b01", cabinet: "TPE-B01", row: "B", positionX: -4.2, positionZ: 2.35, health: "critical", temperatureC: 31.4, utilizationPercent: 96 }),
-  createRack({ id: "tpe-b02", cabinet: "TPE-B02", row: "B", positionX: -1.4, positionZ: 2.35, powerKw: 15.6, utilizationPercent: 69 }),
+  createRack({ id: "tpe-a01", cabinet: "TPE-A01", row: "A", positionX: -4.2, positionZ: -2.35, powerKw: 18.4, utilizationPercent: 86, l10Count: 6 }),
+  createRack({ id: "tpe-a02", cabinet: "TPE-A02", row: "A", positionX: -1.4, positionZ: -2.35, health: "warning", temperatureC: 28.6, utilizationPercent: 91, l10Count: 4 }),
+  createRack({ id: "tpe-a03", cabinet: "TPE-A03", row: "A", positionX: 1.4, positionZ: -2.35, powerKw: 17.1, utilizationPercent: 78, l10Count: 8 }),
+  createRack({ id: "tpe-a04", cabinet: "TPE-A04", row: "A", positionX: 4.2, positionZ: -2.35, status: "reserved", modelId: "partner-48u", powerKw: 8.2, utilizationPercent: 32, l10Count: 2 }),
+  createRack({ id: "tpe-b01", cabinet: "TPE-B01", row: "B", positionX: -4.2, positionZ: 2.35, health: "critical", temperatureC: 31.4, utilizationPercent: 96, l10Count: 5 }),
+  createRack({ id: "tpe-b02", cabinet: "TPE-B02", row: "B", positionX: -1.4, positionZ: 2.35, powerKw: 15.6, utilizationPercent: 69, l10Count: 3 }),
   createRack({ id: "tpe-b03", cabinet: "TPE-B03", row: "B", positionX: 1.4, positionZ: 2.35, status: "available", modelId: "generic-42u", powerKw: 0, utilizationPercent: 0 }),
-  createRack({ id: "tpe-b04", cabinet: "TPE-B04", row: "B", positionX: 4.2, positionZ: 2.35, health: "offline", temperatureC: 23.8, utilizationPercent: 0 }),
+  createRack({ id: "tpe-b04", cabinet: "TPE-B04", row: "B", positionX: 4.2, positionZ: 2.35, health: "offline", temperatureC: 23.8, utilizationPercent: 0, l10Count: 4 }),
 ];
 
 const phoenixRacks: RackPlan[] = [
-  createRack({ id: "phx-a01", cabinet: "PHX-A01", row: "A", positionX: -3.2, positionZ: -2.2, powerKw: 16.1 }),
-  createRack({ id: "phx-a02", cabinet: "PHX-A02", row: "A", positionX: 0, positionZ: -2.2, status: "reserved", modelId: "generic-42u", powerKw: 5.2 }),
-  createRack({ id: "phx-a03", cabinet: "PHX-A03", row: "A", positionX: 3.2, positionZ: -2.2, health: "warning", temperatureC: 27.9 }),
-  createRack({ id: "phx-b01", cabinet: "PHX-B01", row: "B", positionX: -1.6, positionZ: 2.2, powerKw: 14.8 }),
+  createRack({ id: "phx-a01", cabinet: "PHX-A01", row: "A", positionX: -3.2, positionZ: -2.2, powerKw: 16.1, l10Count: 5 }),
+  createRack({ id: "phx-a02", cabinet: "PHX-A02", row: "A", positionX: 0, positionZ: -2.2, status: "reserved", modelId: "generic-42u", powerKw: 5.2, l10Count: 2 }),
+  createRack({ id: "phx-a03", cabinet: "PHX-A03", row: "A", positionX: 3.2, positionZ: -2.2, health: "warning", temperatureC: 27.9, l10Count: 4 }),
+  createRack({ id: "phx-b01", cabinet: "PHX-B01", row: "B", positionX: -1.6, positionZ: 2.2, powerKw: 14.8, l10Count: 6 }),
   createRack({ id: "phx-b02", cabinet: "PHX-B02", row: "B", positionX: 1.6, positionZ: 2.2, status: "available", modelId: "partner-48u", powerKw: 0, utilizationPercent: 0 }),
 ];
 
