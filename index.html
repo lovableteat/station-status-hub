@@ -154,10 +154,23 @@
     <script>
       (function () {
         const RETRY_KEY = "station-status-hub:boot-retry";
+        const REVALIDATE_KEY = "station-status-hub:html-revalidated";
         const FALLBACK_TITLE = "\u9801\u9762\u91cd\u65b0\u540c\u6b65\u4e2d";
         const FALLBACK_MESSAGE =
           "\u525b\u525b\u5075\u6e2c\u5230\u700f\u89bd\u5668\u62ff\u5230\u820a\u7248\u8cc7\u6e90\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u91cd\u6574\u4e00\u6b21\u3002\u5982\u679c\u4f60\u9084\u662f\u770b\u5230\u7a7a\u767d\u9801\uff0c\u8acb\u518d\u6309\u4e00\u6b21\u91cd\u65b0\u6574\u7406\u3002";
         const FALLBACK_BUTTON = "\u91cd\u65b0\u6574\u7406\u9801\u9762";
+
+        try {
+          if (window.sessionStorage.getItem(REVALIDATE_KEY) !== "1") {
+            window.sessionStorage.setItem(REVALIDATE_KEY, "1");
+            const revalidatedUrl = new URL(window.location.href);
+            revalidatedUrl.searchParams.set("reload", Date.now().toString());
+            window.location.replace(revalidatedUrl.toString());
+            return;
+          }
+        } catch {
+          // Continue with the current document when storage is unavailable.
+        }
 
         function renderFallbackMessage(force) {
           const root = document.getElementById("root");
