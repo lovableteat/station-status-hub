@@ -65,6 +65,7 @@ interface UnifiedProgress {
   started_at?: string;
   completed_at?: string;
   assigned_to?: string;
+  updated_at?: string;
 }
 
 interface StationContent {

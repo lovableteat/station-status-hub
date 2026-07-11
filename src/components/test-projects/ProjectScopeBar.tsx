@@ -158,6 +158,7 @@ export function ProjectScopeBar() {
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [owners, setOwners] = useState<ProjectOwner[]>([]);
   const [form, setForm] = useState<ProjectFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     supabase
@@ -189,6 +190,7 @@ export function ProjectScopeBar() {
   }, [allProjects, searchTerm, showArchived, statusFilter]);
 
   const resetForm = () => {
+    setFormError("");
     setEditingProjectId(null);
     setForm({
       ...EMPTY_FORM,
@@ -198,10 +200,12 @@ export function ProjectScopeBar() {
 
   const openCreateForm = () => {
     resetForm();
+    setIsOpen(true);
     setShowForm(true);
   };
 
   const openEditForm = (project: TestProject) => {
+    setFormError("");
     setEditingProjectId(project.id);
     setForm({
       cloneFromProjectId: EMPTY_TEMPLATE_VALUE,
@@ -212,15 +216,27 @@ export function ProjectScopeBar() {
       plannedStartDate: project.planned_start_date ?? "",
       status: getProjectStatus(project),
     });
+    setIsOpen(true);
     setShowForm(true);
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
+    if (
+      form.plannedStartDate &&
+      form.plannedEndDate &&
+      form.plannedEndDate < form.plannedStartDate
+    ) {
+      setFormError("預計完成日期不能早於預計開始日期。");
+      return;
+    }
+
+    setFormError("");
     setIsSaving(true);
+    let savedProject: TestProject | null = null;
 
     if (editingProjectId) {
-      await updateProject({
+      savedProject = await updateProject({
         description: form.description,
         name: form.name,
         ownerUserId: form.ownerUserId === NO_OWNER_VALUE ? null : form.ownerUserId,
@@ -230,7 +246,7 @@ export function ProjectScopeBar() {
         status: form.status,
       });
     } else {
-      await createProject({
+      savedProject = await createProject({
         cloneFromProjectId:
           form.cloneFromProjectId === EMPTY_TEMPLATE_VALUE
             ? null
@@ -245,6 +261,7 @@ export function ProjectScopeBar() {
     }
 
     setIsSaving(false);
+    if (!savedProject) return;
     setShowForm(false);
     resetForm();
   };
@@ -312,6 +329,23 @@ export function ProjectScopeBar() {
             </span>
           </div>
         </>
+      )}
+
+      {activeProject && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 shrink-0 rounded-lg border border-[#2a526f] bg-[#10263a] px-3 text-[#d8e6f0] hover:border-cyan-300/50 hover:bg-[#15344d]"
+              onClick={() => openEditForm(activeProject)}
+            >
+              <Pencil className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">編輯專案</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>直接編輯目前專案</TooltipContent>
+        </Tooltip>
       )}
 
       <Sheet
@@ -443,8 +477,12 @@ export function ProjectScopeBar() {
                     id="maintenance-project-start"
                     type="date"
                     value={form.plannedStartDate}
+                    max={form.plannedEndDate || undefined}
+                    className="cursor-pointer font-data [color-scheme:dark]"
+                    onClick={(event) => event.currentTarget.showPicker?.()}
                     onChange={(event) => setForm((current) => ({ ...current, plannedStartDate: event.target.value }))}
                   />
+                  <p className="text-xs text-[#8fb0c5]">點擊欄位選擇日期，也可直接輸入。</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="maintenance-project-end">預計完成</Label>
@@ -452,10 +490,20 @@ export function ProjectScopeBar() {
                     id="maintenance-project-end"
                     type="date"
                     value={form.plannedEndDate}
+                    min={form.plannedStartDate || undefined}
+                    className="cursor-pointer font-data [color-scheme:dark]"
+                    onClick={(event) => event.currentTarget.showPicker?.()}
                     onChange={(event) => setForm((current) => ({ ...current, plannedEndDate: event.target.value }))}
                   />
+                  <p className="text-xs text-[#8fb0c5]">完成日期不得早於開始日期。</p>
                 </div>
               </div>
+
+              {formError && (
+                <div role="alert" className="mt-4 rounded-xl border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+                  {formError}
+                </div>
+              )}
 
               <div className="mt-6 flex justify-end gap-2 border-t border-[#2a526f]/60 pt-4">
                 <Button variant="outline" onClick={() => setShowForm(false)}>取消</Button>

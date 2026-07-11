@@ -42,6 +42,7 @@ export function useTestTrackerData() {
     stations, 
     testItems: items, 
     progress, 
+    isLoading,
     refetch: loadData,
     updateProgress
   } = useUnifiedData();
@@ -51,6 +52,7 @@ export function useTestTrackerData() {
     stations,
     items,
     progress,
+    isLoading,
     loadData: (newSystemId?: string) => loadData(newSystemId),
     updateProgress
   };
