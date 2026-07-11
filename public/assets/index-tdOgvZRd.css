@@ -1,0 +1,32 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+  background: #071827;
+  color: #f3f8fc;
+}
+
+#root:empty {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.24), transparent 34rem),
+    linear-gradient(145deg, #071827, #0b2033 60%, #0d2a3f);
+}
+
+#root:empty::before {
+  content: "正在取得最新版本，請稍候";
+  width: min(420px, 100%);
+  padding: 24px;
+  box-sizing: border-box;
+  border: 1px solid rgba(125, 211, 252, 0.48);
+  border-radius: 16px;
+  background: #0d2237;
+  color: #f3f8fc;
+  font: 700 18px/1.5 "Segoe UI", "Noto Sans TC", sans-serif;
+  text-align: center;
+}
