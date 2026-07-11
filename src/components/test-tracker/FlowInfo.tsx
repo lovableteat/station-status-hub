@@ -1,885 +1,984 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ClipboardCheck,
+  Clock3,
+  Copy,
+  FileDiff,
+  FileSliders,
+  GripVertical,
+  Layers3,
+  ListChecks,
+  Plus,
+  Route,
+  Save,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import DOMPurify from "dompurify";
+
+import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
+import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, CalendarDays, Clock, Cpu, Gauge, HardDrive, Layers, ListChecks, Monitor, Route, Settings, Edit, Plus, Save, Trash2, Zap } from "lucide-react";
-import { TestItemManager } from "./TestItemManager";
-import { StationContentManager } from "./StationContentManager";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useFlowVersions } from "@/hooks/useFlowVersions";
 import { useToast } from "@/hooks/use-toast";
-import { useTestProject } from "@/components/test-projects/TestProjectProvider";
-import { BackButton } from "@/components/common/BackButton";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
-interface TestStation {
-  id: string;
-  station_name: string;
-  station_order: number;
-  description: string;
-  estimated_hours: number;
+type TestStation = Tables<"test_flow_stations">;
+type TestItem = Tables<"test_flow_items">;
+type StationContent = Tables<"station_contents">;
+type FlowView = "overview" | "editor";
+
+interface FlowSnapshot {
+  contents: StationContent[];
+  items: TestItem[];
+  stations: TestStation[];
 }
 
-interface TestItem {
-  id: string;
-  station_id: string;
-  item_name: string;
-  item_order: number;
-  description: string;
-  estimated_minutes: number;
+function stripHtml(value?: string | null) {
+  if (!value) return "";
+  const sanitized = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
+  const documentNode = new DOMParser().parseFromString(sanitized, "text/html");
+  return documentNode.body.textContent?.replace(/\s+/g, " ").trim() || "";
 }
 
-interface StationContent {
-  id: string;
-  title: string;
-  content: string;
-  order_num: number;
-  station_id: string;
+function updateFlowViewQuery(view: FlowView) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("flowView", view);
+  window.history.replaceState({}, "", url);
 }
-
-const flowButtonClass =
-  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-22px_hsl(var(--primary)/0.8)] active:translate-y-px";
-
-const flowGhostButtonClass =
-  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary hover:shadow-[0_12px_24px_-20px_hsl(var(--primary)/0.75)] active:translate-y-px";
-
-const flowDangerButtonClass =
-  "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-destructive/10 hover:text-destructive hover:shadow-[0_12px_24px_-20px_hsl(var(--destructive)/0.7)] active:translate-y-px";
-
-const stationThemes = [
-  {
-    shell: "border-sky-300/28 bg-gradient-to-br from-slate-900/92 via-slate-900/86 to-sky-400/[0.10] text-foreground hover:border-sky-200/48 hover:bg-sky-400/[0.15]",
-    selected: "border-sky-200/62 bg-sky-400/[0.16] ring-2 ring-sky-200/20 shadow-[0_0_34px_-10px_rgba(125,211,252,0.48)]",
-    icon: "border-sky-200/42 bg-sky-300/[0.20] text-sky-50 shadow-[0_10px_28px_-18px_rgba(125,211,252,0.75)]",
-    badge: "border-sky-200/42 bg-sky-300/[0.20] text-sky-50",
-    pill: "border-sky-200/30 bg-sky-300/[0.14] text-sky-50",
-    accent: "text-sky-200",
-    rail: "from-sky-200 via-sky-300/95 to-transparent",
-    contentPanel: "border-sky-200/42 bg-gradient-to-br from-slate-900/96 via-sky-950/88 to-cyan-500/[0.18] shadow-[0_24px_70px_-34px_rgba(125,211,252,0.72)]",
-    contentHeader: "border-sky-200/32 bg-gradient-to-r from-sky-400/[0.20] via-sky-950/72 to-cyan-400/[0.14]",
-    contentSurface: "border-sky-200/26 bg-sky-400/[0.10]",
-    contentForm: "border-sky-200/26 bg-sky-400/[0.10]",
-    contentCard: "border-sky-200/30 bg-gradient-to-br from-sky-400/[0.12] via-slate-900/86 to-cyan-400/[0.08] hover:border-sky-100/55 hover:bg-sky-300/[0.18]",
-    contentEmpty: "border-sky-200/26 bg-sky-400/[0.10]",
-    contentButton: "border-cyan-100/45 bg-cyan-300/[0.28] text-white hover:bg-cyan-300/[0.38]",
-    contentButtonGhost: "border-sky-200/34 bg-sky-300/[0.12] text-sky-50 hover:bg-sky-300/[0.22] hover:text-white",
-    contentIcon: "border-cyan-100/55 bg-cyan-300/[0.28] text-white",
-    contentBadge: "border-cyan-100/55 bg-cyan-300/[0.28] text-white",
-    contentBar: "from-sky-200 via-sky-300/95 to-transparent",
-  },
-  {
-    shell: "border-indigo-300/28 bg-gradient-to-br from-slate-900/92 via-slate-900/86 to-indigo-400/[0.10] text-foreground hover:border-indigo-200/48 hover:bg-indigo-400/[0.15]",
-    selected: "border-indigo-200/62 bg-indigo-400/[0.16] ring-2 ring-indigo-200/20 shadow-[0_0_34px_-10px_rgba(165,180,252,0.48)]",
-    icon: "border-indigo-200/42 bg-indigo-300/[0.20] text-indigo-50 shadow-[0_10px_28px_-18px_rgba(165,180,252,0.75)]",
-    badge: "border-indigo-200/42 bg-indigo-300/[0.20] text-indigo-50",
-    pill: "border-indigo-200/30 bg-indigo-300/[0.14] text-indigo-50",
-    accent: "text-indigo-200",
-    rail: "from-indigo-200 via-indigo-300/95 to-transparent",
-    contentPanel: "border-indigo-200/42 bg-gradient-to-br from-slate-900/96 via-indigo-950/88 to-indigo-500/[0.18] shadow-[0_24px_70px_-34px_rgba(165,180,252,0.72)]",
-    contentHeader: "border-indigo-200/32 bg-gradient-to-r from-indigo-400/[0.20] via-indigo-950/72 to-blue-400/[0.14]",
-    contentSurface: "border-indigo-200/26 bg-indigo-400/[0.10]",
-    contentForm: "border-indigo-200/26 bg-indigo-400/[0.10]",
-    contentCard: "border-indigo-200/30 bg-gradient-to-br from-indigo-400/[0.12] via-slate-900/86 to-blue-400/[0.08] hover:border-indigo-100/55 hover:bg-indigo-300/[0.18]",
-    contentEmpty: "border-indigo-200/26 bg-indigo-400/[0.10]",
-    contentButton: "border-indigo-100/45 bg-indigo-300/[0.28] text-white hover:bg-indigo-300/[0.38]",
-    contentButtonGhost: "border-indigo-200/34 bg-indigo-300/[0.12] text-indigo-50 hover:bg-indigo-300/[0.22] hover:text-white",
-    contentIcon: "border-indigo-100/55 bg-indigo-300/[0.28] text-white",
-    contentBadge: "border-indigo-100/55 bg-indigo-300/[0.28] text-white",
-    contentBar: "from-indigo-200 via-indigo-300/95 to-transparent",
-  },
-  {
-    shell: "border-fuchsia-300/28 bg-gradient-to-br from-slate-900/92 via-slate-900/86 to-fuchsia-400/[0.10] text-foreground hover:border-fuchsia-200/48 hover:bg-fuchsia-400/[0.15]",
-    selected: "border-fuchsia-200/62 bg-fuchsia-400/[0.16] ring-2 ring-fuchsia-200/20 shadow-[0_0_34px_-10px_rgba(240,171,252,0.48)]",
-    icon: "border-fuchsia-200/42 bg-fuchsia-300/[0.20] text-fuchsia-50 shadow-[0_10px_28px_-18px_rgba(240,171,252,0.75)]",
-    badge: "border-fuchsia-200/42 bg-fuchsia-300/[0.20] text-fuchsia-50",
-    pill: "border-fuchsia-200/30 bg-fuchsia-300/[0.14] text-fuchsia-50",
-    accent: "text-fuchsia-200",
-    rail: "from-fuchsia-200 via-fuchsia-300/95 to-transparent",
-    contentPanel: "border-fuchsia-200/42 bg-gradient-to-br from-slate-900/96 via-fuchsia-950/88 to-fuchsia-500/[0.18] shadow-[0_24px_70px_-34px_rgba(240,171,252,0.72)]",
-    contentHeader: "border-fuchsia-200/32 bg-gradient-to-r from-fuchsia-400/[0.20] via-fuchsia-950/72 to-pink-400/[0.14]",
-    contentSurface: "border-fuchsia-200/26 bg-fuchsia-400/[0.10]",
-    contentForm: "border-fuchsia-200/26 bg-fuchsia-400/[0.10]",
-    contentCard: "border-fuchsia-200/30 bg-gradient-to-br from-fuchsia-400/[0.12] via-slate-900/86 to-pink-400/[0.08] hover:border-fuchsia-100/55 hover:bg-fuchsia-300/[0.18]",
-    contentEmpty: "border-fuchsia-200/26 bg-fuchsia-400/[0.10]",
-    contentButton: "border-fuchsia-100/45 bg-fuchsia-300/[0.28] text-white hover:bg-fuchsia-300/[0.38]",
-    contentButtonGhost: "border-fuchsia-200/34 bg-fuchsia-300/[0.12] text-fuchsia-50 hover:bg-fuchsia-300/[0.22] hover:text-white",
-    contentIcon: "border-fuchsia-100/55 bg-fuchsia-300/[0.28] text-white",
-    contentBadge: "border-fuchsia-100/55 bg-fuchsia-300/[0.28] text-white",
-    contentBar: "from-fuchsia-200 via-fuchsia-300/95 to-transparent",
-  },
-  {
-    shell: "border-teal-300/28 bg-gradient-to-br from-slate-900/92 via-slate-900/86 to-teal-400/[0.10] text-foreground hover:border-teal-200/48 hover:bg-teal-400/[0.15]",
-    selected: "border-teal-200/62 bg-teal-400/[0.16] ring-2 ring-teal-200/20 shadow-[0_0_34px_-10px_rgba(153,246,228,0.48)]",
-    icon: "border-teal-200/42 bg-teal-300/[0.20] text-teal-50 shadow-[0_10px_28px_-18px_rgba(153,246,228,0.75)]",
-    badge: "border-teal-200/42 bg-teal-300/[0.20] text-teal-50",
-    pill: "border-teal-200/30 bg-teal-300/[0.14] text-teal-50",
-    accent: "text-teal-200",
-    rail: "from-teal-200 via-teal-300/95 to-transparent",
-    contentPanel: "border-teal-200/42 bg-gradient-to-br from-slate-900/96 via-teal-950/88 to-teal-500/[0.18] shadow-[0_24px_70px_-34px_rgba(153,246,228,0.72)]",
-    contentHeader: "border-teal-200/32 bg-gradient-to-r from-teal-400/[0.20] via-teal-950/72 to-emerald-400/[0.14]",
-    contentSurface: "border-teal-200/26 bg-teal-400/[0.10]",
-    contentForm: "border-teal-200/26 bg-teal-400/[0.10]",
-    contentCard: "border-teal-200/30 bg-gradient-to-br from-teal-400/[0.12] via-slate-900/86 to-emerald-400/[0.08] hover:border-teal-100/55 hover:bg-teal-300/[0.18]",
-    contentEmpty: "border-teal-200/26 bg-teal-400/[0.10]",
-    contentButton: "border-teal-100/45 bg-teal-300/[0.28] text-white hover:bg-teal-300/[0.38]",
-    contentButtonGhost: "border-teal-200/34 bg-teal-300/[0.12] text-teal-50 hover:bg-teal-300/[0.22] hover:text-white",
-    contentIcon: "border-teal-100/55 bg-teal-300/[0.28] text-white",
-    contentBadge: "border-teal-100/55 bg-teal-300/[0.28] text-white",
-    contentBar: "from-teal-200 via-teal-300/95 to-transparent",
-  },
-];
 
 export function FlowInfo() {
+  const { activeProject, activeProjectId } = useTestProject();
+  const { toast } = useToast();
+  const {
+    activeVersion,
+    createDraft,
+    discardDraft,
+    draftVersion,
+    isLoadingVersions,
+    isMutatingVersion,
+    publishDraft,
+    selectedVersion,
+    selectedVersionId,
+    setSelectedVersionId,
+    versions,
+  } = useFlowVersions();
+  const [view, setView] = useState<FlowView>(() => {
+    if (typeof window === "undefined") return "overview";
+    return new URLSearchParams(window.location.search).get("flowView") === "editor"
+      ? "editor"
+      : "overview";
+  });
   const [stations, setStations] = useState<TestStation[]>([]);
   const [items, setItems] = useState<TestItem[]>([]);
-  const [stationContents, setStationContents] = useState<StationContent[]>([]);
-  const [systems, setSystems] = useState<unknown[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [contents, setContents] = useState<StationContent[]>([]);
+  const [systemCount, setSystemCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
-  const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
-  const [editingStation, setEditingStation] = useState<TestStation | null>(null);
-  const [stationFormData, setStationFormData] = useState({
-    station_name: '',
-    description: '',
-    estimated_hours: 0
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [stationDraft, setStationDraft] = useState({
+    description: "",
+    estimated_hours: 0,
+    station_name: "",
   });
-
-  // Station Management State
-  const [newStationForm, setNewStationForm] = useState({
-    station_name: '',
-    station_order: 0,
-    description: '',
-    estimated_hours: 8
+  const [itemDraft, setItemDraft] = useState({
+    description: "",
+    estimated_minutes: 30,
+    item_name: "",
   });
-  const [isNewStationDialogOpen, setIsNewStationDialogOpen] = useState(false);
-  const [editingNewStation, setEditingNewStation] = useState<TestStation | null>(null);
+  const [contentDialogOpen, setContentDialogOpen] = useState(false);
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
+  const [contentDraft, setContentDraft] = useState({ content: "", title: "" });
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [publishedSnapshot, setPublishedSnapshot] = useState<FlowSnapshot | null>(null);
+  const [draggedStationId, setDraggedStationId] = useState<string | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
 
-  const { toast } = useToast();
-  const { activeProjectId } = useTestProject();
+  const editingVersionId = draftVersion?.id ?? null;
+  const displayedVersionId =
+    view === "editor"
+      ? editingVersionId ?? activeVersion?.id ?? null
+      : selectedVersionId ?? activeVersion?.id ?? null;
+  const canEdit = Boolean(view === "editor" && editingVersionId && displayedVersionId === editingVersionId);
 
-  useEffect(() => {
-    if (!activeProjectId) {
-      setStations([]);
-      setItems([]);
-      setStationContents([]);
-      setSystems([]);
-      return;
-    }
+  const loadSnapshot = useCallback(
+    async (versionId: string | null): Promise<FlowSnapshot> => {
+      if (!activeProjectId) return { contents: [], items: [], stations: [] };
 
-    loadData();
-  }, [activeProjectId]);
+      let stationQuery = supabase
+        .from("test_flow_stations")
+        .select("*")
+        .eq("project_id", activeProjectId);
+      let itemQuery = supabase
+        .from("test_flow_items")
+        .select("*")
+        .eq("project_id", activeProjectId);
+      let contentQuery = supabase
+        .from("station_contents")
+        .select("*")
+        .eq("project_id", activeProjectId);
 
-  useEffect(() => {
-    if (stations.length === 0) {
-      setSelectedStationId(null);
-      return;
-    }
-
-    if (!selectedStationId || !stations.some((station) => station.id === selectedStationId)) {
-      setSelectedStationId(stations[0].id);
-    }
-  }, [stations, selectedStationId]);
-
-  const loadData = async () => {
-    try {
-      if (!activeProjectId) {
-        return;
+      if (versionId) {
+        stationQuery = stationQuery.eq("flow_version_id", versionId);
+        itemQuery = itemQuery.eq("flow_version_id", versionId);
+        contentQuery = contentQuery.eq("flow_version_id", versionId);
       }
 
-      const [stationsRes, itemsRes, contentsRes, systemsRes] = await Promise.all([
-        supabase
-          .from('test_flow_stations')
-          .select('*')
-          .eq('project_id', activeProjectId)
-          .order('station_order'),
-        supabase
-          .from('test_flow_items')
-          .select('*')
-          .eq('project_id', activeProjectId)
-          .order('item_order'),
-        supabase
-          .from('station_contents')
-          .select('*')
-          .eq('project_id', activeProjectId)
-          .order('order_num'),
-        supabase
-          .from('test_systems')
-          .select('*')
-          .eq('project_id', activeProjectId)
+      let [stationResult, itemResult, contentResult] = await Promise.all([
+        stationQuery.order("station_order"),
+        itemQuery.order("item_order"),
+        contentQuery.order("order_num"),
       ]);
 
-      if (stationsRes.data) setStations(stationsRes.data);
-      if (itemsRes.data) setItems(itemsRes.data);
-      if (contentsRes.data) setStationContents(contentsRes.data);
-      if (systemsRes.data) setSystems(systemsRes.data);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  };
-
-  // Calculate total estimated hours for each station based on test items
-  const getCalculatedStationHours = (stationId: string) => {
-    const stationItems = items.filter(item => item.station_id === stationId);
-    const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
-    return (totalMinutes / 60).toFixed(1); // Convert to hours with 1 decimal place
-  };
-
-  const getStationIcon = (stationName: string) => {
-    if (stationName.includes('ME')) return <Settings className="h-5 w-5" />;
-    if (stationName.includes('BIOS')) return <Zap className="h-5 w-5" />;
-    if (stationName.includes('EE')) return <HardDrive className="h-5 w-5" />;
-    if (stationName.includes('SIT')) return <Cpu className="h-5 w-5" />;
-    if (stationName.includes('Station 4')) return <Monitor className="h-5 w-5" />;
-    return <Settings className="h-5 w-5" />;
-  };
-
-  const getStationTheme = (index: number) => {
-    return stationThemes[index % stationThemes.length];
-  };
-
-  const handleSaveStation = async () => {
-    if (!editingStation) return;
-    
-    try {
-      await supabase
-        .from('test_flow_stations')
-        .update({
-          station_name: stationFormData.station_name,
-          description: stationFormData.description,
-          estimated_hours: stationFormData.estimated_hours
-        })
-        .eq('id', editingStation.id);
-
-      toast({ title: "更新成功", description: "站點資訊已更新" });
-      setIsStationDialogOpen(false);
-      setEditingStation(null);
-      loadData();
-    } catch (error) {
-      toast({
-        title: "更新失敗",
-        description: "無法更新站點資訊",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const openEditStationDialog = (station: TestStation) => {
-    setStationFormData({
-      station_name: station.station_name,
-      description: station.description || '',
-      estimated_hours: station.estimated_hours || 0
-    });
-    setEditingStation(station);
-    setIsStationDialogOpen(true);
-  };
-
-  // Station Management Functions
-  const handleAddNewStation = () => {
-    setEditingNewStation(null);
-    setNewStationForm({ 
-      station_name: '', 
-      station_order: stations.length, 
-      description: '', 
-      estimated_hours: 8 
-    });
-    setIsNewStationDialogOpen(true);
-  };
-
-  const handleEditNewStation = (station: TestStation) => {
-    setEditingNewStation(station);
-    setNewStationForm({
-      station_name: station.station_name,
-      station_order: station.station_order,
-      description: station.description || '',
-      estimated_hours: station.estimated_hours || 8
-    });
-    setIsNewStationDialogOpen(true);
-  };
-
-  const handleSaveNewStation = async () => {
-    try {
-      if (!activeProjectId) {
-        throw new Error("No active project");
+      if (versionId && (stationResult.error || itemResult.error || contentResult.error)) {
+        [stationResult, itemResult, contentResult] = await Promise.all([
+          supabase
+            .from("test_flow_stations")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("station_order"),
+          supabase
+            .from("test_flow_items")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("item_order"),
+          supabase
+            .from("station_contents")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("order_num"),
+        ]);
       }
 
-      if (editingNewStation) {
-        // Update existing station
-        await supabase
-          .from('test_flow_stations')
-          .update({
-            station_name: newStationForm.station_name,
-            station_order: newStationForm.station_order,
-            description: newStationForm.description,
-            estimated_hours: newStationForm.estimated_hours
-          })
-          .eq('id', editingNewStation.id);
+      if (stationResult.error) throw stationResult.error;
+      if (itemResult.error) throw itemResult.error;
+      if (contentResult.error) throw contentResult.error;
 
-        toast({ title: "更新成功", description: "測試站點已更新，測試進度表將自動更新" });
-      } else {
-        // Add new station
-        await supabase
-          .from('test_flow_stations')
-          .insert({
-            project_id: activeProjectId,
-            station_name: newStationForm.station_name,
-            station_order: newStationForm.station_order,
-            description: newStationForm.description,
-            estimated_hours: newStationForm.estimated_hours
-          });
+      return {
+        contents: contentResult.data ?? [],
+        items: itemResult.data ?? [],
+        stations: stationResult.data ?? [],
+      };
+    },
+    [activeProjectId]
+  );
 
-        toast({ title: "新增成功", description: "測試站點已新增，測試進度表將自動更新" });
-      }
-
-      setIsNewStationDialogOpen(false);
-      setEditingNewStation(null);
-      loadData();
-    } catch (error) {
-      toast({
-        title: "操作失敗",
-        description: "無法儲存站點資料",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteNewStation = async (stationId: string) => {
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await supabase
-        .from('test_flow_stations')
-        .delete()
-        .eq('id', stationId);
-
-      toast({ title: "刪除成功", description: "測試站點已刪除" });
-      loadData();
+      const [snapshot, systemsResult] = await Promise.all([
+        loadSnapshot(displayedVersionId),
+        activeProjectId
+          ? supabase
+              .from("test_systems")
+              .select("id", { count: "exact", head: true })
+              .eq("project_id", activeProjectId)
+          : Promise.resolve({ count: 0, error: null }),
+      ]);
+      setStations(snapshot.stations);
+      setItems(snapshot.items);
+      setContents(snapshot.contents);
+      setSystemCount(systemsResult.count ?? 0);
+      setSelectedStationId((current) =>
+        snapshot.stations.some((station) => station.id === current)
+          ? current
+          : snapshot.stations[0]?.id ?? null
+      );
     } catch (error) {
+      console.error("Failed to load flow workspace:", error);
       toast({
-        title: "刪除失敗",
-        description: "無法刪除站點",
-        variant: "destructive"
+        title: "流程載入失敗",
+        description: "無法讀取目前流程版本。",
+        variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
+  }, [activeProjectId, displayedVersionId, loadSnapshot, toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const selectedStation = stations.find((station) => station.id === selectedStationId) ?? null;
+  const stationItems = useMemo(
+    () =>
+      items
+        .filter((item) => item.station_id === selectedStationId)
+        .sort((left, right) => left.item_order - right.item_order),
+    [items, selectedStationId]
+  );
+  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const stationContents = useMemo(
+    () =>
+      contents
+        .filter((content) => content.station_id === selectedStationId)
+        .sort((left, right) => left.order_num - right.order_num),
+    [contents, selectedStationId]
+  );
+
+  useEffect(() => {
+    if (!selectedStation) return;
+    setStationDraft({
+      description: selectedStation.description ?? "",
+      estimated_hours: selectedStation.estimated_hours ?? 0,
+      station_name: selectedStation.station_name,
+    });
+    setSelectedItemId((current) =>
+      stationItems.some((item) => item.id === current) ? current : stationItems[0]?.id ?? null
+    );
+  }, [selectedStation, stationItems]);
+
+  useEffect(() => {
+    if (!selectedItem) {
+      setItemDraft({ description: "", estimated_minutes: 30, item_name: "" });
+      return;
+    }
+    setItemDraft({
+      description: selectedItem.description ?? "",
+      estimated_minutes: selectedItem.estimated_minutes ?? 30,
+      item_name: selectedItem.item_name,
+    });
+  }, [selectedItem]);
+
+  const validationIssues = useMemo(() => {
+    const messages: string[] = [];
+    if (!stations.length) messages.push("至少需要一個測試站點");
+    stations.forEach((station) => {
+      const stationItems = items.filter((item) => item.station_id === station.id);
+      if (!stationItems.length) messages.push(`${station.station_name} 尚無測試項目`);
+      stationItems.forEach((item) => {
+        if (!item.item_name.trim()) messages.push(`${station.station_name} 有未命名測項`);
+        if ((item.estimated_minutes ?? 0) <= 0) messages.push(`${item.item_name} 未設定有效工時`);
+      });
+    });
+    return messages;
+  }, [items, stations]);
+
+  const totalMinutes = items.reduce(
+    (sum, item) => sum + (item.estimated_minutes ?? 0),
+    0
+  );
+
+  const setFlowView = (nextView: FlowView) => {
+    setView(nextView);
+    updateFlowViewQuery(nextView);
   };
 
-  // Calculate dynamic summary data - 修正計算邏輯
-  const totalSystems = systems.length;
-  
-  // 計算每個站點的實際測試時間（基於測試項目預估時間）
-  const getStationEstimatedHours = (stationId: string) => {
-    const stationItems = items.filter(item => item.station_id === stationId);
-    const totalMinutes = stationItems.reduce((sum, item) => sum + (item.estimated_minutes || 0), 0);
-    return totalMinutes / 60; // 轉換為小時
+  const requireDraft = () => {
+    if (!editingVersionId || !activeProjectId) {
+      toast({
+        title: "請先建立草稿",
+        description: "已發布流程為唯讀，建立草稿後才能修改。",
+        variant: "destructive",
+      });
+      return null;
+    }
+    return editingVersionId;
   };
 
-  // 計算總測試時間（所有站點時間加總）
-  const totalHours = stations.reduce((total, station) => {
-    return total + getStationEstimatedHours(station.id);
-  }, 0);
-
-  // 找出瓶頸站點（耗時最長的站點）
-  const bottleneckHours = Math.max(...stations.map(station => 
-    getStationEstimatedHours(station.id)
-  ));
-
-  // 預計完成天數（固定為12天）
-  const getEstimatedDays = () => {
-    return 12;
+  const addStation = async () => {
+    const versionId = requireDraft();
+    if (!versionId || !activeProjectId) return;
+    const nextOrder = Math.max(-1, ...stations.map((station) => station.station_order)) + 1;
+    const { data, error } = await supabase
+      .from("test_flow_stations")
+      .insert({
+        description: "",
+        estimated_hours: 0,
+        flow_version_id: versionId,
+        project_id: activeProjectId,
+        station_name: `新站點 ${nextOrder + 1}`,
+        station_order: nextOrder,
+      })
+      .select("*")
+      .single();
+    if (error) return toast({ title: "新增站點失敗", description: error.message, variant: "destructive" });
+    await loadData();
+    setSelectedStationId(data.id);
   };
 
-  // 計算日產能（基於瓶頸站點）
-  const getDailyThroughput = () => {
-    if (bottleneckHours === 0) return 0;
-    return Math.floor(8 / bottleneckHours) || 1;
+  const saveStation = async () => {
+    if (!canEdit || !selectedStation || !activeProjectId || !editingVersionId) return;
+    const { error } = await supabase
+      .from("test_flow_stations")
+      .update({
+        description: stationDraft.description,
+        estimated_hours: stationDraft.estimated_hours,
+        station_name: stationDraft.station_name.trim(),
+      })
+      .eq("id", selectedStation.id)
+      .eq("project_id", activeProjectId)
+      .eq("flow_version_id", editingVersionId);
+    if (error) return toast({ title: "站點儲存失敗", description: error.message, variant: "destructive" });
+    toast({ title: "站點已儲存" });
+    await loadData();
   };
 
-  const selectedStation = stations.find((station) => station.id === selectedStationId) || stations[0];
-  const selectedStationIndex = selectedStation ? stations.findIndex((station) => station.id === selectedStation.id) : -1;
-  const selectedStationTheme = getStationTheme(Math.max(selectedStationIndex, 0));
-  const selectedStationItems = selectedStation
-    ? items
-        .filter((item) => item.station_id === selectedStation.id)
-        .sort((a, b) => a.item_order - b.item_order)
+  const deleteStation = async (station: TestStation) => {
+    if (!canEdit || !activeProjectId || !editingVersionId) return;
+    await supabase.from("station_contents").delete().eq("station_id", station.id).eq("flow_version_id", editingVersionId);
+    await supabase.from("test_flow_items").delete().eq("station_id", station.id).eq("flow_version_id", editingVersionId);
+    const { error } = await supabase.from("test_flow_stations").delete().eq("id", station.id).eq("project_id", activeProjectId);
+    if (error) return toast({ title: "站點刪除失敗", description: error.message, variant: "destructive" });
+    await loadData();
+  };
+
+  const duplicateStation = async (station: TestStation) => {
+    const versionId = requireDraft();
+    if (!versionId || !activeProjectId) return;
+    const { data: newStation, error } = await supabase
+      .from("test_flow_stations")
+      .insert({
+        description: station.description,
+        estimated_hours: station.estimated_hours,
+        flow_version_id: versionId,
+        project_id: activeProjectId,
+        station_name: `${station.station_name} 複本`,
+        station_order: Math.max(-1, ...stations.map((entry) => entry.station_order)) + 1,
+      })
+      .select("*")
+      .single();
+    if (error) return toast({ title: "複製站點失敗", description: error.message, variant: "destructive" });
+
+    const sourceItems = items.filter((item) => item.station_id === station.id);
+    if (sourceItems.length) {
+      await supabase.from("test_flow_items").insert(
+        sourceItems.map((item) => ({
+          description: item.description,
+          estimated_minutes: item.estimated_minutes,
+          flow_version_id: versionId,
+          item_name: item.item_name,
+          item_order: item.item_order,
+          project_id: activeProjectId,
+          station_id: newStation.id,
+        }))
+      );
+    }
+    const sourceContents = contents.filter((content) => content.station_id === station.id);
+    if (sourceContents.length) {
+      await supabase.from("station_contents").insert(
+        sourceContents.map((content) => ({
+          content: content.content,
+          flow_version_id: versionId,
+          order_num: content.order_num,
+          project_id: activeProjectId,
+          station_id: newStation.id,
+          title: content.title,
+        }))
+      );
+    }
+    await loadData();
+    setSelectedStationId(newStation.id);
+  };
+
+  const reorderStations = async (ordered: TestStation[]) => {
+    if (!canEdit || !editingVersionId) return;
+    await Promise.all(
+      ordered.map((station, index) =>
+        supabase.from("test_flow_stations").update({ station_order: 10000 + index }).eq("id", station.id)
+      )
+    );
+    await Promise.all(
+      ordered.map((station, index) =>
+        supabase.from("test_flow_stations").update({ station_order: index }).eq("id", station.id)
+      )
+    );
+    await loadData();
+  };
+
+  const moveStation = (stationId: string, direction: -1 | 1) => {
+    const currentIndex = stations.findIndex((station) => station.id === stationId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= stations.length) return;
+    const ordered = [...stations];
+    [ordered[currentIndex], ordered[nextIndex]] = [ordered[nextIndex], ordered[currentIndex]];
+    reorderStations(ordered);
+  };
+
+  const addItem = async () => {
+    const versionId = requireDraft();
+    if (!versionId || !activeProjectId || !selectedStation) return;
+    const { data, error } = await supabase
+      .from("test_flow_items")
+      .insert({
+        description: "",
+        estimated_minutes: 30,
+        flow_version_id: versionId,
+        item_name: `新測項 ${stationItems.length + 1}`,
+        item_order: Math.max(-1, ...stationItems.map((item) => item.item_order)) + 1,
+        project_id: activeProjectId,
+        station_id: selectedStation.id,
+      })
+      .select("*")
+      .single();
+    if (error) return toast({ title: "新增測項失敗", description: error.message, variant: "destructive" });
+    await loadData();
+    setSelectedItemId(data.id);
+  };
+
+  const saveItem = async () => {
+    if (!canEdit || !selectedItem || !activeProjectId || !editingVersionId) return;
+    const { error } = await supabase
+      .from("test_flow_items")
+      .update({
+        description: itemDraft.description,
+        estimated_minutes: itemDraft.estimated_minutes,
+        item_name: itemDraft.item_name.trim(),
+      })
+      .eq("id", selectedItem.id)
+      .eq("project_id", activeProjectId)
+      .eq("flow_version_id", editingVersionId);
+    if (error) return toast({ title: "測項儲存失敗", description: error.message, variant: "destructive" });
+    toast({ title: "測項已儲存" });
+    await loadData();
+  };
+
+  const deleteItem = async (item: TestItem) => {
+    if (!canEdit || !editingVersionId) return;
+    const { error } = await supabase.from("test_flow_items").delete().eq("id", item.id).eq("flow_version_id", editingVersionId);
+    if (error) return toast({ title: "測項刪除失敗", description: error.message, variant: "destructive" });
+    await loadData();
+  };
+
+  const duplicateItem = async (item: TestItem) => {
+    const versionId = requireDraft();
+    if (!versionId || !activeProjectId) return;
+    const { data, error } = await supabase
+      .from("test_flow_items")
+      .insert({
+        description: item.description,
+        estimated_minutes: item.estimated_minutes,
+        flow_version_id: versionId,
+        item_name: `${item.item_name} 複本`,
+        item_order: Math.max(-1, ...stationItems.map((entry) => entry.item_order)) + 1,
+        project_id: activeProjectId,
+        station_id: item.station_id,
+      })
+      .select("*")
+      .single();
+    if (error) return toast({ title: "複製測項失敗", description: error.message, variant: "destructive" });
+    await loadData();
+    setSelectedItemId(data.id);
+  };
+
+  const reorderItems = async (ordered: TestItem[]) => {
+    if (!canEdit || !editingVersionId) return;
+    await Promise.all(
+      ordered.map((item, index) =>
+        supabase.from("test_flow_items").update({ item_order: 10000 + index }).eq("id", item.id)
+      )
+    );
+    await Promise.all(
+      ordered.map((item, index) =>
+        supabase.from("test_flow_items").update({ item_order: index }).eq("id", item.id)
+      )
+    );
+    await loadData();
+  };
+
+  const moveItem = (itemId: string, direction: -1 | 1) => {
+    const currentIndex = stationItems.findIndex((item) => item.id === itemId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= stationItems.length) return;
+    const ordered = [...stationItems];
+    [ordered[currentIndex], ordered[nextIndex]] = [ordered[nextIndex], ordered[currentIndex]];
+    reorderItems(ordered);
+  };
+
+  const openContentDialog = (content?: StationContent) => {
+    setEditingContentId(content?.id ?? null);
+    setContentDraft({ content: content?.content ?? "", title: content?.title ?? "" });
+    setContentDialogOpen(true);
+  };
+
+  const saveContent = async () => {
+    const versionId = requireDraft();
+    if (!versionId || !activeProjectId || !selectedStation) return;
+    const payload = {
+      content: contentDraft.content,
+      flow_version_id: versionId,
+      project_id: activeProjectId,
+      station_id: selectedStation.id,
+      title: contentDraft.title.trim(),
+    };
+    const result = editingContentId
+      ? await supabase.from("station_contents").update(payload).eq("id", editingContentId)
+      : await supabase.from("station_contents").insert({
+          ...payload,
+          order_num: Math.max(-1, ...stationContents.map((content) => content.order_num)) + 1,
+        });
+    if (result.error) return toast({ title: "流程內容儲存失敗", description: result.error.message, variant: "destructive" });
+    setContentDialogOpen(false);
+    await loadData();
+  };
+
+  const deleteContent = async (contentId: string) => {
+    if (!canEdit || !editingVersionId) return;
+    await supabase.from("station_contents").delete().eq("id", contentId).eq("flow_version_id", editingVersionId);
+    await loadData();
+  };
+
+  const openComparison = async () => {
+    setCompareOpen(true);
+    if (activeVersion?.id) setPublishedSnapshot(await loadSnapshot(activeVersion.id));
+  };
+
+  const addedStations = publishedSnapshot
+    ? stations.filter(
+        (station) =>
+          !publishedSnapshot.stations.some(
+            (published) => published.station_name === station.station_name
+          )
+      )
     : [];
-  const selectedStationContents = selectedStation
-    ? stationContents.filter((content) => content.station_id === selectedStation.id)
+  const removedStations = publishedSnapshot
+    ? publishedSnapshot.stations.filter(
+        (published) =>
+          !stations.some((station) => station.station_name === published.station_name)
+      )
     : [];
+
+  if (isLoading || isLoadingVersions) {
+    return <div className="maintenance-page text-sm text-[#a9c0d1]">載入流程工作區...</div>;
+  }
 
   return (
-    <div className="space-y-6 p-6 animate-fade-in">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-4">
-          <BackButton />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">L10 測試流程設定</h1>
-            <p className="mt-1 text-muted-foreground">集中查看站點路徑、測試項目與流程內容</p>
+    <div className="maintenance-page space-y-3">
+      <MaintenancePageHeader
+        icon={FileSliders}
+        title="L10 測試流程設定"
+        description={`${activeProject?.name || "目前專案"} · ${selectedVersion?.label || activeVersion?.label || "v1"}`}
+        actions={
+          <div className="flex rounded-lg border border-[#2a526f] bg-[#071522] p-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-8 rounded-md", view === "overview" && "bg-[#10263a] text-cyan-100")}
+              onClick={() => setFlowView("overview")}
+            >
+              <Route className="mr-2 h-4 w-4" />流程總覽
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-8 rounded-md", view === "editor" && "bg-[#10263a] text-cyan-100")}
+              onClick={() => setFlowView("editor")}
+            >
+              <FileSliders className="mr-2 h-4 w-4" />流程編輯
+            </Button>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant={activeTab === "overview" ? "default" : "outline"}
-            onClick={() => setActiveTab("overview")}
-            className={flowButtonClass}
-          >
-            <Route className="h-4 w-4" />
-            查看流程
-          </Button>
-          <Button
-            variant={activeTab === "manage" ? "default" : "outline"}
-            onClick={() => setActiveTab("manage")}
-            className={flowButtonClass}
-          >
-            <Edit className="h-4 w-4" />
-            管理流程
-          </Button>
+        }
+      />
+
+      <div className="maintenance-toolbar flex min-h-11 flex-wrap items-center gap-2 px-3 py-2">
+        {view === "overview" && versions.length > 0 && selectedVersionId && (
+          <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
+            <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {versions.filter((version) => version.status !== "draft").map((version) => (
+                <SelectItem key={version.id} value={version.id}>{version.label || `v${version.version_number}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <Badge
+          variant="outline"
+          className={cn(
+            "h-7 rounded-md",
+            draftVersion
+              ? "border-amber-300/35 bg-amber-300/10 text-amber-100"
+              : "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
+          )}
+        >
+          {draftVersion ? `草稿 v${draftVersion.version_number}` : "已發布"}
+        </Badge>
+
+        <div className="ml-auto flex flex-wrap gap-2">
+          {!draftVersion ? (
+            <Button
+              size="sm"
+              className="h-8 rounded-lg"
+              disabled={isMutatingVersion}
+              onClick={async () => {
+                const draft = await createDraft();
+                if (draft) setFlowView("editor");
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />建立編輯草稿
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={openComparison}>
+                <FileDiff className="mr-2 h-4 w-4" />比較差異
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 rounded-lg text-rose-100">
+                    <X className="mr-2 h-4 w-4" />放棄草稿
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>放棄目前草稿？</AlertDialogTitle>
+                    <AlertDialogDescription>草稿內的站點、測項與內容將刪除，已發布流程不受影響。</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={discardDraft}>確認放棄</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" className="h-8 rounded-lg" disabled={validationIssues.length > 0 || isMutatingVersion}>
+                    <Send className="mr-2 h-4 w-4" />發布流程
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>發布 v{draftVersion.version_number}？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      未開始機台會採用新版；已開測與已完成機台仍固定原流程版本。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={publishDraft}>確認發布</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="overview">
-            <Route className="mr-2 h-4 w-4" />
-            流程總覽
-          </TabsTrigger>
-          <TabsTrigger value="manage">
-            <Settings className="mr-2 h-4 w-4" />
-            管理測試項目
-          </TabsTrigger>
-        </TabsList>
+      {view === "overview" ? (
+        <>
+          <MaintenanceMetricStrip
+            metrics={[
+              { accent: "blue", icon: Layers3, label: "測試站點", value: stations.length },
+              { accent: "cyan", icon: ListChecks, label: "測試項目", value: items.length },
+              { accent: "amber", icon: Clock3, label: "單機預估", value: `${(totalMinutes / 60).toFixed(1)}h` },
+              { accent: "emerald", icon: ClipboardCheck, label: "專案機台", value: systemCount },
+            ]}
+          />
 
-        <TabsContent value="overview" className="mt-5 space-y-5">
-          <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/85 shadow-[0_18px_55px_-38px_hsl(220_50%_2%/0.75)]">
-            <div className="border-b border-border/55 bg-secondary/35 p-5 sm:p-6">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
-                      <Layers className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">測試流程總覽</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">站點、工時、測項與流程內容集中在同一個工作區。</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:min-w-[680px]">
-                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
-                    <Monitor className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{totalSystems}</div>
-                    <div className="text-sm text-muted-foreground">測試系統</div>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
-                    <ListChecks className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{items.length}</div>
-                    <div className="text-sm text-muted-foreground">測試項目</div>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
-                    <Clock className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{totalHours.toFixed(1)}h</div>
-                    <div className="text-sm text-muted-foreground">單機總時數</div>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/55 p-4">
-                    <CalendarDays className="mb-3 h-4 w-4 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{getEstimatedDays()}</div>
-                    <div className="text-sm text-muted-foreground">預計天數</div>
-                  </div>
-                </div>
+          <div className="grid min-h-[410px] gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
+            <section className="maintenance-panel overflow-hidden">
+              <div className="border-b border-[#2a526f]/70 px-4 py-3">
+                <h2 className="text-base font-semibold text-[#f3f8fc]">站點路徑</h2>
+                <p className="mt-0.5 text-xs text-[#a9c0d1]">依實際執行順序排列。</p>
               </div>
-            </div>
-          </section>
-
-          <section className="overflow-hidden rounded-2xl border border-primary/40 bg-card/85 shadow-[0_18px_55px_-38px_hsl(var(--primary)/0.55)]">
-            <div className="flex flex-col gap-3 border-b border-primary/20 bg-primary/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
-                  <Route className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">站點路徑</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">點選站點，右側會同步切換站點資訊與測試項目。</p>
-                </div>
-              </div>
-              <Badge variant="outline" className="w-fit border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
-                {stations.length} 個站點
-              </Badge>
-            </div>
-
-            <div className="grid items-start gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
-              <div className="space-y-5">
-                <div>
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
-                    {stations.map((station, index) => {
-                      const theme = getStationTheme(index);
-                      const isSelected = selectedStation?.id === station.id;
-                      const stationItemCount = items.filter((item) => item.station_id === station.id).length;
-
-                      return (
-                        <button
-                          key={station.id}
-                          type="button"
-                          onClick={() => setSelectedStationId(station.id)}
-                          className={`group relative flex min-h-[168px] flex-col rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-22px_rgba(0,0,0,0.5)] ${theme.shell} ${isSelected ? theme.selected : ""}`}
-                        >
-                          <div className={`mb-4 h-1 rounded-full bg-gradient-to-r ${theme.rail}`} />
-                          <div className="flex items-start justify-between gap-3">
-                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${theme.icon}`}>
-                              {getStationIcon(station.station_name)}
-                            </div>
-                            <Badge variant="outline" className={`text-xs ${theme.badge}`}>
-                              #{index + 1}
-                            </Badge>
-                          </div>
-                          <div className="mt-4 flex flex-1 flex-col pr-5">
-                            <div className="line-clamp-2 min-h-12 text-base font-semibold leading-6 text-foreground">{station.station_name}</div>
-                            <div className="mt-auto flex flex-wrap gap-2 pt-3 text-sm">
-                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
-                                {getCalculatedStationHours(station.id)}h
-                              </span>
-                              <span className={`rounded-full border px-2.5 py-1 text-xs ${theme.pill}`}>
-                                {stationItemCount} 測項
-                              </span>
-                            </div>
-                          </div>
-                          <ArrowRight className={`absolute bottom-4 right-4 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1 ${theme.accent}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
-                    <Gauge className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{getDailyThroughput()}</div>
-                    <div className="text-sm text-muted-foreground">預估日產能</div>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
-                    <Clock className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{bottleneckHours > 0 ? bottleneckHours.toFixed(1) : "0.0"}h</div>
-                    <div className="text-sm text-muted-foreground">瓶頸站點工時</div>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
-                    <Route className="mb-3 h-5 w-5 text-primary" />
-                    <div className="text-lg font-bold text-foreground">{selectedStationIndex + 1 || "-"}</div>
-                    <div className="text-sm text-muted-foreground">目前查看站點</div>
-                  </div>
-                </div>
-              </div>
-
-              <aside className="space-y-5">
-                {selectedStation ? (
-                  <>
-                    <div className={`rounded-2xl border p-5 ${selectedStationTheme.shell}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedStationTheme.icon}`}>
-                            {getStationIcon(selectedStation.station_name)}
-                          </div>
-                          <div>
-                            <Badge variant="outline" className={`mb-2 ${selectedStationTheme.badge}`}>
-                              Station {selectedStationIndex + 1}
-                            </Badge>
-                            <h3 className="text-lg font-semibold text-foreground">{selectedStation.station_name}</h3>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                              {selectedStation.description || "尚未填寫站點描述。"}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditStationDialog(selectedStation)}
-                          className={`shrink-0 ${flowGhostButtonClass}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
-                          <div className="text-sm text-muted-foreground">站點工時</div>
-                          <div className="mt-1 text-lg font-bold text-foreground">{getCalculatedStationHours(selectedStation.id)}h</div>
-                        </div>
-                        <div className="rounded-xl border border-border/70 bg-secondary/55 p-3">
-                          <div className="text-sm text-muted-foreground">測項數量</div>
-                          <div className="mt-1 text-lg font-bold text-foreground">{selectedStationItems.length}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/70 bg-secondary/35 p-5">
-                      <div className="mb-4 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground">測試項目</h3>
-                          <p className="text-sm text-muted-foreground">只顯示目前站點，避免整頁拉太長。</p>
-                        </div>
-                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                          {selectedStationItems.length} items
-                        </Badge>
-                      </div>
-                      <div className="max-h-[330px] space-y-3 overflow-y-auto pr-1">
-                        {selectedStationItems.length > 0 ? (
-                          selectedStationItems.map((item) => (
-                            <div key={item.id} className="rounded-xl border border-border/70 bg-card/70 p-3 transition-colors hover:border-primary/35 hover:bg-primary/[0.04]">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold text-foreground">{item.item_name}</div>
-                                  <p className="mt-1 text-sm leading-5 text-muted-foreground">{item.description || "尚未填寫測項描述。"}</p>
-                                </div>
-                                <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-xs text-primary">
-                                  {item.estimated_minutes}min
-                                </Badge>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-border bg-background/35 p-6 text-center text-sm text-muted-foreground">
-                            此站點尚未新增測試項目。
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-card/70 p-8 text-center text-muted-foreground">
-                    尚未建立站點資料。
-                  </div>
-                )}
-              </aside>
-            </div>
-          </section>
-
-          {selectedStation && (
-            <section
-              key={selectedStation.id}
-              className={`animate-in fade-in-0 slide-in-from-top-2 relative overflow-hidden rounded-[1.6rem] border duration-300 before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-cyan-200/60 before:to-transparent ${selectedStationTheme.contentPanel}`}
-            >
-              <div className={`relative flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${selectedStationTheme.contentHeader}`}>
-                <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_12px_28px_-18px_rgba(34,211,238,0.8)] ${selectedStationTheme.contentIcon}`}>
-                    <Layers className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-semibold text-foreground">流程內容管理</h2>
-                      <Badge variant="outline" className={`text-xs ${selectedStationTheme.contentBadge}`}>
-                        Station {selectedStationIndex + 1}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">目前顯示 {selectedStation.station_name} 的流程內容。</p>
-                  </div>
-                </div>
-                <Badge variant="outline" className={`w-fit rounded-full px-3 py-1.5 text-xs shadow-[0_10px_24px_-18px_rgba(34,211,238,0.8)] ${selectedStationTheme.contentBadge}`}>
-                  已切換至 {selectedStation.station_name}
-                </Badge>
-              </div>
-              <div className="relative p-4 sm:p-5">
-                <div className={`rounded-[1.35rem] border p-2 shadow-inner shadow-black/20 ${selectedStationTheme.contentSurface}`}>
-                  <div className={`mb-3 h-1.5 rounded-full bg-gradient-to-r shadow-[0_0_22px_-8px_rgba(34,211,238,0.9)] ${selectedStationTheme.contentBar}`} />
-                  <div className="overflow-visible">
-                    <StationContentManager
-                      stationId={selectedStation.id}
-                      stationName={selectedStation.station_name}
-                      contents={selectedStationContents}
-                      theme={selectedStationTheme}
-                      onUpdate={loadData}
-                    />
-                  </div>
-                </div>
+              <div className="divide-y divide-[#2a526f]/50">
+                {stations.map((station, index) => {
+                  const count = items.filter((item) => item.station_id === station.id).length;
+                  return (
+                    <button
+                      key={station.id}
+                      type="button"
+                      onClick={() => setSelectedStationId(station.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#10263a]",
+                        selectedStationId === station.id && "bg-[#10263a]"
+                      )}
+                    >
+                      <span className="font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#4c8dff] text-xs font-semibold text-[#06111f]">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-[#f3f8fc]">{station.station_name}</span>
+                        <span className="mt-0.5 block text-xs text-[#a9c0d1]">{count} 測項 · {(station.estimated_hours ?? 0).toFixed(1)}h</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </section>
-          )}
-        </TabsContent>
 
-        <TabsContent value="manage" className="mt-5 space-y-5">
-          <Card className="overflow-hidden">
-            <CardHeader className="bg-secondary/30">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="flex items-center gap-2 text-xl sm:text-xl">
-                  <Settings className="h-5 w-5 text-primary" />
-                  站點管理
-                </CardTitle>
-                <Button onClick={handleAddNewStation} className={cn(flowButtonClass, "bg-gradient-to-r from-amber-500 to-amber-600 text-amber-950 border border-amber-400/50 shadow-[0_14px_30px_-18px_rgba(245,158,11,0.9)] hover:from-amber-400 hover:to-amber-500 hover:border-amber-300/60 hover:shadow-[0_14px_34px_-18px_rgba(245,158,11,0.75)]")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增站點
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table className="[&_td]:text-sm [&_th]:text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>站點名稱</TableHead>
-                    <TableHead>順序</TableHead>
-                    <TableHead>描述</TableHead>
-                    <TableHead>預估時間</TableHead>
-                    <TableHead>操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stations.map((station) => (
-                    <TableRow key={station.id}>
-                      <TableCell className="font-medium">{station.station_name}</TableCell>
-                      <TableCell>{station.station_order}</TableCell>
-                      <TableCell>{station.description || '-'}</TableCell>
-                      <TableCell>{station.estimated_hours || 0} 小時</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditNewStation(station)}
-                            className={flowGhostButtonClass}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className={flowDangerButtonClass}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>確認刪除</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  確定要刪除站點 "{station.station_name}" 嗎？此操作無法復原。
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className={flowButtonClass}>取消</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteNewStation(station.id)}
-                                  className={flowDangerButtonClass}
-                                >
-                                  刪除
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+            <section className="maintenance-panel overflow-hidden">
+              {selectedStation ? (
+                <div className="h-full">
+                  <div className="flex items-start justify-between border-b border-[#2a526f]/70 px-4 py-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-[#f3f8fc]">{selectedStation.station_name}</h2>
+                      <p className="mt-1 text-sm text-[#a9c0d1]">{selectedStation.description || "未填寫站點說明"}</p>
+                    </div>
+                    <Badge variant="outline" className="rounded-md">{stationItems.length} 測項</Badge>
+                  </div>
+                  <div className="grid gap-3 p-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]">
+                    <div className="space-y-2">
+                      {stationItems.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-[#2a526f] bg-[#10263a] px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-sm font-medium text-[#f3f8fc]">{item.item_name}</span>
+                            <span className="font-data shrink-0 text-xs text-cyan-100">{item.estimated_minutes ?? 0}m</span>
+                          </div>
+                          {item.description && <p className="mt-1 line-clamp-1 text-xs text-[#a9c0d1]">{item.description}</p>}
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <TestItemManager
-            stations={stations}
-            items={items}
-            onDataChange={loadData}
-          />
-        </TabsContent>
-      </Tabs>
-
-      {/* Station Edit Dialog */}
-      <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>編輯站點資訊</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>站點名稱</Label>
-              <Input
-                value={stationFormData.station_name}
-                onChange={(e) => setStationFormData({ ...stationFormData, station_name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>描述</Label>
-              <Textarea
-                value={stationFormData.description}
-                onChange={(e) => setStationFormData({ ...stationFormData, description: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>預估時間 (小時)</Label>
-              <Input
-                type="number"
-                value={stationFormData.estimated_hours}
-                onChange={(e) => setStationFormData({ ...stationFormData, estimated_hours: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsStationDialogOpen(false)}
-                className={flowButtonClass}
-              >
-                取消
-              </Button>
-              <Button onClick={handleSaveStation} className={flowButtonClass}>
-                <Save className="h-4 w-4 mr-2" />
-                儲存
-              </Button>
-            </div>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      {stationContents.map((content) => (
+                        <div key={content.id} className="rounded-lg border border-[#2a526f] bg-[#071522] px-3 py-2.5">
+                          <div className="text-sm font-semibold text-[#f3f8fc]">{content.title}</div>
+                          <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#a9c0d1]">{stripHtml(content.content) || "尚無內容"}</p>
+                        </div>
+                      ))}
+                      {!stationContents.length && <div className="py-12 text-center text-sm text-[#a9c0d1]">尚未建立流程內容。</div>}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[#a9c0d1]">尚未建立站點。</div>
+              )}
+            </section>
           </div>
+        </>
+      ) : !draftVersion ? (
+        <div className="maintenance-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
+            <FileSliders className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold text-[#f3f8fc]">已發布流程為唯讀</h2>
+            <p className="mt-0.5 text-sm text-[#a9c0d1]">建立草稿會複製目前發布流程；修改不會影響已開測的機台。</p>
+          </div>
+          <Button className="shrink-0" onClick={async () => { const draft = await createDraft(); if (draft) setFlowView("editor"); }}>
+            <Plus className="mr-2 h-4 w-4" />建立編輯草稿
+          </Button>
+        </div>
+      ) : (
+        <div className="grid h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] xl:grid-cols-[240px_300px_minmax(0,1fr)]">
+          <section className="flex min-h-0 flex-col border-b border-[#2a526f] xl:border-b-0 xl:border-r">
+            <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a526f]/70 px-3">
+              <h2 className="text-sm font-semibold text-[#f3f8fc]">站點</h2>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={addStation}><Plus className="h-4 w-4" /><span className="sr-only">新增站點</span></Button>
+            </div>
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-1 pr-2">
+                {stations.map((station, index) => (
+                  <div
+                    key={station.id}
+                    draggable
+                    onDragStart={() => setDraggedStationId(station.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (!draggedStationId || draggedStationId === station.id) return;
+                      const ordered = [...stations];
+                      const from = ordered.findIndex((entry) => entry.id === draggedStationId);
+                      const to = ordered.findIndex((entry) => entry.id === station.id);
+                      const [moved] = ordered.splice(from, 1);
+                      ordered.splice(to, 0, moved);
+                      setDraggedStationId(null);
+                      reorderStations(ordered);
+                    }}
+                    className={cn(
+                      "group flex items-center gap-1 rounded-lg border px-1.5 py-1.5",
+                      selectedStationId === station.id ? "border-cyan-300/55 bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]"
+                    )}
+                  >
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#6f8ba0]" />
+                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedStationId(station.id)}>
+                      <div className="truncate text-sm font-medium text-[#f3f8fc]">{station.station_name}</div>
+                      <div className="font-data text-[10px] text-[#a9c0d1]">{items.filter((item) => item.station_id === station.id).length} items</div>
+                    </button>
+                    <div className="hidden shrink-0 group-hover:flex group-focus-within:flex">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveStation(station.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === stations.length - 1} onClick={() => moveStation(station.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </section>
+
+          <section className="flex min-h-0 flex-col border-b border-[#2a526f] xl:border-b-0 xl:border-r">
+            <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a526f]/70 px-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">測試項目</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!selectedStation} onClick={addItem}><Plus className="h-4 w-4" /><span className="sr-only">新增測項</span></Button>
+            </div>
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-1 pr-2">
+                {stationItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={() => setDraggedItemId(item.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (!draggedItemId || draggedItemId === item.id) return;
+                      const ordered = [...stationItems];
+                      const from = ordered.findIndex((entry) => entry.id === draggedItemId);
+                      const to = ordered.findIndex((entry) => entry.id === item.id);
+                      const [moved] = ordered.splice(from, 1);
+                      ordered.splice(to, 0, moved);
+                      setDraggedItemId(null);
+                      reorderItems(ordered);
+                    }}
+                    className={cn(
+                      "group flex items-center gap-1 rounded-lg border px-1.5 py-2",
+                      selectedItemId === item.id ? "border-[#4c8dff] bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]"
+                    )}
+                  >
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#6f8ba0]" />
+                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedItemId(item.id)}>
+                      <div className="truncate text-sm font-medium text-[#f3f8fc]">{item.item_name}</div>
+                      <div className="font-data text-[10px] text-[#a9c0d1]">{item.estimated_minutes ?? 0} min</div>
+                    </button>
+                    <div className="hidden shrink-0 group-hover:flex group-focus-within:flex">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveItem(item.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === stationItems.length - 1} onClick={() => moveItem(item.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
+                    </div>
+                  </div>
+                ))}
+                {!stationItems.length && <div className="py-12 text-center text-xs text-[#a9c0d1]">此站點尚無測項。</div>}
+              </div>
+            </ScrollArea>
+          </section>
+
+          <section className="min-h-0 overflow-y-auto">
+            {selectedStation ? (
+              <div className="space-y-5 p-4">
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-[#f3f8fc]">站點設定</h2>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateStation(selectedStation)}><Copy className="h-4 w-4" /><span className="sr-only">複製站點</span></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader><AlertDialogTitle>刪除 {selectedStation.station_name}？</AlertDialogTitle><AlertDialogDescription>草稿中的站點、測項與流程內容會一起刪除。</AlertDialogDescription></AlertDialogHeader>
+                          <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => deleteStation(selectedStation)}>確認刪除</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                    <div className="space-y-2"><Label>站點名稱</Label><Input value={stationDraft.station_name} onChange={(event) => setStationDraft((current) => ({ ...current, station_name: event.target.value }))} /></div>
+                    <div className="space-y-2"><Label>預估小時</Label><Input type="number" step="0.1" value={stationDraft.estimated_hours} onChange={(event) => setStationDraft((current) => ({ ...current, estimated_hours: Number(event.target.value) }))} /></div>
+                    <div className="space-y-2 sm:col-span-2"><Label>站點說明</Label><Textarea rows={2} value={stationDraft.description} onChange={(event) => setStationDraft((current) => ({ ...current, description: event.target.value }))} /></div>
+                  </div>
+                  <Button size="sm" className="mt-3 h-8" onClick={saveStation}><Save className="mr-2 h-4 w-4" />儲存站點</Button>
+                </div>
+
+                {selectedItem && (
+                  <div className="border-t border-[#2a526f]/70 pt-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-[#f3f8fc]">測項設定</h2>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateItem(selectedItem)}><Copy className="h-4 w-4" /><span className="sr-only">複製測項</span></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100" onClick={() => deleteItem(selectedItem)}><Trash2 className="h-4 w-4" /><span className="sr-only">刪除測項</span></Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                      <div className="space-y-2"><Label>測項名稱</Label><Input value={itemDraft.item_name} onChange={(event) => setItemDraft((current) => ({ ...current, item_name: event.target.value }))} /></div>
+                      <div className="space-y-2"><Label>分鐘</Label><Input type="number" min={1} value={itemDraft.estimated_minutes} onChange={(event) => setItemDraft((current) => ({ ...current, estimated_minutes: Number(event.target.value) }))} /></div>
+                      <div className="space-y-2 sm:col-span-2"><Label>測項說明</Label><Textarea rows={2} value={itemDraft.description} onChange={(event) => setItemDraft((current) => ({ ...current, description: event.target.value }))} /></div>
+                    </div>
+                    <Button size="sm" className="mt-3 h-8" onClick={saveItem}><Save className="mr-2 h-4 w-4" />儲存測項</Button>
+                  </div>
+                )}
+
+                <div className="border-t border-[#2a526f]/70 pt-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-[#f3f8fc]">流程內容</h2>
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => openContentDialog()}><Plus className="mr-2 h-4 w-4" />新增內容</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {stationContents.map((content) => (
+                      <div key={content.id} className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openContentDialog(content)}>
+                            <div className="text-sm font-semibold text-[#f3f8fc]">{content.title}</div>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#a9c0d1]">{stripHtml(content.content) || "尚無內容"}</p>
+                          </button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100" onClick={() => deleteContent(content.id)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {validationIssues.length > 0 && (
+                  <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 p-3 text-sm text-amber-100">
+                    <div className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" />發布前需要修正</div>
+                    <ul className="mt-2 space-y-1 text-xs">{validationIssues.slice(0, 6).map((message) => <li key={message}>• {message}</li>)}</ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-[#a9c0d1]">請先新增或選擇站點。</div>
+            )}
+          </section>
+        </div>
+      )}
+
+      <Dialog open={contentDialogOpen} onOpenChange={setContentDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>{editingContentId ? "編輯流程內容" : "新增流程內容"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2"><Label>標題</Label><Input value={contentDraft.title} onChange={(event) => setContentDraft((current) => ({ ...current, title: event.target.value }))} /></div>
+            <RichTextEditor content={contentDraft.content} onChange={(content) => setContentDraft((current) => ({ ...current, content }))} className="min-h-[320px]" />
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setContentDialogOpen(false)}>取消</Button><Button disabled={!contentDraft.title.trim()} onClick={saveContent}>儲存內容</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* New Station Add/Edit Dialog */}
-      <Dialog open={isNewStationDialogOpen} onOpenChange={setIsNewStationDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingNewStation ? '編輯站點資訊' : '新增測試站點'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>站點名稱</Label>
-              <Input
-                value={newStationForm.station_name}
-                onChange={(e) => setNewStationForm({ ...newStationForm, station_name: e.target.value })}
-                placeholder="請輸入站點名稱"
-              />
-            </div>
-            <div>
-              <Label>順序</Label>
-              <Input
-                type="number"
-                value={newStationForm.station_order}
-                onChange={(e) => setNewStationForm({ ...newStationForm, station_order: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>描述</Label>
-              <Textarea
-                value={newStationForm.description}
-                onChange={(e) => setNewStationForm({ ...newStationForm, description: e.target.value })}
-                placeholder="請輸入站點描述"
-              />
-            </div>
-            <div>
-              <Label>預估時間 (小時)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={newStationForm.estimated_hours}
-                onChange={(e) => setNewStationForm({ ...newStationForm, estimated_hours: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsNewStationDialogOpen(false)}
-                className={flowButtonClass}
-              >
-                取消
-              </Button>
-              <Button onClick={handleSaveNewStation} className={flowButtonClass}>
-                <Save className="h-4 w-4 mr-2" />
-                儲存
-              </Button>
-            </div>
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>草稿與發布版差異</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">站點</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.stations.length ?? 0} → {stations.length}</div></div>
+            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">測項</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.items.length ?? 0} → {items.length}</div></div>
+            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">內容</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.contents.length ?? 0} → {contents.length}</div></div>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><h3 className="text-sm font-semibold text-emerald-100">新增站點</h3><div className="mt-2 space-y-1 text-sm text-muted-foreground">{addedStations.map((station) => <div key={station.id}>+ {station.station_name}</div>)}{!addedStations.length && <div>無</div>}</div></div>
+            <div><h3 className="text-sm font-semibold text-rose-100">移除站點</h3><div className="mt-2 space-y-1 text-sm text-muted-foreground">{removedStations.map((station) => <div key={station.id}>− {station.station_name}</div>)}{!removedStations.length && <div>無</div>}</div></div>
+          </div>
+          {validationIssues.length ? <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 p-3 text-sm text-amber-100">目前仍有 {validationIssues.length} 個驗證問題，修正後才能發布。</div> : <div className="flex items-center gap-2 text-sm text-emerald-100"><Check className="h-4 w-4" />草稿已通過基本驗證。</div>}
         </DialogContent>
       </Dialog>
     </div>

@@ -1,442 +1,422 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Download,
+  FileText,
+  LayoutGrid,
+  List,
+  Search,
+} from "lucide-react";
 
-import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Download, FileText } from "lucide-react";
+import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
-import { useToast } from "@/hooks/use-toast";
-import { useTestTrackerData } from "@/hooks/useTestTrackerData";
-import { cn } from "@/lib/utils";
-import { FilterControls } from "./FilterControls";
-import { TestProgressTable } from "./TestProgressTable";
-import { ExportManager } from "./ExportManager";
-import { PDFExportDialog } from "./pdf/PDFExportDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Progress as ProgressBar } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useFlowVersions } from "@/hooks/useFlowVersions";
+import { useTestTrackerData } from "@/hooks/useTestTrackerData";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
-interface TestProgress {
-  id: string;
-  system_id: string;
-  station_id: string;
-  item_id: string;
-  status: string;
-  progress_percent: number;
-  notes: string;
-  started_at?: string;
-  completed_at?: string;
+import { BulkResetDialog } from "./BulkResetDialog";
+import { ExportManager } from "./ExportManager";
+import { PDFExportDialog } from "./pdf/PDFExportDialog";
+import { SystemManager } from "./SystemManager";
+import { SystemProgressSheet } from "./SystemProgressSheet";
+import { TestProgressTable } from "./TestProgressTable";
+
+type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
+type TrackerView = "table" | "board";
+
+function normalizeSystemStatus(system: {
+  current_station?: string | null;
+  overall_progress?: number | null;
+  status?: string | null;
+}) {
+  if (
+    system.status === "Done" ||
+    system.status === "已完成" ||
+    system.current_station === "已完成" ||
+    system.overall_progress === 100
+  ) {
+    return "已完成";
+  }
+  if (
+    system.status === "On-going" ||
+    system.status === "進行中" ||
+    (system.overall_progress ?? 0) > 0
+  ) {
+    return "進行中";
+  }
+  return "未開始";
 }
 
-type ProgressUpdates = Pick<TestProgress, "status" | "progress_percent" | "notes"> &
-  Partial<Pick<TestProgress, "started_at" | "completed_at">>;
-
-type StatusFilter = "all-status" | "未開始" | "進行中" | "已完成";
-
-const STATUS_TABS: Array<{ value: Exclude<StatusFilter, "all-status">; label: string }> = [
-  { value: "未開始", label: "尚未開始" },
-  { value: "進行中", label: "進行中" },
-  { value: "已完成", label: "已完成" },
-];
-
-const STATUS_TAB_STYLES: Record<
-  Exclude<StatusFilter, "all-status">,
-  {
-    active: string;
-    inactive: string;
-    badgeActive: string;
-    badgeInactive: string;
-  }
-> = {
-  "未開始": {
-    active:
-      "border-rose-300/75 bg-rose-400/[0.28] text-white shadow-[0_20px_42px_-24px_hsl(350_95%_68%/0.82)]",
-    inactive:
-      "border-rose-300/55 bg-rose-400/[0.16] text-rose-50 hover:border-rose-200/75 hover:bg-rose-400/[0.24]",
-    badgeActive: "bg-white/20 text-white",
-    badgeInactive: "bg-rose-100/20 text-rose-50",
-  },
-  "進行中": {
-    active:
-      "border-amber-200/80 bg-amber-300/[0.3] text-white shadow-[0_20px_42px_-24px_hsl(42_100%_66%/0.85)]",
-    inactive:
-      "border-amber-200/60 bg-amber-300/[0.18] text-amber-50 hover:border-amber-100/80 hover:bg-amber-300/[0.26]",
-    badgeActive: "bg-white/22 text-white",
-    badgeInactive: "bg-amber-100/20 text-amber-50",
-  },
-  "已完成": {
-    active:
-      "border-emerald-200/75 bg-emerald-300/[0.26] text-white shadow-[0_20px_42px_-24px_hsl(152_80%_58%/0.82)]",
-    inactive:
-      "border-emerald-200/55 bg-emerald-300/[0.15] text-emerald-50 hover:border-emerald-100/75 hover:bg-emerald-300/[0.23]",
-    badgeActive: "bg-white/20 text-white",
-    badgeInactive: "bg-emerald-100/20 text-emerald-50",
-  },
-};
+function updateTrackerViewQuery(view: TrackerView) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("trackerView", view);
+  window.history.replaceState({}, "", url);
+}
 
 export function TestTracker() {
-  const { systems, stations, items, progress, loadData, updateProgress } = useTestTrackerData();
+  const {
+    items,
+    loadData,
+    progress,
+    stations,
+    systems,
+    updateProgress,
+  } = useTestTrackerData();
+  const { activeProject, activeProjectId } = useTestProject();
+  const {
+    activeVersion,
+    selectedVersion,
+    selectedVersionId,
+    setSelectedVersionId,
+    versions,
+  } = useFlowVersions();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterEngineer, setFilterEngineer] = useState("all-engineers");
-  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all-status");
-  const [editingProgress, setEditingProgress] = useState<string | null>(null);
+  const [engineerFilter, setEngineerFilter] = useState("all");
+  const [stationFilter, setStationFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [view, setView] = useState<TrackerView>(() => {
+    if (typeof window === "undefined") return "table";
+    return new URLSearchParams(window.location.search).get("trackerView") === "board"
+      ? "board"
+      : "table";
+  });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
-  const [editValues, setEditValues] = useState<{
-    status: string;
-    progress_percent: number;
-    notes: string;
-    started_at?: string;
-    completed_at?: string;
-  }>({ status: "", progress_percent: 0, notes: "", started_at: undefined, completed_at: undefined });
-  const { toast } = useToast();
-  const { activeProjectId } = useTestProject();
+  const [displayStations, setDisplayStations] = useState(stations);
+  const [displayItems, setDisplayItems] = useState(items);
 
-  const getProgressForSystemItem = (systemId: string, stationId: string, itemId: string) => {
-    return progress.find(p => 
-      p.system_id === systemId && 
-      p.station_id === stationId && 
-      p.item_id === itemId
-    );
-  };
-
-  const handleEditProgress = (systemId: string, stationId: string, itemId: string) => {
-    const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-    const editKey = `${systemId}-${stationId}-${itemId}`;
-    
-    setEditingProgress(editKey);
-    setEditValues({
-      status: existingProgress?.status || "Not Start",
-      progress_percent: existingProgress?.progress_percent || 0,
-      notes: existingProgress?.notes || "",
-      started_at: existingProgress?.started_at,
-      completed_at: existingProgress?.completed_at
-    });
-  };
-
-  const handleSaveProgress = async (systemId: string, stationId: string, itemId: string) => {
-    try {
-      // 找到對應的station，檢查是否為Station 0-4
-      const station = stations.find(s => s.id === stationId);
-      const isStation0To4 = station && station.station_order >= 0 && station.station_order <= 4;
-      
-      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-      const currentTime = new Date().toISOString();
-      
-      // 準備更新數據
-      const updates: ProgressUpdates = {
-        status: editValues.status,
-        progress_percent: editValues.progress_percent,
-        notes: editValues.notes
-      };
-
-      // 只對Station 0-4自動記錄時間
-      if (isStation0To4) {
-        // 如果狀態從 "Not Start" 變為 "On-going"，設定開始時間
-        if (existingProgress?.status === 'Not Start' && editValues.status === 'On-going') {
-          updates.started_at = currentTime;
-        }
-        // 如果狀態變為 "Done"，設定完成時間
-        if (editValues.status === 'Done' && existingProgress?.status !== 'Done') {
-          updates.completed_at = currentTime;
-          // 如果沒有開始時間，也設定開始時間
-          if (!existingProgress?.started_at) {
-            updates.started_at = currentTime;
-          }
-        }
-        // 保留現有時間（如果不是狀態變更觸發）
-        if (editValues.started_at) {
-          updates.started_at = editValues.started_at;
-        }
-        if (editValues.completed_at) {
-          updates.completed_at = editValues.completed_at;
-        }
-      } else {
-        // 非Station 0-4的站點，保持手動設定的時間
-        updates.started_at = editValues.started_at;
-        updates.completed_at = editValues.completed_at;
-      }
-
-      const success = await updateProgress(systemId, stationId, itemId, updates);
-      
-      if (success) {
-        setEditingProgress(null);
-        const stationName = station?.station_name || `Station ${station?.station_order}`;
-        toast({
-          title: "儲存成功",
-          description: `${stationName} 測試進度已更新${isStation0To4 ? '，時間已自動記錄' : ''}`,
-        });
-      } else {
-        throw new Error('Update failed');
-      }
-    } catch (error) {
-      console.error('Error saving progress:', error);
-      toast({
-        title: "儲存失敗",
-        description: "無法更新測試進度",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteProgress = async (systemId: string, stationId: string, itemId: string) => {
-    if (!confirm('DELETE the progress for this test item?')) {
+  useEffect(() => {
+    if (!selectedVersionId || selectedVersionId === activeVersion?.id) {
+      setDisplayStations(stations);
+      setDisplayItems(items);
       return;
     }
 
-    try {
-      const existingProgress = getProgressForSystemItem(systemId, stationId, itemId);
-      
-      if (existingProgress) {
-        const { error } = await supabase
-          .from('test_progress')
-          .delete()
-          .eq('project_id', activeProjectId)
-          .eq('id', existingProgress.id);
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("test_flow_stations")
+        .select("*")
+        .eq("project_id", activeProjectId)
+        .eq("flow_version_id", selectedVersionId)
+        .order("station_order"),
+      supabase
+        .from("test_flow_items")
+        .select("*")
+        .eq("project_id", activeProjectId)
+        .eq("flow_version_id", selectedVersionId)
+        .order("item_order"),
+    ]).then(([stationResult, itemResult]) => {
+      if (cancelled || stationResult.error || itemResult.error) return;
+      setDisplayStations(stationResult.data ?? []);
+      setDisplayItems(itemResult.data ?? []);
+    });
 
-        if (error) throw error;
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeProjectId,
+    activeVersion?.id,
+    items,
+    selectedVersionId,
+    stations,
+  ]);
 
-        handleSystemUpdate();
-        
-        toast({
-          title: "Deleted",
-          description: "Test progress record deleted successfully"
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting progress:', error);
-      toast({
-        title: "Delete Error",
-        description: "Failed to delete test progress record",
-        variant: "destructive"
-      });
-    }
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [engineerFilter, searchTerm, selectedVersionId, stationFilter, statusFilter, view]);
 
-  const handleSystemUpdate = (newSystemId?: string) => {
-    loadData(newSystemId);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Done': return 'bg-success text-success-foreground';
-      case 'On-going': return 'bg-warning text-warning-foreground';
-      case 'Not Start': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const normalizeSystemStatus = (system: {
-    status?: string | null;
-    current_station?: string | null;
-    overall_progress?: number | null;
-  }) => {
-    const rawStatus = system.status ?? "";
-    const currentStation = system.current_station ?? "";
-    const overallProgress = system.overall_progress ?? 0;
-
-    if (
-      rawStatus === "Done" ||
-      rawStatus === "已完成" ||
-      currentStation === "已完成" ||
-      overallProgress === 100
-    ) {
-      return "已完成";
-    }
-
-    if (
-      rawStatus === "On-going" ||
-      rawStatus === "進行中" ||
-      currentStation === "進行中" ||
-      overallProgress > 0
-    ) {
-      return "進行中";
-    }
-
-    return "未開始";
-  };
-
-  const hasActiveSearchTerm = searchTerm.trim().length > 0;
+  const engineers = useMemo(
+    () =>
+      [...new Set(
+        systems
+          .map((system) => system.assigned_engineer)
+          .filter((engineer): engineer is string => Boolean(engineer?.trim()))
+      )].sort((left, right) => left.localeCompare(right, "zh-Hant")),
+    [systems]
+  );
 
   const baseFilteredSystems = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
-
-    return systems.filter(system => {
-      const displayStatus = normalizeSystemStatus(system);
-      const matchesSearch =
+    return systems.filter((system) => {
+      const status = normalizeSystemStatus(system);
+      const matchesKeyword =
         !keyword ||
         system.system_name?.toLowerCase().includes(keyword) ||
-        system.assigned_engineer?.toLowerCase().includes(keyword) ||
-        system.current_station?.toLowerCase().includes(keyword) ||
         system.serial_number?.toLowerCase().includes(keyword) ||
-        displayStatus.includes(keyword);
-
+        system.assigned_engineer?.toLowerCase().includes(keyword) ||
+        system.current_station?.toLowerCase().includes(keyword);
       const matchesEngineer =
-        filterEngineer === "all-engineers" || system.assigned_engineer === filterEngineer;
+        engineerFilter === "all" || system.assigned_engineer === engineerFilter;
+      const matchesStation =
+        stationFilter === "all" || system.current_station === stationFilter;
+      const matchesVersion =
+        !selectedVersionId ||
+        !system.flow_version_id ||
+        system.flow_version_id === selectedVersionId;
 
-      return matchesSearch && matchesEngineer;
+      return matchesKeyword && matchesEngineer && matchesStation && matchesVersion && status;
     });
-  }, [systems, searchTerm, filterEngineer]);
+  }, [engineerFilter, searchTerm, selectedVersionId, stationFilter, systems]);
 
   const statusCounts = useMemo(
     () =>
-      baseFilteredSystems.reduce<Record<Exclude<StatusFilter, "all-status">, number>>(
-        (accumulator, system) => {
-          const normalizedStatus = normalizeSystemStatus(system) as Exclude<StatusFilter, "all-status">;
-          accumulator[normalizedStatus] += 1;
-          return accumulator;
+      baseFilteredSystems.reduce(
+        (counts, system) => {
+          counts[normalizeSystemStatus(system)] += 1;
+          return counts;
         },
-        {
-          "未開始": 0,
-          "進行中": 0,
-          "已完成": 0,
-        }
+        { 已完成: 0, 未開始: 0, 進行中: 0 }
       ),
     [baseFilteredSystems]
   );
 
   const filteredSystems = useMemo(
     () =>
-      baseFilteredSystems.filter((system) => {
-        if (hasActiveSearchTerm || filterStatus === "all-status") {
-          return true;
-        }
-
-        return normalizeSystemStatus(system) === filterStatus;
-      }),
-    [baseFilteredSystems, filterStatus, hasActiveSearchTerm]
+      statusFilter === "all"
+        ? baseFilteredSystems
+        : baseFilteredSystems.filter(
+            (system) => normalizeSystemStatus(system) === statusFilter
+          ),
+    [baseFilteredSystems, statusFilter]
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
+  const pagedSystems = filteredSystems.slice((page - 1) * pageSize, page * pageSize);
+  const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
+  const selectedSystemVersion = versions.find(
+    (version) => version.id === selectedSystem?.flow_version_id
   );
 
-  const engineers = useMemo(
-    () =>
-      [...new Set(
-        systems
-          .map(system => system.assigned_engineer)
-          .filter((engineer): engineer is string => Boolean(engineer?.trim()))
-      )].sort((a, b) => a.localeCompare(b, "zh-Hant")),
-    [systems]
-  );
+  const changeView = (nextView: TrackerView) => {
+    setView(nextView);
+    updateTrackerViewQuery(nextView);
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">L10 測試追蹤</h1>
-          <p className="text-muted-foreground">系統測試進度管理 - {systems.length} 台機器測試狀態</p>
-        </div>
-        <div className="flex gap-2">
-          <ExportManager 
-            systems={filteredSystems} 
-            stations={stations} 
-            progress={progress} 
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                PDF 匯出
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
-                <FileText className="h-4 w-4 mr-2" />
-                完整測試追蹤 PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <FilterControls
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        filterEngineer={filterEngineer}
-        setFilterEngineer={setFilterEngineer}
-        engineers={engineers}
+    <div className="maintenance-page space-y-3">
+      <MaintenancePageHeader
+        icon={ClipboardList}
+        title="L10 測試追蹤"
+        description={`${activeProject?.name || "目前專案"} · ${filteredSystems.length} 台符合條件`}
+        actions={
+          <>
+            <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
+            <BulkResetDialog onReset={loadData} />
+            <ExportManager systems={filteredSystems} stations={displayStations} progress={progress} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 rounded-lg">
+                  <Download className="mr-2 h-4 w-4" />PDF
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" />完整測試追蹤 PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
       />
 
-      <div className="rounded-2xl border border-primary/15 bg-card/90 p-2 shadow-[0_18px_48px_-38px_hsl(220_50%_2%/0.9)]">
-        <div className="flex flex-wrap items-center gap-2">
-          {STATUS_TABS.map((tab) => {
-            const isActive = filterStatus === tab.value;
-            const palette = STATUS_TAB_STYLES[tab.value];
-
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setFilterStatus(tab.value)}
-                className={cn(
-                  "inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200",
-                  isActive ? palette.active : palette.inactive
-                )}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-xs font-semibold",
-                    isActive ? palette.badgeActive : palette.badgeInactive
-                  )}
-                >
-                  {statusCounts[tab.value]}
-                </span>
-              </button>
-            );
-          })}
-
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setFilterStatus("all-status")}
-            className={cn(
-              "ml-auto rounded-xl border px-4 text-sm font-medium",
-              filterStatus === "all-status"
-                ? "border-primary/35 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-                : "border-border/70 text-muted-foreground hover:border-primary/25 hover:text-foreground"
-            )}
-          >
-            全部
-            <span className="ml-2 rounded-full bg-background/80 px-2 py-0.5 text-xs font-semibold text-foreground/75">
-              {baseFilteredSystems.length}
-            </span>
-          </Button>
+      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
+            className="h-9 border-[#2a526f] bg-[#06111f] pl-9"
+            placeholder="搜尋機台、序號或工程師"
+          />
         </div>
 
-        {hasActiveSearchTerm && (
-          <div className="px-2 pb-1 pt-2 text-sm text-primary/90">
-            目前為搜尋模式，已跨所有狀態顯示符合的機台結果。
-          </div>
+        <Select value={engineerFilter} onValueChange={setEngineerFilter}>
+          <SelectTrigger className="h-9 w-[145px]"><SelectValue placeholder="工程師" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部工程師</SelectItem>
+            {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={stationFilter} onValueChange={setStationFilter}>
+          <SelectTrigger className="h-9 w-[165px]"><SelectValue placeholder="站點" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部站點</SelectItem>
+            {displayStations.map((station) => <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        {versions.length > 0 && selectedVersionId && (
+          <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
+            <SelectTrigger className="h-9 w-[118px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {versions.map((version) => (
+                <SelectItem key={version.id} value={version.id}>
+                  {version.label || `v${version.version_number}`}{version.status === "draft" ? " 草稿" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+
+        <div className="flex rounded-lg border border-[#2a526f] bg-[#06111f] p-1">
+          {(["未開始", "進行中", "已完成"] as const).map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter((current) => current === status ? "all" : status)}
+              className={cn(
+                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
+                statusFilter === status ? "bg-[#4c8dff] text-[#06111f]" : "text-[#a9c0d1] hover:bg-[#10263a] hover:text-[#f3f8fc]"
+              )}
+            >
+              {status} <span className="font-data ml-1">{statusCounts[status]}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={cn(
+              "h-7 rounded-md px-2.5 text-xs font-medium",
+              statusFilter === "all" ? "bg-[#10263a] text-[#f3f8fc]" : "text-[#a9c0d1]"
+            )}
+          >
+            全部 <span className="font-data ml-1">{baseFilteredSystems.length}</span>
+          </button>
+        </div>
+
+        <div className="ml-auto flex rounded-lg border border-[#2a526f] bg-[#06111f] p-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#10263a] text-cyan-100")}
+            onClick={() => changeView("table")}
+          >
+            <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#10263a] text-cyan-100")}
+            onClick={() => changeView("board")}
+          >
+            <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Content */}
-      <div data-testtracker-table>
-        <TestProgressTable
-          filteredSystems={filteredSystems}
-          stations={stations}
-          items={items}
-          progress={progress}
-          editingProgress={editingProgress}
-          setEditingProgress={setEditingProgress}
-          editValues={editValues}
-          setEditValues={setEditValues}
-          getProgressForSystemItem={getProgressForSystemItem}
-          handleEditProgress={handleEditProgress}
-          handleSaveProgress={handleSaveProgress}
-          handleDeleteProgress={handleDeleteProgress}
-          getStatusColor={getStatusColor}
-          onSystemUpdate={handleSystemUpdate}
-        />
-      </div>
+      {view === "table" ? (
+        <>
+          <TestProgressTable
+            systems={pagedSystems}
+            stations={displayStations}
+            items={displayItems}
+            progress={progress}
+            onSelectSystem={setSelectedSystemId}
+            onSystemUpdate={loadData}
+          />
+          <div className="flex items-center justify-between gap-3 text-xs text-[#a9c0d1]">
+            <div className="flex items-center gap-2">
+              <span>每頁</span>
+              <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
+                <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[25, 50, 100].map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span>共 {filteredSystems.length} 台</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+                <ChevronLeft className="h-4 w-4" /><span className="sr-only">上一頁</span>
+              </Button>
+              <span className="font-data min-w-14 text-center">{page}/{pageCount}</span>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>
+                <ChevronRight className="h-4 w-4" /><span className="sr-only">下一頁</span>
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
+          {displayStations.map((station) => {
+            const stationSystems = filteredSystems.filter(
+              (system) => system.current_station === station.station_name
+            );
+            return (
+              <section key={station.id} className="maintenance-panel min-w-[250px] flex-1 overflow-hidden">
+                <div className="flex h-11 items-center justify-between border-b border-[#2a526f]/70 px-3">
+                  <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">{station.station_name}</h2>
+                  <Badge variant="outline" className="font-data rounded-md">{stationSystems.length}</Badge>
+                </div>
+                <div className="max-h-[calc(100vh-348px)] space-y-2 overflow-y-auto p-2">
+                  {stationSystems.map((system) => (
+                    <button
+                      key={system.id}
+                      type="button"
+                      className="w-full rounded-lg border border-[#2a526f] bg-[#10263a] p-2.5 text-left hover:border-cyan-300/55"
+                      onClick={() => setSelectedSystemId(system.id)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
+                        <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.assigned_engineer || "未指定工程師"}</div>
+                      <ProgressBar value={system.overall_progress ?? 0} className="mt-2 h-1.5" />
+                    </button>
+                  ))}
+                  {!stationSystems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
 
-      {/* PDF Exporter Dialog */}
+      <SystemProgressSheet
+        open={Boolean(selectedSystem)}
+        onOpenChange={(open) => !open && setSelectedSystemId(null)}
+        system={selectedSystem}
+        stations={displayStations}
+        items={displayItems}
+        progress={progress}
+        updateProgress={updateProgress}
+        onUpdated={loadData}
+        versionLabel={
+          selectedSystemVersion?.label ||
+          (selectedVersion?.id === selectedSystem?.flow_version_id
+            ? selectedVersion?.label
+            : null)
+        }
+      />
+
       <PDFExportDialog
         systems={filteredSystems}
-        stations={stations}
-        items={items}
+        stations={displayStations}
+        items={displayItems}
         progress={progress}
         isOpen={pdfExporterOpen}
         onClose={() => setPdfExporterOpen(false)}
