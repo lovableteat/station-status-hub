@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,8 +13,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { getEffectivePriority, IssuePriority } from "@/lib/issuePriority";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import DOMPurify from "dompurify";
 
-interface Issue {
+export interface Issue {
   id: string;
   title: string;
   description: string;
@@ -50,6 +50,7 @@ interface Issue {
 interface IssueTableViewProps {
   issues: Issue[];
   onUpdate: () => void;
+  onViewIssue?: (issue: Issue) => void;
 }
 
 type ColumnKey =
@@ -129,7 +130,14 @@ const PRIORITY_STYLES: Record<IssuePriority, { trigger: string; rank: string; it
 };
 
 
-export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
+function toPlainText(value?: string | null) {
+  if (!value) return "";
+  const sanitized = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
+  const doc = new DOMParser().parseFromString(sanitized, "text/html");
+  return doc.body.textContent?.replace(/\s+/g, " ").trim() || "";
+}
+
+export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableViewProps) {
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -260,6 +268,10 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
     onUpdate();
   };
   const handleView = (issue: Issue) => {
+    if (onViewIssue) {
+      onViewIssue(issue);
+      return;
+    }
     setViewingIssue(issue);
     setIsDetailDialogOpen(true);
   };
@@ -376,12 +388,14 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
               : '-'}
           </div>
         );
-      case "fail_log":
+      case "fail_log": {
+        const descriptionText = toPlainText(issue.description);
         return (
-          <div className="line-clamp-3 text-sm whitespace-pre-wrap" title={issue.description}>
-            {issue.description}
+          <div className="line-clamp-2 text-sm leading-5" title={descriptionText}>
+            {descriptionText || "-"}
           </div>
         );
+      }
       case "priority":
         return (
           <div className="flex justify-center">
@@ -499,16 +513,19 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
   };
 
   return (
-    <Card className="border-primary/15 bg-card/90">
-      <CardHeader className="bg-secondary/25">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>問題列表（可拖曳欄位調整順序）</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">拖曳表頭可調整欄位順序，操作按鈕支援 hover 回饋。</p>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="maintenance-panel overflow-hidden">
+      <div className="flex h-10 items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-3">
+        <div
+          className="flex items-center gap-2 text-xs text-[#a9c0d1]"
+          title="可拖曳表頭調整欄位順序"
+          aria-label="可拖曳表頭調整欄位順序"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+          <span className="font-data">{issues.length} 筆</span>
+        </div>
+        <div className="flex items-center gap-2">
             <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
-              <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10</SelectItem>
                 <SelectItem value="20">20</SelectItem>
@@ -516,14 +533,12 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
                 <SelectItem value="100">100</SelectItem>
               </SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">筆/頁</span>
-          </div>
+            <span className="text-xs text-[#a9c0d1]">筆/頁</span>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
+      </div>
+        <div className="max-h-[calc(100vh-350px)] overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-[#10263a]">
               <TableRow>
                 {columnOrder.map((key) => {
                   const meta = COLUMN_META[key];
@@ -569,11 +584,11 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
             </TableHeader>
             <TableBody>
               {paginatedIssues.map((issue) => (
-                <TableRow key={issue.id}>
+                <TableRow key={issue.id} className="h-14">
                   {columnOrder.map((key) => (
                     <TableCell
                       key={key}
-                      className={cn(isCenteredColumn(key) && "text-center")}
+                      className={cn("py-2", isCenteredColumn(key) && "text-center")}
                     >
                       {renderCell(key, issue)}
                     </TableCell>
@@ -584,7 +599,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
           </Table>
         </div>
 
-        <div className="flex items-center justify-between pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#2a526f] bg-[#0b1b2d] p-3">
           <div className="text-sm text-muted-foreground">
             顯示 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, issues.length)} 筆，共 {issues.length} 筆
           </div>
@@ -616,7 +631,7 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
           </Dialog>
         )}
 
-        {viewingIssue && (
+        {!onViewIssue && viewingIssue && (
           <IssueDetailDialog
             issue={viewingIssue}
             isOpen={isDetailDialogOpen}
@@ -654,7 +669,6 @@ export function IssueTableView({ issues, onUpdate }: IssueTableViewProps) {
             </div>
           </DialogContent>
         </Dialog>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

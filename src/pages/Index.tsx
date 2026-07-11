@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Boxes,
@@ -28,8 +28,10 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
+import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
 import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { FlowInfo } from "@/components/test-tracker/FlowInfo";
 import { TestTracker } from "@/components/test-tracker/TestTracker";
 import { ToolsManagement } from "@/components/tools/ToolsManagement";
@@ -83,6 +85,37 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   "data-center": "data-center",
   "ai-chat": "ai-chat",
 };
+
+const MODULE_QUERY_KEYS = [
+  "assetView",
+  "flowVersion",
+  "flowView",
+  "openIssue",
+  "station",
+  "system",
+  "trackerView",
+];
+
+function pushWorkspaceLocation(
+  workspace: WorkspaceId | null,
+  module?: string,
+  params?: Record<string, string>
+) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  MODULE_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+
+  if (workspace) url.searchParams.set("workspace", workspace);
+  else url.searchParams.delete("workspace");
+
+  if (module) url.searchParams.set("module", module);
+  else url.searchParams.delete("module");
+
+  Object.entries(params ?? {}).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+  window.history.pushState({}, "", url);
+}
 
 function getRoleLabel(role?: string) {
   switch (role) {
@@ -169,9 +202,11 @@ const Index = () => {
     getInitialAdminModule
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const stationMainRef = useRef<HTMLElement | null>(null);
 
   const { login, isLoggedIn, logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
+  const { activeProjectId, isSwitchingProject } = useTestProject();
   const { isUpdating } = useUnifiedData();
   const { canViewModule } = usePermissions();
   const isMobile = useIsMobile();
@@ -275,12 +310,16 @@ const Index = () => {
   }, [activeAdminModule, activeStationModule, activeWorkspace, updateCurrentModule]);
 
   useEffect(() => {
-    const handleNavigationEvent = (event: CustomEvent<{ module: string }>) => {
+    const handleNavigationEvent = (
+      event: CustomEvent<{ module: string; params?: Record<string, string> }>
+    ) => {
       const module = event.detail?.module;
       if (!module) return;
 
       const targetWorkspace = moduleWorkspaceMap[module];
       if (!targetWorkspace) return;
+
+      pushWorkspaceLocation(targetWorkspace, module, event.detail?.params);
 
       setActiveWorkspace(targetWorkspace);
 
@@ -302,24 +341,72 @@ const Index = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+
+    if (activeWorkspace) url.searchParams.set("workspace", activeWorkspace);
+    else url.searchParams.delete("workspace");
+
+    if (activeWorkspace === "station-status") {
+      url.searchParams.set("module", activeStationModule);
+    } else if (activeWorkspace === "user-management") {
+      url.searchParams.set("module", activeAdminModule);
+    } else if (activeWorkspace === "ai-chat") {
+      url.searchParams.set("module", "ai-chat");
+    } else {
+      url.searchParams.delete("module");
+    }
+
+    window.history.replaceState({}, "", url);
+  }, [activeAdminModule, activeStationModule, activeWorkspace]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveWorkspace(getInitialWorkspace());
+      setActiveStationModule(getInitialStationModule());
+      setActiveAdminModule(getInitialAdminModule());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    stationMainRef.current?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  }, [activeProjectId, activeStationModule]);
+
   if (!isLoggedIn) {
     return <LoginPage onLogin={login} />;
   }
 
   const handleWorkspaceChange = (workspace: string) => {
     if (workspace === "workspace-home") {
+      pushWorkspaceLocation(null);
       setActiveWorkspace(null);
       return;
     }
 
-    setActiveWorkspace(workspace as WorkspaceId);
+    const nextWorkspace = workspace as WorkspaceId;
+    const nextModule =
+      nextWorkspace === "station-status"
+        ? activeStationModule
+        : nextWorkspace === "user-management"
+          ? activeAdminModule
+          : nextWorkspace === "ai-chat"
+            ? "ai-chat"
+            : undefined;
+    pushWorkspaceLocation(nextWorkspace, nextModule);
+    setActiveWorkspace(nextWorkspace);
   };
 
   const handleOpenNotifications = () => {
     window.dispatchEvent(new CustomEvent("open-global-notifications"));
   };
 
-  const handleStationNavigation = (module: string) => {
+  const handleStationNavigation = (module: string, params?: Record<string, string>) => {
+    pushWorkspaceLocation("station-status", module, params);
     setActiveWorkspace("station-status");
     setActiveStationModule(module as StationModuleId);
     if (isMobile) {
@@ -328,6 +415,7 @@ const Index = () => {
   };
 
   const handleAdminNavigation = (module: AdminModuleId) => {
+    pushWorkspaceLocation("user-management", module);
     setActiveWorkspace("user-management");
     setActiveAdminModule(module);
   };
@@ -410,7 +498,7 @@ const Index = () => {
       case "station-status":
       default:
         return (
-          <div className="relative">
+          <div className="maintenance-workspace relative lg:h-full lg:overflow-hidden">
             {isMobile && sidebarOpen && (
               <div
                 className="fixed inset-0 z-30 bg-black/50 lg:hidden"
@@ -418,23 +506,33 @@ const Index = () => {
               />
             )}
 
-            <div className="space-y-4 px-4 pb-4 pt-4">
-              <ProjectScopeBar />
+            <div className="flex h-full flex-col gap-3 px-3 pb-3 pt-3">
+              <div className="shrink-0"><ProjectScopeBar /></div>
 
-              <div className="flex min-h-[calc(100vh-148px)] gap-4">
+              <div className="relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0">
                 <Sidebar
                   activeModule={activeStationModule}
                   onModuleChange={handleStationNavigation}
                   isOpen={sidebarOpen}
                   onToggle={() => setSidebarOpen((value) => !value)}
                   isMobile={isMobile}
-                  desktopStickyClass="top-[108px] h-[calc(100vh-124px)]"
-                  mobileHeaderOffsetClass="top-[92px]"
-                  mobilePanelOffsetClass="top-[148px]"
+                  desktopStickyClass="top-[140px] h-full"
                 />
 
-                <main className={cn("min-w-0 flex-1 overflow-auto", isMobile && "pt-14")}>
-                  {renderStationContent()}
+                <main
+                  ref={stationMainRef}
+                  className={cn(
+                    "min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-[#06111f]",
+                    isMobile && "pt-12"
+                  )}
+                >
+                  {isSwitchingProject ? (
+                    <MaintenanceLoading />
+                  ) : (
+                    <div key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}>
+                      {renderStationContent()}
+                    </div>
+                  )}
                 </main>
               </div>
             </div>
@@ -456,8 +554,8 @@ const Index = () => {
         onSelect={handleWorkspaceChange}
         onLogout={logout}
         onOpenNotifications={handleOpenNotifications}
-        onBrandClick={() => setActiveWorkspace(null)}
-        onOpenWorkspaceHome={() => setActiveWorkspace(null)}
+        onBrandClick={() => handleWorkspaceChange("workspace-home")}
+        onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}
         userRoleLabel={getRoleLabel(user?.role)}
         userMenuItems={[
@@ -482,7 +580,15 @@ const Index = () => {
         ]}
       />
 
-      <main className="min-h-[calc(100vh-92px)]">{renderWorkspaceContent()}</main>
+      <main
+        className={cn(
+          activeWorkspace === "station-status"
+            ? "lg:h-[calc(100dvh-95px)] lg:min-h-0"
+            : "min-h-[calc(100vh-92px)]"
+        )}
+      >
+        {renderWorkspaceContent()}
+      </main>
     </div>
   );
 };
