@@ -406,6 +406,92 @@ All colors MUST be HSL for proper theming support.
 }
 
 @layer components {
+  .maintenance-workspace {
+    --background: 212 67% 7%;
+    --foreground: 207 60% 97%;
+    --card: 211 61% 11%;
+    --card-foreground: 207 60% 97%;
+    --popover: 207 57% 15%;
+    --popover-foreground: 207 60% 97%;
+    --primary: 218 100% 65%;
+    --primary-foreground: 212 67% 7%;
+    --secondary: 207 43% 18%;
+    --secondary-foreground: 207 60% 97%;
+    --muted: 207 33% 20%;
+    --muted-foreground: 205 29% 74%;
+    --accent: 191 79% 57%;
+    --accent-foreground: 212 67% 7%;
+    --border: 205 45% 30%;
+    --input: 205 45% 30%;
+    --ring: 191 79% 57%;
+    background: #06111f;
+    color: #f3f8fc;
+    font-size: 15px;
+  }
+
+  .maintenance-workspace :is(input, textarea)::placeholder {
+    color: #a9c0d1;
+    opacity: 0.82;
+  }
+
+  .maintenance-workspace :focus-visible {
+    outline: 2px solid #39c6e8;
+    outline-offset: 2px;
+  }
+
+  .maintenance-project-bar {
+    background: #0b1b2d;
+    border-color: #2a526f;
+  }
+
+  .maintenance-panel {
+    border: 1px solid #2a526f;
+    border-radius: 14px;
+    background: #0b1b2d;
+  }
+
+  .maintenance-panel-raised {
+    border: 1px solid #356985;
+    border-radius: 14px;
+    background: #10263a;
+  }
+
+  .maintenance-toolbar {
+    border: 1px solid #2a526f;
+    border-radius: 12px;
+    background: #0b1b2d;
+  }
+
+  .maintenance-page {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .maintenance-workspace * {
+    scrollbar-color: #2a526f #071522;
+    scrollbar-width: thin;
+  }
+
+  .maintenance-workspace *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  .maintenance-workspace *::-webkit-scrollbar-track {
+    background: #071522;
+  }
+
+  .maintenance-workspace *::-webkit-scrollbar-thumb {
+    border: 2px solid #071522;
+    border-radius: 999px;
+    background: #2a526f;
+  }
+
+  .maintenance-workspace .font-data {
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
   .panel-surface {
     @apply relative isolate border;
     border-color: hsl(217 90% 64% / 0.16);

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -28,6 +29,7 @@ interface UnifiedSystem {
   ubuntu_version?: string;
   cuda_version?: string;
   exclude_from_dashboard?: boolean;
+  flow_version_id?: string;
 }
 
 interface UnifiedStation {
@@ -37,6 +39,7 @@ interface UnifiedStation {
   station_order: number;
   description?: string;
   estimated_hours?: number;
+  flow_version_id?: string;
 }
 
 interface UnifiedTestItem {
@@ -47,6 +50,7 @@ interface UnifiedTestItem {
   item_order: number;
   description: string;
   estimated_minutes?: number;
+  flow_version_id?: string;
 }
 
 interface UnifiedProgress {
@@ -70,6 +74,7 @@ interface StationContent {
   content: string;
   order_num: number;
   station_id: string;
+  flow_version_id?: string;
 }
 
 interface StationStatus {
@@ -92,9 +97,20 @@ interface StationStatus {
   }>;
 }
 
+interface ProjectRealtimeRecord {
+  id: string;
+  project_id: string;
+}
+
+interface ProjectRealtimePayload<T extends ProjectRealtimeRecord> {
+  eventType: "DELETE" | "INSERT" | "UPDATE";
+  new: Partial<T>;
+  old: Partial<T>;
+}
+
 export function useUnifiedData() {
   const { user } = useUser();
-  const { activeProjectId, isLoadingProjects } = useTestProject();
+  const { activeProject, activeProjectId, isLoadingProjects } = useTestProject();
   const [systems, setSystems] = useState<UnifiedSystem[]>([]);
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
@@ -103,10 +119,12 @@ export function useUnifiedData() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const loadSequenceRef = useRef(0);
 
   const stationStatuses = useStationStatus(systems, stations, progress);
 
   const loadAllData = useCallback(async () => {
+    const loadSequence = ++loadSequenceRef.current;
     if (!activeProjectId) {
       setSystems([]);
       setStations([]);
@@ -118,35 +136,78 @@ export function useUnifiedData() {
     }
 
     setIsLoading(true);
+    setSystems([]);
+    setStations([]);
+    setTestItems([]);
+    setProgress([]);
+    setStationContents([]);
 
     try {
-      const [systemsRes, stationsRes, itemsRes, contentsRes] = await Promise.all([
+      const activeFlowVersionId = activeProject?.active_flow_version_id ?? null;
+      let stationsQuery = supabase
+        .from("test_flow_stations")
+        .select("*")
+        .eq("project_id", activeProjectId);
+      let itemsQuery = supabase
+        .from("test_flow_items")
+        .select("*")
+        .eq("project_id", activeProjectId);
+      let contentsQuery = supabase
+        .from("station_contents")
+        .select("*")
+        .eq("project_id", activeProjectId);
+
+      if (activeFlowVersionId) {
+        stationsQuery = stationsQuery.eq("flow_version_id", activeFlowVersionId);
+        itemsQuery = itemsQuery.eq("flow_version_id", activeFlowVersionId);
+        contentsQuery = contentsQuery.eq("flow_version_id", activeFlowVersionId);
+      }
+
+      const [systemsRes, initialStationsRes, initialItemsRes, initialContentsRes] = await Promise.all([
         supabase
           .from("test_systems")
           .select("*")
           .eq("project_id", activeProjectId)
           .order("system_name"),
-        supabase
-          .from("test_flow_stations")
-          .select("*")
-          .eq("project_id", activeProjectId)
-          .order("station_order"),
-        supabase
-          .from("test_flow_items")
-          .select("*")
-          .eq("project_id", activeProjectId)
-          .order("item_order"),
-        supabase
-          .from("station_contents")
-          .select("*")
-          .eq("project_id", activeProjectId)
-          .order("order_num"),
+        stationsQuery.order("station_order"),
+        itemsQuery.order("item_order"),
+        contentsQuery.order("order_num"),
       ]);
+      let stationsRes = initialStationsRes;
+      let itemsRes = initialItemsRes;
+      let contentsRes = initialContentsRes;
+
+      // Older deployed schemas do not have flow_version_id yet. Keep them
+      // readable while the additive migration rolls out.
+      if (
+        activeFlowVersionId &&
+        (stationsRes.error || itemsRes.error || contentsRes.error)
+      ) {
+        [stationsRes, itemsRes, contentsRes] = await Promise.all([
+          supabase
+            .from("test_flow_stations")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("station_order"),
+          supabase
+            .from("test_flow_items")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("item_order"),
+          supabase
+            .from("station_contents")
+            .select("*")
+            .eq("project_id", activeProjectId)
+            .order("order_num"),
+        ]);
+      }
 
       if (systemsRes.error) throw systemsRes.error;
       if (stationsRes.error) throw stationsRes.error;
       if (itemsRes.error) throw itemsRes.error;
       if (contentsRes.error) throw contentsRes.error;
+
+      if (loadSequence !== loadSequenceRef.current) return;
 
       const nextSystems = (systemsRes.data ?? []) as UnifiedSystem[];
       const nextStations = (stationsRes.data ?? []) as UnifiedStation[];
@@ -172,7 +233,9 @@ export function useUnifiedData() {
           throw progressError;
         }
 
-        setProgress((progressData ?? []) as UnifiedProgress[]);
+        if (loadSequence === loadSequenceRef.current) {
+          setProgress((progressData ?? []) as UnifiedProgress[]);
+        }
       }
     } catch (error) {
       console.error("Failed to load project-scoped station data:", error);
@@ -182,18 +245,22 @@ export function useUnifiedData() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (loadSequence === loadSequenceRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [activeProjectId, toast]);
+  }, [activeProject?.active_flow_version_id, activeProjectId, toast]);
 
   const handleProjectScopedRealtime = useCallback(
-    (
-      payload: any,
-      setter: Dispatch<SetStateAction<any[]>>,
-      sortFn?: (left: any, right: any) => number
+    <T extends ProjectRealtimeRecord>(
+      payload: ProjectRealtimePayload<T>,
+      setter: Dispatch<SetStateAction<T[]>>,
+      sortFn?: (left: T, right: T) => number
     ) => {
       const recordProjectId = payload.new?.project_id ?? payload.old?.project_id;
       const isCurrentProject = recordProjectId === activeProjectId;
+
+      if (!isCurrentProject && payload.eventType !== "DELETE") return;
 
       setIsUpdating(true);
 
@@ -208,7 +275,7 @@ export function useUnifiedData() {
           }
 
           if (payload.eventType === "INSERT") {
-            const next = [...previous, payload.new];
+            const next = [...previous, payload.new as T];
             return sortFn ? next.sort(sortFn) : next;
           }
 
@@ -229,16 +296,19 @@ export function useUnifiedData() {
   );
 
   const updateSystems = useCallback(
-    (payload: any) => {
-      handleProjectScopedRealtime(payload, setSystems);
+    (payload: unknown) => {
+      handleProjectScopedRealtime(
+        payload as ProjectRealtimePayload<UnifiedSystem>,
+        setSystems
+      );
     },
     [handleProjectScopedRealtime]
   );
 
   const updateStations = useCallback(
-    (payload: any) => {
+    (payload: unknown) => {
       handleProjectScopedRealtime(
-        payload,
+        payload as ProjectRealtimePayload<UnifiedStation>,
         setStations,
         (left, right) => left.station_order - right.station_order
       );
@@ -247,9 +317,9 @@ export function useUnifiedData() {
   );
 
   const updateTestItems = useCallback(
-    (payload: any) => {
+    (payload: unknown) => {
       handleProjectScopedRealtime(
-        payload,
+        payload as ProjectRealtimePayload<UnifiedTestItem>,
         setTestItems,
         (left, right) => left.item_order - right.item_order
       );
@@ -258,9 +328,9 @@ export function useUnifiedData() {
   );
 
   const updateStationContents = useCallback(
-    (payload: any) => {
+    (payload: unknown) => {
       handleProjectScopedRealtime(
-        payload,
+        payload as ProjectRealtimePayload<StationContent>,
         setStationContents,
         (left, right) => left.order_num - right.order_num
       );
@@ -269,8 +339,11 @@ export function useUnifiedData() {
   );
 
   const updateProgressRecords = useCallback(
-    (payload: any) => {
-      handleProjectScopedRealtime(payload, setProgress);
+    (payload: unknown) => {
+      handleProjectScopedRealtime(
+        payload as ProjectRealtimePayload<UnifiedProgress>,
+        setProgress
+      );
     },
     [handleProjectScopedRealtime]
   );
@@ -335,31 +408,34 @@ export function useUnifiedData() {
 
     loadAllData();
 
+    if (!activeProjectId) return;
+
+    const projectFilter = `project_id=eq.${activeProjectId}`;
     const channel = supabase
-      .channel("unified_data_changes")
+      .channel(`unified_data_changes:${activeProjectId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "test_systems" },
+        { event: "*", filter: projectFilter, schema: "public", table: "test_systems" },
         updateSystems
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "test_progress" },
+        { event: "*", filter: projectFilter, schema: "public", table: "test_progress" },
         updateProgressRecords
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "test_flow_stations" },
+        { event: "*", filter: projectFilter, schema: "public", table: "test_flow_stations" },
         updateStations
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "test_flow_items" },
+        { event: "*", filter: projectFilter, schema: "public", table: "test_flow_items" },
         updateTestItems
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "station_contents" },
+        { event: "*", filter: projectFilter, schema: "public", table: "station_contents" },
         updateStationContents
       )
       .subscribe();
@@ -369,6 +445,7 @@ export function useUnifiedData() {
     };
   }, [
     isLoadingProjects,
+    activeProjectId,
     loadAllData,
     updateProgressRecords,
     updateStationContents,

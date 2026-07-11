@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2,
-  CopyPlus,
+  Archive,
+  CalendarDays,
+  Check,
+  CirclePause,
+  CirclePlay,
   FolderKanban,
   Layers3,
   Pencil,
   Plus,
-  RefreshCcw,
-  Trash2,
+  RotateCcw,
+  Search,
+  UserRound,
 } from "lucide-react";
 
 import {
@@ -19,18 +23,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -41,612 +37,575 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
-import { type TestProject, useTestProject } from "./TestProjectProvider";
+import {
+  type ProjectStatus,
+  type TestProject,
+  useTestProject,
+} from "./TestProjectProvider";
 
 const EMPTY_TEMPLATE_VALUE = "__empty_project_template__";
+const NO_OWNER_VALUE = "__no_project_owner__";
 
-function formatProjectDate(project: TestProject) {
-  const date = new Date(project.created_at);
+const STATUS_META: Record<
+  ProjectStatus,
+  { label: string; className: string; icon: typeof CirclePlay }
+> = {
+  planning: {
+    label: "規劃中",
+    className: "border-sky-300/35 bg-sky-400/12 text-sky-100",
+    icon: CalendarDays,
+  },
+  active: {
+    label: "進行中",
+    className: "border-emerald-300/35 bg-emerald-400/12 text-emerald-100",
+    icon: CirclePlay,
+  },
+  paused: {
+    label: "暫停",
+    className: "border-amber-300/35 bg-amber-400/12 text-amber-100",
+    icon: CirclePause,
+  },
+  completed: {
+    label: "已完成",
+    className: "border-blue-300/35 bg-blue-400/12 text-blue-100",
+    icon: Check,
+  },
+  archived: {
+    label: "已封存",
+    className: "border-slate-300/25 bg-slate-400/10 text-slate-200",
+    icon: Archive,
+  },
+};
 
-  if (Number.isNaN(date.getTime())) {
-    return "建立時間未知";
-  }
+interface ProjectOwner {
+  display_name: string | null;
+  id: string;
+  username: string;
+}
 
+interface ProjectFormState {
+  cloneFromProjectId: string;
+  description: string;
+  name: string;
+  ownerUserId: string;
+  plannedEndDate: string;
+  plannedStartDate: string;
+  status: ProjectStatus;
+}
+
+const EMPTY_FORM: ProjectFormState = {
+  cloneFromProjectId: EMPTY_TEMPLATE_VALUE,
+  description: "",
+  name: "",
+  ownerUserId: NO_OWNER_VALUE,
+  plannedEndDate: "",
+  plannedStartDate: "",
+  status: "planning",
+};
+
+function getProjectStatus(project: TestProject): ProjectStatus {
+  return (project.status || (project.is_archived ? "archived" : "active")) as ProjectStatus;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "未設定";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("zh-TW", {
-    year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    year: "numeric",
   }).format(date);
 }
 
 export function ProjectScopeBar() {
-  const { toast } = useToast();
   const {
     activeProject,
     activeProjectId,
+    allProjects,
+    archiveProject,
     createProject,
-    deleteProject,
     isLoadingProjects,
+    projectSummaries,
     projects,
-    refreshProjects,
+    restoreProject,
     setActiveProjectId,
     updateProject,
   } = useTestProject();
-  const [isManagerOpen, setIsManagerOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isDeletingProject, setIsDeletingProject] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isUpdatingProject, setIsUpdatingProject] = useState(false);
-  const [projectPendingEditId, setProjectPendingEditId] = useState<string | null>(
-    null
-  );
-  const [projectName, setProjectName] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
-  const [editProjectName, setEditProjectName] = useState("");
-  const [editProjectDescription, setEditProjectDescription] = useState("");
-  const [projectPendingDeleteId, setProjectPendingDeleteId] = useState<string | null>(
-    null
-  );
-  const [cloneSourceProjectId, setCloneSourceProjectId] = useState(
-    activeProjectId ?? EMPTY_TEMPLATE_VALUE
-  );
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
+  const [owners, setOwners] = useState<ProjectOwner[]>([]);
+  const [form, setForm] = useState<ProjectFormState>(EMPTY_FORM);
 
-  const cloneSourceProject = useMemo(
-    () =>
-      cloneSourceProjectId === EMPTY_TEMPLATE_VALUE
-        ? null
-        : projects.find((project) => project.id === cloneSourceProjectId) ?? null,
-    [cloneSourceProjectId, projects]
-  );
+  useEffect(() => {
+    supabase
+      .from("system_users")
+      .select("id, username, display_name")
+      .eq("status", "active")
+      .order("display_name")
+      .then(({ data }) => setOwners((data ?? []) as ProjectOwner[]));
+  }, []);
 
-  const projectPendingDelete = useMemo(
-    () =>
-      projectPendingDeleteId
-        ? projects.find((project) => project.id === projectPendingDeleteId) ?? null
-        : null,
-    [projectPendingDeleteId, projects]
-  );
+  const activeStatus = activeProject ? getProjectStatus(activeProject) : "planning";
+  const activeStatusMeta = STATUS_META[activeStatus];
+  const activeSummary = activeProjectId ? projectSummaries[activeProjectId] : undefined;
+  const activeOwner = owners.find((owner) => owner.id === activeProject?.owner_user_id);
 
-  const projectPendingEdit = useMemo(
-    () =>
-      projectPendingEditId
-        ? projects.find((project) => project.id === projectPendingEditId) ?? null
-        : null,
-    [projectPendingEditId, projects]
-  );
+  const filteredProjects = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return allProjects.filter((project) => {
+      const status = getProjectStatus(project);
+      if (!showArchived && status === "archived") return false;
+      if (showArchived && status !== "archived") return false;
+      if (statusFilter !== "all" && status !== statusFilter) return false;
+      return (
+        !keyword ||
+        project.name.toLowerCase().includes(keyword) ||
+        project.description?.toLowerCase().includes(keyword)
+      );
+    });
+  }, [allProjects, searchTerm, showArchived, statusFilter]);
 
-  const resetCreateForm = (preferredSourceProjectId?: string | null) => {
-    setProjectName("");
-    setProjectDescription("");
-    setCloneSourceProjectId(preferredSourceProjectId ?? EMPTY_TEMPLATE_VALUE);
+  const resetForm = () => {
+    setEditingProjectId(null);
+    setForm({
+      ...EMPTY_FORM,
+      cloneFromProjectId: activeProjectId ?? EMPTY_TEMPLATE_VALUE,
+    });
   };
 
-  const closeEditProjectDialog = () => {
-    setProjectPendingEditId(null);
-    setEditProjectName("");
-    setEditProjectDescription("");
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
   };
 
-  const handleManagerOpenChange = (open: boolean) => {
-    setIsManagerOpen(open);
-
-    if (open) {
-      resetCreateForm(activeProjectId);
-    }
+  const openEditForm = (project: TestProject) => {
+    setEditingProjectId(project.id);
+    setForm({
+      cloneFromProjectId: EMPTY_TEMPLATE_VALUE,
+      description: project.description ?? "",
+      name: project.name,
+      ownerUserId: project.owner_user_id ?? NO_OWNER_VALUE,
+      plannedEndDate: project.planned_end_date ?? "",
+      plannedStartDate: project.planned_start_date ?? "",
+      status: getProjectStatus(project),
+    });
+    setShowForm(true);
   };
 
-  const handleCreateProject = async () => {
-    if (!projectName.trim()) {
-      toast({
-        title: "需要專案名稱",
-        description: "請先輸入專案名稱，再建立新專案。",
-        variant: "destructive",
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setIsSaving(true);
+
+    if (editingProjectId) {
+      await updateProject({
+        description: form.description,
+        name: form.name,
+        ownerUserId: form.ownerUserId === NO_OWNER_VALUE ? null : form.ownerUserId,
+        plannedEndDate: form.plannedEndDate || null,
+        plannedStartDate: form.plannedStartDate || null,
+        projectId: editingProjectId,
+        status: form.status,
       });
-      return;
-    }
-
-    setIsCreating(true);
-
-    const project = await createProject({
-      cloneFromProjectId:
-        cloneSourceProjectId === EMPTY_TEMPLATE_VALUE
-          ? null
-          : cloneSourceProjectId,
-      description: projectDescription,
-      name: projectName,
-    });
-
-    setIsCreating(false);
-
-    if (!project) {
-      return;
-    }
-
-    resetCreateForm(project.id);
-
-    toast({
-      title: "專案已建立",
-      description: `${project.name} 已建立完成，現有資料沒有被覆蓋。`,
-    });
-  };
-
-  const handleRefreshProjects = async () => {
-    setIsRefreshing(true);
-    await refreshProjects();
-    setIsRefreshing(false);
-  };
-
-  const handleActivateProject = (projectId: string) => {
-    setActiveProjectId(projectId);
-    setIsManagerOpen(false);
-
-    const selectedProject =
-      projects.find((project) => project.id === projectId) ?? null;
-
-    toast({
-      title: "已切換專案",
-      description: selectedProject
-        ? `目前已切換到 ${selectedProject.name}。`
-        : "專案切換完成。",
-    });
-  };
-
-  const handleDeleteProject = async () => {
-    if (!projectPendingDelete) {
-      return;
-    }
-
-    setIsDeletingProject(true);
-    const deleted = await deleteProject(projectPendingDelete.id);
-    setIsDeletingProject(false);
-
-    if (!deleted) {
-      return;
-    }
-
-    setProjectPendingDeleteId(null);
-  };
-
-  const handleOpenEditProject = (project: TestProject) => {
-    setProjectPendingEditId(project.id);
-    setEditProjectName(project.name);
-    setEditProjectDescription(project.description ?? "");
-  };
-
-  const handleUpdateProject = async () => {
-    if (!projectPendingEdit) {
-      return;
-    }
-
-    const normalizedName = editProjectName.trim();
-    const normalizedDescription = editProjectDescription.trim();
-
-    if (!normalizedName) {
-      toast({
-        title: "需要專案名稱",
-        description: "請先輸入新的專案名稱。",
-        variant: "destructive",
+    } else {
+      await createProject({
+        cloneFromProjectId:
+          form.cloneFromProjectId === EMPTY_TEMPLATE_VALUE
+            ? null
+            : form.cloneFromProjectId,
+        description: form.description,
+        name: form.name,
+        ownerUserId: form.ownerUserId === NO_OWNER_VALUE ? null : form.ownerUserId,
+        plannedEndDate: form.plannedEndDate || null,
+        plannedStartDate: form.plannedStartDate || null,
+        status: form.status,
       });
-      return;
     }
 
-    const currentDescription = projectPendingEdit.description?.trim() ?? "";
-    if (
-      normalizedName === projectPendingEdit.name &&
-      normalizedDescription === currentDescription
-    ) {
-      closeEditProjectDialog();
-      return;
-    }
-
-    setIsUpdatingProject(true);
-    const updatedProject = await updateProject({
-      description: normalizedDescription,
-      name: normalizedName,
-      projectId: projectPendingEdit.id,
-    });
-    setIsUpdatingProject(false);
-
-    if (!updatedProject) {
-      return;
-    }
-
-    closeEditProjectDialog();
+    setIsSaving(false);
+    setShowForm(false);
+    resetForm();
   };
 
   return (
-    <div className="rounded-[28px] border border-primary/18 bg-[linear-gradient(135deg,hsl(223_36%_15%/0.96),hsl(223_28%_12%/0.94))] px-4 py-4 shadow-[0_24px_60px_-48px_hsl(var(--primary)/0.55)]">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="rounded-full border border-primary/18 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary"
-            >
-              Multi Project
-            </Badge>
-            <Badge
-              variant="secondary"
-              className="rounded-full border border-white/10 bg-background/25 px-3 py-1 text-xs text-foreground"
-            >
-              共 {projects.length} 個專案
-            </Badge>
-            {activeProject && (
-              <Badge
-                variant="secondary"
-                className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100"
-              >
-                目前：{activeProject.name}
-              </Badge>
-            )}
-          </div>
-
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              機台維修紀錄已改成多專案獨立管理
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              你可以建立很多個專案。切換專案時，機台、站點、測項、流程內容、問題與進度都會一起切換，而且彼此隔離。
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select
-            disabled={isLoadingProjects || projects.length === 0}
-            value={activeProjectId ?? ""}
-            onValueChange={setActiveProjectId}
-          >
-            <SelectTrigger className="min-w-[260px] rounded-2xl border-primary/18 bg-background/35">
-              <SelectValue
-                placeholder={
-                  isLoadingProjects ? "載入專案中..." : "選擇要查看的專案"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Dialog open={isManagerOpen} onOpenChange={handleManagerOpenChange}>
-            <DialogTrigger asChild>
-              <Button className="rounded-2xl px-5">
-                <Layers3 className="mr-2 h-4 w-4" />
-                專案中心
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0">
-              <div className="border-b border-border/60 px-6 py-5">
-                <DialogHeader className="space-y-2">
-                  <DialogTitle>專案中心</DialogTitle>
-                  <DialogDescription>
-                    這裡不是只支援兩個專案。你可以持續新增、切換、複製流程範本，讓每個專案的資料各自獨立。
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-
-              <div className="grid gap-0 lg:grid-cols-[0.95fr_1.35fr]">
-                <div className="border-b border-border/60 bg-secondary/18 p-6 lg:border-b-0 lg:border-r">
-                  <div className="space-y-5">
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">
-                        建立新專案
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        可建立空白專案，也可從任何既有專案複製站點、測項與站點內容。
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="project-name">專案名稱</Label>
-                      <Input
-                        id="project-name"
-                        value={projectName}
-                        onChange={(event) => setProjectName(event.target.value)}
-                        placeholder="例如：1J4WJ/6、A專案、B專案"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="project-description">專案說明</Label>
-                      <Textarea
-                        id="project-description"
-                        rows={3}
-                        value={projectDescription}
-                        onChange={(event) =>
-                          setProjectDescription(event.target.value)
-                        }
-                        placeholder="可選填，例如客戶、產線、版本、批次"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>流程範本來源</Label>
-                      <Select
-                        value={cloneSourceProjectId}
-                        onValueChange={setCloneSourceProjectId}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="選擇是否複製既有流程" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_TEMPLATE_VALUE}>
-                            空白專案，不複製任何流程
-                          </SelectItem>
-                          {projects.map((project) => (
-                            <SelectItem key={project.id} value={project.id}>
-                              從 {project.name} 複製流程
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/70 bg-background/35 p-4 text-sm text-muted-foreground">
-                      {cloneSourceProject ? (
-                        <div className="space-y-3">
-                          <div className="flex items-start gap-3">
-                            <CopyPlus className="mt-0.5 h-4 w-4 text-primary" />
-                            <div>
-                              <div className="font-medium text-foreground">
-                                會複製流程範本
-                              </div>
-                              <p className="mt-1">
-                                新專案會從 <strong>{cloneSourceProject.name}</strong>{" "}
-                                複製站點、測項與站點內容。
-                              </p>
-                            </div>
-                          </div>
-                          <p className="text-xs leading-6">
-                            不會複製機台清單、維修問題、測試進度與維修紀錄，所以各專案資料仍然獨立。
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-3">
-                          <FolderKanban className="mt-0.5 h-4 w-4 text-primary" />
-                          <div>
-                            <div className="font-medium text-foreground">
-                              會建立空白專案
-                            </div>
-                            <p className="mt-1">
-                              只新增一個全新的專案容器，不會從其他專案帶入任何資料。
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between sm:space-x-0">
-                      <Button
-                        variant="outline"
-                        onClick={handleRefreshProjects}
-                        disabled={isRefreshing || isLoadingProjects}
-                      >
-                        <RefreshCcw
-                          className={`mr-2 h-4 w-4 ${
-                            isRefreshing ? "animate-spin" : ""
-                          }`}
-                        />
-                        重新整理清單
-                      </Button>
-                      <Button onClick={handleCreateProject} disabled={isCreating}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        {isCreating ? "建立中..." : "建立新專案"}
-                      </Button>
-                    </DialogFooter>
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  <div className="mb-4 flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">
-                        全部專案
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        目前共有 {projects.length} 個專案，可隨時切換。
-                      </p>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full border border-white/10 bg-background/25 px-3 py-1 text-xs text-foreground"
-                    >
-                      已載入 {projects.length} 筆
-                    </Badge>
-                  </div>
-
-                  <ScrollArea className="h-[420px] pr-4">
-                    <div className="space-y-3">
-                      {projects.map((project) => {
-                        const isActive = project.id === activeProjectId;
-
-                        return (
-                          <div
-                            key={project.id}
-                            className="rounded-3xl border border-border/70 bg-background/30 p-4 shadow-[0_18px_42px_-36px_hsl(220_40%_2%/1)]"
-                          >
-                            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                              <div className="min-w-0 space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="text-sm font-semibold text-foreground">
-                                    {project.name}
-                                  </div>
-                                  {isActive && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100"
-                                    >
-                                      目前使用中
-                                    </Badge>
-                                  )}
-                                </div>
-
-                                <p className="text-sm text-muted-foreground">
-                                  {project.description?.trim() ||
-                                    "尚未填寫專案說明"}
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                  <span>建立日期：{formatProjectDate(project)}</span>
-                                  <span>ID：{project.id.slice(0, 8)}</span>
-                                </div>
-                              </div>
-
-                              <div className="flex shrink-0 items-center gap-2">
-                                {isActive ? (
-                                  <Button
-                                    variant="secondary"
-                                    className="rounded-2xl"
-                                    disabled
-                                  >
-                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                    目前專案
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    className="rounded-2xl"
-                                    onClick={() => handleActivateProject(project.id)}
-                                  >
-                                    切換到此專案
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="outline"
-                                  className="rounded-2xl border-primary/20 text-primary hover:bg-primary/10 hover:text-primary"
-                                  onClick={() => handleOpenEditProject(project)}
-                                >
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  改名
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  className="rounded-2xl border-red-500/25 text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                                  disabled={projects.length <= 1}
-                                  onClick={() => setProjectPendingDeleteId(project.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  刪除
-                                </Button>
-                              </div>
-                            </div>
-                            {projects.length <= 1 && (
-                              <p className="mt-3 text-xs text-amber-200/80">
-                                至少要保留一個專案，所以目前不能刪除最後一個專案。
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <div className="maintenance-project-bar sticky top-[72px] z-30 flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2">
+      <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-100 sm:flex">
+        <FolderKanban className="h-4 w-4" />
       </div>
 
-      <Dialog
-        open={!!projectPendingEdit}
-        onOpenChange={(open) => {
-          if (!open && !isUpdatingProject) {
-            closeEditProjectDialog();
-          }
-        }}
+      <Select
+        disabled={isLoadingProjects || projects.length === 0}
+        value={activeProjectId ?? ""}
+        onValueChange={setActiveProjectId}
       >
-        <DialogContent className="max-w-lg">
-          <DialogHeader className="space-y-2">
-            <DialogTitle>修改專案名稱</DialogTitle>
-            <DialogDescription>
-              只會更新專案主資料，不會清除你目前這個專案底下的任何機台、進度或維修紀錄。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-project-name">專案名稱</Label>
-              <Input
-                id="edit-project-name"
-                value={editProjectName}
-                onChange={(event) => setEditProjectName(event.target.value)}
-                placeholder="輸入新的專案名稱"
-              />
+        <SelectTrigger className="h-10 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none sm:max-w-[310px]">
+          <div className="min-w-0 text-left">
+            <div className="truncate text-sm font-semibold text-[#f3f8fc]">
+              {activeProject?.name || "選擇專案"}
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-project-description">專案說明</Label>
-              <Textarea
-                id="edit-project-description"
-                rows={4}
-                value={editProjectDescription}
-                onChange={(event) =>
-                  setEditProjectDescription(event.target.value)
-                }
-                placeholder="可一起更新專案說明"
-              />
+            <div className="truncate text-xs text-[#a9c0d1]">
+              {activeOwner?.display_name || activeOwner?.username || "未設定負責人"}
             </div>
           </div>
+        </SelectTrigger>
+        <SelectContent>
+          {projects.map((project) => (
+            <SelectItem key={project.id} value={project.id}>
+              <span className="font-medium">{project.name}</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {STATUS_META[getProjectStatus(project)].label}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              disabled={isUpdatingProject}
-              onClick={closeEditProjectDialog}
-            >
-              取消
-            </Button>
-            <Button disabled={isUpdatingProject} onClick={handleUpdateProject}>
-              {isUpdatingProject ? "更新中..." : "儲存名稱"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {activeProject && (
+        <>
+          <Badge
+            variant="outline"
+            className={cn("hidden h-7 rounded-lg px-2.5 md:inline-flex", activeStatusMeta.className)}
+          >
+            {activeStatusMeta.label}
+          </Badge>
+          <div className="hidden items-center gap-4 border-l border-[#2a526f]/70 pl-4 text-xs text-[#a9c0d1] xl:flex">
+            <Tooltip>
+              <TooltipTrigger className="flex items-center gap-1.5">
+                <Layers3 className="h-3.5 w-3.5 text-cyan-200" />
+                <span className="font-mono text-[#f3f8fc]">
+                  {activeSummary?.flow_version_label || "v1"}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>目前發布流程版本</TooltipContent>
+            </Tooltip>
+            <span>
+              機台 <strong className="font-mono text-[#f3f8fc]">{activeSummary?.machine_count ?? 0}</strong>
+            </span>
+            <span>
+              待處理問題 <strong className="font-mono text-amber-100">{activeSummary?.open_issue_count ?? 0}</strong>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {formatDate(activeProject.planned_end_date)}
+            </span>
+          </div>
+        </>
+      )}
 
-      <AlertDialog
-        open={!!projectPendingDelete}
+      <Sheet
+        open={isOpen}
         onOpenChange={(open) => {
-          if (!open && !isDeletingProject) {
-            setProjectPendingDeleteId(null);
+          setIsOpen(open);
+          if (!open) {
+            setShowForm(false);
+            resetForm();
           }
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除專案</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>
-                你要刪除的是 <strong>{projectPendingDelete?.name ?? "未指定專案"}</strong>。
-              </p>
-              <p>
-                這裡的刪除是安全封存：專案會從切換清單中移除，但資料庫裡既有紀錄不會被物理清掉。
-              </p>
-              <p>
-                若這是目前專案，系統會自動切到其他仍保留的專案。
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingProject}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteProject}
-              disabled={isDeletingProject}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeletingProject ? "刪除中..." : "確認刪除"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <SheetTrigger asChild>
+          <Button className="h-10 shrink-0 rounded-lg px-3.5" variant="outline">
+            <Layers3 className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">專案中心</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent className="maintenance-project-sheet w-full overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[720px]">
+          <SheetHeader className="border-b border-[#2a526f]/70 px-5 py-4 text-left">
+            <div className="flex items-center justify-between gap-4 pr-8">
+              <div>
+                <SheetTitle className="text-xl text-[#f3f8fc]">專案中心</SheetTitle>
+                <SheetDescription className="mt-1 text-[#a9c0d1]">
+                  建立、複製與管理各專案生命週期。
+                </SheetDescription>
+              </div>
+              <Button className="h-9 rounded-lg" onClick={openCreateForm}>
+                <Plus className="mr-2 h-4 w-4" />
+                新增專案
+              </Button>
+            </div>
+          </SheetHeader>
+
+          {showForm ? (
+            <div className="h-[calc(100vh-82px)] overflow-y-auto px-5 py-5">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-[#f3f8fc]">
+                    {editingProjectId ? "編輯專案" : "建立新專案"}
+                  </h3>
+                  <p className="mt-1 text-sm text-[#a9c0d1]">
+                    {editingProjectId
+                      ? "更新名稱、負責人、日期與目前狀態。"
+                      : "可建立空白專案或複製既有專案的發布流程與資產。"}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+                  返回清單
+                </Button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="maintenance-project-name">專案名稱</Label>
+                  <Input
+                    id="maintenance-project-name"
+                    autoFocus
+                    value={form.name}
+                    onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="例如：GB300 Phase 2"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="maintenance-project-description">專案說明</Label>
+                  <Textarea
+                    id="maintenance-project-description"
+                    rows={3}
+                    value={form.description}
+                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="客戶、版本、批次或交付範圍"
+                  />
+                </div>
+                {!editingProjectId && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>建立方式</Label>
+                    <Select
+                      value={form.cloneFromProjectId}
+                      onValueChange={(value) => setForm((current) => ({ ...current, cloneFromProjectId: value }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_TEMPLATE_VALUE}>空白專案</SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            複製 {project.name} 的發布流程與資產
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>專案狀態</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(value) => setForm((current) => ({ ...current, status: value as ProjectStatus }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(STATUS_META)
+                        .filter(([status]) => status !== "archived")
+                        .map(([status, meta]) => (
+                          <SelectItem key={status} value={status}>{meta.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>負責人</Label>
+                  <Select
+                    value={form.ownerUserId}
+                    onValueChange={(value) => setForm((current) => ({ ...current, ownerUserId: value }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_OWNER_VALUE}>未指定</SelectItem>
+                      {owners.map((owner) => (
+                        <SelectItem key={owner.id} value={owner.id}>
+                          {owner.display_name || owner.username}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maintenance-project-start">預計開始</Label>
+                  <Input
+                    id="maintenance-project-start"
+                    type="date"
+                    value={form.plannedStartDate}
+                    onChange={(event) => setForm((current) => ({ ...current, plannedStartDate: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maintenance-project-end">預計完成</Label>
+                  <Input
+                    id="maintenance-project-end"
+                    type="date"
+                    value={form.plannedEndDate}
+                    onChange={(event) => setForm((current) => ({ ...current, plannedEndDate: event.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2 border-t border-[#2a526f]/60 pt-4">
+                <Button variant="outline" onClick={() => setShowForm(false)}>取消</Button>
+                <Button disabled={!form.name.trim() || isSaving} onClick={handleSave}>
+                  {isSaving ? "儲存中..." : editingProjectId ? "儲存變更" : "建立專案"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-[calc(100vh-82px)] flex-col">
+              <div className="space-y-3 border-b border-[#2a526f]/60 px-5 py-4">
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      className="pl-9"
+                      placeholder="搜尋專案"
+                    />
+                  </div>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value) => setStatusFilter(value as ProjectStatus | "all")}
+                  >
+                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部狀態</SelectItem>
+                      {Object.entries(STATUS_META)
+                        .filter(([status]) => status !== "archived")
+                        .map(([status, meta]) => (
+                          <SelectItem key={status} value={status}>{meta.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={!showArchived ? "secondary" : "ghost"}
+                    onClick={() => setShowArchived(false)}
+                  >
+                    使用中 {projects.length}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={showArchived ? "secondary" : "ghost"}
+                    onClick={() => setShowArchived(true)}
+                  >
+                    已封存 {allProjects.length - projects.length}
+                  </Button>
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 px-5 py-4">
+                <div className="space-y-2 pr-3">
+                  {filteredProjects.map((project) => {
+                    const status = getProjectStatus(project);
+                    const statusMeta = STATUS_META[status];
+                    const summary = projectSummaries[project.id];
+                    const owner = owners.find((entry) => entry.id === project.owner_user_id);
+                    const isActive = project.id === activeProjectId;
+
+                    return (
+                      <div
+                        key={project.id}
+                        className={cn(
+                          "rounded-xl border border-[#2a526f]/70 bg-[#0b1b2d] p-3 transition-colors hover:border-cyan-300/45",
+                          isActive && "border-cyan-300/55 bg-[#10263a]"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left"
+                            onClick={() => {
+                              if (status !== "archived") {
+                                setActiveProjectId(project.id);
+                                setIsOpen(false);
+                              }
+                            }}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate font-semibold text-[#f3f8fc]">{project.name}</span>
+                              <Badge variant="outline" className={cn("h-6 rounded-md px-2 text-[11px]", statusMeta.className)}>
+                                {statusMeta.label}
+                              </Badge>
+                              {isActive && <Badge className="h-6 rounded-md px-2 text-[11px]">目前專案</Badge>}
+                            </div>
+                            <p className="mt-1 line-clamp-1 text-sm text-[#a9c0d1]">
+                              {project.description || "尚未填寫專案說明"}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#a9c0d1]">
+                              <span className="flex items-center gap-1"><UserRound className="h-3 w-3" />{owner?.display_name || owner?.username || "未指定"}</span>
+                              <span className="font-mono">{summary?.flow_version_label || "v1"}</span>
+                              <span>機台 {summary?.machine_count ?? 0}</span>
+                              <span>問題 {summary?.open_issue_count ?? 0}</span>
+                            </div>
+                          </button>
+                          <div className="flex shrink-0 gap-1">
+                            {status !== "archived" && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditForm(project)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">編輯 {project.name}</span>
+                              </Button>
+                            )}
+                            {status === "archived" ? (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => restoreProject(project.id)}>
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span className="sr-only">還原 {project.name}</span>
+                              </Button>
+                            ) : (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-[#a9c0d1] hover:text-amber-100">
+                                    <Archive className="h-3.5 w-3.5" />
+                                    <span className="sr-only">封存 {project.name}</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>封存 {project.name}？</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      機台、流程、進度、問題與工時都會保留，只會從使用中專案清單隱藏。
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>取消</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => archiveProject(project.id)}>確認封存</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredProjects.length === 0 && (
+                    <div className="py-16 text-center text-sm text-[#a9c0d1]">
+                      沒有符合條件的專案。
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
