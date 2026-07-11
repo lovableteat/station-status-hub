@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clock3, Save, Server, XCircle } from "lucide-react";
+import { Check, Clock3, Play, Save, Server, Square, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -22,6 +21,8 @@ import {
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { SegmentedProgress } from "./SegmentedProgress";
+import { TimeRecordManager } from "./TimeRecordManager";
 
 interface TrackerSystem {
   assigned_engineer?: string | null;
@@ -47,6 +48,7 @@ interface TrackerItem {
 }
 
 interface TrackerProgress {
+  actual_hours?: number | null;
   completed_at?: string | null;
   id: string;
   item_id: string;
@@ -56,6 +58,21 @@ interface TrackerProgress {
   station_id: string;
   status?: string | null;
   system_id: string;
+}
+
+function calculateHours(startedAt: string, completedAt: string) {
+  const duration = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+  return Math.max(0, Number((duration / 3_600_000).toFixed(4)));
+}
+
+function formatElapsed(startedAt?: string | null, completedAt?: string | null, now = Date.now()) {
+  if (!startedAt) return "尚未計時";
+  const end = completedAt ? new Date(completedAt).getTime() : now;
+  const totalSeconds = Math.max(0, Math.floor((end - new Date(startedAt).getTime()) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 interface ItemDraft {
@@ -110,6 +127,14 @@ export function SystemProgressSheet({
   const [selectedStationId, setSelectedStationId] = useState<string>("");
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({});
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
+  const [clockNow, setClockNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!open) return;
+    setClockNow(Date.now());
+    const interval = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !system) return;
@@ -133,6 +158,10 @@ export function SystemProgressSheet({
   }, [items, open, progress, stations, system]);
 
   const selectedStation = stations.find((station) => station.id === selectedStationId);
+  const progressByItemId = useMemo(() => {
+    const entries = progress.filter((entry) => entry.system_id === system?.id);
+    return new Map(entries.map((entry) => [entry.item_id, entry]));
+  }, [progress, system?.id]);
   const stationItems = useMemo(
     () =>
       items
@@ -140,29 +169,39 @@ export function SystemProgressSheet({
         .sort((left, right) => left.item_order - right.item_order),
     [items, selectedStationId]
   );
-  const stationDone = stationItems.filter((item) => drafts[item.id]?.status === "Done").length;
   const stationPercent = stationItems.length
-    ? Math.round((stationDone / stationItems.length) * 100)
+    ? Math.round(
+        stationItems.reduce((sum, item) => sum + (drafts[item.id]?.progress_percent ?? 0), 0) /
+          stationItems.length
+      )
     : 0;
 
   const saveItem = async (item: TrackerItem, override?: ItemDraft) => {
     if (!system) return false;
     const draft = override ?? drafts[item.id];
     if (!draft) return false;
-    const existing = progress.find(
-      (entry) => entry.system_id === system.id && entry.item_id === item.id
-    );
+    const existing = progressByItemId.get(item.id);
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = { ...draft };
 
-    if (draft.status === "On-going" && !existing?.started_at) updates.started_at = now;
+    if (draft.status === "On-going") {
+      updates.started_at = existing?.completed_at ? now : existing?.started_at || now;
+      updates.completed_at = null;
+      updates.actual_hours = 0;
+    }
     if (draft.status === "Done") {
       updates.completed_at = existing?.completed_at || now;
       updates.started_at = existing?.started_at || now;
       updates.progress_percent = 100;
+      updates.actual_hours = calculateHours(
+        String(updates.started_at),
+        String(updates.completed_at)
+      );
     }
     if (draft.status === "Not Start") {
       updates.completed_at = null;
+      updates.started_at = null;
+      updates.actual_hours = 0;
       updates.progress_percent = 0;
     }
 
@@ -171,6 +210,59 @@ export function SystemProgressSheet({
     setSavingItemId(null);
     if (success) onUpdated();
     return success;
+  };
+
+  const startTimer = async (item: TrackerItem) => {
+    if (!system) return;
+    const draft = drafts[item.id] ?? { notes: "", progress_percent: 0, status: "Not Start" };
+    const existing = progressByItemId.get(item.id);
+    const startedAt = existing?.completed_at ? new Date().toISOString() : existing?.started_at || new Date().toISOString();
+    const nextDraft: ItemDraft = {
+      ...draft,
+      progress_percent: Math.max(1, draft.progress_percent),
+      status: "On-going",
+    };
+
+    setSavingItemId(item.id);
+    const success = await updateProgress(system.id, item.station_id, item.id, {
+      ...nextDraft,
+      actual_hours: 0,
+      completed_at: null,
+      started_at: startedAt,
+    });
+    setSavingItemId(null);
+    if (!success) {
+      toast({ title: "計時啟動失敗", description: "無法寫入開始時間，請稍後再試。", variant: "destructive" });
+      return;
+    }
+    setDrafts((current) => ({ ...current, [item.id]: nextDraft }));
+    toast({ title: "已開始計時", description: `${item.item_name} 已切換為進行中。` });
+    onUpdated();
+  };
+
+  const finishTimer = async (item: TrackerItem) => {
+    if (!system) return;
+    const draft = drafts[item.id] ?? { notes: "", progress_percent: 0, status: "Not Start" };
+    const existing = progressByItemId.get(item.id);
+    const completedAt = new Date().toISOString();
+    const startedAt = existing?.started_at || completedAt;
+    const nextDraft: ItemDraft = { ...draft, progress_percent: 100, status: "Done" };
+
+    setSavingItemId(item.id);
+    const success = await updateProgress(system.id, item.station_id, item.id, {
+      ...nextDraft,
+      actual_hours: calculateHours(startedAt, completedAt),
+      completed_at: completedAt,
+      started_at: startedAt,
+    });
+    setSavingItemId(null);
+    if (!success) {
+      toast({ title: "完成計時失敗", description: "無法寫入完成時間，請稍後再試。", variant: "destructive" });
+      return;
+    }
+    setDrafts((current) => ({ ...current, [item.id]: nextDraft }));
+    toast({ title: "計時已完成", description: `${item.item_name} 已設為 100% 完成。` });
+    onUpdated();
   };
 
   const completeStation = async () => {
@@ -239,7 +331,7 @@ export function SystemProgressSheet({
               <span>{selectedStation?.station_name || "選擇站點"}</span>
               <span className="font-data">{stationPercent}%</span>
             </div>
-            <Progress value={stationPercent} className="mt-1.5 h-1.5" />
+            <SegmentedProgress value={stationPercent} className="mt-1.5" label={`${selectedStation?.station_name || "站點"} 進度`} />
           </div>
           <Button size="sm" variant="outline" disabled={!stationItems.length} onClick={completeStation}>
             <Check className="mr-2 h-4 w-4" />
@@ -255,6 +347,8 @@ export function SystemProgressSheet({
                 progress_percent: 0,
                 status: "Not Start",
               };
+              const timeRecord = progressByItemId.get(item.id);
+              const isTimerRunning = Boolean(timeRecord?.started_at && !timeRecord?.completed_at);
               return (
                 <div key={item.id} className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -327,6 +421,35 @@ export function SystemProgressSheet({
                       {draft.status === "Error" ? <XCircle className="h-4 w-4" /> : draft.status === "On-going" ? <Clock3 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                       <span className="sr-only">儲存 {item.item_name}</span>
                     </Button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#2a526f]/60 pt-3">
+                    <div className="flex min-w-0 items-center gap-2 text-xs text-[#a9c0d1]">
+                      <span className={cn("h-2 w-2 rounded-full", isTimerRunning ? "animate-pulse bg-emerald-300 motion-reduce:animate-none" : timeRecord?.completed_at ? "bg-cyan-300" : "bg-[#58758c]")} />
+                      <Clock3 className="h-3.5 w-3.5" />
+                      <span>{isTimerRunning ? "計時中" : timeRecord?.completed_at ? "實際耗時" : "機台計時"}</span>
+                      <span className="font-data text-[#f3f8fc]">{formatElapsed(timeRecord?.started_at, timeRecord?.completed_at, clockNow)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isTimerRunning ? (
+                        <Button size="sm" variant="outline" className="h-8 border-emerald-300/40 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20" disabled={savingItemId === item.id} onClick={() => finishTimer(item)} title="停止計時，並將此測項設為已完成 100%">
+                          <Square className="mr-1.5 h-3.5 w-3.5" />完成計時
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-8 border-cyan-300/40 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20" disabled={savingItemId === item.id} onClick={() => startTimer(item)} title={timeRecord?.completed_at ? "重新開始計時，原完成時間會被清除" : "開始計時，並將此測項設為進行中"}>
+                          <Play className="mr-1.5 h-3.5 w-3.5" />{timeRecord?.completed_at ? "重新計時" : "開始計時"}
+                        </Button>
+                      )}
+                      {system && (
+                        <TimeRecordManager
+                          systemId={system.id}
+                          stationId={item.station_id}
+                          itemId={item.id}
+                          currentStartedAt={timeRecord?.started_at ?? undefined}
+                          currentCompletedAt={timeRecord?.completed_at ?? undefined}
+                          onTimeUpdate={onUpdated}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               );
