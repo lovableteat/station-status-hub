@@ -417,10 +417,16 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
-      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
       supabase.removeChannel(channel);
     };
   }, [refreshProjects]);
+
+  useEffect(
+    () => () => {
+      if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+    },
+    []
+  );
 
   const activeProject = useMemo(
     () => allProjects.find((project) => project.id === activeProjectIdState) ?? null,
