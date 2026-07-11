@@ -3,11 +3,9 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  Check,
   ClipboardCheck,
   Clock3,
   Copy,
-  FileDiff,
   FileSliders,
   GripVertical,
   Layers3,
@@ -15,9 +13,7 @@ import {
   Plus,
   Route,
   Save,
-  Send,
   Trash2,
-  X,
 } from "lucide-react";
 import DOMPurify from "dompurify";
 
@@ -49,13 +45,6 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFlowVersions } from "@/hooks/useFlowVersions";
 import { useToast } from "@/hooks/use-toast";
@@ -92,16 +81,7 @@ export function FlowInfo() {
   const { toast } = useToast();
   const {
     activeVersion,
-    createDraft,
-    discardDraft,
-    draftVersion,
     isLoadingVersions,
-    isMutatingVersion,
-    publishDraft,
-    selectedVersion,
-    selectedVersionId,
-    setSelectedVersionId,
-    versions,
   } = useFlowVersions();
   const [view, setView] = useState<FlowView>(() => {
     if (typeof window === "undefined") return "overview";
@@ -129,16 +109,11 @@ export function FlowInfo() {
   const [contentDialogOpen, setContentDialogOpen] = useState(false);
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [contentDraft, setContentDraft] = useState({ content: "", title: "" });
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [publishedSnapshot, setPublishedSnapshot] = useState<FlowSnapshot | null>(null);
   const [draggedStationId, setDraggedStationId] = useState<string | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
 
-  const editingVersionId = draftVersion?.id ?? null;
-  const displayedVersionId =
-    view === "editor"
-      ? editingVersionId ?? activeVersion?.id ?? null
-      : selectedVersionId ?? activeVersion?.id ?? null;
+  const editingVersionId = activeVersion?.id ?? null;
+  const displayedVersionId = activeVersion?.id ?? null;
   const canEdit = Boolean(view === "editor" && editingVersionId && displayedVersionId === editingVersionId);
 
   const loadSnapshot = useCallback(
@@ -300,16 +275,20 @@ export function FlowInfo() {
     0
   );
 
-  const setFlowView = (nextView: FlowView) => {
+  const setFlowView = useCallback((nextView: FlowView) => {
     setView(nextView);
     updateFlowViewQuery(nextView);
-  };
+  }, []);
 
-  const requireDraft = () => {
+  const enterEditMode = useCallback(() => {
+    setFlowView("editor");
+  }, [setFlowView]);
+
+  const requireEditableVersion = () => {
     if (!editingVersionId || !activeProjectId) {
       toast({
-        title: "請先建立草稿",
-        description: "已發布流程為唯讀，建立草稿後才能修改。",
+        title: "無法編輯流程",
+        description: "目前專案尚未建立流程版本。",
         variant: "destructive",
       });
       return null;
@@ -318,7 +297,7 @@ export function FlowInfo() {
   };
 
   const addStation = async () => {
-    const versionId = requireDraft();
+    const versionId = requireEditableVersion();
     if (!versionId || !activeProjectId) return;
     const nextOrder = Math.max(-1, ...stations.map((station) => station.station_order)) + 1;
     const { data, error } = await supabase
@@ -365,7 +344,7 @@ export function FlowInfo() {
   };
 
   const duplicateStation = async (station: TestStation) => {
-    const versionId = requireDraft();
+    const versionId = requireEditableVersion();
     if (!versionId || !activeProjectId) return;
     const { data: newStation, error } = await supabase
       .from("test_flow_stations")
@@ -437,7 +416,7 @@ export function FlowInfo() {
   };
 
   const addItem = async () => {
-    const versionId = requireDraft();
+    const versionId = requireEditableVersion();
     if (!versionId || !activeProjectId || !selectedStation) return;
     const { data, error } = await supabase
       .from("test_flow_items")
@@ -482,7 +461,7 @@ export function FlowInfo() {
   };
 
   const duplicateItem = async (item: TestItem) => {
-    const versionId = requireDraft();
+    const versionId = requireEditableVersion();
     if (!versionId || !activeProjectId) return;
     const { data, error } = await supabase
       .from("test_flow_items")
@@ -533,7 +512,7 @@ export function FlowInfo() {
   };
 
   const saveContent = async () => {
-    const versionId = requireDraft();
+    const versionId = requireEditableVersion();
     if (!versionId || !activeProjectId || !selectedStation) return;
     const payload = {
       content: contentDraft.content,
@@ -559,26 +538,6 @@ export function FlowInfo() {
     await loadData();
   };
 
-  const openComparison = async () => {
-    setCompareOpen(true);
-    if (activeVersion?.id) setPublishedSnapshot(await loadSnapshot(activeVersion.id));
-  };
-
-  const addedStations = publishedSnapshot
-    ? stations.filter(
-        (station) =>
-          !publishedSnapshot.stations.some(
-            (published) => published.station_name === station.station_name
-          )
-      )
-    : [];
-  const removedStations = publishedSnapshot
-    ? publishedSnapshot.stations.filter(
-        (published) =>
-          !stations.some((station) => station.station_name === published.station_name)
-      )
-    : [];
-
   if (isLoading || isLoadingVersions) {
     return <div className="maintenance-page text-sm text-[#a9c0d1]">載入流程工作區...</div>;
   }
@@ -588,7 +547,7 @@ export function FlowInfo() {
       <MaintenancePageHeader
         icon={FileSliders}
         title="L10 測試流程設定"
-        description={`${activeProject?.name || "目前專案"} · ${selectedVersion?.label || activeVersion?.label || "v1"}`}
+        description={activeProject?.name || "目前專案"}
         actions={
           <div className="flex rounded-lg border border-[#2a526f] bg-[#071522] p-1">
             <Button
@@ -603,7 +562,7 @@ export function FlowInfo() {
               variant="ghost"
               size="sm"
               className={cn("h-8 rounded-md", view === "editor" && "bg-[#10263a] text-cyan-100")}
-              onClick={() => setFlowView("editor")}
+              onClick={enterEditMode}
             >
               <FileSliders className="mr-2 h-4 w-4" />流程編輯
             </Button>
@@ -612,84 +571,26 @@ export function FlowInfo() {
       />
 
       <div className="maintenance-toolbar flex min-h-11 flex-wrap items-center gap-2 px-3 py-2">
-        {view === "overview" && versions.length > 0 && selectedVersionId && (
-          <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
-            <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {versions.filter((version) => version.status !== "draft").map((version) => (
-                <SelectItem key={version.id} value={version.id}>{version.label || `v${version.version_number}`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
         <Badge
           variant="outline"
-          className={cn(
-            "h-7 rounded-md",
-            draftVersion
-              ? "border-amber-300/35 bg-amber-300/10 text-amber-100"
-              : "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
-          )}
+          className="h-7 rounded-md border-cyan-300/35 bg-cyan-300/10 text-cyan-100"
         >
-          {draftVersion ? `草稿 v${draftVersion.version_number}` : "已發布"}
+          變更直接生效
         </Badge>
 
         <div className="ml-auto flex flex-wrap gap-2">
-          {!draftVersion ? (
+          {view === "overview" ? (
             <Button
               size="sm"
               className="h-8 rounded-lg"
-              disabled={isMutatingVersion}
-              onClick={async () => {
-                const draft = await createDraft();
-                if (draft) setFlowView("editor");
-              }}
+              onClick={enterEditMode}
             >
-              <Plus className="mr-2 h-4 w-4" />建立編輯草稿
+              <FileSliders className="mr-2 h-4 w-4" />直接編輯流程
             </Button>
           ) : (
-            <>
-              <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={openComparison}>
-                <FileDiff className="mr-2 h-4 w-4" />比較差異
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 rounded-lg text-rose-100">
-                    <X className="mr-2 h-4 w-4" />放棄草稿
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>放棄目前草稿？</AlertDialogTitle>
-                    <AlertDialogDescription>草稿內的站點、測項與內容將刪除，已發布流程不受影響。</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={discardDraft}>確認放棄</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" className="h-8 rounded-lg" disabled={validationIssues.length > 0 || isMutatingVersion}>
-                    <Send className="mr-2 h-4 w-4" />發布流程
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>發布 v{draftVersion.version_number}？</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      未開始機台會採用新版；已開測與已完成機台仍固定原流程版本。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={publishDraft}>確認發布</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
+            <span className="flex h-8 items-center text-xs text-[#9eb8ca]">
+              所有修改會立即套用到目前流程
+            </span>
           )}
         </div>
       </div>
@@ -774,18 +675,9 @@ export function FlowInfo() {
             </section>
           </div>
         </>
-      ) : !draftVersion ? (
-        <div className="maintenance-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
-            <FileSliders className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold text-[#f3f8fc]">已發布流程為唯讀</h2>
-            <p className="mt-0.5 text-sm text-[#a9c0d1]">建立草稿會複製目前發布流程；修改不會影響已開測的機台。</p>
-          </div>
-          <Button className="shrink-0" onClick={async () => { const draft = await createDraft(); if (draft) setFlowView("editor"); }}>
-            <Plus className="mr-2 h-4 w-4" />建立編輯草稿
-          </Button>
+      ) : !editingVersionId ? (
+        <div className="maintenance-panel flex min-h-32 items-center justify-center text-sm text-[#a9c0d1]">
+          目前專案尚未建立可編輯的流程資料。
         </div>
       ) : (
         <div className="grid h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] xl:grid-cols-[240px_300px_minmax(0,1fr)]">
@@ -889,7 +781,7 @@ export function FlowInfo() {
                       <AlertDialog>
                         <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
                         <AlertDialogContent>
-                          <AlertDialogHeader><AlertDialogTitle>刪除 {selectedStation.station_name}？</AlertDialogTitle><AlertDialogDescription>草稿中的站點、測項與流程內容會一起刪除。</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogHeader><AlertDialogTitle>刪除 {selectedStation.station_name}？</AlertDialogTitle><AlertDialogDescription>此站點、測項與流程內容會立即刪除。</AlertDialogDescription></AlertDialogHeader>
                           <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => deleteStation(selectedStation)}>確認刪除</AlertDialogAction></AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -943,7 +835,7 @@ export function FlowInfo() {
 
                 {validationIssues.length > 0 && (
                   <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 p-3 text-sm text-amber-100">
-                    <div className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" />發布前需要修正</div>
+                    <div className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" />流程資料需要修正</div>
                     <ul className="mt-2 space-y-1 text-xs">{validationIssues.slice(0, 6).map((message) => <li key={message}>• {message}</li>)}</ul>
                   </div>
                 )}
@@ -966,21 +858,6 @@ export function FlowInfo() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>草稿與發布版差異</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">站點</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.stations.length ?? 0} → {stations.length}</div></div>
-            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">測項</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.items.length ?? 0} → {items.length}</div></div>
-            <div className="rounded-lg border border-[#2a526f] p-3"><div className="text-xs text-muted-foreground">內容</div><div className="font-data mt-1 text-xl">{publishedSnapshot?.contents.length ?? 0} → {contents.length}</div></div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div><h3 className="text-sm font-semibold text-emerald-100">新增站點</h3><div className="mt-2 space-y-1 text-sm text-muted-foreground">{addedStations.map((station) => <div key={station.id}>+ {station.station_name}</div>)}{!addedStations.length && <div>無</div>}</div></div>
-            <div><h3 className="text-sm font-semibold text-rose-100">移除站點</h3><div className="mt-2 space-y-1 text-sm text-muted-foreground">{removedStations.map((station) => <div key={station.id}>− {station.station_name}</div>)}{!removedStations.length && <div>無</div>}</div></div>
-          </div>
-          {validationIssues.length ? <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 p-3 text-sm text-amber-100">目前仍有 {validationIssues.length} 個驗證問題，修正後才能發布。</div> : <div className="flex items-center gap-2 text-sm text-emerald-100"><Check className="h-4 w-4" />草稿已通過基本驗證。</div>}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

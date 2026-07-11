@@ -308,15 +308,6 @@ export function ProjectScopeBar() {
             {activeStatusMeta.label}
           </Badge>
           <div className="hidden items-center gap-4 border-l border-[#2a526f]/70 pl-4 text-xs text-[#a9c0d1] xl:flex">
-            <Tooltip>
-              <TooltipTrigger className="flex items-center gap-1.5">
-                <Layers3 className="h-3.5 w-3.5 text-cyan-200" />
-                <span className="font-mono text-[#f3f8fc]">
-                  {activeSummary?.flow_version_label || "v1"}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>目前發布流程版本</TooltipContent>
-            </Tooltip>
             <span>
               機台 <strong className="font-mono text-[#f3f8fc]">{activeSummary?.machine_count ?? 0}</strong>
             </span>
@@ -598,7 +589,6 @@ export function ProjectScopeBar() {
                             </p>
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#a9c0d1]">
                               <span className="flex items-center gap-1"><UserRound className="h-3 w-3" />{owner?.display_name || owner?.username || "未指定"}</span>
-                              <span className="font-mono">{summary?.flow_version_label || "v1"}</span>
                               <span>機台 {summary?.machine_count ?? 0}</span>
                               <span>問題 {summary?.open_issue_count ?? 0}</span>
                             </div>
