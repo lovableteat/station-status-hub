@@ -16,6 +16,34 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+function readStoredUser(): User | null {
+  try {
+    const savedUser = window.localStorage.getItem("user");
+    if (!savedUser) return null;
+
+    const parsed = JSON.parse(savedUser) as Partial<User>;
+    if (
+      typeof parsed.userId !== "string" ||
+      typeof parsed.username !== "string" ||
+      typeof parsed.role !== "string" ||
+      typeof parsed.displayName !== "string"
+    ) {
+      window.localStorage.removeItem("user");
+      return null;
+    }
+
+    return parsed as User;
+  } catch {
+    // A stale or partially written session must not prevent the app from booting.
+    try {
+      window.localStorage.removeItem("user");
+    } catch {
+      // Ignore blocked storage and continue with a signed-out session.
+    }
+    return null;
+  }
+}
+
 function getDevDemoUser(): User | null {
   if (!import.meta.env.DEV || typeof window === "undefined") {
     return null;
@@ -41,9 +69,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       return demoUser;
     }
 
-    // 從 localStorage 恢復用戶狀態
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    return readStoredUser();
   });
 
   const login = (userId: string, username: string, role: string, displayName: string) => {
