@@ -53,39 +53,61 @@ export function TimeRecordManager({
         throw new Error("No active project");
       }
 
-      const updates: any = {};
+      const updates: Record<string, string | number | null> = {};
       
       if (startedAt) {
-        // 將台灣時間轉換回UTC儲存
-        const taiwanTime = new Date(startedAt);
-        const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
-        updates.started_at = utcTime.toISOString();
+        updates.started_at = new Date(startedAt).toISOString();
       } else {
         updates.started_at = null;
       }
       
       if (completedAt) {
-        // 將台灣時間轉換回UTC儲存
-        const taiwanTime = new Date(completedAt);
-        const utcTime = new Date(taiwanTime.getTime() - (8 * 60 * 60 * 1000));
-        updates.completed_at = utcTime.toISOString();
+        updates.completed_at = new Date(completedAt).toISOString();
       } else {
         updates.completed_at = null;
       }
 
+      if (updates.started_at && updates.completed_at) {
+        const duration = new Date(String(updates.completed_at)).getTime() - new Date(String(updates.started_at)).getTime();
+        if (duration < 0) {
+          toast({ title: "時間範圍錯誤", description: "完成時間不能早於開始時間。", variant: "destructive" });
+          return;
+        }
+        updates.actual_hours = Number((duration / 3_600_000).toFixed(4));
+      } else {
+        updates.actual_hours = 0;
+      }
+
       console.log('Updating time records:', { systemId, stationId, itemId, updates });
 
-      const { error } = await supabase
+      const { data: existingRecord, error: lookupError } = await supabase
         .from('test_progress')
-        .update(updates)
+        .select('id')
         .eq('project_id', activeProjectId)
         .eq('system_id', systemId)
         .eq('station_id', stationId)
-        .eq('item_id', itemId);
+        .eq('item_id', itemId)
+        .maybeSingle();
+      if (lookupError) throw lookupError;
 
-      if (error) {
-        console.error('Error updating time records:', error);
-        throw error;
+      const result = existingRecord
+        ? await supabase
+            .from('test_progress')
+            .update(updates)
+            .eq('id', existingRecord.id)
+        : await supabase.from('test_progress').insert({
+            ...updates,
+            item_id: itemId,
+            progress_percent: updates.completed_at ? 100 : 0,
+            project_id: activeProjectId,
+            station_id: stationId,
+            status: updates.completed_at ? 'Done' : updates.started_at ? 'On-going' : 'Not Start',
+            system_id: systemId,
+          });
+
+      if (result.error) {
+        console.error('Error updating time records:', result.error);
+        throw result.error;
       }
 
       console.log('Time records updated successfully');
@@ -97,6 +119,7 @@ export function TimeRecordManager({
 
       // 使用回調函數僅更新必要的數據，避免整個頁面重新載入
       onTimeUpdate();
+      setDialogOpen(false);
     } catch (error) {
       console.error('Error updating time records:', error);
       toast({
@@ -122,7 +145,8 @@ export function TimeRecordManager({
         .from('test_progress')
         .update({
           started_at: null,
-          completed_at: null
+          completed_at: null,
+          actual_hours: 0
         })
         .eq('project_id', activeProjectId)
         .eq('system_id', systemId)
@@ -152,15 +176,12 @@ export function TimeRecordManager({
     }
   };
 
-  // 正確格式化UTC時間為台灣本地時間供 datetime-local 使用
   const formatDateTimeLocalTaiwan = (isoString?: string) => {
     if (!isoString) return '';
     try {
-      const utcDate = new Date(isoString);
-      // 手動轉換為台灣時間 (UTC+8)
-      const taiwanTime = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000));
-      // 格式化為 YYYY-MM-DDTHH:mm 格式
-      return taiwanTime.toISOString().slice(0, 16);
+      const date = new Date(isoString);
+      const localTime = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+      return localTime.toISOString().slice(0, 16);
     } catch (error) {
       console.error('Error formatting date:', error);
       return '';
@@ -180,9 +201,9 @@ export function TimeRecordManager({
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isUpdating} className="text-foreground border-border hover:bg-accent">
-          <Clock className="h-3 w-3 mr-1 text-foreground" />
-          時間管理
+        <Button variant="outline" size="sm" disabled={isUpdating} className="h-8 border-[#3c6380] bg-[#10263a] text-[#dce9f2] hover:bg-[#16324b]">
+          <Clock className="mr-1 h-3.5 w-3.5" />
+          校正時間
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">

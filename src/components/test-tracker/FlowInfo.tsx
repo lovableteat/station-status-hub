@@ -10,6 +10,7 @@ import {
   GripVertical,
   Layers3,
   ListChecks,
+  Loader2,
   Plus,
   Route,
   Save,
@@ -77,11 +78,13 @@ function updateFlowViewQuery(view: FlowView) {
 }
 
 export function FlowInfo() {
-  const { activeProject, activeProjectId } = useTestProject();
+  const { activeProject, activeProjectId, refreshProjects } = useTestProject();
   const { toast } = useToast();
   const {
     activeVersion,
     isLoadingVersions,
+    refreshVersions,
+    versions,
   } = useFlowVersions();
   const [view, setView] = useState<FlowView>(() => {
     if (typeof window === "undefined") return "overview";
@@ -111,6 +114,7 @@ export function FlowInfo() {
   const [contentDraft, setContentDraft] = useState({ content: "", title: "" });
   const [draggedStationId, setDraggedStationId] = useState<string | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [isPreparingFlow, setIsPreparingFlow] = useState(false);
 
   const editingVersionId = activeVersion?.id ?? null;
   const displayedVersionId = activeVersion?.id ?? null;
@@ -284,20 +288,96 @@ export function FlowInfo() {
     setFlowView("editor");
   }, [setFlowView]);
 
-  const requireEditableVersion = () => {
-    if (!editingVersionId || !activeProjectId) {
+  const ensureEditableVersion = useCallback(async () => {
+    if (!activeProjectId || isPreparingFlow) return null;
+    setIsPreparingFlow(true);
+
+    try {
+      let version = activeVersion ?? versions[0] ?? null;
+
+      if (!version) {
+        const { data: existingVersion, error: existingError } = await supabase
+          .from("test_flow_versions")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("version_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingError) throw existingError;
+        version = existingVersion;
+      }
+
+      if (!version) {
+        const { data: createdVersion, error: createError } = await supabase
+          .from("test_flow_versions")
+          .insert({
+            label: "目前流程",
+            notes: "Direct-edit flow created from the maintenance workspace.",
+            project_id: activeProjectId,
+            published_at: new Date().toISOString(),
+            status: "published",
+            version_number: 1,
+          })
+          .select("*")
+          .single();
+        if (createError) throw createError;
+        version = createdVersion;
+      }
+
+      if (version.status !== "published") {
+        const { error: publishError } = await supabase
+          .from("test_flow_versions")
+          .update({ published_at: new Date().toISOString(), status: "published" })
+          .eq("id", version.id)
+          .eq("project_id", activeProjectId);
+        if (publishError) throw publishError;
+      }
+
+      if (activeProject?.active_flow_version_id !== version.id) {
+        const { error: projectError } = await supabase
+          .from("test_projects")
+          .update({ active_flow_version_id: version.id })
+          .eq("id", activeProjectId);
+        if (projectError) throw projectError;
+      }
+
+      await Promise.all([refreshProjects(), refreshVersions()]);
+      return version.id;
+    } catch (error) {
+      console.error("Failed to prepare direct-edit flow:", error);
       toast({
-        title: "無法編輯流程",
-        description: "目前專案尚未建立流程版本。",
+        title: "無法建立流程資料",
+        description: error instanceof Error ? error.message : "請稍後再試。",
         variant: "destructive",
       });
       return null;
+    } finally {
+      setIsPreparingFlow(false);
     }
-    return editingVersionId;
-  };
+  }, [
+    activeProject?.active_flow_version_id,
+    activeProjectId,
+    activeVersion,
+    isPreparingFlow,
+    refreshProjects,
+    refreshVersions,
+    toast,
+    versions,
+  ]);
+
+  useEffect(() => {
+    if (
+      !activeVersion ||
+      !activeProjectId ||
+      (activeVersion.status === "published" && activeProject?.active_flow_version_id === activeVersion.id)
+    ) {
+      return;
+    }
+    void ensureEditableVersion();
+  }, [activeProject?.active_flow_version_id, activeProjectId, activeVersion, ensureEditableVersion]);
 
   const addStation = async () => {
-    const versionId = requireEditableVersion();
+    const versionId = await ensureEditableVersion();
     if (!versionId || !activeProjectId) return;
     const nextOrder = Math.max(-1, ...stations.map((station) => station.station_order)) + 1;
     const { data, error } = await supabase
@@ -344,7 +424,7 @@ export function FlowInfo() {
   };
 
   const duplicateStation = async (station: TestStation) => {
-    const versionId = requireEditableVersion();
+    const versionId = await ensureEditableVersion();
     if (!versionId || !activeProjectId) return;
     const { data: newStation, error } = await supabase
       .from("test_flow_stations")
@@ -416,7 +496,7 @@ export function FlowInfo() {
   };
 
   const addItem = async () => {
-    const versionId = requireEditableVersion();
+    const versionId = await ensureEditableVersion();
     if (!versionId || !activeProjectId || !selectedStation) return;
     const { data, error } = await supabase
       .from("test_flow_items")
@@ -461,7 +541,7 @@ export function FlowInfo() {
   };
 
   const duplicateItem = async (item: TestItem) => {
-    const versionId = requireEditableVersion();
+    const versionId = await ensureEditableVersion();
     if (!versionId || !activeProjectId) return;
     const { data, error } = await supabase
       .from("test_flow_items")
@@ -512,7 +592,7 @@ export function FlowInfo() {
   };
 
   const saveContent = async () => {
-    const versionId = requireEditableVersion();
+    const versionId = await ensureEditableVersion();
     if (!versionId || !activeProjectId || !selectedStation) return;
     const payload = {
       content: contentDraft.content,
@@ -670,21 +750,40 @@ export function FlowInfo() {
                   </div>
                 </div>
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[#a9c0d1]">尚未建立站點。</div>
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-300/30 bg-cyan-300/10 text-cyan-100"><Route className="h-5 w-5" /></div>
+                  <div><div className="text-base font-semibold text-[#f3f8fc]">尚未建立測試站點</div><p className="mt-1 text-sm text-[#a9c0d1]">切換到流程編輯，建立第一站後即可加入測項。</p></div>
+                  <Button
+                    size="sm"
+                    disabled={isPreparingFlow}
+                    onClick={() => {
+                      setFlowView("editor");
+                      void addStation();
+                    }}
+                  >
+                    {isPreparingFlow ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}
+                    {isPreparingFlow ? "建立中" : "建立站點"}
+                  </Button>
+                </div>
               )}
             </section>
           </div>
         </>
       ) : !editingVersionId ? (
-        <div className="maintenance-panel flex min-h-32 items-center justify-center text-sm text-[#a9c0d1]">
-          目前專案尚未建立可編輯的流程資料。
+        <div className="maintenance-panel flex min-h-[360px] flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100"><Route className="h-6 w-6" /></div>
+          <div><h2 className="text-lg font-semibold text-[#f3f8fc]">建立第一個測試站點</h2><p className="mt-1 max-w-md text-sm text-[#a9c0d1]">系統會自動準備流程資料並建立站點，不需要建立版本或草稿。</p></div>
+          <Button onClick={addStation} disabled={isPreparingFlow} className="min-w-36">
+            {isPreparingFlow ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}
+            {isPreparingFlow ? "準備流程中" : "建立第一個站點"}
+          </Button>
         </div>
       ) : (
         <div className="grid h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] xl:grid-cols-[240px_300px_minmax(0,1fr)]">
           <section className="flex min-h-0 flex-col border-b border-[#2a526f] xl:border-b-0 xl:border-r">
             <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a526f]/70 px-3">
               <h2 className="text-sm font-semibold text-[#f3f8fc]">站點</h2>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={addStation}><Plus className="h-4 w-4" /><span className="sr-only">新增站點</span></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={addStation} disabled={isPreparingFlow}>{isPreparingFlow ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}<span className="sr-only">新增站點</span></Button>
             </div>
             <ScrollArea className="flex-1 p-2">
               <div className="space-y-1 pr-2">
@@ -841,7 +940,11 @@ export function FlowInfo() {
                 )}
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[#a9c0d1]">請先新增或選擇站點。</div>
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <div className="text-base font-semibold text-[#f3f8fc]">目前沒有站點</div>
+                <p className="text-sm text-[#a9c0d1]">新增站點後，可在右側設定名稱、預估工時與測試項目。</p>
+                <Button size="sm" onClick={addStation} disabled={isPreparingFlow}>{isPreparingFlow ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}新增站點</Button>
+              </div>
             )}
           </section>
         </div>
