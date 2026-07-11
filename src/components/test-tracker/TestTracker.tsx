@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   List,
   Search,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
@@ -28,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Progress as ProgressBar } from "@/components/ui/progress";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { ExportManager } from "./ExportManager";
 import { PDFExportDialog } from "./pdf/PDFExportDialog";
+import { SegmentedProgress } from "./SegmentedProgress";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
@@ -52,10 +54,10 @@ type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
 
 const KPI_TONES = {
-  blue: "border-blue-300/30 bg-[#0d2139] text-blue-200",
-  cyan: "border-cyan-300/30 bg-[#0b2434] text-cyan-200",
-  emerald: "border-emerald-300/30 bg-[#0c2828] text-emerald-200",
-  amber: "border-amber-300/30 bg-[#292315] text-amber-200",
+  blue: "bg-[#102b50] text-[#4c92ff]",
+  cyan: "bg-[#0c3040] text-[#43c9e8]",
+  emerald: "bg-[#0b332f] text-[#45d6aa]",
+  amber: "bg-[#342a17] text-[#f5a524]",
 } as const;
 
 function TrackerKpi({
@@ -74,17 +76,17 @@ function TrackerKpi({
   value: string | number;
 }) {
   return (
-    <div className={cn("flex h-[76px] min-w-0 items-center gap-3 rounded-xl border px-3 py-2", KPI_TONES[tone])}>
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/20">
+    <div className="flex h-[72px] min-w-0 items-center gap-3 rounded-xl border border-[#1a3858] bg-[#0a1a2e] px-3 py-2">
+      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", KPI_TONES[tone])}>
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-xs text-[#a9c0d1]">{label}</div>
-        <div className="font-data mt-0.5 flex items-baseline gap-1 text-2xl font-semibold text-[#f3f8fc]">
+        <div className="truncate text-[11px] text-[#9eb7ca]">{label}</div>
+        <div className="font-data mt-0.5 flex items-baseline gap-1 text-[23px] font-semibold leading-6 text-[#f3f8fc]">
           {value}
-          {unit && <span className="text-xs font-normal text-[#a9c0d1]">{unit}</span>}
+          {unit && <span className="text-[10px] font-normal text-[#9eb7ca]">{unit}</span>}
         </div>
-        <div className="truncate text-[11px] text-[#8fb0c5]">{detail}</div>
+        <div className="truncate text-[10px] text-[#7898af]">{detail}</div>
       </div>
     </div>
   );
@@ -156,10 +158,7 @@ export function TestTracker() {
   const { activeProject, activeProjectId } = useTestProject();
   const {
     activeVersion,
-    selectedVersion,
     selectedVersionId,
-    setSelectedVersionId,
-    versions,
   } = useFlowVersions();
   const [searchTerm, setSearchTerm] = useState("");
   const [engineerFilter, setEngineerFilter] = useState("all");
@@ -277,9 +276,6 @@ export function TestTracker() {
   const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
   const pagedSystems = filteredSystems.slice((page - 1) * pageSize, page * pageSize);
   const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
-  const selectedSystemVersion = versions.find(
-    (version) => version.id === selectedSystem?.flow_version_id
-  );
   const projectStatusCounts = useMemo(
     () =>
       systems.reduce(
@@ -318,6 +314,157 @@ export function TestTracker() {
     window.dispatchEvent(new CustomEvent("navigate", { detail: { module: "flow-info" } }));
   };
 
+  const activeFilterCount = [
+    Boolean(searchTerm.trim()),
+    engineerFilter !== "all",
+    stationFilter !== "all",
+    statusFilter !== "all",
+  ].filter(Boolean).length;
+
+  const clearTrackerFilters = () => {
+    setSearchTerm("");
+    setEngineerFilter("all");
+    setStationFilter("all");
+    setStatusFilter("all");
+  };
+
+  const renderTrackerControls = (compact = false) => (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant={compact ? "ghost" : "outline"}
+          size={compact ? "icon" : "sm"}
+          className={cn(
+            "relative rounded-md border-[#315574] text-[#cfe0eb] hover:bg-[#15314b] hover:text-white",
+            compact ? "h-7 w-7 border border-[#315574]" : "h-8"
+          )}
+          aria-label="搜尋、篩選與專案操作"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          {!compact && <span className="ml-2">篩選與操作</span>}
+          {activeFilterCount > 0 && (
+            <span className="font-data absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#438dff] px-1 text-[9px] text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[min(620px,calc(100vw-24px))] space-y-3 border-[#315574] bg-[#0b1b2d] p-3"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-[#f3f8fc]">篩選與專案操作</div>
+            <div className="mt-0.5 text-xs text-[#8fabbe]">控制項收在這裡，資料矩陣保留最大空間。</div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={activeFilterCount === 0}
+            onClick={clearTrackerFilters}
+          >
+            清除篩選
+          </Button>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#91adc2]" />
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
+            className="h-9 border-[#315574] bg-[#06111f] pl-9"
+            placeholder="搜尋機台、序號或工程師"
+          />
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={engineerFilter} onValueChange={setEngineerFilter}>
+            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="工程師" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部工程師</SelectItem>
+              {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={stationFilter} onValueChange={setStationFilter}>
+            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="站點" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部站點</SelectItem>
+              {displayStations.map((station) => <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[#254866] bg-[#071522] p-1">
+          {(["未開始", "進行中", "已完成"] as const).map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter((current) => current === status ? "all" : status)}
+              className={cn(
+                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
+                statusFilter === status
+                  ? "bg-[#438dff] text-white"
+                  : "text-[#a9c0d1] hover:bg-[#10263a] hover:text-[#f3f8fc]"
+              )}
+            >
+              {status} <span className="font-data ml-1">{statusCounts[status]}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={cn(
+              "h-7 rounded-md px-2.5 text-xs font-medium",
+              statusFilter === "all" ? "bg-[#10263a] text-[#f3f8fc]" : "text-[#a9c0d1]"
+            )}
+          >
+            全部 <span className="font-data ml-1">{baseFilteredSystems.length}</span>
+          </button>
+
+          <div className="ml-auto flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#183654] text-cyan-100")}
+              onClick={() => changeView("table")}
+            >
+              <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#183654] text-cyan-100")}
+              onClick={() => changeView("board")}
+            >
+              <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-[#254866] pt-3">
+          <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
+          <BulkResetDialog onReset={loadData} />
+          <ExportManager systems={filteredSystems} stations={displayStations} progress={progress} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 rounded-lg">
+                <Download className="mr-2 h-4 w-4" />PDF
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
+                <FileText className="mr-2 h-4 w-4" />完整測試追蹤 PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   if (isLoading) {
     return <MaintenanceLoading label="正在載入 L10 測試追蹤" />;
   }
@@ -345,31 +492,15 @@ export function TestTracker() {
   }
 
   return (
-    <div className="maintenance-page space-y-2">
-      <MaintenancePageHeader
-        icon={ClipboardList}
-        title="L10 測試追蹤"
-        description={`${activeProject?.name || "目前專案"} · ${filteredSystems.length} 台符合條件`}
-        actions={
-          <>
-            <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
-            <BulkResetDialog onReset={loadData} />
-            <ExportManager systems={filteredSystems} stations={displayStations} progress={progress} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 rounded-lg">
-                  <Download className="mr-2 h-4 w-4" />PDF
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setPdfExporterOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" />完整測試追蹤 PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        }
-      />
+    <div className="maintenance-page !p-2 space-y-2">
+      <div className="lg:hidden">
+        <MaintenancePageHeader
+          icon={ClipboardList}
+          title="L10 測試追蹤"
+          description={`${activeProject?.name || "目前專案"} · ${filteredSystems.length} 台符合條件`}
+          actions={renderTrackerControls(false)}
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <TrackerKpi
@@ -404,105 +535,20 @@ export function TestTracker() {
           detail={`${systems.length ? Math.round((projectStatusCounts.已完成 / systems.length) * 100) : 0}%`}
           tone="emerald"
         />
-        <div className="col-span-2 flex h-[76px] min-w-0 items-center justify-between rounded-xl border border-cyan-300/30 bg-[#0b2434] px-3 py-2 lg:col-span-1">
+        <div className="col-span-2 flex h-[72px] min-w-0 items-center justify-between rounded-xl border border-[#1a3858] bg-[#0a1a2e] px-3 py-2 lg:col-span-1">
           <div>
-            <div className="flex items-center gap-1.5 text-xs text-[#a9c0d1]"><Gauge className="h-3.5 w-3.5 text-cyan-200" />整體完成率</div>
-            <div className="font-data mt-1 text-2xl font-semibold text-[#f3f8fc]">{overallCompletion}%</div>
-            <div className="text-[11px] text-[#8fb0c5]">依所有機台平均進度</div>
+            <div className="flex items-center gap-1.5 text-[11px] text-[#9eb7ca]"><Gauge className="h-3.5 w-3.5 text-[#43c9e8]" />整體完成率</div>
+            <div className="font-data mt-0.5 text-[23px] font-semibold leading-6 text-[#f3f8fc]">{overallCompletion}%</div>
+            <div className="text-[10px] text-[#7898af]">依所有機台平均進度</div>
           </div>
           <ProgressSparkline values={progressDistribution} />
-        </div>
-      </div>
-
-      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
-            className="h-9 border-[#2a526f] bg-[#06111f] pl-9"
-            placeholder="搜尋機台、序號或工程師"
-          />
-        </div>
-
-        <Select value={engineerFilter} onValueChange={setEngineerFilter}>
-          <SelectTrigger className="h-9 w-[145px]"><SelectValue placeholder="工程師" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部工程師</SelectItem>
-            {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={stationFilter} onValueChange={setStationFilter}>
-          <SelectTrigger className="h-9 w-[165px]"><SelectValue placeholder="站點" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部站點</SelectItem>
-            {displayStations.map((station) => <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        {versions.length > 0 && selectedVersionId && (
-          <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
-            <SelectTrigger className="h-9 w-[118px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {versions.map((version) => (
-                <SelectItem key={version.id} value={version.id}>
-                  {version.label || `v${version.version_number}`}{version.status === "draft" ? " 草稿" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <div className="flex rounded-lg border border-[#2a526f] bg-[#06111f] p-1">
-          {(["未開始", "進行中", "已完成"] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setStatusFilter((current) => current === status ? "all" : status)}
-              className={cn(
-                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
-                statusFilter === status ? "bg-[#4c8dff] text-[#06111f]" : "text-[#a9c0d1] hover:bg-[#10263a] hover:text-[#f3f8fc]"
-              )}
-            >
-              {status} <span className="font-data ml-1">{statusCounts[status]}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={cn(
-              "h-7 rounded-md px-2.5 text-xs font-medium",
-              statusFilter === "all" ? "bg-[#10263a] text-[#f3f8fc]" : "text-[#a9c0d1]"
-            )}
-          >
-            全部 <span className="font-data ml-1">{baseFilteredSystems.length}</span>
-          </button>
-        </div>
-
-        <div className="ml-auto flex rounded-lg border border-[#2a526f] bg-[#06111f] p-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#10263a] text-cyan-100")}
-            onClick={() => changeView("table")}
-          >
-            <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#10263a] text-cyan-100")}
-            onClick={() => changeView("board")}
-          >
-            <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
-          </Button>
         </div>
       </div>
 
       {view === "table" ? (
         <>
           <TestProgressTable
+            headerControls={renderTrackerControls(true)}
             systems={pagedSystems}
             stations={displayStations}
             items={displayItems}
@@ -533,7 +579,9 @@ export function TestTracker() {
           </div>
         </>
       ) : (
-        <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
+        <div className="space-y-2">
+          <div className="flex justify-end">{renderTrackerControls(false)}</div>
+          <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
           {displayStations.map((station) => {
             const stationSystems = filteredSystems.filter(
               (system) => system.current_station === station.station_name
@@ -557,7 +605,11 @@ export function TestTracker() {
                         <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
                       </div>
                       <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.assigned_engineer || "未指定工程師"}</div>
-                      <ProgressBar value={system.overall_progress ?? 0} className="mt-2 h-1.5" />
+                      <SegmentedProgress
+                        value={system.overall_progress ?? 0}
+                        className="mt-2"
+                        label={`${system.system_name} 整體進度`}
+                      />
                     </button>
                   ))}
                   {!stationSystems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
@@ -565,6 +617,7 @@ export function TestTracker() {
               </section>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -577,12 +630,6 @@ export function TestTracker() {
         progress={progress}
         updateProgress={updateProgress}
         onUpdated={loadData}
-        versionLabel={
-          selectedSystemVersion?.label ||
-          (selectedVersion?.id === selectedSystem?.flow_version_id
-            ? selectedVersion?.label
-            : null)
-        }
       />
 
       <PDFExportDialog
