@@ -1,11 +1,12 @@
+import type { ReactNode } from "react";
 import { MoreHorizontal, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress as ProgressBar } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
+import { SegmentedProgress } from "./SegmentedProgress";
 import { SystemCompleteButton } from "./SystemCompleteButton";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemDeleteButton } from "./SystemManager";
@@ -40,6 +41,7 @@ interface TrackerProgress {
 }
 
 interface TestProgressTableProps {
+  headerControls?: ReactNode;
   items: TrackerItem[];
   onSelectSystem: (systemId: string) => void;
   onSystemUpdate: () => void;
@@ -74,6 +76,7 @@ function statusClass(status: string) {
 }
 
 export function TestProgressTable({
+  headerControls,
   items,
   onSelectSystem,
   onSystemUpdate,
@@ -84,8 +87,8 @@ export function TestProgressTable({
   const sortedStations = [...stations].sort(
     (left, right) => left.station_order - right.station_order
   );
-  const gridColumns = `158px 116px 98px repeat(${sortedStations.length}, minmax(150px, 1fr)) 48px`;
-  const minWidth = 158 + 116 + 98 + sortedStations.length * 150 + 48;
+  const gridColumns = `158px 116px 98px repeat(${sortedStations.length}, minmax(150px, 1fr)) 82px`;
+  const minWidth = 158 + 116 + 98 + sortedStations.length * 150 + 82;
 
   const getStationPercent = (systemId: string, stationId: string) => {
     const stationItems = items.filter((item) => item.station_id === stationId);
@@ -132,7 +135,11 @@ export function TestProgressTable({
                 <Badge variant="outline" className={cn("rounded-md", statusClass(status))}>{status}</Badge>
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <ProgressBar value={system.overall_progress ?? 0} className="h-1.5 flex-1" />
+                <SegmentedProgress
+                  value={system.overall_progress ?? 0}
+                  className="flex-1"
+                  label={`${system.system_name} 整體進度`}
+                />
                 <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
               </div>
             </button>
@@ -140,14 +147,14 @@ export function TestProgressTable({
         })}
       </div>
 
-      <div className="maintenance-panel hidden overflow-hidden lg:block">
-        <div className="max-h-[calc(100vh-386px)] min-h-[360px] overflow-auto">
+      <div className="hidden overflow-hidden rounded-xl border border-[#1d3d5c] bg-[#08182a] lg:block">
+        <div className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto">
           <div style={{ minWidth }}>
             <div
-              className="sticky top-0 z-20 grid h-10 items-center gap-2 border-b border-[#356985] bg-[#10263a] px-3 text-xs font-semibold text-[#e8f3f9]"
+              className="sticky top-0 z-20 grid h-9 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
               style={{ gridTemplateColumns: gridColumns }}
             >
-              <div className="sticky left-0 z-30 flex h-10 items-center bg-[#10263a]">機台編號</div>
+              <div className="sticky left-0 z-30 flex h-9 items-center bg-[#0d2137]">機台 ID</div>
               <div>序號</div>
               <div>狀態</div>
               {sortedStations.map((station) => (
@@ -155,36 +162,39 @@ export function TestProgressTable({
                   {station.station_name}
                 </div>
               ))}
-              <div className="text-center">操作</div>
+              <div className="flex items-center justify-center gap-1">
+                <span>操作</span>
+                {headerControls}
+              </div>
             </div>
 
-            <div className="divide-y divide-[#2a526f]/45">
+            <div className="divide-y divide-[#1e3b56]/55">
               {systems.map((system) => {
                 const status = normalizeStatus(system);
                 return (
                   <div
                     key={system.id}
                     className={cn(
-                      "group grid h-10 min-h-0 items-center gap-2 px-3 text-sm transition-colors hover:bg-[#14304a]",
-                      status === "進行中" ? "bg-[#0d2440]" : "bg-[#0b1b2d]"
+                      "group grid h-10 min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
+                      status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
                     style={{ gridTemplateColumns: gridColumns }}
                   >
                     <button
                       type="button"
                       className={cn(
-                        "sticky left-0 z-10 min-w-0 py-1 text-left group-hover:bg-[#14304a]",
-                        status === "進行中" ? "bg-[#0d2440]" : "bg-[#0b1b2d]"
+                        "sticky left-0 z-10 min-w-0 py-1 text-left group-hover:bg-[#102b48]",
+                        status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                       )}
                       onClick={() => onSelectSystem(system.id)}
                     >
-                      <div className="truncate font-semibold text-[#f3f8fc]">{system.system_name}</div>
-                      <div className="truncate text-[11px] text-[#a9c0d1]">{system.assigned_engineer || "未指定"}</div>
+                      <div className="truncate font-semibold leading-4 text-[#f3f8fc]">{system.system_name}</div>
+                      <div className="truncate text-[10px] leading-3 text-[#91adc2]">{system.assigned_engineer || "未指定"}</div>
                     </button>
                     <div className="truncate font-data text-xs text-[#b9cddd]" title={system.serial_number || ""}>
                       {system.serial_number || "-"}
                     </div>
-                    <Badge variant="outline" className={cn("w-fit rounded-md px-2 text-[11px]", statusClass(status))}>
+                    <Badge variant="outline" className={cn("w-fit rounded-full px-2 text-[10px]", statusClass(status))}>
                       {status}
                     </Badge>
 
@@ -194,15 +204,18 @@ export function TestProgressTable({
                         <button
                           key={station.id}
                           type="button"
-                          className="rounded-md px-1.5 py-1 text-left hover:bg-[#06111f] focus-visible:outline-none"
+                          className="rounded-md px-1.5 py-0.5 text-left hover:bg-[#061426] focus-visible:outline-none"
                           onClick={() => onSelectSystem(system.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
-                          <div className="mb-1 flex items-center justify-between text-[10px] text-[#a9c0d1]">
+                          <div className="mb-0.5 flex items-center justify-between text-[10px] leading-3 text-[#9db6c8]">
                             <span>{percent === 100 ? "完成" : percent > 0 ? "進度" : "未開始"}</span>
                             <span className="font-data text-[#d8e6f0]">{percent}%</span>
                           </div>
-                          <ProgressBar value={percent} className="h-1.5 bg-[#193149] [&>div]:bg-[#4c8dff]" />
+                          <SegmentedProgress
+                            value={percent}
+                            label={`${system.system_name} ${station.station_name} 進度`}
+                          />
                         </button>
                       );
                     })}
