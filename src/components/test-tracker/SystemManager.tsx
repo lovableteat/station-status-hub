@@ -12,9 +12,10 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 interface SystemManagerProps {
   onSystemUpdate: (newSystemId?: string) => void;
+  showDeleteAll?: boolean;
 }
 
-export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
+export function SystemManager({ onSystemUpdate, showDeleteAll = true }: SystemManagerProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newSystemName, setNewSystemName] = useState("");
   const [newSystemEngineer, setNewSystemEngineer] = useState("");
@@ -24,7 +25,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
   const [creationProgress, setCreationProgress] = useState(0);
   const retryCountRef = useRef(0);
   const { toast } = useToast();
-  const { activeProjectId } = useTestProject();
+  const { activeProject, activeProjectId } = useTestProject();
 
   const handleAddSystem = async () => {
     if (!activeProjectId) {
@@ -55,6 +56,9 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
         // 樂觀更新 - 先顯示進度指示器
         const tempSystemData = {
           project_id: activeProjectId,
+          ...(activeProject?.active_flow_version_id
+            ? { flow_version_id: activeProject.active_flow_version_id }
+            : {}),
           system_name: newSystemName.trim(),
           assigned_engineer: newSystemEngineer.trim() || null,
           serial_number: newSystemSerial.trim() || null,
@@ -244,7 +248,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
       {/* 新增機台對話框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="h-11 rounded-xl px-5 text-sm font-semibold shadow-sm">
+          <Button variant="outline" size="sm" className="h-9 rounded-lg px-3 text-sm font-semibold">
             <Plus className="mr-2 h-4 w-4 shrink-0" />
             新增機台
           </Button>
@@ -315,7 +319,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog>
+      {showDeleteAll && <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button
             variant="outline"
@@ -354,7 +358,7 @@ export function SystemManager({ onSystemUpdate }: SystemManagerProps) {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
     </div>
   );
 }
