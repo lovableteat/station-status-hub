@@ -18,10 +18,139 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #071827;
+      }
+
+      #app-boot {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        color: #f3f8fc;
+        font-family: "Segoe UI", "Noto Sans TC", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(59, 130, 246, 0.24), transparent 34rem),
+          linear-gradient(145deg, #071827, #0b2033 60%, #0d2a3f);
+      }
+
+      .app-boot-panel {
+        width: min(440px, 100%);
+        padding: 24px;
+        box-sizing: border-box;
+        border: 1px solid rgba(125, 211, 252, 0.48);
+        border-radius: 16px;
+        background: #0d2237;
+      }
+
+      .app-boot-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .app-boot-mark {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        background: #38bdf8;
+      }
+
+      .app-boot-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: #071827;
+        animation: app-boot-pulse 1.1s ease-in-out infinite;
+      }
+
+      .app-boot-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 750;
+      }
+
+      .app-boot-copy {
+        margin: 5px 0 0;
+        color: #bae6fd;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .app-boot-track {
+        height: 6px;
+        margin-top: 20px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #071827;
+      }
+
+      .app-boot-progress {
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: #7dd3fc;
+        animation: app-boot-scan 1.45s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+      }
+
+      @keyframes app-boot-pulse {
+        0%,
+        100% {
+          opacity: 0.48;
+          transform: scale(0.72);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes app-boot-scan {
+        from {
+          transform: translateX(-20%);
+        }
+        to {
+          transform: translateX(150%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot-dot,
+        .app-boot-progress {
+          animation: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-boot" role="status" aria-live="polite">
+        <div class="app-boot-panel">
+          <div class="app-boot-row">
+            <div class="app-boot-mark" aria-hidden="true">
+              <div class="app-boot-dot"></div>
+            </div>
+            <div>
+              <p class="app-boot-title">正在啟動工作整合平台</p>
+              <p class="app-boot-copy">正在同步最新版本與專案資料</p>
+            </div>
+          </div>
+          <div class="app-boot-track" aria-hidden="true">
+            <div class="app-boot-progress"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script>
       (function () {
         const RETRY_KEY = "station-status-hub:boot-retry";
@@ -30,9 +159,9 @@
           "\u525b\u525b\u5075\u6e2c\u5230\u700f\u89bd\u5668\u62ff\u5230\u820a\u7248\u8cc7\u6e90\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u91cd\u6574\u4e00\u6b21\u3002\u5982\u679c\u4f60\u9084\u662f\u770b\u5230\u7a7a\u767d\u9801\uff0c\u8acb\u518d\u6309\u4e00\u6b21\u91cd\u65b0\u6574\u7406\u3002";
         const FALLBACK_BUTTON = "\u91cd\u65b0\u6574\u7406\u9801\u9762";
 
-        function renderFallbackMessage() {
+        function renderFallbackMessage(force) {
           const root = document.getElementById("root");
-          if (!root || root.children.length > 0) return;
+          if (!root || (!force && window.__STATION_APP_READY__ === true)) return;
 
           root.innerHTML =
             '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#08111f;color:#e2e8f0;font-family:Arial,sans-serif;">' +
@@ -74,15 +203,46 @@
               target.src.includes("/assets/index-")
             ) {
               retryBoot("asset-load-error");
+              return;
+            }
+
+            if (event.error) {
+              if (window.__STATION_APP_READY__ !== true) {
+                retryBoot("runtime-error-before-mount");
+                return;
+              }
+
+              window.setTimeout(function () {
+                const root = document.getElementById("root");
+                if (root && root.children.length === 0) {
+                  renderFallbackMessage(true);
+                }
+              }, 0);
             }
           },
           true
         );
 
+        window.addEventListener("unhandledrejection", function () {
+          if (window.__STATION_APP_READY__ !== true) {
+            retryBoot("unhandled-rejection-before-mount");
+          }
+        });
+
+        window.addEventListener("station-app-ready", function () {
+          window.__STATION_APP_READY__ = true;
+        });
+
+        window.setTimeout(function () {
+          if (window.__STATION_APP_READY__ !== true) {
+            renderFallbackMessage();
+          }
+        }, 12000);
+
         window.addEventListener("load", function () {
           setTimeout(function () {
             const root = document.getElementById("root");
-            const hasRendered = !!root && root.children.length > 0;
+            const hasRendered = window.__STATION_APP_READY__ === true;
             if (hasRendered) {
               sessionStorage.removeItem(RETRY_KEY);
               return;
