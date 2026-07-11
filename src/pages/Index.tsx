@@ -12,34 +12,69 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { AdminPanel } from "@/components/admin/AdminPanel";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
 import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
-import { ApiChatWorkspacePage } from "@/components/api-management/ApiChatWorkspacePage";
-import { DeploymentPlanningCenter } from "@/components/data-center/DeploymentPlanningCenter";
-import { Dashboard } from "@/components/dashboard/Dashboard";
-import { IssueTracker } from "@/components/issues/IssueTracker";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
-import { MaterialRequestPage } from "@/components/material-requests/MaterialRequestPage";
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
-import { ProductionMonitor } from "@/components/production/ProductionMonitor";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
-import { FlowInfo } from "@/components/test-tracker/FlowInfo";
-import { TestTracker } from "@/components/test-tracker/TestTracker";
-import { ToolsManagement } from "@/components/tools/ToolsManagement";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
+
+const AdminPanel = React.lazy(() =>
+  import("@/components/admin/AdminPanel").then((module) => ({ default: module.AdminPanel }))
+);
+const ApiChatWorkspacePage = React.lazy(() =>
+  import("@/components/api-management/ApiChatWorkspacePage").then((module) => ({
+    default: module.ApiChatWorkspacePage,
+  }))
+);
+const DeploymentPlanningCenter = React.lazy(() =>
+  import("@/components/data-center/DeploymentPlanningCenter").then((module) => ({
+    default: module.DeploymentPlanningCenter,
+  }))
+);
+const Dashboard = React.lazy(() =>
+  import("@/components/dashboard/Dashboard").then((module) => ({ default: module.Dashboard }))
+);
+const IssueTracker = React.lazy(() =>
+  import("@/components/issues/IssueTracker").then((module) => ({
+    default: module.IssueTracker,
+  }))
+);
+const MaterialRequestPage = React.lazy(() =>
+  import("@/components/material-requests/MaterialRequestPage").then((module) => ({
+    default: module.MaterialRequestPage,
+  }))
+);
+const ProductionMonitor = React.lazy(() =>
+  import("@/components/production/ProductionMonitor").then((module) => ({
+    default: module.ProductionMonitor,
+  }))
+);
+const FlowInfo = React.lazy(() =>
+  import("@/components/test-tracker/FlowInfo").then((module) => ({ default: module.FlowInfo }))
+);
+const TestTracker = React.lazy(() =>
+  import("@/components/test-tracker/TestTracker").then((module) => ({
+    default: module.TestTracker,
+  }))
+);
+const ToolsManagement = React.lazy(() =>
+  import("@/components/tools/ToolsManagement").then((module) => ({
+    default: module.ToolsManagement,
+  }))
+);
 
 type WorkspaceId =
   | "station-status"
@@ -529,9 +564,11 @@ const Index = () => {
                   {isSwitchingProject ? (
                     <MaintenanceLoading />
                   ) : (
-                    <div key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}>
-                      {renderStationContent()}
-                    </div>
+                    <React.Suspense fallback={<MaintenanceLoading label="正在載入維修模組" />}>
+                      <div key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}>
+                        {renderStationContent()}
+                      </div>
+                    </React.Suspense>
                   )}
                 </main>
               </div>
@@ -587,7 +624,15 @@ const Index = () => {
             : "min-h-[calc(100vh-92px)]"
         )}
       >
-        {renderWorkspaceContent()}
+        <React.Suspense
+          fallback={
+            <div className="p-3">
+              <MaintenanceLoading label="正在載入工作區" />
+            </div>
+          }
+        >
+          {renderWorkspaceContent()}
+        </React.Suspense>
       </main>
     </div>
   );
