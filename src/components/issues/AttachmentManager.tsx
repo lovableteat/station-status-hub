@@ -1,7 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Eye, Download, Trash2, Image, FileText, File, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,20 +26,18 @@ interface Attachment {
 
 interface AttachmentManagerProps {
   issueId: string;
-  onUpdate: () => void;
+  onUpdate?: () => void;
+  refreshKey?: number;
 }
 
-export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps) {
+export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: AttachmentManagerProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [previewFile, setPreviewFile] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Attachment | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadAttachments();
-  }, [issueId]);
-
-  const loadAttachments = async () => {
+  const loadAttachments = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('issue_attachments')
@@ -43,11 +50,13 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
     } catch (error) {
       console.error('載入附件失敗:', error);
     }
-  };
+  }, [issueId]);
+
+  useEffect(() => {
+    loadAttachments();
+  }, [loadAttachments, refreshKey]);
 
   const deleteAttachment = async (attachment: Attachment) => {
-    if (!confirm(`確定要刪除附件 "${attachment.file_name}" 嗎？`)) return;
-
     setLoading(true);
     try {
       // 從資料庫刪除記錄
@@ -73,7 +82,7 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
       });
 
       loadAttachments();
-      onUpdate();
+      onUpdate?.();
     } catch (error) {
       console.error('刪除附件失敗:', error);
       toast({
@@ -83,6 +92,7 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
       });
     } finally {
       setLoading(false);
+      setPendingDelete(null);
     }
   };
 
@@ -198,7 +208,7 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => deleteAttachment(attachment)}
+              onClick={() => setPendingDelete(attachment)}
               disabled={loading}
               title="刪除"
               className="text-destructive hover:text-destructive"
@@ -208,6 +218,27 @@ export function AttachmentManager({ issueId, onUpdate }: AttachmentManagerProps)
           </div>
         </div>
       ))}
+
+      <AlertDialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent className="border-rose-300/30 bg-[#0b1b2d]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除附件？</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{pendingDelete?.file_name}」會從問題與檔案儲存空間中永久移除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 text-white hover:bg-rose-500"
+              disabled={loading || !pendingDelete}
+              onClick={() => pendingDelete && deleteAttachment(pendingDelete)}
+            >
+              {loading ? "刪除中" : "確認刪除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 預覽對話框 */}
       <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>

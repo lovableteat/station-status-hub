@@ -14,7 +14,15 @@ export function SegmentedProgress({
   value,
 }: SegmentedProgressProps) {
   const safeValue = Math.min(100, Math.max(0, value));
-  const filledSegments = Math.round((safeValue / 100) * segments);
+  const filledSegments = safeValue > 0 ? Math.max(1, Math.round((safeValue / 100) * segments)) : 0;
+  const filledClass =
+    safeValue >= 100
+      ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.72)]"
+      : safeValue >= 80
+        ? "bg-cyan-300 shadow-[0_0_7px_rgba(103,232,249,0.68)]"
+        : safeValue >= 35
+          ? "bg-[#438dff] shadow-[0_0_6px_rgba(67,141,255,0.72)]"
+          : "bg-amber-300 shadow-[0_0_6px_rgba(252,211,77,0.62)]";
 
   return (
     <div
@@ -39,7 +47,7 @@ export function SegmentedProgress({
             className={cn(
               "min-w-0 rounded-full transition-colors duration-200 motion-reduce:transition-none",
               index < filledSegments
-                ? "bg-[#438dff] shadow-[0_0_6px_rgba(67,141,255,0.72)]"
+                ? filledClass
                 : "bg-[#18324d]"
             )}
           />
