@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
+  Boxes,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   Download,
   FileText,
+  Gauge,
+  Hourglass,
   LayoutGrid,
   List,
   Search,
 } from "lucide-react";
 
+import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
+import { MaintenanceProjectSetup } from "@/components/maintenance/MaintenanceProjectSetup";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +51,69 @@ import { TestProgressTable } from "./TestProgressTable";
 type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
 
+const KPI_TONES = {
+  blue: "border-blue-300/30 bg-[#0d2139] text-blue-200",
+  cyan: "border-cyan-300/30 bg-[#0b2434] text-cyan-200",
+  emerald: "border-emerald-300/30 bg-[#0c2828] text-emerald-200",
+  amber: "border-amber-300/30 bg-[#292315] text-amber-200",
+} as const;
+
+function TrackerKpi({
+  detail,
+  icon: Icon,
+  label,
+  tone,
+  unit,
+  value,
+}: {
+  detail: string;
+  icon: typeof Boxes;
+  label: string;
+  tone: keyof typeof KPI_TONES;
+  unit?: string;
+  value: string | number;
+}) {
+  return (
+    <div className={cn("flex h-[76px] min-w-0 items-center gap-3 rounded-xl border px-3 py-2", KPI_TONES[tone])}>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/20">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-xs text-[#a9c0d1]">{label}</div>
+        <div className="font-data mt-0.5 flex items-baseline gap-1 text-2xl font-semibold text-[#f3f8fc]">
+          {value}
+          {unit && <span className="text-xs font-normal text-[#a9c0d1]">{unit}</span>}
+        </div>
+        <div className="truncate text-[11px] text-[#8fb0c5]">{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function ProgressSparkline({ values }: { values: number[] }) {
+  const max = Math.max(1, ...values);
+  const points = values
+    .map((value, index) => {
+      const x = values.length <= 1 ? 0 : (index / (values.length - 1)) * 96;
+      const y = 30 - (value / max) * 24;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox="0 0 96 32" className="h-8 w-24" role="img" aria-label="機台進度分布">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="#4c8dff"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function normalizeSystemStatus(system: {
   current_station?: string | null;
   overall_progress?: number | null;
@@ -76,6 +146,7 @@ function updateTrackerViewQuery(view: TrackerView) {
 export function TestTracker() {
   const {
     items,
+    isLoading,
     loadData,
     progress,
     stations,
@@ -178,7 +249,7 @@ export function TestTracker() {
         !system.flow_version_id ||
         system.flow_version_id === selectedVersionId;
 
-      return matchesKeyword && matchesEngineer && matchesStation && matchesVersion && status;
+      return matchesKeyword && matchesEngineer && matchesStation && matchesVersion;
     });
   }, [engineerFilter, searchTerm, selectedVersionId, stationFilter, systems]);
 
@@ -209,14 +280,72 @@ export function TestTracker() {
   const selectedSystemVersion = versions.find(
     (version) => version.id === selectedSystem?.flow_version_id
   );
+  const projectStatusCounts = useMemo(
+    () =>
+      systems.reduce(
+        (counts, system) => {
+          counts[normalizeSystemStatus(system)] += 1;
+          return counts;
+        },
+        { 已完成: 0, 未開始: 0, 進行中: 0 }
+      ),
+    [systems]
+  );
+  const overallCompletion = systems.length
+    ? Math.round(
+        (systems.reduce((sum, system) => sum + (system.overall_progress ?? 0), 0) /
+          systems.length) *
+          10
+      ) / 10
+    : 0;
+  const progressDistribution = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, bucket) =>
+        systems.filter((system) => {
+          const progressValue = Math.min(99.99, Math.max(0, system.overall_progress ?? 0));
+          return Math.floor(progressValue / 10) === bucket;
+        }).length
+      ),
+    [systems]
+  );
 
   const changeView = (nextView: TrackerView) => {
     setView(nextView);
     updateTrackerViewQuery(nextView);
   };
 
+  const openFlowSettings = () => {
+    window.dispatchEvent(new CustomEvent("navigate", { detail: { module: "flow-info" } }));
+  };
+
+  if (isLoading) {
+    return <MaintenanceLoading label="正在載入 L10 測試追蹤" />;
+  }
+
+  if (!systems.length) {
+    return (
+      <div className="maintenance-page space-y-3">
+        <MaintenancePageHeader
+          icon={ClipboardList}
+          title="L10 測試追蹤"
+          description={`${activeProject?.name || "目前專案"} · 尚未加入機台`}
+        />
+        <MaintenanceProjectSetup
+          projectName={activeProject?.name || "目前專案"}
+          hasPublishedFlow={displayStations.length > 0}
+          onOpenFlow={openFlowSettings}
+          actions={
+            displayStations.length > 0 ? (
+              <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
+            ) : undefined
+          }
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="maintenance-page space-y-3">
+    <div className="maintenance-page space-y-2">
       <MaintenancePageHeader
         icon={ClipboardList}
         title="L10 測試追蹤"
@@ -241,6 +370,49 @@ export function TestTracker() {
           </>
         }
       />
+
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <TrackerKpi
+          icon={Boxes}
+          label="機台總數"
+          value={systems.length}
+          unit="台"
+          detail="目前專案全部機台"
+          tone="blue"
+        />
+        <TrackerKpi
+          icon={Hourglass}
+          label="未開始"
+          value={projectStatusCounts.未開始}
+          unit="台"
+          detail={`${systems.length ? Math.round((projectStatusCounts.未開始 / systems.length) * 100) : 0}%`}
+          tone="amber"
+        />
+        <TrackerKpi
+          icon={Activity}
+          label="進行中"
+          value={projectStatusCounts.進行中}
+          unit="台"
+          detail={`${systems.length ? Math.round((projectStatusCounts.進行中 / systems.length) * 100) : 0}%`}
+          tone="blue"
+        />
+        <TrackerKpi
+          icon={CheckCircle2}
+          label="已完成"
+          value={projectStatusCounts.已完成}
+          unit="台"
+          detail={`${systems.length ? Math.round((projectStatusCounts.已完成 / systems.length) * 100) : 0}%`}
+          tone="emerald"
+        />
+        <div className="col-span-2 flex h-[76px] min-w-0 items-center justify-between rounded-xl border border-cyan-300/30 bg-[#0b2434] px-3 py-2 lg:col-span-1">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-[#a9c0d1]"><Gauge className="h-3.5 w-3.5 text-cyan-200" />整體完成率</div>
+            <div className="font-data mt-1 text-2xl font-semibold text-[#f3f8fc]">{overallCompletion}%</div>
+            <div className="text-[11px] text-[#8fb0c5]">依所有機台平均進度</div>
+          </div>
+          <ProgressSparkline values={progressDistribution} />
+        </div>
+      </div>
 
       <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
         <div className="relative min-w-[220px] flex-1">

@@ -69,8 +69,8 @@ function normalizeStatus(system: TrackerSystem) {
 
 function statusClass(status: string) {
   if (status === "已完成") return "border-emerald-300/35 bg-emerald-300/10 text-emerald-100";
-  if (status === "進行中") return "border-amber-300/35 bg-amber-300/10 text-amber-100";
-  return "border-slate-300/25 bg-slate-300/[0.08] text-slate-200";
+  if (status === "進行中") return "border-blue-300/35 bg-blue-300/10 text-blue-100";
+  return "border-amber-300/25 bg-amber-300/[0.08] text-amber-100";
 }
 
 export function TestProgressTable({
@@ -84,8 +84,8 @@ export function TestProgressTable({
   const sortedStations = [...stations].sort(
     (left, right) => left.station_order - right.station_order
   );
-  const gridColumns = `168px 130px 104px repeat(${sortedStations.length}, minmax(142px, 1fr)) 52px`;
-  const minWidth = 168 + 130 + 104 + sortedStations.length * 142 + 52;
+  const gridColumns = `158px 116px 98px repeat(${sortedStations.length}, minmax(150px, 1fr)) 48px`;
+  const minWidth = 158 + 116 + 98 + sortedStations.length * 150 + 48;
 
   const getStationPercent = (systemId: string, stationId: string) => {
     const stationItems = items.filter((item) => item.station_id === stationId);
@@ -141,10 +141,10 @@ export function TestProgressTable({
       </div>
 
       <div className="maintenance-panel hidden overflow-hidden lg:block">
-        <div className="max-h-[calc(100vh-330px)] min-h-[390px] overflow-auto">
+        <div className="max-h-[calc(100vh-386px)] min-h-[360px] overflow-auto">
           <div style={{ minWidth }}>
             <div
-              className="sticky top-0 z-20 grid h-10 items-center gap-2 border-b border-[#2a526f] bg-[#10263a] px-3 text-xs font-semibold text-[#d8e6f0]"
+              className="sticky top-0 z-20 grid h-10 items-center gap-2 border-b border-[#356985] bg-[#10263a] px-3 text-xs font-semibold text-[#e8f3f9]"
               style={{ gridTemplateColumns: gridColumns }}
             >
               <div className="sticky left-0 z-30 flex h-10 items-center bg-[#10263a]">機台編號</div>
@@ -164,12 +164,18 @@ export function TestProgressTable({
                 return (
                   <div
                     key={system.id}
-                    className="group grid h-12 min-h-0 items-center gap-2 bg-[#0b1b2d] px-3 text-sm hover:bg-[#10263a]"
+                    className={cn(
+                      "group grid h-10 min-h-0 items-center gap-2 px-3 text-sm transition-colors hover:bg-[#14304a]",
+                      status === "進行中" ? "bg-[#0d2440]" : "bg-[#0b1b2d]"
+                    )}
                     style={{ gridTemplateColumns: gridColumns }}
                   >
                     <button
                       type="button"
-                      className="sticky left-0 z-10 min-w-0 bg-[#0b1b2d] py-1 text-left group-hover:bg-[#10263a]"
+                      className={cn(
+                        "sticky left-0 z-10 min-w-0 py-1 text-left group-hover:bg-[#14304a]",
+                        status === "進行中" ? "bg-[#0d2440]" : "bg-[#0b1b2d]"
+                      )}
                       onClick={() => onSelectSystem(system.id)}
                     >
                       <div className="truncate font-semibold text-[#f3f8fc]">{system.system_name}</div>
@@ -193,10 +199,10 @@ export function TestProgressTable({
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
                           <div className="mb-1 flex items-center justify-between text-[10px] text-[#a9c0d1]">
-                            <span>{percent === 100 ? "完成" : "進度"}</span>
+                            <span>{percent === 100 ? "完成" : percent > 0 ? "進度" : "未開始"}</span>
                             <span className="font-data text-[#d8e6f0]">{percent}%</span>
                           </div>
-                          <ProgressBar value={percent} className="h-1.5" />
+                          <ProgressBar value={percent} className="h-1.5 bg-[#193149] [&>div]:bg-[#4c8dff]" />
                         </button>
                       );
                     })}
