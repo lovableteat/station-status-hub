@@ -150,28 +150,46 @@ const ProceduralRackModel = memo(function ProceduralRackModel({
   const width = definition.dimensions.widthMm / 1000;
   const depth = definition.dimensions.depthMm / 1000;
   const height = definition.dimensions.heightMm / 1000;
-  const innerHeight = height * 0.88;
+  const post = Math.max(0.045, width * 0.075);
+  const railWidth = width - post * 1.15;
 
   return (
     <group>
-      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[width, height, depth]} />
-        <meshStandardMaterial color="#13283a" metalness={0.52} roughness={0.42} />
-      </mesh>
-      <mesh position={[0, height / 2, depth / 2 + 0.006]}>
-        <planeGeometry args={[width * 0.82, innerHeight]} />
-        <meshStandardMaterial color="#07111b" metalness={0.65} roughness={0.24} />
-      </mesh>
-      {Array.from({ length: 12 }, (_, index) => {
-        const y = height * 0.1 + (innerHeight / 12) * (index + 0.5);
+      {[-1, 1].flatMap((xSide) =>
+        [-1, 1].map((zSide) => (
+          <mesh
+            key={`${xSide}-${zSide}`}
+            position={[
+              xSide * (width / 2 - post / 2),
+              height / 2,
+              zSide * (depth / 2 - post / 2),
+            ]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[post, height, post]} />
+            <meshStandardMaterial color="#273846" metalness={0.72} roughness={0.3} />
+          </mesh>
+        ))
+      )}
+      {[0.08, height - 0.08].flatMap((y) =>
+        [-1, 1].map((zSide) => (
+          <mesh key={`${y}-${zSide}`} position={[0, y, zSide * (depth / 2 - post / 2)]} castShadow>
+            <boxGeometry args={[railWidth, post, post]} />
+            <meshStandardMaterial color="#334b5d" metalness={0.68} roughness={0.34} />
+          </mesh>
+        ))
+      )}
+      {Array.from({ length: 10 }, (_, index) => {
+        const y = height * 0.12 + (height * 0.74 * index) / 9;
         return (
-          <mesh key={index} position={[0, y, depth / 2 + 0.012]}>
-            <boxGeometry args={[width * 0.72, 0.025, 0.018]} />
+          <mesh key={index} position={[0, y, depth / 2 - post * 0.36]}>
+            <boxGeometry args={[railWidth, 0.018, post * 0.48]} />
             <meshStandardMaterial
-              color={index % 4 === 0 ? accent : "#35546d"}
-              emissive={index % 4 === 0 ? accent : "#000000"}
-              emissiveIntensity={index % 4 === 0 ? 0.3 : 0}
-              roughness={0.35}
+              color={index % 3 === 0 ? accent : "#4a6070"}
+              emissive={index % 3 === 0 ? accent : "#000000"}
+              emissiveIntensity={index % 3 === 0 ? 0.16 : 0}
+              roughness={0.4}
             />
           </mesh>
         );
@@ -297,6 +315,84 @@ const StepRackModel = memo(function StepRackModel({ model }: { model: ImportedSt
   );
 });
 
+const PlaceholderL10Model = memo(function PlaceholderL10Model({
+  definition,
+  index,
+}: {
+  definition: RackModelDefinition;
+  index: number;
+}) {
+  const width = definition.dimensions.widthMm / 1000;
+  const depth = definition.dimensions.depthMm / 1000;
+  const height = definition.dimensions.heightMm / 1000;
+
+  return (
+    <group>
+      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width, height, depth]} />
+        <meshStandardMaterial color="#192936" metalness={0.62} roughness={0.34} />
+      </mesh>
+      <mesh position={[0, height / 2, depth / 2 + 0.004]}>
+        <boxGeometry args={[width * 0.92, height * 0.72, 0.012]} />
+        <meshStandardMaterial color="#0b1822" metalness={0.45} roughness={0.42} />
+      </mesh>
+      {[-0.24, -0.08, 0.08, 0.24].map((offset, ventIndex) => (
+        <mesh key={offset} position={[width * offset, height / 2, depth / 2 + 0.012]}>
+          <boxGeometry args={[width * 0.11, height * 0.42, 0.008]} />
+          <meshStandardMaterial color={ventIndex === index % 4 ? "#22d3ee" : "#426073"} emissive={ventIndex === index % 4 ? "#0891b2" : "#000000"} emissiveIntensity={0.28} />
+        </mesh>
+      ))}
+      <mesh position={[width * 0.39, height * 0.28, depth / 2 + 0.018]}>
+        <sphereGeometry args={[0.008, 10, 10]} />
+        <meshBasicMaterial color="#34d399" />
+      </mesh>
+    </group>
+  );
+});
+
+function RackL10Modules({
+  rack,
+  rackDefinition,
+  l10Definition,
+}: {
+  rack: RackPlan;
+  rackDefinition: RackModelDefinition;
+  l10Definition: RackModelDefinition;
+}) {
+  const rackWidth = rackDefinition.dimensions.widthMm / 1000;
+  const rackDepth = rackDefinition.dimensions.depthMm / 1000;
+  const rackHeight = rackDefinition.dimensions.heightMm / 1000;
+  const modelWidth = l10Definition.dimensions.widthMm / 1000;
+  const modelDepth = l10Definition.dimensions.depthMm / 1000;
+  const modelHeight = l10Definition.dimensions.heightMm / 1000;
+  const fitScale = Math.min(1, (rackWidth * 0.78) / modelWidth, (rackDepth * 0.78) / modelDepth);
+  const fittedHeight = modelHeight * fitScale;
+  const verticalGap = Math.max(0.018, fittedHeight * 0.12);
+  const baseY = rackHeight * 0.12;
+  const maxVisible = Math.max(0, Math.floor((rackHeight * 0.72) / (fittedHeight + verticalGap)));
+  const visibleCount = Math.min(rack.l10Count, maxVisible);
+
+  if (!visibleCount || !Number.isFinite(fitScale)) return null;
+
+  return (
+    <group position={[0, baseY, 0]}>
+      {Array.from({ length: visibleCount }, (_, index) => (
+        <group key={`${rack.id}-l10-${index}`} position={[0, index * (fittedHeight + verticalGap), 0]} scale={fitScale}>
+          <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
+            {l10Definition.source === "step" && l10Definition.stepModel ? (
+              <StepRackModel model={l10Definition.stepModel} />
+            ) : l10Definition.assetUrl ? (
+              <GlbRackModel definition={l10Definition} />
+            ) : (
+              <PlaceholderL10Model definition={l10Definition} index={index} />
+            )}
+          </Suspense>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function RackSceneCard({
   rack,
   definition,
@@ -345,6 +441,7 @@ function RackSceneCard({
 function RackVisual({
   rack,
   definition,
+  l10Definition,
   activeLayer,
   selected,
   hovered,
@@ -354,6 +451,7 @@ function RackVisual({
 }: {
   rack: RackPlan;
   definition: RackModelDefinition;
+  l10Definition: RackModelDefinition;
   activeLayer: DataCenterLayer;
   selected: boolean;
   hovered: boolean;
@@ -403,6 +501,8 @@ function RackVisual({
           <ProceduralRackModel definition={definition} accent={color} />
         )}
       </Suspense>
+
+      <RackL10Modules rack={rack} rackDefinition={definition} l10Definition={l10Definition} />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
         <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
@@ -478,26 +578,45 @@ function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; active
     );
   }
 
-  if (activeLayer === "cooling") {
-    return (
-      <group>
-        {[-1.05, 1.05].map((z) => (
-          <mesh key={z} position={[0, 0.03, z]} receiveShadow>
-            <boxGeometry args={[13.5, 0.04, 1.55]} />
+  return null;
+}
+
+function ThermalAisles({ active }: { active: boolean }) {
+  const channels = [
+    { id: "cold", z: 0, depth: 2.1, color: "#0ea5e9", emissive: "#38bdf8" },
+    { id: "hot-a", z: -3.65, depth: 1.15, color: "#c2410c", emissive: "#fb923c" },
+    { id: "hot-b", z: 3.65, depth: 1.15, color: "#c2410c", emissive: "#fb923c" },
+  ];
+
+  return (
+    <group>
+      {channels.map((channel) => (
+        <group key={channel.id}>
+          <mesh position={[0, 0.026, channel.z]} receiveShadow>
+            <boxGeometry args={[14.2, 0.025, channel.depth]} />
             <meshStandardMaterial
-              color="#0284c7"
-              emissive="#0ea5e9"
-              emissiveIntensity={0.2}
+              color={channel.color}
+              emissive={channel.emissive}
+              emissiveIntensity={active ? 0.34 : 0.08}
               transparent
-              opacity={0.34}
+              opacity={active ? 0.48 : 0.16}
+              roughness={0.78}
             />
           </mesh>
-        ))}
-      </group>
-    );
-  }
-
-  return null;
+          {[-5.4, -3.6, -1.8, 0, 1.8, 3.6, 5.4].map((x, index) => (
+            <mesh
+              key={x}
+              position={[x, 0.052, channel.z]}
+              rotation={[-Math.PI / 2, 0, channel.id === "hot-a" ? Math.PI : 0]}
+            >
+              <coneGeometry args={[0.09, 0.28, 3]} />
+              <meshBasicMaterial color={channel.emissive} transparent opacity={active ? 0.9 : index % 2 ? 0.28 : 0.45} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
 }
 
 function FacilityShell({ activeLayer }: { activeLayer: DataCenterLayer }) {
@@ -645,10 +764,12 @@ function PlannerScene({
       <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
 
       <FacilityShell activeLayer={activeLayer} />
+      <ThermalAisles active={activeLayer === "cooling"} />
       <InfrastructureLayer racks={racks} activeLayer={activeLayer} />
 
       {racks.map((rack) => {
         const definition = models[rack.modelId] ?? models["generic-42u"];
+        const l10Definition = models[rack.l10ModelId] ?? models["l10-placeholder"];
         const health = getRackHealth(rack);
         const selected = rack.id === selectedRackId;
         const hovered = rack.id === hoveredRackId;
@@ -659,6 +780,7 @@ function PlannerScene({
             key={rack.id}
             rack={rack}
             definition={definition}
+            l10Definition={l10Definition}
             activeLayer={activeLayer}
             selected={selected}
             hovered={hovered}
