@@ -176,10 +176,10 @@ export function TestProgressTable({
                     key={system.id}
                     data-machine-row={system.id}
                     className={cn(
-                      "group grid items-center gap-2 px-3 py-2 text-[13px] transition-colors hover:bg-[#102b48]",
+                      "group grid items-center gap-2 px-3 py-2.5 text-[13px] transition-colors hover:bg-[#102b48]",
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
-                    style={{ gridTemplateColumns: gridColumns, minHeight: 64 }}
+                    style={{ gridTemplateColumns: gridColumns, minHeight: 76 }}
                   >
                     <button
                       type="button"
@@ -205,7 +205,7 @@ export function TestProgressTable({
                         <button
                           key={station.id}
                           type="button"
-                          className="rounded-md px-1.5 py-1 text-left hover:bg-[#061426] focus-visible:outline-none"
+                          className="rounded-md px-1.5 py-2 text-left hover:bg-[#061426] focus-visible:outline-none"
                           onClick={() => onSelectSystem(system.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
