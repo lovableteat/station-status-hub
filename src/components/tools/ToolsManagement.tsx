@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import {
-  BookOpenCheck,
-  Code2,
   Download,
   Eye,
-  FileCode2,
+  File,
+  Files,
   Library,
   Loader2,
   PackageCheck,
@@ -49,14 +48,15 @@ import { cn } from "@/lib/utils";
 
 import { CodeStorageManager } from "./CodeStorageManager";
 import { CommandLibrary } from "./CommandLibrary";
-import { FileUploadDialog } from "./FileUploadDialog";
+import { FileUploadDialog, GENERAL_ASSET_CATEGORY } from "./FileUploadDialog";
 
 type ToolRow = Database["public"]["Tables"]["tools_management"]["Row"];
 type CodeRow = Database["public"]["Tables"]["code_snippets"]["Row"];
 type CommandRow = Database["public"]["Tables"]["command_library"]["Row"];
 type AssetKind = "tool" | "code" | "command";
-type AssetFilter = "all" | AssetKind;
-type WorkspaceTab = "applied" | "library" | "code-editor" | "command-editor";
+type AssetClass = "tool" | "command" | "general";
+type AssetFilter = "all" | AssetClass;
+type WorkspaceTab = "applied" | "library" | "command-center";
 
 type Asset =
   | {
@@ -65,6 +65,7 @@ type Asset =
       detail: string;
       id: string;
       kind: "tool";
+      assetClass: AssetClass;
       name: string;
       raw: ToolRow;
       updatedAt: string | null;
@@ -75,6 +76,7 @@ type Asset =
       detail: string;
       id: string;
       kind: "code";
+      assetClass: "command";
       name: string;
       raw: CodeRow;
       updatedAt: string | null;
@@ -85,6 +87,7 @@ type Asset =
       detail: string;
       id: string;
       kind: "command";
+      assetClass: "command";
       name: string;
       raw: CommandRow;
       updatedAt: string | null;
@@ -111,16 +114,53 @@ const EMPTY_DRAFT: ToolDraft = {
 const CATEGORY_LABELS: Record<string, string> = {
   documentation: "文件",
   driver: "驅動程式",
+  [GENERAL_ASSET_CATEGORY]: "檔案傳輸",
   other: "其他",
   software: "軟體",
   utility: "工具程式",
 };
 
-const KIND_META = {
-  code: { icon: Code2, label: "程式碼", tone: "border-blue-300/30 bg-blue-300/10 text-blue-100" },
-  command: { icon: Terminal, label: "指令", tone: "border-amber-300/30 bg-amber-300/10 text-amber-100" },
-  tool: { icon: Wrench, label: "工具", tone: "border-cyan-300/30 bg-cyan-300/10 text-cyan-100" },
+const ASSET_CLASS_META = {
+  command: { icon: Terminal, label: "指令", tone: "border-amber-300/35 bg-amber-300/10 text-amber-100" },
+  general: { icon: Files, label: "不特定", tone: "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" },
+  tool: { icon: Wrench, label: "工具", tone: "border-cyan-300/35 bg-cyan-300/10 text-cyan-100" },
 };
+
+const ASSET_FILTERS: Array<{ activeClass: string; label: string; value: AssetFilter }> = [
+  { activeClass: "border-blue-300/50 bg-blue-300/15 text-blue-50", label: "全部", value: "all" },
+  { activeClass: "border-cyan-300/50 bg-cyan-300/15 text-cyan-50", label: "工具", value: "tool" },
+  { activeClass: "border-amber-300/50 bg-amber-300/15 text-amber-50", label: "指令", value: "command" },
+  { activeClass: "border-emerald-300/50 bg-emerald-300/15 text-emerald-50", label: "不特定", value: "general" },
+];
+
+function getAssetClass(tool: ToolRow): AssetClass {
+  return tool.category === GENERAL_ASSET_CATEGORY ? "general" : "tool";
+}
+
+function formatFileSize(bytes: number | null) {
+  if (!bytes) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function getFileType(fileName: string | null) {
+  if (!fileName) return "檔案";
+  const extension = fileName.split(".").pop();
+  return extension && extension !== fileName ? extension.toUpperCase() : "FILE";
+}
+
+function getStoragePath(publicUrl: string | null) {
+  if (!publicUrl) return null;
+  const marker = "/storage/v1/object/public/task-attachments/";
+  try {
+    const pathname = new URL(publicUrl).pathname;
+    const markerIndex = pathname.indexOf(marker);
+    return markerIndex >= 0 ? decodeURIComponent(pathname.slice(markerIndex + marker.length)) : null;
+  } catch {
+    return null;
+  }
+}
 
 function emptyAssignments() {
   return {
@@ -165,7 +205,9 @@ export function ToolsManagement() {
   const [tab, setTab] = useState<WorkspaceTab>(() => {
     if (typeof window === "undefined") return "applied";
     const requested = new URLSearchParams(window.location.search).get("assetView");
-    return requested === "library" ? "library" : "applied";
+    if (requested === "library") return "library";
+    if (requested === "commands") return "command-center";
+    return "applied";
   });
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<AssetFilter>("all");
@@ -263,9 +305,8 @@ export function ToolsManagement() {
   }, [activeProjectId, refreshKey, toast]);
 
   useEffect(() => {
-    if (tab === "code-editor" || tab === "command-editor") return;
     const url = new URL(window.location.href);
-    url.searchParams.set("assetView", tab);
+    url.searchParams.set("assetView", tab === "command-center" ? "commands" : tab);
     window.history.replaceState({}, "", url);
   }, [tab]);
 
@@ -273,9 +314,12 @@ export function ToolsManagement() {
     ...tools.map<Asset>((tool) => ({
       category: tool.category || "other",
       description: toPlainText(tool.description, "未填寫工具說明"),
-      detail: tool.version || tool.file_name || "未指定版本",
+      detail: tool.category === GENERAL_ASSET_CATEGORY
+        ? [getFileType(tool.file_name), formatFileSize(tool.file_size)].filter(Boolean).join(" · ")
+        : tool.version || tool.file_name || "未指定版本",
       id: tool.id,
       kind: "tool",
+      assetClass: getAssetClass(tool),
       name: tool.tool_name,
       raw: tool,
       updatedAt: tool.updated_at,
@@ -286,6 +330,7 @@ export function ToolsManagement() {
       detail: snippet.language,
       id: snippet.id,
       kind: "code",
+      assetClass: "command",
       name: snippet.title,
       raw: snippet,
       updatedAt: snippet.updated_at,
@@ -296,6 +341,7 @@ export function ToolsManagement() {
       detail: command.platform,
       id: command.id,
       kind: "command",
+      assetClass: "command",
       name: command.name,
       raw: command,
       updatedAt: command.updated_at,
@@ -306,18 +352,30 @@ export function ToolsManagement() {
   const visibleAssets = assets.filter((asset) => {
     const isAssigned = assignments[asset.kind].has(asset.id);
     const matchesScope = tab === "library" || isAssigned;
-    const matchesKind = kindFilter === "all" || asset.kind === kindFilter;
+    const matchesKind = kindFilter === "all" || asset.assetClass === kindFilter;
     const matchesSearch =
       !normalizedSearch ||
       asset.name.toLowerCase().includes(normalizedSearch) ||
       asset.description.toLowerCase().includes(normalizedSearch) ||
       asset.category.toLowerCase().includes(normalizedSearch) ||
+      ASSET_CLASS_META[asset.assetClass].label.toLowerCase().includes(normalizedSearch) ||
       asset.detail.toLowerCase().includes(normalizedSearch);
     return matchesScope && matchesKind && matchesSearch;
   });
 
   const appliedCount =
     assignments.tool.size + assignments.code.size + assignments.command.size;
+  const classCounts = assets.reduce(
+    (counts, asset) => ({ ...counts, [asset.assetClass]: counts[asset.assetClass] + 1 }),
+    { command: 0, general: 0, tool: 0 },
+  );
+
+  const handleWorkspaceTabChange = (nextTab: WorkspaceTab) => {
+    if (tab === "command-center" && nextTab !== "command-center") {
+      setRefreshKey((value) => value + 1);
+    }
+    setTab(nextTab);
+  };
 
   const openNewTool = () => {
     setEditingTool(null);
@@ -341,7 +399,7 @@ export function ToolsManagement() {
 
   const saveTool = async () => {
     if (!toolDraft.tool_name.trim()) {
-      toast({ title: "請輸入工具名稱", variant: "destructive" });
+      toast({ title: `請輸入${toolDraft.category === GENERAL_ASSET_CATEGORY ? "檔案顯示" : "工具"}名稱`, variant: "destructive" });
       return;
     }
 
@@ -387,7 +445,8 @@ export function ToolsManagement() {
       }
     }
 
-    toast({ title: editingTool ? "工具已更新" : "工具已建立並套用" });
+    const savedAsGeneralAsset = toolDraft.category === GENERAL_ASSET_CATEGORY;
+    toast({ title: editingTool ? `${savedAsGeneralAsset ? "檔案資訊" : "工具"}已更新` : "工具已建立並套用" });
     setSaving(false);
     setToolSheetOpen(false);
     setRefreshKey((value) => value + 1);
@@ -469,20 +528,32 @@ export function ToolsManagement() {
   };
 
   const deleteTool = async (tool: ToolRow) => {
-    if (!window.confirm(`確定要刪除「${tool.tool_name}」？`)) return;
+    const isGeneralAsset = tool.category === GENERAL_ASSET_CATEGORY;
+    if (!window.confirm(`確定要刪除「${tool.tool_name}」？${isGeneralAsset ? "檔案也會從傳輸空間移除。" : ""}`)) return;
     const { error } = await supabase.from("tools_management").delete().eq("id", tool.id);
     if (error) {
-      toast({ title: "工具刪除失敗", description: error.message, variant: "destructive" });
+      toast({ title: `${isGeneralAsset ? "檔案" : "工具"}刪除失敗`, description: error.message, variant: "destructive" });
       return;
+    }
+    const storagePath = getStoragePath(tool.file_path);
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage.from("task-attachments").remove([storagePath]);
+      if (storageError) {
+        toast({
+          title: "資料已刪除，但儲存檔案清理失敗",
+          description: storageError.message,
+          variant: "destructive",
+        });
+      }
     }
     setSelectedAsset(null);
     setRefreshKey((value) => value + 1);
-    toast({ title: "工具已刪除" });
+    toast({ title: `${isGeneralAsset ? "檔案" : "工具"}已刪除` });
   };
 
   const downloadTool = async (tool: ToolRow) => {
     if (!tool.file_path) {
-      toast({ title: "此工具沒有可下載的檔案", variant: "destructive" });
+      toast({ title: "此資產沒有可下載的檔案", variant: "destructive" });
       return;
     }
     window.open(tool.file_path, "_blank", "noopener,noreferrer");
@@ -491,6 +562,8 @@ export function ToolsManagement() {
       .update({ download_count: (tool.download_count || 0) + 1 })
       .eq("id", tool.id);
   };
+
+  const editingGeneralAsset = editingTool?.category === GENERAL_ASSET_CATEGORY;
 
   return (
     <div className="maintenance-page space-y-3">
@@ -501,7 +574,7 @@ export function ToolsManagement() {
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />上傳工具
+              <Upload className="mr-2 h-4 w-4" />上傳不特定檔案
             </Button>
             <Button size="sm" onClick={openNewTool}>
               <Plus className="mr-2 h-4 w-4" />新增工具
@@ -513,9 +586,9 @@ export function ToolsManagement() {
       <MaintenanceMetricStrip
         metrics={[
           { accent: "cyan", icon: PackageCheck, label: "專案已套用", value: appliedCount },
-          { accent: "blue", icon: Library, label: "公司共用資產", value: assets.length },
-          { accent: "emerald", icon: FileCode2, label: "程式碼片段", value: snippets.length },
-          { accent: "amber", icon: Terminal, label: "可用指令", value: commands.length },
+          { accent: "blue", icon: Wrench, label: "工具", value: classCounts.tool },
+          { accent: "amber", icon: Terminal, label: "指令", value: classCounts.command },
+          { accent: "emerald", icon: Files, label: "不特定", value: classCounts.general },
         ]}
       />
 
@@ -525,13 +598,12 @@ export function ToolsManagement() {
         </div>
       )}
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as WorkspaceTab)}>
+      <Tabs value={tab} onValueChange={(value) => handleWorkspaceTabChange(value as WorkspaceTab)}>
         <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
           <TabsList className="h-9 min-h-0 rounded-lg p-1">
             <TabsTrigger value="applied" className="h-7 rounded-md px-3 py-1 text-xs">專案已套用</TabsTrigger>
             <TabsTrigger value="library" className="h-7 rounded-md px-3 py-1 text-xs">公司共用庫</TabsTrigger>
-            <TabsTrigger value="code-editor" className="h-7 rounded-md px-3 py-1 text-xs">管理程式碼</TabsTrigger>
-            <TabsTrigger value="command-editor" className="h-7 rounded-md px-3 py-1 text-xs">管理指令</TabsTrigger>
+            <TabsTrigger value="command-center" className="h-7 rounded-md px-3 py-1 text-xs">指令管理</TabsTrigger>
           </TabsList>
 
           {(tab === "applied" || tab === "library") && (
@@ -545,15 +617,25 @@ export function ToolsManagement() {
                   placeholder="搜尋名稱、分類、版本或說明"
                 />
               </div>
-              <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as AssetFilter)}>
-                <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部類型</SelectItem>
-                  <SelectItem value="tool">工具</SelectItem>
-                  <SelectItem value="code">程式碼</SelectItem>
-                  <SelectItem value="command">指令</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex min-h-9 items-center gap-1 overflow-x-auto rounded-lg border border-[#2a526f] bg-[#06111f] p-1" aria-label="資產分類">
+                {ASSET_FILTERS.map((filter) => {
+                  const count = filter.value === "all" ? assets.length : classCounts[filter.value];
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      aria-pressed={kindFilter === filter.value}
+                      onClick={() => setKindFilter(filter.value)}
+                      className={cn(
+                        "flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-xs font-semibold text-[#9eb8c9] transition-colors hover:bg-[#10263a] hover:text-[#f3f8fc]",
+                        kindFilter === filter.value && filter.activeClass,
+                      )}
+                    >
+                      {filter.label}<span className="font-data text-[10px] opacity-80">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>
@@ -578,11 +660,8 @@ export function ToolsManagement() {
             onToggle={toggleAssignment}
           />
         </TabsContent>
-        <TabsContent value="code-editor" className="mt-3 maintenance-panel p-3">
-          <CodeStorageManager />
-        </TabsContent>
-        <TabsContent value="command-editor" className="mt-3 maintenance-panel p-3">
-          <CommandLibrary />
+        <TabsContent value="command-center" className="mt-3">
+          <CommandCenter />
         </TabsContent>
       </Tabs>
 
@@ -604,41 +683,49 @@ export function ToolsManagement() {
       <Sheet open={toolSheetOpen} onOpenChange={setToolSheetOpen}>
         <SheetContent className="w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[540px]">
           <SheetHeader className="text-left">
-            <SheetTitle className="text-xl text-[#f3f8fc]">{editingTool ? "編輯工具" : "新增工具"}</SheetTitle>
-            <SheetDescription className="text-[#a9c0d1]">工具建立後可套用到目前專案，也會保留在公司共用庫。</SheetDescription>
+            <SheetTitle className="text-xl text-[#f3f8fc]">{editingGeneralAsset ? "編輯檔案資訊" : editingTool ? "編輯工具" : "新增工具"}</SheetTitle>
+            <SheetDescription className="text-[#a9c0d1]">
+              {editingGeneralAsset ? "調整傳輸檔案的顯示名稱與說明，不會變更原始檔案。" : "工具建立後可套用到目前專案，也會保留在公司共用庫。"}
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="asset-tool-name">工具名稱</Label>
+              <Label htmlFor="asset-tool-name">{editingGeneralAsset ? "顯示名稱" : "工具名稱"}</Label>
               <Input id="asset-tool-name" value={toolDraft.tool_name} onChange={(event) => setToolDraft((value) => ({ ...value, tool_name: event.target.value }))} />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="asset-tool-version">版本</Label>
-                <Input id="asset-tool-version" value={toolDraft.version} onChange={(event) => setToolDraft((value) => ({ ...value, version: event.target.value }))} placeholder="例如 v1.4.2" />
+            {!editingGeneralAsset && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="asset-tool-version">版本</Label>
+                  <Input id="asset-tool-version" value={toolDraft.version} onChange={(event) => setToolDraft((value) => ({ ...value, version: event.target.value }))} placeholder="例如 v1.4.2" />
+                </div>
+                <div className="space-y-2">
+                  <Label>工具用途</Label>
+                  <Select value={toolDraft.category} onValueChange={(category) => setToolDraft((value) => ({ ...value, category }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CATEGORY_LABELS).filter(([value]) => value !== GENERAL_ASSET_CATEGORY).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>分類</Label>
-                <Select value={toolDraft.category} onValueChange={(category) => setToolDraft((value) => ({ ...value, category }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="asset-tool-description">工具說明</Label>
+              <Label htmlFor="asset-tool-description">{editingGeneralAsset ? "檔案說明" : "工具說明"}</Label>
               <Textarea id="asset-tool-description" rows={4} value={toolDraft.description} onChange={(event) => setToolDraft((value) => ({ ...value, description: event.target.value }))} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="asset-tool-sop">SOP 內容</Label>
-              <Textarea id="asset-tool-sop" rows={8} value={toolDraft.sop_content} onChange={(event) => setToolDraft((value) => ({ ...value, sop_content: event.target.value }))} placeholder="輸入操作步驟、注意事項或驗證方式" />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div><div className="text-sm font-medium text-[#f3f8fc]">必要工具</div><div className="text-xs text-[#a9c0d1]">套用時標示為專案必要資產</div></div>
-              <Switch checked={toolDraft.is_required} onCheckedChange={(is_required) => setToolDraft((value) => ({ ...value, is_required }))} />
-            </div>
+            {!editingGeneralAsset && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="asset-tool-sop">SOP 內容</Label>
+                  <Textarea id="asset-tool-sop" rows={8} value={toolDraft.sop_content} onChange={(event) => setToolDraft((value) => ({ ...value, sop_content: event.target.value }))} placeholder="輸入操作步驟、注意事項或驗證方式" />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+                  <div><div className="text-sm font-medium text-[#f3f8fc]">必要工具</div><div className="text-xs text-[#a9c0d1]">套用時標示為專案必要資產</div></div>
+                  <Switch checked={toolDraft.is_required} onCheckedChange={(is_required) => setToolDraft((value) => ({ ...value, is_required }))} />
+                </div>
+              </>
+            )}
           </div>
           <SheetFooter className="mt-6 flex-row justify-end gap-2">
             <Button variant="outline" onClick={() => setToolSheetOpen(false)}>取消</Button>
@@ -653,6 +740,8 @@ export function ToolsManagement() {
         isOpen={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onUploadSuccess={() => setRefreshKey((value) => value + 1)}
+        projectId={activeProjectId}
+        canAssignToProject={assignmentsReady}
       />
     </div>
   );
@@ -683,22 +772,37 @@ function AssetList({
   return (
     <div className="maintenance-panel overflow-hidden">
       <div className="hidden grid-cols-[minmax(220px,1.4fr)_110px_minmax(150px,1fr)_110px_132px] gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-4 py-2 text-xs font-medium uppercase tracking-[0.08em] text-[#91aabd] lg:grid">
-        <div>資產</div><div>類型</div><div>分類／版本</div><div>更新</div><div className="text-right">專案狀態</div>
+        <div>資產</div><div>分類</div><div>格式／版本</div><div>更新</div><div className="text-right">專案狀態</div>
       </div>
       <div className="divide-y divide-[#2a526f]/70">
         {assets.map((asset) => {
-          const meta = KIND_META[asset.kind];
+          const meta = ASSET_CLASS_META[asset.assetClass];
           const Icon = meta.icon;
           const assigned = assignments[asset.kind].has(asset.id);
           const assigning = assigningKey === `${asset.kind}:${asset.id}`;
+          const sourceLabel = asset.assetClass === "general"
+            ? "檔案傳輸"
+            : asset.kind === "code"
+              ? "程式碼片段"
+              : asset.kind === "command"
+                ? "指令範本"
+                : CATEGORY_LABELS[asset.category] || asset.category;
           return (
-            <div key={`${asset.kind}:${asset.id}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-4 py-3 transition-colors hover:bg-cyan-300/[0.035] lg:grid-cols-[minmax(220px,1.4fr)_110px_minmax(150px,1fr)_110px_132px] lg:items-center lg:gap-3">
+            <div
+              key={`${asset.kind}:${asset.id}`}
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-l-2 px-4 py-3 transition-colors lg:grid-cols-[minmax(220px,1.4fr)_110px_minmax(150px,1fr)_110px_132px] lg:items-center lg:gap-3",
+                asset.assetClass === "tool" && "border-l-cyan-300/45 hover:bg-cyan-300/[0.04]",
+                asset.assetClass === "command" && "border-l-amber-300/45 hover:bg-amber-300/[0.04]",
+                asset.assetClass === "general" && "border-l-emerald-300/45 hover:bg-emerald-300/[0.04]",
+              )}
+            >
               <button type="button" onClick={() => onPreview(asset)} className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
                 <div className="truncate text-sm font-semibold text-[#f3f8fc]">{asset.name}</div>
                 <div className="mt-0.5 truncate text-xs text-[#a9c0d1]">{asset.description}</div>
               </button>
               <div><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge></div>
-              <div className="min-w-0 text-xs text-[#c7d8e4]"><div className="truncate">{CATEGORY_LABELS[asset.category] || asset.category}</div><div className="font-data mt-0.5 truncate text-[#82a2b8]">{asset.detail}</div></div>
+              <div className="min-w-0 text-xs text-[#c7d8e4]"><div className="truncate">{sourceLabel}</div><div className="font-data mt-0.5 truncate text-[#82a2b8]">{asset.detail}</div></div>
               <div className="font-data text-xs text-[#a9c0d1]">{formatDate(asset.updatedAt)}</div>
               <div className="col-span-2 flex items-center justify-end gap-2 lg:col-span-1">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onPreview(asset)} aria-label={`查看 ${asset.name}`}><Eye className="h-4 w-4" /></Button>
@@ -727,9 +831,10 @@ function AssetDetails({
   onEditTool: (tool: ToolRow) => void;
   onToggle: (asset: Asset) => void;
 }) {
-  const meta = KIND_META[asset.kind];
+  const meta = ASSET_CLASS_META[asset.assetClass];
   const Icon = meta.icon;
   const content = asset.kind === "code" ? asset.raw.code_content : asset.kind === "command" ? asset.raw.command : null;
+  const isGeneralAsset = asset.assetClass === "general";
 
   return (
     <>
@@ -740,19 +845,44 @@ function AssetDetails({
       </SheetHeader>
       <div className="mt-6 space-y-4">
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">分類</div><div className="mt-1 text-sm text-[#f3f8fc]">{CATEGORY_LABELS[asset.category] || asset.category}</div></div>
-          <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">版本／平台</div><div className="font-data mt-1 text-sm text-[#f3f8fc]">{asset.detail}</div></div>
+          <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">分類</div><div className="mt-1 text-sm text-[#f3f8fc]">{meta.label}</div></div>
+          <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "格式／大小" : "版本／平台"}</div><div className="font-data mt-1 text-sm text-[#f3f8fc]">{asset.detail}</div></div>
         </div>
         {content && <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap rounded-lg border border-[#2a526f] bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
         {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
-        {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">附件</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
+        {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "傳輸檔案" : "附件"}</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
       </div>
       <SheetFooter className="mt-6 flex-row flex-wrap justify-end gap-2">
         {asset.kind === "tool" && asset.raw.file_path && <Button variant="outline" onClick={() => onDownloadTool(asset.raw)}><Download className="mr-2 h-4 w-4" />下載</Button>}
-        {asset.kind === "tool" && <Button variant="outline" onClick={() => onEditTool(asset.raw)}>編輯工具</Button>}
-        {asset.kind === "tool" && <Button variant="destructive" onClick={() => onDeleteTool(asset.raw)}><Trash2 className="mr-2 h-4 w-4" />刪除</Button>}
+        {asset.kind === "tool" && <Button variant="outline" onClick={() => onEditTool(asset.raw)}>{isGeneralAsset ? "編輯檔案資訊" : "編輯工具"}</Button>}
+        {asset.kind === "tool" && <Button variant="destructive" onClick={() => onDeleteTool(asset.raw)}><Trash2 className="mr-2 h-4 w-4" />{isGeneralAsset ? "刪除檔案" : "刪除"}</Button>}
         <Button onClick={() => onToggle(asset)}>{assigned ? "移出目前專案" : "套用到目前專案"}</Button>
       </SheetFooter>
     </>
+  );
+}
+
+function CommandCenter() {
+  return (
+    <div className="maintenance-panel overflow-hidden">
+      <Tabs defaultValue="commands">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a526f] bg-gradient-to-r from-amber-300/[0.08] via-[#0b1b2d] to-blue-300/[0.06] px-4 py-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#f3f8fc]"><Terminal className="h-4 w-4 text-amber-200" />指令管理</div>
+            <div className="mt-0.5 text-xs text-[#9eb8c9]">執行指令與程式碼片段統一歸類為「指令」，在此分別維護內容。</div>
+          </div>
+          <TabsList className="h-9 min-h-0 rounded-lg p-1">
+            <TabsTrigger value="commands" className="h-7 rounded-md px-3 py-1 text-xs">指令範本</TabsTrigger>
+            <TabsTrigger value="snippets" className="h-7 rounded-md px-3 py-1 text-xs">程式碼片段</TabsTrigger>
+          </TabsList>
+        </div>
+        <TabsContent value="commands" className="m-0 p-3">
+          <CommandLibrary />
+        </TabsContent>
+        <TabsContent value="snippets" className="m-0 p-3">
+          <CodeStorageManager />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
