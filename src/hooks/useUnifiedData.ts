@@ -252,6 +252,36 @@ export function useUnifiedData() {
     }
   }, [activeProject?.active_flow_version_id, activeProjectId, toast]);
 
+  const refreshProgress = useCallback(
+    async (systemId?: string) => {
+      if (!activeProjectId) return false;
+
+      let query = supabase
+        .from("test_progress")
+        .select("*")
+        .eq("project_id", activeProjectId);
+      if (systemId) query = query.eq("system_id", systemId);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("Failed to refresh project-scoped progress:", error);
+        return false;
+      }
+
+      const nextProgress = (data ?? []) as UnifiedProgress[];
+      setProgress((current) =>
+        systemId
+          ? [
+              ...current.filter((entry) => entry.system_id !== systemId),
+              ...nextProgress,
+            ]
+          : nextProgress
+      );
+      return true;
+    },
+    [activeProjectId]
+  );
+
   const handleProjectScopedRealtime = useCallback(
     <T extends ProjectRealtimeRecord>(
       payload: ProjectRealtimePayload<T>,
@@ -465,6 +495,7 @@ export function useUnifiedData() {
     isLoading,
     isUpdating,
     refetch: loadAllData,
+    refreshProgress,
     updateProgress,
   };
 }
