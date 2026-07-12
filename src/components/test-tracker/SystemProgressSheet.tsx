@@ -106,10 +106,37 @@ const STATUS_OPTIONS = [
 ];
 
 function statusBadgeClass(status: string) {
-  if (status === "Done") return "border-emerald-300/35 bg-emerald-300/10 text-emerald-100";
-  if (status === "On-going") return "border-amber-300/35 bg-amber-300/10 text-amber-100";
-  if (status === "Error") return "border-rose-300/35 bg-rose-300/10 text-rose-100";
+  if (status === "Done") return "border-emerald-300/60 bg-emerald-300/20 text-emerald-50";
+  if (status === "On-going") return "border-amber-300/55 bg-amber-300/15 text-amber-50";
+  if (status === "Error") return "border-rose-300/55 bg-rose-300/15 text-rose-50";
   return "border-slate-300/25 bg-slate-300/[0.08] text-slate-200";
+}
+
+function statusCardClass(status: string) {
+  if (status === "Done") {
+    return "border-emerald-300/50 bg-[linear-gradient(110deg,rgba(16,185,129,0.16),rgba(11,27,45,0.97)_48%)] shadow-[inset_3px_0_0_rgba(110,231,183,0.95)]";
+  }
+  if (status === "On-going") {
+    return "border-amber-300/45 bg-[linear-gradient(110deg,rgba(245,158,11,0.13),rgba(11,27,45,0.97)_48%)] shadow-[inset_3px_0_0_rgba(252,211,77,0.9)]";
+  }
+  if (status === "Error") {
+    return "border-rose-300/50 bg-[linear-gradient(110deg,rgba(244,63,94,0.14),rgba(11,27,45,0.97)_48%)] shadow-[inset_3px_0_0_rgba(253,164,175,0.9)]";
+  }
+  return "border-[#2a526f] bg-[#0b1b2d] shadow-[inset_3px_0_0_rgba(88,117,140,0.75)]";
+}
+
+function statusControlClass(status: string) {
+  if (status === "Done") return "border-emerald-300/55 bg-emerald-300/15 text-emerald-50";
+  if (status === "On-going") return "border-amber-300/50 bg-amber-300/12 text-amber-50";
+  if (status === "Error") return "border-rose-300/50 bg-rose-300/12 text-rose-50";
+  return "border-[#365d78] bg-[#10263a] text-slate-100";
+}
+
+function statusSaveButtonClass(status: string) {
+  if (status === "Done") return "bg-emerald-400 text-[#04130e] hover:bg-emerald-300";
+  if (status === "On-going") return "bg-amber-300 text-[#1b1202] hover:bg-amber-200";
+  if (status === "Error") return "bg-rose-400 text-white hover:bg-rose-300";
+  return "bg-blue-500 text-white hover:bg-blue-400";
 }
 
 export function SystemProgressSheet({
@@ -359,7 +386,7 @@ export function SystemProgressSheet({
               const timeRecord = progressByItemId.get(item.id);
               const isTimerRunning = Boolean(timeRecord?.started_at && !timeRecord?.completed_at);
               return (
-                <div key={item.id} className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
+                <div key={item.id} className={cn("rounded-xl border p-3 transition-colors", statusCardClass(draft.status))}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -387,9 +414,13 @@ export function SystemProgressSheet({
                         }))
                       }
                     >
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn("h-9 font-semibold", statusControlClass(draft.status))}><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {STATUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                        {STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value} className={statusBadgeClass(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Input
@@ -423,7 +454,7 @@ export function SystemProgressSheet({
                     />
                     <Button
                       size="icon"
-                      className="h-9 w-9 rounded-lg"
+                      className={cn("h-9 w-9 rounded-lg", statusSaveButtonClass(draft.status))}
                       disabled={savingItemId === item.id}
                       onClick={() => saveItem(item)}
                     >
@@ -431,9 +462,9 @@ export function SystemProgressSheet({
                       <span className="sr-only">儲存 {item.item_name}</span>
                     </Button>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#2a526f]/60 pt-3">
-                    <div className="flex min-w-0 items-center gap-2 text-xs text-[#a9c0d1]">
-                      <span className={cn("h-2 w-2 rounded-full", isTimerRunning ? "animate-pulse bg-emerald-300 motion-reduce:animate-none" : timeRecord?.completed_at ? "bg-cyan-300" : "bg-[#58758c]")} />
+                  <div className={cn("mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3", draft.status === "Done" ? "border-emerald-300/25" : draft.status === "On-going" ? "border-amber-300/25" : "border-[#2a526f]/60")}>
+                    <div className={cn("flex min-w-0 items-center gap-2 text-xs", draft.status === "Done" ? "text-emerald-100" : draft.status === "On-going" ? "text-amber-100" : "text-[#a9c0d1]")}>
+                      <span className={cn("h-2 w-2 rounded-full", isTimerRunning ? "animate-pulse bg-amber-300 motion-reduce:animate-none" : timeRecord?.completed_at ? "bg-emerald-300" : "bg-[#58758c]")} />
                       <Clock3 className="h-3.5 w-3.5" />
                       <span>{isTimerRunning ? "計時中" : timeRecord?.completed_at ? "實際耗時" : "機台計時"}</span>
                       <span className="font-data text-[#f3f8fc]">{formatElapsed(timeRecord?.started_at, timeRecord?.completed_at, clockNow)}</span>
