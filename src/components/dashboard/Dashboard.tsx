@@ -9,7 +9,6 @@ import {
   Gauge,
   LayoutDashboard,
   Server,
-  Target,
   TrendingUp,
 } from "lucide-react";
 
@@ -71,17 +70,6 @@ function normalizeStatus(system: {
 
 function formatShortDate(date: Date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function formatProjectDate(value?: string | null) {
-  if (!value) return "未設定";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-TW", {
-    month: "2-digit",
-    day: "2-digit",
-    year: "numeric",
-  }).format(date);
 }
 
 function ExecutiveKpi({
@@ -412,13 +400,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </div>
               </div>
             </div>
-            <div className="min-w-0 flex-1 space-y-3 text-sm">
-              <div className="flex items-center justify-between"><span className="text-[#a9c0d1]">進行中</span><strong className="font-data text-blue-100">{statusCounts.active}</strong></div>
-              <div className="flex items-center justify-between"><span className="text-[#a9c0d1]">未開始</span><strong className="font-data text-amber-100">{statusCounts.waiting}</strong></div>
-              <div className="border-t border-[#2a526f]/60 pt-3">
-                <div className="flex items-center gap-2 text-xs text-[#9eb8ca]"><Target className="h-4 w-4 text-cyan-200" />預計完成</div>
-                <div className="font-data mt-1 text-sm text-[#f3f8fc]">{formatProjectDate(activeProject?.planned_end_date)}</div>
-              </div>
+            <div className="min-w-0 flex-1 space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-lg border border-emerald-300/20 bg-emerald-300/[0.07] px-3 py-2"><span className="text-emerald-100">已完成</span><strong className="font-data text-emerald-100">{statusCounts.completed}</strong></div>
+              <div className="flex items-center justify-between rounded-lg border border-blue-300/20 bg-blue-300/[0.07] px-3 py-2"><span className="text-blue-100">進行中</span><strong className="font-data text-blue-100">{statusCounts.active}</strong></div>
+              <div className="flex items-center justify-between rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-3 py-2"><span className="text-amber-100">未開始</span><strong className="font-data text-amber-100">{statusCounts.waiting}</strong></div>
             </div>
           </div>
         </section>
@@ -458,8 +443,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </section>
       </div>
 
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="maintenance-panel self-start overflow-hidden">
+      <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-4 py-3">
             <div>
               <h2 className="text-base font-semibold text-[#f3f8fc]">站點產能與瓶頸</h2>
@@ -472,7 +457,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <Activity className="h-5 w-5 text-cyan-200" />
             </div>
           </div>
-          <div className="grid divide-y divide-[#2a526f]/55 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+          <div className="grid min-h-0 flex-1 divide-y divide-[#2a526f]/55 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
             {stationRows.map((station, index) => {
               const queueShare = stationQueueTotal
                 ? Math.round((station.queue / stationQueueTotal) * 100)
@@ -484,7 +469,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   key={station.id}
                   type="button"
                   className={cn(
-                    "min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-[#10263a]",
+                    "h-full min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-[#10263a]",
                     isBottleneck && "bg-amber-300/[0.06]"
                   )}
                   onClick={() => onNavigate?.("test-tracker", { station: station.id })}
@@ -513,7 +498,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </section>
 
-        <section className="maintenance-panel overflow-hidden">
+        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-4 py-3">
             <div>
               <h2 className="text-base font-semibold text-[#f3f8fc]">管理層待辦</h2>
@@ -521,7 +506,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </div>
             <Button variant="ghost" size="sm" onClick={() => onNavigate?.("test-tracker")}>查看全部</Button>
           </div>
-          <div className="max-h-64 divide-y divide-[#2a526f]/45 overflow-y-auto">
+          <div className="max-h-64 min-h-0 flex-1 divide-y divide-[#2a526f]/45 overflow-y-auto">
             {attentionSystems.slice(0, 5).map((system) => (
               <button
                 key={system.id}
