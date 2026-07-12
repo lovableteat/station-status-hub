@@ -174,11 +174,12 @@ export function TestProgressTable({
                 return (
                   <div
                     key={system.id}
+                    data-machine-row={system.id}
                     className={cn(
-                      "group grid h-[52px] min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
+                      "group grid items-center gap-2 px-3 py-2 text-[13px] transition-colors hover:bg-[#102b48]",
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
-                    style={{ gridTemplateColumns: gridColumns }}
+                    style={{ gridTemplateColumns: gridColumns, minHeight: 64 }}
                   >
                     <button
                       type="button"
