@@ -16,13 +16,11 @@ export function SegmentedProgress({
   const safeValue = Math.min(100, Math.max(0, value));
   const filledSegments = safeValue > 0 ? Math.max(1, Math.round((safeValue / 100) * segments)) : 0;
   const filledClass =
-    safeValue >= 100
+    safeValue >= 80
       ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.72)]"
-      : safeValue >= 80
-        ? "bg-cyan-300 shadow-[0_0_7px_rgba(103,232,249,0.68)]"
-        : safeValue >= 35
-          ? "bg-[#438dff] shadow-[0_0_6px_rgba(67,141,255,0.72)]"
-          : "bg-amber-300 shadow-[0_0_6px_rgba(252,211,77,0.62)]";
+      : safeValue >= 34
+        ? "bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.68)]"
+        : "bg-red-400 shadow-[0_0_7px_rgba(248,113,113,0.72)]";
 
   return (
     <div
