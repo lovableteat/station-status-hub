@@ -175,7 +175,7 @@ export function TestProgressTable({
                   <div
                     key={system.id}
                     className={cn(
-                      "group grid h-11 min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
+                      "group grid h-[52px] min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
                     style={{ gridTemplateColumns: gridColumns }}
@@ -183,7 +183,7 @@ export function TestProgressTable({
                     <button
                       type="button"
                       className={cn(
-                        "sticky left-0 z-10 min-w-0 py-1.5 text-left group-hover:bg-[#102b48]",
+                        "sticky left-0 z-10 min-w-0 py-2 text-left group-hover:bg-[#102b48]",
                         status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                       )}
                       onClick={() => onSelectSystem(system.id)}
