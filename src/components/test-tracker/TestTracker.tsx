@@ -151,6 +151,7 @@ export function TestTracker() {
     isLoading,
     loadData,
     progress,
+    refreshProgress,
     stations,
     systems,
     updateProgress,
@@ -629,7 +630,9 @@ export function TestTracker() {
         items={displayItems}
         progress={progress}
         updateProgress={updateProgress}
-        onUpdated={loadData}
+        onUpdated={() => {
+          if (selectedSystemId) void refreshProgress(selectedSystemId);
+        }}
       />
 
       <PDFExportDialog
