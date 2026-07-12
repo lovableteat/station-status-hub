@@ -65,6 +65,12 @@ type FlowView = "overview" | "editor";
 type StationAction = "add" | "remove" | null;
 
 const REMOVED_STATIONS_VERSION_LABEL = "系統封存站點";
+const FLOW_CONTENT_TONES = [
+  "border-cyan-300/45 bg-cyan-300/[0.10]",
+  "border-blue-300/45 bg-blue-300/[0.10]",
+  "border-amber-300/45 bg-amber-300/[0.10]",
+  "border-emerald-300/45 bg-emerald-300/[0.10]",
+] as const;
 
 interface FlowSnapshot {
   contents: StationContent[];
@@ -847,29 +853,56 @@ export function FlowInfo() {
             ]}
           />
 
-          <div className="grid min-h-[410px] gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
-            <section className="maintenance-panel overflow-hidden">
-              <div className="border-b border-[#2a526f]/70 px-4 py-3">
-                <h2 className="text-base font-semibold text-[#f3f8fc]">站點路徑</h2>
-                <p className="mt-0.5 text-xs text-[#a9c0d1]">依實際執行順序排列。</p>
+          <div className="grid min-h-[410px] gap-3 xl:grid-cols-[290px_minmax(0,1fr)]">
+            <section className="overflow-hidden rounded-xl border border-[#2f6f92] bg-[#071a2b]">
+              <div className="border-b border-[#397b9d]/70 bg-[linear-gradient(135deg,#16405f_0%,#0d2b43_62%,#091d30_100%)] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100">
+                    <Route className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-white">站點路徑</h2>
+                    <p className="mt-0.5 text-xs text-[#b9d8e8]">選擇站點查看測項與流程內容。</p>
+                  </div>
+                </div>
               </div>
-              <div className="divide-y divide-[#2a526f]/50">
+              <div className="divide-y divide-[#28506b]/70 bg-[#081a2b]">
                 {stations.map((station, index) => {
                   const count = items.filter((item) => item.station_id === station.id).length;
+                  const isSelected = selectedStationId === station.id;
                   return (
                     <button
                       key={station.id}
                       type="button"
                       onClick={() => setSelectedStationId(station.id)}
+                      aria-current={isSelected ? "step" : undefined}
                       className={cn(
-                        "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#10263a]",
-                        selectedStationId === station.id && "bg-[#10263a]"
+                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200",
+                        isSelected
+                          ? "bg-[#195071] text-white"
+                          : "bg-[#091e31] text-[#d9e7f0] hover:bg-[#102d46]"
                       )}
                     >
-                      <span className="font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#4c8dff] text-xs font-semibold text-[#06111f]">{index + 1}</span>
+                      <span
+                        className={cn(
+                          "font-data flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
+                          isSelected
+                            ? "bg-[#69dcff] text-[#04121e]"
+                            : "bg-[#173a58] text-[#a9dfff]"
+                        )}
+                      >
+                        {index + 1}
+                      </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-[#f3f8fc]">{station.station_name}</span>
-                        <span className="mt-0.5 block text-xs text-[#a9c0d1]">{count} 測項 · {(station.estimated_hours ?? 0).toFixed(1)}h</span>
+                        <span className="flex items-center gap-2">
+                          <span className="block min-w-0 flex-1 truncate text-sm font-semibold">{station.station_name}</span>
+                          {isSelected && (
+                            <span className="shrink-0 rounded-md bg-cyan-100/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-50">
+                              查看中
+                            </span>
+                          )}
+                        </span>
+                        <span className={cn("mt-0.5 block text-xs", isSelected ? "text-[#d2edf8]" : "text-[#91b2c7]")}>{count} 測項 · {(station.estimated_hours ?? 0).toFixed(1)}h</span>
                       </span>
                     </button>
                   );
@@ -877,36 +910,56 @@ export function FlowInfo() {
               </div>
             </section>
 
-            <section className="maintenance-panel overflow-hidden">
+            <section className="overflow-hidden rounded-xl border border-[#316f8f] bg-[#081827]">
               {selectedStation ? (
                 <div className="h-full">
-                  <div className="flex items-start justify-between border-b border-[#2a526f]/70 px-4 py-3">
+                  <div className="flex items-start justify-between border-b border-[#397b9d]/70 bg-[linear-gradient(100deg,#16415f_0%,#102b42_52%,#0a1e31_100%)] px-5 py-4">
                     <div>
-                      <h2 className="text-lg font-semibold text-[#f3f8fc]">{selectedStation.station_name}</h2>
-                      <p className="mt-1 text-sm text-[#a9c0d1]">{selectedStation.description || "未填寫站點說明"}</p>
+                      <div className="mb-1 flex items-center gap-2 text-xs font-medium text-cyan-100">
+                        <Route className="h-3.5 w-3.5" />目前查看站點
+                      </div>
+                      <h2 className="text-xl font-semibold text-white">{selectedStation.station_name}</h2>
+                      <p className="mt-1 text-sm text-[#c0d9e7]">{selectedStation.description || "未填寫站點說明"}</p>
                     </div>
-                    <Badge variant="outline" className="rounded-md">{stationItems.length} 測項</Badge>
+                    <Badge variant="outline" className="rounded-md border-cyan-200/45 bg-cyan-200/15 text-cyan-50">{stationItems.length} 測項</Badge>
                   </div>
-                  <div className="grid gap-3 p-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]">
-                    <div className="space-y-2">
+                  <div className="grid min-h-[330px] xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)]">
+                    <div className="border-b border-[#326785]/70 bg-[#0b2438] p-4 xl:border-b-0 xl:border-r">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-blue-50">
+                          <ListChecks className="h-4 w-4 text-[#78b8ff]" />測試項目
+                        </div>
+                        <span className="font-data text-xs text-[#9fc7e0]">{stationItems.length} 項</span>
+                      </div>
+                      <div className="space-y-2">
                       {stationItems.map((item) => (
-                        <div key={item.id} className="rounded-lg border border-[#2a526f] bg-[#10263a] px-3 py-2.5">
+                        <div key={item.id} className="rounded-lg border border-[#3f7da4] bg-[#12344d] px-3 py-2.5">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="truncate text-sm font-medium text-[#f3f8fc]">{item.item_name}</span>
-                            <span className="font-data shrink-0 text-xs text-cyan-100">{item.estimated_minutes ?? 0}m</span>
+                            <span className="truncate text-sm font-semibold text-white">{item.item_name}</span>
+                            <span className="font-data shrink-0 rounded-md bg-cyan-200/15 px-1.5 py-0.5 text-xs text-cyan-50">{item.estimated_minutes ?? 0}m</span>
                           </div>
-                          {item.description && <p className="mt-1 line-clamp-1 text-xs text-[#a9c0d1]">{item.description}</p>}
+                          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#b9d4e5]">{item.description}</p>}
                         </div>
                       ))}
+                      {!stationItems.length && <div className="py-12 text-center text-sm text-[#9fc0d4]">此站點尚未建立測試項目。</div>}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {stationContents.map((content) => (
-                        <div key={content.id} className="rounded-lg border border-[#2a526f] bg-[#071522] px-3 py-2.5">
-                          <div className="text-sm font-semibold text-[#f3f8fc]">{content.title}</div>
-                          <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#a9c0d1]">{stripHtml(content.content) || "尚無內容"}</p>
+                    <div className="bg-[#101d29] p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-amber-50">
+                          <ClipboardCheck className="h-4 w-4 text-amber-200" />流程文件
+                        </div>
+                        <span className="font-data text-xs text-[#cbbd9e]">{stationContents.length} 區</span>
+                      </div>
+                      <div className="space-y-2">
+                      {stationContents.map((content, index) => (
+                        <div key={content.id} className={cn("rounded-lg border px-3 py-2.5", FLOW_CONTENT_TONES[index % FLOW_CONTENT_TONES.length])}>
+                          <div className="text-sm font-semibold text-white">{content.title}</div>
+                          <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#d2e0e8]">{stripHtml(content.content) || "尚無內容"}</p>
                         </div>
                       ))}
-                      {!stationContents.length && <div className="py-12 text-center text-sm text-[#a9c0d1]">尚未建立流程內容。</div>}
+                      {!stationContents.length && <div className="py-12 text-center text-sm text-[#aebfca]">尚未建立流程內容。</div>}
+                      </div>
                     </div>
                   </div>
                 </div>

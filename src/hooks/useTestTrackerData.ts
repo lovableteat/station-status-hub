@@ -44,6 +44,7 @@ export function useTestTrackerData() {
     progress, 
     isLoading,
     refetch: loadData,
+    refreshProgress,
     updateProgress
   } = useUnifiedData();
 
@@ -54,6 +55,7 @@ export function useTestTrackerData() {
     progress,
     isLoading,
     loadData: (newSystemId?: string) => loadData(newSystemId),
+    refreshProgress,
     updateProgress
   };
 }
