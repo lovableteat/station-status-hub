@@ -44,6 +44,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,6 +62,9 @@ type TestStation = Tables<"test_flow_stations">;
 type TestItem = Tables<"test_flow_items">;
 type StationContent = Tables<"station_contents">;
 type FlowView = "overview" | "editor";
+type StationAction = "add" | "remove" | null;
+
+const REMOVED_STATIONS_VERSION_LABEL = "系統封存站點";
 
 interface FlowSnapshot {
   contents: StationContent[];
@@ -115,6 +123,10 @@ export function FlowInfo() {
   const [draggedStationId, setDraggedStationId] = useState<string | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [isPreparingFlow, setIsPreparingFlow] = useState(false);
+  const [stationAction, setStationAction] = useState<StationAction>(null);
+  const [isWideEditor, setIsWideEditor] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1280px)").matches
+  );
 
   const editingVersionId = activeVersion?.id ?? null;
   const displayedVersionId = activeVersion?.id ?? null;
@@ -218,6 +230,14 @@ export function FlowInfo() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1280px)");
+    const updateLayoutDirection = (event: MediaQueryListEvent) => setIsWideEditor(event.matches);
+    setIsWideEditor(mediaQuery.matches);
+    mediaQuery.addEventListener("change", updateLayoutDirection);
+    return () => mediaQuery.removeEventListener("change", updateLayoutDirection);
+  }, []);
 
   const selectedStation = stations.find((station) => station.id === selectedStationId) ?? null;
   const stationItems = useMemo(
@@ -377,24 +397,41 @@ export function FlowInfo() {
   }, [activeProject?.active_flow_version_id, activeProjectId, activeVersion, ensureEditableVersion]);
 
   const addStation = async () => {
-    const versionId = await ensureEditableVersion();
-    if (!versionId || !activeProjectId) return;
-    const nextOrder = Math.max(-1, ...stations.map((station) => station.station_order)) + 1;
-    const { data, error } = await supabase
-      .from("test_flow_stations")
-      .insert({
-        description: "",
-        estimated_hours: 0,
-        flow_version_id: versionId,
-        project_id: activeProjectId,
-        station_name: `新站點 ${nextOrder + 1}`,
-        station_order: nextOrder,
-      })
-      .select("*")
-      .single();
-    if (error) return toast({ title: "新增站點失敗", description: error.message, variant: "destructive" });
-    await loadData();
-    setSelectedStationId(data.id);
+    if (stationAction) return;
+    setStationAction("add");
+
+    try {
+      const versionId = await ensureEditableVersion();
+      if (!versionId || !activeProjectId) return;
+      const nextOrder = Math.max(-1, ...stations.map((station) => station.station_order)) + 1;
+      const { data, error } = await supabase
+        .from("test_flow_stations")
+        .insert({
+          description: "",
+          estimated_hours: 0,
+          flow_version_id: versionId,
+          project_id: activeProjectId,
+          station_name: `新站點 ${nextOrder + 1}`,
+          station_order: nextOrder,
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+
+      setStations((current) => [...current, data]);
+      setSelectedStationId(data.id);
+      setSelectedItemId(null);
+      toast({ title: "站點已新增", description: "可立即在右側修改名稱與預估工時。" });
+      await loadData();
+    } catch (error) {
+      toast({
+        title: "新增站點失敗",
+        description: error instanceof Error ? error.message : "請稍後再試。",
+        variant: "destructive",
+      });
+    } finally {
+      setStationAction(null);
+    }
   };
 
   const saveStation = async () => {
@@ -414,13 +451,136 @@ export function FlowInfo() {
     await loadData();
   };
 
-  const deleteStation = async (station: TestStation) => {
-    if (!canEdit || !activeProjectId || !editingVersionId) return;
-    await supabase.from("station_contents").delete().eq("station_id", station.id).eq("flow_version_id", editingVersionId);
-    await supabase.from("test_flow_items").delete().eq("station_id", station.id).eq("flow_version_id", editingVersionId);
-    const { error } = await supabase.from("test_flow_stations").delete().eq("id", station.id).eq("project_id", activeProjectId);
-    if (error) return toast({ title: "站點刪除失敗", description: error.message, variant: "destructive" });
-    await loadData();
+  const getRemovedStationsVersion = async () => {
+    if (!activeProjectId) return null;
+
+    const { data: existingVersion, error: existingError } = await supabase
+      .from("test_flow_versions")
+      .select("*")
+      .eq("project_id", activeProjectId)
+      .eq("status", "retired")
+      .eq("label", REMOVED_STATIONS_VERSION_LABEL)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existingVersion) return existingVersion;
+
+    const { data: latestVersion, error: latestError } = await supabase
+      .from("test_flow_versions")
+      .select("version_number")
+      .eq("project_id", activeProjectId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestError) throw latestError;
+
+    const { data: createdVersion, error: createError } = await supabase
+      .from("test_flow_versions")
+      .insert({
+        label: REMOVED_STATIONS_VERSION_LABEL,
+        notes: "Internal archive for stations removed from the active direct-edit flow.",
+        project_id: activeProjectId,
+        status: "retired",
+        version_number: (latestVersion?.version_number ?? 0) + 1,
+      })
+      .select("*")
+      .single();
+    if (createError) {
+      // Another operator may have created the shared archive at the same time.
+      const { data: concurrentVersion, error: concurrentError } = await supabase
+        .from("test_flow_versions")
+        .select("*")
+        .eq("project_id", activeProjectId)
+        .eq("status", "retired")
+        .eq("label", REMOVED_STATIONS_VERSION_LABEL)
+        .order("version_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (concurrentError || !concurrentVersion) throw createError;
+      return concurrentVersion;
+    }
+    return createdVersion;
+  };
+
+  const removeStation = async (station: TestStation) => {
+    if (stationAction) return;
+    setStationAction("remove");
+
+    try {
+      const versionId = await ensureEditableVersion();
+      if (!versionId || !activeProjectId) return;
+      const removedVersion = await getRemovedStationsVersion();
+      if (!removedVersion) throw new Error("無法準備站點封存空間。");
+
+      const { data: removedStations, error: removedStationsError } = await supabase
+        .from("test_flow_stations")
+        .select("station_order")
+        .eq("flow_version_id", removedVersion.id)
+        .order("station_order", { ascending: false })
+        .limit(1);
+      if (removedStationsError) throw removedStationsError;
+      const removedOrder = (removedStations?.[0]?.station_order ?? -1) + 1;
+
+      const itemResult = await supabase
+        .from("test_flow_items")
+        .update({ flow_version_id: removedVersion.id })
+        .eq("station_id", station.id)
+        .eq("flow_version_id", versionId);
+      if (itemResult.error) throw itemResult.error;
+
+      const contentResult = await supabase
+        .from("station_contents")
+        .update({ flow_version_id: removedVersion.id })
+        .eq("station_id", station.id)
+        .eq("flow_version_id", versionId);
+      if (contentResult.error) {
+        await supabase
+          .from("test_flow_items")
+          .update({ flow_version_id: versionId })
+          .eq("station_id", station.id)
+          .eq("flow_version_id", removedVersion.id);
+        throw contentResult.error;
+      }
+
+      const stationResult = await supabase
+        .from("test_flow_stations")
+        .update({ flow_version_id: removedVersion.id, station_order: removedOrder })
+        .eq("id", station.id)
+        .eq("project_id", activeProjectId)
+        .eq("flow_version_id", versionId);
+      if (stationResult.error) {
+        await Promise.all([
+          supabase
+            .from("test_flow_items")
+            .update({ flow_version_id: versionId })
+            .eq("station_id", station.id)
+            .eq("flow_version_id", removedVersion.id),
+          supabase
+            .from("station_contents")
+            .update({ flow_version_id: versionId })
+            .eq("station_id", station.id)
+            .eq("flow_version_id", removedVersion.id),
+        ]);
+        throw stationResult.error;
+      }
+
+      setSelectedStationId(null);
+      setSelectedItemId(null);
+      toast({
+        title: `${station.station_name} 已移出目前流程`,
+        description: "既有機台進度與計時紀錄仍完整保留。",
+      });
+      await Promise.all([loadData(), refreshVersions()]);
+    } catch (error) {
+      toast({
+        title: "移除站點失敗",
+        description: error instanceof Error ? error.message : "請稍後再試。",
+        variant: "destructive",
+      });
+    } finally {
+      setStationAction(null);
+    }
   };
 
   const duplicateStation = async (station: TestStation) => {
@@ -668,8 +828,9 @@ export function FlowInfo() {
               <FileSliders className="mr-2 h-4 w-4" />直接編輯流程
             </Button>
           ) : (
-            <span className="flex h-8 items-center text-xs text-[#9eb8ca]">
-              所有修改會立即套用到目前流程
+            <span className="flex h-8 items-center gap-1.5 text-xs text-[#9eb8ca]">
+              <GripVertical className="h-3.5 w-3.5 text-cyan-200" />
+              拖曳分隔線調整欄寬，系統會記住你的配置
             </span>
           )}
         </div>
@@ -755,7 +916,7 @@ export function FlowInfo() {
                   <div><div className="text-base font-semibold text-[#f3f8fc]">尚未建立測試站點</div><p className="mt-1 text-sm text-[#a9c0d1]">切換到流程編輯，建立第一站後即可加入測項。</p></div>
                   <Button
                     size="sm"
-                    disabled={isPreparingFlow}
+                    disabled={isPreparingFlow || stationAction !== null}
                     onClick={() => {
                       setFlowView("editor");
                       void addStation();
@@ -773,17 +934,50 @@ export function FlowInfo() {
         <div className="maintenance-panel flex min-h-[360px] flex-col items-center justify-center gap-4 px-6 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100"><Route className="h-6 w-6" /></div>
           <div><h2 className="text-lg font-semibold text-[#f3f8fc]">建立第一個測試站點</h2><p className="mt-1 max-w-md text-sm text-[#a9c0d1]">系統會自動準備流程資料並建立站點，不需要建立版本或草稿。</p></div>
-          <Button onClick={addStation} disabled={isPreparingFlow} className="min-w-36">
-            {isPreparingFlow ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}
-            {isPreparingFlow ? "準備流程中" : "建立第一個站點"}
+          <Button onClick={() => void addStation()} disabled={isPreparingFlow || stationAction !== null} className="min-w-36">
+            {isPreparingFlow || stationAction === "add" ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}
+            {isPreparingFlow || stationAction === "add" ? "準備流程中" : "建立第一個站點"}
           </Button>
         </div>
       ) : (
-        <div className="grid h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] xl:grid-cols-[240px_300px_minmax(0,1fr)]">
-          <section className="flex min-h-0 flex-col border-b border-[#2a526f] xl:border-b-0 xl:border-r">
-            <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a526f]/70 px-3">
-              <h2 className="text-sm font-semibold text-[#f3f8fc]">站點</h2>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={addStation} disabled={isPreparingFlow}>{isPreparingFlow ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}<span className="sr-only">新增站點</span></Button>
+        <ResizablePanelGroup
+          autoSaveId={`maintenance-flow-editor:${activeProjectId ?? "default"}:${isWideEditor ? "columns" : "rows"}`}
+          className="h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522]"
+          direction={isWideEditor ? "horizontal" : "vertical"}
+          data-testid="flow-editor-panels"
+        >
+          <ResizablePanel
+            defaultSize={isWideEditor ? 15 : 27}
+            minSize={isWideEditor ? 12 : 18}
+            maxSize={isWideEditor ? 30 : 42}
+            order={1}
+          >
+          <section className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-[#2a526f]/70 px-3 py-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-[#f3f8fc]">站點</h2>
+                  <Badge variant="outline" className="h-5 rounded-md border-[#2a526f] px-1.5 font-data text-[10px] text-cyan-100">
+                    {stations.length}
+                  </Badge>
+                </div>
+                <p className="mt-0.5 truncate text-[11px] text-[#8facbf]">拖曳卡片排序</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 border-cyan-300/35 bg-cyan-300/10 px-2.5 text-cyan-50 hover:bg-cyan-300/20"
+                onClick={() => void addStation()}
+                disabled={isPreparingFlow || stationAction !== null}
+                data-testid="add-station-button"
+              >
+                {stationAction === "add" || isPreparingFlow ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                新增
+              </Button>
             </div>
             <ScrollArea className="flex-1 p-2">
               <div className="space-y-1 pr-2">
@@ -822,13 +1016,40 @@ export function FlowInfo() {
               </div>
             </ScrollArea>
           </section>
+          </ResizablePanel>
 
-          <section className="flex min-h-0 flex-col border-b border-[#2a526f] xl:border-b-0 xl:border-r">
-            <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a526f]/70 px-3">
+          <ResizableHandle
+            withHandle
+            aria-label={isWideEditor ? "調整站點欄寬" : "調整站點區高度"}
+            className="w-2 shrink-0 bg-[#10263a] transition-colors duration-200 hover:bg-cyan-300/35 focus-visible:bg-cyan-300/35 data-[panel-group-direction=vertical]:h-2 data-[panel-group-direction=vertical]:w-full"
+          />
+
+          <ResizablePanel
+            defaultSize={isWideEditor ? 19 : 28}
+            minSize={isWideEditor ? 14 : 18}
+            maxSize={isWideEditor ? 36 : 42}
+            order={2}
+          >
+          <section className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-[#2a526f]/70 px-3 py-2">
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">測試項目</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">測試項目</h2>
+                  <Badge variant="outline" className="h-5 rounded-md border-[#2a526f] px-1.5 font-data text-[10px] text-blue-100">
+                    {stationItems.length}
+                  </Badge>
+                </div>
+                <p className="mt-0.5 truncate text-[11px] text-[#8facbf]">{selectedStation?.station_name ?? "請先選擇站點"}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!selectedStation} onClick={addItem}><Plus className="h-4 w-4" /><span className="sr-only">新增測項</span></Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 border-blue-300/35 bg-blue-300/10 px-2.5 text-blue-50 hover:bg-blue-300/20"
+                disabled={!selectedStation}
+                onClick={() => void addItem()}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />新增
+              </Button>
             </div>
             <ScrollArea className="flex-1 p-2">
               <div className="space-y-1 pr-2">
@@ -868,20 +1089,70 @@ export function FlowInfo() {
               </div>
             </ScrollArea>
           </section>
+          </ResizablePanel>
 
-          <section className="min-h-0 overflow-y-auto">
+          <ResizableHandle
+            withHandle
+            aria-label={isWideEditor ? "調整測試項目欄寬" : "調整測試項目區高度"}
+            className="w-2 shrink-0 bg-[#10263a] transition-colors duration-200 hover:bg-cyan-300/35 focus-visible:bg-cyan-300/35 data-[panel-group-direction=vertical]:h-2 data-[panel-group-direction=vertical]:w-full"
+          />
+
+          <ResizablePanel
+            defaultSize={isWideEditor ? 66 : 45}
+            minSize={isWideEditor ? 34 : 28}
+            order={3}
+          >
+          <section className="h-full min-h-0 overflow-y-auto">
             {selectedStation ? (
               <div className="space-y-5 p-4">
                 <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-[#f3f8fc]">站點設定</h2>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateStation(selectedStation)}><Copy className="h-4 w-4" /><span className="sr-only">複製站點</span></Button>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-sm font-semibold text-[#f3f8fc]">站點設定</h2>
+                      <p className="mt-0.5 text-[11px] text-[#8facbf]">修改名稱、工時，或將站點移出目前流程。</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 border-[#2a526f] px-2.5"
+                        onClick={() => void duplicateStation(selectedStation)}
+                      >
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />複製站點
+                      </Button>
                       <AlertDialog>
-                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-rose-300/35 bg-rose-300/10 px-2.5 text-rose-100 hover:bg-rose-300/20 hover:text-rose-50"
+                            disabled={stationAction !== null}
+                            data-testid="remove-station-button"
+                          >
+                            {stationAction === "remove" ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                            ) : (
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            移除站點
+                          </Button>
+                        </AlertDialogTrigger>
                         <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>刪除 {selectedStation.station_name}？</AlertDialogTitle><AlertDialogDescription>此站點、測項與流程內容會立即刪除。</AlertDialogDescription></AlertDialogHeader>
-                          <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => deleteStation(selectedStation)}>確認刪除</AlertDialogAction></AlertDialogFooter>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>從目前流程移除「{selectedStation.station_name}」？</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              站點與其中 {stationItems.length} 個測試項目將不再出現在目前流程；既有機台的測試進度與計時紀錄會保留，不會刪除歷史資料。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-rose-500 text-white hover:bg-rose-400"
+                              onClick={() => void removeStation(selectedStation)}
+                            >
+                              確認移出流程
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
@@ -943,11 +1214,12 @@ export function FlowInfo() {
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                 <div className="text-base font-semibold text-[#f3f8fc]">目前沒有站點</div>
                 <p className="text-sm text-[#a9c0d1]">新增站點後，可在右側設定名稱、預估工時與測試項目。</p>
-                <Button size="sm" onClick={addStation} disabled={isPreparingFlow}>{isPreparingFlow ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}新增站點</Button>
+                <Button size="sm" onClick={() => void addStation()} disabled={isPreparingFlow || stationAction !== null}>{isPreparingFlow || stationAction === "add" ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="mr-2 h-4 w-4" />}新增站點</Button>
               </div>
             )}
           </section>
-        </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       )}
 
       <Dialog open={contentDialogOpen} onOpenChange={setContentDialogOpen}>
