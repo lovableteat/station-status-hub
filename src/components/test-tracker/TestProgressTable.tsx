@@ -175,7 +175,7 @@ export function TestProgressTable({
                   <div
                     key={system.id}
                     className={cn(
-                      "group grid h-10 min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
+                      "group grid h-11 min-h-0 items-center gap-2 px-3 text-[13px] transition-colors hover:bg-[#102b48]",
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
                     style={{ gridTemplateColumns: gridColumns }}
@@ -183,7 +183,7 @@ export function TestProgressTable({
                     <button
                       type="button"
                       className={cn(
-                        "sticky left-0 z-10 min-w-0 py-1 text-left group-hover:bg-[#102b48]",
+                        "sticky left-0 z-10 min-w-0 py-1.5 text-left group-hover:bg-[#102b48]",
                         status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                       )}
                       onClick={() => onSelectSystem(system.id)}
@@ -204,7 +204,7 @@ export function TestProgressTable({
                         <button
                           key={station.id}
                           type="button"
-                          className="rounded-md px-1.5 py-0.5 text-left hover:bg-[#061426] focus-visible:outline-none"
+                          className="rounded-md px-1.5 py-1 text-left hover:bg-[#061426] focus-visible:outline-none"
                           onClick={() => onSelectSystem(system.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
