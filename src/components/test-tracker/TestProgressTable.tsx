@@ -147,8 +147,8 @@ export function TestProgressTable({
         })}
       </div>
 
-      <div className="hidden overflow-hidden rounded-xl border border-[#1d3d5c] bg-[#08182a] lg:block">
-        <div className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto">
+      <div className="hidden overflow-hidden rounded-xl bg-[#315b7b] p-px lg:block">
+        <div className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto rounded-[11px] bg-[#08182a] [scrollbar-gutter:stable]">
           <div style={{ minWidth }}>
             <div
               className="sticky top-0 z-20 grid h-9 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
