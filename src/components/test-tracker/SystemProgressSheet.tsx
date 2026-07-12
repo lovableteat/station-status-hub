@@ -176,7 +176,11 @@ export function SystemProgressSheet({
       )
     : 0;
 
-  const saveItem = async (item: TrackerItem, override?: ItemDraft) => {
+  const saveItem = async (
+    item: TrackerItem,
+    override?: ItemDraft,
+    shouldRefresh = true
+  ) => {
     if (!system) return false;
     const draft = override ?? drafts[item.id];
     if (!draft) return false;
@@ -208,7 +212,7 @@ export function SystemProgressSheet({
     setSavingItemId(item.id);
     const success = await updateProgress(system.id, item.station_id, item.id, updates);
     setSavingItemId(null);
-    if (success) onUpdated();
+    if (success && shouldRefresh) onUpdated();
     return success;
   };
 
@@ -268,14 +272,19 @@ export function SystemProgressSheet({
   const completeStation = async () => {
     const results = await Promise.all(
       stationItems.map((item) =>
-        saveItem(item, {
-          notes: drafts[item.id]?.notes ?? "",
-          progress_percent: 100,
-          status: "Done",
-        })
+        saveItem(
+          item,
+          {
+            notes: drafts[item.id]?.notes ?? "",
+            progress_percent: 100,
+            status: "Done",
+          },
+          false
+        )
       )
     );
     if (results.every(Boolean)) {
+      onUpdated();
       toast({ title: "站點已完成", description: `${selectedStation?.station_name} 的測項已全部完成。` });
     }
   };
