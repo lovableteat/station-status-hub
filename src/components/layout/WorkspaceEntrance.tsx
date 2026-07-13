@@ -83,8 +83,11 @@ export function WorkspaceEntrance({
             : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
 
   return (
-    <section className="relative w-full px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1600px]">
+    <section
+      className="relative flex min-h-[calc(100dvh-92px)] w-full flex-col px-4 py-6 sm:px-6 lg:px-8"
+      data-testid="workspace-entrance"
+    >
+      <div className="flex w-full flex-1 flex-col">
         <div className="mb-5 flex flex-col gap-3 rounded-[1.6rem] border border-primary/12 bg-[linear-gradient(180deg,rgba(15,24,42,0.92),rgba(9,15,29,0.96))] px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary/75">
@@ -99,7 +102,14 @@ export function WorkspaceEntrance({
           </div>
         </div>
 
-        <div className={cn("grid gap-5", gridClass)}>
+        <div
+          className={cn(
+            "grid flex-1 gap-5",
+            isFiveItemLayout && "xl:auto-rows-fr",
+            gridClass,
+          )}
+          data-testid="workspace-entrance-grid"
+        >
           {items.map((item) => {
             const Icon = item.icon;
             const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
@@ -115,7 +125,7 @@ export function WorkspaceEntrance({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "interactive-lift group relative flex min-h-[238px] flex-col justify-between overflow-hidden rounded-[1.8rem] border border-white/10 p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-30px_rgba(15,23,42,0.9)]",
+                  "interactive-lift group relative flex h-full min-h-[238px] flex-col justify-between overflow-hidden rounded-[1.8rem] border border-white/10 p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-30px_rgba(15,23,42,0.9)]",
                   tone.panel,
                   layoutClass
                 )}
