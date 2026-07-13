@@ -72,6 +72,13 @@ function formatShortDate(date: Date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+function buildTrendPoints(values: number[], maxValue: number) {
+  return values.map((value, index) => ({
+    x: values.length <= 1 ? 50 : (index / (values.length - 1)) * 100,
+    y: 100 - (value / maxValue) * 100,
+  }));
+}
+
 function ExecutiveKpi({
   detail,
   icon: Icon,
@@ -97,14 +104,6 @@ function ExecutiveKpi({
       </div>
     </div>
   );
-}
-
-function buildChartPoints(values: number[], width: number, height: number) {
-  const maxValue = Math.max(1, ...values);
-  return values.map((value, index) => ({
-    x: values.length <= 1 ? 0 : (index / (values.length - 1)) * width,
-    y: height - (value / maxValue) * (height - 18) - 8,
-  }));
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
@@ -194,16 +193,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     });
     return days;
   }, [progress]);
-  const chartPoints = buildChartPoints(
-    dailyCompletion.map((day) => day.count),
-    620,
-    150
-  );
-  const pointString = chartPoints.map((point) => `${point.x},${point.y}`).join(" ");
-  const areaPath = chartPoints.length
-    ? `M 0 150 L ${chartPoints.map((point) => `${point.x} ${point.y}`).join(" L ")} L 620 150 Z`
-    : "";
   const sevenDayOutput = dailyCompletion.reduce((sum, day) => sum + day.count, 0);
+  const dailyAverage = sevenDayOutput / dailyCompletion.length;
+  const peakDay = dailyCompletion.reduce(
+    (peak, day) => (day.count > peak.count ? day : peak),
+    dailyCompletion[0]
+  );
+  const dailyPeak = Math.max(...dailyCompletion.map((day) => day.count), 0);
+  const chartTickStep = Math.max(1, Math.ceil(dailyPeak / 4));
+  const chartYAxisMax = chartTickStep * 4;
+  const chartAxisTicks = Array.from(
+    { length: 5 },
+    (_, index) => chartYAxisMax - chartTickStep * index
+  );
+  const trendPoints = buildTrendPoints(
+    dailyCompletion.map((day) => day.count),
+    chartYAxisMax
+  );
+  const trendPointString = trendPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const trendAreaPath = trendPoints.length
+    ? `M 0 100 L ${trendPoints.map((point) => `${point.x} ${point.y}`).join(" L ")} L 100 100 Z`
+    : "";
+  const dailyAverageY = 100 - (dailyAverage / chartYAxisMax) * 100;
 
   const stationRows = useMemo(() => {
     const sortedStations = [...stations].sort(
@@ -263,19 +274,34 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         : 0;
       const hours =
         stationItems.reduce((sum, item) => sum + (item.estimated_minutes ?? 30), 0) / 60;
+      const queue = queueByStation.get(station.id) ?? 0;
       return {
         averageProgress,
         hours,
         id: station.id,
         name: station.station_name,
-        queue: queueByStation.get(station.id) ?? 0,
+        queue,
+        workloadHours: queue * hours,
       };
     });
   }, [includedSystems, progress, stations, testItems]);
-  const bottleneckStation = [...stationRows].sort(
-    (left, right) => right.queue - left.queue || right.hours - left.hours
-  )[0];
+  const bottleneckStation = stationRows.some((station) => station.queue > 0)
+    ? [...stationRows].sort(
+        (left, right) =>
+          right.workloadHours - left.workloadHours ||
+          right.queue - left.queue ||
+          right.hours - left.hours
+      )[0]
+    : null;
   const stationQueueTotal = stationRows.reduce((sum, station) => sum + station.queue, 0);
+  const stationWorkloadTotal = stationRows.reduce(
+    (sum, station) => sum + station.workloadHours,
+    0
+  );
+  const stationWorkloadMax = Math.max(
+    ...stationRows.map((station) => station.workloadHours),
+    0
+  );
   const attentionSystems = useMemo(
     () =>
       includedSystems
@@ -408,59 +434,166 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </section>
 
-        <section className="maintenance-panel overflow-hidden p-5">
-          <div className="flex items-start justify-between gap-4">
+        <section className="maintenance-panel overflow-hidden p-5" data-testid="dashboard-output-trend">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#f3f8fc]">近七日產出趨勢</h2>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                <h2 className="text-base font-semibold text-[#f3f8fc]">近七日產出趨勢</h2>
+              </div>
               <p className="mt-1 text-xs text-[#9eb8ca]">每日有完成測項的不同機台數</p>
             </div>
-            <div className="text-right">
-              <div className="font-data text-2xl font-semibold text-cyan-100">{sevenDayOutput}</div>
-              <div className="text-[11px] text-[#8fb0c5]">七日產出</div>
+            <div className="flex divide-x divide-[#2a526f]/70 rounded-xl border border-[#2a526f]/70 bg-[#071522]/65">
+              <div className="min-w-[84px] px-3 py-2 text-right">
+                <div className="text-[10px] text-[#8fb0c5]">七日總產出</div>
+                <div className="font-data mt-0.5 text-lg font-semibold text-cyan-100">{sevenDayOutput}<small className="ml-1 text-[10px] font-normal text-[#9eb8ca]">台</small></div>
+              </div>
+              <div className="min-w-[84px] px-3 py-2 text-right">
+                <div className="text-[10px] text-[#8fb0c5]">每日平均</div>
+                <div className="font-data mt-0.5 text-lg font-semibold text-[#f3f8fc]">{dailyAverage.toFixed(1)}<small className="ml-1 text-[10px] font-normal text-[#9eb8ca]">台</small></div>
+              </div>
+              <div className="min-w-[92px] px-3 py-2 text-right">
+                <div className="text-[10px] text-[#8fb0c5]">單日高峰</div>
+                <div className="font-data mt-0.5 text-lg font-semibold text-[#f3f8fc]">{peakDay.count}<small className="ml-1 text-[10px] font-normal text-[#9eb8ca]">台 · {peakDay.label}</small></div>
+              </div>
             </div>
           </div>
-          <div className="mt-4 h-[165px] w-full">
-            <svg viewBox="0 0 620 165" preserveAspectRatio="none" className="h-full w-full" role="img" aria-label="近七日產出折線圖">
-              <defs>
-                <linearGradient id="dashboard-output-area" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#4c8dff" stopOpacity="0.36" />
-                  <stop offset="100%" stopColor="#4c8dff" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[30, 70, 110, 150].map((y) => (
-                <line key={y} x1="0" x2="620" y1={y} y2={y} stroke="#284b65" strokeWidth="1" />
-              ))}
-              <path d={areaPath} fill="url(#dashboard-output-area)" />
-              <polyline points={pointString} fill="none" stroke="#4c8dff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              {chartPoints.map((point, index) => (
-                <circle key={dailyCompletion[index].key} cx={point.x} cy={point.y} r="4" fill="#071522" stroke="#7dd3fc" strokeWidth="2" />
-              ))}
-            </svg>
-          </div>
-          <div className="grid grid-cols-7 gap-2 text-center text-[11px] text-[#8fb0c5]">
-            {dailyCompletion.map((day) => <span key={day.key}>{day.label}</span>)}
-          </div>
+          <figure
+            className="mt-3 w-full min-w-0 rounded-xl border border-[#234963]/65 bg-[#071522]/45 px-3 py-2.5"
+            aria-label={`近七日產出折線圖，總產出 ${sevenDayOutput} 台，每日平均 ${dailyAverage.toFixed(1)} 台`}
+          >
+            <figcaption className="sr-only">
+              近七日每日完成機台數：{dailyCompletion.map((day) => `${day.label} ${day.count} 台`).join("、")}
+            </figcaption>
+            <div className="grid h-[150px] grid-cols-[28px_minmax(0,1fr)] gap-2">
+              <div className="relative mb-2 mt-5" aria-hidden="true">
+                {chartAxisTicks.map((tick, index) => (
+                  <span
+                    key={tick}
+                    className="font-data absolute right-0 -translate-y-1/2 text-[10px] text-[#8fb0c5]"
+                    style={{ top: `${index * 25}%` }}
+                  >
+                    {tick}
+                  </span>
+                ))}
+              </div>
+              <div className="relative mb-2 mt-5 min-w-0">
+                <svg
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <linearGradient id="dashboard-output-area" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
+                      <stop offset="72%" stopColor="#38bdf8" stopOpacity="0.06" />
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  {chartAxisTicks.map((tick, index) => (
+                    <line
+                      key={tick}
+                      x1="0"
+                      x2="100"
+                      y1={index * 25}
+                      y2={index * 25}
+                      stroke="#284b65"
+                      strokeDasharray="3 6"
+                      strokeOpacity="0.72"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  <path d={trendAreaPath} fill="url(#dashboard-output-area)" />
+                  <polyline
+                    points={trendPointString}
+                    fill="none"
+                    stroke="#38bdf8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="3"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+
+                {dailyAverage > 0 && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 border-t border-dashed border-amber-300/70"
+                    style={{ top: `${dailyAverageY}%` }}
+                    aria-hidden="true"
+                  >
+                    <span className="font-data absolute right-1 -top-5 rounded bg-[#152437] px-1.5 py-0.5 text-[9px] text-amber-100">
+                      日均 {dailyAverage.toFixed(1)}
+                    </span>
+                  </div>
+                )}
+
+                {trendPoints.map((point, index) => {
+                  const day = dailyCompletion[index];
+                  return (
+                    <span
+                      key={day.key}
+                      className="group absolute z-10 -translate-x-1/2 -translate-y-1/2 outline-none"
+                      style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                      tabIndex={0}
+                      role="img"
+                      title={`${day.label} 完成 ${day.count} 台`}
+                      aria-label={`${day.label} 完成 ${day.count} 台`}
+                    >
+                      <span className="font-data absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-semibold text-[#e0f7ff]">
+                        {day.count}
+                      </span>
+                      <span className="block h-3 w-3 rounded-full border-2 border-cyan-200 bg-[#071522] ring-2 ring-cyan-400/15 transition-transform group-hover:scale-125 group-focus-visible:scale-125 group-focus-visible:ring-cyan-200" />
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-[28px_minmax(0,1fr)] gap-2" aria-hidden="true">
+              <span />
+              <div className="grid grid-cols-7 text-center text-[10px] text-[#8fb0c5]">
+                {dailyCompletion.map((day) => <span key={day.key}>{day.label}</span>)}
+              </div>
+            </div>
+          </figure>
         </section>
       </div>
 
       <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-4 py-3">
+        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden" data-testid="dashboard-station-capacity">
+          <div className="flex flex-col gap-3 border-b border-[#2a526f]/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#f3f8fc]">站點產能與瓶頸</h2>
-              <p className="mt-1 text-xs text-[#9eb8ca]">目前瓶頸：{bottleneckStation?.name || "尚無資料"}</p>
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                <h2 className="text-base font-semibold text-[#f3f8fc]">站點產能與瓶頸</h2>
+              </div>
+              <p className="mt-1 text-xs text-[#9eb8ca]">
+                依 WIP × 單站預估工時判定
+                {bottleneckStation ? `，目前瓶頸為 ${bottleneckStation.name}` : "，目前沒有排隊瓶頸"}
+              </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {bottleneckStation ? (
+                <Badge variant="outline" className="border-amber-300/40 bg-amber-300/10 text-amber-100">
+                  瓶頸 {bottleneckStation.queue} 台
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-emerald-300/35 bg-emerald-300/10 text-emerald-100">
+                  目前順暢
+                </Badge>
+              )}
               <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
-                WIP {stationQueueTotal} 台
+                待處理 {stationWorkloadTotal.toFixed(1)}h
               </Badge>
-              <Activity className="h-5 w-5 text-cyan-200" />
             </div>
           </div>
-          <div className="grid min-h-0 flex-1 divide-y divide-[#2a526f]/55 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+          <div className="grid min-h-0 flex-1 gap-2.5 p-3 md:grid-cols-2 2xl:grid-cols-4">
             {stationRows.map((station, index) => {
               const queueShare = stationQueueTotal
                 ? Math.round((station.queue / stationQueueTotal) * 100)
+                : 0;
+              const workloadShare = stationWorkloadMax
+                ? Math.round((station.workloadHours / stationWorkloadMax) * 100)
                 : 0;
               const isBottleneck = station.id === bottleneckStation?.id && station.queue > 0;
 
@@ -468,30 +601,70 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <button
                   key={station.id}
                   type="button"
+                  aria-label={`查看 ${station.name}，目前 ${station.queue} 台 WIP，預估待處理 ${station.workloadHours.toFixed(1)} 小時`}
                   className={cn(
-                    "h-full min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-[#10263a]",
-                    isBottleneck && "bg-amber-300/[0.06]"
+                    "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                    isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
                   )}
                   onClick={() => onNavigate?.("test-tracker", { station: station.id })}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-data flex h-7 w-7 items-center justify-center rounded-lg bg-[#10263a] text-xs text-cyan-100">{index + 1}</span>
-                    <div className="flex items-center gap-2">
-                      {isBottleneck && (
-                        <Badge variant="outline" className="h-6 border-amber-300/35 bg-amber-300/10 px-2 text-[10px] text-amber-100">
-                          瓶頸
-                        </Badge>
-                      )}
-                      <span className="font-data text-lg font-semibold text-[#f3f8fc]">{station.queue}<small className="ml-1 text-[10px] font-normal text-[#8fb0c5]">台</small></span>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className={cn(
+                        "font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] text-xs text-cyan-100",
+                        isBottleneck && "border-amber-300/35 bg-amber-300/10 text-amber-100"
+                      )}>{index + 1}</span>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
+                        <div className="mt-0.5 text-[10px] text-[#8fb0c5]">單站 {station.hours.toFixed(1)}h</div>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.queue}</div>
+                      <div className="text-[10px] text-[#8fb0c5]">台 WIP</div>
                     </div>
                   </div>
-                  <div className="mt-2.5 truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
-                  <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]">
-                    <span>單站預估 {station.hours.toFixed(1)}h</span>
-                    <span>WIP {queueShare}%</span>
+
+                  <div className="mt-3 border-t border-[#315d78]/55 pt-2.5">
+                    <div className="flex items-center justify-between text-[10px] text-[#9eb8ca]">
+                      <span>相對負載</span>
+                      <span className={cn("font-data text-cyan-100", isBottleneck && "text-amber-100")}>{workloadShare}%</span>
+                    </div>
+                    <div
+                      className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#06111f] ring-1 ring-inset ring-[#315d78]/65"
+                      role="progressbar"
+                      aria-label={`${station.name} 相對負載`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={workloadShare}
+                    >
+                      <div
+                        className={cn(
+                          "h-full rounded-full bg-cyan-400 transition-[width] duration-200",
+                          isBottleneck && "bg-amber-300"
+                        )}
+                        style={{ width: `${workloadShare}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-[#9eb8ca]"><span>整體完成</span><span className="font-data text-[#d9e8f2]">{station.averageProgress}%</span></div>
-                  <Progress value={station.averageProgress} className="mt-1.5 h-1.5 bg-[#193149] [&>div]:bg-[#39c6e8]" />
+
+                  <div className="mt-2.5 grid grid-cols-2 gap-3 text-[10px]">
+                    <div>
+                      <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />待處理工時</div>
+                      <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.workloadHours.toFixed(1)}h</div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />平均完成</div>
+                      <div className="font-data mt-0.5 text-xs font-semibold text-emerald-200">{station.averageProgress}%</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
+                    <span>WIP 占比 {queueShare}%</span>
+                    <span className={cn(isBottleneck ? "text-amber-100" : "text-cyan-100")}>
+                      {isBottleneck ? "優先疏通" : station.queue ? "持續監控" : "目前順暢"}
+                    </span>
+                  </div>
                 </button>
               );
             })}
