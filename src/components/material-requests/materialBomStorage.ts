@@ -84,8 +84,17 @@ interface BomPreferenceRow {
   updated_at: string;
 }
 
+interface BomWorkspaceCacheEntry {
+  cachedAt: string;
+  id: "latest";
+  result: BomWorkspaceLoadResult;
+}
+
 const DATABASE_NAME = "station-status-hub-material-boms";
 const STORE_NAME = "boms";
+const RENDER_CACHE_DATABASE_NAME = "station-status-hub-material-bom-render-cache";
+const RENDER_CACHE_STORE_NAME = "snapshots";
+const RENDER_CACHE_ENTRY_ID = "latest";
 const WORKSPACE_TABLE = "material_bom_workspaces";
 const RECORD_TABLE = "material_bom_records";
 const PREFERENCE_TABLE = "ui_table_preferences";
@@ -94,6 +103,7 @@ const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
+let renderCacheDatabasePromise: Promise<IDBDatabase | null> | null = null;
 
 // Collaborative BOM tables predate the generated Supabase schema types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,6 +139,100 @@ function getPreferenceRowKey(workspaceId: string) {
 
 function getPageTrackerRowKey(workspaceId: string) {
   return `${PAGE_TRACKER_KEY_PREFIX}${workspaceId}`;
+}
+
+function openRenderCacheDatabase() {
+  if (typeof window === "undefined" || !("indexedDB" in window)) {
+    return Promise.resolve<IDBDatabase | null>(null);
+  }
+  if (renderCacheDatabasePromise) return renderCacheDatabasePromise;
+
+  renderCacheDatabasePromise = new Promise<IDBDatabase | null>((resolve, reject) => {
+    const request = window.indexedDB.open(RENDER_CACHE_DATABASE_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(RENDER_CACHE_STORE_NAME)) {
+        database.createObjectStore(RENDER_CACHE_STORE_NAME, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  }).catch(() => null);
+
+  return renderCacheDatabasePromise;
+}
+
+async function runRenderCacheRequest<T>(
+  mode: IDBTransactionMode,
+  action: (store: IDBObjectStore) => IDBRequest<T>,
+) {
+  const database = await openRenderCacheDatabase();
+  if (!database) return null;
+
+  return new Promise<T | null>((resolve, reject) => {
+    const transaction = database.transaction(RENDER_CACHE_STORE_NAME, mode);
+    const request = action(transaction.objectStore(RENDER_CACHE_STORE_NAME));
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readRenderCacheEntry() {
+  try {
+    return await runRenderCacheRequest<BomWorkspaceCacheEntry>(
+      "readonly",
+      (store) => store.get(RENDER_CACHE_ENTRY_ID),
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function writeRenderCacheResult(result: BomWorkspaceLoadResult) {
+  try {
+    const entry: BomWorkspaceCacheEntry = {
+      cachedAt: new Date().toISOString(),
+      id: "latest",
+      result,
+    };
+    await runRenderCacheRequest<IDBValidKey>("readwrite", (store) => store.put(entry));
+  } catch {
+    // The cache is optional. Storage quota failures must never affect production data.
+  }
+}
+
+async function patchCachedWorkspace(workspace: BomWorkspace) {
+  const entry = await readRenderCacheEntry();
+  if (!entry) return;
+
+  const exists = entry.result.workspaces.some((candidate) => candidate.id === workspace.id);
+  const workspaces = exists
+    ? entry.result.workspaces.map((candidate) => candidate.id === workspace.id ? workspace : candidate)
+    : [workspace, ...entry.result.workspaces];
+  await writeRenderCacheResult({ ...entry.result, workspaces: sortWorkspaces(workspaces) });
+}
+
+async function patchCachedWorkspaceFields(
+  workspaceId: string,
+  update: (workspace: BomWorkspace) => BomWorkspace,
+) {
+  const entry = await readRenderCacheEntry();
+  if (!entry) return;
+  await writeRenderCacheResult({
+    ...entry.result,
+    workspaces: entry.result.workspaces.map((workspace) => (
+      workspace.id === workspaceId ? update(workspace) : workspace
+    )),
+  });
+}
+
+async function removeCachedWorkspace(workspaceId: string) {
+  const entry = await readRenderCacheEntry();
+  if (!entry) return;
+  await writeRenderCacheResult({
+    ...entry.result,
+    workspaces: entry.result.workspaces.filter((workspace) => workspace.id !== workspaceId),
+  });
 }
 
 function getTableColorThemeRowKey(workspaceId: string) {
@@ -666,7 +770,7 @@ async function loadRecoveryBomWorkspaces() {
 export async function loadBomWorkspacesDetailed(preferredWorkspaceId?: string): Promise<BomWorkspaceLoadResult> {
   try {
     const remoteWorkspaces = await loadRemoteBomWorkspaces(preferredWorkspaceId);
-    return {
+    const result: BomWorkspaceLoadResult = {
       mode: "remote",
       workspaces: await migrateLegacyBomWorkspaces(
         remoteWorkspaces,
@@ -674,6 +778,8 @@ export async function loadBomWorkspacesDetailed(preferredWorkspaceId?: string): 
         () => loadRemoteBomWorkspaces(preferredWorkspaceId),
       ),
     };
+    void writeRenderCacheResult(result);
+    return result;
   } catch (error) {
     if (!isMissingCollaborativeTables(error)) {
       throw error;
@@ -684,6 +790,11 @@ export async function loadBomWorkspacesDetailed(preferredWorkspaceId?: string): 
       workspaces: await loadRecoveryBomWorkspaces(),
     };
   }
+}
+
+export async function loadCachedBomWorkspacesDetailed() {
+  const entry = await readRenderCacheEntry();
+  return entry?.result ?? null;
 }
 
 export async function loadBomWorkspaces() {
@@ -730,6 +841,7 @@ export async function saveBomWorkspace(workspace: BomWorkspace) {
 
   await upsertWorkspaceRow(workspace);
   await removeLegacyBomWorkspace(workspace.id);
+  void patchCachedWorkspace(workspace);
 }
 
 export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: MaterialWorkbookRecord) {
@@ -769,6 +881,7 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
     if (!data) throw new BomRecordConflictError(record.id);
 
     await removeLegacyBomWorkspace(workspace.id);
+    void patchCachedWorkspace(workspace);
     return { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
   }
 
@@ -790,15 +903,18 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
   }
 
   await removeLegacyBomWorkspace(workspace.id);
+  void patchCachedWorkspace(workspace);
   return { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
 }
 
 export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker) {
   await saveRemotePageTracker(workspaceId, pageTracker);
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, pageTracker }));
 }
 
 export async function saveBomWorkspaceTableColorTheme(workspaceId: string, tableColorTheme: BomTableColorTheme) {
   await saveRemoteTableColorTheme(workspaceId, tableColorTheme);
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, tableColorTheme }));
 }
 
 export async function removeBomWorkspace(id: string) {
@@ -815,6 +931,7 @@ export async function removeBomWorkspace(id: string) {
     removeRemoteTableColorTheme(id),
   ]);
   await removeLegacyBomWorkspace(id);
+  void removeCachedWorkspace(id);
 }
 
 export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChange) => void) {
