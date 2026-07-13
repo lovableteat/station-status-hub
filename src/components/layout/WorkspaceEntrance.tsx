@@ -84,16 +84,16 @@ export function WorkspaceEntrance({
 
   return (
     <section
-      className="relative flex min-h-[calc(100dvh-92px)] w-full flex-col px-4 py-6 sm:px-6 lg:px-8"
+      className="relative flex min-h-full w-full min-w-0 flex-1 flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
       data-testid="workspace-entrance"
     >
       <div className="flex w-full flex-1 flex-col">
-        <div className="mb-5 flex flex-col gap-3 rounded-[1.6rem] border border-primary/12 bg-[linear-gradient(180deg,rgba(15,24,42,0.92),rgba(9,15,29,0.96))] px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+        <div className="mb-4 flex flex-col gap-3 rounded-[1.35rem] border border-primary/12 bg-[linear-gradient(180deg,rgba(15,24,42,0.92),rgba(9,15,29,0.96))] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary/75">
               Workspace
             </p>
-            <h1 className="text-3xl font-black tracking-[-0.04em] text-foreground sm:text-4xl">
+            <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">
               選擇要進入的工作區
             </h1>
           </div>
@@ -104,7 +104,7 @@ export function WorkspaceEntrance({
 
         <div
           className={cn(
-            "grid flex-1 gap-5",
+            "grid flex-1 gap-3 2xl:gap-4",
             isFiveItemLayout && "xl:auto-rows-fr",
             gridClass,
           )}
@@ -125,16 +125,16 @@ export function WorkspaceEntrance({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "interactive-lift group relative flex h-full min-h-[238px] flex-col justify-between overflow-hidden rounded-[1.8rem] border border-white/10 p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-30px_rgba(15,23,42,0.9)]",
+                  "interactive-lift group relative flex h-full min-h-[210px] flex-col justify-between overflow-hidden rounded-[1.45rem] border border-white/10 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-30px_rgba(15,23,42,0.9)] 2xl:p-5",
                   tone.panel,
                   layoutClass
                 )}
               >
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div
                       className={cn(
-                        "flex h-14 w-14 items-center justify-center rounded-[1.2rem] border",
+                        "flex h-11 w-11 items-center justify-center rounded-xl border 2xl:h-12 2xl:w-12",
                         tone.iconWrap
                       )}
                     >
@@ -146,17 +146,17 @@ export function WorkspaceEntrance({
                   </div>
 
                   <div className="space-y-2.5">
-                    <h2 className="text-[2rem] font-black tracking-[-0.04em] text-white">
+                    <h2 className="text-[1.55rem] font-black tracking-[-0.04em] text-white 2xl:text-[1.7rem]">
                       {item.title}
                     </h2>
-                    <p className="max-w-[28rem] text-[15px] leading-7 text-slate-300">
+                    <p className="max-w-[28rem] text-sm leading-6 text-slate-300">
                       {item.description || tone.description}
                     </p>
                   </div>
                 </div>
 
-                <div className="inline-flex items-center pt-6 text-sm font-semibold text-slate-100 transition-colors group-hover:text-white">
-                  <span className="inline-flex h-11 items-center rounded-xl px-0">
+                <div className="inline-flex items-center pt-4 text-sm font-semibold text-slate-100 transition-colors group-hover:text-white">
+                  <span className="inline-flex h-9 items-center rounded-xl px-0">
                     進入工作區
                     <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                   </span>
