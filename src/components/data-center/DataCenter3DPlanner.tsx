@@ -14,6 +14,7 @@ import * as THREE from "three";
 import type {
   CameraPreset,
   DataCenterLayer,
+  FacilityPlan,
   ImportedStepModel,
   RackDeviceHealth,
   RackModelDefinition,
@@ -29,6 +30,7 @@ interface DataCenter3DPlannerProps {
   showLabels: boolean;
   cameraPreset: CameraPreset;
   cameraRequestId: number;
+  facility: FacilityPlan;
   onSelectRack: (rackId: string) => void;
 }
 
@@ -528,11 +530,20 @@ function RackVisual({
   );
 }
 
-function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; activeLayer: DataCenterLayer }) {
+function InfrastructureLayer({
+  racks,
+  activeLayer,
+  facility,
+}: {
+  racks: RackPlan[];
+  activeLayer: DataCenterLayer;
+  facility: FacilityPlan;
+}) {
   if (activeLayer === "network") {
+    const networkHubZ = -facility.depth / 2 + 0.75;
     return (
       <group>
-        <mesh position={[0, 0.15, -5.3]}>
+        <mesh position={[0, 0.15, networkHubZ]}>
           <boxGeometry args={[2.2, 0.3, 0.65]} />
           <meshStandardMaterial color="#0e7490" emissive="#22d3ee" emissiveIntensity={0.35} />
         </mesh>
@@ -540,7 +551,7 @@ function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; active
           <Line
             key={rack.id}
             points={[
-              [0, 0.22, -5.3],
+              [0, 0.22, networkHubZ],
               [rack.positionX, 0.22, rack.positionZ],
             ]}
             color="#22d3ee"
@@ -554,26 +565,30 @@ function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; active
   }
 
   if (activeLayer === "power") {
+    const activeFeeds = facility.powerFeeds.filter((feed) => feed.enabled);
     return (
       <group>
-        <Line points={[[-6.4, 0.1, -4.15], [6.4, 0.1, -4.15]]} color="#f59e0b" lineWidth={2} />
-        <Line points={[[-6.4, 0.1, 4.15], [6.4, 0.1, 4.15]]} color="#60a5fa" lineWidth={2} />
-        {racks.map((rack) => {
-          const busZ = rack.positionZ < 0 ? -4.15 : 4.15;
-          return (
-            <Line
-              key={rack.id}
-              points={[
-                [rack.positionX, 0.1, busZ],
-                [rack.positionX, 0.1, rack.positionZ],
-              ]}
-              color={rack.positionZ < 0 ? "#f59e0b" : "#60a5fa"}
-              lineWidth={1.3}
-              transparent
-              opacity={0.72}
-            />
-          );
-        })}
+        {activeFeeds.map((feed) => (
+          <group key={feed.id}>
+            <mesh position={[feed.x, 0.12, feed.z]}>
+              <boxGeometry args={[0.42, 0.16, 0.42]} />
+              <meshStandardMaterial color={feed.color} emissive={feed.color} emissiveIntensity={0.42} />
+            </mesh>
+            {racks.map((rack) => (
+              <Line
+                key={`${feed.id}-${rack.id}`}
+                points={[
+                  [feed.x, 0.2, feed.z],
+                  [rack.positionX, 0.2, rack.positionZ],
+                ]}
+                color={feed.color}
+                lineWidth={1.25}
+                transparent
+                opacity={0.62}
+              />
+            ))}
+          </group>
+        ))}
       </group>
     );
   }
@@ -581,72 +596,90 @@ function InfrastructureLayer({ racks, activeLayer }: { racks: RackPlan[]; active
   return null;
 }
 
-function ThermalAisles({ active }: { active: boolean }) {
-  const channels = [
-    { id: "cold", z: 0, depth: 2.1, color: "#0ea5e9", emissive: "#38bdf8" },
-    { id: "hot-a", z: -3.65, depth: 1.15, color: "#c2410c", emissive: "#fb923c" },
-    { id: "hot-b", z: 3.65, depth: 1.15, color: "#c2410c", emissive: "#fb923c" },
-  ];
-
+function ThermalAisles({ aisles, active }: { aisles: FacilityPlan["aisles"]; active: boolean }) {
   return (
     <group>
-      {channels.map((channel) => (
-        <group key={channel.id}>
-          <mesh position={[0, 0.026, channel.z]} receiveShadow>
-            <boxGeometry args={[14.2, 0.025, channel.depth]} />
-            <meshStandardMaterial
-              color={channel.color}
-              emissive={channel.emissive}
-              emissiveIntensity={active ? 0.34 : 0.08}
-              transparent
-              opacity={active ? 0.48 : 0.16}
-              roughness={0.78}
-            />
-          </mesh>
-          {[-5.4, -3.6, -1.8, 0, 1.8, 3.6, 5.4].map((x, index) => (
-            <mesh
-              key={x}
-              position={[x, 0.052, channel.z]}
-              rotation={[-Math.PI / 2, 0, channel.id === "hot-a" ? Math.PI : 0]}
-            >
-              <coneGeometry args={[0.09, 0.28, 3]} />
-              <meshBasicMaterial color={channel.emissive} transparent opacity={active ? 0.9 : index % 2 ? 0.28 : 0.45} />
+      {aisles.map((aisle) => {
+        const isCold = aisle.kind === "cold";
+        const color = isCold ? "#0ea5e9" : "#c2410c";
+        const emissive = isCold ? "#38bdf8" : "#fb923c";
+        return (
+          <group key={aisle.id} position={[aisle.x, 0, aisle.z]} rotation={[0, (aisle.rotation * Math.PI) / 180, 0]}>
+            <mesh position={[0, 0.026, 0]} receiveShadow>
+              <boxGeometry args={[aisle.width, 0.025, aisle.depth]} />
+              <meshStandardMaterial
+                color={color}
+                emissive={emissive}
+                emissiveIntensity={active ? 0.34 : 0.08}
+                transparent
+                opacity={active ? 0.48 : 0.16}
+                roughness={0.78}
+              />
             </mesh>
-          ))}
-        </group>
-      ))}
+            {[-0.38, -0.13, 0.13, 0.38].map((offset, index) => (
+              <mesh
+                key={offset}
+                position={[aisle.width * offset, 0.052, 0]}
+                rotation={[-Math.PI / 2, 0, !isCold ? Math.PI : 0]}
+              >
+                <coneGeometry args={[0.09, 0.28, 3]} />
+                <meshBasicMaterial color={emissive} transparent opacity={active ? 0.9 : index % 2 ? 0.28 : 0.45} />
+              </mesh>
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 }
 
-function FacilityShell({ activeLayer }: { activeLayer: DataCenterLayer }) {
+function FacilityShell({ activeLayer, facility }: { activeLayer: DataCenterLayer; facility: FacilityPlan }) {
+  const width = Math.max(8, facility.width);
+  const depth = Math.max(8, facility.depth);
+  const wallHeight = Math.max(2.4, facility.wallHeight);
+  const gridSize = Math.max(width, depth);
+
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[18, 13]} />
+        <planeGeometry args={[width, depth]} />
         <meshStandardMaterial
-          color={activeLayer === "health" ? "#07100f" : "#060b12"}
+          color={activeLayer === "health" ? "#0d1c19" : "#0a1824"}
           roughness={0.95}
           metalness={0.08}
         />
       </mesh>
-      <gridHelper args={[18, 36, "#1e5b78", "#102638"]} position={[0, 0.012, 0]} />
+      {facility.showGrid ? (
+        <gridHelper
+          args={[gridSize, Math.max(12, Math.round(gridSize * 2)), "#2d7896", "#17374d"]}
+          position={[0, 0.012, 0]}
+          scale={[width / gridSize, 1, depth / gridSize]}
+        />
+      ) : null}
 
-      {[-6.7, 6.7].map((x) => (
-        <group key={x} position={[x, 0, 0]}>
-          {[-3.6, -1.2, 1.2, 3.6].map((z) => (
-            <mesh key={z} position={[0, 0.62, z]} castShadow receiveShadow>
-              <boxGeometry args={[0.7, 1.24, 1.05]} />
-              <meshStandardMaterial color="#0d2535" metalness={0.4} roughness={0.48} />
+      {facility.showWalls ? (
+        <group>
+          {[
+            [0, wallHeight / 2, -depth / 2, width, wallHeight, 0.12],
+            [0, wallHeight / 2, depth / 2, width, wallHeight, 0.12],
+            [-width / 2, wallHeight / 2, 0, 0.12, wallHeight, depth],
+            [width / 2, wallHeight / 2, 0, 0.12, wallHeight, depth],
+          ].map(([x, y, z, wallWidth, wallWallHeight, wallDepth], index) => (
+            <mesh key={index} position={[x, y, z]} receiveShadow>
+              <boxGeometry args={[wallWidth, wallWallHeight, wallDepth]} />
+              <meshStandardMaterial
+                color="#2a6680"
+                emissive="#113c52"
+                emissiveIntensity={0.34}
+                transparent
+                opacity={0.28}
+                depthWrite={false}
+                roughness={0.48}
+              />
             </mesh>
           ))}
         </group>
-      ))}
-
-      <mesh position={[0, 1.7, -6.35]} receiveShadow>
-        <boxGeometry args={[18, 3.4, 0.12]} />
-        <meshStandardMaterial color="#06111c" metalness={0.18} roughness={0.82} />
-      </mesh>
+      ) : null}
     </group>
   );
 }
@@ -656,11 +689,13 @@ function CameraRig({
   selectedRackId,
   preset,
   requestId,
+  facility,
 }: {
   racks: RackPlan[];
   selectedRackId: string;
   preset: CameraPreset;
   requestId: number;
+  facility: FacilityPlan;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -670,17 +705,18 @@ function CameraRig({
 
   useEffect(() => {
     const selected = racks.find((rack) => rack.id === selectedRackId);
+    const span = Math.max(facility.width, facility.depth);
     if (preset === "top") {
-      desiredPosition.current.set(0.01, 15, 0.01);
+      desiredPosition.current.set(0.01, Math.max(15, span * 1.05), 0.01);
       desiredTarget.current.set(0, 0, 0);
     } else if (preset === "front") {
-      desiredPosition.current.set(0, 4.2, 12.5);
+      desiredPosition.current.set(0, Math.max(4.2, span * 0.34), Math.max(12.5, span * 0.92));
       desiredTarget.current.set(0, 1, 0);
     } else if (preset === "focus" && selected) {
       desiredPosition.current.set(selected.positionX + 3.5, 3.2, selected.positionZ + 4.3);
       desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
     } else {
-      desiredPosition.current.set(10, 7, 11);
+      desiredPosition.current.set(span * 0.72, Math.max(7, span * 0.46), span * 0.82);
       desiredTarget.current.set(0, 0.8, 0);
     }
 
@@ -693,7 +729,7 @@ function CameraRig({
     } else {
       animating.current = true;
     }
-  }, [camera, preset, racks, requestId, selectedRackId]);
+  }, [camera, facility.depth, facility.width, preset, racks, requestId, selectedRackId]);
 
   useFrame(() => {
     if (!animating.current || !controlsRef.current) return;
@@ -721,7 +757,7 @@ function CameraRig({
       enablePan
       enableZoom
       minDistance={2.6}
-      maxDistance={24}
+      maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
       maxPolarAngle={Math.PI / 2.02}
       target={[0, 0.8, 0]}
     />
@@ -736,6 +772,7 @@ function PlannerScene({
   showLabels,
   cameraPreset,
   cameraRequestId,
+  facility,
   onSelectRack,
 }: DataCenter3DPlannerProps) {
   const [hoveredRackId, setHoveredRackId] = useState<string | null>(null);
@@ -763,9 +800,9 @@ function PlannerScene({
       <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
       <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
 
-      <FacilityShell activeLayer={activeLayer} />
-      <ThermalAisles active={activeLayer === "cooling"} />
-      <InfrastructureLayer racks={racks} activeLayer={activeLayer} />
+      <FacilityShell activeLayer={activeLayer} facility={facility} />
+      <ThermalAisles aisles={facility.aisles} active={activeLayer === "cooling"} />
+      <InfrastructureLayer racks={racks} activeLayer={activeLayer} facility={facility} />
 
       {racks.map((rack) => {
         const definition = models[rack.modelId] ?? models["generic-42u"];
@@ -796,6 +833,7 @@ function PlannerScene({
         selectedRackId={selectedRackId}
         preset={cameraPreset}
         requestId={cameraRequestId}
+        facility={facility}
       />
     </>
   );

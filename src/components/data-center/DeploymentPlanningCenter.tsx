@@ -70,11 +70,14 @@ import {
   INITIAL_SITE_PLANS,
   createRackFromModel,
 } from "./dataCenterSeed";
+import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
 import { importStepModel } from "./stepImport";
 import type {
   CameraPreset,
   DataCenterAssetKind,
   DataCenterLayer,
+  FacilityAisleKind,
+  FacilityPlan,
   ImportedStepDimensions,
   RackDevice,
   RackDeviceHealth,
@@ -85,6 +88,7 @@ import type {
 } from "./dataCenterTypes";
 
 const LAYOUT_STORAGE_KEY = "data-center-digital-twin-layout-v2";
+const FACILITY_STORAGE_KEY = "data-center-digital-twin-facility-v1";
 const MAX_MODEL_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_BROWSER_STEP_BYTES = 25 * 1024 * 1024;
 
@@ -166,6 +170,49 @@ function readInitialSites() {
     }));
   } catch {
     return INITIAL_SITE_PLANS;
+  }
+}
+
+function cloneDefaultFacilityPlan(): FacilityPlan {
+  return {
+    ...DEFAULT_FACILITY_PLAN,
+    aisles: DEFAULT_FACILITY_PLAN.aisles.map((aisle) => ({ ...aisle })),
+    powerFeeds: DEFAULT_FACILITY_PLAN.powerFeeds.map((feed) => ({ ...feed })),
+  };
+}
+
+function readInitialFacilityPlans(): Record<string, FacilityPlan> {
+  const defaults = Object.fromEntries(
+    INITIAL_SITE_PLANS.map((site) => [site.id, cloneDefaultFacilityPlan()])
+  );
+  if (typeof window === "undefined") return defaults;
+
+  try {
+    const raw = window.localStorage.getItem(FACILITY_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as Record<string, FacilityPlan>;
+    if (!parsed || typeof parsed !== "object") return defaults;
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([siteId, plan]) => {
+        const base = cloneDefaultFacilityPlan();
+        if (!plan || typeof plan !== "object") return [siteId, base];
+        return [
+          siteId,
+          {
+            ...base,
+            ...plan,
+            width: Number.isFinite(plan.width) ? Math.max(8, plan.width) : base.width,
+            depth: Number.isFinite(plan.depth) ? Math.max(8, plan.depth) : base.depth,
+            wallHeight: Number.isFinite(plan.wallHeight) ? Math.max(2.4, plan.wallHeight) : base.wallHeight,
+            aisles: Array.isArray(plan.aisles) ? plan.aisles : base.aisles,
+            powerFeeds: Array.isArray(plan.powerFeeds) ? plan.powerFeeds : base.powerFeeds,
+          },
+        ];
+      })
+    );
+  } catch {
+    return defaults;
   }
 }
 
@@ -1168,6 +1215,7 @@ export function DeploymentPlanningCenter() {
   const uploadedUrlsRef = useRef<string[]>([]);
 
   const [sites, setSites] = useState<SitePlan[]>(readInitialSites);
+  const [facilityPlans, setFacilityPlans] = useState<Record<string, FacilityPlan>>(readInitialFacilityPlans);
   const [models, setModels] = useState<Record<string, RackModelDefinition>>(BUILT_IN_RACK_MODELS);
   const [selectedSiteId, setSelectedSiteId] = useState(sites[0].id);
   const [selectedRackId, setSelectedRackId] = useState(sites[0].racks[0].id);
@@ -1175,12 +1223,15 @@ export function DeploymentPlanningCenter() {
   const [searchTerm, setSearchTerm] = useState("");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [showSceneTools, setShowSceneTools] = useState(false);
+  const [showRackDetails, setShowRackDetails] = useState(false);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [layoutEditing, setLayoutEditing] = useState(false);
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
+  const [facilityPlannerOpen, setFacilityPlannerOpen] = useState(false);
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
   const [catalogKind, setCatalogKind] = useState<DataCenterAssetKind>("rack");
   const [importKind, setImportKind] = useState<DataCenterAssetKind>("rack");
@@ -1207,10 +1258,21 @@ export function DeploymentPlanningCenter() {
   const selectedModel = models[selectedRack.modelId] ?? models["generic-42u"];
   const selectedL10Model = models[selectedRack.l10ModelId] ?? models["l10-placeholder"];
   const selectedL10Capacity = getL10Capacity(selectedRack, selectedL10Model);
+  const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
 
   useEffect(() => {
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(sites));
   }, [sites]);
+
+  useEffect(() => {
+    window.localStorage.setItem(FACILITY_STORAGE_KEY, JSON.stringify(facilityPlans));
+  }, [facilityPlans]);
+
+  useEffect(() => {
+    if (!facilityPlans[selectedSiteId]) {
+      setFacilityPlans((current) => ({ ...current, [selectedSiteId]: cloneDefaultFacilityPlan() }));
+    }
+  }, [facilityPlans, selectedSiteId]);
 
   useEffect(
     () => () => {
@@ -1277,6 +1339,85 @@ export function DeploymentPlanningCenter() {
           : site
       )
     );
+  };
+
+  const updateFacility = (updater: (facility: FacilityPlan) => FacilityPlan) => {
+    setFacilityPlans((current) => ({
+      ...current,
+      [selectedSiteId]: updater(current[selectedSiteId] ?? cloneDefaultFacilityPlan()),
+    }));
+  };
+
+  const updateFacilityNumber = (field: "width" | "depth" | "wallHeight", value: string) => {
+    const next = Number(value);
+    if (!Number.isFinite(next)) return;
+    updateFacility((facility) => ({ ...facility, [field]: next }));
+  };
+
+  const addAisle = (kind: FacilityAisleKind) => {
+    const index = selectedFacility.aisles.filter((aisle) => aisle.kind === kind).length + 1;
+    updateFacility((facility) => ({
+      ...facility,
+      aisles: [
+        ...facility.aisles,
+        {
+          id: `${kind}-${crypto.randomUUID()}`,
+          label: `${kind === "cold" ? "冷通道" : "熱通道"} ${index}`,
+          kind,
+          x: 0,
+          z: 0,
+          width: Math.max(4, facility.width - 3.8),
+          depth: kind === "cold" ? 2.1 : 1.15,
+          rotation: 0,
+        },
+      ],
+    }));
+  };
+
+  const removeAisle = (aisleId: string) => {
+    updateFacility((facility) => ({
+      ...facility,
+      aisles: facility.aisles.filter((aisle) => aisle.id !== aisleId),
+    }));
+  };
+
+  const updateAisle = (aisleId: string, updater: (aisle: FacilityPlan["aisles"][number]) => FacilityPlan["aisles"][number]) => {
+    updateFacility((facility) => ({
+      ...facility,
+      aisles: facility.aisles.map((aisle) => (aisle.id === aisleId ? updater(aisle) : aisle)),
+    }));
+  };
+
+  const updatePowerFeed = (feedId: string, updater: (feed: FacilityPlan["powerFeeds"][number]) => FacilityPlan["powerFeeds"][number]) => {
+    updateFacility((facility) => ({
+      ...facility,
+      powerFeeds: facility.powerFeeds.map((feed) => (feed.id === feedId ? updater(feed) : feed)),
+    }));
+  };
+
+  const addPowerFeed = () => {
+    const index = selectedFacility.powerFeeds.length + 1;
+    updateFacility((facility) => ({
+      ...facility,
+      powerFeeds: [
+        ...facility.powerFeeds,
+        {
+          id: `power-${crypto.randomUUID()}`,
+          label: `PDU ${String.fromCharCode(64 + index)}`,
+          x: 0,
+          z: 0,
+          color: "#a78bfa",
+          enabled: true,
+        },
+      ],
+    }));
+  };
+
+  const removePowerFeed = (feedId: string) => {
+    updateFacility((facility) => ({
+      ...facility,
+      powerFeeds: facility.powerFeeds.filter((feed) => feed.id !== feedId),
+    }));
   };
 
   const getFootprint = (rack: RackPlan) => {
@@ -1497,6 +1638,18 @@ export function DeploymentPlanningCenter() {
       ? "lg:grid-cols-[304px_minmax(0,1fr)_68px]"
       : "lg:grid-cols-[304px_minmax(0,1fr)_360px]";
 
+  const compactDesktopGridClass = showSceneTools && showRackDetails
+    ? desktopGridClass
+    : showSceneTools
+      ? leftCollapsed
+        ? "lg:grid-cols-[68px_minmax(0,1fr)]"
+        : "lg:grid-cols-[304px_minmax(0,1fr)]"
+      : showRackDetails
+        ? rightCollapsed
+          ? "lg:grid-cols-[minmax(0,1fr)_68px]"
+          : "lg:grid-cols-[minmax(0,1fr)_360px]"
+        : "lg:grid-cols-[minmax(0,1fr)]";
+
   return (
     <TooltipProvider delayDuration={180}>
       <div className="flex min-h-[calc(100dvh-92px)] flex-col overflow-hidden bg-[#02060b] text-slate-100 lg:h-[calc(100dvh-92px)] lg:min-h-[620px]">
@@ -1575,10 +1728,10 @@ export function DeploymentPlanningCenter() {
         </header>
 
         {isDesktopLayout ? (
-        <div className={cn("grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3 transition-[grid-template-columns] duration-300 ease-out", desktopGridClass)}>
-          <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
+        <div className={cn("grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3 transition-[grid-template-columns] duration-300 ease-out", compactDesktopGridClass)}>
+          {showSceneTools ? <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
             <SceneNavigator {...navigatorProps} collapsed={leftCollapsed} onToggleCollapse={() => setLeftCollapsed((value) => !value)} />
-          </aside>
+          </aside> : null}
 
           <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
             <DataCenter3DPlanner
@@ -1589,6 +1742,7 @@ export function DeploymentPlanningCenter() {
               showLabels={showLabels}
               cameraPreset={cameraPreset}
               cameraRequestId={cameraRequestId}
+              facility={selectedFacility}
               onSelectRack={handleRackSelect}
             />
 
@@ -1610,7 +1764,48 @@ export function DeploymentPlanningCenter() {
               ) : null}
             </div>
 
-            <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-white/12 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="absolute right-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center justify-end gap-1.5 rounded-xl border border-white/12 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+              <IconTooltipButton
+                label={showSceneTools ? "關閉場景工具" : "開啟場景工具"}
+                icon={showSceneTools ? PanelLeftClose : PanelLeftOpen}
+                onClick={() => {
+                  setShowSceneTools((value) => !value);
+                  setLeftCollapsed(false);
+                }}
+                className="h-9 w-9"
+              />
+              <IconTooltipButton
+                label={showRackDetails ? "關閉機櫃詳情" : "開啟機櫃詳情"}
+                icon={showRackDetails ? PanelRightClose : PanelRightOpen}
+                onClick={() => {
+                  setShowRackDetails((value) => !value);
+                  setRightCollapsed(false);
+                }}
+                className="h-9 w-9"
+              />
+              <div className="mx-0.5 h-6 w-px bg-white/10" />
+              <IconTooltipButton
+                label="廠房規劃"
+                icon={PencilRuler}
+                onClick={() => setFacilityPlannerOpen(true)}
+                className="h-9 w-9"
+                active={facilityPlannerOpen}
+              />
+              <IconTooltipButton
+                label="冷熱通道"
+                icon={Snowflake}
+                onClick={() => setActiveLayer("cooling")}
+                className="h-9 w-9"
+                active={activeLayer === "cooling"}
+              />
+              <IconTooltipButton
+                label="電力佈線"
+                icon={Cable}
+                onClick={() => setActiveLayer("power")}
+                className="h-9 w-9"
+                active={activeLayer === "power"}
+              />
+              <div className="mx-0.5 h-6 w-px bg-white/10" />
               {([
                 ["overview", Boxes, "斜角總覽"],
                 ["top", LayoutDashboard, "俯視"],
@@ -1676,9 +1871,9 @@ export function DeploymentPlanningCenter() {
             </div>
           </main>
 
-          <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
+          {showRackDetails ? <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
             <RackInspector {...inspectorProps} collapsed={rightCollapsed} onToggleCollapse={() => setRightCollapsed((value) => !value)} />
-          </aside>
+          </aside> : null}
         </div>
         ) : (
         <div className="relative h-[640px] flex-none bg-black">
@@ -1690,6 +1885,7 @@ export function DeploymentPlanningCenter() {
             showLabels={showLabels}
             cameraPreset={cameraPreset}
             cameraRequestId={cameraRequestId}
+            facility={selectedFacility}
             onSelectRack={handleRackSelect}
           />
           <div className="absolute left-3 top-3 z-20 flex gap-2">
@@ -1712,6 +1908,175 @@ export function DeploymentPlanningCenter() {
         <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
           <SheetContent side="right" className="w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
             <RackInspector {...inspectorProps} />
+          </SheetContent>
+        </Sheet>
+
+        <Sheet open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
+          <SheetContent side="right" className="w-[min(94vw,480px)] border-l border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[480px]">
+            <SheetHeader className="border-b border-white/10 px-6 py-5 text-left">
+              <SheetTitle className="flex items-center gap-2 text-white">
+                <PencilRuler className="h-5 w-5 text-cyan-300" />
+                廠房與佈線規劃
+              </SheetTitle>
+              <SheetDescription className="text-slate-400">
+                設定廠房邊界、冷熱通道與 PDU 饋線，變更會自動保存在目前廠區。
+              </SheetDescription>
+            </SheetHeader>
+
+            <ScrollArea className="h-[calc(100dvh-112px)]">
+              <div className="space-y-5 px-6 py-5">
+                <section className="rounded-2xl border border-cyan-300/15 bg-[#0b2234] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-black text-white">廠房尺寸</h2>
+                      <p className="mt-1 text-[11px] text-slate-400">單位：公尺。牆體會沿著外框生成。</p>
+                    </div>
+                    <span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">{selectedSite.label}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      ["width", "寬度"],
+                      ["depth", "深度"],
+                      ["wallHeight", "牆高"],
+                    ] as Array<["width" | "depth" | "wallHeight", string]>).map(([field, label]) => (
+                      <label key={field} className="space-y-1.5">
+                        <span className="block text-[11px] font-bold text-slate-400">{label}</span>
+                        <Input
+                          type="number"
+                          min={field === "wallHeight" ? 2.4 : 8}
+                          step="0.1"
+                          value={selectedFacility[field]}
+                          disabled={!canEdit}
+                          onChange={(event) => updateFacilityNumber(field, event.target.value)}
+                          className="h-10 border-white/12 bg-black/25 px-2 text-sm text-white"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    {([
+                      ["showWalls", "顯示牆體"],
+                      ["showGrid", "顯示網格"],
+                    ] as Array<["showWalls" | "showGrid", string]>).map(([field, label]) => (
+                      <label key={field} className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={selectedFacility[field]}
+                          disabled={!canEdit}
+                          onChange={(event) => updateFacility((facility) => ({ ...facility, [field]: event.target.checked }))}
+                          className="h-4 w-4 accent-cyan-400"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-sky-300/15 bg-[#0b2234] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-black text-white">冷熱通道</h2>
+                      <p className="mt-1 text-[11px] text-slate-400">可調整位置、寬度、深度與方向。</p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("cold")} className="h-8 border-sky-300/20 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20">
+                        <Snowflake className="mr-1 h-3.5 w-3.5" />冷
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("hot")} className="h-8 border-orange-300/20 bg-orange-400/10 px-2.5 text-[11px] text-orange-100 hover:bg-orange-400/20">
+                        <Thermometer className="mr-1 h-3.5 w-3.5" />熱
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {selectedFacility.aisles.map((aisle) => (
+                      <div key={aisle.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
+                            <Input
+                              value={aisle.label}
+                              disabled={!canEdit}
+                              onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, label: event.target.value }))}
+                              className="h-8 w-32 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
+                            />
+                          </div>
+                          <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+                            移除
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {([
+                            ["x", "X"],
+                            ["z", "Z"],
+                            ["width", "寬"],
+                            ["depth", "深"],
+                            ["rotation", "角度"],
+                          ] as Array<["x" | "z" | "width" | "depth" | "rotation", string]>).map(([field, label]) => (
+                            <label key={field} className="space-y-1">
+                              <span className="block text-[10px] font-bold text-slate-500">{label}</span>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                value={aisle[field]}
+                                disabled={!canEdit}
+                                onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, [field]: Number(event.target.value) }))}
+                                className="h-8 border-white/10 bg-black/20 px-1.5 text-[11px] text-white"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-amber-300/15 bg-[#0b2234] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-black text-white">電力佈線</h2>
+                      <p className="mt-1 text-[11px] text-slate-400">電力圖層會從啟用的饋線連到所有機櫃。</p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={addPowerFeed} className="h-8 border-amber-300/20 bg-amber-400/10 px-2.5 text-[11px] text-amber-100 hover:bg-amber-400/20">
+                      <Plus className="mr-1 h-3.5 w-3.5" />饋線
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {selectedFacility.powerFeeds.map((feed) => (
+                      <div key={feed.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={feed.color} disabled={!canEdit} onChange={(event) => updatePowerFeed(feed.id, (current) => ({ ...current, color: event.target.value }))} className="h-7 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
+                            <Input
+                              value={feed.label}
+                              disabled={!canEdit}
+                              onChange={(event) => updatePowerFeed(feed.id, (current) => ({ ...current, label: event.target.value }))}
+                              className="h-8 w-28 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                              <input type="checkbox" checked={feed.enabled} disabled={!canEdit} onChange={(event) => updatePowerFeed(feed.id, (current) => ({ ...current, enabled: event.target.checked }))} className="h-4 w-4 accent-amber-400" />
+                              啟用
+                            </label>
+                            <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removePowerFeed(feed.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+                              移除
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(["x", "z"] as const).map((field) => (
+                            <label key={field} className="space-y-1">
+                              <span className="block text-[10px] font-bold text-slate-500">位置 {field.toUpperCase()}</span>
+                              <Input type="number" step="0.1" value={feed[field]} disabled={!canEdit} onChange={(event) => updatePowerFeed(feed.id, (current) => ({ ...current, [field]: Number(event.target.value) }))} className="h-8 border-white/10 bg-black/20 px-2 text-[11px] text-white" />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </ScrollArea>
           </SheetContent>
         </Sheet>
 
