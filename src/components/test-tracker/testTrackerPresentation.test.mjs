@@ -33,6 +33,24 @@ test("stored tracker column widths are clamped by column type", () => {
   assert.equal(presentation.getTrackerColumnWidth("serial", {}), 116);
 });
 
+test("tracker station columns flex to the right boundary while fixed columns keep their widths", () => {
+  assert.equal(typeof presentation.getTrackerGridTemplate, "function");
+  assert.equal(
+    presentation.getTrackerGridTemplate(
+      ["machine", "serial", "status", "station:station-a", "station:station-b", "actions"],
+      {
+        machine: 158,
+        serial: 116,
+        status: 98,
+        "station:station-a": 300,
+        "station:station-b": 420,
+        actions: 82,
+      },
+    ),
+    "158px 116px 98px minmax(300px, 300fr) minmax(420px, 420fr) 82px",
+  );
+});
+
 test("station progress lookup only counts completed items from the matching station", () => {
   assert.equal(typeof presentation.createStationProgressLookup, "function");
   const lookup = presentation.createStationProgressLookup(

@@ -33,6 +33,20 @@ test("short values remain unchanged", () => {
   assert.equal(result.isTruncated, false);
 });
 
+test("the material table rightmost column can resize without an adjacent column", () => {
+  assert.equal(typeof presentation.resizeMaterialColumnWidths, "function");
+  assert.deepEqual(
+    presentation.resizeMaterialColumnWidths({
+      index: 2,
+      maxWidths: [200, 200, 240],
+      minWidths: [80, 80, 100],
+      requestedWidth: 210,
+      widths: [120, 140, 160],
+    }),
+    [120, 140, 210],
+  );
+});
+
 test("export scope follows active filters and defaults to all data", () => {
   assert.equal(presentation.getMaterialExportScopeLabel([]), "全部資料");
   assert.equal(

@@ -34,6 +34,44 @@ export function getMaterialExportScopeLabel(activeFilters: string[]) {
     : "全部資料";
 }
 
+export function resizeMaterialColumnWidths({
+  index,
+  maxWidths,
+  minWidths,
+  requestedWidth,
+  widths,
+}: {
+  index: number;
+  maxWidths: number[];
+  minWidths: number[];
+  requestedWidth: number;
+  widths: number[];
+}) {
+  if (index < 0 || index >= widths.length) return widths;
+
+  const next = [...widths];
+  const targetWidth = Math.min(
+    maxWidths[index] ?? Number.POSITIVE_INFINITY,
+    Math.max(minWidths[index] ?? 0, requestedWidth),
+  );
+  const adjacentIndex = index + 1;
+
+  if (adjacentIndex >= widths.length) {
+    next[index] = targetWidth;
+    return next;
+  }
+
+  const requestedDelta = targetWidth - widths[index];
+  const adjacentWidth = Math.min(
+    maxWidths[adjacentIndex] ?? Number.POSITIVE_INFINITY,
+    Math.max(minWidths[adjacentIndex] ?? 0, widths[adjacentIndex] - requestedDelta),
+  );
+  const appliedDelta = widths[adjacentIndex] - adjacentWidth;
+  next[index] = widths[index] + appliedDelta;
+  next[adjacentIndex] = adjacentWidth;
+  return next;
+}
+
 export function createClipboardImageName(mimeType: string, value = new Date()) {
   const pad = (part: number) => String(part).padStart(2, "0");
   const extension = mimeType.toLowerCase().includes("png") ? "png" : "jpg";
