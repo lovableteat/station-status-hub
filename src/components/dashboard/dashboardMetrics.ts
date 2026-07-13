@@ -44,6 +44,7 @@ export interface DashboardSystemMetric {
 
 export interface DashboardStationMetric {
   averageProgress: number;
+  completedSystems: number;
   completedRecords: number;
   hours: number;
   id: string;
@@ -53,6 +54,7 @@ export interface DashboardStationMetric {
   possibleRecords: number;
   remainingHours: number;
   remainingItems: number;
+  totalSystems: number;
 }
 
 export interface DashboardDailyCompletion {
@@ -232,15 +234,22 @@ export function calculateDashboardMetrics<
 
   const stationRows = sortedStations.map<DashboardStationMetric>((station) => {
     const stationItems = itemsByStation.get(station.id) ?? [];
+    const totalSystems = stationItems.length ? includedSystems.length : 0;
+    let completedSystems = 0;
     let incompleteSystems = 0;
     let remainingItems = 0;
     let remainingMinutes = 0;
 
     includedSystems.forEach((system) => {
+      if (!stationItems.length) return;
       const missingItems = stationItems.filter(
         (item) => !isDone(progressBySystemItem.get(`${system.id}:${item.id}`))
       );
-      if (missingItems.length) incompleteSystems += 1;
+      if (missingItems.length) {
+        incompleteSystems += 1;
+      } else {
+        completedSystems += 1;
+      }
       remainingItems += missingItems.length;
       remainingMinutes += missingItems.reduce(
         (sum, item) => sum + getEstimatedMinutes(item),
@@ -254,6 +263,7 @@ export function calculateDashboardMetrics<
       averageProgress: possibleRecords
         ? Math.round((completedRecords / possibleRecords) * 100)
         : 0,
+      completedSystems,
       completedRecords,
       hours: stationItems.reduce((sum, item) => sum + getEstimatedMinutes(item), 0) / 60,
       id: station.id,
@@ -263,6 +273,7 @@ export function calculateDashboardMetrics<
       possibleRecords,
       remainingHours: remainingMinutes / 60,
       remainingItems,
+      totalSystems,
     };
   });
   const totalRemainingHours = stationRows.reduce(
