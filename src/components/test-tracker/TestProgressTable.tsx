@@ -22,6 +22,7 @@ import {
   getStationProgressKey,
   getTrackerColumnSpec,
   getTrackerColumnWidth,
+  getTrackerGridTemplate,
   getTrackerVirtualRange,
   TRACKER_ROW_HEIGHT,
 } from "./testTrackerPresentation";
@@ -253,9 +254,7 @@ export function TestProgressTable({
     },
     [columnKeys, columnLayout, columnStorageKey]
   );
-  const gridColumns = columnKeys
-    .map((columnKey) => `${columnWidths[columnKey]}px`)
-    .join(" ");
+  const gridColumns = getTrackerGridTemplate(columnKeys, columnWidths);
   const minWidth = columnKeys.reduce(
     (total, columnKey) => total + columnWidths[columnKey],
     24 + Math.max(0, columnKeys.length - 1) * 8
@@ -420,7 +419,7 @@ export function TestProgressTable({
           role="table"
           aria-colcount={columnKeys.length}
           aria-rowcount={systems.length + 1}
-          style={{ minWidth }}
+          style={{ minWidth, width: "100%" }}
         >
           <div
             role="row"

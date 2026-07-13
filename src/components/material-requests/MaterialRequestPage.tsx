@@ -117,6 +117,7 @@ import {
   createCompactValueSummary,
   getBomPageProgress,
   getMaterialExportScopeLabel,
+  resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
 } from "./materialRequestPresentation";
 import { useMaterialBomPresence } from "./useMaterialBomPresence";
@@ -4300,21 +4301,13 @@ export function MaterialRequestPage() {
   }, [columnWidths]);
 
   const resizeColumn = (index: number, width: number) => {
-    setColumnWidths((current) => {
-      const adjacentIndex = index + 1;
-      if (adjacentIndex >= current.length) return current;
-
-      const requestedDelta = width - current[index];
-      const adjacentWidth = Math.min(
-        MAX_COLUMN_WIDTHS[adjacentIndex],
-        Math.max(MIN_COLUMN_WIDTHS[adjacentIndex], current[adjacentIndex] - requestedDelta)
-      );
-      const appliedDelta = current[adjacentIndex] - adjacentWidth;
-      const next = [...current];
-      next[index] = current[index] + appliedDelta;
-      next[adjacentIndex] = adjacentWidth;
-      return next;
-    });
+    setColumnWidths((current) => resizeMaterialColumnWidths({
+      index,
+      maxWidths: MAX_COLUMN_WIDTHS,
+      minWidths: MIN_COLUMN_WIDTHS,
+      requestedWidth: width,
+      widths: current,
+    }));
   };
 
   const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
@@ -5240,7 +5233,7 @@ export function MaterialRequestPage() {
   }
 
   return (
-    <div className="material-sheet-theme min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_28%),linear-gradient(180deg,#08111f_0%,#0d1a2d_48%,#091320_100%)] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
+    <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[#06111f] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
@@ -5268,7 +5261,7 @@ export function MaterialRequestPage() {
         snapshot={exportSnapshot}
       />
 
-      <header className="overflow-hidden rounded-2xl border border-slate-400/20 bg-[radial-gradient(circle_at_top_right,rgba(148,163,184,0.12),transparent_30%),linear-gradient(180deg,#2b3543_0%,#222c39_52%,#19232f_100%)] p-4 shadow-[0_24px_70px_rgba(6,12,22,0.32)]">
+      <header className="overflow-hidden rounded-[14px] border border-[#356985] bg-[#10263a] p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
@@ -5389,7 +5382,7 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <section className="mt-3 rounded-2xl border border-cyan-300/24 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.10),transparent_34%),linear-gradient(180deg,#1b3152_0%,#142744_58%,#112038_100%)] p-4 shadow-[0_18px_40px_rgba(10,24,48,0.24)]">
+        <section className="mt-3 rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] p-4">
           <div className="flex flex-col gap-3 border-b border-cyan-400/10 pb-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
@@ -5434,7 +5427,7 @@ export function MaterialRequestPage() {
 
           {!pageTrackerPanelCollapsed && (
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)]">
-              <div className="min-w-0 rounded-xl border border-cyan-300/24 bg-[linear-gradient(145deg,rgba(24,58,91,0.94),rgba(11,30,50,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="min-w-0 rounded-xl border border-[#356985] bg-[#10263a] p-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">目前處理進度</p>
@@ -5471,7 +5464,7 @@ export function MaterialRequestPage() {
                 </p>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(33,57,95,0.96),rgba(18,34,57,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="space-y-3 rounded-xl border border-[#2a526f] bg-[#0d2137] p-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="page-tracker-quick-total">總頁數</Label>
@@ -5484,7 +5477,7 @@ export function MaterialRequestPage() {
                       value={pageTrackerQuickTotalInput}
                       onChange={(event) => setPageTrackerQuickTotalInput(event.target.value)}
                       placeholder="例如 12"
-                      className="h-10 border-sky-300/24 bg-[linear-gradient(180deg,#2a4164_0%,#243754_100%)] text-slate-100"
+                      className="h-10 border-[#356985] bg-[#071522] text-slate-100"
                     />
                   </div>
                   <div className="space-y-2">
@@ -5499,7 +5492,7 @@ export function MaterialRequestPage() {
                       onChange={(event) => setPageTrackerQuickCurrentInput(event.target.value)}
                       placeholder={pageTrackerQuickTotalPages > 0 ? `1 ~ ${pageTrackerQuickTotalPages}` : "先填總頁數"}
                       disabled={pageTrackerQuickTotalPages === 0}
-                      className="h-10 border-sky-300/24 bg-[linear-gradient(180deg,#2a4164_0%,#243754_100%)] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-10 border-[#356985] bg-[#071522] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -5570,7 +5563,7 @@ export function MaterialRequestPage() {
 
       <div className={cn("mt-3 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
-      <section className="rounded-2xl border border-slate-400/20 bg-[radial-gradient(circle_at_top_left,rgba(148,163,184,0.10),transparent_32%),linear-gradient(180deg,#293341_0%,#202a36_100%)] p-3 shadow-[0_20px_48px_rgba(6,12,22,0.24)]">
+      <section className="rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
@@ -5593,7 +5586,7 @@ export function MaterialRequestPage() {
                 }
               }}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
-              className="h-10 border-slate-400/28 bg-[linear-gradient(180deg,#384250_0%,#2c3542_100%)] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-cyan-400"
+              className="h-10 border-[#356985] bg-[#071522] pl-12 text-[15px] text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
             />
           </div>
 
@@ -5607,7 +5600,7 @@ export function MaterialRequestPage() {
           </Button>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] text-sm text-slate-200">
+            <SelectTrigger className="h-10 border-[#2a526f] bg-[#071522] text-sm text-slate-200">
               <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
             </SelectTrigger>
             <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -5619,7 +5612,7 @@ export function MaterialRequestPage() {
             </SelectContent>
           </Select>
 
-          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />全部清除</Button>
+          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-[#2a526f] bg-[#071522] px-3 text-sm text-slate-200 hover:border-cyan-300/35 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />全部清除</Button>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-3">
           <span className="rounded-md border border-cyan-300/20 bg-cyan-300/[0.08] px-2.5 py-1 text-xs font-bold text-cyan-100">
@@ -5651,8 +5644,8 @@ export function MaterialRequestPage() {
         </div>
       </section>
 
-      <section className="mt-3 overflow-hidden rounded-xl border border-slate-400/20 bg-[linear-gradient(180deg,#252f3c_0%,#19222e_100%)] shadow-[0_18px_44px_rgba(6,12,22,0.24)]">
-        <div className="flex items-center justify-between border-b border-slate-400/18 bg-[linear-gradient(90deg,#35404e_0%,#293442_52%,#222c38_100%)] px-4 py-3">
+      <section className="mt-3 overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]">
+        <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
@@ -5681,7 +5674,7 @@ export function MaterialRequestPage() {
         >
           <table className="table-fixed border-collapse text-[15px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }}>
             <thead className="sticky top-0 z-20">
-              <tr className="bg-[linear-gradient(90deg,#3b82f6_0%,#2563eb_45%,#1d4ed8_100%)] text-left text-[15px] font-bold text-white shadow-sm">
+              <tr className="bg-[#0d2137] text-left text-[15px] font-bold text-white">
                 {[
                   "Item",
                   "標記",
@@ -5700,10 +5693,9 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
-                    resizable={columnIndex < 10}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                     className={columnIndex === 10
-                      ? "sticky right-0 z-40 border-l border-cyan-200/35 border-r-0 bg-[#1d4ed8] text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"
+                      ? "sticky right-0 z-40 border-l border-r border-cyan-200/35 bg-[#0d2137] text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"
                       : undefined}
                   >
                     <span data-testid={columnIndex === 10 ? "material-data-update-header" : undefined}>
@@ -5712,7 +5704,7 @@ export function MaterialRequestPage() {
                   </ResizableHeader>
                 ))}
               </tr>
-              <tr className="bg-[linear-gradient(90deg,rgba(24,55,108,0.96),rgba(17,42,82,0.96))] text-slate-100">
+              <tr className="bg-[#10263a] text-slate-100">
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     項次
