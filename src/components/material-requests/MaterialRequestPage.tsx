@@ -200,7 +200,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v7";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v8";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
 const BOM_PAGE_STATUS_OPTIONS: Array<{
@@ -307,7 +307,7 @@ function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(COLUMN_WIDTHS_KEY) ?? "null");
+    const parsed = JSON.parse(window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY) ?? "null");
     if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COLUMN_WIDTHS.length) {
       return DEFAULT_COLUMN_WIDTHS;
     }
@@ -3599,7 +3599,7 @@ function CompactAlternativeRows({
               <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
             </td>
 
-            <td className="px-3 py-3.5">
+            <td className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[#14263a] px-3 py-3.5 shadow-[-14px_0_24px_rgba(2,12,27,0.42)]">
               <div className="flex justify-center gap-2">
                 <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                   <Eye className="h-4 w-4" />
@@ -4088,9 +4088,9 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(columnWidths));
+      window.sessionStorage.setItem(COLUMN_WIDTHS_SESSION_KEY, JSON.stringify(columnWidths));
     } catch {
-      // Column resizing still works for the current session without browser storage.
+      // Column resizing still works in memory when session storage is unavailable.
     }
   }, [columnWidths]);
 
@@ -5478,7 +5478,10 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <div className="max-h-[70vh] overflow-auto">
+        <div
+          className="relative max-h-[70vh] overflow-auto"
+          data-testid="material-table-scroll"
+        >
           <table className="table-fixed border-collapse text-[15px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[linear-gradient(90deg,#3b82f6_0%,#2563eb_45%,#1d4ed8_100%)] text-left text-[15px] font-bold text-white shadow-sm">
@@ -5502,9 +5505,13 @@ export function MaterialRequestPage() {
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     resizable={columnIndex < 10}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 10 ? "border-r-0 text-center" : undefined}
+                    className={columnIndex === 10
+                      ? "sticky right-0 z-40 border-l border-cyan-200/35 border-r-0 bg-[#1d4ed8] text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"
+                      : undefined}
                   >
-                    {label}
+                    <span data-testid={columnIndex === 10 ? "material-data-update-header" : undefined}>
+                      {label}
+                    </span>
                   </ResizableHeader>
                 ))}
               </tr>
@@ -5531,7 +5538,7 @@ export function MaterialRequestPage() {
                 </th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
-                <th className="p-2 text-center"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
+                <th className="sticky right-0 z-40 border-l border-cyan-200/30 bg-[#163b70] p-2 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
               {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
@@ -5765,7 +5772,11 @@ export function MaterialRequestPage() {
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
-                      <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
+                      <td
+                        className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[#14263a] px-4 py-3 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.42)]"
+                        data-testid="material-data-update-cell"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         {editingNames.length > 0 && (
                           <div className="mb-2 rounded-md border border-amber-300/28 bg-amber-400/12 px-2 py-1 text-[11px] font-bold text-amber-100" title={`${editingNames.join("、")} 正在編輯`}>
                             {editingNames[0]} 正在編輯{editingNames.length > 1 ? ` +${editingNames.length - 1}` : ""}
