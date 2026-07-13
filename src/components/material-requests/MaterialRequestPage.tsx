@@ -3,6 +3,7 @@
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  startTransition,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -1438,9 +1439,7 @@ function ExcelFilterPopover({
     const nextSelection = draftSelectedValues === null
       ? null
       : normalizeColumnFilterSelection(draftSelectedValues);
-    startTransition(() => {
-      onSelectedValuesChange(nextSelection);
-    });
+    onSelectedValuesChange(nextSelection);
     setOpen(false);
   };
 
@@ -1510,7 +1509,13 @@ function ExcelFilterPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[320px] border border-blue-400/25 bg-[#0d182b] p-2.5 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)]"
+        collisionPadding={12}
+        sticky="always"
+        data-testid="material-column-filter-panel"
+        style={{
+          maxHeight: "min(640px, calc(var(--radix-popover-content-available-height) - 12px))",
+        }}
+        className="w-[min(320px,calc(100vw-24px))] overflow-y-auto overscroll-contain border border-blue-400/25 bg-[#0d182b] p-2.5 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)] [scrollbar-color:rgba(103,232,249,0.45)_rgba(15,23,42,0.35)] [scrollbar-width:thin]"
       >
         <div className="space-y-2">
           <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#111f36] px-3 py-2">
@@ -1680,7 +1685,7 @@ function ExcelFilterPopover({
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-2 border-t border-blue-400/10 pt-2">
+          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t border-blue-400/15 bg-[#0d182b]/95 px-1 pb-0.5 pt-2 backdrop-blur">
             <Button
               type="button"
               variant="outline"
