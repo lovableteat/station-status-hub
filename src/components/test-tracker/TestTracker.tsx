@@ -49,6 +49,10 @@ import { SegmentedProgress } from "./SegmentedProgress";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
+import {
+  DEFAULT_TRACKER_PAGE_SIZE,
+  TRACKER_PAGE_SIZE_OPTIONS,
+} from "./testTrackerPresentation";
 
 type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
@@ -172,7 +176,7 @@ export function TestTracker() {
       : "table";
   });
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(DEFAULT_TRACKER_PAGE_SIZE);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [displayStations, setDisplayStations] = useState(stations);
@@ -275,7 +279,18 @@ export function TestTracker() {
     [baseFilteredSystems, statusFilter]
   );
   const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
-  const pagedSystems = filteredSystems.slice((page - 1) * pageSize, page * pageSize);
+  const currentPage = Math.min(page, pageCount);
+  const pagedSystems = filteredSystems.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+  const firstVisibleRecord = filteredSystems.length
+    ? (currentPage - 1) * pageSize + 1
+    : 0;
+  const lastVisibleRecord = Math.min(currentPage * pageSize, filteredSystems.length);
+  useEffect(() => {
+    setPage((value) => Math.min(value, pageCount));
+  }, [pageCount]);
   const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
   const projectStatusCounts = useMemo(
     () =>
@@ -549,6 +564,7 @@ export function TestTracker() {
       {view === "table" ? (
         <>
           <TestProgressTable
+            columnStorageKey={`maintenance:test-tracker:columns:${activeProjectId}`}
             headerControls={renderTrackerControls(true)}
             systems={pagedSystems}
             stations={displayStations}
@@ -557,23 +573,33 @@ export function TestTracker() {
             onSelectSystem={setSelectedSystemId}
             onSystemUpdate={loadData}
           />
-          <div className="flex items-center justify-between gap-3 text-xs text-[#a9c0d1]">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#1a3858] bg-[#0a1a2e] px-3 py-2 text-xs text-[#a9c0d1]">
             <div className="flex items-center gap-2">
               <span>每頁</span>
-              <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
-                <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[25, 50, 100].map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}
+                  {TRACKER_PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>{size} 筆</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <span>共 {filteredSystems.length} 台</span>
+              <span className="font-data">
+                顯示 {firstVisibleRecord}-{lastVisibleRecord}，共 {filteredSystems.length} 台
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setPage((value) => value - 1)}>
                 <ChevronLeft className="h-4 w-4" /><span className="sr-only">上一頁</span>
               </Button>
-              <span className="font-data min-w-14 text-center">{page}/{pageCount}</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>
+              <span className="font-data min-w-14 text-center">{currentPage}/{pageCount}</span>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= pageCount} onClick={() => setPage((value) => value + 1)}>
                 <ChevronRight className="h-4 w-4" /><span className="sr-only">下一頁</span>
               </Button>
             </div>
