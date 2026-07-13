@@ -18,6 +18,8 @@ export type DataCenterLayer = "overview" | "health" | "power" | "network" | "coo
 
 export type CameraPreset = "overview" | "top" | "front" | "focus";
 
+export type FacilityAisleKind = "cold" | "hot";
+
 export type ModelUpAxis = "x" | "y" | "z";
 
 export type DataCenterAssetKind = "rack" | "l10";
@@ -102,6 +104,53 @@ export interface SitePlan {
   racks: RackPlan[];
   checklist: ChecklistItem[];
 }
+
+export interface FacilityAislePlan {
+  id: string;
+  label: string;
+  kind: FacilityAisleKind;
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  rotation: number;
+}
+
+export interface PowerFeedPlan {
+  id: string;
+  label: string;
+  x: number;
+  z: number;
+  color: string;
+  enabled: boolean;
+}
+
+export interface FacilityPlan {
+  width: number;
+  depth: number;
+  wallHeight: number;
+  showWalls: boolean;
+  showGrid: boolean;
+  aisles: FacilityAislePlan[];
+  powerFeeds: PowerFeedPlan[];
+}
+
+export const DEFAULT_FACILITY_PLAN: FacilityPlan = {
+  width: 18,
+  depth: 13,
+  wallHeight: 3.4,
+  showWalls: true,
+  showGrid: true,
+  aisles: [
+    { id: "cold-main", label: "冷通道 A", kind: "cold", x: 0, z: 0, width: 14.2, depth: 2.1, rotation: 0 },
+    { id: "hot-a", label: "熱通道 A", kind: "hot", x: 0, z: -3.65, width: 14.2, depth: 1.15, rotation: 0 },
+    { id: "hot-b", label: "熱通道 B", kind: "hot", x: 0, z: 3.65, width: 14.2, depth: 1.15, rotation: 0 },
+  ],
+  powerFeeds: [
+    { id: "power-a", label: "PDU A", x: -7, z: -5.5, color: "#f59e0b", enabled: true },
+    { id: "power-b", label: "PDU B", x: 7, z: 5.5, color: "#60a5fa", enabled: true },
+  ],
+};
 
 export interface ImportedStepPart {
   id: string;
