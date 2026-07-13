@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  CircleHelp,
   Clock3,
   Download,
   FileCode2,
@@ -28,6 +29,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { useToast } from "@/hooks/use-toast";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { supabase } from "@/integrations/supabase/client";
@@ -277,9 +283,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       const queue = queueByStation.get(station.id) ?? 0;
       return {
         averageProgress,
+        completedRecords,
         hours,
         id: station.id,
+        itemCount: stationItems.length,
         name: station.station_name,
+        possibleRecords,
         queue,
         workloadHours: queue * hours,
       };
@@ -566,16 +575,53 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4 text-cyan-200" aria-hidden="true" />
                 <h2 className="text-base font-semibold text-[#f3f8fc]">站點產能與瓶頸</h2>
+                <HoverCard openDelay={180} closeDelay={120}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="dashboard-capacity-help"
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] px-2 text-[11px] font-medium text-cyan-100 outline-none transition-colors hover:border-cyan-200/65 hover:bg-cyan-300/[0.14] focus-visible:ring-2 focus-visible:ring-cyan-200/75"
+                      aria-label="查看站點產能與瓶頸的計算方式"
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+                      計算方式
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    data-testid="dashboard-capacity-help-content"
+                    align="start"
+                    side="bottom"
+                    className="z-[70] w-[min(30rem,calc(100vw-2rem))] rounded-xl border border-[#3d718f] bg-[#071827] p-0 text-[#d9e8f2]"
+                  >
+                    <div className="border-b border-[#315d78]/70 px-4 py-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-[#f3f8fc]">
+                        <Activity className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                        這區在估算什麼？
+                      </div>
+                      <p className="mt-1.5 text-xs leading-5 text-[#a9c0d1]">
+                        只計入儀表板納管機台，依目前所在站點的排隊數與流程預估工時，找出最需要優先疏通的站點。這是流程工作量估算，不是設備即時利用率或 OEE。
+                      </p>
+                    </div>
+                    <ol className="space-y-2.5 px-4 py-3 text-xs leading-5 text-[#c4d7e4]">
+                      <li><strong className="text-cyan-100">1. 歸屬 WIP：</strong>未完成機台以目前站點為準；若未指定，歸到第一個尚未完成的站點。</li>
+                      <li><strong className="text-cyan-100">2. 估算工作量：</strong>待處理工時 = WIP 台數 × 該站所有測項的預估工時總和。</li>
+                      <li><strong className="text-cyan-100">3. 判定瓶頸：</strong>待處理工時最高者優先；同值時再比較 WIP 台數與單站預估工時。</li>
+                    </ol>
+                    <div className="border-t border-[#315d78]/70 px-4 py-2.5 text-[11px] text-[#8fb0c5]">
+                      滑過任一站點卡，可查看該站當下代入的數字與完整公式。
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
               <p className="mt-1 text-xs text-[#9eb8ca]">
-                依 WIP × 單站預估工時判定
+                依 WIP × 單站預估工時判定；滑過卡片查看公式
                 {bottleneckStation ? `，目前瓶頸為 ${bottleneckStation.name}` : "，目前沒有排隊瓶頸"}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {bottleneckStation ? (
                 <Badge variant="outline" className="border-amber-300/40 bg-amber-300/10 text-amber-100">
-                  瓶頸 {bottleneckStation.queue} 台
+                  瓶頸 WIP {bottleneckStation.queue} 台
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-emerald-300/35 bg-emerald-300/10 text-emerald-100">
@@ -598,74 +644,154 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               const isBottleneck = station.id === bottleneckStation?.id && station.queue > 0;
 
               return (
-                <button
-                  key={station.id}
-                  type="button"
-                  aria-label={`查看 ${station.name}，目前 ${station.queue} 台 WIP，預估待處理 ${station.workloadHours.toFixed(1)} 小時`}
-                  className={cn(
-                    "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
-                    isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
-                  )}
-                  onClick={() => onNavigate?.("test-tracker", { station: station.id })}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={cn(
-                        "font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] text-xs text-cyan-100",
-                        isBottleneck && "border-amber-300/35 bg-amber-300/10 text-amber-100"
-                      )}>{index + 1}</span>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
-                        <div className="mt-0.5 text-[10px] text-[#8fb0c5]">單站 {station.hours.toFixed(1)}h</div>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.queue}</div>
-                      <div className="text-[10px] text-[#8fb0c5]">台 WIP</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 border-t border-[#315d78]/55 pt-2.5">
-                    <div className="flex items-center justify-between text-[10px] text-[#9eb8ca]">
-                      <span>相對負載</span>
-                      <span className={cn("font-data text-cyan-100", isBottleneck && "text-amber-100")}>{workloadShare}%</span>
-                    </div>
-                    <div
-                      className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#06111f] ring-1 ring-inset ring-[#315d78]/65"
-                      role="progressbar"
-                      aria-label={`${station.name} 相對負載`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={workloadShare}
+                <HoverCard key={station.id} openDelay={220} closeDelay={120}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid={`station-capacity-card-${index}`}
+                      aria-label={`查看 ${station.name}，目前 ${station.queue} 台 WIP，預估待處理 ${station.workloadHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
+                      className={cn(
+                        "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
+                      )}
+                      onClick={() => onNavigate?.("test-tracker", { station: station.id })}
                     >
-                      <div
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className={cn(
+                            "font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] text-xs text-cyan-100",
+                            isBottleneck && "border-amber-300/35 bg-amber-300/10 text-amber-100"
+                          )}>{index + 1}</span>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
+                            <div className="mt-0.5 text-[10px] text-[#8fb0c5]">單站 {station.hours.toFixed(1)}h</div>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.queue}</div>
+                          <div className="text-[10px] text-[#8fb0c5]">台 WIP</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 border-t border-[#315d78]/55 pt-2.5">
+                        <div className="flex items-center justify-between text-[10px] text-[#9eb8ca]">
+                          <span>相對負載</span>
+                          <span className={cn("font-data text-cyan-100", isBottleneck && "text-amber-100")}>{workloadShare}%</span>
+                        </div>
+                        <div
+                          className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#06111f] ring-1 ring-inset ring-[#315d78]/65"
+                          role="progressbar"
+                          aria-label={`${station.name} 相對負載`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={workloadShare}
+                        >
+                          <div
+                            className={cn(
+                              "h-full rounded-full bg-cyan-400 transition-[width] duration-200",
+                              isBottleneck && "bg-amber-300"
+                            )}
+                            style={{ width: `${workloadShare}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 grid grid-cols-2 gap-3 text-[10px]">
+                        <div>
+                          <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />待處理工時</div>
+                          <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.workloadHours.toFixed(1)}h</div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />平均完成</div>
+                          <div className="font-data mt-0.5 text-xs font-semibold text-emerald-200">{station.averageProgress}%</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
+                        <span>WIP 占比 {queueShare}%</span>
+                        <span className={cn(isBottleneck ? "text-amber-100" : "text-cyan-100")}>
+                          {isBottleneck ? "優先疏通" : station.queue ? "持續監控" : "目前順暢"}
+                        </span>
+                      </div>
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    data-testid={`station-capacity-formula-${index}`}
+                    align="start"
+                    side="right"
+                    collisionPadding={12}
+                    className="z-[70] w-[min(31rem,calc(100vw-2rem))] rounded-xl border border-[#3d718f] bg-[#071827] p-0 text-[#d9e8f2]"
+                  >
+                    <div className="flex items-start justify-between gap-4 border-b border-[#315d78]/70 px-4 py-3">
+                      <div>
+                        <div className="text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
+                        <div className="mt-1 text-[11px] text-[#9eb8ca]">目前數值與計算基準</div>
+                      </div>
+                      <Badge
+                        variant="outline"
                         className={cn(
-                          "h-full rounded-full bg-cyan-400 transition-[width] duration-200",
-                          isBottleneck && "bg-amber-300"
+                          "shrink-0 border-cyan-300/30 bg-cyan-300/10 text-cyan-100",
+                          isBottleneck && "border-amber-300/45 bg-amber-300/10 text-amber-100"
                         )}
-                        style={{ width: `${workloadShare}%` }}
-                      />
+                      >
+                        {isBottleneck ? "目前瓶頸" : station.queue ? "持續監控" : "目前順暢"}
+                      </Badge>
                     </div>
-                  </div>
-
-                  <div className="mt-2.5 grid grid-cols-2 gap-3 text-[10px]">
-                    <div>
-                      <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />待處理工時</div>
-                      <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.workloadHours.toFixed(1)}h</div>
+                    <dl className="px-4 py-2 text-xs">
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-cyan-100">WIP 台數</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          未完成且目前歸屬本站的機台，共 <strong className="font-data text-[#f3f8fc]">{station.queue} 台</strong>。
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-cyan-100">單站預估工時</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          {station.itemCount} 個測項的預估分鐘加總 ÷ 60 = <strong className="font-data text-[#f3f8fc]">{station.hours.toFixed(2)}h</strong>。未填預估時間的測項以 30 分鐘計。
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-cyan-100">待處理工時</dt>
+                        <dd className="font-data leading-5 text-[#f3f8fc]">
+                          {station.queue} 台 × {station.hours.toFixed(2)}h = {station.workloadHours.toFixed(1)}h
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-cyan-100">相對負載</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          {stationWorkloadMax ? (
+                            <>本站 {station.workloadHours.toFixed(1)}h ÷ 站點最高 {stationWorkloadMax.toFixed(1)}h × 100 = <strong className="font-data text-[#f3f8fc]">{workloadShare}%</strong>。</>
+                          ) : (
+                            <>所有站點目前都沒有待處理工時，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
+                          )}
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-cyan-100">平均完成</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          {station.possibleRecords ? (
+                            <>已完成 {station.completedRecords} 筆 ÷（{includedSystems.length} 台 × {station.itemCount} 項，共 {station.possibleRecords} 筆）= <strong className="font-data text-[#f3f8fc]">{station.averageProgress}%</strong>，最高顯示 100%。</>
+                          ) : (
+                            <>本站尚未建立可計算的測項，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
+                          )}
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2.5">
+                        <dt className="font-medium text-cyan-100">WIP 占比</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          {stationQueueTotal ? (
+                            <>本站 {station.queue} 台 ÷ 全站 WIP {stationQueueTotal} 台 × 100 = <strong className="font-data text-[#f3f8fc]">{queueShare}%</strong>。</>
+                          ) : (
+                            <>目前沒有未完成機台列入 WIP，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="border-t border-[#315d78]/70 px-4 py-2.5 text-[11px] text-[#8fb0c5]">
+                      點擊卡片會帶入此站點，前往 L10 測試追蹤查看機台明細。
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />平均完成</div>
-                      <div className="font-data mt-0.5 text-xs font-semibold text-emerald-200">{station.averageProgress}%</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2.5 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
-                    <span>WIP 占比 {queueShare}%</span>
-                    <span className={cn(isBottleneck ? "text-amber-100" : "text-cyan-100")}>
-                      {isBottleneck ? "優先疏通" : station.queue ? "持續監控" : "目前順暢"}
-                    </span>
-                  </div>
-                </button>
+                  </HoverCardContent>
+                </HoverCard>
               );
             })}
           </div>
