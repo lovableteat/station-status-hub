@@ -1,4 +1,6 @@
-import * as XLSX from "xlsx";
+import type { CellObject, WorkSheet } from "xlsx";
+
+type XlsxModule = typeof import("xlsx");
 
 export interface MaterialWorkbookRecord {
   id: string;
@@ -191,7 +193,13 @@ const APPROVED_STATUS_WORDS = ["approved", "qualified", "active", "已核准", "
 const RISK_STATUS_WORDS = ["obsolete", "disqualified", "qualificationpending", "nrnd", "eol", "停產", "淘汰", "禁用", "不建議採用", "認證中"];
 
 function normalizeText(value: unknown) {
-  return String(value ?? "").trim();
+  return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
+}
+
+export function normalizeMaterialSearchText(value: unknown) {
+  return normalizeText(value)
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 export function isPreferredInternalPartNumber(value: string) {
@@ -199,8 +207,7 @@ export function isPreferredInternalPartNumber(value: string) {
 }
 
 function normalizeHeader(value: unknown) {
-  return normalizeText(value)
-    .toLowerCase()
+  return normalizeMaterialSearchText(value)
     .replace(/[\s_/().（）-]+/g, "");
 }
 
@@ -463,10 +470,10 @@ export function getActionLabel(actionKind: MaterialActionKind) {
 
 function buildSearchText(values: unknown[]) {
   return values
-    .map(normalizeText)
+    .map(normalizeMaterialSearchText)
     .filter(Boolean)
     .join(" ")
-    .toLowerCase();
+    .replace(/\s+/g, " ");
 }
 
 function compareActionPriority(left: MaterialRecord, right: MaterialRecord) {
@@ -745,12 +752,17 @@ function getFieldValue(row: unknown[], fields: Map<MaterialField, number>, field
   return index == null ? "" : row[index];
 }
 
-function getFieldAddress(rowIndex: number, fields: Map<MaterialField, number>, field: MaterialField) {
+function getFieldAddress(
+  xlsx: XlsxModule,
+  rowIndex: number,
+  fields: Map<MaterialField, number>,
+  field: MaterialField,
+) {
   const columnIndex = fields.get(field);
-  return columnIndex == null ? null : XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+  return columnIndex == null ? null : xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
 }
 
-interface StyledWorksheetCell extends XLSX.CellObject {
+interface StyledWorksheetCell extends CellObject {
   l?: {
     Target?: string;
     target?: string;
@@ -766,12 +778,13 @@ interface StyledWorksheetCell extends XLSX.CellObject {
 }
 
 function getHyperlinkValue(
-  worksheet: XLSX.WorkSheet,
+  xlsx: XlsxModule,
+  worksheet: WorkSheet,
   rowIndex: number,
   fields: Map<MaterialField, number>,
   field: MaterialField,
 ) {
-  const address = getFieldAddress(rowIndex, fields, field);
+  const address = getFieldAddress(xlsx, rowIndex, fields, field);
   if (!address) return "";
 
   const cell = worksheet[address] as StyledWorksheetCell | undefined;
@@ -779,7 +792,8 @@ function getHyperlinkValue(
 }
 
 function isBlueGroupStartRow(
-  worksheet: XLSX.WorkSheet,
+  xlsx: XlsxModule,
+  worksheet: WorkSheet,
   rowIndex: number,
   fields: Map<MaterialField, number>
 ) {
@@ -787,7 +801,7 @@ function isBlueGroupStartRow(
     .filter((index): index is number => index != null);
 
   return candidateColumns.some((columnIndex) => {
-    const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+    const address = xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
     const style = (worksheet[address] as StyledWorksheetCell | undefined)?.s;
     const rgb = style?.fgColor?.rgb?.replace(/^FF/i, "").toUpperCase();
     const isWorkbookBlue = rgb === "DCEAF7";
@@ -797,9 +811,9 @@ function isBlueGroupStartRow(
   });
 }
 
-function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
-  const worksheetRange = XLSX.utils.decode_range(worksheet["!ref"] ?? "A1:A1");
-  const previewRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: WorkSheet) {
+  const worksheetRange = xlsx.utils.decode_range(worksheet["!ref"] ?? "A1:A1");
+  const previewRows = xlsx.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
     defval: "",
     raw: false,
@@ -821,7 +835,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
 
   for (let rowIndex = worksheetRange.e.r; rowIndex > headerRowIndex; rowIndex -= 1) {
     const hasData = dataColumns.some((columnIndex) => {
-      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      const address = xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
       return Boolean(normalizeText(worksheet[address]?.v));
     });
 
@@ -831,7 +845,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     }
   }
 
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+  const rows = xlsx.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
     defval: "",
     raw: false,
@@ -849,7 +863,7 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     const levelCell = getFieldValue(rows[index], fields, "level");
     const parsedLevel = Number(levelCell);
     const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
-    if (levelValue === 2 && isBlueGroupStartRow(worksheet, index, fields)) {
+    if (levelValue === 2 && isBlueGroupStartRow(xlsx, worksheet, index, fields)) {
       blueGroupRows.add(index);
     }
   }
@@ -894,8 +908,8 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
     const refDes = normalizeText(getFieldValue(row, fields, "refDes"));
     const trackingNote = normalizeText(getFieldValue(row, fields, "trackingNote"));
     const requestTicket = normalizeText(getFieldValue(row, fields, "requestTicket"));
-    const requestUrl = getHyperlinkValue(worksheet, index, fields, "requestTicket")
-      || getHyperlinkValue(worksheet, index, fields, "requestUrl")
+    const requestUrl = getHyperlinkValue(xlsx, worksheet, index, fields, "requestTicket")
+      || getHyperlinkValue(xlsx, worksheet, index, fields, "requestUrl")
       || normalizeText(getFieldValue(row, fields, "requestUrl"));
     const rowRefGroup = firstNonEmpty(getFieldValue(row, fields, "refGroup"), refDes);
     const isGroupStart = useBlueGroupRows && blueGroupRows.has(index);
@@ -968,7 +982,8 @@ function extractSheetRecords(sheetName: string, worksheet: XLSX.WorkSheet) {
 }
 
 export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWorkbookPayload> {
-  const workbook = XLSX.read(await file.arrayBuffer(), {
+  const xlsx = await import("xlsx");
+  const workbook = xlsx.read(await file.arrayBuffer(), {
     type: "array",
     cellStyles: true,
     // Some source BOMs format every Excel row; cap parsing while retaining far more rows than a normal BOM.
@@ -976,7 +991,7 @@ export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWor
   });
 
   const candidates = workbook.SheetNames.map((sheetName) =>
-    extractSheetRecords(sheetName, workbook.Sheets[sheetName])
+    extractSheetRecords(xlsx, sheetName, workbook.Sheets[sheetName])
   ).filter(Boolean) as Array<{
     sheetName: string;
     score: number;
