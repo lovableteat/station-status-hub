@@ -1652,7 +1652,7 @@ export function DeploymentPlanningCenter() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <div className="flex min-h-[calc(100dvh-92px)] flex-col overflow-hidden bg-[#02060b] text-slate-100 lg:h-[calc(100dvh-92px)] lg:min-h-[620px]">
+      <div className="flex min-h-[640px] min-w-0 flex-col overflow-hidden bg-[#02060b] text-slate-100 lg:h-full lg:min-h-0">
         <input
           ref={fileInputRef}
           type="file"

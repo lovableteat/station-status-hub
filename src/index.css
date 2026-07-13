@@ -150,7 +150,18 @@ All colors MUST be HSL for proper theming support.
 
 @layer base {
   html {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    overflow-x: clip;
     scroll-behavior: smooth;
+  }
+
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
   }
 
   * {
@@ -159,6 +170,8 @@ All colors MUST be HSL for proper theming support.
 
   body {
     @apply bg-background text-foreground antialiased;
+    margin: 0;
+    overflow-x: clip;
     font-family: "Noto Sans TC", "Segoe UI", sans-serif;
     text-rendering: optimizeLegibility;
     background-image:
@@ -167,6 +180,17 @@ All colors MUST be HSL for proper theming support.
       radial-gradient(circle at bottom right, hsl(245 64% 68% / 0.08), transparent 30rem),
       linear-gradient(180deg, hsl(222 46% 8%), hsl(222 54% 5%));
     background-attachment: fixed;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  canvas {
+    display: block;
+    max-width: 100%;
   }
 
   :is(code, pre, kbd, samp) {
@@ -406,6 +430,16 @@ All colors MUST be HSL for proper theming support.
 }
 
 @layer components {
+  .app-shell {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .app-shell > main,
+  .app-shell > main > * {
+    min-width: 0;
+  }
+
   .maintenance-workspace {
     --background: 212 67% 7%;
     --foreground: 207 60% 97%;
