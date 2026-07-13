@@ -488,9 +488,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       </p>
                     </div>
                     <ol className="space-y-2.5 px-4 py-3 text-xs leading-5 text-[#c4d7e4]">
-                      <li><strong className="text-cyan-100">1. 待完成機台：</strong>只要機台在本站仍有至少一個測項未完成，就列入本站；同一台可能同時出現在多個站點。</li>
-                      <li><strong className="text-cyan-100">2. 剩餘工作量：</strong>逐筆加總所有未完成測項的預估分鐘，不再以機台數乘上整站完整工時。</li>
-                      <li><strong className="text-cyan-100">3. 判定瓶頸：</strong>剩餘工時最高者優先；同值時再比較待完成機台數與剩餘測項數。</li>
+                      <li><strong className="text-cyan-100">1. 整站完成機台：</strong>機台在本站的所有有效測項都為 Done 才計入已完成；只要還有一項未完成，就計入處理中。</li>
+                      <li><strong className="text-cyan-100">2. 站點機台總數：</strong>以目前儀表板納管的專案機台為準，已排除設定為不納入儀表板的機台。</li>
+                      <li><strong className="text-cyan-100">3. 剩餘工作量：</strong>逐筆加總所有未完成測項的預估分鐘，不再以機台數乘上整站完整工時。</li>
+                      <li><strong className="text-cyan-100">4. 判定瓶頸：</strong>剩餘工時最高者優先；同值時再比較處理中機台數與剩餘測項數。</li>
                     </ol>
                     <div className="border-t border-[#315d78]/70 px-4 py-2.5 text-[11px] text-[#8fb0c5]">
                       滑過任一站點卡，可查看該站當下代入的數字與完整公式。
@@ -535,7 +536,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     <button
                       type="button"
                       data-testid={`station-capacity-card-${index}`}
-                      aria-label={`查看 ${station.name}，目前 ${station.incompleteSystems} 台仍有未完成測項，預估剩餘 ${station.remainingHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
+                      aria-label={`查看 ${station.name}，總共 ${station.totalSystems} 台，整站已完成 ${station.completedSystems} 台，還有 ${station.incompleteSystems} 台處理中，預估剩餘 ${station.remainingHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
                       className={cn(
                         "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
                         isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
@@ -554,12 +555,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.incompleteSystems}</div>
-                          <div className="text-[10px] text-[#8fb0c5]">台待完成</div>
+                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.totalSystems}</div>
+                          <div className="text-[10px] text-[#8fb0c5]">台總數</div>
                         </div>
                       </div>
 
-                      <div className="mt-3 border-t border-[#315d78]/55 pt-2.5">
+                      <div className="mt-3 grid grid-cols-2 gap-2" aria-label={`${station.name} 機台完成摘要`}>
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-2">
+                          <span className="text-[10px] font-medium text-emerald-100">整站已完成</span>
+                          <strong className="font-data text-base text-emerald-200">{station.completedSystems}</strong>
+                        </div>
+                        <div className={cn(
+                          "flex items-center justify-between gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-2",
+                          isBottleneck && "border-amber-300/35 bg-amber-300/[0.09]"
+                        )}>
+                          <span className={cn("text-[10px] font-medium text-cyan-100", isBottleneck && "text-amber-100")}>仍在處理</span>
+                          <strong className={cn("font-data text-base text-cyan-200", isBottleneck && "text-amber-100")}>{station.incompleteSystems}</strong>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 border-t border-[#315d78]/55 pt-2.5">
                         <div className="flex items-center justify-between text-[10px] text-[#9eb8ca]">
                           <span>相對負載</span>
                           <span className={cn("font-data text-cyan-100", isBottleneck && "text-amber-100")}>{workloadShare}%</span>
@@ -625,9 +640,21 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                     <dl className="px-4 py-2 text-xs">
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
-                        <dt className="font-medium text-cyan-100">待完成機台</dt>
+                        <dt className="font-medium text-cyan-100">站點機台總數</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
-                          在本站至少還有一個測項未完成，共 <strong className="font-data text-[#f3f8fc]">{station.incompleteSystems} 台</strong>。機台可同時列入多站，不會被 current_station 限制在單一站點。
+                          目前儀表板納管 <strong className="font-data text-[#f3f8fc]">{station.totalSystems} 台</strong>；已排除不納入儀表板的機台。
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-emerald-100">整站已完成</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          本站所有 {station.itemCount} 個有效測項都為 Done 的機台，共 <strong className="font-data text-emerald-200">{station.completedSystems} 台</strong>。
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
+                        <dt className="font-medium text-amber-100">仍在處理</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          站點總數 {station.totalSystems} 台 − 整站已完成 {station.completedSystems} 台 = <strong className="font-data text-amber-100">{station.incompleteSystems} 台</strong>；包含未開始與處理中機台。
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
