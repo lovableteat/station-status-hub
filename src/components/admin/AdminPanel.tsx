@@ -403,39 +403,58 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="space-y-6 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_28%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_24%)] p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">後台管理</h1>
-          <p className="text-muted-foreground">歡迎，{user?.displayName || user?.username} (超級管理員)</p>
-        </div>
-        <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          onClick={() => setActiveTab("api-management")}
-          className="border-cyan-300/30 bg-[#182641] text-slate-100 hover:bg-[#223352] hover:text-white"
-        >
-          <Network className="h-4 w-4 mr-2" />
-          API 管理
-        </Button>
-        <Button
-          variant="outline"
-          onClick={logout}
-          className="border-cyan-300/20 bg-[#141f36] text-slate-100 hover:bg-[#1e2b45] hover:text-white"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          登出
-        </Button>
-        </div>
-      </div>
+    <div className="min-h-full bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1720px] space-y-5">
+        {/* Header */}
+        <header className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(17,38,66,0.96)_0%,rgba(13,25,45,0.98)_52%,rgba(19,27,55,0.96)_100%)] p-5 shadow-[0_28px_80px_-52px_rgba(56,189,248,0.75)] sm:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 left-1/3 h-px w-1/2 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-sky-200/28 bg-[linear-gradient(180deg,rgba(37,56,92,0.94),rgba(21,34,58,0.96))] p-1.5 text-slate-200 shadow-[0_14px_36px_rgba(56,189,248,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <TabsTrigger
-            value="users"
-            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-200/45 data-[state=active]:bg-[linear-gradient(135deg,rgba(125,211,252,0.22),rgba(59,130,246,0.16))] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(56,189,248,0.14)]"
-          >
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-cyan-200/20 bg-[linear-gradient(145deg,rgba(56,189,248,0.22),rgba(59,130,246,0.10))] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_40px_-24px_rgba(56,189,248,0.9)]">
+                <UserCog className="h-6 w-6 text-cyan-100" />
+              </div>
+              <div>
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200/70">
+                    Administration
+                  </span>
+                  <span className="h-1 w-1 rounded-full bg-cyan-300/60" />
+                  <span className="text-xs text-slate-400">系統設定中心</span>
+                </div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-[30px]">後台管理</h1>
+                <p className="mt-1 text-sm text-slate-400">
+                  歡迎回來，<span className="font-semibold text-slate-200">{user?.displayName || user?.username}</span>
+                  <span className="mx-2 text-slate-600">/</span>超級管理員
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl border-cyan-300/15 bg-slate-950/25 text-slate-200 hover:border-cyan-200/30 hover:bg-cyan-300/10 hover:text-cyan-50"
+                onClick={() => setActiveTab("api-management")}
+              >
+                <Network className="mr-2 h-4 w-4 text-cyan-200" />
+                API 管理
+              </Button>
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-rose-300/20 hover:bg-rose-400/10 hover:text-rose-100"
+                onClick={logout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                登出
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-5">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/35 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-[420px]">
+            <TabsTrigger value="users" className="h-10 rounded-xl text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/25 data-[state=active]:to-blue-500/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18),0_10px_28px_-18px_rgba(56,189,248,0.8)]">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
           </TabsTrigger>
@@ -443,20 +462,23 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
           </TabsTrigger> : null}
-          <TabsTrigger
-            value="api-management"
-            className="rounded-xl border border-transparent text-sm font-bold data-[state=active]:border-cyan-200/45 data-[state=active]:bg-[linear-gradient(135deg,rgba(125,211,252,0.22),rgba(59,130,246,0.16))] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(56,189,248,0.14)]"
-          >
+          <TabsTrigger value="api-management" className="h-10 rounded-xl text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/25 data-[state=active]:to-blue-500/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18),0_10px_28px_-18px_rgba(56,189,248,0.8)]">
             <Network className="h-4 w-4 mr-2" />
             API 管理
           </TabsTrigger>
         </TabsList>
 
         {/* User Management Tab */}
-        <TabsContent value="users" className="space-y-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold">系統用戶管理</h2>
+        <TabsContent value="users" className="mt-0 space-y-4">
+          <section className="flex flex-col gap-4 rounded-[24px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(20,32,54,0.78),rgba(12,21,38,0.78))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
+                <Users className="h-4.5 w-4.5 text-sky-200" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-slate-100">系統用戶管理</h2>
+                <p className="mt-0.5 text-sm text-slate-400">管理帳號狀態、角色與各工作區存取權限</p>
+              </div>
               {false ? <p className="max-w-3xl text-sm text-muted-foreground">
                 這裡集中管理整站帳號、角色、工作區權限與細部頁面權限。密碼只會以雜湊方式保存，超級帳號可直接發起重設，但不能回看任何人的明文密碼。
               </p> : null}
@@ -464,8 +486,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="border border-cyan-100/38 bg-[linear-gradient(135deg,rgba(186,230,253,0.38),rgba(96,165,250,0.28))] text-slate-950 shadow-[0_14px_32px_rgba(56,189,248,0.22)] hover:brightness-110">
-                  <Plus className="h-4 w-4 mr-2" />
+                <Button className="h-10 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-4 font-bold text-slate-950 shadow-[0_12px_30px_-16px_rgba(56,189,248,0.95)] hover:from-cyan-200 hover:to-sky-300">
+                  <Plus className="mr-2 h-4 w-4" />
                   新增用戶
                 </Button>
               </DialogTrigger>
@@ -541,61 +563,73 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </div>
               </DialogContent>
             </Dialog>
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className="group relative overflow-hidden rounded-[22px] border-sky-300/15 bg-[linear-gradient(145deg,rgba(24,45,76,0.88),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/60 to-transparent" />
+              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-sky-200/65">全部帳號</div>
+                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{totalUsers}</div>
+                  <p className="mt-2 text-xs text-slate-400">後台可管理帳號總數</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
+                  <Users className="h-5 w-5 text-sky-200" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="group relative overflow-hidden rounded-[22px] border-emerald-300/15 bg-[linear-gradient(145deg,rgba(19,53,56,0.70),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent" />
+              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200/65">正常啟用</div>
+                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{activeUsers}</div>
+                  <p className="mt-2 text-xs text-slate-400">可以登入並操作</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300/15 bg-emerald-400/10">
+                  <Shield className="h-5 w-5 text-emerald-200" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="group relative overflow-hidden rounded-[22px] border-amber-300/15 bg-[linear-gradient(145deg,rgba(60,48,35,0.64),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
+              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200/65">管理權限</div>
+                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{privilegedUsers}</div>
+                  <p className="mt-2 text-xs text-slate-400">具管理級權限帳號</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-300/15 bg-amber-400/10">
+                  <UserCog className="h-5 w-5 text-amber-200" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="group relative overflow-hidden rounded-[22px] border-indigo-300/15 bg-[linear-gradient(145deg,rgba(37,40,77,0.72),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-indigo-300/60 to-transparent" />
+              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-200/65">工作區權限</div>
+                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{workspaceConfiguredUsers}</div>
+                  <p className="mt-2 text-xs text-slate-400">已配置存取權限</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-300/15 bg-indigo-400/10">
+                  <Lock className="h-5 w-5 text-indigo-200" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-cyan-300/18 bg-[linear-gradient(145deg,rgba(34,211,238,0.16),rgba(37,99,235,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-cyan-100/75">Accounts</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-50">{totalUsers}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">目前後台可管理帳號總數</p>
-                </div>
-                <Users className="h-10 w-10 text-cyan-200" />
-              </CardContent>
-            </Card>
-
-            <Card className="border-emerald-300/18 bg-[linear-gradient(145deg,rgba(16,185,129,0.18),rgba(20,184,166,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-emerald-100/75">Active</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-50">{activeUsers}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">目前可以登入並操作的帳號</p>
-                </div>
-                <Shield className="h-10 w-10 text-emerald-200" />
-              </CardContent>
-            </Card>
-
-            <Card className="border-amber-300/18 bg-[linear-gradient(145deg,rgba(245,158,11,0.18),rgba(251,191,36,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-amber-100/80">Privileged</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-50">{privilegedUsers}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">具管理級權限的帳號數量</p>
-                </div>
-                <UserCog className="h-10 w-10 text-amber-200" />
-              </CardContent>
-            </Card>
-
-            <Card className="border-sky-300/18 bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(99,102,241,0.1)_55%,rgba(15,23,42,0.94))] shadow-[0_20px_48px_rgba(8,15,40,0.24)]">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-sky-100/80">Workspace Access</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-50">{workspaceConfiguredUsers}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">已配置工作區入口與網站權限</p>
-                </div>
-                <Lock className="h-10 w-10 text-sky-200" />
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="border-cyan-300/16 bg-[linear-gradient(180deg,rgba(22,35,60,0.96),rgba(16,24,40,0.96))] shadow-[0_22px_56px_rgba(8,15,40,0.22)]">
-            <CardContent className="space-y-4 pt-6">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
+          <Card className="rounded-[24px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(17,28,48,0.88),rgba(11,20,36,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <CardContent className="space-y-3 p-4 sm:p-5">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-100/65" />
+                  <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-200/60" />
                   <Input
-                    className="border-cyan-200/20 bg-white/[0.03] pl-10 text-slate-50 placeholder:text-slate-400"
+                    className="h-11 rounded-xl border-white/10 bg-slate-950/40 pl-10 text-slate-100 shadow-none focus-visible:border-sky-300/30 focus-visible:ring-sky-300/15"
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
                     placeholder="搜尋帳號、顯示名稱、建立者或工作區"
@@ -603,7 +637,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </div>
 
                 <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
-                  <SelectTrigger className="border-cyan-200/20 bg-white/[0.03] text-slate-50">
+                  <SelectTrigger className="h-11 rounded-xl border-white/10 bg-slate-950/40 text-slate-200 shadow-none">
                     <SelectValue placeholder="角色" />
                   </SelectTrigger>
                   <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
@@ -616,7 +650,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </Select>
 
                 <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
-                  <SelectTrigger className="border-cyan-200/20 bg-white/[0.03] text-slate-50">
+                  <SelectTrigger className="h-11 rounded-xl border-white/10 bg-slate-950/40 text-slate-200 shadow-none">
                     <SelectValue placeholder="狀態" />
                   </SelectTrigger>
                   <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
@@ -627,16 +661,20 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </Select>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200/80">
-                <Badge variant="outline">顯示 {filteredSystemUsers.length} / {totalUsers} 位用戶</Badge>
-                <Badge variant="outline">密碼保存方式：加密雜湊</Badge>
-                <Badge variant="outline">明文回看：停用</Badge>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500">
+                <span>
+                  顯示 <strong className="font-semibold text-sky-200">{filteredSystemUsers.length}</strong> / {totalUsers} 位用戶
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5 text-emerald-300/70" />
+                  密碼以加密雜湊保存，無法回看明文
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-cyan-300/16 bg-[linear-gradient(180deg,rgba(20,31,54,0.96),rgba(14,22,37,0.96))] shadow-[0_24px_60px_rgba(8,15,40,0.24)]">
-            <CardContent className="pt-5">
+          <Card className="rounded-[26px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,27,47,0.88),rgba(10,18,33,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <CardContent className="p-3 sm:p-4">
               <div className="space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
@@ -645,246 +683,151 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group rounded-[26px] border border-sky-300/30 bg-[linear-gradient(145deg,rgba(55,88,150,0.26),rgba(48,65,120,0.16)_26%,rgba(35,44,80,0.96)_58%,rgba(16,24,39,0.98)_100%)] p-4 shadow-[0_18px_48px_rgba(15,23,42,0.24),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all duration-300 hover:border-cyan-200/50 hover:shadow-[0_22px_64px_rgba(56,189,248,0.14),inset_0_1px_0_rgba(255,255,255,0.1)]"
+                      className="group relative overflow-hidden rounded-[22px] border border-white/[0.08] bg-[linear-gradient(135deg,rgba(23,38,64,0.76),rgba(13,23,41,0.88))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] transition-all duration-200 hover:border-sky-300/20 hover:shadow-[0_20px_55px_-42px_rgba(56,189,248,0.75)] sm:p-5"
                     >
-                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_172px]">
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-cyan-200/42 bg-[linear-gradient(145deg,rgba(186,230,253,0.3),rgba(59,130,246,0.14))] shadow-[0_10px_24px_rgba(56,189,248,0.16)]">
-                                <Shield className="h-4.5 w-4.5 text-white" />
-                              </div>
+                      <div className="pointer-events-none absolute left-0 top-5 h-12 w-0.5 rounded-r-full bg-gradient-to-b from-cyan-300 to-blue-500 opacity-70" />
 
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="text-base font-semibold tracking-tight text-slate-50">
-                                    {systemUser.display_name || systemUser.username}
-                                  </h3>
-                                  <HoverCard openDelay={100} closeDelay={80}>
-                                    <HoverCardTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-slate-300 transition-colors hover:border-cyan-200/40 hover:text-cyan-100"
-                                      >
-                                        <CircleHelp className="h-3.5 w-3.5" />
-                                      </button>
-                                    </HoverCardTrigger>
-                                    <HoverCardContent
-                                      align="start"
-                                      className="w-72 border-cyan-200/22 bg-[#233456] text-slate-100"
-                                    >
-                                      <div className="space-y-2">
-                                        <div className="text-sm font-semibold">帳號卡說明</div>
-                                        <p className="text-sm leading-6 text-slate-300">
-                                          這裡只保留必要資訊；建立資訊、權限摘要與管理操作都集中在卡片內，避免版面被說明文撐高。
-                                        </p>
-                                      </div>
-                                    </HoverCardContent>
-                                  </HoverCard>
-                                  <Badge className={getRoleColor(systemUser.role)}>
-                                    {getRoleLabel(systemUser.role)}
-                                  </Badge>
-                                  <Badge className={getStatusTone(systemUser.status)}>
-                                    {getStatusLabel(systemUser.status)}
-                                  </Badge>
-                                  {isProtected ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="border-white/16 bg-white/[0.05] text-slate-200"
-                                    >
-                                      保留帳號
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-
-                            <Badge
-                              variant="outline"
-                              className="border-cyan-200/22 bg-white/[0.04] px-2.5 py-1 text-slate-100"
-                            >
-                              {workspaceBadges.length > 0
-                                ? `${workspaceBadges.length} 個工作區`
-                                : "未配置"}
-                            </Badge>
+                      <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-300/15 bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(37,99,235,0.08))]">
+                            <Shield className="h-4.5 w-4.5 text-sky-200" />
                           </div>
-
-                          <div className="grid gap-2.5 md:grid-cols-3">
-                            <div className="rounded-[20px] border border-cyan-200/22 bg-[linear-gradient(180deg,rgba(122,162,255,0.16),rgba(18,31,54,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/76">
-                                帳號
-                              </div>
-                              <div className="mt-1.5 text-base font-semibold text-slate-50">
-                                {systemUser.username}
-                              </div>
-                            </div>
-
-                            <div className="rounded-[20px] border border-violet-200/22 bg-[linear-gradient(180deg,rgba(129,78,255,0.16),rgba(26,25,52,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-violet-100/78">
-                                建立者
-                              </div>
-                              <div className="mt-1.5 text-base font-semibold text-slate-50">
-                                {systemUser.created_by}
-                              </div>
-                            </div>
-
-                            <div className="rounded-[20px] border border-amber-200/22 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(39,27,18,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.22em] text-amber-100/78">
-                                <Clock3 className="h-3.5 w-3.5" />
-                                建立時間
-                              </div>
-                              <div className="mt-1.5 text-base font-semibold text-slate-50">
-                                {formatCreatedAt(systemUser.created_at)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-[22px] border border-emerald-200/22 bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(18,37,35,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className="text-sm font-semibold text-slate-50">
-                                  網站與工作區權限
-                                </div>
-                                <HoverCard openDelay={100} closeDelay={80}>
-                                  <HoverCardTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-slate-300 transition-colors hover:border-emerald-200/40 hover:text-emerald-100"
-                                    >
-                                      <CircleHelp className="h-3 w-3" />
-                                    </button>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent
-                                    align="start"
-                                    className="w-72 border-emerald-200/22 bg-[#1d3a39] text-slate-100"
-                                  >
-                                    <p className="text-sm leading-6 text-slate-300">
-                                      工作區入口與角色已合併顯示。若要調整可見範圍或管理權限，直接用右側的「網站權限」即可。
-                                    </p>
-                                  </HoverCardContent>
-                                </HoverCard>
-                              </div>
-
-                              <Badge
-                                variant="outline"
-                                className="border-emerald-200/24 bg-emerald-300/10 text-emerald-50"
-                              >
-                                {workspaceBadges.length > 0
-                                  ? `${workspaceBadges.length} 個工作區`
-                                  : "尚未配置"}
-                              </Badge>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              {workspaceBadges.length > 0 ? (
-                                workspaceBadges.map((workspace) => (
-                                  <Badge
-                                    key={`${systemUser.id}-${workspace.id}`}
-                                    variant="outline"
-                                    className="border-white/14 bg-white/[0.05] text-slate-100"
-                                  >
-                                    {workspace.label} · {workspace.level}
-                                  </Badge>
-                                ))
-                              ) : (
-                                <Badge
-                                  variant="outline"
-                                  className="border-white/14 bg-white/[0.05] text-slate-200"
-                                >
-                                  尚未設定工作區權限
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <aside className="rounded-[22px] border border-sky-200/22 bg-[linear-gradient(180deg,rgba(64,104,178,0.16),rgba(18,28,48,0.96))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                          <div className="space-y-2.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-sky-100/74">
-                                Actions
-                              </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="truncate text-base font-bold text-slate-100">
+                                {systemUser.display_name || systemUser.username}
+                              </h3>
                               <HoverCard openDelay={100} closeDelay={80}>
                                 <HoverCardTrigger asChild>
                                   <button
                                     type="button"
-                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-slate-300 transition-colors hover:border-sky-200/40 hover:text-sky-100"
+                                    aria-label="帳號卡說明"
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.035] text-slate-500 transition-colors hover:border-cyan-200/30 hover:text-cyan-100"
                                   >
-                                    <CircleHelp className="h-3 w-3" />
+                                    <CircleHelp className="h-3.5 w-3.5" />
                                   </button>
                                 </HoverCardTrigger>
                                 <HoverCardContent
-                                  align="end"
-                                  className="w-72 border-sky-200/22 bg-[#203454] text-slate-100"
+                                  align="start"
+                                  className="w-72 border-cyan-200/20 bg-[#182a48] text-slate-100"
                                 >
                                   <div className="space-y-2">
-                                    <div className="text-sm font-semibold">帳號管理操作</div>
+                                    <div className="text-sm font-semibold">帳號管理說明</div>
                                     <p className="text-sm leading-6 text-slate-300">
-                                      啟停帳號、調整網站權限與重設密碼都從這裡進入。密碼說明不常駐顯示，避免浪費版面。
+                                      卡片集中顯示建立資訊與工作區權限；停用、權限調整與密碼重設可從右側按鈕操作。
                                     </p>
                                   </div>
                                 </HoverCardContent>
                               </HoverCard>
+                              <Badge className={getRoleColor(systemUser.role)}>{getRoleLabel(systemUser.role)}</Badge>
+                              <Badge className={getStatusTone(systemUser.status)}>{getStatusLabel(systemUser.status)}</Badge>
+                              {isProtected ? (
+                                <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-slate-400">
+                                  保留帳號
+                                </Badge>
+                              ) : null}
                             </div>
-
-                            <div className="grid gap-2">
-                              {systemUser.username !== "liu52417" ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleToggleUserStatus(systemUser.id, systemUser.status)
-                                  }
-                                  className="border-rose-200/28 bg-white/[0.03] text-slate-100 hover:border-rose-200/50 hover:bg-rose-300/10"
-                                >
-                                  {systemUser.status === "active" ? "停用帳號" : "重新啟用"}
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled
-                                  className="border-slate-200/12 bg-white/[0.02] text-slate-400"
-                                >
-                                  主系統帳號
-                                </Button>
-                              )}
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedUserId(systemUser.id);
-                                  setSelectedUsername(systemUser.username);
-                                  setPermissionsDialogOpen(true);
-                                }}
-                                className="border-cyan-200/30 bg-white/[0.03] text-slate-100 hover:border-cyan-100/50 hover:bg-cyan-300/10"
-                              >
-                                <Shield className="h-4 w-4 mr-1" />
-                                網站權限
-                              </Button>
-
-                              <UserEditDialog
-                                userId={systemUser.id}
-                                username={systemUser.username}
-                                role={systemUser.role}
-                                status={systemUser.status}
-                                displayName={systemUser.display_name}
-                                onUpdate={loadSystemUsers}
-                                onDelete={handleDeleteUser}
-                              />
-                            </div>
+                            <p className="mt-1 truncate text-xs text-slate-500">@{systemUser.username}</p>
                           </div>
-                        </aside>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          {systemUser.username !== "liu52417" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-amber-300/20 hover:bg-amber-400/10 hover:text-amber-100"
+                              onClick={() => handleToggleUserStatus(systemUser.id, systemUser.status)}
+                            >
+                              {systemUser.status === "active" ? "停用帳號" : "重新啟用"}
+                            </Button>
+                          ) : (
+                            <Button variant="outline" size="sm" className="h-9 rounded-xl border-white/10 bg-slate-950/20" disabled>
+                              主系統帳號
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 rounded-xl border-sky-300/15 bg-sky-400/[0.07] text-sky-100 hover:border-sky-300/30 hover:bg-sky-400/15"
+                            onClick={() => {
+                              setSelectedUserId(systemUser.id);
+                              setSelectedUsername(systemUser.username);
+                              setPermissionsDialogOpen(true);
+                            }}
+                          >
+                            <Shield className="mr-1.5 h-3.5 w-3.5" />
+                            網站權限
+                          </Button>
+
+                          <div className="[&>button]:h-9 [&>button]:rounded-xl [&>button]:border-white/10 [&>button]:bg-slate-950/25 [&>button]:text-slate-300 [&>button]:hover:border-sky-300/20 [&>button]:hover:bg-sky-400/10 [&>button]:hover:text-sky-100">
+                            <UserEditDialog
+                              userId={systemUser.id}
+                              username={systemUser.username}
+                              role={systemUser.role}
+                              status={systemUser.status}
+                              displayName={systemUser.display_name}
+                              onUpdate={loadSystemUsers}
+                              onDelete={handleDeleteUser}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 py-4 sm:grid-cols-3">
+                        <div className="min-w-0 border-white/[0.07] sm:border-r sm:pr-4">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入帳號</div>
+                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
+                        </div>
+                        <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立者</div>
+                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.created_by}</div>
+                        </div>
+                        <div className="min-w-0 sm:pl-4">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                            <Clock3 className="h-3 w-3" />
+                            建立時間
+                          </div>
+                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
+                            {formatCreatedAt(systemUser.created_at)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-slate-950/25 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <Lock className="h-3.5 w-3.5 text-indigo-200/75" />
+                          <span className="text-xs font-semibold text-slate-400">網站與工作區權限</span>
+                          <span className="rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
+                            {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {workspaceBadges.length > 0 ? (
+                            workspaceBadges.map((workspace) => (
+                              <Badge
+                                key={`${systemUser.id}-${workspace.id}`}
+                                variant="outline"
+                                className="border-cyan-300/10 bg-cyan-300/[0.05] text-[11px] font-medium text-cyan-100/80"
+                              >
+                                {workspace.label} · {workspace.level}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-500">尚未設定工作區權限</span>
+                          )}
+                        </div>
                       </div>
                     </article>
                   );
                 })}
 
                 {filteredSystemUsers.length === 0 ? (
-                  <div className="rounded-[28px] border border-dashed border-cyan-300/20 bg-[linear-gradient(180deg,rgba(22,35,60,0.92),rgba(14,22,37,0.92))] px-6 py-16 text-center">
-                    <div className="text-lg font-semibold text-foreground">找不到符合條件的用戶</div>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                  <div className="rounded-[22px] border border-dashed border-sky-300/15 bg-slate-950/20 px-6 py-16 text-center">
+                    <div className="text-lg font-semibold text-slate-200">找不到符合條件的用戶</div>
+                    <p className="mt-2 text-sm text-slate-500">
                       請調整搜尋關鍵字、角色或狀態篩選，再重新檢查。
                     </p>
                   </div>
@@ -1042,6 +985,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         userId={selectedUserId}
         username={selectedUsername}
       />
+      </div>
     </div>
   );
 }
