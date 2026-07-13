@@ -9,8 +9,8 @@
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from "react";
-import { startTransition } from "react";
 import type { CSSProperties } from "react";
 import {
   ChevronDown,
@@ -23,6 +23,8 @@ import {
   Download,
   Eye,
   Factory,
+  FileArchive,
+  FileCode2,
   FileSpreadsheet,
   Filter,
   History,
@@ -60,11 +62,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import seedPayload from "@/data/materialRequestSeed.json";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { exportToCsv } from "@/utils/apiExportUtils";
+import { useUser } from "@/components/auth/UserContext";
 
 import {
   type MaterialDataset,
@@ -78,6 +80,7 @@ import {
   getActionLabel,
   getLatestTrackingEntry,
   isPreferredInternalPartNumber,
+  normalizeMaterialSearchText,
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
@@ -86,6 +89,7 @@ import {
   type BomPageTrackerStatus,
   type BomStorageMode,
   type BomWorkspace,
+  BomRecordConflictError,
   loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
@@ -95,6 +99,19 @@ import {
 } from "./materialBomStorage";
 import type { BomTableColorTheme } from "./materialBomStorage";
 import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
+import {
+  type MaterialExportProgress,
+  type MaterialReportSnapshot,
+  exportMaterialReportExcel,
+  exportMaterialReportHtml,
+  exportMaterialReportHtmlZip,
+} from "./materialRequestExport";
+import { useMaterialBomPresence } from "./useMaterialBomPresence";
+import {
+  logMaterialRecordChange,
+  logMaterialReportExport,
+  logMaterialWorkspaceAction,
+} from "./materialRequestAudit";
 
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
@@ -107,6 +124,15 @@ const SORT_MODE_LABELS: Record<SortMode, string> = {
   alternatives: "替代料數由多到少",
   approved: "Approved 數由多到少",
   pending: "待申請數由多到少",
+};
+
+const AVAILABILITY_FILTER_LABELS: Record<AvailabilityFilter, string> = {
+  all: "全部狀態",
+  usable: "已有可用料",
+  required: "主料與替代都無料",
+  pending: "有待申請明細",
+  risk: "有風險",
+  single: "單一來源",
 };
 
 interface ExcelFilterOption {
@@ -137,6 +163,16 @@ interface MaterialColumnFilters {
 
 type ColumnFilterKey = keyof MaterialColumnFilters;
 
+const COLUMN_FILTER_LABELS: Record<ColumnFilterKey, string> = {
+  material: "料件",
+  refDes: "REF DES",
+  mpn: "MPN",
+  internal: "內部料號",
+  virtualAlternative: "TX",
+  trackingStatus: "狀態追蹤",
+  specification: "規格",
+};
+
 interface CachedColumnValues {
   raw: string[];
   searchable: string;
@@ -160,8 +196,9 @@ const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
 
-const PAGE_SIZE_OPTIONS = [50, 100, 200, 500, 1000];
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
+const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
 const COLUMN_WIDTHS_KEY = "station-status-hub:material-column-widths:v7";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -510,8 +547,14 @@ function loadSavedChanges(): SavedMaterialChanges {
   }
 }
 
-function createDefaultBomWorkspace(): BomWorkspace {
-  const payload = seedPayload as MaterialWorkbookPayload;
+function createDefaultBomWorkspace(sourcePayload?: MaterialWorkbookPayload): BomWorkspace {
+  const payload = sourcePayload ?? {
+    sourceFile: "申請carrier料.xlsx",
+    sheetName: "",
+    generatedAt: new Date(0).toISOString(),
+    recordCount: 0,
+    records: [],
+  };
   const savedChanges = loadSavedChanges();
   const records = payload.records
     .map((record) => savedChanges.updated[record.id] ?? record)
@@ -524,6 +567,11 @@ function createDefaultBomWorkspace(): BomWorkspace {
     tableColorTheme: DEFAULT_BOM_TABLE_COLOR_THEME,
     updatedAt: payload.generatedAt,
   };
+}
+
+async function loadDefaultBomWorkspace() {
+  const module = await import("@/data/materialRequestSeed.json");
+  return createDefaultBomWorkspace(module.default as MaterialWorkbookPayload);
 }
 
 function createBomId(fileName: string) {
@@ -683,7 +731,7 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
 
 function parseSearchTokens(query: string) {
   return (query.match(/"[^"]+"|\S+/g) ?? [])
-    .map((token) => token.replace(/^"|"$/g, "").trim().toLowerCase())
+    .map((token) => normalizeMaterialSearchText(token.replace(/^"|"$/g, "")))
     .filter(Boolean);
 }
 
@@ -1034,7 +1082,7 @@ function readImageFile(file: File) {
 }
 
 function normalizeFilterValue(value: string) {
-  const normalized = value.trim();
+  const normalized = String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
   return normalized || "(空白)";
 }
 
@@ -1047,7 +1095,7 @@ function createCachedColumnValues(values: string[]): CachedColumnValues {
 
   return {
     raw,
-    searchable: raw.map((value) => value.toLowerCase()).join(" "),
+    searchable: raw.map(normalizeMaterialSearchText).join(" "),
   };
 }
 
@@ -1232,47 +1280,6 @@ function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection) {
       value === "無狀態" ? "新增追蹤" : String(value ?? ""),
     )),
   ));
-}
-
-function DeferredTextInput({
-  className,
-  commitDelay = 90,
-  onCommit,
-  placeholder,
-  value,
-}: {
-  className?: string;
-  commitDelay?: number;
-  onCommit: (value: string) => void;
-  placeholder?: string;
-  value: string;
-}) {
-  const [draftValue, setDraftValue] = useState(value);
-
-  useEffect(() => {
-    setDraftValue(value);
-  }, [value]);
-
-  useEffect(() => {
-    if (draftValue === value) return undefined;
-
-    const timerId = window.setTimeout(() => {
-      startTransition(() => {
-        onCommit(draftValue);
-      });
-    }, commitDelay);
-
-    return () => window.clearTimeout(timerId);
-  }, [commitDelay, draftValue, onCommit, value]);
-
-  return (
-    <Input
-      value={draftValue}
-      onChange={(event) => setDraftValue(event.target.value)}
-      placeholder={placeholder}
-      className={className}
-    />
-  );
 }
 
 function ExcelFilterPopover({
@@ -1988,7 +1995,7 @@ function TrackingHistoryDialog({
     setRequestInfo("");
     setImages([]);
     setPreviewImage(null);
-  }, [open, record?.id]);
+  }, [open, record?.id, record?.requestTicket, record?.requestUrl]);
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -2181,7 +2188,7 @@ function TrackingHistoryDialog({
                                 className="block aspect-[4/3] w-full bg-slate-950/40 transition hover:opacity-90"
                                 title={`預覽圖片：${image.name}`}
                               >
-                                <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
+                                <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                               </button>
                               <div className="flex items-start justify-between gap-3 px-3 py-2">
                                 <div className="min-w-0">
@@ -2292,7 +2299,7 @@ function TrackingHistoryDialog({
                               title={`檢視圖片：${image.name}`}
                             >
                               <div className="aspect-[4/3]">
-                                <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
+                                <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                               </div>
                               <div className="px-3 py-2">
                                 <p className="truncate text-sm font-semibold text-slate-200">{image.name}</p>
@@ -2573,7 +2580,7 @@ function BomPageTrackerDialog({
     setRangeEndInput(String(defaultRangePage));
     setPages(syncBomTrackerPages(workspace.pageTracker?.pages ?? [], summary.totalPages));
     setIsSaving(false);
-  }, [open, workspace?.id, workspace?.pageTracker?.updatedAt]);
+  }, [open, workspace]);
 
   if (!workspace) return null;
 
@@ -3701,6 +3708,96 @@ function BomTableColorDialog({
   );
 }
 
+function MaterialExportDialog({
+  activeFormat,
+  onExport,
+  onOpenChange,
+  open,
+  progress,
+  snapshot,
+}: {
+  activeFormat: "excel" | "html" | "zip" | null;
+  onExport: (format: "excel" | "html" | "zip") => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  progress: MaterialExportProgress | null;
+  snapshot: MaterialReportSnapshot | null;
+}) {
+  const progressLabel = (() => {
+    if (!progress) return "固定查詢結果已建立，可用同一份資料產生不同格式。";
+    if (progress.phase === "images") {
+      return `正在處理圖片 ${progress.current ?? 0} / ${progress.total ?? 0}`;
+    }
+    if (progress.phase === "excel") return "正在產生 Excel";
+    if (progress.phase === "html") return "正在產生 HTML";
+    if (progress.phase === "complete") return "報表已完成";
+    return "正在整理資料";
+  })();
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!activeFormat) onOpenChange(nextOpen); }}>
+      <DialogContent className="max-w-3xl border-cyan-300/25 bg-[#0b1829] text-slate-100">
+        <DialogHeader>
+          <DialogTitle className="text-xl text-slate-50">匯出主管報表</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Excel、HTML 與 HTML ZIP 都使用同一份固定查詢結果，匯出期間不會重新查詢或改動原始資料。
+          </DialogDescription>
+        </DialogHeader>
+
+        {snapshot ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-sky-300/20 bg-sky-400/[0.08] p-3">
+                <p className="text-xs text-sky-200">原始主料</p>
+                <p className="mt-1 text-2xl font-black text-white">{snapshot.originalGroupCount.toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl border border-cyan-300/20 bg-cyan-400/[0.08] p-3">
+                <p className="text-xs text-cyan-200">篩選後主料</p>
+                <p className="mt-1 text-2xl font-black text-white">{snapshot.filteredGroupCount.toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-300/20 bg-emerald-400/[0.08] p-3">
+                <p className="text-xs text-emerald-200">匯出明細</p>
+                <p className="mt-1 text-2xl font-black text-white">{snapshot.rows.length.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-500/20 bg-[#081322] p-3">
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <p><span className="text-slate-500">匯出人：</span>{snapshot.exportedBy}</p>
+                <p><span className="text-slate-500">資料截止：</span>{formatTimestamp(snapshot.dataAsOf)}</p>
+                <p className="sm:col-span-2"><span className="text-slate-500">BOM：</span>{snapshot.workspaceName}</p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(snapshot.filterSummary.length > 0 ? snapshot.filterSummary : ["全部資料"]).map((filter) => (
+                  <span key={filter} className="rounded-md border border-cyan-300/20 bg-cyan-300/[0.08] px-2.5 py-1 text-xs text-cyan-100">{filter}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-cyan-300/18 bg-cyan-300/[0.06] px-3 py-2.5 text-sm text-cyan-100" role="status" aria-live="polite">
+              {progressLabel}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("excel")} className="h-12 bg-emerald-500 font-bold text-slate-950 hover:bg-emerald-400 disabled:bg-slate-600">
+                <FileSpreadsheet className="mr-2 h-5 w-5" />{activeFormat === "excel" ? "產生中" : "匯出 Excel"}
+              </Button>
+              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("html")} className="h-12 bg-sky-500 font-bold text-slate-950 hover:bg-sky-400 disabled:bg-slate-600">
+                <FileCode2 className="mr-2 h-5 w-5" />{activeFormat === "html" ? "產生中" : "匯出 HTML"}
+              </Button>
+              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("zip")} className="h-12 bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600">
+                <FileArchive className="mr-2 h-5 w-5" />{activeFormat === "zip" ? "封裝中" : "HTML + 圖片 ZIP"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-300/20 bg-amber-400/[0.08] p-4 text-sm text-amber-100">尚未建立報表快照。</div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
@@ -3708,12 +3805,13 @@ export function MaterialRequestPage() {
   const [markedGroupKeys, setMarkedGroupKeys] = useState<string[]>(() => loadMarkedGroups(loadActiveBomId()));
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100);
+  const [pageSize, setPageSize] = useState(50);
   const [columnWidths, setColumnWidths] = useState(loadColumnWidths);
   const [tableColorDialogOpen, setTableColorDialogOpen] = useState(false);
   const [tableColorDraft, setTableColorDraft] = useState<BomTableColorTheme>(DEFAULT_BOM_TABLE_COLOR_THEME);
@@ -3727,10 +3825,33 @@ export function MaterialRequestPage() {
   const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
   const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportSnapshot, setExportSnapshot] = useState<MaterialReportSnapshot | null>(null);
+  const [exportProgress, setExportProgress] = useState<MaterialExportProgress | null>(null);
+  const [activeExportFormat, setActiveExportFormat] = useState<"excel" | "html" | "zip" | null>(null);
+  const [pendingRemoteRecordIds, setPendingRemoteRecordIds] = useState<string[]>([]);
+  const [hasPendingWorkspaceUpdate, setHasPendingWorkspaceUpdate] = useState(false);
+  const [isSearchPending, startSearchTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
+  const activeBomIdRef = useRef(activeBomId);
+  const recentLocalRecordIdsRef = useRef(new Map<string, number>());
+  const loadedViewStateKeyRef = useRef("");
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
+  const { user } = useUser();
+  const presenceEditingRecordId = editorOpen && editorMode !== "view"
+    ? editorRecord.id
+    : trackingDialogOpen
+      ? trackingRecord?.id ?? null
+      : null;
+  const { editorsByRecordId, onlineUserCount } = useMaterialBomPresence(
+    activeBomId,
+    user,
+    presenceEditingRecordId,
+  );
   const isCollaborativeReady = collaborationStatus === "remote";
   const canManageBomPageTracker = collaborationStatus !== "checking" && collaborationStatus !== "error";
   const collaborationStatusMeta = useMemo(
@@ -3787,10 +3908,15 @@ export function MaterialRequestPage() {
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (storedWorkspaces.length === 0) {
-      const fallbackWorkspace = createDefaultBomWorkspace();
-      setBomWorkspaces([fallbackWorkspace]);
-      setActiveBomId(fallbackWorkspace.id);
-      void saveBomWorkspace(fallbackWorkspace).catch(() => undefined);
+      const loadingWorkspace = createDefaultBomWorkspace();
+      setBomWorkspaces([loadingWorkspace]);
+      setActiveBomId(loadingWorkspace.id);
+      void loadDefaultBomWorkspace().then((fallbackWorkspace) => {
+        setBomWorkspaces((current) => current.length === 1 && current[0].id === loadingWorkspace.id
+          ? [fallbackWorkspace]
+          : current);
+        return saveBomWorkspace(fallbackWorkspace);
+      }).catch(() => undefined);
       return;
     }
 
@@ -3806,7 +3932,7 @@ export function MaterialRequestPage() {
   const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
     const requestId = ++workspaceSyncRequestRef.current;
     try {
-      const result = await loadBomWorkspacesDetailed();
+      const result = await loadBomWorkspacesDetailed(preferredBomId);
       if (requestId !== workspaceSyncRequestRef.current) {
         return result.workspaces;
       }
@@ -3827,7 +3953,7 @@ export function MaterialRequestPage() {
     const syncWorkspaces = async (preferredBomId?: string) => {
       const requestId = ++workspaceSyncRequestRef.current;
       try {
-        const result = await loadBomWorkspacesDetailed();
+        const result = await loadBomWorkspacesDetailed(preferredBomId);
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredBomId);
@@ -3835,27 +3961,114 @@ export function MaterialRequestPage() {
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus("error");
         // Keep the current local state when collaborative sync is temporarily unavailable.
+      } finally {
+        if (active) setIsInitialLoading(false);
       }
     };
 
     void syncWorkspaces(loadActiveBomId());
-    const unsubscribe = subscribeBomWorkspaceChanges(() => {
-      void syncWorkspaces();
+    const unsubscribe = subscribeBomWorkspaceChanges((change) => {
+      if (!change.workspaceIds.includes(activeBomIdRef.current)) return;
+
+      const now = Date.now();
+      const externalRecordIds = change.recordIds.filter((recordId) => {
+        const localTimestamp = recentLocalRecordIdsRef.current.get(recordId) ?? 0;
+        return now - localTimestamp > 5000;
+      });
+      if (externalRecordIds.length > 0) {
+        setPendingRemoteRecordIds((current) => Array.from(new Set([...current, ...externalRecordIds])));
+      }
+      if (change.recordIds.length === 0) {
+        setHasPendingWorkspaceUpdate(true);
+      }
     });
-    const pollId = window.setInterval(() => {
-      void syncWorkspaces();
-    }, 15000);
 
     return () => {
       active = false;
-      window.clearInterval(pollId);
       unsubscribe();
     };
   }, [applyLoadedWorkspaces]);
 
   useEffect(() => {
+    activeBomIdRef.current = activeBomId;
+  }, [activeBomId]);
+
+  useEffect(() => {
+    const selectedWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId);
+    if (!selectedWorkspace || selectedWorkspace.isLoaded !== false) return;
+
+    let active = true;
+    setIsWorkspaceLoading(true);
+    void reloadBomWorkspaces(activeBomId)
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setIsWorkspaceLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeBomId, bomWorkspaces, reloadBomWorkspaces]);
+
+  useEffect(() => {
     window.localStorage.setItem(ACTIVE_BOM_KEY, activeBomId);
   }, [activeBomId]);
+
+  useEffect(() => {
+    const key = `${VIEW_STATE_KEY_PREFIX}${user?.userId || "guest"}:${activeBomId}`;
+    loadedViewStateKeyRef.current = "";
+    try {
+      const stored = window.sessionStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<{
+          availability: AvailabilityFilter;
+          columnFilters: MaterialColumnFilters;
+          page: number;
+          pageSize: number;
+          query: string;
+          sortMode: SortMode;
+        }>;
+        const restoredQuery = typeof parsed.query === "string" ? parsed.query : "";
+        setQuery(restoredQuery);
+        setSearchDraft(restoredQuery);
+        if (parsed.columnFilters && typeof parsed.columnFilters === "object") {
+          setColumnFilters({ ...EMPTY_COLUMN_FILTERS, ...parsed.columnFilters });
+        }
+        if (parsed.availability && parsed.availability in AVAILABILITY_FILTER_LABELS) {
+          setAvailability(parsed.availability);
+        }
+        if (parsed.sortMode && parsed.sortMode in SORT_MODE_LABELS) setSortMode(parsed.sortMode);
+        if (PAGE_SIZE_OPTIONS.includes(Number(parsed.pageSize))) setPageSize(Number(parsed.pageSize));
+        if (Number.isFinite(parsed.page) && Number(parsed.page) > 0) setPage(Math.trunc(Number(parsed.page)));
+      }
+    } catch {
+      // Invalid per-user view state must never block the shared production data.
+    } finally {
+      loadedViewStateKeyRef.current = key;
+    }
+  }, [activeBomId, user?.userId]);
+
+  useEffect(() => {
+    const key = `${VIEW_STATE_KEY_PREFIX}${user?.userId || "guest"}:${activeBomId}`;
+    if (loadedViewStateKeyRef.current !== key) return undefined;
+
+    const timerId = window.setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(key, JSON.stringify({
+          availability,
+          columnFilters,
+          page,
+          pageSize,
+          query,
+          sortMode,
+        }));
+      } catch {
+        // View preferences are optional; shared BOM data is unaffected.
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timerId);
+  }, [activeBomId, availability, columnFilters, page, pageSize, query, sortMode, user?.userId]);
 
   useEffect(() => {
     setMarkedGroupKeys(loadMarkedGroups(activeBomId));
@@ -4101,6 +4314,26 @@ export function MaterialRequestPage() {
     });
   }, [getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
 
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string }> = [];
+
+    if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
+    if (availability !== "all") {
+      chips.push({ key: "availability", label: `狀態：${AVAILABILITY_FILTER_LABELS[availability]}` });
+    }
+    if (showMarkedOnly) chips.push({ key: "marked", label: "僅顯示我的標記" });
+
+    FILTER_KEYS.forEach((key) => {
+      const values = columnFilters[key];
+      if (!values?.length) return;
+      const preview = values.slice(0, 2).join("、");
+      const remainder = values.length > 2 ? ` 等 ${values.length} 項` : "";
+      chips.push({ key: `column:${key}`, label: `${COLUMN_FILTER_LABELS[key]}：${preview}${remainder}` });
+    });
+
+    return chips;
+  }, [availability, columnFilters, query, showMarkedOnly]);
+
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
@@ -4221,6 +4454,17 @@ export function MaterialRequestPage() {
         const existingWorkspace = workspaceMap.get(workspaceId);
         const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
         await saveBomWorkspace(workspace);
+        void logMaterialWorkspaceAction({
+          action: "import",
+          actor: user,
+          metadata: {
+            fileName: file.name,
+            recordCount: workspace.payload.recordCount,
+            replacedExistingWorkspace: Boolean(existingWorkspace),
+            sheetName: workspace.payload.sheetName,
+          },
+          workspaceId: workspace.id,
+        });
         replaceBomWorkspace(workspace);
         workspaceMap.set(workspaceId, workspace);
         lastWorkspaceId = workspace.id;
@@ -4288,6 +4532,10 @@ export function MaterialRequestPage() {
     }
 
     const exists = basePayload.records.some((item) => item.id === record.id);
+    const previousRecord = basePayload.records.find((item) => item.id === record.id);
+    const previousUpdatedAt = activeWorkspace.recordMeta?.[record.id]?.updatedAt;
+    const previousImageCount = (previousRecord?.trackingHistory ?? [])
+      .reduce((count, entry) => count + (entry.images?.length ?? 0), 0);
     const records = exists
       ? basePayload.records.map((item) => item.id === record.id ? record : item)
       : [...basePayload.records, record];
@@ -4296,12 +4544,36 @@ export function MaterialRequestPage() {
       payload: { ...basePayload, records, recordCount: records.length },
       updatedAt: new Date().toISOString(),
     };
+    recentLocalRecordIdsRef.current.set(record.id, Date.now());
     replaceBomWorkspace(nextWorkspace);
 
-    return saveBomWorkspaceRecord(nextWorkspace, record).catch(async (error) => {
-      await reloadBomWorkspaces(activeBomId).catch(() => undefined);
-      throw error;
-    });
+    return saveBomWorkspaceRecord(nextWorkspace, record)
+      .then((recordMeta) => {
+        setBomWorkspaces((current) => current.map((workspace) => workspace.id === nextWorkspace.id
+          ? {
+              ...workspace,
+              recordMeta: {
+                ...workspace.recordMeta,
+                [record.id]: recordMeta,
+              },
+            }
+          : workspace));
+        void logMaterialRecordChange({
+          action: exists ? "update" : "create",
+          actor: user,
+          imageCount: (record.trackingHistory ?? []).reduce((count, entry) => count + (entry.images?.length ?? 0), 0),
+          previousImageCount,
+          newUpdatedAt: recordMeta.updatedAt,
+          previousUpdatedAt,
+          recordId: record.id,
+          workspaceId: nextWorkspace.id,
+        });
+        return recordMeta;
+      })
+      .catch(async (error) => {
+        await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+        throw error;
+      });
   };
 
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
@@ -4315,10 +4587,12 @@ export function MaterialRequestPage() {
         title: editorMode === "create" ? "料件已新增" : "料件已更新",
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
       });
-    } catch {
+    } catch (error) {
       toast({
-        title: "同步更新失敗",
-        description: "這筆料件還沒寫進共用資料，請稍後再試一次。",
+        title: error instanceof BomRecordConflictError ? "偵測到版本衝突" : "同步更新失敗",
+        description: error instanceof BomRecordConflictError
+          ? "此筆資料已由其他使用者更新，系統沒有覆蓋對方內容；你的表單仍保留，請比對最新資料後再送出。"
+          : "這筆料件還沒寫進共用資料，請稍後再試一次。",
         variant: "destructive",
       });
     }
@@ -4379,6 +4653,16 @@ export function MaterialRequestPage() {
 
     try {
       await saveBomWorkspacePageTracker(workspaceId, pageTracker);
+      void logMaterialWorkspaceAction({
+        action: "page_tracker.update",
+        actor: user,
+        metadata: {
+          completedPages: pageTrackerSummary.completedPages,
+          currentPage: pageTrackerSummary.currentPage,
+          totalPages: pageTrackerSummary.totalPages,
+        },
+        workspaceId,
+      });
       toast({
         title: "頁數追蹤已更新",
         description: `${workspace.name} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
@@ -4410,7 +4694,10 @@ export function MaterialRequestPage() {
 
   const switchActiveBom = (value: string) => {
     setActiveBomId(value);
+    setPendingRemoteRecordIds([]);
+    setHasPendingWorkspaceUpdate(false);
     setQuery("");
+    setSearchDraft("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
     setShowMarkedOnly(false);
@@ -4420,6 +4707,7 @@ export function MaterialRequestPage() {
 
   const applyAvailabilityFilter = (nextAvailability: AvailabilityFilter) => {
     setQuery("");
+    setSearchDraft("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability((current) => current === nextAvailability ? "all" : nextAvailability);
     setExpandedKey(null);
@@ -4435,7 +4723,9 @@ export function MaterialRequestPage() {
     if (!targetWorkspace || !window.confirm(`確定刪除 BOM「${targetWorkspace.name}」？`)) return;
 
     const remaining = bomWorkspaces.filter((workspace) => workspace.id !== targetBomId);
-    const fallbackWorkspace = createDefaultBomWorkspace();
+    const fallbackWorkspace = remaining.length > 0
+      ? createDefaultBomWorkspace()
+      : await loadDefaultBomWorkspace();
     const nextWorkspaces = remaining.length > 0 ? remaining : [fallbackWorkspace];
 
     setBomWorkspaces(nextWorkspaces);
@@ -4445,6 +4735,15 @@ export function MaterialRequestPage() {
 
     try {
       await removeBomWorkspace(targetBomId);
+      void logMaterialWorkspaceAction({
+        action: "delete",
+        actor: user,
+        metadata: {
+          deletedWorkspaceId: targetBomId,
+          name: targetWorkspace.name,
+          recordCount: targetWorkspace.payload.recordCount,
+        },
+      });
       if (remaining.length === 0) {
         await saveBomWorkspace(fallbackWorkspace);
       }
@@ -4467,60 +4766,192 @@ export function MaterialRequestPage() {
     await deleteBomWorkspaceById(activeBomId);
   };
 
-  const handleExport = () => {
+  const createExportSnapshot = () => {
     const rows = filteredGroups.flatMap((group, groupIndex) =>
-      getMatchingRecords(group)
-        .map((record) => {
-          const latestTrackingEntry = getLatestTrackingEntry(record);
-          const requestMeta = getTrackingRequestMeta(record);
+      getMatchingRecords(group).map((record) => {
+        const latestTrackingEntry = getLatestTrackingEntry(record);
+        const requestMeta = getTrackingRequestMeta(record);
+        const images = Array.from(
+          new Map(
+            (record.trackingHistory ?? [])
+              .flatMap((entry) => entry.images ?? [])
+              .map((image) => [image.id, image]),
+          ).values(),
+        );
 
-          return {
-            Item: getGroupItemValue(group, groupIndex + 1),
-            我的標記: markedGroupKeySet.has(group.key) ? "★" : "",
-            Ref_Group: group.displayRef,
-            REF_DES: record.refDes || group.primaryRecord.refDes,
-            電路料名稱: group.name,
-            模組: group.assemblyName,
-            Qty: group.qty,
-            Symbol: group.schematicPart,
-            Footprint: group.footprint,
-            廠商: record.manufacturer,
-            Manufacturer_PN: record.manufacturerPartNumber,
-            Manufacturer_PN_2: record.manufacturerPartNumberAlt,
-            TX: record.virtualAlternative ?? "",
-            狀態追蹤: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
-            單號: requestMeta.ticket,
-            申請連結: requestMeta.url,
-            申請狀態資訊: latestTrackingEntry?.requestInfo ?? "",
-            更新人: latestTrackingEntry?.createdBy ?? "",
-            Sourcing_Status: record.sourcingStatus,
-            建料狀態: getActionLabel(record.actionKind),
-            內部料號: record.partNumber,
-            規格: record.partSpec,
-          };
-        })
+        return {
+          actionStatus: getActionLabel(record.actionKind),
+          assembly: group.assemblyName,
+          footprint: group.footprint,
+          images: images.map((image) => ({
+            dataUrl: image.dataUrl,
+            id: image.id,
+            mimeType: image.mimeType,
+            name: image.name,
+          })),
+          internalPartNumber: record.partNumber,
+          item: String(getGroupItemValue(group, groupIndex + 1)),
+          manufacturer: record.manufacturer,
+          manufacturerPartNumber: record.manufacturerPartNumber,
+          manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
+          marked: markedGroupKeySet.has(group.key),
+          materialName: group.name,
+          qty: String(group.qty),
+          refDes: record.refDes || group.primaryRecord.refDes,
+          refGroup: group.displayRef,
+          requestInfo: latestTrackingEntry?.requestInfo ?? "",
+          requestTicket: requestMeta.ticket,
+          requestUrl: requestMeta.url,
+          sourcingStatus: record.sourcingStatus,
+          specification: record.partSpec || group.partSpec || group.partName,
+          symbol: group.schematicPart,
+          trackingOwner: latestTrackingEntry?.createdBy ?? "",
+          trackingStatus: getTrackingWorkflowStatus(record),
+          trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
+          tx: record.virtualAlternative ?? "",
+        };
+      }),
     );
 
     if (!rows.length) {
-      toast({ title: "沒有可匯出的資料", variant: "destructive" });
-      return;
+      toast({ title: "沒有可匯出的資料", description: "請調整搜尋或篩選條件後再試。", variant: "destructive" });
+      return null;
     }
 
-    const exportFileName = `${activeWorkspace.name || "material-alternatives"}-${new Date().toISOString().slice(0, 10)}`
-      .replace(/[\\/:*?"<>|]+/g, "-")
-      .replace(/\s+/g, "-");
+    const statusCounts = rows.reduce<Record<string, number>>((counts, row) => {
+      const status = row.trackingStatus || "未設定";
+      counts[status] = (counts[status] ?? 0) + 1;
+      return counts;
+    }, {});
+    const timestamp = new Date().toISOString();
+    const snapshot: MaterialReportSnapshot = {
+      dataAsOf: timestamp,
+      exportedAt: timestamp,
+      exportedBy: user?.displayName || user?.username || "未知使用者",
+      filteredGroupCount: filteredGroups.length,
+      filterSummary: [
+        ...activeFilterChips.map((chip) => chip.label),
+        `排序：${SORT_MODE_LABELS[sortMode]}`,
+      ],
+      id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `material-export-${Date.now()}`,
+      originalGroupCount: dataset.stats.totalGroups,
+      reportName: `${activeWorkspace.name}_料號申請篩選報表`,
+      rows,
+      sheetName: dataset.meta.sheetName,
+      sourceFile: dataset.meta.sourceFile,
+      statusCounts,
+      workspaceName: activeWorkspace.name,
+    };
 
-    exportToCsv(rows, `${exportFileName}.csv`);
-    toast({ title: "CSV 已下載", description: `共匯出 ${rows.length.toLocaleString()} 筆替代料。` });
+    setExportSnapshot(snapshot);
+    setExportProgress({ phase: "snapshot" });
+    setExportDialogOpen(true);
+    return snapshot;
+  };
+
+  const runExport = async (format: "excel" | "html" | "zip") => {
+    if (!exportSnapshot || activeExportFormat) return;
+    setActiveExportFormat(format);
+    setExportProgress({ phase: "snapshot" });
+
+    try {
+      const fileName = format === "excel"
+        ? await exportMaterialReportExcel(exportSnapshot, setExportProgress)
+        : format === "html"
+          ? await exportMaterialReportHtml(exportSnapshot, setExportProgress)
+          : await exportMaterialReportHtmlZip(exportSnapshot, setExportProgress);
+      await logMaterialReportExport({
+        actor: user,
+        fileName,
+        format: format === "zip" ? "html_zip" : format,
+        snapshot: exportSnapshot,
+        workspaceId: activeWorkspace.id,
+      });
+      toast({
+        title: "主管報表已匯出",
+        description: `${fileName} · ${exportSnapshot.rows.length.toLocaleString()} 筆明細`,
+      });
+    } catch (error) {
+      toast({
+        title: "報表匯出失敗",
+        description: error instanceof Error ? error.message : "產生報表時發生未預期錯誤。",
+        variant: "destructive",
+      });
+    } finally {
+      setActiveExportFormat(null);
+    }
+  };
+
+  const applySearch = async () => {
+    const normalizedQuery = searchDraft.normalize("NFKC").replace(/\u3000/g, " ").trim();
+    if (isSearchPending || isWorkspaceLoading) return;
+
+    if (isCollaborativeReady) {
+      setIsWorkspaceLoading(true);
+      try {
+        await reloadBomWorkspaces(activeBomId);
+        setPendingRemoteRecordIds([]);
+        setHasPendingWorkspaceUpdate(false);
+      } catch {
+        toast({
+          title: "無法取得伺服器最新資料",
+          description: "為避免顯示可能過期的搜尋結果，本次搜尋尚未執行。",
+          variant: "destructive",
+        });
+        return;
+      } finally {
+        setIsWorkspaceLoading(false);
+      }
+    }
+
+    startSearchTransition(() => {
+      setQuery(normalizedQuery);
+      setExpandedKey(null);
+      setPage(1);
+    });
   };
 
   const clearFilters = () => {
     setQuery("");
+    setSearchDraft("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
     setShowMarkedOnly(false);
     setSortMode("reference");
     setExpandedKey(null);
+  };
+
+  const removeFilterChip = (key: string) => {
+    if (key === "query") {
+      setQuery("");
+      setSearchDraft("");
+    } else if (key === "availability") {
+      setAvailability("all");
+    } else if (key === "marked") {
+      setShowMarkedOnly(false);
+    } else if (key.startsWith("column:")) {
+      const columnKey = key.slice("column:".length) as ColumnFilterKey;
+      if (FILTER_KEYS.includes(columnKey)) {
+        setColumnFilters((current) => ({ ...current, [columnKey]: null }));
+      }
+    }
+
+    setExpandedKey(null);
+    setPage(1);
+  };
+
+  const loadLatestBomData = async () => {
+    setIsWorkspaceLoading(true);
+    try {
+      await reloadBomWorkspaces(activeBomId);
+      setPendingRemoteRecordIds([]);
+      setHasPendingWorkspaceUpdate(false);
+      toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
+    } catch {
+      toast({ title: "載入最新資料失敗", description: "目前仍保留畫面中的資料與輸入內容。", variant: "destructive" });
+    } finally {
+      setIsWorkspaceLoading(false);
+    }
   };
 
   const toggleMarkedGroup = (groupKey: string) => {
@@ -4566,6 +4997,31 @@ export function MaterialRequestPage() {
     }
   };
 
+  if (isInitialLoading) {
+    return (
+      <div className="material-sheet-theme min-h-full bg-[#08111f] p-4 text-slate-100 sm:p-5 lg:p-6" aria-live="polite" aria-busy="true">
+        <div className="rounded-2xl border border-cyan-300/20 bg-[#102139] p-5">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-11 w-11 rounded-xl bg-cyan-200/10" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-40 bg-cyan-200/10" />
+              <Skeleton className="h-3 w-72 max-w-[70vw] bg-cyan-200/10" />
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-[#0d1b2f] p-4">
+          <p className="text-sm font-bold text-cyan-100">正在取得最新料號資料</p>
+          <p className="mt-1 text-sm text-slate-400">先載入 BOM 摘要，再載入目前使用中的資料，不會一次下載所有 BOM 與圖片。</p>
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-14 w-full bg-slate-500/10" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="material-sheet-theme min-h-full bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_28%),linear-gradient(180deg,#08111f_0%,#0d1a2d_48%,#091320_100%)] p-4 text-slate-100 sm:p-5 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
@@ -4586,6 +5042,14 @@ export function MaterialRequestPage() {
       <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
+      <MaterialExportDialog
+        activeFormat={activeExportFormat}
+        onExport={(format) => { void runExport(format); }}
+        onOpenChange={setExportDialogOpen}
+        open={exportDialogOpen}
+        progress={exportProgress}
+        snapshot={exportSnapshot}
+      />
 
       <header className="overflow-hidden rounded-2xl border border-cyan-300/22 bg-[radial-gradient(circle_at_top_right,rgba(103,232,249,0.18),transparent_28%),radial-gradient(circle_at_left,rgba(59,130,246,0.14),transparent_26%),linear-gradient(180deg,#172a45_0%,#11213a_52%,#0d1b30_100%)] p-4 shadow-[0_24px_70px_rgba(6,23,48,0.34)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -4601,6 +5065,9 @@ export function MaterialRequestPage() {
                   <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
                   {collaborationStatusMeta.label}
                 </Badge>
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 text-xs font-bold text-emerald-100">
+                  {onlineUserCount} 人在線
+                </span>
                 <span className="text-xs text-slate-400">{collaborationStatusMeta.description}</span>
               </div>
             </div>
@@ -4633,8 +5100,8 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={handleExport} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
-              <Download className="mr-2 h-4 w-4" />匯出結果
+            <Button type="button" variant="outline" onClick={createExportSnapshot} className="h-9 border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/18 hover:text-white">
+              <Download className="mr-2 h-4 w-4" />匯出主管報表
             </Button>
           </div>
         </div>
@@ -4729,6 +5196,26 @@ export function MaterialRequestPage() {
             </Button>
           </div>
 
+          {pageTrackerPanelCollapsed && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-lg border border-sky-300/20 bg-sky-400/[0.08] px-3 py-1.5 text-sky-100">
+                總頁數 <strong className="ml-1 text-white">{activePageTrackerSummary.totalPages || "未設定"}</strong>
+              </span>
+              <span className="rounded-lg border border-cyan-300/20 bg-cyan-400/[0.08] px-3 py-1.5 text-cyan-100">
+                目前 <strong className="ml-1 text-white">{activePageTrackerSummary.currentPage > 0 ? `第 ${activePageTrackerSummary.currentPage} 頁` : "未指定"}</strong>
+              </span>
+              <span className="rounded-lg border border-emerald-300/20 bg-emerald-400/[0.08] px-3 py-1.5 text-emerald-100">
+                已完成 <strong className="ml-1 text-white">{activePageTrackerSummary.completedPages} 頁</strong>
+              </span>
+              {activePageTrackerSummary.missingPages > 0 && (
+                <span className="rounded-lg border border-violet-300/20 bg-violet-400/[0.08] px-3 py-1.5 text-violet-100">
+                  缺料 {activePageTrackerSummary.missingPages} 頁
+                </span>
+              )}
+            </div>
+          )}
+
+          {!pageTrackerPanelCollapsed && (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <BomPageTrackerStatCard
               label="總頁數"
@@ -4749,6 +5236,7 @@ export function MaterialRequestPage() {
               tone={activePageTrackerSummary.completedPages > 0 ? "emerald" : "slate"}
             />
           </div>
+          )}
 
           {!pageTrackerPanelCollapsed && (
             <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -4840,19 +5328,67 @@ export function MaterialRequestPage() {
         </div>
       </header>
 
-      <div className="mt-3">
+      {(pendingRemoteRecordIds.length > 0 || hasPendingWorkspaceUpdate) && (
+        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-amber-300/30 bg-amber-400/[0.09] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="mt-0.5 h-5 w-5 flex-none text-amber-300" />
+            <div>
+              <p className="text-sm font-bold text-amber-100">
+                {pendingRemoteRecordIds.length > 0 ? `有 ${pendingRemoteRecordIds.length} 筆資料已由其他使用者更新` : "BOM 設定已由其他使用者更新"}
+              </p>
+              <p className="mt-0.5 text-xs text-amber-100/70">
+                {editorOpen || trackingDialogOpen
+                  ? "你正在填寫的內容不會被清除；完成或取消後再載入最新資料。"
+                  : "系統不會強制刷新或讓資料突然消失，請在方便時載入最新內容。"}
+              </p>
+            </div>
+          </div>
+          <Button type="button" variant="outline" onClick={() => { void loadLatestBomData(); }} disabled={isWorkspaceLoading} className="h-9 flex-none border-amber-300/35 bg-amber-300/12 text-amber-50 hover:bg-amber-300/20">
+            <RotateCcw className="mr-2 h-4 w-4" />載入最新資料
+          </Button>
+        </div>
+      )}
+
+      {isWorkspaceLoading && (
+        <div className="mt-3 rounded-xl border border-cyan-300/20 bg-[#0d2035] px-4 py-3" role="status" aria-live="polite">
+          <div className="flex items-center gap-3">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-300 motion-reduce:animate-none" />
+            <div>
+              <p className="text-sm font-bold text-cyan-100">正在切換 BOM</p>
+              <p className="mt-0.5 text-xs text-slate-400">目前只下載這份 BOM 的最新記錄，完成前不會顯示其他 BOM 的舊資料。</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={cn("mt-3 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
       <section className="rounded-2xl border border-cyan-300/18 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.10),transparent_30%),linear-gradient(180deg,#14233a_0%,#0f1b2f_100%)] p-3 shadow-[0_20px_48px_rgba(6,20,40,0.24)]">
-        <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_220px_auto]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
-            <DeferredTextInput
-              value={query}
-              onCommit={setQuery}
+            <Input
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void applySearch();
+                }
+              }}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
               className="h-10 border-cyan-300/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-cyan-400"
             />
           </div>
+
+          <Button
+            type="button"
+            onClick={() => { void applySearch(); }}
+            disabled={isSearchPending || isWorkspaceLoading}
+            className="h-10 bg-cyan-500 px-5 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-300"
+          >
+            <Search className="mr-2 h-4 w-4" />{isSearchPending ? "搜尋中" : "搜尋"}
+          </Button>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
             <SelectTrigger className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] text-sm text-slate-200">
@@ -4867,7 +5403,31 @@ export function MaterialRequestPage() {
             </SelectContent>
           </Select>
 
-          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />清除</Button>
+          <Button type="button" variant="outline" onClick={clearFilters} className="h-10 border-slate-400/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] px-3 text-sm text-slate-200 hover:border-cyan-300/22 hover:bg-cyan-400/10 hover:text-white"><RotateCcw className="mr-2 h-4 w-4" />全部清除</Button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-3">
+          <span className="rounded-md border border-cyan-300/20 bg-cyan-300/[0.08] px-2.5 py-1 text-xs font-bold text-cyan-100">
+            條件邏輯：全部同時符合（AND）
+          </span>
+          {activeFilterChips.length > 0 ? activeFilterChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => removeFilterChip(chip.key)}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-sky-300/24 bg-sky-400/10 px-2.5 py-1 text-xs font-semibold text-sky-100 hover:bg-sky-400/18"
+              title="移除此條件"
+            >
+              <span className="max-w-[24rem] truncate">{chip.label}</span>
+              <X className="h-3.5 w-3.5 flex-none" />
+            </button>
+          )) : (
+            <span className="text-xs text-slate-400">尚未套用搜尋或欄位篩選</span>
+          )}
+          {activeFilterChips.length > 1 && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-7 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+              全部清除
+            </Button>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
@@ -4964,6 +5524,14 @@ export function MaterialRequestPage() {
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
+                const editingNames = Array.from(new Set(
+                  group.records.flatMap((record) => editorsByRecordId.get(record.id) ?? []),
+                ));
+                const latestRecordUpdate = group.records
+                  .map((record) => activeWorkspace.recordMeta?.[record.id]?.updatedAt)
+                  .filter((value): value is string => Boolean(value))
+                  .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
+                const latestUpdater = trackingRecord ? getLatestTrackingEntry(trackingRecord)?.createdBy : "";
                 const primaryRowColor = activeTableColorTheme.primary;
                 const mainRowStyle = buildTableRowStyle(primaryRowColor, {
                   backgroundAlpha: mustApply ? 0.2 : primaryReady ? 0.17 : 0.14,
@@ -5179,7 +5747,17 @@ export function MaterialRequestPage() {
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
                       <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
+                        {editingNames.length > 0 && (
+                          <div className="mb-2 rounded-md border border-amber-300/28 bg-amber-400/12 px-2 py-1 text-[11px] font-bold text-amber-100" title={`${editingNames.join("、")} 正在編輯`}>
+                            {editingNames[0]} 正在編輯{editingNames.length > 1 ? ` +${editingNames.length - 1}` : ""}
+                          </div>
+                        )}
                         <Button type="button" variant="outline" size="sm" onClick={() => openCreate(group)} className="h-8 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-sm text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-100"><Plus className="mr-1 h-3.5 w-3.5" />資料更新</Button>
+                        {latestRecordUpdate && (
+                          <p className="mt-1.5 text-[10px] leading-4 text-slate-500" title={`最後修改：${formatTimestamp(latestRecordUpdate)}`}>
+                            {latestUpdater ? `${latestUpdater} · ` : ""}{formatTimestamp(latestRecordUpdate)}
+                          </p>
+                        )}
                       </td>
                     </tr>
                     {expanded && (
