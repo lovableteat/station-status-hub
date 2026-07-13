@@ -621,7 +621,7 @@ const Index = () => {
         className={cn(
           activeWorkspace === "station-status"
             ? "lg:h-[calc(100dvh-95px)] lg:min-h-0"
-            : "min-h-[calc(100vh-92px)]"
+            : "min-h-[calc(100dvh-92px)] w-full"
         )}
       >
         <React.Suspense
