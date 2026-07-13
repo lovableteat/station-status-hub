@@ -238,17 +238,17 @@ function IconTooltipButton({
           aria-label={label}
           onClick={onClick}
           className={cn(
-            "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+            "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
             active
-              ? "border-cyan-300/45 bg-cyan-400/18 text-cyan-50 shadow-[0_12px_30px_-18px_rgba(34,211,238,0.95)]"
-              : "border-white/12 bg-white/[0.045] text-slate-300 hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
+              ? "border-blue-300/50 bg-blue-500/20 text-blue-50 shadow-[0_12px_30px_-18px_rgba(59,130,246,0.95)]"
+              : "border-[#214669] bg-[#10283d] text-blue-100 hover:border-blue-300/45 hover:bg-[#16324b] hover:text-white",
             className
           )}
         >
           <Icon className="h-[18px] w-[18px]" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right" className="border-white/10 bg-[#07131f] text-slate-100">
+      <TooltipContent side="right" className="border-[#214669] bg-[#081c2d] text-slate-100">
         {label}
       </TooltipContent>
     </Tooltip>
@@ -298,11 +298,11 @@ function SceneNavigator({
 
   if (collapsed) {
     return (
-      <div className="flex h-full flex-col items-center gap-2 py-3">
+      <div className="flex h-full flex-col items-center gap-2 bg-[#081c2d] py-3">
         {onToggleCollapse ? (
           <IconTooltipButton label="展開場景導覽" icon={PanelLeftOpen} onClick={onToggleCollapse} />
         ) : null}
-        <div className="my-1 h-px w-8 bg-white/10" />
+        <div className="my-1 h-px w-8 bg-[#214669]" />
         {LAYER_OPTIONS.map((layer) => (
           <IconTooltipButton
             key={layer.id}
@@ -312,10 +312,10 @@ function SceneNavigator({
             onClick={() => onLayerChange(layer.id)}
           />
         ))}
-        <div className="my-1 h-px w-8 bg-white/10" />
-        <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.035] text-slate-300">
+        <div className="my-1 h-px w-8 bg-[#214669]" />
+        <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
           <Boxes className="h-[18px] w-[18px]" />
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#07131f] bg-cyan-400 px-1 text-[9px] font-bold text-cyan-950">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#081c2d] bg-blue-400 px-1 text-[9px] font-black text-[#071421]">
             {racks.length}
           </span>
         </div>
@@ -324,16 +324,16 @@ function SceneNavigator({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-white/10 px-5">
-        <div>
-          <div className="flex items-center gap-2.5 text-base font-bold text-white">
-            <Layers3 className="h-[18px] w-[18px] text-cyan-300" />
-            場景導覽
+    <div className="flex h-full min-h-0 flex-col bg-[#081c2d]">
+      <div className="flex min-h-[82px] shrink-0 items-center justify-between border-b border-[#163653] px-4 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-300/30 bg-blue-400/15 text-blue-100">
+            <Layers3 className="h-5 w-5" />
           </div>
-          <p className="mt-1 text-[11px] font-semibold text-cyan-100/70">
-            Digital Twin Layers
-          </p>
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-black tracking-[-0.02em] text-white">場景導覽</div>
+            <p className="mt-1 truncate text-[11px] font-semibold text-blue-200/65">站點、圖層與機櫃</p>
+          </div>
         </div>
         {onToggleCollapse ? (
           <IconTooltipButton
@@ -345,14 +345,14 @@ function SceneNavigator({
         ) : null}
       </div>
 
-      <div className="shrink-0 space-y-4 border-b border-white/10 px-4 py-4">
+      <div className="shrink-0 space-y-3 border-b border-[#163653] px-4 py-4">
         <label className="block">
-          <span className="mb-2 block text-xs font-semibold text-slate-300">站點</span>
+          <span className="mb-2 block text-[11px] font-black tracking-[0.08em] text-blue-200/70">目前站點</span>
           <Select value={selectedSiteId} onValueChange={onSiteChange}>
-            <SelectTrigger className="h-11 rounded-xl border-cyan-300/18 bg-[#0b1b29] px-3 text-sm text-slate-100">
+            <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#10283d] px-3 text-sm font-semibold text-slate-100">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="border-white/12 bg-[#07131f] text-slate-100">
+            <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
               {sites.map((site) => (
                 <SelectItem key={site.id} value={site.id}>
                   {site.label}
@@ -364,24 +364,24 @@ function SceneNavigator({
 
         <label className="relative block">
           <span className="sr-only">搜尋機櫃</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/50" />
           <Input
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="搜尋機櫃或廠牌"
-            className="h-11 rounded-xl border-white/12 bg-black/25 pl-10 text-sm text-white placeholder:text-slate-400"
+            className="h-11 rounded-xl border-[#214669] bg-[#10283d] pl-10 text-sm text-white placeholder:text-slate-400"
           />
         </label>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-6 px-4 py-5">
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200">圖層</span>
-              <span className="text-[11px] text-slate-400">{LAYER_OPTIONS.length} 個</span>
+        <div className="space-y-4 px-4 py-4">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-xs font-black text-white">顯示圖層</span>
+              <span className="rounded-full bg-blue-400/10 px-2 py-1 text-[10px] font-bold text-blue-200">{LAYER_OPTIONS.length} 個</span>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {LAYER_OPTIONS.map((layer) => {
                 const Icon = layer.icon;
                 const selected = activeLayer === layer.id;
@@ -391,38 +391,35 @@ function SceneNavigator({
                     type="button"
                     onClick={() => onLayerChange(layer.id)}
                     className={cn(
-                      "flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                      "flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       selected
-                        ? "border-cyan-300/35 bg-[linear-gradient(90deg,rgba(14,116,144,0.28),rgba(14,116,144,0.08))] text-white"
-                        : "border-transparent bg-white/[0.025] text-slate-300 hover:border-white/12 hover:bg-white/[0.055]"
+                        ? "border-blue-300/45 bg-blue-500/20 text-white shadow-[0_12px_26px_-22px_rgba(59,130,246,0.9)]"
+                        : "border-transparent bg-[#10283d]/55 text-slate-300 hover:border-[#2b5274] hover:bg-[#10283d]"
                     )}
                   >
-                    <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
-                      style={{ borderColor: `${layer.color}55`, backgroundColor: `${layer.color}18`, color: layer.color }}
-                    >
+                    <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border", selected ? "border-blue-200/35 bg-blue-300/15 text-blue-100" : "border-[#214669] bg-[#081c2d] text-blue-200/75")}>
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold">{layer.label}</span>
-                      <span className="mt-1 block truncate text-xs text-slate-400">{layer.description}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{layer.description}</span>
                     </span>
-                    {selected ? <Check className="h-3.5 w-3.5 text-cyan-200" /> : null}
+                    {selected ? <Check className="h-3.5 w-3.5 text-blue-100" /> : null}
                   </button>
                 );
               })}
             </div>
           </section>
 
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200">機櫃</span>
-              <Badge className="border-white/12 bg-white/[0.045] text-[10px] text-slate-200 shadow-none">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-xs font-black text-white">機櫃清單</span>
+              <Badge className="border-0 bg-blue-400/10 text-[10px] font-bold text-blue-200 shadow-none">
                 {filteredRacks.length} / {racks.length}
               </Badge>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {filteredRacks.map((rack) => {
                 const health = getRackHealth(rack);
                 const selected = rack.id === selectedRackId;
@@ -433,11 +430,11 @@ function SceneNavigator({
                     type="button"
                     onClick={() => onRackSelect(rack.id)}
                     className={cn(
-                      "w-full cursor-pointer rounded-xl border px-3.5 py-3 text-left transition-all duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                      "w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-all duration-200",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       selected
-                        ? "border-cyan-300/42 bg-cyan-400/12 shadow-[0_14px_34px_-24px_rgba(34,211,238,0.95)]"
-                        : "border-white/9 bg-black/16 hover:border-white/18 hover:bg-white/[0.045]"
+                        ? "border-blue-300/45 bg-blue-500/18 shadow-[0_14px_34px_-24px_rgba(59,130,246,0.95)]"
+                        : "border-[#163653] bg-[#081c2d]/75 hover:border-[#2b5274] hover:bg-[#10283d]"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -446,7 +443,7 @@ function SceneNavigator({
                         {HEALTH_LABELS[health]}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                    <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
                       <span>{rack.row} Row</span>
                       <span className="h-1 w-1 rounded-full bg-slate-600" />
                       <span>{rack.l10Count}× L10</span>
@@ -504,11 +501,11 @@ function RackInspector({
 
   if (collapsed) {
     return (
-      <div className="flex h-full flex-col items-center gap-2 py-3">
+      <div className="flex h-full flex-col items-center gap-2 bg-[#081c2d] py-3">
         {onToggleCollapse ? (
           <IconTooltipButton label="展開機櫃詳情" icon={PanelRightOpen} onClick={onToggleCollapse} />
         ) : null}
-        <div className="my-1 h-px w-8 bg-white/10" />
+        <div className="my-1 h-px w-8 bg-[#214669]" />
         <IconTooltipButton label="聚焦機櫃" icon={Focus} onClick={onFocus} />
         <IconTooltipButton label="模型與尺寸" icon={Box} onClick={onOpenModels} />
         <IconTooltipButton label="L10 配置" icon={Cpu} onClick={onOpenL10Models} />
@@ -520,7 +517,7 @@ function RackInspector({
             onClick={() => onLayoutEditingChange(!layoutEditing)}
           />
         ) : null}
-        <div className="mt-auto mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.035]">
+        <div className="mt-auto mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d]">
           <span className={cn("h-2.5 w-2.5 rounded-full", health === "healthy" ? "bg-emerald-400" : health === "critical" ? "bg-rose-400" : "bg-amber-400")} />
         </div>
       </div>
@@ -528,16 +525,16 @@ function RackInspector({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-white/10 px-5">
-        <div>
-          <div className="flex items-center gap-2.5 text-base font-bold text-white">
-            <Server className="h-[18px] w-[18px] text-cyan-300" />
-            機櫃詳情
+    <div className="flex h-full min-h-0 flex-col bg-[#081c2d]">
+      <div className="flex min-h-[82px] shrink-0 items-center justify-between border-b border-[#163653] px-4 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-300/30 bg-blue-400/15 text-blue-100">
+            <Server className="h-5 w-5" />
           </div>
-          <p className="mt-1 text-[11px] font-semibold text-cyan-100/70">
-            Rack Inspector
-          </p>
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-black tracking-[-0.02em] text-white">機櫃詳情</div>
+            <p className="mt-1 truncate text-[11px] font-semibold text-blue-200/65">狀態、設備與配置</p>
+          </div>
         </div>
         {onToggleCollapse ? (
           <IconTooltipButton
@@ -550,8 +547,8 @@ function RackInspector({
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 p-5">
-          <section className="rounded-2xl border border-cyan-300/18 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_52%),rgba(255,255,255,0.025)] p-4">
+        <div className="space-y-4 p-4">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xl font-black tracking-[-0.03em] text-white">{rack.cabinet}</div>
@@ -564,14 +561,14 @@ function RackInspector({
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               {[
-                { label: "POWER", value: `${rack.powerKw} kW`, icon: Zap, color: "text-amber-200" },
-                { label: "TEMP", value: `${rack.temperatureC}°C`, icon: Thermometer, color: "text-sky-200" },
-                { label: "LOAD", value: `${rack.utilizationPercent}%`, icon: CircleGauge, color: "text-emerald-200" },
+                { label: "POWER", value: `${rack.powerKw} kW`, icon: Zap },
+                { label: "TEMP", value: `${rack.temperatureC}°C`, icon: Thermometer },
+                { label: "LOAD", value: `${rack.utilizationPercent}%`, icon: CircleGauge },
               ].map((metric) => {
                 const Icon = metric.icon;
                 return (
-                    <div key={metric.label} className="rounded-xl border border-white/9 bg-black/25 p-2.5">
-                    <div className={cn("flex items-center gap-1 text-[10px] font-bold", metric.color)}>
+                  <div key={metric.label} className="rounded-xl border border-[#163653] bg-[#081c2d] p-2.5">
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-blue-200/80">
                       <Icon className="h-3 w-3" />
                       {metric.label}
                     </div>
@@ -582,8 +579,8 @@ function RackInspector({
             </div>
           </section>
 
-          <section>
-            <div className="mb-2 flex items-center justify-between">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+            <div className="mb-3 flex items-center justify-between px-1">
               <span className="text-xs font-bold text-slate-200">機櫃模型</span>
               {model.isCalibrated ? (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-200">
@@ -594,10 +591,10 @@ function RackInspector({
             <button
               type="button"
               onClick={onOpenModels}
-              className="w-full cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition-colors hover:border-cyan-300/25 hover:bg-cyan-400/[0.07]"
+              className="w-full cursor-pointer rounded-xl border border-[#163653] bg-[#081c2d] p-3 text-left transition-colors hover:border-blue-300/40 hover:bg-[#10283d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-200">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-300/25 bg-blue-400/12 text-blue-100">
                   <Box className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -606,17 +603,17 @@ function RackInspector({
                 </div>
                 <ChevronRight className="h-4 w-4 text-slate-500" />
               </div>
-              <div className="mt-3 rounded-lg bg-black/25 px-2.5 py-2 text-[11px] tabular-nums text-cyan-100/90">
+              <div className="mt-3 rounded-lg bg-[#10283d] px-2.5 py-2 text-[11px] tabular-nums text-blue-100/90">
                 {formatDimensions(model.dimensions)}
               </div>
             </button>
           </section>
 
-          <section className="border-y border-white/10 py-4">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <Cpu className="h-4 w-4 text-cyan-300" />
+                  <Cpu className="h-4 w-4 text-blue-300" />
                   L10 配置
                 </div>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
@@ -626,13 +623,13 @@ function RackInspector({
               <button
                 type="button"
                 onClick={onOpenL10Models}
-                className="h-9 cursor-pointer rounded-lg border border-cyan-300/20 bg-cyan-400/8 px-3 text-xs font-bold text-cyan-50 hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                className="h-9 cursor-pointer rounded-lg border border-[#214669] bg-[#10283d] px-3 text-xs font-bold text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
               >
                 更換模型
               </button>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-[#0b1b29] px-3 py-3">
+            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-3">
               <div>
                 <div className="text-[11px] font-semibold text-slate-300">目前數量</div>
                 <div className="mt-0.5 text-2xl font-black tabular-nums text-white">
@@ -646,7 +643,7 @@ function RackInspector({
                   aria-label="減少一個 L10"
                   disabled={!canEdit || rack.l10Count <= 0}
                   onClick={() => onL10CountChange(rack.l10Count - 1)}
-                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-white/15 bg-black/20 text-slate-100 hover:border-white/25 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-slate-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -655,7 +652,7 @@ function RackInspector({
                   aria-label="增加一個 L10"
                   disabled={!canEdit || rack.l10Count >= l10Capacity}
                   onClick={() => onL10CountChange(rack.l10Count + 1)}
-                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-cyan-300 text-cyan-950 hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-cyan-950 disabled:text-cyan-100/45"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-100/45"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -668,7 +665,7 @@ function RackInspector({
                   key={index}
                   className={cn(
                     "h-2.5 min-w-5 flex-1 rounded-full",
-                    index < rack.l10Count ? "bg-cyan-300" : "bg-white/10"
+                    index < rack.l10Count ? "bg-blue-400" : "bg-[#163653]"
                   )}
                 />
               ))}
@@ -680,10 +677,10 @@ function RackInspector({
             ) : null}
           </section>
 
-          <section>
-            <div className="mb-2 flex items-center justify-between">
+          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+            <div className="mb-3 flex items-center justify-between px-1">
               <span className="text-xs font-bold text-slate-200">其他設備</span>
-              <Badge className="border-white/10 bg-white/[0.04] text-[10px] text-slate-200 shadow-none">
+              <Badge className="border-0 bg-blue-400/10 text-[10px] text-blue-200 shadow-none">
                 {rack.devices.length} devices
               </Badge>
             </div>
@@ -691,8 +688,8 @@ function RackInspector({
               {sortedDevices.map((device) => {
                 const Icon = getDeviceIcon(device.type);
                 return (
-                  <div key={device.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.045] text-slate-300">
+                  <div key={device.id} className="flex items-center gap-3 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10283d] text-blue-100/75">
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -717,11 +714,11 @@ function RackInspector({
           ) : null}
 
           {canEdit ? (
-            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+            <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
-                    <PencilRuler className="h-4 w-4 text-cyan-300" />
+                    <PencilRuler className="h-4 w-4 text-blue-300" />
                     編排模式
                   </div>
                   <p className="mt-1 text-[11px] text-slate-400">以 250mm 網格移動，比例不變形</p>
@@ -732,7 +729,7 @@ function RackInspector({
                   onClick={() => onLayoutEditingChange(!layoutEditing)}
                   className={cn(
                     "relative h-7 w-12 cursor-pointer rounded-full border transition-colors",
-                    layoutEditing ? "border-cyan-300/50 bg-cyan-400/30" : "border-white/15 bg-white/[0.06]"
+                    layoutEditing ? "border-blue-300/50 bg-blue-500/35" : "border-[#214669] bg-[#10283d]"
                   )}
                 >
                   <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform", layoutEditing ? "translate-x-5" : "translate-x-1")} />
@@ -741,7 +738,7 @@ function RackInspector({
               </div>
 
               {layoutEditing ? (
-                <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                <div className="mt-3 space-y-2 border-t border-[#163653] pt-3">
                   <div className="grid grid-cols-3 gap-2">
                     <span />
                     <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0, -0.25)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-white/[0.07]">Z−</Button>
@@ -763,11 +760,11 @@ function RackInspector({
         </div>
       </ScrollArea>
 
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 p-4">
-        <Button type="button" variant="outline" onClick={onFocus} className="h-11 rounded-xl border-cyan-300/20 bg-cyan-400/8 text-sm text-cyan-50 hover:bg-cyan-400/15">
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[#163653] bg-[#081c2d] p-4">
+        <Button type="button" variant="outline" onClick={onFocus} className="h-11 rounded-xl border-blue-300/30 bg-blue-500/15 text-sm font-bold text-blue-50 hover:bg-blue-500/25">
           <Focus className="mr-2 h-4 w-4" /> 聚焦
         </Button>
-        <Button type="button" variant="outline" onClick={onOpenModels} className="h-11 rounded-xl border-white/12 bg-white/[0.04] text-sm text-slate-200 hover:bg-white/[0.08]">
+        <Button type="button" variant="outline" onClick={onOpenModels} className="h-11 rounded-xl border-[#214669] bg-[#10283d] text-sm font-bold text-blue-100 hover:bg-[#16324b]">
           <Box className="mr-2 h-4 w-4" /> 模型
         </Button>
       </div>
@@ -1497,8 +1494,8 @@ export function DeploymentPlanningCenter() {
       ? "lg:grid-cols-[68px_minmax(0,1fr)_68px]"
       : "lg:grid-cols-[68px_minmax(0,1fr)_360px]"
     : rightCollapsed
-      ? "lg:grid-cols-[286px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[286px_minmax(0,1fr)_360px]";
+      ? "lg:grid-cols-[304px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[304px_minmax(0,1fr)_360px]";
 
   return (
     <TooltipProvider delayDuration={180}>
@@ -1578,12 +1575,12 @@ export function DeploymentPlanningCenter() {
         </header>
 
         {isDesktopLayout ? (
-        <div className={cn("grid min-h-0 flex-1 transition-[grid-template-columns] duration-300 ease-out", desktopGridClass)}>
-          <aside className="min-w-0 overflow-hidden border-r border-cyan-300/12 bg-[linear-gradient(180deg,#07131f,#040b12)]">
+        <div className={cn("grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3 transition-[grid-template-columns] duration-300 ease-out", desktopGridClass)}>
+          <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
             <SceneNavigator {...navigatorProps} collapsed={leftCollapsed} onToggleCollapse={() => setLeftCollapsed((value) => !value)} />
           </aside>
 
-          <main className="relative min-w-0 overflow-hidden bg-black">
+          <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
             <DataCenter3DPlanner
               racks={selectedSite.racks}
               models={models}
@@ -1679,7 +1676,7 @@ export function DeploymentPlanningCenter() {
             </div>
           </main>
 
-          <aside className="min-w-0 overflow-hidden border-l border-cyan-300/12 bg-[linear-gradient(180deg,#07131f,#040b12)]">
+          <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
             <RackInspector {...inspectorProps} collapsed={rightCollapsed} onToggleCollapse={() => setRightCollapsed((value) => !value)} />
           </aside>
         </div>
@@ -1707,13 +1704,13 @@ export function DeploymentPlanningCenter() {
         )}
 
         <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
-          <SheetContent side="left" className="w-[min(90vw,330px)] border-r border-cyan-300/15 bg-[#06111c] p-0 text-slate-100 sm:max-w-[330px]">
+          <SheetContent side="left" className="w-[min(90vw,340px)] border-r border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[340px]">
             <SceneNavigator {...navigatorProps} />
           </SheetContent>
         </Sheet>
 
         <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
-          <SheetContent side="right" className="w-[min(92vw,360px)] border-l border-cyan-300/15 bg-[#06111c] p-0 text-slate-100 sm:max-w-[360px]">
+          <SheetContent side="right" className="w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
             <RackInspector {...inspectorProps} />
           </SheetContent>
         </Sheet>
