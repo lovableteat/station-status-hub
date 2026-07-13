@@ -533,7 +533,7 @@ const Index = () => {
       case "station-status":
       default:
         return (
-          <div className="maintenance-workspace relative lg:h-full lg:overflow-hidden">
+          <div className="maintenance-workspace relative min-h-0 lg:h-full lg:overflow-hidden">
             {isMobile && sidebarOpen && (
               <div
                 className="fixed inset-0 z-30 bg-black/50 lg:hidden"
@@ -541,7 +541,7 @@ const Index = () => {
               />
             )}
 
-            <div className="flex h-full flex-col gap-3 px-3 pb-3 pt-3">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-3 lg:h-full">
               <div className="shrink-0"><ProjectScopeBar /></div>
 
               <div className="relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0">
@@ -579,7 +579,13 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className={cn(
+        "app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background",
+        (activeWorkspace === "station-status" || activeWorkspace === "data-center") &&
+          "lg:h-[100dvh] lg:overflow-hidden"
+      )}
+    >
       <UpdateIndicator isUpdating={isUpdating} />
       {!isDemoMode && <FacebookStyleNotifications />}
       {!isDemoMode && <OnlineUsersIndicator />}
@@ -619,9 +625,10 @@ const Index = () => {
 
       <main
         className={cn(
-          activeWorkspace === "station-status"
-            ? "lg:h-[calc(100dvh-95px)] lg:min-h-0"
-            : "min-h-[calc(100dvh-92px)] w-full"
+          "flex w-full min-w-0 flex-1 flex-col",
+          activeWorkspace === "station-status" || activeWorkspace === "data-center"
+            ? "lg:min-h-0 lg:overflow-hidden"
+            : "min-h-0"
         )}
       >
         <React.Suspense
