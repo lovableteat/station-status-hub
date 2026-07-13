@@ -789,10 +789,6 @@ function splitRefDesignators(...values: string[]) {
   ));
 }
 
-function isExactRefDesToken(token: string) {
-  return /^[a-z]{1,4}\d+(?:[_-][a-z0-9]+)?$/i.test(token.trim());
-}
-
 function hasNoAlternative(group: MaterialGroup) {
   return getUniqueMpnCount(group) <= 1;
 }
@@ -1103,7 +1099,7 @@ function createCachedColumnValues(values: string[]): CachedColumnValues {
 function inferFilterOptionTone(value: string): ExcelFilterTone {
   const normalized = value.trim().toLowerCase();
 
-  if (!normalized) return "amber";
+  if (!normalized) return "slate";
   if (["完成", "已完成", "ok", "approved", "結案", "可用", "已建"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return "emerald";
   }
@@ -1111,10 +1107,10 @@ function inferFilterOptionTone(value: string): ExcelFilterTone {
     return "rose";
   }
   if (["無狀態", "新增追蹤", "待", "申請", "確認", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "amber";
+    return "slate";
   }
   if (["處理中", "追蹤", "進行", "progress"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "sky";
+    return "amber";
   }
 
   return "slate";
@@ -4135,7 +4131,8 @@ export function MaterialRequestPage() {
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const groupRuntimeIndex = useMemo(() => {
     const searchableTextByGroup = new Map<string, string>();
-    const exactRefTokensByGroup = new Map<string, Set<string>>();
+    const refTokensByGroup = new Map<string, string[]>();
+    const refPrefixes = new Set<string>();
     const sortedRecordsByGroup = new Map<string, MaterialRecord[]>();
     const uniqueMpnCountByGroup = new Map<string, number>();
     const recordColumnsByRecordId = new Map<string, CachedRecordColumnValues>();
@@ -4153,17 +4150,21 @@ export function MaterialRequestPage() {
         : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
 
       searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
-      exactRefTokensByGroup.set(
-        group.key,
-        new Set(
-          [
-            group.displayRef,
-            ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
-          ]
-            .flatMap((value) => splitRefDesignators(value))
-            .map((value) => value.toLowerCase()),
-        ),
-      );
+      const refTokens = Array.from(new Set(
+        [
+          group.displayRef,
+          ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
+        ]
+          .flatMap((value) => splitRefDesignators(value))
+          .map(normalizeMaterialSearchText)
+          .filter(Boolean),
+      ));
+      refTokensByGroup.set(group.key, refTokens);
+      refTokens.forEach((refToken) => {
+        for (let prefixLength = 1; prefixLength <= refToken.length; prefixLength += 1) {
+          refPrefixes.add(refToken.slice(0, prefixLength));
+        }
+      });
       sortedRecordsByGroup.set(group.key, sortedRecords);
       uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
 
@@ -4207,8 +4208,9 @@ export function MaterialRequestPage() {
     });
 
     return {
-      exactRefTokensByGroup,
       recordColumnsByRecordId,
+      refPrefixes,
+      refTokensByGroup,
       searchableTextByGroup,
       sortedRecordsByGroup,
       uniqueMpnCountByGroup,
@@ -4226,14 +4228,17 @@ export function MaterialRequestPage() {
 
   const matchesSearch = useCallback((group: MaterialGroup) => {
     const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
-    const exactRefTokens = groupRuntimeIndex.exactRefTokensByGroup.get(group.key) ?? new Set<string>();
+    const refTokens = groupRuntimeIndex.refTokensByGroup.get(group.key) ?? [];
 
     return searchTokens.every((token) => {
-      if (isExactRefDesToken(token)) {
-        return exactRefTokens.has(token);
-      }
+      const shouldMatchRefPrefix = (
+        token.length === 1
+        || /\d/.test(token)
+      ) && groupRuntimeIndex.refPrefixes.has(token);
 
-      return searchableText.includes(token);
+      return shouldMatchRefPrefix
+        ? refTokens.some((refToken) => refToken.startsWith(token))
+        : searchableText.includes(token);
     });
   }, [groupRuntimeIndex, searchTokens]);
 
@@ -5056,7 +5061,7 @@ export function MaterialRequestPage() {
         snapshot={exportSnapshot}
       />
 
-      <header className="overflow-hidden rounded-2xl border border-cyan-300/22 bg-[radial-gradient(circle_at_top_right,rgba(103,232,249,0.18),transparent_28%),radial-gradient(circle_at_left,rgba(59,130,246,0.14),transparent_26%),linear-gradient(180deg,#172a45_0%,#11213a_52%,#0d1b30_100%)] p-4 shadow-[0_24px_70px_rgba(6,23,48,0.34)]">
+      <header className="overflow-hidden rounded-2xl border border-slate-400/20 bg-[radial-gradient(circle_at_top_right,rgba(148,163,184,0.12),transparent_30%),linear-gradient(180deg,#2b3543_0%,#222c39_52%,#19232f_100%)] p-4 shadow-[0_24px_70px_rgba(6,12,22,0.32)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
@@ -5368,13 +5373,22 @@ export function MaterialRequestPage() {
 
       <div className={cn("mt-3 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
-      <section className="rounded-2xl border border-cyan-300/18 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.10),transparent_30%),linear-gradient(180deg,#14233a_0%,#0f1b2f_100%)] p-3 shadow-[0_20px_48px_rgba(6,20,40,0.24)]">
+      <section className="rounded-2xl border border-slate-400/20 bg-[radial-gradient(circle_at_top_left,rgba(148,163,184,0.10),transparent_32%),linear-gradient(180deg,#293341_0%,#202a36_100%)] p-3 shadow-[0_20px_48px_rgba(6,12,22,0.24)]">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
             <Input
               value={searchDraft}
-              onChange={(event) => setSearchDraft(event.target.value)}
+              onChange={(event) => {
+                const nextSearchDraft = event.target.value;
+                const normalizedQuery = nextSearchDraft.normalize("NFKC").replace(/\u3000/g, " ").trim();
+                setSearchDraft(nextSearchDraft);
+                startSearchTransition(() => {
+                  setQuery(normalizedQuery);
+                  setExpandedKey(null);
+                  setPage(1);
+                });
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -5382,7 +5396,7 @@ export function MaterialRequestPage() {
                 }
               }}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
-              className="h-10 border-cyan-300/24 bg-[linear-gradient(180deg,#18273d_0%,#111e31_100%)] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-cyan-400"
+              className="h-10 border-slate-400/28 bg-[linear-gradient(180deg,#384250_0%,#2c3542_100%)] pl-12 text-[15px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-cyan-400"
             />
           </div>
 
@@ -5440,8 +5454,8 @@ export function MaterialRequestPage() {
         </div>
       </section>
 
-      <section className="mt-3 overflow-hidden rounded-xl border border-blue-300/20 bg-[linear-gradient(180deg,#12203a_0%,#0d172a_100%)] shadow-[0_18px_44px_rgba(9,20,38,0.22)]">
-        <div className="flex items-center justify-between border-b border-blue-300/18 bg-[linear-gradient(90deg,rgba(43,83,150,0.38),rgba(28,49,86,0.84))] px-4 py-3">
+      <section className="mt-3 overflow-hidden rounded-xl border border-slate-400/20 bg-[linear-gradient(180deg,#252f3c_0%,#19222e_100%)] shadow-[0_18px_44px_rgba(6,12,22,0.24)]">
+        <div className="flex items-center justify-between border-b border-slate-400/18 bg-[linear-gradient(90deg,#35404e_0%,#293442_52%,#222c38_100%)] px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
