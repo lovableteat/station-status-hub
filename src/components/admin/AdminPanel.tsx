@@ -403,8 +403,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1720px] space-y-5">
+    <div className="min-h-[calc(100dvh-92px)] w-full bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
+      <div className="flex min-h-[calc(100dvh-116px)] w-full flex-col gap-4">
         {/* Header */}
         <header className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(17,38,66,0.96)_0%,rgba(13,25,45,0.98)_52%,rgba(19,27,55,0.96)_100%)] p-5 shadow-[0_28px_80px_-52px_rgba(56,189,248,0.75)] sm:p-6">
           <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl" />
@@ -452,7 +452,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-5">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/35 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-[420px]">
             <TabsTrigger value="users" className="h-10 rounded-xl text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/25 data-[state=active]:to-blue-500/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18),0_10px_28px_-18px_rgba(56,189,248,0.8)]">
             <Users className="h-4 w-4 mr-2" />
@@ -469,7 +469,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </TabsList>
 
         {/* User Management Tab */}
-        <TabsContent value="users" className="mt-0 space-y-4">
+        <TabsContent value="users" className="mt-0 flex flex-1 flex-col gap-3">
           <section className="flex flex-col gap-4 rounded-[24px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(20,32,54,0.78),rgba(12,21,38,0.78))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
@@ -673,9 +673,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
 
-          <Card className="rounded-[26px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,27,47,0.88),rgba(10,18,33,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <CardContent className="p-3 sm:p-4">
-              <div className="space-y-3">
+          <Card className="flex min-h-[280px] flex-1 flex-col rounded-[26px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,27,47,0.88),rgba(10,18,33,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <CardContent className="flex flex-1 flex-col p-3 sm:p-4">
+              <div className="flex-1 space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
                   const isProtected = isProtectedSystemUser(systemUser);
@@ -973,7 +973,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </Card>
         </TabsContent> : null}
 
-        <TabsContent value="api-management" className="space-y-6">
+        <TabsContent value="api-management" className="mt-0 flex-1">
           <ApiManagementPage />
         </TabsContent>
       </Tabs>
