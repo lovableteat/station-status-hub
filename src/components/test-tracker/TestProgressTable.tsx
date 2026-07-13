@@ -1,4 +1,10 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  UIEvent as ReactUIEvent,
+} from "react";
 import { MoreHorizontal, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +17,14 @@ import { SystemCompleteButton } from "./SystemCompleteButton";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
+import {
+  createStationProgressLookup,
+  getStationProgressKey,
+  getTrackerColumnSpec,
+  getTrackerColumnWidth,
+  getTrackerVirtualRange,
+  TRACKER_ROW_HEIGHT,
+} from "./testTrackerPresentation";
 
 interface TrackerSystem {
   assigned_engineer?: string | null;
@@ -41,6 +55,7 @@ interface TrackerProgress {
 }
 
 interface TestProgressTableProps {
+  columnStorageKey: string;
   headerControls?: ReactNode;
   items: TrackerItem[];
   onSelectSystem: (systemId: string) => void;
@@ -48,6 +63,11 @@ interface TestProgressTableProps {
   progress: TrackerProgress[];
   stations: TrackerStation[];
   systems: TrackerSystem[];
+}
+
+interface ColumnLayoutState {
+  storageKey: string;
+  widths: Record<string, number>;
 }
 
 function normalizeStatus(system: TrackerSystem) {
@@ -75,7 +95,115 @@ function statusClass(status: string) {
   return "border-amber-300/25 bg-amber-300/[0.08] text-amber-100";
 }
 
+function loadStoredColumnWidths(storageKey: string) {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "{}") as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([key, value]) => [key, Number(value)] as const)
+        .filter((entry): entry is [string, number] => Number.isFinite(entry[1]))
+    );
+  } catch {
+    return {};
+  }
+}
+
+function persistColumnWidths(storageKey: string, widths: Record<string, number>) {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(widths));
+  } catch {
+    // Private browsing can disable local storage; resizing still works for this session.
+  }
+}
+
+function ResizableColumnHeader({
+  children,
+  className,
+  columnKey,
+  onReset,
+  onResize,
+  width,
+}: {
+  children: ReactNode;
+  className?: string;
+  columnKey: string;
+  onReset: (columnKey: string) => void;
+  onResize: (columnKey: string, width: number) => void;
+  width: number;
+}) {
+  const dragRef = useRef<{ startWidth: number; startX: number } | null>(null);
+  const spec = getTrackerColumnSpec(columnKey);
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { startWidth: width, startX: event.clientX };
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    onResize(
+      columnKey,
+      dragRef.current.startWidth + event.clientX - dragRef.current.startX
+    );
+  };
+
+  const stopDragging = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Home") {
+      event.preventDefault();
+      onReset(columnKey);
+      return;
+    }
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    onResize(columnKey, width + direction * (event.shiftKey ? 40 : 16));
+  };
+
+  return (
+    <div
+      role="columnheader"
+      className={cn("relative flex h-9 min-w-0 items-center", className)}
+    >
+      <div className="min-w-0 flex-1">{children}</div>
+      <div
+        role="separator"
+        tabIndex={0}
+        aria-label="調整欄位寬度"
+        aria-orientation="vertical"
+        aria-valuemax={spec.maxWidth}
+        aria-valuemin={spec.minWidth}
+        aria-valuenow={width}
+        title="拖曳調整欄寬；雙擊或按 Home 還原"
+        onDoubleClick={() => onReset(columnKey)}
+        onKeyDown={handleKeyDown}
+        onLostPointerCapture={() => {
+          dragRef.current = null;
+        }}
+        onPointerCancel={stopDragging}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={stopDragging}
+        className="group absolute -right-1 top-0 z-40 flex h-full w-3 touch-none cursor-col-resize items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+      >
+        <span className="h-5 w-px rounded-full bg-[#416985] transition-colors group-hover:bg-cyan-300 group-focus-visible:bg-cyan-200" />
+      </div>
+    </div>
+  );
+}
+
 export function TestProgressTable({
+  columnStorageKey,
   headerControls,
   items,
   onSelectSystem,
@@ -84,25 +212,157 @@ export function TestProgressTable({
   stations,
   systems,
 }: TestProgressTableProps) {
-  const sortedStations = [...stations].sort(
-    (left, right) => left.station_order - right.station_order
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
   );
-  const gridColumns = `158px 116px 98px repeat(${sortedStations.length}, minmax(150px, 1fr)) 82px`;
-  const minWidth = 158 + 116 + 98 + sortedStations.length * 150 + 82;
+  const [columnLayout, setColumnLayout] = useState<ColumnLayoutState>(() => ({
+    storageKey: columnStorageKey,
+    widths: loadStoredColumnWidths(columnStorageKey),
+  }));
+  const [viewport, setViewport] = useState({ height: 520, scrollTop: 0 });
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const latestColumnLayoutRef = useRef(columnLayout);
+  latestColumnLayoutRef.current = columnLayout;
+
+  const sortedStations = useMemo(
+    () => [...stations].sort((left, right) => left.station_order - right.station_order),
+    [stations]
+  );
+  const columnKeys = useMemo(
+    () => [
+      "machine",
+      "serial",
+      "status",
+      ...sortedStations.map((station) => `station:${station.id}`),
+      "actions",
+    ],
+    [sortedStations]
+  );
+  const columnWidths = useMemo(
+    () => {
+      const storedWidths = columnLayout.storageKey === columnStorageKey
+        ? columnLayout.widths
+        : {};
+      return Object.fromEntries(
+        columnKeys.map((columnKey) => [
+          columnKey,
+          getTrackerColumnWidth(columnKey, storedWidths),
+        ])
+      );
+    },
+    [columnKeys, columnLayout, columnStorageKey]
+  );
+  const gridColumns = columnKeys
+    .map((columnKey) => `${columnWidths[columnKey]}px`)
+    .join(" ");
+  const minWidth = columnKeys.reduce(
+    (total, columnKey) => total + columnWidths[columnKey],
+    24 + Math.max(0, columnKeys.length - 1) * 8
+  );
+  const stationProgressLookup = useMemo(
+    () => createStationProgressLookup(items, progress),
+    [items, progress]
+  );
+  const systemWindowKey = `${systems.length}:${systems[0]?.id || ""}:${systems[systems.length - 1]?.id || ""}`;
+  const virtualRange = getTrackerVirtualRange({
+    rowCount: systems.length,
+    scrollTop: viewport.scrollTop,
+    viewportHeight: viewport.height,
+  });
+  const visibleSystems = systems.slice(virtualRange.start, virtualRange.end);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const handleChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    setIsDesktop(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    setColumnLayout((current) => current.storageKey === columnStorageKey
+      ? current
+      : {
+          storageKey: columnStorageKey,
+          widths: loadStoredColumnWidths(columnStorageKey),
+        });
+  }, [columnStorageKey]);
+
+  useEffect(() => {
+    if (columnLayout.storageKey !== columnStorageKey) return undefined;
+    const timer = window.setTimeout(() => {
+      persistColumnWidths(columnStorageKey, columnLayout.widths);
+    }, 160);
+    return () => window.clearTimeout(timer);
+  }, [columnLayout, columnStorageKey]);
+
+  useEffect(() => () => {
+    const latestLayout = latestColumnLayoutRef.current;
+    if (latestLayout.storageKey === columnStorageKey) {
+      persistColumnWidths(columnStorageKey, latestLayout.widths);
+    }
+  }, [columnStorageKey]);
+
+  useEffect(() => {
+    const element = scrollContainerRef.current;
+    if (!element) return undefined;
+
+    const updateHeight = () => {
+      setViewport((current) => ({ ...current, height: element.clientHeight }));
+    };
+    updateHeight();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isDesktop]);
+
+  useEffect(() => {
+    const element = scrollContainerRef.current;
+    if (element) element.scrollTop = 0;
+    setViewport((current) => ({ ...current, scrollTop: 0 }));
+  }, [systemWindowKey]);
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
+
+  const resizeColumn = useCallback((columnKey: string, width: number) => {
+    const nextWidth = getTrackerColumnWidth(columnKey, { [columnKey]: width });
+    setColumnLayout((current) => ({
+      storageKey: columnStorageKey,
+      widths: {
+        ...(current.storageKey === columnStorageKey ? current.widths : {}),
+        [columnKey]: nextWidth,
+      },
+    }));
+  }, [columnStorageKey]);
+
+  const resetColumn = useCallback((columnKey: string) => {
+    setColumnLayout((current) => {
+      const widths = current.storageKey === columnStorageKey
+        ? { ...current.widths }
+        : {};
+      delete widths[columnKey];
+      return { storageKey: columnStorageKey, widths };
+    });
+  }, [columnStorageKey]);
+
+  const handleScroll = (event: ReactUIEvent<HTMLDivElement>) => {
+    const height = event.currentTarget.clientHeight;
+    const scrollTop = event.currentTarget.scrollTop;
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      setViewport((current) => current.height === height && current.scrollTop === scrollTop
+        ? current
+        : { height, scrollTop });
+      scrollFrameRef.current = null;
+    });
+  };
 
   const getStationPercent = (systemId: string, stationId: string) => {
-    const stationItems = items.filter((item) => item.station_id === stationId);
-    if (!stationItems.length) return 0;
-    const completed = stationItems.filter((item) =>
-      progress.some(
-        (entry) =>
-          entry.system_id === systemId &&
-          entry.station_id === stationId &&
-          entry.item_id === item.id &&
-          entry.status === "Done"
-      )
-    ).length;
-    return Math.round((completed / stationItems.length) * 100);
+    return stationProgressLookup.get(getStationProgressKey(systemId, stationId)) ?? 0;
   };
 
   if (!systems.length) {
@@ -113,16 +373,16 @@ export function TestProgressTable({
     );
   }
 
-  return (
-    <>
-      <div className="space-y-2 lg:hidden">
+  if (!isDesktop) {
+    return (
+      <div className="space-y-2">
         {systems.map((system) => {
           const status = normalizeStatus(system);
           return (
             <button
               key={system.id}
               type="button"
-              className="maintenance-panel w-full p-3 text-left hover:border-cyan-300/50"
+              className="maintenance-panel w-full p-3 text-left [contain-intrinsic-size:96px] [content-visibility:auto] hover:border-cyan-300/50"
               onClick={() => onSelectSystem(system.id)}
             >
               <div className="flex items-start justify-between gap-3">
@@ -146,66 +406,139 @@ export function TestProgressTable({
           );
         })}
       </div>
+    );
+  }
 
-      <div className="hidden overflow-hidden rounded-xl bg-[#315b7b] p-px lg:block">
-        <div className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto rounded-[11px] bg-[#08182a] [scrollbar-gutter:stable]">
-          <div style={{ minWidth }}>
-            <div
-              className="sticky top-0 z-20 grid h-9 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
-              style={{ gridTemplateColumns: gridColumns }}
+  return (
+    <div className="overflow-hidden rounded-xl bg-[#315b7b] p-px">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto rounded-[11px] bg-[#08182a] [scrollbar-gutter:stable]"
+      >
+        <div
+          role="table"
+          aria-colcount={columnKeys.length}
+          aria-rowcount={systems.length + 1}
+          style={{ minWidth }}
+        >
+          <div
+            role="row"
+            className="sticky top-0 z-20 grid h-9 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
+            style={{ gridTemplateColumns: gridColumns }}
+          >
+            <ResizableColumnHeader
+              columnKey="machine"
+              width={columnWidths.machine}
+              onResize={resizeColumn}
+              onReset={resetColumn}
+              className="sticky left-0 z-30 bg-[#0d2137] pr-2"
             >
-              <div className="sticky left-0 z-30 flex h-9 items-center bg-[#0d2137]">機台 ID</div>
-              <div>序號</div>
-              <div>狀態</div>
-              {sortedStations.map((station) => (
-                <div key={station.id} className="truncate text-center" title={station.station_name}>
-                  {station.station_name}
-                </div>
-              ))}
+              機台 ID
+            </ResizableColumnHeader>
+            <ResizableColumnHeader
+              columnKey="serial"
+              width={columnWidths.serial}
+              onResize={resizeColumn}
+              onReset={resetColumn}
+              className="pr-2"
+            >
+              序號
+            </ResizableColumnHeader>
+            <ResizableColumnHeader
+              columnKey="status"
+              width={columnWidths.status}
+              onResize={resizeColumn}
+              onReset={resetColumn}
+              className="pr-2"
+            >
+              狀態
+            </ResizableColumnHeader>
+            {sortedStations.map((station) => {
+              const columnKey = `station:${station.id}`;
+              return (
+                <ResizableColumnHeader
+                  key={station.id}
+                  columnKey={columnKey}
+                  width={columnWidths[columnKey]}
+                  onResize={resizeColumn}
+                  onReset={resetColumn}
+                  className="pr-2 text-center"
+                >
+                  <div className="truncate" title={station.station_name}>{station.station_name}</div>
+                </ResizableColumnHeader>
+              );
+            })}
+            <ResizableColumnHeader
+              columnKey="actions"
+              width={columnWidths.actions}
+              onResize={resizeColumn}
+              onReset={resetColumn}
+              className="text-center"
+            >
               <div className="flex items-center justify-center gap-1">
                 <span>操作</span>
                 {headerControls}
               </div>
-            </div>
+            </ResizableColumnHeader>
+          </div>
 
-            <div className="divide-y divide-[#1e3b56]/55">
-              {systems.map((system) => {
-                const status = normalizeStatus(system);
-                return (
+          <div
+            role="rowgroup"
+            className="relative"
+            style={{ height: systems.length * TRACKER_ROW_HEIGHT }}
+          >
+            {visibleSystems.map((system, visibleIndex) => {
+              const status = normalizeStatus(system);
+              const absoluteIndex = virtualRange.start + visibleIndex;
+              return (
+                <div
+                  key={system.id}
+                  role="row"
+                  aria-rowindex={absoluteIndex + 2}
+                  data-machine-row={system.id}
+                  className={cn(
+                    "group absolute left-0 right-0 grid items-center gap-2 border-b border-[#1e3b56]/55 px-3 py-2.5 text-[13px] transition-colors hover:bg-[#102b48]",
+                    status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
+                  )}
+                  style={{
+                    gridTemplateColumns: gridColumns,
+                    height: TRACKER_ROW_HEIGHT,
+                    top: absoluteIndex * TRACKER_ROW_HEIGHT,
+                  }}
+                >
                   <div
-                    key={system.id}
-                    data-machine-row={system.id}
+                    role="cell"
                     className={cn(
-                      "group grid items-center gap-2 px-3 py-2.5 text-[13px] transition-colors hover:bg-[#102b48]",
+                      "sticky left-0 z-10 min-w-0 group-hover:bg-[#102b48]",
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
-                    style={{ gridTemplateColumns: gridColumns, minHeight: 76 }}
                   >
                     <button
                       type="button"
-                      className={cn(
-                        "sticky left-0 z-10 min-w-0 py-2 text-left group-hover:bg-[#102b48]",
-                        status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
-                      )}
+                      className="w-full min-w-0 py-2 text-left"
                       onClick={() => onSelectSystem(system.id)}
                     >
                       <div className="truncate font-semibold leading-4 text-[#f3f8fc]">{system.system_name}</div>
                       <div className="truncate text-[10px] leading-3 text-[#91adc2]">{system.assigned_engineer || "未指定"}</div>
                     </button>
-                    <div className="truncate font-data text-xs text-[#b9cddd]" title={system.serial_number || ""}>
-                      {system.serial_number || "-"}
-                    </div>
+                  </div>
+                  <div role="cell" className="truncate font-data text-xs text-[#b9cddd]" title={system.serial_number || ""}>
+                    {system.serial_number || "-"}
+                  </div>
+                  <div role="cell">
                     <Badge variant="outline" className={cn("w-fit rounded-full px-2 text-[10px]", statusClass(status))}>
                       {status}
                     </Badge>
+                  </div>
 
-                    {sortedStations.map((station) => {
-                      const percent = getStationPercent(system.id, station.id);
-                      return (
+                  {sortedStations.map((station) => {
+                    const percent = getStationPercent(system.id, station.id);
+                    return (
+                      <div key={station.id} role="cell">
                         <button
-                          key={station.id}
                           type="button"
-                          className="rounded-md px-1.5 py-2 text-left hover:bg-[#061426] focus-visible:outline-none"
+                          className="w-full rounded-md px-1.5 py-2 text-left hover:bg-[#061426] focus-visible:outline-none"
                           onClick={() => onSelectSystem(system.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
@@ -218,12 +551,14 @@ export function TestProgressTable({
                             label={`${system.system_name} ${station.station_name} 進度`}
                           />
                         </button>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
 
+                  <div role="cell" className="flex justify-center">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="mx-auto h-8 w-8 rounded-lg">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">{system.system_name} 操作</span>
                         </Button>
@@ -258,12 +593,12 @@ export function TestProgressTable({
                       </PopoverContent>
                     </Popover>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
