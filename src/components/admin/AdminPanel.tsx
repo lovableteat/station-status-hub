@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ interface SystemUser {
   id: string;
   username: string;
   role: string;
-  permissions: any;
+  permissions: unknown;
   status: string;
   created_by: string;
   created_at: string;
@@ -44,6 +44,9 @@ interface SystemUser {
 }
 
 type AdminTab = "users" | "api-management";
+
+const SHOW_ENGINEER_ADMIN = false;
+const SHOW_EXTENDED_ADMIN_COPY = false;
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -65,16 +68,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const { logout, user } = useUser();
 
   useEffect(() => {
-    loadAllData();
-  }, []);
-
-  useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
-
-  const loadAllData = async () => {
-    await loadSystemUsers();
-  };
 
   const loadEngineers = async () => {
     try {
@@ -94,7 +89,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
   };
 
-  const loadSystemUsers = async () => {
+  const loadSystemUsers = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('system_users')
@@ -110,7 +105,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         variant: "destructive"
       });
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    void loadSystemUsers();
+  }, [loadSystemUsers]);
 
   const handleAddEngineer = async () => {
     try {
@@ -182,11 +181,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       setIsUserDialogOpen(false);
       setNewUser({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
       loadSystemUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding user:', error);
       toast({
         title: "新增失敗",
-        description: error.message || "無法新增系統用戶",
+        description: error instanceof Error ? error.message : "無法新增系統用戶",
         variant: "destructive"
       });
     }
@@ -403,10 +402,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="min-h-full w-full min-w-0 bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
+    <div className="maintenance-workspace min-h-full w-full min-w-0 bg-[#06111f] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
       <div className="flex min-h-full w-full min-w-0 flex-col gap-4">
         {/* Header */}
-        <header className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(17,38,66,0.96)_0%,rgba(13,25,45,0.98)_52%,rgba(19,27,55,0.96)_100%)] p-5 shadow-[0_28px_80px_-52px_rgba(56,189,248,0.75)] sm:p-6">
+        <header className="relative overflow-hidden rounded-[14px] border border-[#356985] bg-[#10263a] p-5 sm:p-6">
           <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl" />
           <div className="pointer-events-none absolute bottom-0 left-1/3 h-px w-1/2 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
 
@@ -453,16 +452,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/35 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-[420px]">
-            <TabsTrigger value="users" className="h-10 rounded-xl text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/25 data-[state=active]:to-blue-500/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18),0_10px_28px_-18px_rgba(56,189,248,0.8)]">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-1.5 sm:w-[420px]">
+            <TabsTrigger value="users" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
           </TabsTrigger>
-          {false ? <TabsTrigger value="engineers">
+          {SHOW_ENGINEER_ADMIN ? <TabsTrigger value="engineers">
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
           </TabsTrigger> : null}
-          <TabsTrigger value="api-management" className="h-10 rounded-xl text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/25 data-[state=active]:to-blue-500/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18),0_10px_28px_-18px_rgba(56,189,248,0.8)]">
+          <TabsTrigger value="api-management" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
             <Network className="h-4 w-4 mr-2" />
             API 管理
           </TabsTrigger>
@@ -470,7 +469,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
         {/* User Management Tab */}
         <TabsContent value="users" className="mt-0 flex flex-1 flex-col gap-3">
-          <section className="flex flex-col gap-4 rounded-[24px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(20,32,54,0.78),rgba(12,21,38,0.78))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex-row sm:items-center sm:justify-between">
+          <section className="flex flex-col gap-4 rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
                 <Users className="h-4.5 w-4.5 text-sky-200" />
@@ -479,7 +478,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 <h2 className="text-lg font-bold tracking-tight text-slate-100">系統用戶管理</h2>
                 <p className="mt-0.5 text-sm text-slate-400">管理帳號狀態、角色與各工作區存取權限</p>
               </div>
-              {false ? <p className="max-w-3xl text-sm text-muted-foreground">
+              {SHOW_EXTENDED_ADMIN_COPY ? <p className="max-w-3xl text-sm text-muted-foreground">
                 這裡集中管理整站帳號、角色、工作區權限與細部頁面權限。密碼只會以雜湊方式保存，超級帳號可直接發起重設，但不能回看任何人的明文密碼。
               </p> : null}
             </div>
@@ -491,13 +490,13 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   新增用戶
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl border border-cyan-200/26 bg-[linear-gradient(180deg,rgba(33,49,82,0.98),rgba(17,27,45,0.98))] text-slate-100 shadow-[0_28px_80px_rgba(15,23,42,0.48)]">
+              <DialogContent className="max-w-2xl border border-[#356985] bg-[#10263a] text-slate-100">
                 <DialogHeader>
                   <DialogTitle>新增系統用戶</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-5">
-                  <div className="rounded-2xl border border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(59,130,246,0.08)_48%,rgba(15,23,42,0.88))] p-4 text-sm text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="rounded-xl border border-cyan-300/20 bg-[#0d2137] p-4 text-sm text-slate-200">
                     新帳號建立時只輸入一次密碼，系統會立即轉成加密雜湊保存。若後續需要交接，請使用「編輯」直接重設新密碼。
                   </div>
 
@@ -566,7 +565,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </section>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Card className="group relative overflow-hidden rounded-[22px] border-sky-300/15 bg-[linear-gradient(145deg,rgba(24,45,76,0.88),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-[#2a526f] bg-[#10263a]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -580,7 +579,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[22px] border-emerald-300/15 bg-[linear-gradient(145deg,rgba(19,53,56,0.70),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-emerald-300/25 bg-[#0d292c]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -594,7 +593,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[22px] border-amber-300/15 bg-[linear-gradient(145deg,rgba(60,48,35,0.64),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-amber-300/25 bg-[#2a271c]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -608,22 +607,22 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[22px] border-indigo-300/15 bg-[linear-gradient(145deg,rgba(37,40,77,0.72),rgba(14,25,43,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-indigo-300/60 to-transparent" />
+            <Card className="group relative overflow-hidden rounded-[14px] border-cyan-300/20 bg-[#10263a]">
+              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-200/65">工作區權限</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200/70">工作區權限</div>
                   <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{workspaceConfiguredUsers}</div>
                   <p className="mt-2 text-xs text-slate-400">已配置存取權限</p>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-300/15 bg-indigo-400/10">
-                  <Lock className="h-5 w-5 text-indigo-200" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10">
+                  <Lock className="h-5 w-5 text-cyan-200" />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card className="rounded-[24px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(17,28,48,0.88),rgba(11,20,36,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="rounded-[14px] border-[#2a526f] bg-[#0b1b2d]">
             <CardContent className="space-y-3 p-4 sm:p-5">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
                 <div className="relative">
@@ -673,7 +672,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
 
-          <Card className="flex min-h-[280px] flex-1 flex-col rounded-[26px] border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,27,47,0.88),rgba(10,18,33,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <Card className="flex min-h-[280px] flex-1 flex-col rounded-[14px] border-[#2a526f] bg-[#0b1b2d]">
             <CardContent className="flex flex-1 flex-col p-3 sm:p-4">
               <div className="flex-1 space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
@@ -683,10 +682,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group relative overflow-hidden rounded-[22px] border border-white/[0.08] bg-[linear-gradient(135deg,rgba(23,38,64,0.76),rgba(13,23,41,0.88))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] transition-all duration-200 hover:border-sky-300/20 hover:shadow-[0_20px_55px_-42px_rgba(56,189,248,0.75)] sm:p-5"
+                      className="group relative overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#10263a] p-4 transition-colors duration-200 hover:border-cyan-300/45 sm:p-5"
                     >
-                      <div className="pointer-events-none absolute left-0 top-5 h-12 w-0.5 rounded-r-full bg-gradient-to-b from-cyan-300 to-blue-500 opacity-70" />
-
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-300/15 bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(37,99,235,0.08))]">
@@ -795,9 +792,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-slate-950/25 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
-                          <Lock className="h-3.5 w-3.5 text-indigo-200/75" />
+                          <Lock className="h-3.5 w-3.5 text-cyan-200/75" />
                           <span className="text-xs font-semibold text-slate-400">網站與工作區權限</span>
                           <span className="rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
                             {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
@@ -838,7 +835,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </TabsContent>
 
         {/* Engineer Management Tab */}
-        {false ? <TabsContent value="engineers" className="space-y-6">
+        {SHOW_ENGINEER_ADMIN ? <TabsContent value="engineers" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">工程師管理</h2>
             <Dialog open={isEngineerDialogOpen} onOpenChange={setIsEngineerDialogOpen}>
