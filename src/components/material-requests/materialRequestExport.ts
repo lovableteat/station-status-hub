@@ -43,6 +43,7 @@ export interface MaterialReportSnapshot {
   reportName: string;
   rows: MaterialReportRow[];
   sheetName: string;
+  scopeLabel: string;
   sourceFile: string;
   statusCounts: Record<string, number>;
   workspaceName: string;
@@ -232,10 +233,11 @@ export async function exportMaterialReportExcel(
 
   const summaryRows = [
     ["BOM", snapshot.workspaceName, "來源檔案", snapshot.sourceFile],
+    ["匯出範圍", snapshot.scopeLabel, "資料截止時間", formatDateTime(snapshot.dataAsOf)],
     ["匯出人員", snapshot.exportedBy, "匯出時間", formatDateTime(snapshot.exportedAt)],
-    ["資料截止時間", formatDateTime(snapshot.dataAsOf), "工作表", snapshot.sheetName],
+    ["工作表", snapshot.sheetName, "匯出明細數", snapshot.rows.length],
     ["原始主料數", snapshot.originalGroupCount, "篩選後主料數", snapshot.filteredGroupCount],
-    ["匯出明細數", snapshot.rows.length, "篩選條件", snapshot.filterSummary.join("；") || "全部資料"],
+    ["篩選條件", snapshot.filterSummary.join("；") || "全部資料", "報表識別", snapshot.id],
   ];
 
   summaryRows.forEach((values, index) => {
@@ -398,7 +400,7 @@ body.image-preview-open{overflow:hidden}
 </style>
 </head><body><main class="report">
 <header class="hero"><h1>${escapeHtml(snapshot.reportName)}</h1><p>${escapeHtml(snapshot.workspaceName)} · 資料截至 ${escapeHtml(formatDateTime(snapshot.dataAsOf))}</p></header>
-<section class="meta"><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
+<section class="meta"><div><span>匯出範圍</span><strong>${escapeHtml(snapshot.scopeLabel)}</strong></div><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
 <div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>REF</th><th>料件</th><th>廠商 / MPN</th><th>內部料號 / 圖面</th><th>TX</th><th>狀態追蹤</th><th>申請資訊</th><th>規格 / 備註</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
