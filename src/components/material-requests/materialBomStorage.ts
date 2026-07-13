@@ -31,8 +31,21 @@ export interface BomWorkspace {
   name: string;
   payload: MaterialWorkbookPayload;
   pageTracker?: BomPageTracker;
+  recordMeta?: Record<string, BomRecordSyncMeta>;
   tableColorTheme?: BomTableColorTheme;
+  isLoaded?: boolean;
   updatedAt: string;
+}
+
+export interface BomRecordSyncMeta {
+  updatedAt: string;
+}
+
+export class BomRecordConflictError extends Error {
+  constructor(public readonly recordId: string) {
+    super("此筆料號已由其他使用者更新，系統已阻止覆蓋。請載入最新資料後再確認修改內容。");
+    this.name = "BomRecordConflictError";
+  }
 }
 
 export type BomStorageMode = "remote" | "recovery";
@@ -40,6 +53,11 @@ export type BomStorageMode = "remote" | "recovery";
 export interface BomWorkspaceLoadResult {
   mode: BomStorageMode;
   workspaces: BomWorkspace[];
+}
+
+export interface BomWorkspaceChange {
+  recordIds: string[];
+  workspaceIds: string[];
 }
 
 interface BomWorkspaceRow {
@@ -77,7 +95,14 @@ const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 
+// Collaborative BOM tables predate the generated Supabase schema types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabaseClient = supabase as any;
+
+interface RealtimeRowPayload {
+  new?: Record<string, unknown>;
+  old?: Record<string, unknown>;
+}
 
 function toTimestamp(value: string) {
   const parsed = new Date(value).getTime();
@@ -313,56 +338,36 @@ function buildWorkspaceFromRows(
       records,
     },
     pageTracker,
+    recordMeta: Object.fromEntries(
+      recordRows.map((row) => [row.record_id, { updatedAt: row.updated_at } satisfies BomRecordSyncMeta]),
+    ),
     tableColorTheme,
+    isLoaded: true,
     updatedAt: workspaceRow.updated_at,
   };
 }
 
-async function loadAllRemoteRecordRows() {
-  const rows: BomRecordRow[] = [];
-
-  for (let start = 0; ; start += REMOTE_RECORD_FETCH_BATCH_SIZE) {
-    const end = start + REMOTE_RECORD_FETCH_BATCH_SIZE - 1;
-    const { data, error } = await supabaseClient
-      .from(RECORD_TABLE)
-      .select("workspace_id, record_id, order_index, data, updated_at")
-      .order("workspace_id", { ascending: true })
-      .order("order_index", { ascending: true })
-      .range(start, end);
-
-    if (error) throw error;
-
-    const batch = (data ?? []) as BomRecordRow[];
-    rows.push(...batch);
-
-    if (batch.length < REMOTE_RECORD_FETCH_BATCH_SIZE) {
-      break;
-    }
-  }
-
-  return rows;
-}
-
-async function repairRemoteWorkspaceRecordCounts(
-  workspaceRows: BomWorkspaceRow[],
-  rowsByWorkspace: Map<string, BomRecordRow[]>,
-) {
-  const mismatches = workspaceRows
-    .map((workspaceRow) => ({
-      id: workspaceRow.id,
-      recordCount: rowsByWorkspace.get(workspaceRow.id)?.length ?? 0,
-      currentRecordCount: workspaceRow.record_count ?? 0,
-    }))
-    .filter((workspace) => workspace.recordCount !== workspace.currentRecordCount);
-
-  await Promise.allSettled(
-    mismatches.map((workspace) =>
-      supabaseClient
-        .from(WORKSPACE_TABLE)
-        .update({ record_count: workspace.recordCount })
-        .eq("id", workspace.id)
-    ),
-  );
+function buildWorkspaceSummary(
+  workspaceRow: BomWorkspaceRow,
+  pageTracker?: BomPageTracker,
+  tableColorTheme?: BomTableColorTheme,
+): BomWorkspace {
+  return {
+    id: workspaceRow.id,
+    name: workspaceRow.name,
+    payload: {
+      sourceFile: workspaceRow.source_file,
+      sheetName: workspaceRow.sheet_name,
+      generatedAt: workspaceRow.generated_at,
+      recordCount: workspaceRow.record_count,
+      records: [],
+    },
+    pageTracker,
+    recordMeta: {},
+    tableColorTheme,
+    isLoaded: workspaceRow.record_count === 0,
+    updatedAt: workspaceRow.updated_at,
+  };
 }
 
 async function loadPageTrackerMap() {
@@ -387,6 +392,29 @@ async function loadPageTrackerMap() {
   return pageTrackerByWorkspace;
 }
 
+async function loadRemoteRecordRowsForWorkspace(workspaceId: string) {
+  const rows: BomRecordRow[] = [];
+
+  for (let start = 0; ; start += REMOTE_RECORD_FETCH_BATCH_SIZE) {
+    const end = start + REMOTE_RECORD_FETCH_BATCH_SIZE - 1;
+    const { data, error } = await supabaseClient
+      .from(RECORD_TABLE)
+      .select("workspace_id, record_id, order_index, data, updated_at")
+      .eq("workspace_id", workspaceId)
+      .order("order_index", { ascending: true })
+      .range(start, end);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as BomRecordRow[];
+    rows.push(...batch);
+
+    if (batch.length < REMOTE_RECORD_FETCH_BATCH_SIZE) break;
+  }
+
+  return rows;
+}
+
 async function loadTableColorThemeMap() {
   const { data, error } = await supabaseClient
     .from(PREFERENCE_TABLE)
@@ -409,40 +437,42 @@ async function loadTableColorThemeMap() {
   return themeByWorkspace;
 }
 
-async function loadRemoteBomWorkspaces() {
-  const [workspaceResponse, recordRows, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
+async function loadRemoteBomWorkspaces(preferredWorkspaceId?: string) {
+  const [workspaceResponse, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
     supabaseClient
       .from(WORKSPACE_TABLE)
       .select("id, name, source_file, sheet_name, generated_at, record_count, updated_at")
       .order("updated_at", { ascending: false }),
-    loadAllRemoteRecordRows(),
     loadPageTrackerMap(),
     loadTableColorThemeMap(),
   ]);
 
   if (workspaceResponse.error) throw workspaceResponse.error;
 
-  const rowsByWorkspace = new Map<string, BomRecordRow[]>();
-  for (const row of recordRows) {
-    const current = rowsByWorkspace.get(row.workspace_id) ?? [];
-    current.push(row);
-    rowsByWorkspace.set(row.workspace_id, current);
-  }
-
-  await repairRemoteWorkspaceRecordCounts(
-    (workspaceResponse.data ?? []) as BomWorkspaceRow[],
-    rowsByWorkspace,
-  );
+  const workspaceRows = (workspaceResponse.data ?? []) as BomWorkspaceRow[];
+  const activeWorkspaceId = preferredWorkspaceId && workspaceRows.some((row) => row.id === preferredWorkspaceId)
+    ? preferredWorkspaceId
+    : workspaceRows[0]?.id;
+  const activeRecordRows = activeWorkspaceId
+    ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId)
+    : [];
 
   return sortWorkspaces(
-    ((workspaceResponse.data ?? []) as BomWorkspaceRow[]).map((workspaceRow) =>
-      buildWorkspaceFromRows(
-        workspaceRow,
-        rowsByWorkspace.get(workspaceRow.id) ?? [],
-        pageTrackerByWorkspace.get(workspaceRow.id),
-        tableColorThemeByWorkspace.get(workspaceRow.id),
-      )
-    )
+    workspaceRows.map((workspaceRow) => workspaceRow.id === activeWorkspaceId
+      ? buildWorkspaceFromRows(
+          {
+            ...workspaceRow,
+            record_count: activeRecordRows.length,
+          },
+          activeRecordRows,
+          pageTrackerByWorkspace.get(workspaceRow.id),
+          tableColorThemeByWorkspace.get(workspaceRow.id),
+        )
+      : buildWorkspaceSummary(
+          workspaceRow,
+          pageTrackerByWorkspace.get(workspaceRow.id),
+          tableColorThemeByWorkspace.get(workspaceRow.id),
+        ))
   );
 }
 
@@ -633,15 +663,15 @@ async function loadRecoveryBomWorkspaces() {
   }
 }
 
-export async function loadBomWorkspacesDetailed(): Promise<BomWorkspaceLoadResult> {
+export async function loadBomWorkspacesDetailed(preferredWorkspaceId?: string): Promise<BomWorkspaceLoadResult> {
   try {
-    const remoteWorkspaces = await loadRemoteBomWorkspaces();
+    const remoteWorkspaces = await loadRemoteBomWorkspaces(preferredWorkspaceId);
     return {
       mode: "remote",
       workspaces: await migrateLegacyBomWorkspaces(
         remoteWorkspaces,
         saveBomWorkspace,
-        loadRemoteBomWorkspaces,
+        () => loadRemoteBomWorkspaces(preferredWorkspaceId),
       ),
     };
   } catch (error) {
@@ -659,6 +689,15 @@ export async function loadBomWorkspacesDetailed(): Promise<BomWorkspaceLoadResul
 export async function loadBomWorkspaces() {
   const result = await loadBomWorkspacesDetailed();
   return result.workspaces;
+}
+
+export async function loadBomWorkspaceById(workspaceId: string) {
+  const result = await loadBomWorkspacesDetailed(workspaceId);
+  return {
+    mode: result.mode,
+    workspace: result.workspaces.find((workspace) => workspace.id === workspaceId) ?? null,
+    workspaces: result.workspaces,
+  };
 }
 
 export async function saveBomWorkspace(workspace: BomWorkspace) {
@@ -701,15 +740,57 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
     throw new Error(`Unable to save BOM record ${record.id} because it is not present in workspace ${workspace.id}.`);
   }
 
-  await upsertRecordRows([{
-    workspace_id: workspace.id,
-    record_id: record.id,
-    order_index: orderIndex,
-    data: record,
-    updated_at: workspace.updatedAt,
-  }]);
+  const existingRecord = workspace.payload.records.some((item) => item.id === record.id);
+  let expectedUpdatedAt = workspace.recordMeta?.[record.id]?.updatedAt;
+
+  if (existingRecord && !expectedUpdatedAt) {
+    const { data: currentRow, error: currentRowError } = await supabaseClient
+      .from(RECORD_TABLE)
+      .select("updated_at")
+      .eq("workspace_id", workspace.id)
+      .eq("record_id", record.id)
+      .maybeSingle();
+
+    if (currentRowError) throw currentRowError;
+    expectedUpdatedAt = currentRow?.updated_at;
+  }
+
+  if (expectedUpdatedAt) {
+    const { data, error } = await supabaseClient
+      .from(RECORD_TABLE)
+      .update({ data: record, order_index: orderIndex })
+      .eq("workspace_id", workspace.id)
+      .eq("record_id", record.id)
+      .eq("updated_at", expectedUpdatedAt)
+      .select("updated_at")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new BomRecordConflictError(record.id);
+
+    await removeLegacyBomWorkspace(workspace.id);
+    return { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
+  }
+
+  const { data, error } = await supabaseClient
+    .from(RECORD_TABLE)
+    .insert({
+      workspace_id: workspace.id,
+      record_id: record.id,
+      order_index: orderIndex,
+      data: record,
+      updated_at: workspace.updatedAt,
+    })
+    .select("updated_at")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") throw new BomRecordConflictError(record.id);
+    throw error;
+  }
 
   await removeLegacyBomWorkspace(workspace.id);
+  return { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
 }
 
 export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker) {
@@ -736,27 +817,43 @@ export async function removeBomWorkspace(id: string) {
   await removeLegacyBomWorkspace(id);
 }
 
-export function subscribeBomWorkspaceChanges(onChange: () => void) {
+export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChange) => void) {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  const emitChange = () => {
+  const workspaceIds = new Set<string>();
+  const recordIds = new Set<string>();
+  const emitChange = (workspaceId?: unknown, recordId?: unknown) => {
+    if (typeof workspaceId === "string" && workspaceId) workspaceIds.add(workspaceId);
+    if (typeof recordId === "string" && recordId) recordIds.add(recordId);
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
 
     debounceTimer = setTimeout(() => {
-      onChange();
+      onChange({ workspaceIds: [...workspaceIds], recordIds: [...recordIds] });
+      workspaceIds.clear();
+      recordIds.clear();
       debounceTimer = null;
     }, 180);
   };
 
   const channel = supabaseClient
     .channel("material_bom_workspace_changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: WORKSPACE_TABLE }, emitChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: RECORD_TABLE }, emitChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: PREFERENCE_TABLE }, (payload: any) => {
+    .on("postgres_changes", { event: "*", schema: "public", table: WORKSPACE_TABLE }, (payload: RealtimeRowPayload) => {
+      emitChange(payload?.new?.id ?? payload?.old?.id);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: RECORD_TABLE }, (payload: RealtimeRowPayload) => {
+      emitChange(
+        payload?.new?.workspace_id ?? payload?.old?.workspace_id,
+        payload?.new?.record_id ?? payload?.old?.record_id,
+      );
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
       if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX) || value.startsWith(TABLE_COLOR_THEME_KEY_PREFIX))) {
-        emitChange();
+        const workspaceId = keys
+          .map((key) => key.split(":").pop())
+          .find(Boolean);
+        emitChange(workspaceId);
       }
     })
     .subscribe();
