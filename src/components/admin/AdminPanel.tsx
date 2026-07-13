@@ -403,8 +403,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="min-h-[calc(100dvh-92px)] w-full bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
-      <div className="flex min-h-[calc(100dvh-116px)] w-full flex-col gap-4">
+    <div className="min-h-full w-full min-w-0 bg-[radial-gradient(circle_at_12%_0%,rgba(56,189,248,0.10),transparent_25rem),radial-gradient(circle_at_88%_8%,rgba(99,102,241,0.08),transparent_28rem)] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
+      <div className="flex min-h-full w-full min-w-0 flex-col gap-4">
         {/* Header */}
         <header className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(17,38,66,0.96)_0%,rgba(13,25,45,0.98)_52%,rgba(19,27,55,0.96)_100%)] p-5 shadow-[0_28px_80px_-52px_rgba(56,189,248,0.75)] sm:p-6">
           <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl" />

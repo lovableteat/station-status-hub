@@ -5240,7 +5240,7 @@ export function MaterialRequestPage() {
   }
 
   return (
-    <div className="material-sheet-theme min-h-full bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_28%),linear-gradient(180deg,#08111f_0%,#0d1a2d_48%,#091320_100%)] p-4 text-slate-100 sm:p-5 lg:p-6">
+    <div className="material-sheet-theme min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_28%),linear-gradient(180deg,#08111f_0%,#0d1a2d_48%,#091320_100%)] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
