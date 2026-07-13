@@ -1,5 +1,6 @@
 ﻿import {
   type ChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -18,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ClipboardPaste,
   CircleHelp,
   CircleCheck,
   Copy,
@@ -54,6 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -65,6 +68,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
@@ -91,6 +95,7 @@ import {
   type BomStorageMode,
   type BomWorkspace,
   BomRecordConflictError,
+  loadCachedBomWorkspacesDetailed,
   loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
@@ -107,6 +112,13 @@ import {
   exportMaterialReportHtml,
   exportMaterialReportHtmlZip,
 } from "./materialRequestExport";
+import {
+  createClipboardImageName,
+  createCompactValueSummary,
+  getBomPageProgress,
+  getMaterialExportScopeLabel,
+  shouldApplyBomWorkspaceCache,
+} from "./materialRequestPresentation";
 import { useMaterialBomPresence } from "./useMaterialBomPresence";
 import {
   logMaterialRecordChange,
@@ -250,6 +262,129 @@ const BOM_TABLE_COLOR_FIELDS: Array<{
   { key: "secondary", label: "其餘料", description: "其他替代料或未首選列背景。" },
 ];
 
+const MATERIAL_FIELD_HELP = {
+  refGroup: { description: "同一組主料與替代料的分組代碼。相同 Ref Group 會顯示在同一組。", example: "C1 或 CARRIER_RAIL" },
+  refDes: { description: "料件在電路板上的位置，可填一個或多個位置代號。", example: "C418、R806" },
+  name: { description: "電路圖或 BOM 使用的料件名稱，用來辨識這一組料。", example: "CAP CER 0.1UF 16V" },
+  qty: { description: "這組料在單一產品或模組中的使用數量。", example: "1、2、4" },
+  assemblyName: { description: "料件所屬的板卡、模組或組裝層級，方便搜尋與報表分類。", example: "C2 Carrier Board" },
+  schematicPart: { description: "原理圖中的 Symbol 名稱或電路符號識別碼。", example: "CAP、CONN、IC" },
+  pcbFootprint: { description: "PCB Layout 使用的封裝或圖面名稱。", example: "c0402_t01_h24" },
+  partSpec: { description: "電氣、機構或採購需要確認的完整規格。", example: "0402、1uF、±10%、25V" },
+  manufacturer: { description: "實際生產這顆料的原廠名稱；不是代理商或採購窗口。", example: "Murata Manufacturing Co., Ltd." },
+  manufacturerPartNumber: { description: "原廠正式料號（MPN），用來判斷是否為同一顆料。", example: "GRM155C81E105KE11D" },
+  manufacturerPartNumberAlt: { description: "同一筆資料需要保留的第二個原廠料號；沒有可留空。", example: "替代封裝或舊版 MPN" },
+  virtualAlternative: { description: "內部暫用的 TX／規劃代號，不會取代正式 MPN 或狀態追蹤。", example: "1AT200087S00" },
+  requestTicket: { description: "申請單、Excel 單號或工單編號，方便回查申請進度。", example: "REQ-20260713-001" },
+  requestUrl: { description: "對應申請單或工單的完整網址；若沒有可留空。", example: "https://..." },
+  tracking: { description: "此區只顯示最新追蹤內容；新增歷史、圖片與狀態請從表格的「狀態追蹤」進入。", example: "新增追蹤、處理中、已完成" },
+  sourcingStatus: { description: "原廠供應與生命週期狀態，供採購與工程判斷風險。", example: "Approved、NRND、Obsolete" },
+  partNumber: { description: "公司內部正式建立的料號；尚未建料時請留空。", example: "1A20-060X0IN" },
+  partName: { description: "內部料號對應的公司料名，應與正式系統命名一致。", example: "CAP NCS X6S 0402 1uF" },
+  remark: { description: "補充申請狀態、缺料原因或需要下一位同仁處理的事項。", example: "需申請 Part / Symbol" },
+} as const;
+
+function CompactHoverValue({
+  label,
+  maxItems = 3,
+  onCopy,
+  previewClassName,
+  values,
+}: {
+  label: string;
+  maxItems?: number;
+  onCopy?: (value: string) => void;
+  previewClassName?: string;
+  values: string | string[];
+}) {
+  const summary = createCompactValueSummary(values, { maxItems });
+
+  return (
+    <HoverCard openDelay={180} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          aria-label={`查看${label}完整內容`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (onCopy && summary.fullText !== "-") onCopy(summary.fullText);
+          }}
+          className="group block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+        >
+          <span className={cn("line-clamp-2 break-words", previewClassName)}>{summary.preview}</span>
+          {summary.remainingCount > 0 && (
+            <span className="mt-1 inline-flex rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[11px] font-bold text-cyan-200">
+              +{summary.remainingCount} 項
+            </span>
+          )}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        side="top"
+        className="w-[min(460px,calc(100vw-32px))] border-cyan-300/25 bg-[#081727] p-0 text-slate-100 shadow-2xl"
+      >
+        <div className="border-b border-cyan-300/15 px-4 py-3">
+          <p className="text-sm font-black text-cyan-100">{label}</p>
+          <p className="mt-1 text-xs text-slate-400">{onCopy ? "點一下欄位可複製完整內容" : "完整內容"}</p>
+        </div>
+        <div className="max-h-64 overflow-y-auto px-4 py-3">
+          <div className="flex flex-wrap gap-2">
+            {summary.values.map((value, index) => (
+              <span key={`${value}-${index}`} className="max-w-full break-all rounded-md border border-sky-300/16 bg-sky-400/[0.08] px-2.5 py-1.5 font-mono text-sm leading-5 text-sky-100">
+                {value}
+              </span>
+            ))}
+          </div>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+function MaterialFieldLabel({
+  field,
+  htmlFor,
+  label,
+  required = false,
+}: {
+  field: keyof typeof MATERIAL_FIELD_HELP;
+  htmlFor?: string;
+  label: string;
+  required?: boolean;
+}) {
+  const help = MATERIAL_FIELD_HELP[field];
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label htmlFor={htmlFor} className="text-sm font-bold text-slate-200">
+        {label}{required ? <span className="ml-1 text-rose-300">*</span> : null}
+      </Label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${label}填寫說明`}
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-cyan-300 transition-colors hover:bg-cyan-300/12 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+          >
+            <CircleHelp className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          align="start"
+          sideOffset={8}
+          collisionPadding={16}
+          className="max-w-80 border-cyan-300/25 bg-[#071522] px-3 py-2.5 text-slate-100 shadow-xl"
+        >
+          <p className="text-sm leading-5">{help.description}</p>
+          <p className="mt-1.5 text-xs text-cyan-200">範例：{help.example}</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
 function normalizeBomTableColorTheme(theme: Partial<BomTableColorTheme> | null | undefined): BomTableColorTheme {
   const pickColor = (value: unknown, fallback: string) => (
     typeof value === "string" && /^#([0-9a-f]{6})$/i.test(value.trim())
@@ -280,6 +415,16 @@ function withAlpha(value: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function blendWithSurface(value: string, alpha: number) {
+  const foreground = hexToRgb(value);
+  const surface = hexToRgb("#0B1B2D");
+  const blend = (foregroundValue: number, surfaceValue: number) => (
+    Math.round((foregroundValue * alpha) + (surfaceValue * (1 - alpha)))
+  );
+
+  return `rgb(${blend(foreground.r, surface.r)}, ${blend(foreground.g, surface.g)}, ${blend(foreground.b, surface.b)})`;
+}
+
 function buildTableRowStyle(
   color: string,
   options?: {
@@ -294,6 +439,7 @@ function buildTableRowStyle(
 
   return {
     "--material-row-bg": withAlpha(color, backgroundAlpha),
+    "--material-row-solid": blendWithSurface(color, backgroundAlpha),
     "--material-row-hover": withAlpha(color, hoverAlpha),
     "--material-row-accent": withAlpha(color, accentAlpha),
   } as CSSProperties;
@@ -436,32 +582,6 @@ function BomPageTrackerSummaryPill({
           : `已完成 ${summary.completedPages} / ${summary.totalPages} 頁`
         : "頁數未設定"}
     </span>
-  );
-}
-
-function BomPageTrackerStatCard({
-  label,
-  value,
-  hint,
-  tone = "slate",
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone?: "slate" | "emerald" | "cyan";
-}) {
-  const toneClassName = tone === "emerald"
-    ? "border-emerald-300/26 bg-emerald-300/[0.14]"
-    : tone === "cyan"
-      ? "border-cyan-300/26 bg-cyan-300/[0.14]"
-      : "border-sky-300/18 bg-[#162338]";
-
-  return (
-    <div className={cn("rounded-xl border px-3 py-3", toneClassName)}>
-      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</p>
-      <p className="mt-2 text-xl font-black text-slate-50">{value}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-300">{hint}</p>
-    </div>
   );
 }
 
@@ -1998,8 +2118,7 @@ function TrackingHistoryDialog({
     setPreviewImage(null);
   }, [open, record?.id, record?.requestTicket, record?.requestUrl]);
 
-  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
+  const appendImageFiles = useCallback(async (files: File[], source: "picker" | "clipboard") => {
     if (files.length === 0) return;
 
     const invalidFiles = files.filter((file) => !file.type.startsWith("image/"));
@@ -2011,24 +2130,52 @@ function TrackingHistoryDialog({
       });
     }
 
-    const validFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (validFiles.length === 0) {
-      event.target.value = "";
-      return;
-    }
+    const timestamp = new Date();
+    const validFiles = files
+      .filter((file) => file.type.startsWith("image/"))
+      .map((file, index) => {
+        if (source !== "clipboard") return file;
+        const baseName = createClipboardImageName(file.type, timestamp);
+        const name = index === 0 ? baseName : baseName.replace(/(\.[^.]+)$/, `-${index + 1}$1`);
+        return new File([file], name, { type: file.type, lastModified: timestamp.getTime() });
+      });
+    if (validFiles.length === 0) return;
 
     try {
       const nextImages = await Promise.all(validFiles.map(readImageFile));
       setImages((current) => [...current, ...nextImages]);
+      if (source === "clipboard") {
+        toast({
+          title: `已貼上 ${nextImages.length} 張圖片`,
+          description: "圖片已加入這筆追蹤，儲存追蹤後才會正式寫入。",
+        });
+      }
     } catch (error) {
       toast({
         title: "圖片讀取失敗",
         description: error instanceof Error ? error.message : "請重新選擇圖片後再試一次。",
         variant: "destructive",
       });
-    } finally {
-      event.target.value = "";
     }
+  }, [toast]);
+
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    void appendImageFiles(files, "picker");
+    event.target.value = "";
+  };
+
+  const handleImagePaste = (event: ReactClipboardEvent<HTMLElement>) => {
+    const clipboardFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .flatMap((item) => {
+        const file = item.getAsFile();
+        return file ? [file] : [];
+      });
+    if (clipboardFiles.length === 0) return;
+
+    event.preventDefault();
+    void appendImageFiles(clipboardFiles, "clipboard");
   };
 
   const handleSave = () => {
@@ -2068,7 +2215,7 @@ function TrackingHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+        <DialogContent onPaste={handleImagePaste} className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
           <DialogHeader>
             <DialogTitle className="text-2xl text-slate-50">狀態追蹤</DialogTitle>
             <DialogDescription className="text-slate-400">
@@ -2173,12 +2320,18 @@ function TrackingHistoryDialog({
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="tracking-images-input">上傳圖片</Label>
-                      <label htmlFor="tracking-images-input" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-400/30 bg-cyan-400/[0.06] px-4 py-4 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/[0.12]">
-                        <Upload className="h-4 w-4" />
-                        選擇圖片
+                      <label htmlFor="tracking-images-input" className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-cyan-300/40 bg-cyan-400/[0.08] px-4 py-4 text-center text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/[0.14]">
+                        <span className="flex items-center gap-2">
+                          <Upload className="h-4 w-4" />
+                          選擇圖片
+                        </span>
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-sky-200">
+                          <ClipboardPaste className="h-3.5 w-3.5" />
+                          或直接按 Ctrl+V 貼上截圖
+                        </span>
                       </label>
                       <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
-                      <p className="text-xs leading-5 text-slate-400">圖片會跟這筆狀態一起保存，之後打開歷史可以直接回看。</p>
+                      <p className="text-xs leading-5 text-slate-400">在此視窗任一位置按 Ctrl+V 都可貼上剪貼簿圖片；圖片會跟這筆狀態一起保存。</p>
                       {images.length > 0 && (
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           {images.map((image) => (
@@ -3178,83 +3331,100 @@ function MaterialRecordDialog({
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
 
   return (
+    <TooltipProvider delayDuration={160}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="material-record-dialog max-h-[90vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+      <DialogContent className="material-record-dialog max-h-[90vh] max-w-5xl overflow-y-auto border-cyan-300/30 bg-[#091727] text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-slate-50">{title}</DialogTitle>
+          <div className="flex flex-wrap items-center gap-3">
+            <DialogTitle className="text-2xl text-slate-50">{title}</DialogTitle>
+            <span className={cn("rounded-full border px-2.5 py-1 text-xs font-black", readOnly ? "border-slate-400/25 bg-slate-400/10 text-slate-300" : "border-cyan-300/30 bg-cyan-300/12 text-cyan-100")}>
+              {readOnly ? "唯讀檢視" : "可直接編輯"}
+            </span>
+          </div>
           <DialogDescription className="text-slate-400">
             電路資料決定分組；廠商與 MPN 是展開後的替代料明細。
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex items-start gap-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] px-4 py-3 text-sm text-slate-300">
+          <CircleHelp className="mt-0.5 h-5 w-5 flex-none text-cyan-300" />
+          <p className="leading-6">滑鼠移到每個欄位名稱旁的 <strong className="text-cyan-100">?</strong>，即可查看用途與填寫範例；標示 <strong className="text-rose-300">*</strong> 的欄位為必要資料。</p>
+        </div>
+
         <div className="grid gap-5 py-2">
-          <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-4">
-            <h3 className="mb-4 text-sm font-bold text-blue-300">電路與原理圖資訊</h3>
+          <section className="rounded-2xl border border-sky-300/24 bg-[linear-gradient(145deg,rgba(18,46,74,0.96),rgba(10,27,45,0.98))] p-4 [&_input]:border-sky-300/22 [&_input]:bg-[#071522] [&_textarea]:border-sky-300/22 [&_textarea]:bg-[#071522]">
+            <div className="mb-4 border-b border-sky-300/15 pb-3">
+              <h3 className="text-base font-black text-sky-100">電路與原理圖資訊</h3>
+              <p className="mt-1 text-xs text-slate-400">決定主料分組、位置與原理圖識別。</p>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-2">
-                <Label htmlFor="material-ref">Ref Group *</Label>
+                <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="Ref Group" required />
                 <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 CARRIER_RAIL" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-ref-des">REF DES</Label>
+                <MaterialFieldLabel field="refDes" htmlFor="material-ref-des" label="REF DES" />
                 <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C418、R806" />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="material-name">電路料名稱 *</Label>
+                <MaterialFieldLabel field="name" htmlFor="material-name" label="電路料名稱" required />
                 <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-qty">Qty</Label>
+                <MaterialFieldLabel field="qty" htmlFor="material-qty" label="Qty" />
                 <Input id="material-qty" disabled={readOnly} value={String(form.qty)} onChange={(event) => updateField("qty", event.target.value)} />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="material-assembly">模組</Label>
+                <MaterialFieldLabel field="assemblyName" htmlFor="material-assembly" label="模組" />
                 <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-symbol">Symbol</Label>
+                <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Symbol" />
                 <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-footprint">Footprint</Label>
+                <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="Footprint" />
                 <Input id="material-footprint" disabled={readOnly} value={form.pcbFootprint} onChange={(event) => updateField("pcbFootprint", event.target.value)} />
               </div>
               <div className="space-y-2 md:col-span-2 xl:col-span-4">
-                <Label htmlFor="material-spec">料件規格</Label>
+                <MaterialFieldLabel field="partSpec" htmlFor="material-spec" label="料件規格" />
                 <Textarea id="material-spec" disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} className="min-h-20" />
               </div>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-cyan-400/20 bg-[#101d33] p-4">
-            <h3 className="mb-4 text-sm font-bold text-cyan-300">廠商替代料資訊</h3>
+          <section className="rounded-2xl border border-teal-300/24 bg-[linear-gradient(145deg,rgba(13,50,59,0.94),rgba(8,28,42,0.98))] p-4 [&_input]:border-teal-300/22 [&_input]:bg-[#071522] [&_textarea]:border-teal-300/22 [&_textarea]:bg-[#071522]">
+            <div className="mb-4 border-b border-teal-300/15 pb-3">
+              <h3 className="text-base font-black text-teal-100">廠商、料號與申請資訊</h3>
+              <p className="mt-1 text-xs text-slate-400">記錄原廠 MPN、內部料號與申請狀態。</p>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="material-maker">廠商</Label>
+                <MaterialFieldLabel field="manufacturer" htmlFor="material-maker" label="廠商" />
                 <Input id="material-maker" disabled={readOnly} value={form.manufacturer} onChange={(event) => updateField("manufacturer", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-mpn">Manufacturer P/N</Label>
+                <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="Manufacturer P/N" />
                 <Input id="material-mpn" disabled={readOnly} value={form.manufacturerPartNumber} onChange={(event) => updateField("manufacturerPartNumber", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-mpn-2">第二廠商料號</Label>
+                <MaterialFieldLabel field="manufacturerPartNumberAlt" htmlFor="material-mpn-2" label="第二廠商料號" />
                 <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-virtual-alternative">TX</Label>
+                <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="TX" />
                 <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="填寫暫用、規劃或追蹤紀錄" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-request-ticket">單號</Label>
+                <MaterialFieldLabel field="requestTicket" htmlFor="material-request-ticket" label="單號" />
                 <Input id="material-request-ticket" disabled={readOnly} value={form.requestTicket ?? ""} onChange={(event) => updateField("requestTicket", event.target.value)} placeholder="例如 Excel 單號 / ticket" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-request-url">單號連結</Label>
+                <MaterialFieldLabel field="requestUrl" htmlFor="material-request-url" label="單號連結" />
                 <Input id="material-request-url" disabled={readOnly} value={form.requestUrl ?? ""} onChange={(event) => updateField("requestUrl", event.target.value)} placeholder="可貼上 request URL" />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>狀態追蹤</Label>
+                <MaterialFieldLabel field="tracking" label="狀態追蹤" />
                 <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3">
                   <p className="text-sm font-bold text-sky-200">{latestTrackingEntry?.status || "尚未建立狀態追蹤"}</p>
                   <p className="mt-1 text-sm leading-6 text-slate-300">
@@ -3271,19 +3441,19 @@ function MaterialRecordDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-sourcing">Sourcing Status</Label>
+                <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="Sourcing Status" />
                 <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-internal-pn">內部料號</Label>
+                <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="內部料號" />
                 <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="material-part-name">內部料名</Label>
+                <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="內部料名" />
                 <Input id="material-part-name" disabled={readOnly} value={form.partName} onChange={(event) => updateField("partName", event.target.value)} />
               </div>
               <div className="space-y-2 md:col-span-2 xl:col-span-3">
-                <Label htmlFor="material-remark">申請狀態 / 備註</Label>
+                <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
                 <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-20" placeholder="例如 OK、需申請 00/Part/Symbol" />
               </div>
             </div>
@@ -3303,6 +3473,7 @@ function MaterialRecordDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 }
 
@@ -3488,6 +3659,7 @@ function CompactAlternativeRows({
           }),
           boxShadow: `inset 4px 0 0 ${withAlpha(rowColor, 0.9)}`,
         } as CSSProperties;
+        const refValues = splitRefDesignators(groupRefDes);
 
         return (
           <tr
@@ -3531,7 +3703,13 @@ function CompactAlternativeRows({
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[15px] font-bold text-slate-50">{record.manufacturer || "未填廠商"}</p>
+                    <div className="min-w-0 flex-1">
+                      <CompactHoverValue
+                        label="廠商"
+                        values={[record.manufacturer || "未填廠商"]}
+                        previewClassName="text-[15px] font-bold text-slate-50"
+                      />
+                    </div>
                     {preferred && (
                       <span
                         className="rounded-full px-2.5 py-1 text-xs font-bold text-slate-50"
@@ -3550,10 +3728,13 @@ function CompactAlternativeRows({
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
-              <button type="button" onClick={() => groupRefDes !== "-" && onCopy(groupRefDes)} className="group flex max-w-full items-center gap-2 text-left" title="複製 REF DES">
-                <span className="break-all font-mono text-base font-black text-sky-200 group-hover:text-sky-100">{groupRefDes}</span>
-                {groupRefDes !== "-" && <Copy className="h-4 w-4 flex-none text-sky-400 opacity-75 group-hover:opacity-100" />}
-              </button>
+              <CompactHoverValue
+                label="REF DES"
+                values={refValues.length > 0 ? refValues : groupRefDes}
+                maxItems={4}
+                onCopy={groupRefDes !== "-" ? () => onCopy(groupRefDes) : undefined}
+                previewClassName="font-mono text-[15px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
+              />
             </td>
 
             <td className="border-r border-blue-400/10 px-4 py-3.5">
@@ -3599,7 +3780,7 @@ function CompactAlternativeRows({
               <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
             </td>
 
-            <td className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[#14263a] px-3 py-3.5 shadow-[-14px_0_24px_rgba(2,12,27,0.42)]">
+            <td className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[var(--material-row-solid)] px-3 py-3.5 shadow-[-14px_0_24px_rgba(2,12,27,0.42)]">
               <div className="flex justify-center gap-2">
                 <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                   <Eye className="h-4 w-4" />
@@ -3764,6 +3945,7 @@ function MaterialExportDialog({
 
             <div className="rounded-xl border border-slate-500/20 bg-[#081322] p-3">
               <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <p className="sm:col-span-2"><span className="text-slate-500">匯出範圍：</span><strong className="text-cyan-100">{snapshot.scopeLabel}</strong></p>
                 <p><span className="text-slate-500">匯出人：</span>{snapshot.exportedBy}</p>
                 <p><span className="text-slate-500">資料截止：</span>{formatTimestamp(snapshot.dataAsOf)}</p>
                 <p className="sm:col-span-2"><span className="text-slate-500">BOM：</span>{snapshot.workspaceName}</p>
@@ -3871,6 +4053,10 @@ export function MaterialRequestPage() {
     () => getBomPageTrackerSummary(activeWorkspace.pageTracker),
     [activeWorkspace.pageTracker],
   );
+  const activePageProgress = useMemo(
+    () => getBomPageProgress(activePageTrackerSummary.currentPage, activePageTrackerSummary.totalPages),
+    [activePageTrackerSummary.currentPage, activePageTrackerSummary.totalPages],
+  );
   const [pageTrackerQuickTotalInput, setPageTrackerQuickTotalInput] = useState("0");
   const [pageTrackerQuickCurrentInput, setPageTrackerQuickCurrentInput] = useState("0");
   const [pageTrackerQuickSaving, setPageTrackerQuickSaving] = useState(false);
@@ -3953,12 +4139,31 @@ export function MaterialRequestPage() {
     let active = true;
     const syncWorkspaces = async (preferredBomId?: string) => {
       const requestId = ++workspaceSyncRequestRef.current;
+      const preferredWorkspaceId = preferredBomId ?? loadActiveBomId();
+      let remoteSettled = false;
+      const remoteRequest = loadBomWorkspacesDetailed(preferredWorkspaceId);
+
+      void loadCachedBomWorkspacesDetailed().then((cachedResult) => {
+        if (!shouldApplyBomWorkspaceCache({
+          active,
+          currentRequest: requestId === workspaceSyncRequestRef.current,
+          preferredWorkspaceId,
+          remoteSettled,
+          result: cachedResult,
+        })) return;
+
+        applyLoadedWorkspaces(cachedResult!.workspaces, preferredWorkspaceId);
+        setIsInitialLoading(false);
+      });
+
       try {
-        const result = await loadBomWorkspacesDetailed(preferredBomId);
+        const result = await remoteRequest;
+        remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus(result.mode);
-        applyLoadedWorkspaces(result.workspaces, preferredBomId);
+        applyLoadedWorkspaces(result.workspaces, preferredWorkspaceId);
       } catch {
+        remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus("error");
         // Keep the current local state when collaborative sync is temporarily unavailable.
@@ -4834,13 +5039,14 @@ export function MaterialRequestPage() {
       return counts;
     }, {});
     const timestamp = new Date().toISOString();
+    const activeFilterLabels = activeFilterChips.map((chip) => chip.label);
     const snapshot: MaterialReportSnapshot = {
       dataAsOf: timestamp,
       exportedAt: timestamp,
       exportedBy: user?.displayName || user?.username || "未知使用者",
       filteredGroupCount: filteredGroups.length,
       filterSummary: [
-        ...activeFilterChips.map((chip) => chip.label),
+        ...(activeFilterLabels.length > 0 ? activeFilterLabels : ["全部資料"]),
         `排序：${SORT_MODE_LABELS[sortMode]}`,
       ],
       id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `material-export-${Date.now()}`,
@@ -4848,6 +5054,7 @@ export function MaterialRequestPage() {
       reportName: `${activeWorkspace.name}_料號申請篩選報表`,
       rows,
       sheetName: dataset.meta.sheetName,
+      scopeLabel: getMaterialExportScopeLabel(activeFilterLabels),
       sourceFile: dataset.meta.sourceFile,
       statusCounts,
       workspaceName: activeWorkspace.name,
@@ -5226,55 +5433,45 @@ export function MaterialRequestPage() {
           )}
 
           {!pageTrackerPanelCollapsed && (
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <BomPageTrackerStatCard
-              label="總頁數"
-              value={activePageTrackerSummary.totalPages > 0 ? `${activePageTrackerSummary.totalPages} 頁` : "未設定"}
-              hint="先填 BOM 一共有幾頁。"
-              tone={activePageTrackerSummary.totalPages > 0 ? "cyan" : "slate"}
-            />
-            <BomPageTrackerStatCard
-              label="目前做到"
-              value={activePageTrackerSummary.currentPage > 0 ? `第 ${activePageTrackerSummary.currentPage} 頁` : "尚未指定"}
-              hint={activePageTrackerCurrentStatusMeta.label}
-              tone={activePageTrackerSummary.currentPage > 0 ? "emerald" : "slate"}
-            />
-            <BomPageTrackerStatCard
-              label="已完成"
-              value={activePageTrackerSummary.totalPages > 0 ? `${activePageTrackerSummary.completedPages} / ${activePageTrackerSummary.totalPages} 頁` : "0 / 0 頁"}
-              hint={activePageTrackerSummary.missingPages > 0 ? `其中 ${activePageTrackerSummary.missingPages} 頁為缺料` : "逐頁切狀態後會自動累計。"}
-              tone={activePageTrackerSummary.completedPages > 0 ? "emerald" : "slate"}
-            />
-          </div>
-          )}
-
-          {!pageTrackerPanelCollapsed && (
-            <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0">
-                <div className="rounded-xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(45,79,126,0.92),rgba(23,40,68,0.96))] px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  {activePageTrackerSummary.totalPages === 0 ? (
-                    <p className="leading-6 text-amber-200">這份 BOM 還沒設定頁數。先填總頁數後按「儲存頁數設定」，下面才會知道你目前做到哪一頁。</p>
-                  ) : activePageTrackerSummary.currentPage > 0 ? (
-                    <>
-                      <p className="font-bold text-slate-100">
-                        目前進度：第 {activePageTrackerSummary.currentPage} / {activePageTrackerSummary.totalPages} 頁
-                      </p>
-                      <p className="mt-1 leading-6 text-slate-300">
-                        目前狀態：{activePageTrackerCurrentStatusMeta.label}
-                      </p>
-                      <p className="mt-1 leading-6 text-slate-300">
-                        {activePageTrackerCurrentNote
-                          ? `目前頁備註：${activePageTrackerCurrentNote}`
-                          : "目前這一頁還沒填備註，可以按「逐頁勾選 / 備註」補上說明。"}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="leading-6 text-slate-300">總頁數已設定，但還沒指定目前做到第幾頁。填好之後主畫面會直接顯示進度。</p>
-                  )}
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)]">
+              <div className="min-w-0 rounded-xl border border-cyan-300/24 bg-[linear-gradient(145deg,rgba(24,58,91,0.94),rgba(11,30,50,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">目前處理進度</p>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <strong className="font-mono text-3xl font-black text-white">{activePageProgress.percentage}%</strong>
+                      <span className="text-sm font-bold text-slate-300">
+                        {activePageProgress.totalPages > 0
+                          ? `第 ${activePageProgress.currentPage} / ${activePageProgress.totalPages} 頁`
+                          : "尚未設定頁數"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs font-bold">
+                    <span className="rounded-md border border-emerald-300/24 bg-emerald-400/12 px-2.5 py-1.5 text-emerald-100">已完成 {activePageTrackerSummary.completedPages} 頁</span>
+                    {activePageTrackerSummary.missingPages > 0 && (
+                      <span className="rounded-md border border-violet-300/24 bg-violet-400/12 px-2.5 py-1.5 text-violet-100">缺料 {activePageTrackerSummary.missingPages} 頁</span>
+                    )}
+                    <span className={cn("rounded-md border px-2.5 py-1.5", activePageTrackerCurrentStatusMeta.cardClassName, activePageTrackerCurrentStatusMeta.textClassName)}>{activePageTrackerCurrentStatusMeta.label}</span>
+                  </div>
                 </div>
+                <div className="mt-4 h-3 overflow-hidden rounded-full border border-cyan-200/24 bg-[#061421] p-[2px]">
+                  <div
+                    className="h-full rounded-full shadow-[0_0_16px_rgba(34,211,238,0.45)] transition-[width] duration-300 motion-reduce:transition-none"
+                    style={{
+                      width: `${activePageProgress.percentage}%`,
+                      backgroundImage: "repeating-linear-gradient(90deg,#22d3ee 0,#22d3ee 12px,#67e8f9 12px,#67e8f9 16px,#0e7490 16px,#0e7490 19px)",
+                    }}
+                  />
+                </div>
+                <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-300">
+                  {activePageTrackerSummary.totalPages === 0
+                    ? "先在右側設定總頁數，再指定目前做到哪一頁。"
+                    : activePageTrackerCurrentNote || "目前頁尚未填備註，可使用「逐頁勾選 / 備註」補充。"}
+                </p>
               </div>
 
-              <div className="w-full max-w-[420px] space-y-3 rounded-2xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(33,57,95,0.96),rgba(22,38,63,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="space-y-3 rounded-xl border border-sky-300/24 bg-[linear-gradient(180deg,rgba(33,57,95,0.96),rgba(18,34,57,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="page-tracker-quick-total">總頁數</Label>
@@ -5307,12 +5504,12 @@ export function MaterialRequestPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Button
                     type="button"
                     onClick={() => void saveQuickBomPageTracker()}
                     disabled={!canManageBomPageTracker || pageTrackerQuickSaving || !pageTrackerQuickDirty}
-                    className="h-10 bg-cyan-500 px-4 font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+                    className="h-10 w-full bg-cyan-500 px-4 font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
                   >
                     {pageTrackerQuickSaving ? "儲存中..." : activePageTrackerSummary.totalPages > 0 ? "更新頁數進度" : "儲存頁數設定"}
                   </Button>
@@ -5321,7 +5518,7 @@ export function MaterialRequestPage() {
                     variant="outline"
                     onClick={() => openBomPageTrackerDialog(activeWorkspace.id)}
                     disabled={!canManageBomPageTracker}
-                    className="h-10 border-emerald-400/25 bg-emerald-400/10 px-4 font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500"
+                    className="h-10 w-full border-emerald-400/25 bg-emerald-400/10 px-4 font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500"
                   >
                     逐頁勾選 / 備註
                   </Button>
@@ -5548,6 +5745,11 @@ export function MaterialRequestPage() {
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
+                const groupRefValues = splitRefDesignators(groupRefDes);
+                const materialHoverValues = [
+                  group.name || "未命名料件",
+                  primaryAlternative?.manufacturer || "未填廠商",
+                ];
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
                 const editingNames = Array.from(new Set(
@@ -5618,16 +5820,26 @@ export function MaterialRequestPage() {
                                 <span className="rounded bg-blue-400/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{uniqueMpnCount} 個 MPN</span>
                               )}
                             </div>
-                            <p className="mt-1.5 text-base font-bold leading-6 text-slate-50">{group.name}</p>
-                            <p className="mt-1 text-sm text-slate-500">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
+                            <div className="mt-1.5">
+                              <CompactHoverValue
+                                label="主料 / 廠商"
+                                values={materialHoverValues}
+                                maxItems={2}
+                                previewClassName="text-base font-bold leading-6 text-slate-50"
+                              />
+                            </div>
+                            <p className="mt-1 truncate text-sm text-slate-400">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
                           </div>
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        <button type="button" onClick={() => groupRefDes !== "-" && handleCopy(groupRefDes)} className="group flex max-w-full items-center gap-2 text-left" title="複製 REF DES">
-                          <span className="break-all font-mono text-base font-black text-sky-200 group-hover:text-sky-100">{groupRefDes}</span>
-                          {groupRefDes !== "-" && <Copy className="h-4 w-4 flex-none text-sky-400 opacity-80 group-hover:opacity-100" />}
-                        </button>
+                        <CompactHoverValue
+                          label="REF DES"
+                          values={groupRefValues.length > 0 ? groupRefValues : groupRefDes}
+                          maxItems={4}
+                          onCopy={groupRefDes !== "-" ? () => handleCopy(groupRefDes) : undefined}
+                          previewClassName="font-mono text-[15px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
+                        />
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle">
                         <div>
@@ -5773,7 +5985,7 @@ export function MaterialRequestPage() {
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
                       <td
-                        className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[#14263a] px-4 py-3 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.42)]"
+                        className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[var(--material-row-solid)] px-4 py-3 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.42)]"
                         data-testid="material-data-update-cell"
                         onClick={(event) => event.stopPropagation()}
                       >
