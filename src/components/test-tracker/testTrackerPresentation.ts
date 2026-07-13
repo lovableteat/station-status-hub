@@ -43,6 +43,21 @@ export function getTrackerColumnWidth(
   return Math.round(Math.min(spec.maxWidth, Math.max(spec.minWidth, width)));
 }
 
+export function getTrackerGridTemplate(
+  columnKeys: string[],
+  columnWidths: Record<string, number>,
+) {
+  const hasStationColumns = columnKeys.some((columnKey) => columnKey.startsWith("station:"));
+
+  return columnKeys
+    .map((columnKey) => {
+      const width = getTrackerColumnWidth(columnKey, columnWidths);
+      const shouldFlex = columnKey.startsWith("station:") || (!hasStationColumns && columnKey === "machine");
+      return shouldFlex ? `minmax(${width}px, ${width}fr)` : `${width}px`;
+    })
+    .join(" ");
+}
+
 interface TrackerItemLike {
   id: string;
   station_id: string;
