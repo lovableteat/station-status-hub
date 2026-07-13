@@ -364,7 +364,7 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
     const images = row.images.length > 0
       ? `<div class="images">${row.images.map((image, imageIndex) => {
           const src = imagePathById?.get(image.id) ?? image.dataUrl;
-          return `<a href="${escapeHtml(src)}" target="_blank" rel="noreferrer"><img loading="lazy" src="${escapeHtml(src)}" alt="${escapeHtml(image.name)}"><small>${escapeHtml(image.name)}${imageIndex === 0 && row.images.length > 1 ? `（共 ${row.images.length} 張）` : ""}</small></a>`;
+          return `<a class="image-link" href="${escapeHtml(src)}" data-image-src="${escapeHtml(src)}" data-image-name="${escapeHtml(image.name)}" aria-label="放大檢視 ${escapeHtml(image.name)}"><img loading="lazy" src="${escapeHtml(src)}" alt="${escapeHtml(image.name)}"><small>${escapeHtml(image.name)}${imageIndex === 0 && row.images.length > 1 ? `（共 ${row.images.length} 張）` : ""}</small></a>`;
         }).join("")}</div>`
       : '<span class="muted">無圖片</span>';
     const requestLink = row.requestUrl
@@ -391,13 +391,66 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
 <title>${escapeHtml(snapshot.reportName)}</title>
 <style>
 :root{color-scheme:light;--ink:#102033;--muted:#587086;--line:#cddce7;--blue:#155e85;--cyan:#dff3f7;--paper:#f4f8fb}*{box-sizing:border-box}body{margin:0;background:#e9f0f5;color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif}.report{max-width:1800px;margin:0 auto;background:white;min-height:100vh}.hero{padding:28px 32px;background:linear-gradient(135deg,#123a61,#17677c);color:white}.hero h1{margin:0;font-size:28px}.hero p{margin:8px 0 0;color:#d7eef5}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:18px 32px;background:#f7fafc;border-bottom:1px solid var(--line)}.meta div,.stat{border:1px solid var(--line);border-radius:10px;background:white;padding:12px 14px}.meta span,.stat span{display:block;color:var(--muted);font-size:12px}.meta strong,.stat strong{display:block;margin-top:4px;font-size:16px}.filters,.stats{display:flex;flex-wrap:wrap;gap:8px;padding:14px 32px;border-bottom:1px solid var(--line)}.filter{border:1px solid #8ac6d5;border-radius:999px;background:var(--cyan);padding:6px 10px;font-size:12px}.stats .stat{min-width:140px}.table-wrap{overflow:auto;padding:0 24px 32px}table{width:100%;min-width:1500px;border-collapse:separate;border-spacing:0;font-size:12px}thead th{position:sticky;top:0;z-index:2;background:var(--blue);color:white;text-align:left;padding:11px 10px;border-right:1px solid rgba(255,255,255,.2)}tbody td{vertical-align:top;padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);max-width:260px;overflow-wrap:anywhere}tbody tr:nth-child(even){background:var(--paper)}td small{display:block;margin-top:5px;color:var(--muted);line-height:1.45}.status{display:inline-block;border:1px solid #7bb8c7;border-radius:999px;background:#e5f5f7;padding:4px 8px;font-weight:700}.link{color:#075f9a}.images{display:flex;flex-wrap:wrap;gap:6px}.images a{display:block;color:var(--muted);text-decoration:none}.images img{display:block;width:96px;height:68px;object-fit:cover;border:1px solid var(--line);border-radius:6px}.images small{max-width:110px}.muted{color:var(--muted)}.footer{padding:16px 32px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}@media(max-width:900px){.meta{grid-template-columns:1fr}.hero,.meta,.filters,.stats{padding-left:18px;padding-right:18px}}@media print{body{background:white}.report{max-width:none}.hero{print-color-adjust:exact;-webkit-print-color-adjust:exact}.table-wrap{overflow:visible;padding:0}table{min-width:0;font-size:8px}thead{display:table-header-group}.images img{width:56px;height:40px}.footer{page-break-before:avoid}}
-</style></head><body><main class="report">
+</style>
+<style>
+.image-link{cursor:zoom-in}.image-link img{transition:transform .18s ease,box-shadow .18s ease}.image-link:hover img,.image-link:focus-visible img{transform:scale(1.04);box-shadow:0 8px 22px rgba(16,32,51,.2)}.image-link:focus-visible{outline:2px solid #155e85;outline-offset:3px;border-radius:8px}.image-lightbox{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:clamp(16px,4vw,48px);background:rgba(4,14,25,.84);backdrop-filter:blur(8px)}.image-lightbox[hidden]{display:none}.image-lightbox__backdrop{position:absolute;inset:0;border:0;background:transparent;cursor:zoom-out}.image-lightbox__content{position:relative;z-index:1;max-width:min(1200px,92vw);max-height:90vh;margin:0;border:1px solid #8ac6d5;border-radius:16px;background:#fff;padding:12px;box-shadow:0 24px 70px rgba(4,14,25,.45)}.image-lightbox__content img{display:block;max-width:calc(92vw - 24px);max-height:calc(84vh - 52px);width:auto;height:auto;object-fit:contain;border-radius:10px}.image-lightbox__content figcaption{padding:10px 4px 2px;color:var(--muted);font-size:12px}.image-lightbox__close{position:absolute;right:10px;top:10px;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(16,32,51,.85);color:#fff;cursor:pointer;font-size:24px;line-height:1}
+body.image-preview-open{overflow:hidden}
+</style>
+</head><body><main class="report">
 <header class="hero"><h1>${escapeHtml(snapshot.reportName)}</h1><p>${escapeHtml(snapshot.workspaceName)} · 資料截至 ${escapeHtml(formatDateTime(snapshot.dataAsOf))}</p></header>
 <section class="meta"><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
 <div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>REF</th><th>料件</th><th>廠商 / MPN</th><th>內部料號 / 圖面</th><th>TX</th><th>狀態追蹤</th><th>申請資訊</th><th>規格 / 備註</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
-</main></body></html>`;
+</main>
+<div class="image-lightbox" id="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="圖片放大預覽">
+  <button class="image-lightbox__backdrop" type="button" data-close-image aria-label="關閉圖片預覽"></button>
+  <figure class="image-lightbox__content">
+    <button class="image-lightbox__close" type="button" data-close-image aria-label="關閉圖片預覽">×</button>
+    <img id="image-lightbox-image" alt="">
+    <figcaption id="image-lightbox-caption"></figcaption>
+  </figure>
+</div>
+<script>
+(() => {
+  const lightbox = document.getElementById("image-lightbox");
+  const previewImage = document.getElementById("image-lightbox-image");
+  const caption = document.getElementById("image-lightbox-caption");
+  const links = Array.from(document.querySelectorAll(".image-link"));
+  if (!lightbox || !previewImage || !caption) return;
+
+  let lastFocusedElement = null;
+  const close = () => {
+    lightbox.hidden = true;
+    document.body.classList.remove("image-preview-open");
+    previewImage.removeAttribute("src");
+    lastFocusedElement?.focus();
+  };
+  const open = (link) => {
+    const src = link.getAttribute("data-image-src") || link.getAttribute("href");
+    if (!src) return;
+    lastFocusedElement = link;
+    previewImage.src = src;
+    previewImage.alt = link.getAttribute("data-image-name") || "報表圖片";
+    caption.textContent = previewImage.alt;
+    lightbox.hidden = false;
+    document.body.classList.add("image-preview-open");
+    lightbox.querySelector("[data-close-image]")?.focus();
+  };
+
+  links.forEach((link) => link.addEventListener("click", (event) => {
+    event.preventDefault();
+    open(link);
+  }));
+  lightbox.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-close-image]")) close();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !lightbox.hidden) close();
+  });
+})();
+</script>
+</body></html>`;
 }
 
 export async function exportMaterialReportHtml(
