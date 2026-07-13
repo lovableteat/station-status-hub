@@ -12,6 +12,7 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+import { fetchAllPages } from "./fetchAllPages";
 import { useStationStatus } from "./useStationStatus";
 
 interface UnifiedSystem {
@@ -145,34 +146,54 @@ export function useUnifiedData() {
 
     try {
       const activeFlowVersionId = activeProject?.active_flow_version_id ?? null;
-      let stationsQuery = supabase
-        .from("test_flow_stations")
-        .select("*")
-        .eq("project_id", activeProjectId);
-      let itemsQuery = supabase
-        .from("test_flow_items")
-        .select("*")
-        .eq("project_id", activeProjectId);
-      let contentsQuery = supabase
-        .from("station_contents")
-        .select("*")
-        .eq("project_id", activeProjectId);
+      const fetchStations = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+        let query = supabase
+          .from("test_flow_stations")
+          .select("*")
+          .eq("project_id", activeProjectId);
+        if (includeFlowVersion && activeFlowVersionId) {
+          query = query.eq("flow_version_id", activeFlowVersionId);
+        }
+        return query.order("station_order").order("id").range(from, to);
+      });
+      const fetchItems = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+        let query = supabase
+          .from("test_flow_items")
+          .select("*")
+          .eq("project_id", activeProjectId);
+        if (includeFlowVersion && activeFlowVersionId) {
+          query = query.eq("flow_version_id", activeFlowVersionId);
+        }
+        return query.order("item_order").order("id").range(from, to);
+      });
+      const fetchContents = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+        let query = supabase
+          .from("station_contents")
+          .select("*")
+          .eq("project_id", activeProjectId);
+        if (includeFlowVersion && activeFlowVersionId) {
+          query = query.eq("flow_version_id", activeFlowVersionId);
+        }
+        return query.order("order_num").order("id").range(from, to);
+      });
 
-      if (activeFlowVersionId) {
-        stationsQuery = stationsQuery.eq("flow_version_id", activeFlowVersionId);
-        itemsQuery = itemsQuery.eq("flow_version_id", activeFlowVersionId);
-        contentsQuery = contentsQuery.eq("flow_version_id", activeFlowVersionId);
-      }
-
-      const [systemsRes, initialStationsRes, initialItemsRes, initialContentsRes] = await Promise.all([
-        supabase
+      const [systemsRes, initialStationsRes, initialItemsRes, initialContentsRes, progressRes] = await Promise.all([
+        fetchAllPages((from, to) => supabase
           .from("test_systems")
           .select("*")
           .eq("project_id", activeProjectId)
-          .order("system_name"),
-        stationsQuery.order("station_order"),
-        itemsQuery.order("item_order"),
-        contentsQuery.order("order_num"),
+          .order("system_name")
+          .order("id")
+          .range(from, to)),
+        fetchStations(Boolean(activeFlowVersionId)),
+        fetchItems(Boolean(activeFlowVersionId)),
+        fetchContents(Boolean(activeFlowVersionId)),
+        fetchAllPages((from, to) => supabase
+          .from("test_progress")
+          .select("*")
+          .eq("project_id", activeProjectId)
+          .order("id")
+          .range(from, to)),
       ]);
       let stationsRes = initialStationsRes;
       let itemsRes = initialItemsRes;
@@ -185,21 +206,9 @@ export function useUnifiedData() {
         (stationsRes.error || itemsRes.error || contentsRes.error)
       ) {
         [stationsRes, itemsRes, contentsRes] = await Promise.all([
-          supabase
-            .from("test_flow_stations")
-            .select("*")
-            .eq("project_id", activeProjectId)
-            .order("station_order"),
-          supabase
-            .from("test_flow_items")
-            .select("*")
-            .eq("project_id", activeProjectId)
-            .order("item_order"),
-          supabase
-            .from("station_contents")
-            .select("*")
-            .eq("project_id", activeProjectId)
-            .order("order_num"),
+          fetchStations(false),
+          fetchItems(false),
+          fetchContents(false),
         ]);
       }
 
@@ -207,6 +216,7 @@ export function useUnifiedData() {
       if (stationsRes.error) throw stationsRes.error;
       if (itemsRes.error) throw itemsRes.error;
       if (contentsRes.error) throw contentsRes.error;
+      if (progressRes.error) throw progressRes.error;
 
       if (loadSequence !== loadSequenceRef.current) return;
 
@@ -214,30 +224,13 @@ export function useUnifiedData() {
       const nextStations = (stationsRes.data ?? []) as UnifiedStation[];
       const nextItems = (itemsRes.data ?? []) as UnifiedTestItem[];
       const nextContents = (contentsRes.data ?? []) as StationContent[];
+      const nextProgress = (progressRes.data ?? []) as UnifiedProgress[];
 
       setSystems(nextSystems);
       setStations(nextStations);
       setTestItems(nextItems);
       setStationContents(nextContents);
-
-      const systemIds = nextSystems.map((system) => system.id);
-      if (systemIds.length === 0) {
-        setProgress([]);
-      } else {
-        const { data: progressData, error: progressError } = await supabase
-          .from("test_progress")
-          .select("*")
-          .eq("project_id", activeProjectId)
-          .in("system_id", systemIds);
-
-        if (progressError) {
-          throw progressError;
-        }
-
-        if (loadSequence === loadSequenceRef.current) {
-          setProgress((progressData ?? []) as UnifiedProgress[]);
-        }
-      }
+      setProgress(nextProgress);
     } catch (error) {
       console.error("Failed to load project-scoped station data:", error);
       toast({
@@ -256,19 +249,20 @@ export function useUnifiedData() {
     async (systemId?: string) => {
       if (!activeProjectId) return false;
 
-      let query = supabase
-        .from("test_progress")
-        .select("*")
-        .eq("project_id", activeProjectId);
-      if (systemId) query = query.eq("system_id", systemId);
-
-      const { data, error } = await query;
+      const { data, error } = await fetchAllPages((from, to) => {
+        let query = supabase
+          .from("test_progress")
+          .select("*")
+          .eq("project_id", activeProjectId);
+        if (systemId) query = query.eq("system_id", systemId);
+        return query.order("id").range(from, to);
+      });
       if (error) {
         console.error("Failed to refresh project-scoped progress:", error);
         return false;
       }
 
-      const nextProgress = (data ?? []) as UnifiedProgress[];
+      const nextProgress = data as UnifiedProgress[];
       setProgress((current) =>
         systemId
           ? [
