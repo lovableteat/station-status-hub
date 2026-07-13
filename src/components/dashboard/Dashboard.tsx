@@ -40,6 +40,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { exportSiteArchiveHtml } from "@/utils/siteArchiveExport";
 
+import { calculateDashboardMetrics } from "./dashboardMetrics";
+
 interface DashboardProps {
   onNavigate?: (module: string, params?: Record<string, string>) => void;
 }
@@ -50,33 +52,6 @@ const KPI_TONES = {
   emerald: "border-emerald-300/30 bg-[#0c2828] text-emerald-200",
   rose: "border-rose-300/30 bg-[#2b1822] text-rose-200",
 } as const;
-
-function normalizeStatus(system: {
-  current_station?: string | null;
-  overall_progress?: number | null;
-  status?: string | null;
-}) {
-  if (
-    system.status === "Done" ||
-    system.status === "已完成" ||
-    system.current_station === "已完成" ||
-    system.overall_progress === 100
-  ) {
-    return "completed";
-  }
-  if (
-    system.status === "On-going" ||
-    system.status === "進行中" ||
-    (system.overall_progress ?? 0) > 0
-  ) {
-    return "active";
-  }
-  return "waiting";
-}
-
-function formatShortDate(date: Date) {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
 
 function buildTrendPoints(values: number[], maxValue: number) {
   return values.map((value, index) => ({
@@ -149,56 +124,23 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       });
   }, [activeProjectId]);
 
-  const includedSystems = useMemo(
-    () => systems.filter((system) => !system.exclude_from_dashboard),
-    [systems]
+  const dashboardMetrics = useMemo(
+    () => calculateDashboardMetrics({ progress, stations, systems, testItems }),
+    [progress, stations, systems, testItems]
   );
-  const statusCounts = useMemo(
-    () =>
-      includedSystems.reduce(
-        (counts, system) => {
-          counts[normalizeStatus(system)] += 1;
-          return counts;
-        },
-        { active: 0, completed: 0, waiting: 0 }
-      ),
-    [includedSystems]
-  );
-  const completionRate = includedSystems.length
-    ? Math.round((statusCounts.completed / includedSystems.length) * 100)
-    : 0;
-  const portfolioProgress = includedSystems.length
-    ? Math.round(
-        (includedSystems.reduce((sum, system) => sum + (system.overall_progress ?? 0), 0) /
-          includedSystems.length) *
-          10
-      ) / 10
-    : 0;
-
-  const dailyCompletion = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() - (6 - index));
-      return {
-        count: 0,
-        date,
-        key: date.toISOString().slice(0, 10),
-        label: formatShortDate(date),
-      };
-    });
-    const completedSystemsByDate = new Map<string, Set<string>>();
-    progress.forEach((entry) => {
-      if (entry.status !== "Done" || !entry.completed_at) return;
-      const key = entry.completed_at.slice(0, 10);
-      if (!completedSystemsByDate.has(key)) completedSystemsByDate.set(key, new Set());
-      completedSystemsByDate.get(key)?.add(entry.system_id);
-    });
-    days.forEach((day) => {
-      day.count = completedSystemsByDate.get(day.key)?.size ?? 0;
-    });
-    return days;
-  }, [progress]);
+  const {
+    activeItemCount,
+    bottleneckStation,
+    completionRate,
+    dailyCompletion,
+    includedSystems,
+    maxRemainingHours,
+    portfolioProgress,
+    stationRows,
+    statusCounts,
+    systemMetricById,
+    totalRemainingHours,
+  } = dashboardMetrics;
   const sevenDayOutput = dailyCompletion.reduce((sum, day) => sum + day.count, 0);
   const dailyAverage = sevenDayOutput / dailyCompletion.length;
   const peakDay = dailyCompletion.reduce(
@@ -222,106 +164,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     : "";
   const dailyAverageY = 100 - (dailyAverage / chartYAxisMax) * 100;
 
-  const stationRows = useMemo(() => {
-    const sortedStations = [...stations].sort(
-      (left, right) => left.station_order - right.station_order
-    );
-    const includedSystemIds = new Set(includedSystems.map((system) => system.id));
-    const itemsByStation = new Map(
-      sortedStations.map((station) => [
-        station.id,
-        testItems.filter((item) => item.station_id === station.id),
-      ])
-    );
-    const completedItemKeys = new Set(
-      progress
-        .filter(
-          (entry) =>
-            includedSystemIds.has(entry.system_id) &&
-            entry.status === "Done" &&
-            Boolean(entry.item_id)
-        )
-        .map((entry) => `${entry.system_id}:${entry.item_id}`)
-    );
-    const stationCompletion = (systemId: string, stationId: string) => {
-      const stationItems = itemsByStation.get(stationId) ?? [];
-      if (!stationItems.length) return 100;
-      const completedCount = stationItems.filter((item) =>
-        completedItemKeys.has(`${systemId}:${item.id}`)
-      ).length;
-      return Math.round((completedCount / stationItems.length) * 100);
-    };
-    const queueByStation = new Map(sortedStations.map((station) => [station.id, 0]));
-
-    includedSystems.forEach((system) => {
-      if (normalizeStatus(system) === "completed") return;
-      const declaredStation = sortedStations.find(
-        (station) => station.station_name === system.current_station
-      );
-      const currentStation =
-        declaredStation ??
-        sortedStations.find((station) => stationCompletion(system.id, station.id) < 100);
-      if (currentStation) {
-        queueByStation.set(currentStation.id, (queueByStation.get(currentStation.id) ?? 0) + 1);
-      }
-    });
-
-    return sortedStations.map((station) => {
-      const stationItems = itemsByStation.get(station.id) ?? [];
-      const possibleRecords = includedSystems.length * stationItems.length;
-      const completedRecords = progress.filter(
-        (entry) =>
-          includedSystemIds.has(entry.system_id) &&
-          entry.station_id === station.id &&
-          entry.status === "Done"
-      ).length;
-      const averageProgress = possibleRecords
-        ? Math.min(100, Math.round((completedRecords / possibleRecords) * 100))
-        : 0;
-      const hours =
-        stationItems.reduce((sum, item) => sum + (item.estimated_minutes ?? 30), 0) / 60;
-      const queue = queueByStation.get(station.id) ?? 0;
-      return {
-        averageProgress,
-        completedRecords,
-        hours,
-        id: station.id,
-        itemCount: stationItems.length,
-        name: station.station_name,
-        possibleRecords,
-        queue,
-        workloadHours: queue * hours,
-      };
-    });
-  }, [includedSystems, progress, stations, testItems]);
-  const bottleneckStation = stationRows.some((station) => station.queue > 0)
-    ? [...stationRows].sort(
-        (left, right) =>
-          right.workloadHours - left.workloadHours ||
-          right.queue - left.queue ||
-          right.hours - left.hours
-      )[0]
-    : null;
-  const stationQueueTotal = stationRows.reduce((sum, station) => sum + station.queue, 0);
-  const stationWorkloadTotal = stationRows.reduce(
-    (sum, station) => sum + station.workloadHours,
-    0
-  );
-  const stationWorkloadMax = Math.max(
-    ...stationRows.map((station) => station.workloadHours),
-    0
-  );
   const attentionSystems = useMemo(
     () =>
       includedSystems
-        .filter((system) => normalizeStatus(system) !== "completed")
+        .filter((system) => systemMetricById.get(system.id)?.status !== "completed")
         .sort(
           (left, right) =>
-            (left.overall_progress ?? 0) - (right.overall_progress ?? 0) ||
+            (systemMetricById.get(left.id)?.progress ?? 0) -
+              (systemMetricById.get(right.id)?.progress ?? 0) ||
             left.system_name.localeCompare(right.system_name, "zh-Hant")
         )
         .slice(0, 6),
-    [includedSystems]
+    [includedSystems, systemMetricById]
   );
 
   const handleArchiveExport = async () => {
@@ -386,22 +240,53 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         title="系統儀表板"
         description={`${activeProject?.name || "目前專案"} · 管理層專案總覽`}
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 rounded-lg">
-                <Download className="mr-2 h-4 w-4" />匯出管理報表
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
-                <Download className="mr-2 h-4 w-4" />專案資料報表
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleArchiveExport} disabled={isArchiveExporting}>
-                <FileCode2 className="mr-2 h-4 w-4" />HTML 離線封存
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <HoverCard openDelay={180} closeDelay={120}>
+              <HoverCardTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-lg border-cyan-300/30 bg-cyan-300/[0.07] text-cyan-100 hover:bg-cyan-300/[0.12]"
+                  data-testid="dashboard-metric-help"
+                >
+                  <CircleHelp className="mr-2 h-4 w-4" />計算口徑
+                </Button>
+              </HoverCardTrigger>
+              <HoverCardContent
+                align="end"
+                className="z-[70] w-[min(31rem,calc(100vw-2rem))] rounded-xl border border-[#3d718f] bg-[#071827] p-0 text-[#d9e8f2]"
+              >
+                <div className="border-b border-[#315d78]/70 px-4 py-3">
+                  <div className="text-sm font-semibold text-[#f3f8fc]">儀表板共用計算口徑</div>
+                  <p className="mt-1 text-xs leading-5 text-[#a9c0d1]">
+                    目前依 {includedSystems.length} 台納管機台、{activeItemCount} 個有效測項與最新測項紀錄即時計算，不採用可能延遲的 overall_progress 或 current_station 快取值。
+                  </p>
+                </div>
+                <dl className="divide-y divide-[#294b63]/55 px-4 py-2 text-xs leading-5">
+                  <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 py-2"><dt className="font-medium text-cyan-100">平均進度</dt><dd className="text-[#c4d7e4]">各機台已完成測項數 ÷ 有效測項數，再取所有納管機台平均。</dd></div>
+                  <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 py-2"><dt className="font-medium text-cyan-100">完成機台</dt><dd className="text-[#c4d7e4]">所有有效測項的狀態都必須是 Done；只有百分比 100 不會誤算完成。</dd></div>
+                  <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 py-2"><dt className="font-medium text-cyan-100">七日產出</dt><dd className="text-[#c4d7e4]">依機台完成全部有效測項的日期計數，不再把單一測項完成當成整台產出。</dd></div>
+                  <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 py-2"><dt className="font-medium text-cyan-100">待處理問題</dt><dd className="text-[#c4d7e4]">問題狀態不是 resolved 或 closed 的最新紀錄。</dd></div>
+                </dl>
+              </HoverCardContent>
+            </HoverCard>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 rounded-lg">
+                  <Download className="mr-2 h-4 w-4" />匯出管理報表
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
+                  <Download className="mr-2 h-4 w-4" />專案資料報表
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleArchiveExport} disabled={isArchiveExporting}>
+                  <FileCode2 className="mr-2 h-4 w-4" />HTML 離線封存
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         }
       />
 
@@ -450,7 +335,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <TrendingUp className="h-4 w-4 text-cyan-200" aria-hidden="true" />
                 <h2 className="text-base font-semibold text-[#f3f8fc]">近七日產出趨勢</h2>
               </div>
-              <p className="mt-1 text-xs text-[#9eb8ca]">每日有完成測項的不同機台數</p>
+              <p className="mt-1 text-xs text-[#9eb8ca]">每日完成全部 {activeItemCount} 個有效測項的機台數</p>
             </div>
             <div className="flex divide-x divide-[#2a526f]/70 rounded-xl border border-[#2a526f]/70 bg-[#071522]/65">
               <div className="min-w-[84px] px-3 py-2 text-right">
@@ -469,10 +354,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <figure
             className="mt-3 w-full min-w-0 rounded-xl border border-[#234963]/65 bg-[#071522]/45 px-3 py-2.5"
-            aria-label={`近七日產出折線圖，總產出 ${sevenDayOutput} 台，每日平均 ${dailyAverage.toFixed(1)} 台`}
+            aria-label={`近七日完成全部有效測項的機台折線圖，總產出 ${sevenDayOutput} 台，每日平均 ${dailyAverage.toFixed(1)} 台`}
           >
             <figcaption className="sr-only">
-              近七日每日完成機台數：{dailyCompletion.map((day) => `${day.label} ${day.count} 台`).join("、")}
+              近七日每日完成全部有效測項的機台數：{dailyCompletion.map((day) => `${day.label} ${day.count} 台`).join("、")}
             </figcaption>
             <div className="grid h-[150px] grid-cols-[28px_minmax(0,1fr)] gap-2">
               <div className="relative mb-2 mt-5" aria-hidden="true">
@@ -599,13 +484,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         這區在估算什麼？
                       </div>
                       <p className="mt-1.5 text-xs leading-5 text-[#a9c0d1]">
-                        只計入儀表板納管機台，依目前所在站點的排隊數與流程預估工時，找出最需要優先疏通的站點。這是流程工作量估算，不是設備即時利用率或 OEE。
+                        只計入儀表板納管機台，逐台檢查本站每個有效測項是否完成，再加總尚未完成測項的預估工時。這是剩餘工作量估算，不是設備即時利用率或 OEE。
                       </p>
                     </div>
                     <ol className="space-y-2.5 px-4 py-3 text-xs leading-5 text-[#c4d7e4]">
-                      <li><strong className="text-cyan-100">1. 歸屬 WIP：</strong>未完成機台以目前站點為準；若未指定，歸到第一個尚未完成的站點。</li>
-                      <li><strong className="text-cyan-100">2. 估算工作量：</strong>待處理工時 = WIP 台數 × 該站所有測項的預估工時總和。</li>
-                      <li><strong className="text-cyan-100">3. 判定瓶頸：</strong>待處理工時最高者優先；同值時再比較 WIP 台數與單站預估工時。</li>
+                      <li><strong className="text-cyan-100">1. 待完成機台：</strong>只要機台在本站仍有至少一個測項未完成，就列入本站；同一台可能同時出現在多個站點。</li>
+                      <li><strong className="text-cyan-100">2. 剩餘工作量：</strong>逐筆加總所有未完成測項的預估分鐘，不再以機台數乘上整站完整工時。</li>
+                      <li><strong className="text-cyan-100">3. 判定瓶頸：</strong>剩餘工時最高者優先；同值時再比較待完成機台數與剩餘測項數。</li>
                     </ol>
                     <div className="border-t border-[#315d78]/70 px-4 py-2.5 text-[11px] text-[#8fb0c5]">
                       滑過任一站點卡，可查看該站當下代入的數字與完整公式。
@@ -614,14 +499,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </HoverCard>
               </div>
               <p className="mt-1 text-xs text-[#9eb8ca]">
-                依 WIP × 單站預估工時判定；滑過卡片查看公式
+                依每台機台尚未完成的測項逐筆加總；滑過卡片查看公式
                 {bottleneckStation ? `，目前瓶頸為 ${bottleneckStation.name}` : "，目前沒有排隊瓶頸"}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {bottleneckStation ? (
                 <Badge variant="outline" className="border-amber-300/40 bg-amber-300/10 text-amber-100">
-                  瓶頸 WIP {bottleneckStation.queue} 台
+                  瓶頸 {bottleneckStation.remainingHours.toFixed(1)}h
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-emerald-300/35 bg-emerald-300/10 text-emerald-100">
@@ -629,19 +514,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </Badge>
               )}
               <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
-                待處理 {stationWorkloadTotal.toFixed(1)}h
+                總剩餘 {totalRemainingHours.toFixed(1)}h
               </Badge>
             </div>
           </div>
           <div className="grid min-h-0 flex-1 gap-2.5 p-3 md:grid-cols-2 2xl:grid-cols-4">
             {stationRows.map((station, index) => {
-              const queueShare = stationQueueTotal
-                ? Math.round((station.queue / stationQueueTotal) * 100)
+              const remainingShare = totalRemainingHours
+                ? Math.round((station.remainingHours / totalRemainingHours) * 100)
                 : 0;
-              const workloadShare = stationWorkloadMax
-                ? Math.round((station.workloadHours / stationWorkloadMax) * 100)
+              const workloadShare = maxRemainingHours
+                ? Math.round((station.remainingHours / maxRemainingHours) * 100)
                 : 0;
-              const isBottleneck = station.id === bottleneckStation?.id && station.queue > 0;
+              const isBottleneck =
+                station.id === bottleneckStation?.id && station.remainingHours > 0;
 
               return (
                 <HoverCard key={station.id} openDelay={220} closeDelay={120}>
@@ -649,7 +535,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     <button
                       type="button"
                       data-testid={`station-capacity-card-${index}`}
-                      aria-label={`查看 ${station.name}，目前 ${station.queue} 台 WIP，預估待處理 ${station.workloadHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
+                      aria-label={`查看 ${station.name}，目前 ${station.incompleteSystems} 台仍有未完成測項，預估剩餘 ${station.remainingHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
                       className={cn(
                         "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
                         isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
@@ -668,8 +554,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.queue}</div>
-                          <div className="text-[10px] text-[#8fb0c5]">台 WIP</div>
+                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.incompleteSystems}</div>
+                          <div className="text-[10px] text-[#8fb0c5]">台待完成</div>
                         </div>
                       </div>
 
@@ -698,19 +584,19 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
                       <div className="mt-2.5 grid grid-cols-2 gap-3 text-[10px]">
                         <div>
-                          <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />待處理工時</div>
-                          <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.workloadHours.toFixed(1)}h</div>
+                          <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />剩餘估時</div>
+                          <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.remainingHours.toFixed(1)}h</div>
                         </div>
                         <div>
-                          <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />平均完成</div>
+                          <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />測項完成率</div>
                           <div className="font-data mt-0.5 text-xs font-semibold text-emerald-200">{station.averageProgress}%</div>
                         </div>
                       </div>
 
                       <div className="mt-2.5 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
-                        <span>WIP 占比 {queueShare}%</span>
+                        <span>剩餘工時占比 {remainingShare}%</span>
                         <span className={cn(isBottleneck ? "text-amber-100" : "text-cyan-100")}>
-                          {isBottleneck ? "優先疏通" : station.queue ? "持續監控" : "目前順暢"}
+                          {isBottleneck ? "優先疏通" : station.remainingItems ? "持續監控" : "工作已清空"}
                         </span>
                       </div>
                     </button>
@@ -734,40 +620,40 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                           isBottleneck && "border-amber-300/45 bg-amber-300/10 text-amber-100"
                         )}
                       >
-                        {isBottleneck ? "目前瓶頸" : station.queue ? "持續監控" : "目前順暢"}
+                        {isBottleneck ? "目前瓶頸" : station.remainingItems ? "持續監控" : "工作已清空"}
                       </Badge>
                     </div>
                     <dl className="px-4 py-2 text-xs">
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
-                        <dt className="font-medium text-cyan-100">WIP 台數</dt>
+                        <dt className="font-medium text-cyan-100">待完成機台</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
-                          未完成且目前歸屬本站的機台，共 <strong className="font-data text-[#f3f8fc]">{station.queue} 台</strong>。
+                          在本站至少還有一個測項未完成，共 <strong className="font-data text-[#f3f8fc]">{station.incompleteSystems} 台</strong>。機台可同時列入多站，不會被 current_station 限制在單一站點。
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
-                        <dt className="font-medium text-cyan-100">單站預估工時</dt>
+                        <dt className="font-medium text-cyan-100">完整站點工時</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
                           {station.itemCount} 個測項的預估分鐘加總 ÷ 60 = <strong className="font-data text-[#f3f8fc]">{station.hours.toFixed(2)}h</strong>。未填預估時間的測項以 30 分鐘計。
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
-                        <dt className="font-medium text-cyan-100">待處理工時</dt>
-                        <dd className="font-data leading-5 text-[#f3f8fc]">
-                          {station.queue} 台 × {station.hours.toFixed(2)}h = {station.workloadHours.toFixed(1)}h
+                        <dt className="font-medium text-cyan-100">剩餘工作量</dt>
+                        <dd className="leading-5 text-[#c4d7e4]">
+                          剩餘 <strong className="font-data text-[#f3f8fc]">{station.remainingItems} 筆測項</strong>，逐筆加總預估分鐘 ÷ 60 = <strong className="font-data text-[#f3f8fc]">{station.remainingHours.toFixed(1)}h</strong>。
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
                         <dt className="font-medium text-cyan-100">相對負載</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
-                          {stationWorkloadMax ? (
-                            <>本站 {station.workloadHours.toFixed(1)}h ÷ 站點最高 {stationWorkloadMax.toFixed(1)}h × 100 = <strong className="font-data text-[#f3f8fc]">{workloadShare}%</strong>。</>
+                          {maxRemainingHours ? (
+                            <>本站 {station.remainingHours.toFixed(1)}h ÷ 站點最高 {maxRemainingHours.toFixed(1)}h × 100 = <strong className="font-data text-[#f3f8fc]">{workloadShare}%</strong>。</>
                           ) : (
                             <>所有站點目前都沒有待處理工時，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
                           )}
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b border-[#294b63]/55 py-2.5">
-                        <dt className="font-medium text-cyan-100">平均完成</dt>
+                        <dt className="font-medium text-cyan-100">測項完成率</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
                           {station.possibleRecords ? (
                             <>已完成 {station.completedRecords} 筆 ÷（{includedSystems.length} 台 × {station.itemCount} 項，共 {station.possibleRecords} 筆）= <strong className="font-data text-[#f3f8fc]">{station.averageProgress}%</strong>，最高顯示 100%。</>
@@ -777,12 +663,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         </dd>
                       </div>
                       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2.5">
-                        <dt className="font-medium text-cyan-100">WIP 占比</dt>
+                        <dt className="font-medium text-cyan-100">剩餘工時占比</dt>
                         <dd className="leading-5 text-[#c4d7e4]">
-                          {stationQueueTotal ? (
-                            <>本站 {station.queue} 台 ÷ 全站 WIP {stationQueueTotal} 台 × 100 = <strong className="font-data text-[#f3f8fc]">{queueShare}%</strong>。</>
+                          {totalRemainingHours ? (
+                            <>本站 {station.remainingHours.toFixed(1)}h ÷ 全流程剩餘 {totalRemainingHours.toFixed(1)}h × 100 = <strong className="font-data text-[#f3f8fc]">{remainingShare}%</strong>。</>
                           ) : (
-                            <>目前沒有未完成機台列入 WIP，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
+                            <>目前沒有未完成測項，因此顯示 <strong className="font-data text-[#f3f8fc]">0%</strong>。</>
                           )}
                         </dd>
                       </div>
@@ -806,21 +692,25 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <Button variant="ghost" size="sm" onClick={() => onNavigate?.("test-tracker")}>查看全部</Button>
           </div>
           <div className="max-h-64 min-h-0 flex-1 divide-y divide-[#2a526f]/45 overflow-y-auto">
-            {attentionSystems.slice(0, 5).map((system) => (
-              <button
-                key={system.id}
-                type="button"
-                className="w-full px-4 py-3 text-left hover:bg-[#10263a]"
-                onClick={() => onNavigate?.("monitor", { system: system.system_name })}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
-                  <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]"><span className="truncate">{system.current_station || "尚未進站"}</span><span>{system.assigned_engineer || "未指定"}</span></div>
-                <Progress value={system.overall_progress ?? 0} className="mt-2 h-1.5" />
-              </button>
-            ))}
+            {attentionSystems.slice(0, 5).map((system) => {
+              const metric = systemMetricById.get(system.id);
+              const calculatedProgress = metric?.progress ?? 0;
+              return (
+                <button
+                  key={system.id}
+                  type="button"
+                  className="w-full px-4 py-3 text-left hover:bg-[#10263a]"
+                  onClick={() => onNavigate?.("monitor", { system: system.system_name })}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
+                    <span className="font-data text-xs text-cyan-100">{calculatedProgress}%</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]"><span className="truncate">{metric?.nextStationName || "尚未設定待辦站點"}</span><span>{system.assigned_engineer || "未指定"}</span></div>
+                  <Progress value={calculatedProgress} className="mt-2 h-1.5" />
+                </button>
+              );
+            })}
           </div>
           <button type="button" className="flex w-full items-center justify-between border-t border-rose-300/25 bg-rose-300/[0.07] px-4 py-3 text-left hover:bg-rose-300/10" onClick={() => onNavigate?.("issues")}>
             <span className="flex items-center gap-2 text-sm text-rose-100"><AlertTriangle className="h-4 w-4" />高優先問題</span>
