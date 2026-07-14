@@ -47,6 +47,19 @@ test("the material table rightmost column can resize without an adjacent column"
   );
 });
 
+test("the sticky data update column keeps the same visual treatment as neighboring columns", () => {
+  assert.equal(typeof presentation.getMaterialStickyColumnClasses, "function");
+
+  const classes = presentation.getMaterialStickyColumnClasses();
+
+  assert.match(classes.header, /bg-\[#0d2137\]/);
+  assert.match(classes.filter, /bg-\[#10263a\]/);
+  assert.match(classes.row, /bg-\[var\(--material-row-solid\)\]/);
+  assert.match(classes.row, /group-hover\/material-row:bg-\[var\(--material-row-hover-solid\)\]/);
+  assert.doesNotMatch(`${classes.header} ${classes.filter} ${classes.row}`, /shadow-\[/);
+  assert.doesNotMatch(`${classes.header} ${classes.filter} ${classes.row}`, /\bborder-l\b/);
+});
+
 test("export scope follows active filters and defaults to all data", () => {
   assert.equal(presentation.getMaterialExportScopeLabel([]), "全部資料");
   assert.equal(
