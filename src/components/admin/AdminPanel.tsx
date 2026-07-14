@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Plus, UserPlus, Shield, LogOut, Users, Network, Clock3, Lock, UserCog, CircleHelp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { UserEditDialog } from "./UserEditDialog";
@@ -66,10 +67,26 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [selectedUsername, setSelectedUsername] = useState<string>("");
   const { toast } = useToast();
   const { logout, user } = useUser();
+  const { canEditModule, canViewModule, loading: permissionsLoading } = usePermissions();
+  const canEditUsers = canEditModule("users");
+  const canViewApiManagement = canViewModule("api-management");
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    if (permissionsLoading) return;
+    setActiveTab(
+      initialTab === "api-management" && !canViewApiManagement ? "users" : initialTab
+    );
+  }, [canViewApiManagement, initialTab, permissionsLoading]);
+
+  const rejectUserMutation = () => {
+    if (canEditUsers) return false;
+    toast({
+      title: "僅限檢視",
+      description: "你的帳號沒有後台管理編輯權限。",
+      variant: "destructive",
+    });
+    return true;
+  };
 
   const loadEngineers = async () => {
     try {
@@ -137,6 +154,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleAddUser = async () => {
+    if (rejectUserMutation()) return;
+
     if (!newUser.username || !newUser.password || !newUser.displayName) {
       toast({
         title: "新增失敗",
@@ -217,6 +236,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleToggleUserStatus = async (id: string, currentStatus: string) => {
+    if (rejectUserMutation()) return;
+
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
       const { error } = await supabase
@@ -242,6 +263,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleDeleteUser = async (userId: string) => {
+    if (rejectUserMutation()) return;
+
     try {
       const { error } = await supabase
         .from('system_users')
@@ -431,14 +454,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                className="h-10 rounded-xl border-cyan-300/15 bg-slate-950/25 text-slate-200 hover:border-cyan-200/30 hover:bg-cyan-300/10 hover:text-cyan-50"
-                onClick={() => setActiveTab("api-management")}
-              >
-                <Network className="mr-2 h-4 w-4 text-cyan-200" />
-                API 管理
-              </Button>
+              {canViewApiManagement ? (
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl border-cyan-300/15 bg-slate-950/25 text-slate-200 hover:border-cyan-200/30 hover:bg-cyan-300/10 hover:text-cyan-50"
+                  onClick={() => setActiveTab("api-management")}
+                >
+                  <Network className="mr-2 h-4 w-4 text-cyan-200" />
+                  API 管理
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 className="h-10 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-rose-300/20 hover:bg-rose-400/10 hover:text-rose-100"
@@ -452,7 +477,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-1.5 sm:w-[420px]">
+          <TabsList className={`grid h-auto w-full gap-1 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-1.5 ${canViewApiManagement ? "grid-cols-2 sm:w-[420px]" : "grid-cols-1 sm:w-[210px]"}`}>
             <TabsTrigger value="users" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
@@ -461,10 +486,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             <UserPlus className="h-4 w-4 mr-2" />
             工程師管理
           </TabsTrigger> : null}
-          <TabsTrigger value="api-management" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
-            <Network className="h-4 w-4 mr-2" />
-            API 管理
-          </TabsTrigger>
+          {canViewApiManagement ? (
+            <TabsTrigger value="api-management" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
+              <Network className="h-4 w-4 mr-2" />
+              API 管理
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         {/* User Management Tab */}
@@ -483,9 +510,15 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </p> : null}
             </div>
 
-            <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+            <Dialog
+              open={canEditUsers && isUserDialogOpen}
+              onOpenChange={(open) => canEditUsers && setIsUserDialogOpen(open)}
+            >
               <DialogTrigger asChild>
-                <Button className="h-10 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-4 font-bold text-slate-950 shadow-[0_12px_30px_-16px_rgba(56,189,248,0.95)] hover:from-cyan-200 hover:to-sky-300">
+                <Button
+                  disabled={!canEditUsers}
+                  className="h-10 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-4 font-bold text-slate-950 shadow-[0_12px_30px_-16px_rgba(56,189,248,0.95)] hover:from-cyan-200 hover:to-sky-300 disabled:cursor-not-allowed disabled:opacity-45"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   新增用戶
                 </Button>
@@ -733,6 +766,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             <Button
                               variant="outline"
                               size="sm"
+                              disabled={!canEditUsers}
                               className="h-9 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-amber-300/20 hover:bg-amber-400/10 hover:text-amber-100"
                               onClick={() => handleToggleUserStatus(systemUser.id, systemUser.status)}
                             >
@@ -747,6 +781,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={!canEditUsers}
                             className="h-9 rounded-xl border-sky-300/15 bg-sky-400/[0.07] text-sky-100 hover:border-sky-300/30 hover:bg-sky-400/15"
                             onClick={() => {
                               setSelectedUserId(systemUser.id);
@@ -758,17 +793,19 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             網站權限
                           </Button>
 
-                          <div className="[&>button]:h-9 [&>button]:rounded-xl [&>button]:border-white/10 [&>button]:bg-slate-950/25 [&>button]:text-slate-300 [&>button]:hover:border-sky-300/20 [&>button]:hover:bg-sky-400/10 [&>button]:hover:text-sky-100">
-                            <UserEditDialog
-                              userId={systemUser.id}
-                              username={systemUser.username}
-                              role={systemUser.role}
-                              status={systemUser.status}
-                              displayName={systemUser.display_name}
-                              onUpdate={loadSystemUsers}
-                              onDelete={handleDeleteUser}
-                            />
-                          </div>
+                          {canEditUsers ? (
+                            <div className="[&>button]:h-9 [&>button]:rounded-xl [&>button]:border-white/10 [&>button]:bg-slate-950/25 [&>button]:text-slate-300 [&>button]:hover:border-sky-300/20 [&>button]:hover:bg-sky-400/10 [&>button]:hover:text-sky-100">
+                              <UserEditDialog
+                                userId={systemUser.id}
+                                username={systemUser.username}
+                                role={systemUser.role}
+                                status={systemUser.status}
+                                displayName={systemUser.display_name}
+                                onUpdate={loadSystemUsers}
+                                onDelete={handleDeleteUser}
+                              />
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -970,14 +1007,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </Card>
         </TabsContent> : null}
 
-        <TabsContent value="api-management" className="mt-0 flex-1">
-          <ApiManagementPage />
-        </TabsContent>
+        {canViewApiManagement ? (
+          <TabsContent value="api-management" className="mt-0 flex-1">
+            <ApiManagementPage />
+          </TabsContent>
+        ) : null}
       </Tabs>
 
       {/* User Permissions Dialog */}
       <UserPermissionsDialog
-        isOpen={permissionsDialogOpen}
+        isOpen={canEditUsers && permissionsDialogOpen}
         onClose={() => setPermissionsDialogOpen(false)}
         userId={selectedUserId}
         username={selectedUsername}

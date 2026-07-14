@@ -318,6 +318,13 @@ const Index = () => {
     () => stationModuleItems.filter((item) => canViewModule(item.id)),
     [canViewModule]
   );
+  const availableAdminModules = useMemo<AdminModuleId[]>(
+    () =>
+      (["users", "api-management"] as AdminModuleId[]).filter((module) =>
+        canViewModule(module)
+      ),
+    [canViewModule]
+  );
 
   useEffect(() => {
     if (activeWorkspace && !workspaceItems.some((item) => item.id === activeWorkspace)) {
@@ -330,6 +337,12 @@ const Index = () => {
       setActiveStationModule(availableStationModules[0]?.id ?? "dashboard");
     }
   }, [activeStationModule, availableStationModules]);
+
+  useEffect(() => {
+    if (!availableAdminModules.includes(activeAdminModule)) {
+      setActiveAdminModule(availableAdminModules[0] ?? "users");
+    }
+  }, [activeAdminModule, availableAdminModules]);
 
   useEffect(() => {
     const presenceModule =

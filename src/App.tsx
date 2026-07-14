@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { UserProvider } from "@/components/auth/UserContext";
 import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
+import { PermissionGuard } from "@/components/layout/PermissionGuard";
+import { PermissionsProvider } from "@/hooks/usePermissions";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -55,7 +57,8 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <UserProvider>
-        <TestProjectProvider>
+        <PermissionsProvider>
+          <TestProjectProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -63,15 +66,30 @@ const App = () => {
               <Suspense fallback={<AppLoadingScreen />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/test-tracker" element={<TestTrackerPage />} />
-                  <Route path="/api-management" element={<ApiManagementPage />} />
+                  <Route
+                    path="/test-tracker"
+                    element={
+                      <PermissionGuard module="test-tracker">
+                        <TestTrackerPage />
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/api-management"
+                    element={
+                      <PermissionGuard module="api-management">
+                        <ApiManagementPage />
+                      </PermissionGuard>
+                    }
+                  />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
             </HashRouter>
           </TooltipProvider>
-        </TestProjectProvider>
+          </TestProjectProvider>
+        </PermissionsProvider>
       </UserProvider>
     </QueryClientProvider>
   );

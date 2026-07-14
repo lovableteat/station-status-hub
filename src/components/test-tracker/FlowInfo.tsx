@@ -54,6 +54,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useFlowVersions } from "@/hooks/useFlowVersions";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -97,6 +98,8 @@ function updateFlowViewQuery(view: FlowView) {
 export function FlowInfo() {
   const { activeProject, activeProjectId, refreshProjects } = useTestProject();
   const { toast } = useToast();
+  const { canEditModule } = usePermissions();
+  const hasFlowEditPermission = canEditModule("flow-info");
   const {
     activeVersion,
     isLoadingVersions,
@@ -142,7 +145,12 @@ export function FlowInfo() {
 
   const editingVersionId = activeVersion?.id ?? null;
   const displayedVersionId = activeVersion?.id ?? null;
-  const canEdit = Boolean(view === "editor" && editingVersionId && displayedVersionId === editingVersionId);
+  const canEdit = Boolean(
+    hasFlowEditPermission &&
+      view === "editor" &&
+      editingVersionId &&
+      displayedVersionId === editingVersionId
+  );
 
   const loadSnapshot = useCallback(
     async (versionId: string | null): Promise<FlowSnapshot> => {
@@ -316,12 +324,26 @@ export function FlowInfo() {
     updateFlowViewQuery(nextView);
   }, []);
 
+  useEffect(() => {
+    if (!hasFlowEditPermission && view === "editor") {
+      setFlowView("overview");
+    }
+  }, [hasFlowEditPermission, setFlowView, view]);
+
   const enterEditMode = useCallback(() => {
+    if (!hasFlowEditPermission) {
+      toast({
+        title: "目前只有檢視權限",
+        description: "請由管理員開啟「編輯測試流程設定」權限。",
+        variant: "destructive",
+      });
+      return;
+    }
     setFlowView("editor");
-  }, [setFlowView]);
+  }, [hasFlowEditPermission, setFlowView, toast]);
 
   const ensureEditableVersion = useCallback(async () => {
-    if (!activeProjectId || isPreparingFlow) return null;
+    if (!hasFlowEditPermission || !activeProjectId || isPreparingFlow) return null;
     setIsPreparingFlow(true);
 
     try {
@@ -390,6 +412,7 @@ export function FlowInfo() {
     activeProject?.active_flow_version_id,
     activeProjectId,
     activeVersion,
+    hasFlowEditPermission,
     isPreparingFlow,
     refreshProjects,
     refreshVersions,
@@ -399,6 +422,7 @@ export function FlowInfo() {
 
   useEffect(() => {
     if (
+      !hasFlowEditPermission ||
       !activeVersion ||
       !activeProjectId ||
       (activeVersion.status === "published" && activeProject?.active_flow_version_id === activeVersion.id)
@@ -406,10 +430,10 @@ export function FlowInfo() {
       return;
     }
     void ensureEditableVersion();
-  }, [activeProject?.active_flow_version_id, activeProjectId, activeVersion, ensureEditableVersion]);
+  }, [activeProject?.active_flow_version_id, activeProjectId, activeVersion, ensureEditableVersion, hasFlowEditPermission]);
 
   const addStation = async () => {
-    if (stationAction) return;
+    if (!hasFlowEditPermission || stationAction) return;
     setStationAction("add");
 
     try {
@@ -943,6 +967,8 @@ export function FlowInfo() {
               size="sm"
               className={cn("h-8 rounded-md", view === "editor" && "bg-[#10263a] text-cyan-100")}
               onClick={enterEditMode}
+              disabled={!hasFlowEditPermission}
+              title={!hasFlowEditPermission ? "需要編輯測試流程設定權限" : undefined}
             >
               <FileSliders className="mr-2 h-4 w-4" />流程編輯
             </Button>
@@ -964,6 +990,8 @@ export function FlowInfo() {
               size="sm"
               className="h-8 rounded-lg"
               onClick={enterEditMode}
+              disabled={!hasFlowEditPermission}
+              title={!hasFlowEditPermission ? "需要編輯測試流程設定權限" : undefined}
             >
               <FileSliders className="mr-2 h-4 w-4" />直接編輯流程
             </Button>
@@ -1107,7 +1135,7 @@ export function FlowInfo() {
                   <div><div className="text-base font-semibold text-[#f3f8fc]">尚未建立測試站點</div><p className="mt-1 text-sm text-[#a9c0d1]">切換到流程編輯，建立第一站後即可加入測項。</p></div>
                   <Button
                     size="sm"
-                    disabled={isPreparingFlow || stationAction !== null}
+                    disabled={!hasFlowEditPermission || isPreparingFlow || stationAction !== null}
                     onClick={() => {
                       setFlowView("editor");
                       void addStation();
