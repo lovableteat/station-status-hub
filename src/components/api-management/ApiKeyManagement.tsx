@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Table,
   TableBody,
@@ -68,6 +69,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ApiKeyRecord | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const { canEditModule } = usePermissions();
+  const canEditApiManagement = canEditModule("api-management");
 
   const loadApiKeys = async () => {
     try {
@@ -127,16 +130,20 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   };
 
   const openCreateDialog = () => {
+    if (!canEditApiManagement) return;
     setEditingRecord(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (record: ApiKeyRecord) => {
+    if (!canEditApiManagement) return;
     setEditingRecord(record);
     setDialogOpen(true);
   };
 
   const toggleKeyStatus = async (keyId: string, currentStatus: boolean) => {
+    if (!canEditApiManagement) return;
+
     try {
       const { error } = await supabase
         .from("api_keys")
@@ -157,6 +164,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   };
 
   const deleteKey = async (keyId: string) => {
+    if (!canEditApiManagement) return;
+
     try {
       const { error } = await supabase.from("api_keys").delete().eq("id", keyId);
       if (error) throw error;
@@ -239,6 +248,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
           <Button
             type="button"
+            disabled={!canEditApiManagement}
             onClick={openCreateDialog}
             className="bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
           >
@@ -259,6 +269,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
               </p>
               <Button
                 type="button"
+                disabled={!canEditApiManagement}
                 onClick={openCreateDialog}
                 className="mt-6 bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
               >
@@ -403,6 +414,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               type="button"
                               variant="ghost"
                               size="sm"
+                              disabled={!canEditApiManagement}
                               onClick={() => openEditDialog(apiKey)}
                               className="text-slate-300 hover:bg-blue-400/10 hover:text-white"
                             >
@@ -414,6 +426,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               type="button"
                               variant="ghost"
                               size="sm"
+                              disabled={!canEditApiManagement}
                               onClick={() => void toggleKeyStatus(apiKey.id, apiKey.is_active)}
                               className="text-slate-300 hover:bg-blue-400/10 hover:text-white"
                             >
@@ -427,6 +440,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
+                                  disabled={!canEditApiManagement}
                                   className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -465,8 +479,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
       </Card>
 
       <CreateApiKeyDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={canEditApiManagement && dialogOpen}
+        onOpenChange={(open) => canEditApiManagement && setDialogOpen(open)}
         onKeyCreated={() => void loadApiKeys()}
         record={editingRecord}
       />
