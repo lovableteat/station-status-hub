@@ -1241,7 +1241,7 @@ export function FlowInfo() {
                 </div>
                 <p
                   className="mt-0.5 truncate text-[11px] text-[#8facbf]"
-                  title="拖曳測試項目可換序，也可拖到左側其他站點"
+                  title="拖曳測試項目可調整同站順序"
                 >
                   {selectedStation ? `${selectedStation.station_name} · 拖曳換序` : "請先選擇站點"}
                 </p>
