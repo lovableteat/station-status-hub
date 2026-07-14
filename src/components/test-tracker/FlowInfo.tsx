@@ -923,7 +923,7 @@ export function FlowInfo() {
   }
 
   return (
-    <div className="maintenance-page space-y-3">
+    <div className="maintenance-page flex h-full min-h-0 flex-col gap-3">
       <MaintenancePageHeader
         icon={FileSliders}
         title="L10 測試流程設定"
@@ -1133,7 +1133,7 @@ export function FlowInfo() {
       ) : (
         <ResizablePanelGroup
           autoSaveId={`maintenance-flow-editor:${activeProjectId ?? "default"}:${isWideEditor ? "columns" : "rows"}`}
-          className="h-[calc(100vh-286px)] min-h-[470px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522]"
+          className="min-h-[470px] flex-1 overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522]"
           direction={isWideEditor ? "horizontal" : "vertical"}
           data-testid="flow-editor-panels"
         >
