@@ -2,6 +2,7 @@ export const DEFAULT_TRACKER_PAGE_SIZE = 100;
 export const TRACKER_PAGE_SIZE_OPTIONS = [100, 500, 1000];
 
 export const TRACKER_HEADER_HEIGHT = 36;
+export const TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS = "border-r border-[#315b7b]";
 export const TRACKER_ROW_HEIGHT = 76;
 export const TRACKER_VIRTUAL_OVERSCAN = 4;
 
