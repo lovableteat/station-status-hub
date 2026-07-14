@@ -1,5 +1,9 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent as ReactDragEvent } from "react";
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -38,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/components/auth/UserContext";
@@ -52,6 +57,14 @@ import {
   resolveAiProviderPreset,
 } from "./aiProviderCatalog";
 import type { ProviderChatMessage } from "./aiProviderCatalog";
+import {
+  createFileFromDataImageUrl,
+  extractEmbeddedImageSources,
+  filterSharedPrompts,
+  getClipboardImageFiles,
+  getSlashPromptQuery,
+  insertClipboardText,
+} from "./apiChatPromptHelpers";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 interface ApiChatConsoleProps {
@@ -698,6 +711,10 @@ export function ApiChatConsole({
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
   const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
+  const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
+  const [promptLibraryQuery, setPromptLibraryQuery] = useState("");
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
+  const [slashHighlightedIndex, setSlashHighlightedIndex] = useState(0);
   const [promptDialogTitle, setPromptDialogTitle] = useState("");
   const [promptDialogContent, setPromptDialogContent] = useState("");
   const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
@@ -713,12 +730,23 @@ export function ApiChatConsole({
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerDragDepthRef = useRef(0);
   const hasHydratedConversationRef = useRef(false);
   const previousSelectedApiKeyIdRef = useRef<null | string>(null);
   const { user } = useUser();
 
   const isChatOnly = mode === "chat-only";
+  const slashPromptQuery = useMemo(() => getSlashPromptQuery(draftMessage), [draftMessage]);
+  const slashPromptResults = useMemo(
+    () => filterSharedPrompts(savedPrompts, slashPromptQuery ?? "").slice(0, 6),
+    [savedPrompts, slashPromptQuery],
+  );
+  const filteredLibraryPrompts = useMemo(
+    () => filterSharedPrompts(savedPrompts, promptLibraryQuery),
+    [promptLibraryQuery, savedPrompts],
+  );
+  const slashMenuOpen = slashPromptQuery !== null && !slashMenuDismissed && !loading;
 
   const selectedMetadata = useMemo(() => {
     return selectedApiKey
@@ -1351,7 +1379,21 @@ export function ApiChatConsole({
     const draft = buildWorkspaceItemDraft("新提示詞");
     setPromptDialogTitle(draft.title);
     setPromptDialogContent(draft.content);
+    setPromptLibraryOpen(false);
     setSavePromptDialogOpen(true);
+  };
+
+  const focusComposer = () => {
+    window.setTimeout(() => composerTextareaRef.current?.focus(), 0);
+  };
+
+  const applySharedPromptToDraft = (item: SavedWorkspaceItem) => {
+    setDraftMessage(item.content);
+    setPromptLibraryOpen(false);
+    setSlashMenuDismissed(true);
+    setSlashHighlightedIndex(0);
+    focusComposer();
+    toast.success(`已套用「${item.title}」，確認內容後再送出`);
   };
 
   const saveCurrentPrompt = () => {
@@ -1383,13 +1425,14 @@ export function ApiChatConsole({
       }
 
       setSavePromptDialogOpen(false);
-      toast.success("已儲存到左側共享提示詞庫，點選名稱即可調整並套用");
+      toast.success("已儲存到輸入區的共享提示詞庫，輸入 / 也能快速套用");
     })();
   };
 
   const openLibraryApplyDialog = (item: SavedWorkspaceItem) => {
     setLibraryApplyTitle(item.title);
     setLibraryApplyContent(item.content);
+    setPromptLibraryOpen(false);
     setLibraryApplyDialogOpen(true);
   };
 
@@ -1402,6 +1445,7 @@ export function ApiChatConsole({
 
     setDraftMessage(content);
     setLibraryApplyDialogOpen(false);
+    focusComposer();
     toast.success("已套用到 AI 輸入框，尚未自動送出");
   };
 
@@ -1520,49 +1564,100 @@ export function ApiChatConsole({
     void handleFileUpload(event.dataTransfer.files);
   };
 
-  const handleClipboardPaste = async (items: ClipboardItem[] | DataTransferItemList) => {
-    const imageFiles: File[] = [];
+  const createFileFromClipboardImageSource = async (source: string, index: number) => {
+    if (source.startsWith("data:image/")) {
+      return createFileFromDataImageUrl(source, index);
+    }
 
-    Array.from(items).forEach((item) => {
-      const file = "getAsFile" in item ? item.getAsFile() : null;
-      if (file && file.type.startsWith("image/")) {
-        imageFiles.push(file);
-      }
-    });
-
-    if (!imageFiles.length) return false;
-    await appendUploadedFiles(imageFiles);
-    return true;
+    try {
+      const response = await fetch(source, { credentials: "omit" });
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) return null;
+      const extension = blob.type.split("/")[1]?.split("+")[0]?.replace("jpeg", "jpg") || "png";
+      return new File([blob], `clipboard-image-${Date.now()}-${index + 1}.${extension}`, {
+        type: blob.type,
+      });
+    } catch (error) {
+      console.warn("Clipboard image could not be fetched:", source, error);
+      return null;
+    }
   };
 
-  useEffect(() => {
-    const handleGlobalPaste = (event: ClipboardEvent) => {
-      if (!event.clipboardData?.items?.length) return;
+  const handleComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const directImageFiles = getClipboardImageFiles(event.clipboardData.items);
+    const embeddedImageSources = directImageFiles.length
+      ? []
+      : extractEmbeddedImageSources(event.clipboardData.getData("text/html"));
 
-      const consoleElement = chatConsoleRef.current;
-      if (!consoleElement) return;
+    if (!directImageFiles.length && !embeddedImageSources.length) return;
 
-      const activeElement = document.activeElement;
-      const isConsoleFocused = activeElement instanceof Node
-        ? consoleElement.contains(activeElement)
-        : false;
-      const isPageFocused = activeElement === document.body || activeElement === null;
+    // Mixed clipboard payloads must be handled synchronously or the browser drops the image part.
+    event.preventDefault();
+    const pastedText = event.clipboardData.getData("text/plain");
+    const selectionStart = event.currentTarget.selectionStart ?? draftMessage.length;
+    const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
 
-      if (!isConsoleFocused && !isPageFocused) return;
+    if (pastedText) {
+      const nextValue = insertClipboardText(draftMessage, pastedText, selectionStart, selectionEnd);
+      const nextCursor = selectionStart + pastedText.length;
+      setDraftMessage(nextValue);
+      setSlashMenuDismissed(false);
+      window.requestAnimationFrame(() => {
+        composerTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+    }
 
-      void (async () => {
-        const handled = await handleClipboardPaste(event.clipboardData!.items);
-        if (handled) {
-          event.preventDefault();
-        }
-      })();
-    };
+    void (async () => {
+      const sourceFiles = directImageFiles.length
+        ? directImageFiles
+        : (await Promise.all(
+          embeddedImageSources.map((source, index) => createFileFromClipboardImageSource(source, index)),
+        )).filter((file): file is File => Boolean(file));
 
-    document.addEventListener("paste", handleGlobalPaste);
-    return () => {
-      document.removeEventListener("paste", handleGlobalPaste);
-    };
-  }, [uploadedAttachments.length]);
+      if (!sourceFiles.length) {
+        toast.error("剪貼簿含有圖片，但原始網站不允許讀取；請單獨複製圖片或直接拖入輸入框");
+        return;
+      }
+
+      await appendUploadedFiles(sourceFiles);
+    })();
+  };
+
+  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (!slashMenuOpen) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSlashHighlightedIndex((current) =>
+        slashPromptResults.length ? (current + 1) % slashPromptResults.length : 0,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSlashHighlightedIndex((current) =>
+        slashPromptResults.length
+          ? (current - 1 + slashPromptResults.length) % slashPromptResults.length
+          : 0,
+      );
+      return;
+    }
+
+    if ((event.key === "Enter" || event.key === "Tab") && slashPromptResults.length) {
+      event.preventDefault();
+      applySharedPromptToDraft(
+        slashPromptResults[Math.min(slashHighlightedIndex, slashPromptResults.length - 1)],
+      );
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSlashMenuDismissed(true);
+    }
+  };
 
   useEffect(() => {
     if (!isDragOverComposer) return;
@@ -1662,7 +1757,7 @@ export function ApiChatConsole({
               建立共享提示詞
             </DialogTitle>
             <DialogDescription className="text-base leading-7 text-slate-300">
-              把常用查詢方式存進團隊提示詞庫。儲存後，所有使用者都能從左側「共享提示詞庫」點選並套用。
+              把常用查詢方式存進團隊提示詞庫。儲存後，可從輸入區的「提示詞庫」或輸入 / 快速套用。
             </DialogDescription>
           </DialogHeader>
 
@@ -1670,8 +1765,8 @@ export function ApiChatConsole({
             <div className="grid gap-3 rounded-[20px] border border-blue-300/25 bg-blue-500/10 p-4 sm:grid-cols-3">
             {[
               ["1", "填寫", "輸入名稱與完整指令"],
-              ["2", "儲存", "加入左側共享提示詞庫"],
-              ["3", "套用", "點選名稱後放入輸入框"],
+              ["2", "儲存", "加入輸入區共享提示詞庫"],
+              ["3", "套用", "點選提示詞或輸入 /"],
             ].map(([step, title, description]) => (
               <div key={step} className="flex items-start gap-3 rounded-2xl bg-slate-950/25 px-4 py-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-400 text-sm font-black text-slate-950">
@@ -1820,6 +1915,121 @@ export function ApiChatConsole({
         </DialogContent>
       </Dialog>
     </>
+  );
+
+  const promptLibraryControl = (
+    <Popover
+      open={promptLibraryOpen}
+      onOpenChange={(open) => {
+        setPromptLibraryOpen(open);
+        if (!open) setPromptLibraryQuery("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 rounded-xl border-blue-300/35 bg-blue-400/12 px-3 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white"
+          aria-label="開啟共享提示詞庫"
+        >
+          <LibraryBig className="mr-2 h-4 w-4 text-cyan-200" />
+          提示詞庫
+          <span className="ml-2 rounded-full border border-blue-200/25 bg-slate-950/35 px-2 py-0.5 text-[11px] tabular-nums text-blue-100">
+            {savedPrompts.length}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={10}
+        className="w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]"
+      >
+        <div className="border-b border-blue-300/20 px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-black text-white">共享提示詞庫</p>
+              <p className="mt-1 text-sm leading-5 text-blue-100/75">點選直接套用，或在輸入框輸入 / 快速搜尋。</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={openSavePromptDialog}
+              className="h-9 shrink-0 rounded-xl bg-blue-400 px-3 font-black text-slate-950 hover:bg-blue-300"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              新增
+            </Button>
+          </div>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200" />
+            <Input
+              value={promptLibraryQuery}
+              onChange={(event) => setPromptLibraryQuery(event.target.value)}
+              placeholder="搜尋名稱或提示詞內容"
+              className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 pl-10 text-sm text-white placeholder:text-slate-400 focus-visible:ring-blue-400/35"
+            />
+          </div>
+        </div>
+
+        <div className="max-h-[360px] space-y-2 overflow-y-auto p-3">
+          {filteredLibraryPrompts.length ? (
+            filteredLibraryPrompts.map((item) => (
+              <div
+                key={item.id}
+                className="group flex items-stretch gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
+              >
+                <button
+                  type="button"
+                  onClick={() => applySharedPromptToDraft(item)}
+                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                >
+                  <span className="block truncate text-base font-black text-white">{item.title}</span>
+                  <span className="mt-1 block line-clamp-2 text-sm leading-5 text-slate-300">{item.content}</span>
+                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openLibraryApplyDialog(item)}
+                    className="flex h-10 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-400/10 px-2.5 text-xs font-black text-blue-100 hover:bg-blue-400/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                    aria-label={`調整後套用：${item.title}`}
+                  >
+                    調整
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSavedPrompt(item.id)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-rose-500/15 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
+                    aria-label={`刪除共享提示詞：${item.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-blue-300/25 bg-slate-950/25 px-5 py-8 text-center">
+              <LibraryBig className="mx-auto h-7 w-7 text-blue-200" />
+              <p className="mt-3 text-base font-black text-white">
+                {savedPrompts.length ? "找不到符合的提示詞" : "尚未建立共享提示詞"}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {savedPrompts.length ? "換個關鍵字再搜尋。" : "建立後所有使用者都能在這裡與 / 選單使用。"}
+              </p>
+              {!savedPrompts.length ? (
+                <Button
+                  type="button"
+                  onClick={openSavePromptDialog}
+                  className="mt-4 h-10 rounded-xl bg-blue-400 px-4 font-black text-slate-950 hover:bg-blue-300"
+                >
+                  建立第一個提示詞
+                </Button>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 
   const conversationPanel = (
@@ -1976,13 +2186,16 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-2.5 hidden flex-wrap items-center justify-between gap-2 sm:flex">
-            <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-300">
-              <span>Ctrl+V 貼上圖片</span>
-              <span className="h-3 w-px bg-slate-700" />
-              <span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
-              <span className="h-3 w-px bg-slate-700" />
-              <span>PDF / PPT / Excel / Word / 圖片</span>
+          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
+              {promptLibraryControl}
+              <span className="rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100">
+                輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
+              </span>
+              <span className="hidden h-3 w-px bg-slate-700 md:block" />
+              <span className="hidden md:inline">文字＋圖片可一起貼上</span>
+              <span className="hidden h-3 w-px bg-slate-700 lg:block" />
+              <span className="hidden lg:inline">附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span>
             </div>
             {!isChatOnly ? (
               <Button
@@ -2073,11 +2286,80 @@ export function ApiChatConsole({
                 </Button>
               </div>
 
-              <div className="min-w-0 flex-1 rounded-[16px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="relative min-w-0 flex-1 rounded-[16px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                {slashMenuOpen ? (
+                  <div
+                    role="listbox"
+                    aria-label="共享提示詞快速選單"
+                    className="absolute bottom-[calc(100%+12px)] left-0 z-40 w-full min-w-[280px] overflow-hidden rounded-[18px] border border-cyan-300/35 bg-[linear-gradient(180deg,#142b45_0%,#091827_100%)] shadow-[0_28px_70px_rgba(2,8,23,0.68)]"
+                  >
+                    <div className="flex items-center justify-between gap-3 border-b border-blue-300/18 px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <LibraryBig className="h-4 w-4 shrink-0 text-cyan-200" />
+                        <p className="truncate text-sm font-black text-white">
+                          {slashPromptQuery ? `搜尋「${slashPromptQuery}」` : "選擇共享提示詞"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-bold text-slate-400">↑↓ 選擇 · Enter 套用</span>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto p-2">
+                      {slashPromptResults.length ? (
+                        slashPromptResults.map((item, index) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="option"
+                            aria-selected={index === slashHighlightedIndex}
+                            onMouseEnter={() => setSlashHighlightedIndex(index)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => applySharedPromptToDraft(item)}
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                              index === slashHighlightedIndex
+                                ? "bg-blue-400/20 text-white"
+                                : "text-slate-200 hover:bg-white/6",
+                            )}
+                          >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/20 bg-cyan-400/10 font-mono text-sm font-black text-cyan-100">
+                              /
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-black">{item.title}</span>
+                              <span className="mt-0.5 block truncate text-xs text-slate-400">{item.content}</span>
+                            </span>
+                            <ArrowRight className="h-4 w-4 shrink-0 text-blue-200" />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-6 text-center">
+                          <p className="text-sm font-black text-white">
+                            {savedPrompts.length ? "找不到符合的提示詞" : "尚未建立共享提示詞"}
+                          </p>
+                          <Button
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={openSavePromptDialog}
+                            className="mt-3 h-9 rounded-xl bg-blue-400 px-4 text-sm font-black text-slate-950 hover:bg-blue-300"
+                          >
+                            <Plus className="mr-1.5 h-4 w-4" />
+                            建立提示詞
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
                 <Textarea
+                  ref={composerTextareaRef}
                   data-ai-surface="true"
                   value={draftMessage}
-                  onChange={(event) => setDraftMessage(event.target.value)}
+                  onChange={(event) => {
+                    setDraftMessage(event.target.value);
+                    setSlashMenuDismissed(false);
+                    setSlashHighlightedIndex(0);
+                  }}
+                  onKeyDown={handleComposerKeyDown}
+                  onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder=""
                   className="min-h-[74px] border-0 bg-transparent px-0 py-0 text-[17px] leading-7 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0"
@@ -2174,19 +2456,6 @@ export function ApiChatConsole({
                   {!sidebarCollapsed ? "建立新對話" : null}
                 </Button>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={openSavePromptDialog}
-                  className={cn(
-                    "mt-2 h-12 rounded-xl border border-[#214669] bg-[#10283d] font-bold text-blue-100 hover:border-blue-300/50 hover:bg-[#16324b] hover:text-white",
-                    sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
-                  )}
-                  aria-label="新增共享提示詞"
-                >
-                  <Bookmark className={cn("h-5 w-5", !sidebarCollapsed && "mr-2")} />
-                  {!sidebarCollapsed ? "新增共享提示詞" : null}
-                </Button>
               </div>
 
               {!sidebarCollapsed ? (
@@ -2233,61 +2502,12 @@ export function ApiChatConsole({
                   </div>
                 </section>
 
-                {savedPrompts.length > 0 ? (
-                  <section
-                    aria-labelledby="shared-prompts-title"
-                    className="rounded-[20px] border border-[#1d4262] bg-[#0C2235] p-3.5"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <LibraryBig className="h-5 w-5 shrink-0 text-blue-200" />
-                        <p id="shared-prompts-title" className="text-base font-black text-white">
-                          共享提示詞庫
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[#2b5377] bg-[#14324c] px-2.5 py-1 text-xs font-black tabular-nums text-blue-100">
-                        {savedPrompts.length}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      {savedPrompts.map((item) => (
-                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-[#1e425f] bg-[#10263a] hover:border-blue-300/50 hover:bg-[#16324a]">
-                          <button
-                            type="button"
-                            onClick={() => openLibraryApplyDialog(item)}
-                            className="min-w-0 flex-1 rounded-xl px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
-                          >
-                            <p className="truncate text-base font-black text-white">{item.title}</p>
-                            <span className="mt-1.5 flex items-center gap-1 text-sm font-bold text-blue-200">
-                              調整並套用
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeSavedPrompt(item.id)}
-                            aria-label={`刪除共享提示詞：${item.title}`}
-                            className="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 opacity-100 hover:bg-rose-500/15 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
               </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col items-center gap-3 bg-[#081C2D] px-3 py-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
                     <History className="h-4 w-4" />
                   </div>
-                  {savedPrompts.length > 0 ? (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-blue-100">
-                      <LibraryBig className="h-4 w-4" />
-                    </div>
-                  ) : null}
                 </div>
               )}
 
