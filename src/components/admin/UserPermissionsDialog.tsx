@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Save, Shield, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ALL_PAGE_PERMISSIONS,
@@ -21,6 +22,7 @@ import {
   LEGACY_PAGE_PERMISSION_GROUPS,
   type Permission,
   readWorkspaceAccess,
+  synchronizeWorkspacePermissions,
   type UserPermissionSettings,
   type WorkspaceAccessLevel,
   type WorkspaceAccessMap,
@@ -42,7 +44,7 @@ const WORKSPACE_OPTIONS: Array<{
 }> = [
   { value: "none", label: "未授權", description: "不顯示此工作區" },
   { value: "view", label: "檢視", description: "可進入工作區，但不可編輯" },
-  { value: "edit", label: "管理", description: "可完整操作此工作區" },
+  { value: "edit", label: "管理", description: "允許勾選的頁面進行編輯" },
 ];
 
 function getWorkspaceCardTone(level: WorkspaceAccessLevel) {
@@ -66,17 +68,10 @@ export function UserPermissionsDialog({
   const [workspaceAccess, setWorkspaceAccess] =
     useState<WorkspaceAccessMap>(DEFAULT_WORKSPACE_ACCESS);
   const [isLoading, setIsLoading] = useState(false);
-  const [storedPermissionSettings, setStoredPermissionSettings] =
-    useState<UserPermissionSettings>({});
   const { toast } = useToast();
+  const { user } = useUser();
 
-  useEffect(() => {
-    if (isOpen && userId) {
-      loadUserPermissions();
-    }
-  }, [isOpen, userId]);
-
-  const loadUserPermissions = async () => {
+  const loadUserPermissions = useCallback(async () => {
     try {
       const [{ data: pagePermissions, error: pagePermissionError }, { data: userData, error: userError }] =
         await Promise.all([
@@ -101,28 +96,25 @@ export function UserPermissionsDialog({
           ? (userData.permissions as UserPermissionSettings)
           : {};
 
-      setStoredPermissionSettings(permissionSettings);
       setWorkspaceAccess(readWorkspaceAccess(permissionSettings));
     } catch (error) {
-      try {
-        const localPermissions = localStorage.getItem(`user_page_permissions:${userId}`);
-        const localWorkspace = localStorage.getItem(
-          `user_workspace_permissions:${userId}`
-        );
-
-        setPermissions(localPermissions ? JSON.parse(localPermissions) : []);
-        setWorkspaceAccess(readWorkspaceAccess(localWorkspace ? JSON.parse(localWorkspace) : null));
-      } catch {
-        setPermissions([]);
-        setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
-      }
+      console.error("Failed to load user permissions:", error);
+      setPermissions([]);
+      setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
 
       toast({
-        title: "載入權限（離線）",
-        description: "資料庫不可用，使用本機權限設定",
+        title: "權限載入失敗",
+        description: "無法讀取資料庫權限，請稍後重試。為避免誤設，未載入本機舊資料。",
+        variant: "destructive",
       });
     }
-  };
+  }, [toast, userId]);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      void loadUserPermissions();
+    }
+  }, [isOpen, loadUserPermissions, userId]);
 
   const handlePermissionChange = (permission: Permission, checked: boolean) => {
     if (checked) {
@@ -143,6 +135,9 @@ export function UserPermissionsDialog({
       ...prev,
       [workspaceId]: level,
     }));
+    setPermissions((prev) =>
+      synchronizeWorkspacePermissions(prev, workspaceId, level)
+    );
   };
 
   const applyGlobalPreset = (level: WorkspaceAccessLevel) => {
@@ -229,44 +224,18 @@ export function UserPermissionsDialog({
     try {
       setIsLoading(true);
 
-      const nextPermissionSettings: UserPermissionSettings = {
-        ...storedPermissionSettings,
-        workspaceAccess,
-      };
+      const { error } = await supabase.rpc("set_user_access_permissions", {
+        p_user_id: userId,
+        p_permissions: permissions,
+        p_workspace_access: workspaceAccess,
+        p_granted_by: user?.username ?? "admin",
+      });
+      if (error) throw error;
 
-      const { error: deleteError } = await supabase
-        .from("user_page_permissions")
-        .delete()
-        .eq("user_id", userId);
-      if (deleteError) throw deleteError;
-
-      if (permissions.length > 0) {
-        const { error: insertError } = await supabase
-          .from("user_page_permissions")
-          .insert(
-            permissions.map((permission) => ({
-              user_id: userId,
-              permission: permission as any,
-              granted_by: "admin",
-            }))
-          );
-        if (insertError) throw insertError;
-      }
-
-      const { error: settingsError } = await supabase
-        .from("system_users")
-        .update({ permissions: nextPermissionSettings as any })
-        .eq("id", userId);
-
-      if (settingsError) throw settingsError;
-
-      localStorage.setItem(
-        `user_page_permissions:${userId}`,
-        JSON.stringify(permissions)
-      );
-      localStorage.setItem(
-        `user_workspace_permissions:${userId}`,
-        JSON.stringify({ workspaceAccess })
+      window.dispatchEvent(
+        new CustomEvent("station-permissions-updated", {
+          detail: { userId },
+        })
       );
 
       toast({
@@ -276,20 +245,14 @@ export function UserPermissionsDialog({
 
       onClose();
     } catch (error) {
-      localStorage.setItem(
-        `user_page_permissions:${userId}`,
-        JSON.stringify(permissions)
-      );
-      localStorage.setItem(
-        `user_workspace_permissions:${userId}`,
-        JSON.stringify({ workspaceAccess })
-      );
-
       toast({
-        title: "已以本機方式儲存",
-        description: "資料庫不可用，先保存至本機，稍後可再同步",
+        title: "權限儲存失敗",
+        description:
+          error instanceof Error
+            ? error.message
+            : "資料庫未完成更新，原權限已完整保留，請稍後重試。",
+        variant: "destructive",
       });
-      onClose();
     } finally {
       setIsLoading(false);
     }
@@ -305,7 +268,7 @@ export function UserPermissionsDialog({
               設定 {username} 的網站權限
             </DialogTitle>
             <DialogDescription>
-              先決定三大工作區是否可見，再補細部頁面權限。工作區是入口層，頁面權限是進入後的操作層。
+              工作區決定可進入與最高操作層級；維修中心內仍依下方勾選的頁面權限逐項生效。
             </DialogDescription>
           </DialogHeader>
 
@@ -374,7 +337,7 @@ export function UserPermissionsDialog({
                 <div>
                   <h3 className="text-lg font-semibold">工作區權限</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    這裡決定登入後首頁會看見哪些工作區入口；選「管理」代表該工作區內所有功能都能操作。
+                    這裡決定登入後首頁會看見哪些工作區入口；維修中心選「管理」後，仍只開放下方勾選為編輯的頁面。
                   </p>
                 </div>
 
