@@ -24,6 +24,7 @@ import {
   getTrackerColumnWidth,
   getTrackerGridTemplate,
   getTrackerVirtualRange,
+  TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
   TRACKER_ROW_HEIGHT,
 } from "./testTrackerPresentation";
 
@@ -431,7 +432,10 @@ export function TestProgressTable({
               width={columnWidths.machine}
               onResize={resizeColumn}
               onReset={resetColumn}
-              className="sticky left-0 z-30 bg-[#0d2137] pr-2"
+              className={cn(
+                "sticky left-0 z-30 bg-[#0d2137] pr-2",
+                TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
+              )}
             >
               機台 ID
             </ResizableColumnHeader>
@@ -510,6 +514,7 @@ export function TestProgressTable({
                     role="cell"
                     className={cn(
                       "sticky left-0 z-10 min-w-0 group-hover:bg-[#102b48]",
+                      TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
                   >

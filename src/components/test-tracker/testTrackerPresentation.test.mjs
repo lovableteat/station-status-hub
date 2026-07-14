@@ -26,6 +26,13 @@ test("tracker defaults to 100 rows and keeps the 500 and 1000 row options", () =
   assert.deepEqual(presentation.TRACKER_PAGE_SIZE_OPTIONS, [100, 500, 1000]);
 });
 
+test("pinned machine column keeps a visible boundary from header through every row", () => {
+  assert.equal(
+    presentation.TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
+    "border-r border-[#315b7b]",
+  );
+});
+
 test("stored tracker column widths are clamped by column type", () => {
   assert.equal(typeof presentation.getTrackerColumnWidth, "function");
   assert.equal(presentation.getTrackerColumnWidth("machine", { machine: 20 }), 120);
