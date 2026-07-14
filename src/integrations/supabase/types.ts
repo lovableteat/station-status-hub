@@ -2914,6 +2914,15 @@ export type Database = {
         }
         delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
         generate_api_key: { Args: never; Returns: string }
+        set_user_access_permissions: {
+          Args: {
+            p_granted_by?: string
+            p_permissions: Database["public"]["Enums"]["page_permission"][]
+            p_user_id: string
+            p_workspace_access: Json
+          }
+          Returns: undefined
+        }
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
@@ -2940,6 +2949,8 @@ export type Database = {
         | "dashboard_edit"
         | "test_tracker_view"
         | "test_tracker_edit"
+        | "flow_info_view"
+        | "flow_info_edit"
         | "issues_view"
         | "issues_edit"
         | "production_view"
@@ -3090,6 +3101,8 @@ export const Constants = {
         "dashboard_edit",
         "test_tracker_view",
         "test_tracker_edit",
+        "flow_info_view",
+        "flow_info_edit",
         "issues_view",
         "issues_edit",
         "production_view",
