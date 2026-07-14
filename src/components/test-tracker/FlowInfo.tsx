@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -57,6 +58,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
+
+import { reorderItemsByDrop, reorderStationsByDrop } from "./flowDragReorder";
 
 type TestStation = Tables<"test_flow_stations">;
 type TestItem = Tables<"test_flow_items">;
@@ -128,6 +131,9 @@ export function FlowInfo() {
   const [contentDraft, setContentDraft] = useState({ content: "", title: "" });
   const [draggedStationId, setDraggedStationId] = useState<string | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverStationId, setDragOverStationId] = useState<string | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
   const [isPreparingFlow, setIsPreparingFlow] = useState(false);
   const [stationAction, setStationAction] = useState<StationAction>(null);
   const [isWideEditor, setIsWideEditor] = useState(() =>
@@ -638,18 +644,32 @@ export function FlowInfo() {
   };
 
   const reorderStations = async (ordered: TestStation[]) => {
-    if (!canEdit || !editingVersionId) return;
-    await Promise.all(
-      ordered.map((station, index) =>
-        supabase.from("test_flow_stations").update({ station_order: 10000 + index }).eq("id", station.id)
-      )
-    );
-    await Promise.all(
-      ordered.map((station, index) =>
-        supabase.from("test_flow_stations").update({ station_order: index }).eq("id", station.id)
-      )
-    );
-    await loadData();
+    if (!canEdit || !editingVersionId || !activeProjectId || isReordering) return;
+    const previousStations = stations;
+    const normalizedStations = ordered.map((station, station_order) => ({
+      ...station,
+      station_order,
+    }));
+    setStations(normalizedStations);
+    setIsReordering(true);
+    try {
+      const { error } = await supabase.rpc("reorder_test_flow_stations", {
+        p_flow_version_id: editingVersionId,
+        p_project_id: activeProjectId,
+        p_station_ids: normalizedStations.map((station) => station.id),
+      });
+      if (error) throw error;
+      toast({ title: "站點順序已更新" });
+    } catch (error) {
+      setStations(previousStations);
+      toast({
+        title: "站點排序失敗",
+        description: error instanceof Error ? error.message : "資料未變更，請稍後再試。",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReordering(false);
+    }
   };
 
   const moveStation = (stationId: string, direction: -1 | 1) => {
@@ -658,7 +678,7 @@ export function FlowInfo() {
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= stations.length) return;
     const ordered = [...stations];
     [ordered[currentIndex], ordered[nextIndex]] = [ordered[nextIndex], ordered[currentIndex]];
-    reorderStations(ordered);
+    void reorderStations(ordered);
   };
 
   const addItem = async () => {
@@ -727,19 +747,46 @@ export function FlowInfo() {
     setSelectedItemId(data.id);
   };
 
-  const reorderItems = async (ordered: TestItem[]) => {
-    if (!canEdit || !editingVersionId) return;
-    await Promise.all(
-      ordered.map((item, index) =>
-        supabase.from("test_flow_items").update({ item_order: 10000 + index }).eq("id", item.id)
-      )
-    );
-    await Promise.all(
-      ordered.map((item, index) =>
-        supabase.from("test_flow_items").update({ item_order: index }).eq("id", item.id)
-      )
-    );
-    await loadData();
+  const persistItemArrangement = async (
+    nextItems: TestItem[],
+    stationId: string,
+  ) => {
+    if (!canEdit || !editingVersionId || !activeProjectId || isReordering) return;
+    const previousItems = items;
+    const orderedItemIds = nextItems
+      .filter((item) => item.station_id === stationId)
+      .sort((left, right) => left.item_order - right.item_order)
+      .map((item) => item.id);
+
+    setItems(nextItems);
+    setIsReordering(true);
+    try {
+      const { error } = await supabase.rpc("reorder_test_flow_items", {
+        p_flow_version_id: editingVersionId,
+        p_item_ids: orderedItemIds,
+        p_project_id: activeProjectId,
+        p_station_id: stationId,
+      });
+      if (error) throw error;
+      toast({ title: "測項順序已更新" });
+    } catch (error) {
+      setItems(previousItems);
+      toast({
+        title: "測項排序失敗",
+        description: error instanceof Error ? error.message : "資料未變更，請稍後再試。",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  const reorderItems = (ordered: TestItem[]) => {
+    if (!selectedStationId) return;
+    const normalizedItems = ordered.map((item, item_order) => ({ ...item, item_order }));
+    const orderedById = new Map(normalizedItems.map((item) => [item.id, item]));
+    const nextItems = items.map((item) => orderedById.get(item.id) ?? item);
+    void persistItemArrangement(nextItems, selectedStationId);
   };
 
   const moveItem = (itemId: string, direction: -1 | 1) => {
@@ -748,6 +795,93 @@ export function FlowInfo() {
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= stationItems.length) return;
     const ordered = [...stationItems];
     [ordered[currentIndex], ordered[nextIndex]] = [ordered[nextIndex], ordered[currentIndex]];
+    reorderItems(ordered);
+  };
+
+  const clearDragState = () => {
+    setDraggedStationId(null);
+    setDraggedItemId(null);
+    setDragOverStationId(null);
+    setDragOverItemId(null);
+  };
+
+  const handleStationDragStart = (
+    event: ReactDragEvent<HTMLDivElement>,
+    stationId: string,
+  ) => {
+    if (!canEdit || isReordering) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `station:${stationId}`);
+    setDraggedStationId(stationId);
+    setDraggedItemId(null);
+  };
+
+  const handleItemDragStart = (
+    event: ReactDragEvent<HTMLDivElement>,
+    itemId: string,
+  ) => {
+    if (!canEdit || isReordering) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `item:${itemId}`);
+    setDraggedItemId(itemId);
+    setDraggedStationId(null);
+  };
+
+  const handleStationDrop = (
+    event: ReactDragEvent<HTMLDivElement>,
+    targetStationId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (draggedStationId) {
+      if (draggedStationId === targetStationId) {
+        clearDragState();
+        return;
+      }
+      const nextStations = reorderStationsByDrop(
+        stations,
+        draggedStationId,
+        targetStationId,
+      );
+      clearDragState();
+      void reorderStations(nextStations);
+      return;
+    }
+
+  };
+
+  const handleItemDrop = (
+    event: ReactDragEvent<HTMLDivElement>,
+    targetItem: TestItem,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!draggedItemId || draggedItemId === targetItem.id) {
+      clearDragState();
+      return;
+    }
+
+    const ordered = reorderItemsByDrop(stationItems, draggedItemId, targetItem.id);
+    clearDragState();
+    reorderItems(ordered);
+  };
+
+  const handleItemListDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!draggedItemId || !selectedStationId) {
+      clearDragState();
+      return;
+    }
+
+    const ordered = reorderItemsByDrop(stationItems, draggedItemId);
+    clearDragState();
     reorderItems(ordered);
   };
 
@@ -835,8 +969,12 @@ export function FlowInfo() {
             </Button>
           ) : (
             <span className="flex h-8 items-center gap-1.5 text-xs text-[#9eb8ca]">
-              <GripVertical className="h-3.5 w-3.5 text-cyan-200" />
-              拖曳分隔線調整欄寬，系統會記住你的配置
+              {isReordering ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-200 motion-reduce:animate-none" />
+              ) : (
+                <GripVertical className="h-3.5 w-3.5 text-cyan-200" />
+              )}
+              {isReordering ? "正在儲存排序" : "拖曳卡片即可調整順序"}
             </span>
           )}
         </div>
@@ -1014,14 +1152,19 @@ export function FlowInfo() {
                     {stations.length}
                   </Badge>
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-[#8facbf]">拖曳卡片排序</p>
+                <p
+                  className="mt-0.5 truncate text-[11px] text-[#8facbf]"
+                  title="拖曳站點可調整順序"
+                >
+                  拖曳排序
+                </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 shrink-0 border-cyan-300/35 bg-cyan-300/10 px-2.5 text-cyan-50 hover:bg-cyan-300/20"
                 onClick={() => void addStation()}
-                disabled={isPreparingFlow || stationAction !== null}
+                disabled={isPreparingFlow || stationAction !== null || isReordering}
                 data-testid="add-station-button"
               >
                 {stationAction === "add" || isPreparingFlow ? (
@@ -1037,32 +1180,36 @@ export function FlowInfo() {
                 {stations.map((station, index) => (
                   <div
                     key={station.id}
-                    draggable
-                    onDragStart={() => setDraggedStationId(station.id)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (!draggedStationId || draggedStationId === station.id) return;
-                      const ordered = [...stations];
-                      const from = ordered.findIndex((entry) => entry.id === draggedStationId);
-                      const to = ordered.findIndex((entry) => entry.id === station.id);
-                      const [moved] = ordered.splice(from, 1);
-                      ordered.splice(to, 0, moved);
-                      setDraggedStationId(null);
-                      reorderStations(ordered);
+                    draggable={canEdit && !isReordering}
+                    aria-grabbed={draggedStationId === station.id}
+                    data-testid={`flow-station-${station.id}`}
+                    onDragStart={(event) => handleStationDragStart(event, station.id)}
+                    onDragOver={(event) => {
+                      if (!draggedStationId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setDragOverStationId(station.id);
+                      setDragOverItemId(null);
                     }}
+                    onDrop={(event) => handleStationDrop(event, station.id)}
+                    onDragEnd={clearDragState}
                     className={cn(
-                      "group flex items-center gap-1 rounded-lg border px-1.5 py-1.5",
-                      selectedStationId === station.id ? "border-cyan-300/55 bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]"
+                      "group relative flex items-center gap-1 rounded-lg border px-1.5 py-1.5 transition-[border-color,background-color,opacity] duration-150 motion-reduce:transition-none",
+                      selectedStationId === station.id ? "border-cyan-300/55 bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]",
+                      draggedStationId === station.id && "opacity-45",
+                      dragOverStationId === station.id && draggedStationId && draggedStationId !== station.id && "border-cyan-200 bg-cyan-300/15",
                     )}
                   >
-                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#6f8ba0]" />
-                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedStationId(station.id)}>
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#8fb2c8] active:cursor-grabbing" />
+                    <button type="button" className="min-w-0 flex-1 pr-14 text-left" onClick={() => setSelectedStationId(station.id)}>
                       <div className="truncate text-sm font-medium text-[#f3f8fc]">{station.station_name}</div>
-                      <div className="font-data text-[10px] text-[#a9c0d1]">{items.filter((item) => item.station_id === station.id).length} items</div>
+                      <div className="flex items-center gap-1.5 font-data text-[10px] text-[#a9c0d1]">
+                        <span>{items.filter((item) => item.station_id === station.id).length} items</span>
+                      </div>
                     </button>
-                    <div className="hidden shrink-0 group-hover:flex group-focus-within:flex">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveStation(station.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === stations.length - 1} onClick={() => moveStation(station.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
+                    <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity motion-reduce:transition-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                      <Button aria-label={`${station.station_name} 上移`} variant="ghost" size="icon" className="h-7 w-7" disabled={isReordering || index === 0} onClick={() => moveStation(station.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
+                      <Button aria-label={`${station.station_name} 下移`} variant="ghost" size="icon" className="h-7 w-7" disabled={isReordering || index === stations.length - 1} onClick={() => moveStation(station.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
                     </div>
                   </div>
                 ))}
@@ -1092,49 +1239,70 @@ export function FlowInfo() {
                     {stationItems.length}
                   </Badge>
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-[#8facbf]">{selectedStation?.station_name ?? "請先選擇站點"}</p>
+                <p
+                  className="mt-0.5 truncate text-[11px] text-[#8facbf]"
+                  title="拖曳測試項目可換序，也可拖到左側其他站點"
+                >
+                  {selectedStation ? `${selectedStation.station_name} · 拖曳換序` : "請先選擇站點"}
+                </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 shrink-0 border-blue-300/35 bg-blue-300/10 px-2.5 text-blue-50 hover:bg-blue-300/20"
-                disabled={!selectedStation}
+                disabled={!selectedStation || isReordering}
                 onClick={() => void addItem()}
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />新增
               </Button>
             </div>
             <ScrollArea className="flex-1 p-2">
-              <div className="space-y-1 pr-2">
+              <div
+                className={cn(
+                  "min-h-[200px] space-y-1 pr-2 rounded-lg transition-colors duration-150 motion-reduce:transition-none",
+                  draggedItemId && !dragOverItemId && "bg-blue-300/[0.04]",
+                )}
+                data-testid="flow-item-drop-zone"
+                onDragOver={(event) => {
+                  if (!draggedItemId || event.target !== event.currentTarget) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverItemId(null);
+                }}
+                onDrop={handleItemListDrop}
+              >
                 {stationItems.map((item, index) => (
                   <div
                     key={item.id}
-                    draggable
-                    onDragStart={() => setDraggedItemId(item.id)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (!draggedItemId || draggedItemId === item.id) return;
-                      const ordered = [...stationItems];
-                      const from = ordered.findIndex((entry) => entry.id === draggedItemId);
-                      const to = ordered.findIndex((entry) => entry.id === item.id);
-                      const [moved] = ordered.splice(from, 1);
-                      ordered.splice(to, 0, moved);
-                      setDraggedItemId(null);
-                      reorderItems(ordered);
+                    draggable={canEdit && !isReordering}
+                    aria-grabbed={draggedItemId === item.id}
+                    data-testid={`flow-item-${item.id}`}
+                    onDragStart={(event) => handleItemDragStart(event, item.id)}
+                    onDragOver={(event) => {
+                      if (!draggedItemId) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.dataTransfer.dropEffect = "move";
+                      setDragOverItemId(item.id);
+                      setDragOverStationId(null);
                     }}
+                    onDrop={(event) => handleItemDrop(event, item)}
+                    onDragEnd={clearDragState}
                     className={cn(
-                      "group flex items-center gap-1 rounded-lg border px-1.5 py-2",
-                      selectedItemId === item.id ? "border-[#4c8dff] bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]"
+                      "group relative flex items-center gap-1 rounded-lg border px-1.5 py-2 transition-[border-color,background-color,opacity] duration-150 motion-reduce:transition-none",
+                      selectedItemId === item.id ? "border-[#4c8dff] bg-[#10263a]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1b2d]",
+                      draggedItemId === item.id && "opacity-45",
+                      dragOverItemId === item.id && draggedItemId !== item.id && "border-blue-200 bg-blue-300/15",
                     )}
                   >
-                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#6f8ba0]" />
-                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedItemId(item.id)}>
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[#8fb2c8] active:cursor-grabbing" />
+                    <button type="button" className="min-w-0 flex-1 pr-14 text-left" onClick={() => setSelectedItemId(item.id)}>
                       <div className="truncate text-sm font-medium text-[#f3f8fc]">{item.item_name}</div>
                       <div className="font-data text-[10px] text-[#a9c0d1]">{item.estimated_minutes ?? 0} min</div>
                     </button>
-                    <div className="hidden shrink-0 group-hover:flex group-focus-within:flex">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveItem(item.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === stationItems.length - 1} onClick={() => moveItem(item.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
+                    <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity motion-reduce:transition-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                      <Button aria-label={`${item.item_name} 上移`} variant="ghost" size="icon" className="h-7 w-7" disabled={isReordering || index === 0} onClick={() => moveItem(item.id, -1)}><ArrowUp className="h-3 w-3" /></Button>
+                      <Button aria-label={`${item.item_name} 下移`} variant="ghost" size="icon" className="h-7 w-7" disabled={isReordering || index === stationItems.length - 1} onClick={() => moveItem(item.id, 1)}><ArrowDown className="h-3 w-3" /></Button>
                     </div>
                   </div>
                 ))}
