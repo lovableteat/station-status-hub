@@ -72,6 +72,14 @@ export function resizeMaterialColumnWidths({
   return next;
 }
 
+export function getMaterialStickyColumnClasses() {
+  return {
+    header: "sticky right-0 z-40 border-r border-blue-300/20 bg-[#0d2137] text-center",
+    filter: "sticky right-0 z-40 border-r border-blue-300/20 bg-[#10263a] p-2 text-center",
+    row: "sticky right-0 z-10 border-r border-blue-400/10 bg-[var(--material-row-solid)] transition-colors group-hover/material-row:bg-[var(--material-row-hover-solid)]",
+  };
+}
+
 export function createClipboardImageName(mimeType: string, value = new Date()) {
   const pad = (part: number) => String(part).padStart(2, "0");
   const extension = mimeType.toLowerCase().includes("png") ? "png" : "jpg";
