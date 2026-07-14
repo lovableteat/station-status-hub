@@ -27,6 +27,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { ApiDataTable } from "./ApiDataTable";
 import { API_ENDPOINTS, buildApiUrl } from "./apiManagementConfig";
+import {
+  buildProviderChatRequest,
+  getProviderErrorMessage,
+  parseProviderChatResponse,
+  redactSensitiveText,
+} from "./aiProviderCatalog";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 const previewEndpoints = API_ENDPOINTS.filter((endpoint) => endpoint.previewable);
@@ -129,10 +135,11 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
       : null;
   }, [selectedApiKey]);
 
-  const isGeminiKey = useMemo(() => {
+  const hasProviderConfiguration = useMemo(() => {
     return (
-      selectedMetadata?.provider?.toLowerCase() === "gemini" &&
-      Boolean(selectedMetadata.baseUrl)
+      Boolean(selectedMetadata?.provider) &&
+      Boolean(selectedMetadata?.baseUrl) &&
+      Boolean(selectedMetadata?.model)
     );
   }, [selectedMetadata]);
 
@@ -162,21 +169,30 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
     });
   }, [queryValue, selectedEndpoint]);
 
-  const geminiRequestUrl = useMemo(() => {
+  const providerRequest = useMemo(() => {
     if (
-      !isGeminiKey ||
+      !hasProviderConfiguration ||
+      !selectedMetadata?.provider ||
       !selectedMetadata?.baseUrl ||
       !selectedMetadata.model ||
       !apiKey.trim()
     ) {
-      return "";
+      return null;
     }
 
-    const normalizedBaseUrl = selectedMetadata.baseUrl.replace(/\/$/, "");
-    return `${normalizedBaseUrl}/models/${selectedMetadata.model}:generateContent?key=${encodeURIComponent(
-      apiKey.trim(),
-    )}`;
-  }, [apiKey, isGeminiKey, selectedMetadata]);
+    return buildProviderChatRequest({
+      provider: selectedMetadata.provider,
+      apiKey: apiKey.trim(),
+      baseUrl: selectedMetadata.baseUrl,
+      model: selectedMetadata.model,
+      messages: [
+        {
+          role: "user",
+          text: providerPrompt.trim() || "請簡短回覆：API 測試成功",
+        },
+      ],
+    });
+  }, [apiKey, hasProviderConfiguration, providerPrompt, selectedMetadata]);
 
   const handleInternalPreview = () => {
     if (!selectedEndpoint) return;
@@ -187,8 +203,8 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
     });
   };
 
-  const handleGeminiTest = async () => {
-    if (!geminiRequestUrl) {
+  const handleProviderTest = async () => {
+    if (!providerRequest || !selectedMetadata) {
       toast.error("請先補齊 API Key、Base URL 與模型設定。");
       return;
     }
@@ -199,82 +215,76 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
     setProviderTestResult(null);
 
     try {
-      const response = await fetch(geminiRequestUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: providerPrompt.trim() || "請簡短回覆：API 測試成功",
-                },
-              ],
-            },
-          ],
-        }),
+      const response = await fetch(providerRequest.url, {
+        method: providerRequest.method,
+        headers: providerRequest.headers,
+        body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
       const durationMs = Date.now() - startedAt;
-      setProviderResponse(JSON.stringify(result, null, 2));
+      setProviderResponse(
+        redactSensitiveText(JSON.stringify(result, null, 2), [apiKey]),
+      );
 
       if (!response.ok) {
         setProviderTestResult({
           status: "error",
           title: "AI API 連線失敗",
-          message:
-            result?.error?.message ||
-            `Gemini API 測試失敗，HTTP ${response.status}`,
-          endpoint: geminiRequestUrl,
-          provider: selectedMetadata?.provider || "Gemini",
-          model: selectedMetadata?.model || "-",
+          message: getProviderErrorMessage(result, response.status, [apiKey]),
+          endpoint: providerRequest.url,
+          provider: selectedMetadata.provider,
+          model: selectedMetadata.model,
           durationMs,
           statusText: `HTTP ${response.status}`,
         });
-        toast.error(`Gemini API 測試失敗：HTTP ${response.status}`);
+        toast.error(`AI API 測試失敗：HTTP ${response.status}`);
         return;
       }
 
+      const parsed = parseProviderChatResponse(selectedMetadata.provider, result);
       setProviderTestResult({
         status: "success",
         title: "AI API 連線正常",
-        message: `${selectedMetadata?.provider || "Gemini"} API 測試正常。`,
-        endpoint: geminiRequestUrl,
-        provider: selectedMetadata?.provider || "Gemini",
-        model: selectedMetadata?.model || "-",
+        message:
+          redactSensitiveText(parsed.text, [apiKey]) ||
+          `${selectedMetadata.provider} API 已正常回應。`,
+        endpoint: providerRequest.url,
+        provider: selectedMetadata.provider,
+        model: selectedMetadata.model,
         durationMs,
         statusText: "OK",
       });
-      toast.success("Gemini API 測試完成");
+      toast.success("AI API 測試完成");
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       setProviderResponse(
-        JSON.stringify(
-          { error: error instanceof Error ? error.message : "Unknown error" },
-          null,
-          2,
+        redactSensitiveText(
+          JSON.stringify(
+            { error: error instanceof Error ? error.message : "Unknown error" },
+            null,
+            2,
+          ),
+          [apiKey],
         ),
       );
       setProviderTestResult({
         status: "error",
         title: "AI API 連線失敗",
-        message: error instanceof Error ? error.message : "Gemini API 測試失敗",
-        endpoint: geminiRequestUrl,
-        provider: selectedMetadata?.provider || "Gemini",
-        model: selectedMetadata?.model || "-",
+        message: error instanceof Error ? error.message : "AI API 測試失敗",
+        endpoint: providerRequest.url,
+        provider: selectedMetadata.provider,
+        model: selectedMetadata.model,
         durationMs,
         statusText: "ERROR",
       });
-      toast.error("Gemini API 測試失敗");
+      toast.error("AI API 測試失敗");
     } finally {
       setProviderLoading(false);
     }
   };
 
-  if (isGeminiKey && selectedApiKey && selectedMetadata) {
+  if (hasProviderConfiguration && selectedApiKey && selectedMetadata) {
     return (
       <div className="space-y-5">
         <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
@@ -327,7 +337,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                       type="password"
                       value={apiKey}
                       onChange={(event) => setApiKey(event.target.value)}
-                      placeholder="可直接貼上要測試的 Gemini API Key"
+                      placeholder={`可直接貼上要測試的 ${selectedMetadata.provider} API Key`}
                       className="h-11 border-cyan-300/18 bg-[#111d33] pl-10 text-slate-50 placeholder:text-slate-400"
                     />
                   </div>
@@ -353,11 +363,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   </div>
                   <div>
                     <p className="text-sm font-black text-slate-50">
-                      POST /models/{selectedMetadata.model}:generateContent
+                      POST {providerRequest?.url.replace(/^https?:\/\/[^/]+/, "") || "AI 端點"}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-300">
-                      這裡會用目前金鑰直接打 Gemini generateContent，
-                      確認金鑰、模型與路徑是否正常。
+                      系統會依服務商自動使用正確的驗證標頭、請求格式與回應解析。
                     </p>
                   </div>
                 </div>
@@ -367,7 +376,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                     Request URL
                   </p>
                   <p className="mt-2 break-all text-sm leading-6 text-cyan-100">
-                    {geminiRequestUrl || "請先補齊測試資料"}
+                    {providerRequest?.url || "請先補齊測試資料"}
                   </p>
                 </div>
 
@@ -394,12 +403,12 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
             <div className="flex justify-end">
               <Button
                 type="button"
-                onClick={() => void handleGeminiTest()}
+                onClick={() => void handleProviderTest()}
                 disabled={providerLoading || !apiKey.trim()}
                 className="bg-emerald-400 text-slate-950 shadow-[0_12px_24px_rgba(74,222,128,0.22)] hover:bg-emerald-300"
               >
                 <Play className="mr-2 h-4 w-4" />
-                {providerLoading ? "測試中..." : "測試 Gemini API"}
+                {providerLoading ? "測試中..." : `測試 ${selectedMetadata.provider} API`}
               </Button>
             </div>
 
