@@ -3,6 +3,8 @@ export type Permission =
   | "dashboard_edit"
   | "test_tracker_view"
   | "test_tracker_edit"
+  | "flow_info_view"
+  | "flow_info_edit"
   | "issues_view"
   | "issues_edit"
   | "production_view"
@@ -48,18 +50,31 @@ export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   "data-center": "Data-center",
 };
 
-export const MODULE_WORKSPACE_MAP: Record<string, WorkspaceId> = {
+export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   dashboard: "station-status",
   "test-tracker": "station-status",
   "flow-info": "station-status",
   monitor: "station-status",
   issues: "station-status",
   tools: "station-status",
-  users: "station-status",
-  "api-management": "station-status",
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
+};
+
+export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
+  dashboard: "dashboard",
+  "test-tracker": "test_tracker",
+  "flow-info": "flow_info",
+  monitor: "production",
+  issues: "issues",
+  tools: "tools",
+  users: "admin",
+  "api-management": "api_management",
+  comparison: "comparison",
+  "material-requests": "data_center",
+  data: "data_center",
+  "data-center": "data_center",
 };
 
 export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
@@ -81,6 +96,13 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
     permissions: [
       { key: "test_tracker_view", label: "檢視測試追蹤" },
       { key: "test_tracker_edit", label: "編輯測試追蹤" },
+    ],
+  },
+  flow_info: {
+    name: "L10 測試流程設定",
+    permissions: [
+      { key: "flow_info_view", label: "檢視測試流程設定" },
+      { key: "flow_info_edit", label: "編輯測試流程設定" },
     ],
   },
   issues: {
@@ -157,6 +179,96 @@ export function readWorkspaceAccess(value: unknown): WorkspaceAccessMap {
 
   const workspaceAccess = (value as UserPermissionSettings).workspaceAccess;
   return normalizeWorkspaceAccess(workspaceAccess);
+}
+
+const STATION_STATUS_PERMISSIONS = Object.entries(MODULE_WORKSPACE_MAP)
+  .filter(([, workspace]) => workspace === "station-status")
+  .flatMap(([module]) => {
+    const prefix = MODULE_PERMISSION_PREFIX[module];
+    return prefix
+      ? ([`${prefix}_view`, `${prefix}_edit`] as Permission[])
+      : [];
+  });
+
+function hasConfiguredWorkspace(
+  settings: UserPermissionSettings | null | undefined,
+  workspace: WorkspaceId
+) {
+  const workspaceAccess = settings?.workspaceAccess;
+  return Boolean(
+    workspaceAccess &&
+      Object.prototype.hasOwnProperty.call(workspaceAccess, workspace)
+  );
+}
+
+function hasPagePermission(
+  module: string,
+  action: "view" | "edit",
+  permissions: Permission[]
+) {
+  const prefix = MODULE_PERMISSION_PREFIX[module];
+  if (!prefix) return false;
+
+  const editPermission = `${prefix}_edit` as Permission;
+  if (action === "edit") return permissions.includes(editPermission);
+
+  return (
+    permissions.includes(`${prefix}_view` as Permission) ||
+    permissions.includes(editPermission)
+  );
+}
+
+export function canAccessModule({
+  module,
+  action,
+  role,
+  permissions,
+  permissionSettings,
+}: {
+  module: string;
+  action: "view" | "edit";
+  role?: string | null;
+  permissions: Permission[];
+  permissionSettings?: UserPermissionSettings | null;
+}) {
+  if (role === "admin" || role === "super_admin") return true;
+
+  const workspace = MODULE_WORKSPACE_MAP[module];
+  if (!workspace) {
+    return hasPagePermission(module, action, permissions);
+  }
+
+  if (!hasConfiguredWorkspace(permissionSettings, workspace)) {
+    return hasPagePermission(module, action, permissions);
+  }
+
+  const level = normalizeWorkspaceAccess(permissionSettings?.workspaceAccess)[workspace];
+  if (level === "none") return false;
+  if (action === "edit" && level !== "edit") return false;
+
+  // Material requests and Data-center each contain one page, so the workspace
+  // level is their complete permission. Station status still requires the
+  // matching page permission to prevent one broad setting from unlocking all modules.
+  if (workspace !== "station-status") return true;
+  return hasPagePermission(module, action, permissions);
+}
+
+export function synchronizeWorkspacePermissions(
+  current: Permission[],
+  workspace: WorkspaceId,
+  level: WorkspaceAccessLevel
+) {
+  if (workspace !== "station-status") return current;
+
+  const outsideWorkspace = current.filter(
+    (permission) => !STATION_STATUS_PERMISSIONS.includes(permission)
+  );
+  if (level === "none") return outsideWorkspace;
+
+  const stationPermissions = STATION_STATUS_PERMISSIONS.filter(
+    (permission) => level === "edit" || permission.endsWith("_view")
+  );
+  return Array.from(new Set([...outsideWorkspace, ...stationPermissions]));
 }
 
 export function getWorkspaceLevelLabel(level: WorkspaceAccessLevel) {

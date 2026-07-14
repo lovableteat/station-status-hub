@@ -1,180 +1,258 @@
-import { useEffect, useState } from "react";
+import {
+  createContext,
+  createElement,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  canAccessModule,
   type Permission,
+  type UserPermissionSettings,
   type WorkspaceAccessMap,
   MODULE_WORKSPACE_MAP,
   readWorkspaceAccess,
 } from "@/lib/workspacePermissions";
 
-export function usePermissions() {
+interface PermissionsContextValue {
+  permissions: Permission[];
+  workspacePermissions: WorkspaceAccessMap;
+  loading: boolean;
+  hasPermission: (permission: Permission) => boolean;
+  hasAnyPermission: (permissions: Permission[]) => boolean;
+  canViewModule: (module: string) => boolean;
+  canEditModule: (module: string) => boolean;
+  getWorkspaceAccess: (module: string) => "none" | "view" | "edit";
+  reloadPermissions: () => Promise<void>;
+}
+
+const PermissionsContext = createContext<PermissionsContextValue | undefined>(
+  undefined
+);
+
+export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [workspacePermissions, setWorkspacePermissions] = useState<WorkspaceAccessMap>(
-    readWorkspaceAccess(null)
-  );
+  const [permissionSettings, setPermissionSettings] =
+    useState<UserPermissionSettings>({});
+  const [effectiveRole, setEffectiveRole] = useState<string | null>(null);
+  const [accountActive, setAccountActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    if (user?.userId) {
-      void loadUserPermissions();
+  const resetPermissions = useCallback(() => {
+    setPermissions([]);
+    setPermissionSettings({});
+    setEffectiveRole(null);
+    setAccountActive(false);
+  }, []);
+
+  const reloadPermissions = useCallback(async () => {
+    const userId = user?.userId;
+    const requestId = ++requestIdRef.current;
+
+    if (!userId) {
+      resetPermissions();
+      setLoading(false);
       return;
     }
 
-    setPermissions([]);
-    setWorkspacePermissions(readWorkspaceAccess(null));
-    setLoading(false);
-  }, [user?.userId]);
+    if (import.meta.env.DEV && userId === "demo-admin") {
+      setPermissions([]);
+      setPermissionSettings({});
+      setEffectiveRole("admin");
+      setAccountActive(true);
+      setLoading(false);
+      return;
+    }
 
-  const loadUserPermissions = async () => {
+    setLoading(true);
     try {
-      const [
-        { data: pagePermissionData, error: pagePermissionError },
-        { data: userData, error: userError },
-      ] = await Promise.all([
+      const [pagePermissionResult, userResult] = await Promise.all([
         supabase
           .from("user_page_permissions")
           .select("permission")
-          .eq("user_id", user?.userId),
+          .eq("user_id", userId),
         supabase
           .from("system_users")
-          .select("permissions")
-          .eq("id", user?.userId)
+          .select("permissions, role, status")
+          .eq("id", userId)
           .maybeSingle(),
       ]);
 
-      if (pagePermissionError) throw pagePermissionError;
-      if (userError) throw userError;
+      if (pagePermissionResult.error) throw pagePermissionResult.error;
+      if (userResult.error) throw userResult.error;
+      if (!userResult.data) throw new Error("找不到目前登入帳號");
+      if (requestId !== requestIdRef.current) return;
 
-      setPermissions(pagePermissionData?.map((item) => item.permission as Permission) ?? []);
-      setWorkspacePermissions(readWorkspaceAccess(userData?.permissions));
+      const settings =
+        userResult.data.permissions &&
+        typeof userResult.data.permissions === "object" &&
+        !Array.isArray(userResult.data.permissions)
+          ? (userResult.data.permissions as UserPermissionSettings)
+          : {};
+
+      setPermissions(
+        pagePermissionResult.data?.map(
+          (item) => item.permission as Permission
+        ) ?? []
+      );
+      setPermissionSettings(settings);
+      setEffectiveRole(userResult.data.role);
+      setAccountActive(userResult.data.status === "active");
     } catch (error) {
-      console.error("Failed to load permissions:", error);
-
-      try {
-        const localPermissions = localStorage.getItem(
-          `user_page_permissions:${user?.userId}`
-        );
-        const localWorkspace = localStorage.getItem(
-          `user_workspace_permissions:${user?.userId}`
-        );
-
-        setPermissions(localPermissions ? JSON.parse(localPermissions) : []);
-        setWorkspacePermissions(
-          readWorkspaceAccess(localWorkspace ? JSON.parse(localWorkspace) : null)
-        );
-      } catch {
-        setPermissions([]);
-        setWorkspacePermissions(readWorkspaceAccess(null));
-      }
+      if (requestId !== requestIdRef.current) return;
+      console.error("Failed to load current database permissions:", error);
+      // Fail closed. A revoked permission must never be restored from stale browser storage.
+      resetPermissions();
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  };
+  }, [resetPermissions, user?.userId]);
 
-  const isAdminUser = user?.role === "super_admin" || user?.role === "admin";
+  useEffect(() => {
+    void reloadPermissions();
+  }, [reloadPermissions]);
 
-  const hasPermission = (permission: Permission): boolean => {
-    if (isAdminUser) {
-      return true;
-    }
+  useEffect(() => {
+    const userId = user?.userId;
+    if (!userId || (import.meta.env.DEV && userId === "demo-admin")) return;
 
-    return permissions.includes(permission);
-  };
+    const handlePermissionUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!detail?.userId || detail.userId === userId) {
+        void reloadPermissions();
+      }
+    };
+    window.addEventListener("station-permissions-updated", handlePermissionUpdate);
 
-  const hasAnyPermission = (permissionList: Permission[]): boolean => {
-    return permissionList.some((permission) => hasPermission(permission));
-  };
+    const channel = supabase
+      .channel(`current-user-permissions:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_page_permissions",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => void reloadPermissions()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "system_users",
+          filter: `id=eq.${userId}`,
+        },
+        () => void reloadPermissions()
+      )
+      .subscribe();
 
-  const getWorkspaceAccess = (module: string) => {
-    const workspaceId = MODULE_WORKSPACE_MAP[module];
-    if (!workspaceId) {
-      return "none";
-    }
+    return () => {
+      window.removeEventListener(
+        "station-permissions-updated",
+        handlePermissionUpdate
+      );
+      void supabase.removeChannel(channel);
+    };
+  }, [reloadPermissions, user?.userId]);
 
-    return workspacePermissions[workspaceId];
-  };
+  const workspacePermissions = useMemo(
+    () => readWorkspaceAccess(permissionSettings),
+    [permissionSettings]
+  );
+  const isAdmin =
+    accountActive &&
+    (effectiveRole === "admin" || effectiveRole === "super_admin");
 
-  const canViewModule = (module: string): boolean => {
-    if (isAdminUser) {
-      return true;
-    }
+  const hasPermission = useCallback(
+    (permission: Permission) =>
+      accountActive && (isAdmin || permissions.includes(permission)),
+    [accountActive, isAdmin, permissions]
+  );
 
-    const workspaceAccess = getWorkspaceAccess(module);
-    if (workspaceAccess === "view" || workspaceAccess === "edit") {
-      return true;
-    }
+  const hasAnyPermission = useCallback(
+    (permissionList: Permission[]) =>
+      permissionList.some((permission) => hasPermission(permission)),
+    [hasPermission]
+  );
 
-    switch (module) {
-      case "dashboard":
-        return hasPermission("dashboard_view");
-      case "test-tracker":
-      case "flow-info":
-        return hasPermission("test_tracker_view");
-      case "issues":
-        return hasPermission("issues_view");
-      case "monitor":
-        return hasPermission("production_view");
-      case "data":
-      case "material-requests":
-        return hasPermission("data_center_view");
-      case "tools":
-        return hasPermission("tools_view");
-      case "bom-center":
-        return hasPermission("comparison_view");
-      case "api-management":
-        return hasPermission("api_management_view");
-      case "users":
-        return hasPermission("admin_view");
-      default:
-        return false;
-    }
-  };
+  const canViewModule = useCallback(
+    (module: string) =>
+      accountActive &&
+      canAccessModule({
+        module,
+        action: "view",
+        role: effectiveRole,
+        permissions,
+        permissionSettings,
+      }),
+    [accountActive, effectiveRole, permissionSettings, permissions]
+  );
 
-  const canEditModule = (module: string): boolean => {
-    if (isAdminUser) {
-      return true;
-    }
+  const canEditModule = useCallback(
+    (module: string) =>
+      accountActive &&
+      canAccessModule({
+        module,
+        action: "edit",
+        role: effectiveRole,
+        permissions,
+        permissionSettings,
+      }),
+    [accountActive, effectiveRole, permissionSettings, permissions]
+  );
 
-    if (getWorkspaceAccess(module) === "edit") {
-      return true;
-    }
+  const getWorkspaceAccess = useCallback(
+    (module: string) => {
+      if (isAdmin) return "edit" as const;
+      const workspaceId = MODULE_WORKSPACE_MAP[module];
+      return workspaceId ? workspacePermissions[workspaceId] : "none";
+    },
+    [isAdmin, workspacePermissions]
+  );
 
-    switch (module) {
-      case "dashboard":
-        return hasPermission("dashboard_edit");
-      case "test-tracker":
-      case "flow-info":
-        return hasPermission("test_tracker_edit");
-      case "issues":
-        return hasPermission("issues_edit");
-      case "monitor":
-        return hasPermission("production_edit");
-      case "data":
-      case "material-requests":
-        return hasPermission("data_center_edit");
-      case "tools":
-        return hasPermission("tools_edit");
-      case "bom-center":
-        return hasPermission("comparison_edit");
-      case "api-management":
-        return hasPermission("api_management_edit");
-      case "users":
-        return hasPermission("admin_edit");
-      default:
-        return false;
-    }
-  };
+  const value = useMemo<PermissionsContextValue>(
+    () => ({
+      permissions,
+      workspacePermissions,
+      loading,
+      hasPermission,
+      hasAnyPermission,
+      canViewModule,
+      canEditModule,
+      getWorkspaceAccess,
+      reloadPermissions,
+    }),
+    [
+      canEditModule,
+      canViewModule,
+      getWorkspaceAccess,
+      hasAnyPermission,
+      hasPermission,
+      loading,
+      permissions,
+      reloadPermissions,
+      workspacePermissions,
+    ]
+  );
 
-  return {
-    permissions,
-    workspacePermissions,
-    loading,
-    hasPermission,
-    hasAnyPermission,
-    canViewModule,
-    canEditModule,
-    getWorkspaceAccess,
-  };
+  return createElement(PermissionsContext.Provider, { value }, children);
+}
+
+export function usePermissions() {
+  const context = useContext(PermissionsContext);
+  if (!context) {
+    throw new Error("usePermissions must be used within a PermissionsProvider");
+  }
+  return context;
 }
