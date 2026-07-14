@@ -2895,6 +2895,23 @@ export type Database = {
             version_number: number
           }
         }
+        reorder_test_flow_items: {
+          Args: {
+            p_flow_version_id: string
+            p_item_ids: string[]
+            p_project_id: string
+            p_station_id: string
+          }
+          Returns: undefined
+        }
+        reorder_test_flow_stations: {
+          Args: {
+            p_flow_version_id: string
+            p_project_id: string
+            p_station_ids: string[]
+          }
+          Returns: undefined
+        }
         delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
         generate_api_key: { Args: never; Returns: string }
       get_notification_stats: {
