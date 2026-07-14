@@ -117,6 +117,7 @@ import {
   createCompactValueSummary,
   getBomPageProgress,
   getMaterialExportScopeLabel,
+  getMaterialStickyColumnClasses,
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
 } from "./materialRequestPresentation";
@@ -442,9 +443,12 @@ function buildTableRowStyle(
     "--material-row-bg": withAlpha(color, backgroundAlpha),
     "--material-row-solid": blendWithSurface(color, backgroundAlpha),
     "--material-row-hover": withAlpha(color, hoverAlpha),
+    "--material-row-hover-solid": blendWithSurface(color, hoverAlpha),
     "--material-row-accent": withAlpha(color, accentAlpha),
   } as CSSProperties;
 }
+
+const MATERIAL_STICKY_COLUMN_CLASSES = getMaterialStickyColumnClasses();
 
 function getMarkedGroupsStorageKey(bomId: string) {
   return `${MARKED_GROUPS_KEY_PREFIX}${bomId}`;
@@ -3667,7 +3671,7 @@ function CompactAlternativeRows({
             key={record.id}
             style={rowStyle}
             className={cn(
-              "border-b border-blue-400/10 text-slate-200 transition-colors",
+              "group/material-row border-b border-blue-400/10 text-slate-200 transition-colors",
               "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]"
             )}
           >
@@ -3781,7 +3785,7 @@ function CompactAlternativeRows({
               <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
             </td>
 
-            <td className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[var(--material-row-solid)] px-3 py-3.5 shadow-[-14px_0_24px_rgba(2,12,27,0.42)]">
+            <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-3 py-3.5")}>
               <div className="flex justify-center gap-2">
                 <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                   <Eye className="h-4 w-4" />
@@ -5695,7 +5699,7 @@ export function MaterialRequestPage() {
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                     className={columnIndex === 10
-                      ? "sticky right-0 z-40 border-l border-r border-cyan-200/35 bg-[#0d2137] text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"
+                      ? MATERIAL_STICKY_COLUMN_CLASSES.header
                       : undefined}
                   >
                     <span data-testid={columnIndex === 10 ? "material-data-update-header" : undefined}>
@@ -5727,7 +5731,7 @@ export function MaterialRequestPage() {
                 </th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
-                <th className="sticky right-0 z-40 border-l border-cyan-200/30 bg-[#163b70] p-2 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.48)]"><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
+                <th className={MATERIAL_STICKY_COLUMN_CLASSES.filter}><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
               {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
@@ -5765,7 +5769,7 @@ export function MaterialRequestPage() {
                       onClick={() => secondaryAlternatives.length > 0 && toggleExpanded(group.key)}
                       style={mainRowStyle}
                       className={cn(
-                        "border-b border-blue-400/15 text-slate-200 transition-colors",
+                        "group/material-row border-b border-blue-400/15 text-slate-200 transition-colors",
                         secondaryAlternatives.length > 0 ? "cursor-pointer" : "cursor-default",
                         "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]",
                       )}
@@ -5977,7 +5981,7 @@ export function MaterialRequestPage() {
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
                       <td
-                        className="sticky right-0 z-10 border-l border-cyan-300/25 bg-[var(--material-row-solid)] px-4 py-3 text-center shadow-[-14px_0_24px_rgba(2,12,27,0.42)]"
+                        className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-4 py-3 text-center")}
                         data-testid="material-data-update-cell"
                         onClick={(event) => event.stopPropagation()}
                       >
