@@ -58,16 +58,33 @@ export function normalizeApiKeyPermissions(value: Json | null | undefined): ApiK
 
 export function buildApiKeyPermissions(
   input: Partial<ApiKeyPermissionState>,
+  existing?: Json | null,
 ): Record<string, Json> {
+  const existingPermissions =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? (existing as Record<string, Json | undefined>)
+      : {};
+  const existingMetadata =
+    existingPermissions.metadata &&
+    typeof existingPermissions.metadata === "object" &&
+    !Array.isArray(existingPermissions.metadata)
+      ? (existingPermissions.metadata as Record<string, Json | undefined>)
+      : {};
   const normalizedMetadata = {
     ...defaultApiKeyMetadata,
     ...(input.metadata ?? {}),
   };
 
   return {
+    ...Object.fromEntries(
+      Object.entries(existingPermissions).filter(([, value]) => value !== undefined),
+    ),
     read: input.read ?? true,
     write: input.write ?? false,
     metadata: {
+      ...Object.fromEntries(
+        Object.entries(existingMetadata).filter(([, value]) => value !== undefined),
+      ),
       provider: normalizedMetadata.provider,
       model: normalizedMetadata.model,
       baseUrl: normalizedMetadata.baseUrl,

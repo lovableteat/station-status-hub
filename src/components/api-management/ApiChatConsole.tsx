@@ -44,6 +44,14 @@ import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
+import {
+  buildProviderChatRequest,
+  getProviderErrorMessage,
+  parseProviderChatResponse,
+  redactSensitiveText,
+  resolveAiProviderPreset,
+} from "./aiProviderCatalog";
+import type { ProviderChatMessage } from "./aiProviderCatalog";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 interface ApiChatConsoleProps {
@@ -188,7 +196,7 @@ interface GeminiResponsePart {
   };
 }
 
-interface GeminiRequestTarget {
+interface ProviderRequestTarget {
   id: string;
   apiKey: string;
   baseUrl: string;
@@ -201,7 +209,7 @@ interface GeminiRequestTarget {
   usageCount: number;
 }
 
-interface GeminiAttemptFailure {
+interface ProviderAttemptFailure {
   demandRelated: boolean;
   endpoint: string;
   keyLabel: string;
@@ -216,12 +224,6 @@ function looksLikeImageModel(model: string) {
   return /image|nano banana/i.test(model);
 }
 
-function buildGeminiRequestUrl(target: Pick<GeminiRequestTarget, "apiKey" | "baseUrl" | "model">) {
-  return `${target.baseUrl.replace(/\/$/, "")}/models/${target.model.trim()}:generateContent?key=${encodeURIComponent(
-    target.apiKey.trim()
-  )}`;
-}
-
 function getTimeValue(value: null | string | undefined) {
   if (!value) return 0;
   const parsed = Date.parse(value);
@@ -232,31 +234,14 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function normalizeGeminiErrorMessage(result: unknown, status?: number) {
-  if (
-    result &&
-    typeof result === "object" &&
-    "error" in result &&
-    result.error &&
-    typeof result.error === "object" &&
-    "message" in result.error &&
-    typeof result.error.message === "string" &&
-    result.error.message
-  ) {
-    return result.error.message;
-  }
-
-  return status ? `Gemini API 失敗，HTTP ${status}` : "Gemini API 失敗";
-}
-
-function isDemandRelatedGeminiFailure(status: number | undefined, message: string) {
+function isDemandRelatedProviderFailure(status: number | undefined, message: string) {
   return status === 429 || status === 503 || GEMINI_DEMAND_ERROR_PATTERN.test(message);
 }
 
-function isRetryableGeminiFailure(status: number | undefined, message: string) {
+function isRetryableProviderFailure(status: number | undefined, message: string) {
   return (
     (typeof status === "number" && RETRYABLE_GEMINI_STATUS_CODES.has(status)) ||
-    isDemandRelatedGeminiFailure(status, message) ||
+    isDemandRelatedProviderFailure(status, message) ||
     /failed to fetch|networkerror|network request failed|timeout/i.test(message)
   );
 }
@@ -857,8 +842,6 @@ export function ApiChatConsole({
     if (activeConversation) {
       setMessages(activeConversation.messages);
       setDraftMessage(activeConversation.draftMessage);
-      setProvider(activeConversation.provider || "gemini");
-      setModel(activeConversation.model || "gemini-2.5-flash");
       setConnectionState(null);
     }
 
@@ -866,20 +849,22 @@ export function ApiChatConsole({
   }, [conversationsLoaded, isChatOnly, savedConversations]);
 
   const normalizedProvider = provider.trim().toLowerCase();
-  const isGeminiProvider = normalizedProvider === "gemini";
-  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 Gemini Key";
+  const activeProviderPreset = resolveAiProviderPreset(normalizedProvider);
+  const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 AI Key";
 
   const requestUrl = useMemo(() => {
     if (!apiKey.trim() || !model.trim() || !baseUrl.trim()) return "";
-    return buildGeminiRequestUrl({
+    return buildProviderChatRequest({
+      provider: provider.trim(),
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim(),
       model: model.trim(),
-    });
-  }, [apiKey, model, baseUrl]);
+      messages: [{ role: "user", text: "連線測試" }],
+    }).url;
+  }, [apiKey, baseUrl, model, provider]);
 
-  const geminiTargets = useMemo(() => {
-    const manualTarget: GeminiRequestTarget | null =
+  const providerTargets = useMemo(() => {
+    const manualTarget: ProviderRequestTarget | null =
       apiKey.trim() && provider.trim() && model.trim() && baseUrl.trim()
         ? {
             id: selectedApiKey?.id ?? "manual-current",
@@ -898,9 +883,17 @@ export function ApiChatConsole({
     const knownTargets = availableApiKeys
       .map((record) => {
         const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
+        const candidatePreset = resolveAiProviderPreset(metadata.provider);
+        const sameProvider = candidatePreset.id === activeProviderPreset.id;
+        const sameCustomRoute =
+          candidatePreset.id !== "openai-compatible" ||
+          (metadata.provider.trim().toLowerCase() === normalizedProvider &&
+            metadata.baseUrl.trim().replace(/\/+$/, "").toLowerCase() ===
+              baseUrl.trim().replace(/\/+$/, "").toLowerCase());
         if (
           !record.api_key.trim() ||
-          metadata.provider.trim().toLowerCase() !== "gemini" ||
+          !sameProvider ||
+          !sameCustomRoute ||
           !metadata.model.trim() ||
           !metadata.baseUrl.trim()
         ) {
@@ -918,12 +911,12 @@ export function ApiChatConsole({
           model: metadata.model.trim(),
           provider: metadata.provider.trim(),
           usageCount: record.usage_count ?? 0,
-        } satisfies GeminiRequestTarget;
+        } satisfies ProviderRequestTarget;
       })
-      .filter((target): target is GeminiRequestTarget => Boolean(target));
+      .filter((target): target is ProviderRequestTarget => Boolean(target));
 
     const seen = new Set<string>();
-    const mergedTargets = [manualTarget, ...knownTargets].filter((target): target is GeminiRequestTarget => {
+    const mergedTargets = [manualTarget, ...knownTargets].filter((target): target is ProviderRequestTarget => {
       if (!target) return false;
       const fingerprint = [target.apiKey, target.baseUrl, target.model].join("::");
       if (seen.has(fingerprint)) return false;
@@ -952,6 +945,7 @@ export function ApiChatConsole({
       return left.usageCount - right.usageCount;
     });
   }, [
+    activeProviderPreset.id,
     activeKeyLabel,
     apiKey,
     availableApiKeys,
@@ -959,6 +953,7 @@ export function ApiChatConsole({
     keyCooldowns,
     model,
     provider,
+    normalizedProvider,
     selectedApiKey?.id,
     selectedApiKey?.last_used_at,
     selectedApiKey?.usage_count,
@@ -1004,28 +999,46 @@ export function ApiChatConsole({
     uploadedAttachments,
   ]);
 
-  const buildGeminiContents = (history: ChatMessage[]) =>
-    history.map((message) => {
-      const parts: GeminiRequestPart[] = message.content ? [{ text: message.content }] : [];
+  const buildProviderMessages = (history: ChatMessage[], targetProvider: string) => {
+    const targetPreset = resolveAiProviderPreset(targetProvider);
+    const providerMessages: ProviderChatMessage[] = [];
+    const unsupportedDocuments = history.flatMap((message) =>
+      (message.attachments ?? [])
+        .filter((attachment) => attachment.kind === "file")
+        .map((attachment) => attachment.name),
+    );
 
-      if (message.role === "user") {
-        message.attachments?.forEach((attachment) => {
-          parts.push({
-            inlineData: {
-              mimeType: attachment.mimeType,
-              data: attachment.inlineData,
-            },
-          });
-        });
-      }
+    if (targetPreset.protocol !== "gemini" && unsupportedDocuments.length > 0) {
+      throw new Error(
+        `此服務商目前不支援直接讀取下列文件：${unsupportedDocuments.join("、")}。請改用 Gemini，或移除文件後再送出。`,
+      );
+    }
 
-      return {
-        role: message.role === "assistant" ? "model" : "user",
-        parts: parts.length ? parts : [{ text: "" }],
-      };
+    if (systemPrompt.trim()) {
+      providerMessages.push({ role: "system", text: systemPrompt.trim() });
+    }
+
+    history.forEach((message) => {
+      const attachments = message.role === "user" ? message.attachments ?? [] : [];
+      const supportedAttachments =
+        targetPreset.protocol === "gemini"
+          ? attachments
+          : attachments.filter((attachment) => attachment.kind === "image");
+
+      providerMessages.push({
+        role: message.role,
+        text: message.content,
+        images: supportedAttachments.map((attachment) => ({
+          data: attachment.inlineData,
+          mimeType: attachment.mimeType,
+        })),
+      });
     });
 
-  const markApiKeyUsage = async (target: GeminiRequestTarget) => {
+    return providerMessages;
+  };
+
+  const markApiKeyUsage = async (target: ProviderRequestTarget) => {
     if (target.id === "manual-current" || !target.apiKey.trim()) return;
 
     const { error } = await supabase.rpc("validate_and_update_api_key", {
@@ -1037,30 +1050,35 @@ export function ApiChatConsole({
     }
   };
 
-  const runGeminiRequest = async (
+  const runProviderRequest = async (
     history: ChatMessage[],
     bannerTitle: string,
     showSuccessBanner = true
   ) => {
-    const requestContents = buildGeminiContents(history);
-    const availableTargets = geminiTargets.filter(
+    const availableTargets = providerTargets.filter(
       (target) =>
-        target.provider.trim().toLowerCase() === "gemini" &&
         target.apiKey.trim() &&
         target.model.trim() &&
         target.baseUrl.trim()
     );
     const targetsToTry = (availableTargets.length ? availableTargets : []).slice(0, 5);
     const attemptedLabels: string[] = [];
-    let lastFailure: GeminiAttemptFailure | null = null;
+    let lastFailure: ProviderAttemptFailure | null = null;
 
     if (!targetsToTry.length) {
-      throw new Error("目前沒有可用的 Gemini API Key 或模型設定");
+      throw new Error("目前沒有可用的 AI API Key 或模型設定");
     }
 
     for (const [targetIndex, target] of targetsToTry.entries()) {
       const startedAt = Date.now();
-      const requestUrlForTarget = buildGeminiRequestUrl(target);
+      const providerRequest = buildProviderChatRequest({
+        provider: target.provider,
+        apiKey: target.apiKey,
+        baseUrl: target.baseUrl,
+        model: target.model,
+        messages: buildProviderMessages(history, target.provider),
+      });
+      const requestUrlForTarget = providerRequest.url;
       const allowRetryOnSameTarget = target.cooldownUntil <= Date.now();
       const maxAttemptsForTarget = allowRetryOnSameTarget ? GEMINI_RETRY_DELAYS_MS.length + 1 : 1;
 
@@ -1069,40 +1087,42 @@ export function ApiChatConsole({
           await markApiKeyUsage(target);
 
           const response = await fetch(requestUrlForTarget, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              systemInstruction: systemPrompt.trim()
-                ? {
-                    parts: [{ text: systemPrompt.trim() }],
-                  }
-                : undefined,
-              contents: requestContents,
-            }),
+            method: providerRequest.method,
+            headers: providerRequest.headers,
+            body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
           });
 
           const result = await response.json().catch(() => null);
           const durationMs = Date.now() - startedAt;
 
           if (!response.ok) {
-            const errorMessage = normalizeGeminiErrorMessage(result, response.status);
+            const errorMessage = getProviderErrorMessage(
+              result,
+              response.status,
+              [target.apiKey],
+            );
             throw {
-              demandRelated: isDemandRelatedGeminiFailure(response.status, errorMessage),
+              demandRelated: isDemandRelatedProviderFailure(response.status, errorMessage),
               endpoint: requestUrlForTarget,
               keyLabel: target.keyLabel,
               message: errorMessage,
               model: target.model,
-              retryable: isRetryableGeminiFailure(response.status, errorMessage),
+              retryable: isRetryableProviderFailure(response.status, errorMessage),
               status: response.status,
               targetId: target.id,
-            } satisfies GeminiAttemptFailure;
+            } satisfies ProviderAttemptFailure;
           }
 
-          const parsed = extractGeminiResponse(result);
-          const fallbackText =
-            parsed.text || (parsed.images.length === 0 ? JSON.stringify(result, null, 2) : "");
+          const parsed = parseProviderChatResponse(target.provider, result);
+          const parsedImages = parsed.images.map((image, index) => ({
+            id: `inline-${index}`,
+            src: `data:${image.mimeType};base64,${image.data}`,
+            mimeType: image.mimeType,
+          }));
+          const fallbackText = redactSensitiveText(
+            parsed.text || (parsedImages.length === 0 ? JSON.stringify(result, null, 2) : ""),
+            [target.apiKey],
+          );
           const usedFallbackTarget = targetIndex > 0 || attemptIndex > 0;
 
           setKeyCooldowns((current) => {
@@ -1118,11 +1138,11 @@ export function ApiChatConsole({
               title: `${bannerTitle}成功`,
               message: usedFallbackTarget
                 ? `主要模型繁忙，系統已自動切換到 ${target.keyLabel} / ${target.model} 並完成查詢。`
-                : parsed.images.length > 0
+                : parsedImages.length > 0
                   ? "API 已正常回應，並回傳可直接顯示的圖片結果。"
                   : "API 已正常回應，你可以直接繼續查詢。",
               endpoint: requestUrlForTarget,
-              provider: target.provider || "gemini",
+              provider: target.provider || "AI",
               model: target.model || "-",
               durationMs,
             });
@@ -1130,7 +1150,7 @@ export function ApiChatConsole({
 
           return {
             text: fallbackText,
-            images: parsed.images,
+            images: parsedImages,
           };
         } catch (error) {
           const failure =
@@ -1138,20 +1158,20 @@ export function ApiChatConsole({
             typeof error === "object" &&
             "message" in error &&
             "targetId" in error
-              ? (error as GeminiAttemptFailure)
+              ? (error as ProviderAttemptFailure)
               : ({
                   demandRelated: false,
                   endpoint: requestUrlForTarget,
                   keyLabel: target.keyLabel,
                   message:
-                    error instanceof Error ? error.message : "Gemini API 呼叫失敗，請稍後再試",
+                    error instanceof Error ? error.message : "AI API 呼叫失敗，請稍後再試",
                   model: target.model,
-                  retryable: isRetryableGeminiFailure(
+                  retryable: isRetryableProviderFailure(
                     undefined,
                     error instanceof Error ? error.message : ""
                   ),
                   targetId: target.id,
-                } satisfies GeminiAttemptFailure);
+                } satisfies ProviderAttemptFailure);
 
           attemptedLabels.push(`${failure.keyLabel} / ${failure.model}`);
           lastFailure = failure;
@@ -1186,7 +1206,7 @@ export function ApiChatConsole({
       ? `已嘗試 ${Array.from(new Set(attemptedLabels)).join("、")}`
       : "尚未找到可用的查詢路由";
     const userFacingMessage = lastFailure?.demandRelated
-      ? `目前 Gemini 查詢量過高，${attemptedSummary}，請稍後再試或新增更多可輪替的 API Key。`
+      ? `目前 ${activeProviderPreset.shortLabel} 查詢量過高，${attemptedSummary}，請稍後再試或新增更多可輪替的 API Key。`
       : lastFailure?.message || "資料查詢失敗";
 
     setConnectionState({
@@ -1194,7 +1214,7 @@ export function ApiChatConsole({
       title: `${bannerTitle}失敗`,
       message: userFacingMessage,
       endpoint: lastFailure?.endpoint || requestUrl,
-      provider: provider || "gemini",
+      provider: provider || "AI",
       model: model || "-",
       durationMs: 0,
     });
@@ -1211,11 +1231,6 @@ export function ApiChatConsole({
       return;
     }
 
-    if (!isGeminiProvider) {
-      toast.error("目前對話模式先支援 Gemini provider");
-      return;
-    }
-
     const userAttachments = [...uploadedAttachments];
     const userImages = userAttachments
       .filter((item) => item.kind === "image" && item.src)
@@ -1229,7 +1244,7 @@ export function ApiChatConsole({
     setLoading(true);
 
     try {
-      const reply = await runGeminiRequest(nextHistory, "資料查詢", false);
+      const reply = await runProviderRequest(nextHistory, "資料查詢", false);
       setMessages((current) => [
         ...current,
         createMessage("assistant", reply.text, "normal", reply.images),
@@ -1248,15 +1263,10 @@ export function ApiChatConsole({
   };
 
   const handleConnectionTest = async () => {
-    if (!isGeminiProvider) {
-      toast.error("目前測試模式先支援 Gemini provider");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      const reply = await runGeminiRequest(
+      const reply = await runProviderRequest(
         [createMessage("user", "請只回覆：API 連線正常")],
         "AI API 連線測試",
         true
@@ -1398,10 +1408,8 @@ export function ApiChatConsole({
   const restoreConversation = (conversation: SavedConversation) => {
     setMessages(conversation.messages);
     setDraftMessage(conversation.draftMessage);
-    setProvider(conversation.provider || "gemini");
-    setModel(conversation.model || "gemini-2.5-flash");
     setConnectionState(null);
-    toast.success(`已載入對話：${conversation.title}`);
+    toast.success(`已載入對話：${conversation.title}，並沿用目前 AI 金鑰`);
   };
 
   const removeSavedPrompt = (id: string) => {
@@ -1578,7 +1586,7 @@ export function ApiChatConsole({
   };
 
   const totalMessages = messages.length.toString();
-  const modeLabel = isGeminiProvider ? "可對話" : "待擴充";
+  const modeLabel = `${activeProviderPreset.shortLabel} 可對話`;
   const chatHeightClass = isChatOnly
     ? "min-h-0 flex-1"
     : "min-h-[560px] max-h-[560px]";
@@ -2346,7 +2354,7 @@ export function ApiChatConsole({
               <MetricTile
                 label="Mode"
                 value={modeLabel}
-                caption={isGeminiProvider ? "目前已接通 Gemini 查詢。" : "此 provider 尚未接查詢流程。"}
+                caption={`目前已接通 ${activeProviderPreset.label} 查詢。`}
               />
               <MetricTile
                 label="Messages"
