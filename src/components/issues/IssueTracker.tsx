@@ -98,14 +98,14 @@ export function IssueTracker() {
   const [selectedIssue, setSelectedIssue] = useState<WorkspaceIssue | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  const loadIssues = useCallback(async () => {
+  const loadIssues = useCallback(async (showLoading = true) => {
     if (!activeProjectId) {
       setIssues([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (showLoading) setLoading(true);
     const { data, error } = await supabase
       .from("issues")
       .select(`
@@ -166,6 +166,35 @@ export function IssueTracker() {
   useEffect(() => {
     loadIssues();
   }, [loadIssues]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+
+    let reloadTimer: number | undefined;
+    const channel = supabase
+      .channel(`issues:${activeProjectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "issues",
+          filter: `project_id=eq.${activeProjectId}`,
+        },
+        () => {
+          if (reloadTimer) window.clearTimeout(reloadTimer);
+          reloadTimer = window.setTimeout(() => {
+            void loadIssues(false);
+          }, 250);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (reloadTimer) window.clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [activeProjectId, loadIssues]);
 
   useEffect(() => {
     const openIssueId = new URLSearchParams(window.location.search).get("openIssue");
