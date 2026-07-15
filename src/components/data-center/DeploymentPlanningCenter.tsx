@@ -1348,7 +1348,7 @@ export function DeploymentPlanningCenter() {
     }));
   };
 
-  const updateFacilityNumber = (field: "width" | "depth" | "wallHeight", value: string) => {
+  const updateFacilityNumber = (field: "width" | "depth", value: string) => {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
     updateFacility((facility) => ({ ...facility, [field]: next }));
@@ -1929,21 +1929,20 @@ export function DeploymentPlanningCenter() {
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">廠房尺寸</h2>
-                      <p className="mt-1 text-[11px] text-slate-400">單位：公尺。牆體會沿著外框生成。</p>
+                      <p className="mt-1 text-[11px] text-slate-400">單位：公尺。尺寸會同步套用到開放式地板與網格。</p>
                     </div>
                     <span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">{selectedSite.label}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {([
                       ["width", "寬度"],
                       ["depth", "深度"],
-                      ["wallHeight", "牆高"],
-                    ] as Array<["width" | "depth" | "wallHeight", string]>).map(([field, label]) => (
+                    ] as Array<["width" | "depth", string]>).map(([field, label]) => (
                       <label key={field} className="space-y-1.5">
                         <span className="block text-[11px] font-bold text-slate-400">{label}</span>
                         <Input
                           type="number"
-                          min={field === "wallHeight" ? 2.4 : 8}
+                          min={8}
                           step="0.1"
                           value={selectedFacility[field]}
                           disabled={!canEdit}
@@ -1953,22 +1952,17 @@ export function DeploymentPlanningCenter() {
                       </label>
                     ))}
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    {([
-                      ["showWalls", "顯示牆體"],
-                      ["showGrid", "顯示網格"],
-                    ] as Array<["showWalls" | "showGrid", string]>).map(([field, label]) => (
-                      <label key={field} className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={selectedFacility[field]}
-                          disabled={!canEdit}
-                          onChange={(event) => updateFacility((facility) => ({ ...facility, [field]: event.target.checked }))}
-                          className="h-4 w-4 accent-cyan-400"
-                        />
-                        {label}
-                      </label>
-                    ))}
+                  <div className="mt-4">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={selectedFacility.showGrid}
+                        disabled={!canEdit}
+                        onChange={(event) => updateFacility((facility) => ({ ...facility, showGrid: event.target.checked }))}
+                        className="h-4 w-4 accent-cyan-400"
+                      />
+                      顯示網格
+                    </label>
                   </div>
                 </section>
 
