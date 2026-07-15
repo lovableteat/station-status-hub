@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clock3, Play, Save, Server, Square, XCircle } from "lucide-react";
+import { AlertTriangle, Check, Clock3, Play, Save, Server, Square, XCircle } from "lucide-react";
 
+import { IssueCreateDialog } from "@/components/issues/IssueCreateDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,30 @@ function formatElapsed(startedAt?: string | null, completedAt?: string | null, n
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function escapeIssueText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildIssueDescription(
+  system: TrackerSystem,
+  station: TrackerStation | undefined,
+  item: TrackerItem,
+  notes: string
+) {
+  const abnormalDetail = notes.trim() || item.description?.trim() || "請補充異常現象與重現方式。";
+  return [
+    `<p><strong>機台：</strong>${escapeIssueText(system.system_name)}</p>`,
+    `<p><strong>站點：</strong>${escapeIssueText(station?.station_name || "未指定站點")}</p>`,
+    `<p><strong>測試項目：</strong>${escapeIssueText(item.item_name)}</p>`,
+    `<p><strong>異常內容：</strong>${escapeIssueText(abnormalDetail)}</p>`,
+  ].join("");
 }
 
 interface ItemDraft {
@@ -470,6 +495,40 @@ export function SystemProgressSheet({
                       <span className="font-data text-[#f3f8fc]">{formatElapsed(timeRecord?.started_at, timeRecord?.completed_at, clockNow)}</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      {system && (
+                        <IssueCreateDialog
+                          initialValues={{
+                            title: `${system.system_name} - ${item.item_name} 異常`,
+                            description: buildIssueDescription(system, selectedStation, item, draft.notes),
+                            priority: draft.status === "Error" ? "high" : "medium",
+                            status: "open",
+                            system_id: system.id,
+                            station_id: item.station_id,
+                            test_item_id: item.id,
+                            relate: `${selectedStation?.station_name || "未指定站點"} / ${item.item_name}`,
+                            category: "L10 測試異常",
+                          }}
+                          onIssueCreated={() => undefined}
+                          trigger={(
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              aria-label={`為 ${item.item_name} 建立問題`}
+                              className={cn(
+                                "h-8",
+                                draft.status === "Error"
+                                  ? "border-rose-300/60 bg-rose-300/15 text-rose-50 hover:bg-rose-300/25"
+                                  : "border-[#3c6380] bg-[#10263a] text-[#dce9f2] hover:bg-[#17334a]"
+                              )}
+                              title="建立問題並同步到問題追蹤頁面"
+                            >
+                              <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                              建立問題
+                            </Button>
+                          )}
+                        />
+                      )}
                       {isTimerRunning ? (
                         <Button size="sm" variant="outline" className="h-8 border-emerald-300/40 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20" disabled={savingItemId === item.id} onClick={() => finishTimer(item)} title="停止計時，並將此測項設為已完成 100%">
                           <Square className="mr-1.5 h-3.5 w-3.5" />完成計時
