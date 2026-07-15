@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, type ClipboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
@@ -122,6 +122,22 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
     }
   }, [editor]);
 
+  const replaceImageSource = useCallback((source: string, replacement?: string) => {
+    if (!editor || editor.isDestroyed) return;
+
+    const transaction = editor.state.tr;
+    editor.state.doc.descendants((node, position) => {
+      if (node.type.name !== 'image' || node.attrs.src !== source) return;
+      if (replacement) {
+        transaction.setNodeMarkup(position, undefined, { ...node.attrs, src: replacement });
+      } else {
+        transaction.delete(position, position + node.nodeSize);
+      }
+    });
+
+    if (transaction.docChanged) editor.view.dispatch(transaction);
+  }, [editor]);
+
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && editor) {
@@ -146,6 +162,51 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       }
     }
   }, [editor, onImageUpload, insertImage]);
+
+  const handlePaste = useCallback(async (event: ClipboardEvent<HTMLDivElement>) => {
+    const imageFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+
+    if (imageFiles.length === 0) return;
+    if (disableImageUpload) return;
+
+    event.preventDefault();
+    const pastedAt = Date.now();
+
+    for (const [index, sourceFile] of imageFiles.entries()) {
+      const extension = sourceFile.type.split('/').pop()?.replace('jpeg', 'jpg') || 'png';
+      const file = new File(
+        [sourceFile],
+        `clipboard-${pastedAt}-${index + 1}.${extension}`,
+        { type: sourceFile.type || `image/${extension}` }
+      );
+      const previewUrl = URL.createObjectURL(file);
+      insertImage(previewUrl);
+
+      try {
+        if (onImageUpload) {
+          const uploadedUrl = await onImageUpload(file);
+          if (uploadedUrl) replaceImageSource(previewUrl, uploadedUrl);
+          continue;
+        }
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        if (dataUrl) replaceImageSource(previewUrl, dataUrl);
+      } catch (error) {
+        replaceImageSource(previewUrl);
+        console.error('Pasted image upload failed:', error);
+      } finally {
+        URL.revokeObjectURL(previewUrl);
+      }
+    }
+  }, [disableImageUpload, insertImage, onImageUpload, replaceImageSource]);
 
   const handleImageUrlSubmit = () => {
     if (imageUrl.trim()) {
@@ -415,6 +476,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       <EditorContent 
         editor={editor} 
         className={cn("min-h-[200px]", className)}
+        onPaste={handlePaste}
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.tagName === 'IMG') {

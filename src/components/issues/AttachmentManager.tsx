@@ -59,6 +59,28 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
   const deleteAttachment = async (attachment: Attachment) => {
     setLoading(true);
     try {
+      if (attachment.file_path.includes('/inline/')) {
+        const publicUrl = supabase.storage.from('issue-attachments').getPublicUrl(attachment.file_path).data.publicUrl;
+        const { data: issue, error: issueError } = await supabase
+          .from('issues')
+          .select('description, process_notes, solution')
+          .eq('id', issueId)
+          .single();
+
+        if (issueError) throw issueError;
+        const isReferenced = [issue.description, issue.process_notes, issue.solution]
+          .some((content) => content?.includes(publicUrl));
+
+        if (isReferenced) {
+          toast({
+            title: "截圖仍在問題內容中",
+            description: "請先從內容編輯器移除截圖並儲存，再回到附件區刪除檔案。",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       // 從資料庫刪除記錄
       const { error: dbError } = await supabase
         .from('issue_attachments')

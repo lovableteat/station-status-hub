@@ -1,16 +1,22 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, ClipboardPenLine, Link2, Paperclip, Plus, Save, Upload, UserRound, X } from "lucide-react";
+import { ClipboardPenLine, ImagePlus, Link2, Paperclip, Plus, Save, Upload, UserRound, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { IssueContentWorkspace, type IssueContentField } from "./IssueContentWorkspace";
+import {
+  cleanupInlineImages,
+  hasMeaningfulIssueContent,
+  persistInlineImageAttachments,
+  uploadInlineImage,
+  type PendingInlineImage,
+} from "./issueInlineImages";
 
 interface NewIssue {
   title: string;
@@ -72,7 +78,15 @@ function buildInitialIssue(initialValues?: Partial<NewIssue>): NewIssue {
 export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: IssueCreateDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInlineUploading, setIsInlineUploading] = useState(false);
   const [newIssue, setNewIssue] = useState<NewIssue>(() => buildInitialIssue(initialValues));
+  const [draftIssueId, setDraftIssueId] = useState(() => crypto.randomUUID());
+  const [pendingInlineImages, setPendingInlineImages] = useState<PendingInlineImage[]>([]);
+  const pendingInlineImagesRef = useRef<PendingInlineImage[]>([]);
+  const activeInlineUploadsRef = useRef(0);
+  const acceptingInlineUploadsRef = useRef(true);
+  const closeRequestedRef = useRef(false);
+  const draftPersistedRef = useRef(false);
 
   // 照片上傳相關狀態
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -87,13 +101,104 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
   const { toast } = useToast();
   const { activeProjectId } = useTestProject();
 
+  const setInlineImages = (images: PendingInlineImage[]) => {
+    pendingInlineImagesRef.current = images;
+    setPendingInlineImages(images);
+  };
+
+  const cleanupPendingInlineImages = async () => {
+    const images = pendingInlineImagesRef.current;
+    if (images.length === 0) return true;
+    try {
+      await cleanupInlineImages(images);
+      setInlineImages([]);
+      return true;
+    } catch (error) {
+      console.error("Unable to clean up draft issue images:", error);
+      toast({
+        title: "暫存截圖尚未清除",
+        description: "請保持視窗開啟並稍後再試，避免留下未使用的檔案。",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const closeAfterCleanup = async () => {
+    acceptingInlineUploadsRef.current = false;
+    closeRequestedRef.current = true;
+    if (activeInlineUploadsRef.current > 0) return;
+    if (draftPersistedRef.current && pendingInlineImagesRef.current.length > 0) {
+      try {
+        await persistInlineImageAttachments(draftIssueId, pendingInlineImagesRef.current);
+        setInlineImages([]);
+      } catch (error) {
+        console.error("Unable to register pasted images before closing:", error);
+        acceptingInlineUploadsRef.current = true;
+        closeRequestedRef.current = false;
+        toast({
+          title: "截圖尚未完成登記",
+          description: "問題資料已保留，請稍後再按一次儲存或關閉。",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    if (!(await cleanupPendingInlineImages())) {
+      acceptingInlineUploadsRef.current = true;
+      closeRequestedRef.current = false;
+      draftPersistedRef.current = false;
+      return;
+    }
+    closeRequestedRef.current = false;
+    setIsOpen(false);
+  };
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
+      acceptingInlineUploadsRef.current = true;
+      closeRequestedRef.current = false;
       setNewIssue(buildInitialIssue(initialValues));
+      setDraftIssueId(crypto.randomUUID());
+      setInlineImages([]);
       setSelectedFiles([]);
       setUploadProgress({});
+      setIsOpen(true);
+    } else {
+      void closeAfterCleanup();
     }
-    setIsOpen(nextOpen);
+  };
+
+  const handleInlineImageUpload = async (file: File) => {
+    activeInlineUploadsRef.current += 1;
+    setIsInlineUploading(true);
+    try {
+      const image = await uploadInlineImage(draftIssueId, file);
+      if (!acceptingInlineUploadsRef.current) {
+        await cleanupInlineImages([image]);
+        throw new Error("INLINE_UPLOAD_CANCELLED");
+      }
+      setInlineImages([...pendingInlineImagesRef.current, image]);
+      return image.publicUrl;
+    } catch (error) {
+      if ((error as Error).message !== "INLINE_UPLOAD_CANCELLED") {
+        toast({
+          title: "截圖貼上失敗",
+          description: "無法上傳剪貼簿圖片，請稍後重試。",
+          variant: "destructive",
+        });
+      }
+      throw error;
+    } finally {
+      activeInlineUploadsRef.current -= 1;
+      const isUploading = activeInlineUploadsRef.current > 0;
+      setIsInlineUploading(isUploading);
+      if (!isUploading && closeRequestedRef.current) void closeAfterCleanup();
+    }
+  };
+
+  const handleContentChange = (field: IssueContentField, content: string) => {
+    setNewIssue((current) => ({ ...current, [field]: content }));
   };
 
   useEffect(() => {
@@ -111,6 +216,12 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
     }
   }, [newIssue.station_id]);
 
+  useEffect(() => () => {
+    acceptingInlineUploadsRef.current = false;
+    const images = pendingInlineImagesRef.current;
+    if (!draftPersistedRef.current && images.length > 0) void cleanupInlineImages(images);
+  }, []);
+
   const loadSystems = async () => {
     try {
       if (!activeProjectId) {
@@ -125,6 +236,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
         .order('system_name');
       
       if (error) throw error;
+      draftPersistedRef.current = true;
       setSystems(data || []);
     } catch (error) {
       console.error('Error loading systems:', error);
@@ -275,8 +387,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
   };
 
   const createIssue = async () => {
-    const descriptionText = newIssue.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-    if (!newIssue.title.trim() || !descriptionText) {
+    if (!newIssue.title.trim() || !hasMeaningfulIssueContent(newIssue.description)) {
       toast({
         title: "資料不完整",
         description: "請填寫問題標題和問題描述",
@@ -294,7 +405,8 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
 
       const { data, error } = await supabase
         .from('issues')
-        .insert([{
+        .upsert([{
+          id: draftIssueId,
           project_id: activeProjectId,
           title: newIssue.title,
           description: newIssue.description,
@@ -308,13 +420,18 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
           category: newIssue.category || null,
           process_notes: newIssue.process_notes || null,
           solution: newIssue.solution || null
-        }])
+        }], { onConflict: 'id' })
         .select()
         .single();
 
       if (error) throw error;
 
-      // 上傳照片
+      if (pendingInlineImagesRef.current.length > 0) {
+        await persistInlineImageAttachments(data.id, pendingInlineImagesRef.current);
+        setInlineImages([]);
+      }
+
+      // 一般附件最後處理，避免內嵌截圖登記失敗時重試造成重複附件。
       if (selectedFiles.length > 0) {
         await uploadFiles(data.id);
       }
@@ -328,6 +445,9 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
       setNewIssue(buildInitialIssue());
       setSelectedFiles([]);
       setUploadProgress({});
+      setInlineImages([]);
+      acceptingInlineUploadsRef.current = false;
+      draftPersistedRef.current = false;
       setIsOpen(false);
       onIssueCreated();
     } catch (error) {
@@ -345,7 +465,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
   const filteredTestItems = testItems.filter(item => 
     !newIssue.station_id || item.station_id === newIssue.station_id
   );
-  const hasDescription = newIssue.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+  const hasDescription = hasMeaningfulIssueContent(newIssue.description);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -357,7 +477,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="!flex !max-w-6xl !gap-0 !overflow-hidden !p-0 h-[min(900px,calc(100vh-1.5rem))] w-[calc(100vw-1.5rem)] flex-col border-[#2a526f] bg-[#071522] text-[#f3f8fc]">
+      <DialogContent className="!flex !max-w-7xl !gap-0 !overflow-hidden !p-0 h-[min(920px,calc(100vh-1.5rem))] w-[calc(100vw-1.5rem)] flex-col border-[#2a526f] bg-[#071522] text-[#f3f8fc]">
         <DialogHeader className="shrink-0 border-b border-[#2a526f] bg-[linear-gradient(110deg,#0b1b2d_0%,#102b41_100%)] px-5 py-4 pr-14 text-left">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100">
@@ -373,7 +493,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_340px]">
           <main className="min-h-0 overflow-y-auto p-4 sm:p-6">
             <div className="space-y-5">
               <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-4">
@@ -490,37 +610,14 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
                 </div>
               </section>
 
-              <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-4">
-                <Tabs defaultValue="description" className="w-full">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-200" />
-                        <h2 className="text-sm font-semibold">問題內容</h2>
-                      </div>
-                      <p className="mt-1 text-xs text-[#8faabd]">三種紀錄分開填寫，畫面更短，也方便後續接手。</p>
-                    </div>
-                    <Badge variant="outline" className="border-amber-300/35 bg-amber-300/10 text-xs text-amber-100">描述為必填</Badge>
-                  </div>
-                  <TabsList className="grid h-11 w-full grid-cols-3 border border-[#2a526f] bg-[#081827] p-1">
-                    <TabsTrigger value="description">問題描述 *</TabsTrigger>
-                    <TabsTrigger value="process">處理過程</TabsTrigger>
-                    <TabsTrigger value="solution">解決方案</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="description" className="mt-3 rounded-xl border border-[#2a526f] bg-[#081827] p-3">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-amber-200" />問題現象與影響</div>
-                    <RichTextEditor content={newIssue.description} onChange={(content) => setNewIssue(prev => ({ ...prev, description: content }))} placeholder="記錄錯誤現象、發生條件、影響範圍與重現方式..." className="min-h-[300px] border-[#2a526f] bg-[#071522]" disableImageUpload />
-                  </TabsContent>
-                  <TabsContent value="process" className="mt-3 rounded-xl border border-[#2a526f] bg-[#081827] p-3">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ClipboardPenLine className="h-4 w-4 text-cyan-100" />診斷與處理時間線</div>
-                    <RichTextEditor content={newIssue.process_notes} onChange={(content) => setNewIssue(prev => ({ ...prev, process_notes: content }))} placeholder="依時間記錄診斷、執行步驟、測試結果與待追蹤事項..." className="min-h-[300px] border-[#2a526f] bg-[#071522]" disableImageUpload />
-                  </TabsContent>
-                  <TabsContent value="solution" className="mt-3 rounded-xl border border-[#2a526f] bg-[#081827] p-3">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-emerald-200" />最終修復與驗證</div>
-                    <RichTextEditor content={newIssue.solution} onChange={(content) => setNewIssue(prev => ({ ...prev, solution: content }))} placeholder="記錄採用方案、變更內容、驗證結果與預防措施..." className="min-h-[300px] border-[#2a526f] bg-[#071522]" disableImageUpload />
-                  </TabsContent>
-                </Tabs>
-              </section>
+              <IssueContentWorkspace
+                description={newIssue.description}
+                processNotes={newIssue.process_notes}
+                solution={newIssue.solution}
+                onChange={handleContentChange}
+                onImageUpload={handleInlineImageUpload}
+                isImageUploading={isInlineUploading}
+              />
             </div>
           </main>
 
@@ -528,8 +625,8 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
             <div className="space-y-4">
               <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件</div>
-                  {selectedFiles.length > 0 && <Badge variant="outline" className="border-cyan-300/35 bg-cyan-300/10 text-cyan-100">{selectedFiles.length} 個</Badge>}
+                  <div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件與截圖</div>
+                  {(selectedFiles.length + pendingInlineImages.length) > 0 && <Badge variant="outline" className="border-cyan-300/35 bg-cyan-300/10 text-cyan-100">{selectedFiles.length + pendingInlineImages.length} 個</Badge>}
                 </div>
                 <label htmlFor="issue-attachments" className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#3c6380] bg-[#10263a] px-4 py-6 text-center transition hover:border-cyan-300/60 hover:bg-[#16324b]">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-100"><Upload className="h-5 w-5" /></span>
@@ -537,6 +634,11 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
                   <span className="text-xs text-[#8faabd]">可多選圖片、PDF、Word 或 TXT</span>
                 </label>
                 <input id="issue-attachments" type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileSelect} className="sr-only" />
+
+                <div className="mt-3 flex items-start gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-[#b9d4e4]">
+                  <ImagePlus className="mt-0.5 h-4 w-4 shrink-0 text-cyan-100" />
+                  <span>截圖可直接在左側任一內容編輯器按 <strong className="text-cyan-50">Ctrl+V</strong>，圖片會插入游標位置並同步列入附件。</span>
+                </div>
 
                 {selectedFiles.length > 0 && (
                   <div className="mt-4 space-y-2">
@@ -581,8 +683,8 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#2a526f] bg-[#0b1b2d] px-5 py-3">
           <div className="text-xs text-[#8faabd]"><span className="text-amber-200">*</span> 為必填欄位 <span className="mx-2 text-[#3c6380]">|</span>目前狀態：{newIssue.status === "open" ? "開啟" : newIssue.status === "in_progress" ? "處理中" : newIssue.status === "resolved" ? "已解決" : "已關閉"}</div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading}>取消</Button>
-            <Button type="button" onClick={createIssue} disabled={!newIssue.title.trim() || !hasDescription || isLoading} className="min-w-28 bg-[#4c8dff] text-[#06111f] hover:bg-[#6da2ff]">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading || isInlineUploading}>取消</Button>
+            <Button type="button" onClick={createIssue} disabled={!newIssue.title.trim() || !hasDescription || isLoading || isInlineUploading} className="min-w-28 bg-[#4c8dff] text-[#06111f] hover:bg-[#6da2ff]">
               <Save className="mr-2 h-4 w-4" />
               {isLoading ? "建立中..." : "建立問題"}
             </Button>

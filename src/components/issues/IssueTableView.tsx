@@ -614,6 +614,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
             <DialogContent
               className="h-[min(90vh,820px)] max-w-[1280px] overflow-hidden border-[#2a526f] bg-[#071522] p-0"
+              hideCloseButton
               onPointerDownOutside={(e) => e.preventDefault()}
               onEscapeKeyDown={(e) => e.preventDefault()}
               onInteractOutside={(e) => e.preventDefault()}
