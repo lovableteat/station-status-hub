@@ -1,14 +1,13 @@
 
-import { useCallback, useState, useEffect, type ChangeEvent } from "react";
+import { useCallback, useState, useEffect, useRef, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  AlertTriangle,
   Bell,
-  CheckCircle2,
   ClipboardPenLine,
+  ImagePlus,
   Link2,
   Loader2,
   Paperclip,
@@ -16,16 +15,24 @@ import {
   Trash2,
   Upload,
   UserRound,
+  X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { MentionInput } from "@/components/common/MentionInput";
 import { useMentionNotifications } from "@/hooks/useMentionNotifications";
 import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { AttachmentManager } from "./AttachmentManager";
+import { IssueContentWorkspace, type IssueContentField } from "./IssueContentWorkspace";
+import {
+  cleanupInlineImages,
+  hasMeaningfulIssueContent,
+  persistInlineImageAttachments,
+  uploadInlineImage,
+  type PendingInlineImage,
+} from "./issueInlineImages";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +44,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Issue {
   id: string;
@@ -81,7 +87,13 @@ export function IssueEditDialog({
 }: IssueEditDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isInlineUploading, setIsInlineUploading] = useState(false);
   const [attachmentRefreshKey, setAttachmentRefreshKey] = useState(0);
+  const [pendingInlineImages, setPendingInlineImages] = useState<PendingInlineImage[]>([]);
+  const pendingInlineImagesRef = useRef<PendingInlineImage[]>([]);
+  const activeInlineUploadsRef = useRef(0);
+  const acceptingInlineUploadsRef = useRef(true);
+  const closeRequestedRef = useRef(false);
   const [formData, setFormData] = useState({
     title: issue.title,
     description: issue.description,
@@ -203,6 +215,76 @@ export function IssueEditDialog({
     }
   }, []);
 
+  const setInlineImages = (images: PendingInlineImage[]) => {
+    pendingInlineImagesRef.current = images;
+    setPendingInlineImages(images);
+  };
+
+  const cleanupPendingInlineImages = async () => {
+    const images = pendingInlineImagesRef.current;
+    if (images.length === 0) return true;
+    try {
+      await cleanupInlineImages(images);
+      setInlineImages([]);
+      return true;
+    } catch (error) {
+      console.error("Unable to clean up unsaved issue images:", error);
+      toast({
+        title: "暫存截圖尚未清除",
+        description: "請保持視窗開啟並稍後再試，避免留下未使用的檔案。",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const handleInlineImageUpload = async (file: File) => {
+    activeInlineUploadsRef.current += 1;
+    setIsInlineUploading(true);
+    try {
+      const image = await uploadInlineImage(issue.id, file);
+      if (!acceptingInlineUploadsRef.current) {
+        await cleanupInlineImages([image]);
+        throw new Error("INLINE_UPLOAD_CANCELLED");
+      }
+      setInlineImages([...pendingInlineImagesRef.current, image]);
+      return image.publicUrl;
+    } catch (error) {
+      if ((error as Error).message !== "INLINE_UPLOAD_CANCELLED") {
+        toast({
+          title: "截圖貼上失敗",
+          description: "無法上傳剪貼簿圖片，請稍後重試。",
+          variant: "destructive",
+        });
+      }
+      throw error;
+    } finally {
+      activeInlineUploadsRef.current -= 1;
+      const isUploading = activeInlineUploadsRef.current > 0;
+      setIsInlineUploading(isUploading);
+      if (!isUploading && closeRequestedRef.current) void handleClose();
+    }
+  };
+
+  const handleContentChange = (field: IssueContentField, content: string) => {
+    setFormData((current) => ({ ...current, [field]: content }));
+  };
+
+  const handleClose = () => {
+    acceptingInlineUploadsRef.current = false;
+    closeRequestedRef.current = true;
+    if (activeInlineUploadsRef.current > 0) return;
+    void cleanupPendingInlineImages().then((cleaned) => {
+      if (!cleaned) {
+        acceptingInlineUploadsRef.current = true;
+        closeRequestedRef.current = false;
+        return;
+      }
+      closeRequestedRef.current = false;
+      onClose?.();
+    });
+  };
+
   const handleSave = async () => {
     if (!formData.title.trim()) {
       toast({
@@ -213,7 +295,7 @@ export function IssueEditDialog({
       return;
     }
 
-    if (!formData.description.trim()) {
+    if (!hasMeaningfulIssueContent(formData.description)) {
       toast({
         title: "驗證錯誤", 
         description: "請輸入問題描述",
@@ -257,6 +339,13 @@ export function IssueEditDialog({
       if (error) {
         console.error('更新問題錯誤:', error);
         throw error;
+      }
+
+      if (pendingInlineImagesRef.current.length > 0) {
+        await persistInlineImageAttachments(issue.id, pendingInlineImagesRef.current);
+        setInlineImages([]);
+        setAttachmentRefreshKey((current) => current + 1);
+        onAttachmentUpdate?.();
       }
 
       // 發送標註通知
@@ -325,6 +414,8 @@ export function IssueEditDialog({
         console.error('刪除問題錯誤:', error);
         throw error;
       }
+
+      await cleanupPendingInlineImages();
 
       toast({
         title: "刪除成功",
@@ -412,6 +503,12 @@ export function IssueEditDialog({
     }
   }, [formData.station_id, loadTestItems, loadTestItemsForStation]);
 
+  useEffect(() => () => {
+    acceptingInlineUploadsRef.current = false;
+    const images = pendingInlineImagesRef.current;
+    if (images.length > 0) void cleanupInlineImages(images);
+  }, []);
+
   const statusLabel = {
     open: "開啟",
     in_progress: "處理中",
@@ -440,60 +537,37 @@ export function IssueEditDialog({
             </div>
             <p className="mt-1 text-sm text-[#a9c0d1]">更新處理狀態、關聯機台與維修紀錄；按下儲存後才會寫入問題資料。</p>
           </div>
+          <Button type="button" variant="ghost" size="icon" onClick={handleClose} disabled={isSubmitting || isUploading || isInlineUploading} className="absolute right-4 top-4 h-9 w-9 border border-[#2a526f] bg-[#10263a] text-[#a9c0d1] hover:bg-[#16324b] hover:text-white">
+            <X className="h-4 w-4" />
+            <span className="sr-only">關閉編輯問題</span>
+          </Button>
         </div>
       </header>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-h-0 overflow-y-auto p-5">
-          <div className="space-y-2">
-            <Label htmlFor="title" className="text-sm font-semibold text-[#dce9f2]">問題標題 *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(event) => handleInputChange("title", event.target.value)}
-              placeholder="輸入可辨識的問題標題"
-              disabled={isSubmitting}
-              className="h-11 border-[#3c6380] bg-[#10263a] text-base font-semibold"
-            />
-          </div>
+        <main className="min-h-0 space-y-4 overflow-y-auto p-5">
+          <section className="rounded-2xl border border-[#315b78] bg-[#0a1b2b] p-4 shadow-[0_14px_38px_rgba(0,0,0,0.14)]">
+            <div className="space-y-2">
+              <Label htmlFor="title" className="text-sm font-semibold text-[#dce9f2]">問題標題 *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(event) => handleInputChange("title", event.target.value)}
+                placeholder="輸入可辨識的問題標題"
+                disabled={isSubmitting}
+                className="h-11 border-[#3c6380] bg-[#10263a] text-base font-semibold"
+              />
+            </div>
+          </section>
 
-          <Tabs defaultValue="description" className="mt-4">
-            <TabsList className="grid h-11 w-full grid-cols-3 border border-[#2a526f] bg-[#0b1b2d] p-1">
-              <TabsTrigger value="description">問題描述 *</TabsTrigger>
-              <TabsTrigger value="process">處理過程</TabsTrigger>
-              <TabsTrigger value="solution">解決方案</TabsTrigger>
-            </TabsList>
-            <TabsContent value="description" className="mt-3 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-amber-200" />問題現象與影響</div>
-              <RichTextEditor
-                content={formData.description}
-                onChange={(content) => handleInputChange("description", content)}
-                placeholder="記錄錯誤現象、發生條件、影響範圍與重現方式..."
-                className="min-h-[330px]"
-                disableImageUpload
-              />
-            </TabsContent>
-            <TabsContent value="process" className="mt-3 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ClipboardPenLine className="h-4 w-4 text-cyan-100" />診斷與處理時間線</div>
-              <RichTextEditor
-                content={formData.process_notes}
-                onChange={(content) => handleInputChange("process_notes", content)}
-                placeholder="依時間記錄診斷、執行步驟、測試結果與待追蹤事項..."
-                className="min-h-[330px]"
-                disableImageUpload
-              />
-            </TabsContent>
-            <TabsContent value="solution" className="mt-3 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-emerald-200" />最終修復與驗證</div>
-              <RichTextEditor
-                content={formData.solution}
-                onChange={(content) => handleInputChange("solution", content)}
-                placeholder="記錄採用方案、變更內容、驗證結果與預防措施..."
-                className="min-h-[330px]"
-                disableImageUpload
-              />
-            </TabsContent>
-          </Tabs>
+          <IssueContentWorkspace
+            description={formData.description}
+            processNotes={formData.process_notes}
+            solution={formData.solution}
+            onChange={handleContentChange}
+            onImageUpload={handleInlineImageUpload}
+            isImageUploading={isInlineUploading}
+          />
         </main>
 
         <aside className="min-h-0 overflow-y-auto border-t border-[#2a526f] bg-[#091a2a] p-4 lg:border-l lg:border-t-0">
@@ -553,8 +627,13 @@ export function IssueEditDialog({
             </section>
 
             <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件</div><Label htmlFor={`issue-file-${issue.id}`} className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#3c6380] bg-[#10263a] px-3 text-xs font-semibold hover:border-cyan-300/55 hover:bg-[#16324b]"><Upload className="mr-1.5 h-3.5 w-3.5" />{isUploading ? "上傳中" : "加入檔案"}</Label></div>
-              <Input id={`issue-file-${issue.id}`} type="file" multiple className="sr-only" disabled={isUploading || isSubmitting} accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.msg" onChange={handleAttachmentUpload} />
+              <div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件與截圖</div><Label htmlFor={`issue-file-${issue.id}`} className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#3c6380] bg-[#10263a] px-3 text-xs font-semibold hover:border-cyan-300/55 hover:bg-[#16324b]"><Upload className="mr-1.5 h-3.5 w-3.5" />{isUploading ? "上傳中" : "加入檔案"}</Label></div>
+              <Input id={`issue-file-${issue.id}`} type="file" multiple className="sr-only" disabled={isUploading || isSubmitting || isInlineUploading} accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.msg" onChange={handleAttachmentUpload} />
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-[#b9d4e4]">
+                <ImagePlus className="mt-0.5 h-4 w-4 shrink-0 text-cyan-100" />
+                <span>在左側目前內容頁籤按 <strong className="text-cyan-50">Ctrl+V</strong>，截圖會直接插入內容並在儲存後同步到附件。</span>
+              </div>
+              {pendingInlineImages.length > 0 && <div className="mb-3 rounded-lg border border-amber-300/25 bg-amber-300/[0.07] px-3 py-2 text-xs text-amber-50">尚有 {pendingInlineImages.length} 張貼上截圖等待儲存</div>}
               <AttachmentManager issueId={issue.id} refreshKey={attachmentRefreshKey} onUpdate={onAttachmentUpdate} />
             </section>
           </div>
@@ -567,8 +646,8 @@ export function IssueEditDialog({
           <AlertDialogContent className="border-rose-300/30 bg-[#0b1b2d]"><AlertDialogHeader><AlertDialogTitle>永久刪除「{formData.title}」？</AlertDialogTitle><AlertDialogDescription>問題資料與附件記錄會立即刪除，這個動作無法復原。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>保留問題</AlertDialogCancel><AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-500" onClick={handleDelete}>確認刪除</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
         </AlertDialog>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onClose} disabled={isSubmitting || isUploading}>取消</Button>
-          <Button onClick={handleSave} disabled={isSubmitting || isUploading} className="min-w-28 bg-[#4c8dff] text-[#06111f] hover:bg-[#6da2ff]">
+          <Button variant="outline" onClick={handleClose} disabled={isSubmitting || isUploading || isInlineUploading}>取消</Button>
+          <Button onClick={handleSave} disabled={isSubmitting || isUploading || isInlineUploading} className="min-w-28 bg-[#4c8dff] text-[#06111f] hover:bg-[#6da2ff]">
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Save className="mr-2 h-4 w-4" />}
             {isSubmitting ? "儲存中" : "儲存變更"}
           </Button>
