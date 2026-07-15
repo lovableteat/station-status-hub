@@ -52,7 +52,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
+import { SystemManager } from "@/components/test-tracker/SystemManager";
 
 import {
   type ProjectStatus,
@@ -145,10 +147,13 @@ export function ProjectScopeBar() {
     isLoadingProjects,
     projectSummaries,
     projects,
+    refreshProjects,
     restoreProject,
     setActiveProjectId,
     updateProject,
   } = useTestProject();
+  const { canEditModule } = usePermissions();
+  const canCreateSystems = canEditModule("test-tracker");
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -320,6 +325,23 @@ export function ProjectScopeBar() {
             </span>
           </div>
         </>
+      )}
+
+      {activeProject && canCreateSystems && (
+        <SystemManager
+          onSystemUpdate={refreshProjects}
+          showDeleteAll={false}
+          trigger={
+            <Button
+              type="button"
+              aria-label="新增機台"
+              className="h-10 shrink-0 rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 text-cyan-50 shadow-[0_8px_24px_-16px_rgba(34,211,238,0.9)] hover:border-cyan-200/60 hover:bg-cyan-400/25 hover:text-white"
+            >
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">新增機台</span>
+            </Button>
+          }
+        />
       )}
 
       {activeProject && (
