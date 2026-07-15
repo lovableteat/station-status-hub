@@ -25,6 +25,14 @@ export function filterSharedPrompts<T extends SharedPromptLike>(prompts: T[], qu
   );
 }
 
+const DATABASE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function getSharedPromptCreatorId(userId?: null | string) {
+  const normalizedUserId = userId?.trim();
+  return normalizedUserId && DATABASE_UUID_PATTERN.test(normalizedUserId) ? normalizedUserId : null;
+}
+
 export function insertClipboardText(
   currentValue: string,
   pastedText: string,
