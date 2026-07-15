@@ -40,6 +40,15 @@ test("shared prompts are searched by title and content", () => {
   );
 });
 
+test("shared prompt creator only uses a valid database UUID", () => {
+  assert.equal(
+    helpers.getSharedPromptCreatorId("550e8400-e29b-41d4-a716-446655440000"),
+    "550e8400-e29b-41d4-a716-446655440000",
+  );
+  assert.equal(helpers.getSharedPromptCreatorId("admin"), null);
+  assert.equal(helpers.getSharedPromptCreatorId(undefined), null);
+});
+
 test("mixed clipboard text is inserted at the current selection", () => {
   assert.equal(
     helpers.insertClipboardText("前段舊文字後段", "新文字", 2, 5),
