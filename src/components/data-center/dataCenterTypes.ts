@@ -139,7 +139,7 @@ export const DEFAULT_FACILITY_PLAN: FacilityPlan = {
   width: 18,
   depth: 13,
   wallHeight: 3.4,
-  showWalls: true,
+  showWalls: false,
   showGrid: true,
   aisles: [
     { id: "cold-main", label: "冷通道 A", kind: "cold", x: 0, z: 0, width: 14.2, depth: 2.1, rotation: 0 },
