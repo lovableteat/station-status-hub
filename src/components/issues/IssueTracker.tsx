@@ -4,6 +4,8 @@ import {
   BarChart3,
   Bug,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   Eye,
@@ -83,6 +85,10 @@ function statusTone(status: string) {
   return "border-emerald-300/35 bg-emerald-300/10 text-emerald-100";
 }
 
+function isImageAttachment(attachment: NonNullable<Issue["attachments"]>[number]) {
+  return /\.(png|jpe?g|gif|bmp|webp)$/i.test(attachment.file_name);
+}
+
 export function IssueTracker() {
   const { activeProject, activeProjectId } = useTestProject();
   const { toast } = useToast();
@@ -96,7 +102,56 @@ export function IssueTracker() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [activeView, setActiveView] = useState("list");
   const [selectedIssue, setSelectedIssue] = useState<WorkspaceIssue | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+
+  const imageAttachments = useMemo(
+    () => (selectedIssue?.attachments ?? []).filter(isImageAttachment),
+    [selectedIssue]
+  );
+  const previewImage = previewImageIndex === null
+    ? null
+    : imageAttachments[previewImageIndex] ?? null;
+
+  const showPreviousImage = useCallback(() => {
+    setPreviewImageIndex((currentIndex) => {
+      if (currentIndex === null || imageAttachments.length === 0) return null;
+      return (currentIndex - 1 + imageAttachments.length) % imageAttachments.length;
+    });
+  }, [imageAttachments.length]);
+
+  const showNextImage = useCallback(() => {
+    setPreviewImageIndex((currentIndex) => {
+      if (currentIndex === null || imageAttachments.length === 0) return null;
+      return (currentIndex + 1) % imageAttachments.length;
+    });
+  }, [imageAttachments.length]);
+
+  useEffect(() => {
+    if (previewImageIndex === null) return;
+    if (imageAttachments.length === 0) {
+      setPreviewImageIndex(null);
+    } else if (previewImageIndex >= imageAttachments.length) {
+      setPreviewImageIndex(0);
+    }
+  }, [imageAttachments.length, previewImageIndex]);
+
+  useEffect(() => {
+    if (previewImageIndex === null || imageAttachments.length < 2) return;
+
+    const handleGalleryKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        showPreviousImage();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        showNextImage();
+      }
+    };
+
+    window.addEventListener("keydown", handleGalleryKeyDown);
+    return () => window.removeEventListener("keydown", handleGalleryKeyDown);
+  }, [imageAttachments.length, previewImageIndex, showNextImage, showPreviousImage]);
 
   const loadIssues = useCallback(async (showLoading = true) => {
     if (!activeProjectId) {
@@ -340,7 +395,15 @@ export function IssueTracker() {
         </TabsContent>
       </Tabs>
 
-      <Sheet open={Boolean(selectedIssue)} onOpenChange={(open) => !open && setSelectedIssue(null)}>
+      <Sheet
+        open={Boolean(selectedIssue)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewImageIndex(null);
+            setSelectedIssue(null);
+          }
+        }}
+      >
         <SheetContent className="w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[620px]">
           <SheetHeader className="text-left">
             <SheetTitle className="pr-8 text-xl text-[#f3f8fc]">{selectedIssue?.title || "問題詳情"}</SheetTitle>
@@ -385,12 +448,27 @@ export function IssueTracker() {
                   <h3 className="text-sm font-semibold text-[#f3f8fc]">附件</h3>
                   <div className="mt-2 space-y-2">
                     {selectedIssue.attachments.map((attachment) => {
-                      const isImage = /\.(png|jpe?g|gif|bmp|webp)$/i.test(attachment.file_name);
+                      const isImage = isImageAttachment(attachment);
+                      const imageIndex = isImage
+                        ? imageAttachments.findIndex((image) => image.id === attachment.id)
+                        : -1;
                       return (
                         <div key={attachment.id} className="flex items-center gap-3 rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
                           <ImageIcon className="h-4 w-4 shrink-0 text-cyan-100" />
                           <span className="min-w-0 flex-1 truncate text-sm text-[#d8e6f0]">{attachment.file_name}</span>
-                          {isImage && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewImage(attachment.file_path)}><Eye className="h-4 w-4" /></Button>}
+                          {isImage && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label={`預覽 ${attachment.file_name}`}
+                              onClick={() => {
+                                if (imageIndex >= 0) setPreviewImageIndex(imageIndex);
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => downloadAttachment(attachment)}><Download className="h-4 w-4" /></Button>
                         </div>
                       );
@@ -403,10 +481,91 @@ export function IssueTracker() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader><DialogTitle>附件預覽</DialogTitle></DialogHeader>
-          {previewImage && <img src={publicAttachmentUrl(previewImage)} alt="問題附件" className="max-h-[75vh] w-full object-contain" />}
+      <Dialog
+        open={previewImageIndex !== null && Boolean(previewImage)}
+        onOpenChange={(open) => !open && setPreviewImageIndex(null)}
+      >
+        <DialogContent className="max-h-[92vh] max-w-6xl overflow-hidden border-[#2a526f] bg-[#071522] p-0">
+          <DialogHeader className="border-b border-[#2a526f] bg-[#0b1b2d] px-5 py-4 pr-14 text-left">
+            <div className="flex min-w-0 items-center justify-between gap-4">
+              <div className="min-w-0">
+                <DialogTitle className="text-lg text-[#f3f8fc]">附件預覽</DialogTitle>
+                <p className="mt-1 truncate text-sm text-[#a9c0d1]" title={previewImage?.file_name}>
+                  {previewImage?.file_name}
+                </p>
+              </div>
+              {previewImageIndex !== null && (
+                <Badge variant="outline" className="shrink-0 border-cyan-300/30 bg-cyan-300/10 text-cyan-50">
+                  第 {previewImageIndex + 1} / {imageAttachments.length} 張
+                </Badge>
+              )}
+            </div>
+          </DialogHeader>
+
+          {previewImage && (
+            <>
+              <div className="relative flex min-h-[360px] items-center justify-center bg-[#030a11] px-14 py-4 sm:min-h-[520px]">
+                <img
+                  src={publicAttachmentUrl(previewImage.file_path)}
+                  alt={previewImage.file_name}
+                  className="max-h-[68vh] max-w-full object-contain"
+                />
+                {imageAttachments.length > 1 && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="上一張"
+                      title="上一張（方向鍵 ←）"
+                      className="absolute left-3 h-11 w-11 rounded-full border-[#4b7089] bg-[#10263a]/95 text-[#f3f8fc] hover:border-cyan-200 hover:bg-[#17344d]"
+                      onClick={showPreviousImage}
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="下一張"
+                      title="下一張（方向鍵 →）"
+                      className="absolute right-3 h-11 w-11 rounded-full border-[#4b7089] bg-[#10263a]/95 text-[#f3f8fc] hover:border-cyan-200 hover:bg-[#17344d]"
+                      onClick={showNextImage}
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {imageAttachments.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto border-t border-[#2a526f] bg-[#0b1b2d] px-4 py-3">
+                  {imageAttachments.map((attachment, index) => (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      aria-label={`切換到第 ${index + 1} 張：${attachment.file_name}`}
+                      aria-current={index === previewImageIndex ? "true" : undefined}
+                      className={cn(
+                        "h-14 w-20 shrink-0 overflow-hidden rounded-lg border bg-[#06111f] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+                        index === previewImageIndex
+                          ? "border-cyan-300 ring-2 ring-cyan-300/30"
+                          : "border-[#2a526f] opacity-70 hover:border-[#5f849c] hover:opacity-100"
+                      )}
+                      onClick={() => setPreviewImageIndex(index)}
+                    >
+                      <img
+                        src={publicAttachmentUrl(attachment.file_path)}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
