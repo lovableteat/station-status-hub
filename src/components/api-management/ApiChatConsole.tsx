@@ -62,6 +62,7 @@ import {
   extractEmbeddedImageSources,
   filterSharedPrompts,
   getClipboardImageFiles,
+  getSharedPromptCreatorId,
   getSlashPromptQuery,
   insertClipboardText,
 } from "./apiChatPromptHelpers";
@@ -717,6 +718,7 @@ export function ApiChatConsole({
   const [slashHighlightedIndex, setSlashHighlightedIndex] = useState(0);
   const [promptDialogTitle, setPromptDialogTitle] = useState("");
   const [promptDialogContent, setPromptDialogContent] = useState("");
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
   const [libraryApplyContent, setLibraryApplyContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1398,6 +1400,7 @@ export function ApiChatConsole({
 
   const saveCurrentPrompt = () => {
     void (async () => {
+      if (savingPrompt) return;
       const content = promptDialogContent.trim();
       if (!content) {
         toast.error("請先填入提示詞內容");
@@ -1405,27 +1408,39 @@ export function ApiChatConsole({
       }
 
       const title = promptDialogTitle.trim() || content.split(/\r?\n/)[0] || "未命名提示詞";
-      const { error } = await supabase.from("command_library").insert({
-        category: SHARED_PROMPT_CATEGORY,
-        platform: SHARED_PROMPT_PLATFORM,
-        name: title.slice(0, 32),
-        command: content,
-        description: "AI 查詢共享提示詞",
-        created_by: user?.username || user?.displayName || null,
-        examples: null,
-        notes: null,
-        tags: ["shared", "ai-workspace", "prompt"],
-        is_active: true,
-      });
+      setSavingPrompt(true);
 
-      if (error) {
+      try {
+        const { data, error } = await supabase
+          .from("command_library")
+          .insert({
+            category: SHARED_PROMPT_CATEGORY,
+            platform: SHARED_PROMPT_PLATFORM,
+            name: title.slice(0, 32),
+            command: content,
+            description: "AI 查詢共享提示詞",
+            created_by: getSharedPromptCreatorId(user?.userId),
+            examples: null,
+            notes: null,
+            tags: ["shared", "ai-workspace", "prompt"],
+            is_active: true,
+          })
+          .select("id,name,command,description,created_by,created_at,updated_at")
+          .single();
+
+        if (error) throw error;
+
+        const savedPrompt = mapSharedPromptRowToItem(data as SharedPromptRow);
+        setSavedPrompts((current) => [savedPrompt, ...current.filter((item) => item.id !== savedPrompt.id)]);
+        setSavePromptDialogOpen(false);
+        toast.success("已儲存到輸入區的共享提示詞庫，輸入 / 也能快速套用");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "資料庫未接受這筆提示詞";
         console.error("Failed to save shared prompt:", error);
-        toast.error("共享提示詞儲存失敗");
-        return;
+        toast.error("共享提示詞儲存失敗", { description: message });
+      } finally {
+        setSavingPrompt(false);
       }
-
-      setSavePromptDialogOpen(false);
-      toast.success("已儲存到輸入區的共享提示詞庫，輸入 / 也能快速套用");
     })();
   };
 
@@ -1845,11 +1860,11 @@ export function ApiChatConsole({
             <Button
               type="button"
               onClick={saveCurrentPrompt}
-              disabled={!promptDialogContent.trim()}
-              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!promptDialogContent.trim() || savingPrompt}
+              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-wait disabled:opacity-50"
             >
               <Bookmark className="mr-2 h-4 w-4" />
-              儲存到提示詞庫
+              {savingPrompt ? "儲存中..." : "儲存到提示詞庫"}
             </Button>
           </DialogFooter>
         </DialogContent>
