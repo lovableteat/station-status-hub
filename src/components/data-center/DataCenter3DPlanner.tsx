@@ -636,7 +636,6 @@ function ThermalAisles({ aisles, active }: { aisles: FacilityPlan["aisles"]; act
 function FacilityShell({ activeLayer, facility }: { activeLayer: DataCenterLayer; facility: FacilityPlan }) {
   const width = Math.max(8, facility.width);
   const depth = Math.max(8, facility.depth);
-  const wallHeight = Math.max(2.4, facility.wallHeight);
   const gridSize = Math.max(width, depth);
 
   return (
@@ -655,30 +654,6 @@ function FacilityShell({ activeLayer, facility }: { activeLayer: DataCenterLayer
           position={[0, 0.012, 0]}
           scale={[width / gridSize, 1, depth / gridSize]}
         />
-      ) : null}
-
-      {facility.showWalls ? (
-        <group>
-          {[
-            [0, wallHeight / 2, -depth / 2, width, wallHeight, 0.12],
-            [0, wallHeight / 2, depth / 2, width, wallHeight, 0.12],
-            [-width / 2, wallHeight / 2, 0, 0.12, wallHeight, depth],
-            [width / 2, wallHeight / 2, 0, 0.12, wallHeight, depth],
-          ].map(([x, y, z, wallWidth, wallWallHeight, wallDepth], index) => (
-            <mesh key={index} position={[x, y, z]} receiveShadow>
-              <boxGeometry args={[wallWidth, wallWallHeight, wallDepth]} />
-              <meshStandardMaterial
-                color="#2a6680"
-                emissive="#113c52"
-                emissiveIntensity={0.34}
-                transparent
-                opacity={0.28}
-                depthWrite={false}
-                roughness={0.48}
-              />
-            </mesh>
-          ))}
-        </group>
       ) : null}
     </group>
   );
