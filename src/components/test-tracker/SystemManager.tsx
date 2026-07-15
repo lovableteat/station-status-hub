@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,10 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 interface SystemManagerProps {
   onSystemUpdate: (newSystemId?: string) => void;
   showDeleteAll?: boolean;
+  trigger?: ReactNode;
 }
 
-export function SystemManager({ onSystemUpdate, showDeleteAll = true }: SystemManagerProps) {
+export function SystemManager({ onSystemUpdate, showDeleteAll = true, trigger }: SystemManagerProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newSystemName, setNewSystemName] = useState("");
   const [newSystemEngineer, setNewSystemEngineer] = useState("");
@@ -248,10 +249,12 @@ export function SystemManager({ onSystemUpdate, showDeleteAll = true }: SystemMa
       {/* 新增機台對話框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9 rounded-lg px-3 text-sm font-semibold">
-            <Plus className="mr-2 h-4 w-4 shrink-0" />
-            新增機台
-          </Button>
+          {trigger ?? (
+            <Button variant="outline" size="sm" className="h-9 rounded-lg px-3 text-sm font-semibold">
+              <Plus className="mr-2 h-4 w-4 shrink-0" />
+              新增機台
+            </Button>
+          )}
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
