@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,9 @@ interface NewIssue {
 }
 
 interface IssueCreateDialogProps {
+  initialValues?: Partial<NewIssue>;
   onIssueCreated: () => void;
+  trigger?: ReactNode;
 }
 
 interface TestSystem {
@@ -48,23 +50,29 @@ interface TestItem {
   station_id: string;
 }
 
-export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
+const EMPTY_ISSUE: NewIssue = {
+  title: "",
+  description: "",
+  priority: "medium",
+  status: "open",
+  assigned_to: "",
+  system_id: undefined,
+  station_id: undefined,
+  test_item_id: undefined,
+  relate: "",
+  category: "",
+  process_notes: "",
+  solution: ""
+};
+
+function buildInitialIssue(initialValues?: Partial<NewIssue>): NewIssue {
+  return { ...EMPTY_ISSUE, ...initialValues };
+}
+
+export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: IssueCreateDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [newIssue, setNewIssue] = useState<NewIssue>({
-    title: "",
-    description: "",
-    priority: "medium",
-    status: "open",
-    assigned_to: "",
-    system_id: undefined,
-    station_id: undefined,
-    test_item_id: undefined,
-    relate: "",
-    category: "",
-    process_notes: "",
-    solution: ""
-  });
+  const [newIssue, setNewIssue] = useState<NewIssue>(() => buildInitialIssue(initialValues));
 
   // 照片上傳相關狀態
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -78,6 +86,15 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
 
   const { toast } = useToast();
   const { activeProjectId } = useTestProject();
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setNewIssue(buildInitialIssue(initialValues));
+      setSelectedFiles([]);
+      setUploadProgress({});
+    }
+    setIsOpen(nextOpen);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -308,20 +325,7 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
       });
 
       // 重置表單
-      setNewIssue({
-        title: "",
-        description: "",
-        priority: "medium",
-        status: "open",
-        assigned_to: "",
-        system_id: undefined,
-        station_id: undefined,
-        test_item_id: undefined,
-        relate: "",
-        category: "",
-        process_notes: "",
-        solution: ""
-      });
+      setNewIssue(buildInitialIssue());
       setSelectedFiles([]);
       setUploadProgress({});
       setIsOpen(false);
@@ -344,12 +348,14 @@ export function IssueCreateDialog({ onIssueCreated }: IssueCreateDialogProps) {
   const hasDescription = newIssue.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          新增問題
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            新增問題
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="!flex !max-w-6xl !gap-0 !overflow-hidden !p-0 h-[min(900px,calc(100vh-1.5rem))] w-[calc(100vw-1.5rem)] flex-col border-[#2a526f] bg-[#071522] text-[#f3f8fc]">
         <DialogHeader className="shrink-0 border-b border-[#2a526f] bg-[linear-gradient(110deg,#0b1b2d_0%,#102b41_100%)] px-5 py-4 pr-14 text-left">
