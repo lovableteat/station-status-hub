@@ -199,6 +199,10 @@ All colors MUST be HSL for proper theming support.
     padding: 0.6rem;
   }
 
+  .workspace-card-preview--expanded {
+    height: 7.25rem;
+  }
+
   .workspace-card-footer {
     margin-top: 0.5rem;
     padding-top: 0.25rem;
