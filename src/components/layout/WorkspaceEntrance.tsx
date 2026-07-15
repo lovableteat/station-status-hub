@@ -118,7 +118,7 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
   if (workspaceId === "station-status") {
     return (
       <div className={cn(shellClass, "workspace-card-preview border-sky-300/15")} aria-hidden="true">
-        <div className="mb-2.5 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <span className="text-[10px] font-bold tracking-[0.14em] text-sky-200">LIVE TEST FLOW</span>
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]" />
@@ -209,7 +209,7 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
 
   if (workspaceId === "user-management") {
     return (
-      <div className={cn(shellClass, "workspace-card-preview border-emerald-300/15")} aria-hidden="true">
+      <div className={cn(shellClass, "workspace-card-preview workspace-card-preview--expanded border-emerald-300/15")} aria-hidden="true">
         <div className="mb-2.5 flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-emerald-200">
             <ShieldCheck className="h-3.5 w-3.5" /> ACCESS CONTROL
@@ -223,11 +223,11 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
               <span className="absolute -bottom-1 -right-2 rounded-full border border-slate-800 bg-emerald-400 px-1.5 py-0.5 font-mono text-[8px] font-black text-slate-950">24</span>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-0.5">
             {["維修中心", "料號申請", "資料查詢"].map((name, index) => (
-              <div key={name} className="flex items-center justify-between rounded-lg border border-white/8 bg-white/5 px-2 py-1.5 text-[9px]">
+              <div key={name} className="flex h-4 items-center justify-between rounded-md border border-white/8 bg-white/5 px-2 text-[8px] leading-none">
                 <span className="font-semibold text-slate-200">{name}</span>
-                <span className={cn("rounded-full px-1.5 py-0.5 font-bold", index === 1 ? "bg-sky-400/15 text-sky-200" : "bg-emerald-400/15 text-emerald-200")}>
+                <span className={cn("rounded-full px-1 py-0.5 text-[7px] font-bold", index === 1 ? "bg-sky-400/15 text-sky-200" : "bg-emerald-400/15 text-emerald-200")}>
                   {index === 1 ? "檢視" : "管理"}
                 </span>
               </div>
@@ -239,8 +239,8 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <div className={cn(shellClass, "workspace-card-preview border-fuchsia-300/15")} aria-hidden="true">
-      <div className="mb-2 flex items-center justify-between">
+    <div className={cn(shellClass, "workspace-card-preview workspace-card-preview--expanded border-fuchsia-300/15")} aria-hidden="true">
+      <div className="mb-1 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-fuchsia-200">
           <Bot className="h-3.5 w-3.5" /> AI KNOWLEDGE
         </span>
@@ -248,18 +248,18 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> 已連線
         </span>
       </div>
-      <div className="space-y-1.5">
-        <div className="ml-auto w-[82%] rounded-xl rounded-br-sm border border-fuchsia-300/15 bg-fuchsia-400/10 px-2.5 py-1.5 text-[9px] font-semibold text-fuchsia-100">
+      <div className="space-y-1">
+        <div className="ml-auto w-[82%] rounded-xl rounded-br-sm border border-fuchsia-300/15 bg-fuchsia-400/10 px-2.5 py-1 text-[9px] font-semibold text-fuchsia-100">
           / 比較這兩份測試報告
         </div>
-        <div className="mr-auto flex w-[88%] items-center gap-2 rounded-xl rounded-bl-sm border border-white/8 bg-white/5 px-2.5 py-1.5">
+        <div className="mr-auto flex w-[88%] items-center gap-2 rounded-xl rounded-bl-sm border border-white/8 bg-white/5 px-2.5 py-1">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
           <span className="truncate text-[9px] font-semibold text-slate-200">已整理差異與異常項目</span>
         </div>
-        <div className="flex gap-1.5 pt-0.5">
-          <span className="inline-flex items-center gap-1 rounded-md bg-sky-400/10 px-1.5 py-1 text-[8px] font-bold text-sky-200"><FileSpreadsheet className="h-2.5 w-2.5" /> Excel</span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-fuchsia-400/10 px-1.5 py-1 text-[8px] font-bold text-fuchsia-200"><ImageIcon className="h-2.5 w-2.5" /> 圖片</span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/10 px-1.5 py-1 text-[8px] font-bold text-amber-200"><KeyRound className="h-2.5 w-2.5" /> Prompt</span>
+        <div className="flex gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-md bg-sky-400/10 px-1.5 py-0.5 text-[8px] font-bold text-sky-200"><FileSpreadsheet className="h-2.5 w-2.5" /> Excel</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-fuchsia-400/10 px-1.5 py-0.5 text-[8px] font-bold text-fuchsia-200"><ImageIcon className="h-2.5 w-2.5" /> 圖片</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-bold text-amber-200"><KeyRound className="h-2.5 w-2.5" /> Prompt</span>
         </div>
       </div>
     </div>
