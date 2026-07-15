@@ -848,7 +848,7 @@ function AssetDetails({
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">分類</div><div className="mt-1 text-sm text-[#f3f8fc]">{meta.label}</div></div>
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "格式／大小" : "版本／平台"}</div><div className="font-data mt-1 text-sm text-[#f3f8fc]">{asset.detail}</div></div>
         </div>
-        {content && <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap rounded-lg border border-[#2a526f] bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
+        {content && <pre className="max-h-[360px] overflow-auto whitespace-pre rounded-lg border border-[#2a526f] bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
         {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
         {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "傳輸檔案" : "附件"}</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
       </div>

@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,8 @@ export function CodeStorageManager() {
   const [filterLanguage, setFilterLanguage] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState(false);
+  const codeEditorRef = useRef<HTMLTextAreaElement>(null);
+  const codeLineNumbersRef = useRef<HTMLPreElement>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -81,6 +83,24 @@ export function CodeStorageManager() {
     tags: "",
     sop_content: ""
   });
+
+  const codeLineCount = formData.code_content.length === 0
+    ? 1
+    : formData.code_content.split(/\r\n|\r|\n/).length;
+
+  const handleCodeEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") return;
+
+    event.preventDefault();
+    const editor = event.currentTarget;
+    const { selectionStart, selectionEnd } = editor;
+    const nextCode = `${formData.code_content.slice(0, selectionStart)}  ${formData.code_content.slice(selectionEnd)}`;
+
+    setFormData({ ...formData, code_content: nextCode });
+    requestAnimationFrame(() => {
+      codeEditorRef.current?.setSelectionRange(selectionStart + 2, selectionStart + 2);
+    });
+  };
 
   const loadCodeSnippets = async () => {
     try {
@@ -414,14 +434,46 @@ export function CodeStorageManager() {
               
               <div className="space-y-2">
                 <Label htmlFor="code_content">程式碼內容 *</Label>
-                <textarea
-                  id="code_content"
-                  value={formData.code_content}
-                  onChange={(e) => setFormData({...formData, code_content: e.target.value})}
-                  rows={12}
-                  className="w-full px-3 py-2 border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-sm resize-y"
-                  required
-                />
+                <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] shadow-inner shadow-black/20 focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
+                  <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-2 text-xs text-[#9fc8dc]">
+                    <span>原始格式編輯器 · 保留換行與縮排</span>
+                    <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
+                  </div>
+                  <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
+                    <pre
+                      ref={codeLineNumbersRef}
+                      aria-hidden="true"
+                      className="m-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none"
+                    >
+                      {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
+                    </pre>
+                    <textarea
+                      ref={codeEditorRef}
+                      id="code_content"
+                      value={formData.code_content}
+                      onChange={(e) => setFormData({ ...formData, code_content: e.target.value })}
+                      onKeyDown={handleCodeEditorKeyDown}
+                      onScroll={(event) => {
+                        if (codeLineNumbersRef.current) {
+                          codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
+                        }
+                      }}
+                      rows={14}
+                      wrap="off"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      aria-describedby="code_content_help"
+                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0] disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ tabSize: 4 }}
+                      placeholder="貼上或輸入程式碼，原始換行、空白與縮排都會保留。"
+                      required
+                    />
+                  </div>
+                </div>
+                <p id="code_content_help" className="text-xs text-muted-foreground">
+                  長行不會自動折行，可左右捲動查看；按 Tab 可插入縮排。
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -695,7 +747,7 @@ export function CodeStorageManager() {
                                   </div>
                                 </div>
                                 <div className="relative">
-                                  <pre className="bg-background border rounded-lg p-3 overflow-auto max-h-80 text-sm">
+                                  <pre className="max-h-80 overflow-auto whitespace-pre rounded-lg border bg-background p-3 font-mono text-sm leading-6">
                                     <code className="language-{snippet.language}">
                                       {snippet.code_content}
                                     </code>
@@ -761,7 +813,7 @@ export function CodeStorageManager() {
                     </Button>
                   </div>
                 </div>
-                <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[60vh] text-sm border">
+                <pre className="max-h-[60vh] overflow-auto whitespace-pre rounded-lg border bg-muted p-4 font-mono text-sm leading-6">
                   <code className="language-{viewingSnippet?.language}">
                     {viewingSnippet?.code_content}
                   </code>
