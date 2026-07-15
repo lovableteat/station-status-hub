@@ -126,6 +126,7 @@ function ResizableColumnHeader({
   columnKey,
   onReset,
   onResize,
+  testId,
   width,
 }: {
   children: ReactNode;
@@ -133,6 +134,7 @@ function ResizableColumnHeader({
   columnKey: string;
   onReset: (columnKey: string) => void;
   onResize: (columnKey: string, width: number) => void;
+  testId?: string;
   width: number;
 }) {
   const dragRef = useRef<{ startWidth: number; startX: number } | null>(null);
@@ -175,6 +177,7 @@ function ResizableColumnHeader({
   return (
     <div
       role="columnheader"
+      data-testid={testId}
       className={cn("relative flex h-9 min-w-0 items-center", className)}
     >
       <div className="min-w-0 flex-1">{children}</div>
@@ -477,7 +480,8 @@ export function TestProgressTable({
               width={columnWidths.actions}
               onResize={resizeColumn}
               onReset={resetColumn}
-              className="text-center"
+              testId="progress-actions-header"
+              className="sticky right-0 z-50 border-l border-[#315b7b] bg-[#0c263c] px-2 text-center"
             >
               <div className="flex items-center justify-center gap-1">
                 <span>操作</span>
@@ -559,18 +563,37 @@ export function TestProgressTable({
                     );
                   })}
 
-                  <div role="cell" className="flex justify-center">
+                  <div
+                    role="cell"
+                    data-testid={`progress-actions-${system.id}`}
+                    className={cn(
+                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[#315b7b] px-1.5 group-hover:bg-[#102b48]",
+                      status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
+                    )}
+                  >
+                    <Button
+                      type="button"
+                      size="sm"
+                      data-testid={`edit-progress-${system.id}`}
+                      aria-label={`編輯 ${system.system_name} 的測試進度`}
+                      className="h-9 gap-1.5 rounded-lg border border-cyan-300/55 bg-cyan-300/15 px-3 text-xs font-semibold text-cyan-50 hover:border-cyan-200 hover:bg-cyan-300/25 focus-visible:ring-2 focus-visible:ring-cyan-200"
+                      onClick={() => onSelectSystem(system.id)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      編輯進度
+                    </Button>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0 rounded-lg border border-[#315b7b] text-[#b9cddd] hover:border-cyan-300/60 hover:bg-[#102b48] hover:text-cyan-50"
+                          aria-label={`${system.system_name} 更多操作`}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">{system.system_name} 操作</span>
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="end" className="w-52 space-y-2 p-2">
-                        <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => onSelectSystem(system.id)}>
-                          <Pencil className="mr-2 h-4 w-4" />編輯測試進度
-                        </Button>
                         <SystemCompleteButton
                           systemId={system.id}
                           systemName={system.system_name}
