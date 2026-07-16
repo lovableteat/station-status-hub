@@ -516,15 +516,16 @@ export function TestProgressTable({
                 >
                   <div
                     role="cell"
+                    data-testid={`machine-cell-${system.id}`}
                     className={cn(
-                      "sticky left-0 z-10 min-w-0 group-hover:bg-[#102b48]",
+                      "sticky left-0 z-10 flex h-full min-w-0 items-stretch overflow-hidden group-hover:bg-[#102b48]",
                       TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
                       status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
                     )}
                   >
                     <button
                       type="button"
-                      className="w-full min-w-0 py-2 text-left"
+                      className="flex h-full w-full min-w-0 flex-col items-start justify-center overflow-hidden text-left"
                       onClick={() => onSelectSystem(system.id)}
                     >
                       <div className="truncate font-semibold leading-4 text-[#f3f8fc]">{system.system_name}</div>
