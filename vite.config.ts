@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
     exclude: ["occt-wasm"],
   },
   build: {
-    target: "esnext",
+    target: "es2020",
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
