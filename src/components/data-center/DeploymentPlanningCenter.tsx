@@ -43,6 +43,7 @@ import {
   Upload,
   Wifi,
   Wrench,
+  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -71,7 +72,10 @@ import {
   createRackFromModel,
 } from "./dataCenterSeed";
 import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
-import { importStepModel } from "./stepImport";
+import {
+  convertStepToGlb,
+  type ModelConversionProgress,
+} from "./modelConversionWorker";
 import type {
   CameraPreset,
   DataCenterAssetKind,
@@ -89,8 +93,6 @@ import type {
 
 const LAYOUT_STORAGE_KEY = "data-center-digital-twin-layout-v2";
 const FACILITY_STORAGE_KEY = "data-center-digital-twin-facility-v1";
-const MAX_MODEL_FILE_BYTES = 100 * 1024 * 1024;
-const MAX_BROWSER_STEP_BYTES = 25 * 1024 * 1024;
 
 const STATUS_LABELS: Record<RackStatus, string> = {
   allocated: "運行中",
@@ -827,6 +829,7 @@ interface ModelLibraryProps {
   canEdit: boolean;
   isImporting: boolean;
   importError: string;
+  importProgress: ModelConversionProgress | null;
   manufacturer: string;
   modelName: string;
   revision: string;
@@ -842,6 +845,7 @@ interface ModelLibraryProps {
   onImportKindChange: (kind: DataCenterAssetKind) => void;
   onSelectedModelChange: (modelId: string) => void;
   onChooseFile: () => void;
+  onCancelImport: () => void;
   onAssignModel: () => void;
   onAssignL10Model: () => void;
   onAddRack: () => void;
@@ -855,6 +859,7 @@ function ModelLibrary({
   canEdit,
   isImporting,
   importError,
+  importProgress,
   manufacturer,
   modelName,
   revision,
@@ -870,6 +875,7 @@ function ModelLibrary({
   onImportKindChange,
   onSelectedModelChange,
   onChooseFile,
+  onCancelImport,
   onAssignModel,
   onAssignL10Model,
   onAddRack,
@@ -1062,7 +1068,7 @@ function ModelLibrary({
               <div className="mb-3">
                 <h3 className="text-lg font-bold text-white">匯入新模型</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
-                  支援 GLB 與 STEP/STP，單檔上限 100MB。大型 AP242 請先轉 GLB，避免瀏覽器長時間卡住。
+                  支援 GLB 與 STEP/STP；STEP/STP 會在背景自動轉為 GLB，不設固定檔案大小上限。
                 </p>
               </div>
 
@@ -1129,30 +1135,39 @@ function ModelLibrary({
 
               <button
                 type="button"
-                disabled={!canEdit || isImporting}
-                onClick={onChooseFile}
+                disabled={!canEdit}
+                onClick={isImporting ? onCancelImport : onChooseFile}
                 className="mt-4 flex min-h-20 w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-cyan-300/35 bg-cyan-400/[0.045] px-4 text-center transition-colors hover:border-cyan-300/60 hover:bg-cyan-400/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span>
                   {isImporting ? (
                     <>
-                      <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10">
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-200/30 border-t-cyan-200 motion-reduce:animate-none" />
+                      <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-rose-300/25 bg-rose-400/10 text-rose-100">
+                        <X className="h-4 w-4" />
                       </span>
-                      <span className="mt-2 block text-sm font-bold text-cyan-50">正在解析模型</span>
+                      <span className="mt-2 block text-sm font-bold text-cyan-50">
+                        {importProgress?.label || "正在準備模型轉換"}
+                      </span>
+                      <span className="mt-1 block text-xs font-semibold text-rose-200">取消轉換</span>
                     </>
                   ) : (
                     <>
                       <Upload className="mx-auto h-5 w-5 text-cyan-200" />
                       <span className="mt-2 block text-sm font-bold text-white">選擇 GLB / STEP / STP</span>
-                      <span className="mt-1 block text-xs text-slate-300">模型只在目前工作階段使用</span>
+                      <span className="mt-1 block text-xs text-slate-300">選擇後自動轉換並加入型錄</span>
                     </>
                   )}
                 </span>
               </button>
 
+              {isImporting ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#10263a]" aria-label="模型轉換進行中">
+                  <div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-300 motion-reduce:animate-none" />
+                </div>
+              ) : null}
+
               <div className="mt-3 rounded-xl bg-blue-400/[0.08] px-4 py-3 text-xs leading-5 text-blue-100/85">
-                GLB 以高度做單一比例縮放，不會分別拉伸 X / Y / Z；STEP 會自動偵測最長軸為高度並讀取毫米尺寸。
+                大型 STEP 會在背景解析，畫面仍可操作；完成後自動校正 Y 軸、讀取毫米尺寸並產生 GLB。
               </div>
 
               {importError ? (
@@ -1213,6 +1228,7 @@ export function DeploymentPlanningCenter() {
   const isDesktopLayout = useDesktopDataCenterLayout();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlsRef = useRef<string[]>([]);
+  const importAbortRef = useRef<AbortController | null>(null);
 
   const [sites, setSites] = useState<SitePlan[]>(readInitialSites);
   const [facilityPlans, setFacilityPlans] = useState<Record<string, FacilityPlan>>(readInitialFacilityPlans);
@@ -1238,6 +1254,7 @@ export function DeploymentPlanningCenter() {
   const [selectedModelId, setSelectedModelId] = useState("nv-mgx-rack-v1-2-rev7");
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [importProgress, setImportProgress] = useState<ModelConversionProgress | null>(null);
   const [manufacturer, setManufacturer] = useState("New Vendor");
   const [modelName, setModelName] = useState("Rack Model");
   const [revision, setRevision] = useState("Rev.A");
@@ -1276,6 +1293,7 @@ export function DeploymentPlanningCenter() {
 
   useEffect(
     () => () => {
+      importAbortRef.current?.abort();
       uploadedUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     },
     []
@@ -1471,17 +1489,10 @@ export function DeploymentPlanningCenter() {
       setImportError("僅支援 .glb、.stp 與 .step 模型檔。");
       return;
     }
-    if (file.size > MAX_MODEL_FILE_BYTES) {
-      setImportError("模型超過 100MB，請先降低細節或壓縮後再匯入。");
-      return;
-    }
-    if ((extension === "stp" || extension === "step") && file.size > MAX_BROWSER_STEP_BYTES) {
-      setImportError(
-        "大型 AP242 STEP 不適合在瀏覽器即時轉檔。請先轉為 Meshopt/Draco GLB；公司 MGX Rev7 已完成內建轉檔。"
-      );
-      return;
-    }
 
+    const controller = new AbortController();
+    importAbortRef.current?.abort();
+    importAbortRef.current = controller;
     try {
       setIsImporting(true);
       setImportError("");
@@ -1489,6 +1500,7 @@ export function DeploymentPlanningCenter() {
       let definition: RackModelDefinition;
 
       if (extension === "glb") {
+        setImportProgress({ stage: "loading-glb", label: `載入 ${file.name}` });
         const assetUrl = URL.createObjectURL(file);
         uploadedUrlsRef.current.push(assetUrl);
         definition = {
@@ -1507,23 +1519,27 @@ export function DeploymentPlanningCenter() {
           isCalibrated: true,
         };
       } else {
-        const stepModel = await importStepModel(file);
+        const converted = await convertStepToGlb(file, setImportProgress, controller.signal);
+        const assetUrl = URL.createObjectURL(
+          new Blob([converted.glb], { type: "model/gltf-binary" })
+        );
+        uploadedUrlsRef.current.push(assetUrl);
         definition = {
           id,
           kind: importKind,
           manufacturer: manufacturer.trim() || "Imported Vendor",
           name: modelName.trim() || file.name.replace(/\.(stp|step)$/i, ""),
           revision: revision.trim() || "Imported",
-          source: "step",
+          source: "uploaded-glb",
+          assetUrl,
           sourceFileName: file.name,
-          dimensions: stepModel.dimensions,
-          upAxis: stepModel.upAxis,
-          stepModel,
+          dimensions: converted.dimensions,
+          upAxis: converted.upAxis,
           rackUnits:
-            importKind === "l10" ? Math.max(1, Math.ceil(stepModel.dimensions.heightMm / 44.45)) : undefined,
+            importKind === "l10" ? Math.max(1, Math.ceil(converted.dimensions.heightMm / 44.45)) : undefined,
           isCalibrated: true,
         };
-        setImportDimensions(stepModel.dimensions);
+        setImportDimensions(converted.dimensions);
       }
 
       setModels((current) => ({ ...current, [id]: definition }));
@@ -1534,12 +1550,22 @@ export function DeploymentPlanningCenter() {
         description: `${definition.manufacturer} ${definition.name} 已按實際尺寸建立。`,
       });
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setImportError("模型轉換已取消，可重新選擇檔案。");
+        return;
+      }
       const message = error instanceof Error ? error.message : "模型匯入失敗。";
       setImportError(message);
       toast({ title: "模型匯入失敗", description: message, variant: "destructive" });
     } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null;
       setIsImporting(false);
+      setImportProgress(null);
     }
+  };
+
+  const cancelModelImport = () => {
+    importAbortRef.current?.abort();
   };
 
   const assignSelectedModel = () => {
@@ -2082,6 +2108,7 @@ export function DeploymentPlanningCenter() {
           canEdit={canEdit}
           isImporting={isImporting}
           importError={importError}
+          importProgress={importProgress}
           manufacturer={manufacturer}
           modelName={modelName}
           revision={revision}
@@ -2097,6 +2124,7 @@ export function DeploymentPlanningCenter() {
           onImportKindChange={handleImportKindChange}
           onSelectedModelChange={setSelectedModelId}
           onChooseFile={() => fileInputRef.current?.click()}
+          onCancelImport={cancelModelImport}
           onAssignModel={assignSelectedModel}
           onAssignL10Model={assignSelectedL10Model}
           onAddRack={addRackFromSelectedModel}
