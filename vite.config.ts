@@ -9,6 +9,15 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  worker: {
+    format: "es",
+  },
+  optimizeDeps: {
+    exclude: ["occt-wasm"],
+  },
+  build: {
+    target: "esnext",
+  },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
