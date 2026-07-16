@@ -46,6 +46,7 @@ import { BulkResetDialog } from "./BulkResetDialog";
 import { ExportManager } from "./ExportManager";
 import { PDFExportDialog } from "./pdf/PDFExportDialog";
 import { SegmentedProgress } from "./SegmentedProgress";
+import { SystemCloneDialog } from "./SystemCloneDialog";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
@@ -178,6 +179,10 @@ export function TestTracker() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TRACKER_PAGE_SIZE);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [cloneSourceSystem, setCloneSourceSystem] = useState<{
+    id: string;
+    system_name: string;
+  } | null>(null);
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [displayStations, setDisplayStations] = useState(stations);
   const [displayItems, setDisplayItems] = useState(items);
@@ -570,6 +575,7 @@ export function TestTracker() {
             stations={displayStations}
             items={displayItems}
             progress={progress}
+            onCloneSystem={setCloneSourceSystem}
             onSelectSystem={setSelectedSystemId}
             onSystemUpdate={loadData}
           />
@@ -659,6 +665,13 @@ export function TestTracker() {
         onUpdated={() => {
           if (selectedSystemId) void refreshProgress(selectedSystemId);
         }}
+      />
+
+      <SystemCloneDialog
+        open={Boolean(cloneSourceSystem)}
+        sourceSystem={cloneSourceSystem}
+        onOpenChange={(open) => !open && setCloneSourceSystem(null)}
+        onCloned={loadData}
       />
 
       <PDFExportDialog
