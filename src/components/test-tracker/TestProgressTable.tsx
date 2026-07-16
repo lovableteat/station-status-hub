@@ -5,7 +5,7 @@ import type {
   ReactNode,
   UIEvent as ReactUIEvent,
 } from "react";
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { Copy, MoreHorizontal, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,7 @@ interface TestProgressTableProps {
   columnStorageKey: string;
   headerControls?: ReactNode;
   items: TrackerItem[];
+  onCloneSystem: (system: TrackerSystem) => void;
   onSelectSystem: (systemId: string) => void;
   onSystemUpdate: () => void;
   progress: TrackerProgress[];
@@ -211,6 +212,7 @@ export function TestProgressTable({
   columnStorageKey,
   headerControls,
   items,
+  onCloneSystem,
   onSelectSystem,
   onSystemUpdate,
   progress,
@@ -608,6 +610,16 @@ export function TestProgressTable({
                           assignedEngineer={system.assigned_engineer || ""}
                           onUpdate={onSystemUpdate}
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20 hover:text-cyan-50"
+                          onClick={() => onCloneSystem(system)}
+                        >
+                          <Copy className="mr-2 h-3.5 w-3.5" />
+                          複製為連號機台
+                        </Button>
                         <SystemResetDialog
                           systemId={system.id}
                           systemName={system.system_name}
