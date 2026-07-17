@@ -495,7 +495,7 @@ function SceneNavigator({
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
                       <span>{rack.row} Row</span>
                       <span className="h-1 w-1 rounded-full bg-slate-600" />
-                      <span>{rack.l10Count}× L10</span>
+                      <span>{rack.l10Count}× 設備</span>
                       <span className="h-1 w-1 rounded-full bg-slate-600" />
                       <span className="truncate">{model.name}</span>
                     </div>
@@ -557,7 +557,7 @@ function RackInspector({
         <div className="my-1 h-px w-8 bg-[#214669]" />
         <IconTooltipButton label="聚焦機櫃" icon={Focus} onClick={onFocus} />
         <IconTooltipButton label="模型與尺寸" icon={Box} onClick={onOpenModels} />
-        <IconTooltipButton label="L10 配置" icon={Cpu} onClick={onOpenL10Models} />
+        <IconTooltipButton label="設備模組配置" icon={Cpu} onClick={onOpenL10Models} />
         {canEdit ? (
           <IconTooltipButton
             label={layoutEditing ? "結束編排" : "編排機櫃"}
@@ -663,7 +663,7 @@ function RackInspector({
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
                   <Cpu className="h-4 w-4 text-blue-300" />
-                  L10 配置
+                  設備模組
                 </div>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   {l10Model.name} · 每櫃最多 {l10Capacity} 個
@@ -689,7 +689,7 @@ function RackInspector({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  aria-label="減少一個 L10"
+                  aria-label="減少一個設備模組"
                   disabled={!canEdit || rack.l10Count <= 0}
                   onClick={() => onL10CountChange(rack.l10Count - 1)}
                   className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-slate-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-35"
@@ -698,7 +698,7 @@ function RackInspector({
                 </button>
                 <button
                   type="button"
-                  aria-label="增加一個 L10"
+                  aria-label="增加一個設備模組"
                   disabled={!canEdit || rack.l10Count >= l10Capacity}
                   onClick={() => onL10CountChange(rack.l10Count + 1)}
                   className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-100/45"
@@ -708,7 +708,7 @@ function RackInspector({
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`已使用 ${rack.l10Count} 個 L10 插槽`}>
+            <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`已使用 ${rack.l10Count} 個設備模組插槽`}>
               {Array.from({ length: l10Capacity }, (_, index) => (
                 <span
                   key={index}
@@ -721,7 +721,7 @@ function RackInspector({
             </div>
             {l10Model.isPlaceholder ? (
               <p className="mt-3 text-[11px] leading-5 text-amber-100/85">
-                目前使用暫代外型；收到正式 L10 STEP／GLB 後，在型錄匯入並套用即可整櫃替換。
+                目前使用暫代外型；收到正式設備 STEP／GLB 後，在型錄匯入並套用即可整櫃替換。
               </p>
             ) : null}
           </section>
@@ -920,7 +920,7 @@ function ModelLibrary({
             <div>
               <SheetTitle className="text-2xl font-black tracking-[-0.025em] text-white">模型型錄</SheetTitle>
               <SheetDescription className="mt-1 text-sm leading-5 text-slate-300">
-                為 {selectedRack.cabinet} 選擇機櫃或 L10，或匯入新廠牌模型。
+                為 {selectedRack.cabinet} 選擇機櫃或設備模組，或匯入新廠牌模型。
               </SheetDescription>
             </div>
           </div>
@@ -956,7 +956,7 @@ function ModelLibrary({
               <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1.5" role="tablist" aria-label="模型種類">
                 {([
                   ["rack", `機櫃模型 ${rackModelCount}`],
-                  ["l10", `L10 模組 ${l10ModelCount}`],
+                  ["l10", `設備模組 ${l10ModelCount}`],
                 ] as const).map(([kind, label]) => (
                   <button
                     key={kind}
@@ -978,12 +978,12 @@ function ModelLibrary({
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-white">
-                    {catalogKind === "rack" ? "選擇機櫃外型" : "選擇 L10 模組"}
+                    {catalogKind === "rack" ? "選擇機櫃外型" : "選擇設備模組"}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-slate-300">
                     {catalogKind === "rack"
                       ? "選取後可套用至目前機櫃，或放入一座新機櫃。"
-                      : "替換模型時會保留目前設定的 L10 數量。"}
+                      : "替換模型時會保留目前設定的設備數量。"}
                   </p>
                 </div>
                 <Badge className="border-cyan-300/18 bg-cyan-400/8 text-[11px] text-cyan-50 shadow-none">
@@ -1056,7 +1056,7 @@ function ModelLibrary({
                     </div>
                   ) : (
                     <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignL10Model} className="h-12 w-full rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
-                      <Cpu className="mr-2 h-4 w-4" /> 套用為 L10 模型
+                      <Cpu className="mr-2 h-4 w-4" /> 套用為設備模型
                     </Button>
                   )}
                 </div>
@@ -1077,7 +1077,7 @@ function ModelLibrary({
                 <div className="grid grid-cols-2 gap-2">
                   {([
                     ["rack", "機櫃外型", Server],
-                    ["l10", "L10 模組", Cpu],
+                    ["l10", "設備模組", Cpu],
                   ] as const).map(([kind, label, Icon]) => (
                     <button
                       key={kind}
@@ -1195,7 +1195,7 @@ function ModelLibrary({
 
         <div className="shrink-0 border-t border-white/10 bg-black/20 px-6 py-3">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
-            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "機櫃模型" : "L10 模組"}`}</span>
+            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "機櫃模型" : "設備模組"}`}</span>
             {view === "browse" && selectedModel ? <span className="hidden tabular-nums sm:inline">{formatDimensions(selectedModel.dimensions)}</span> : null}
           </div>
         </div>
@@ -1323,7 +1323,7 @@ export function DeploymentPlanningCenter() {
 
   const handleImportKindChange = (kind: DataCenterAssetKind) => {
     setImportKind(kind);
-    setModelName(kind === "rack" ? "Rack Model" : "L10 Model");
+    setModelName(kind === "rack" ? "Rack Model" : "Equipment Model");
     setImportDimensions(
       kind === "rack"
         ? { widthMm: 600, depthMm: 1200, heightMm: 2200 }
@@ -1587,8 +1587,8 @@ export function DeploymentPlanningCenter() {
       l10Count: Math.min(rack.l10Count, getL10Capacity(rack, definition)),
     }));
     toast({
-      title: "L10 模型已更新",
-      description: `${selectedRack.cabinet} 內的 ${selectedRack.l10Count} 個 L10 已套用 ${definition.name}。`,
+      title: "設備模型已更新",
+      description: `${selectedRack.cabinet} 內的 ${selectedRack.l10Count} 個設備已套用 ${definition.name}。`,
     });
   };
 
@@ -1705,7 +1705,7 @@ export function DeploymentPlanningCenter() {
           <div className="ml-auto hidden items-center gap-2 xl:flex">
             {[
               { label: "RACKS", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
-              { label: "L10", value: totalL10, icon: Cpu, color: "text-cyan-200" },
+              { label: "設備模組", value: totalL10, icon: Cpu, color: "text-cyan-200" },
               { label: "ALERTS", value: alertCount, icon: AlertTriangle, color: alertCount ? "text-amber-200" : "text-emerald-200" },
               { label: "POWER", value: `${totalPower.toFixed(1)} kW`, icon: Zap, color: "text-amber-200" },
             ].map((metric) => {
