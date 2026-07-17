@@ -598,8 +598,8 @@ const Index = () => {
     <div
       className={cn(
         "app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background",
-        (activeWorkspace === "station-status" || activeWorkspace === "data-center") &&
-          "lg:h-[100dvh] lg:overflow-hidden"
+        activeWorkspace === "data-center" && "h-[100dvh] overflow-hidden",
+        activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden"
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
@@ -642,9 +642,11 @@ const Index = () => {
       <main
         className={cn(
           "flex w-full min-w-0 flex-1 flex-col",
-          activeWorkspace === "station-status" || activeWorkspace === "data-center"
-            ? "lg:min-h-0 lg:overflow-hidden"
-            : "min-h-0"
+          activeWorkspace === "data-center"
+            ? "min-h-0 overflow-hidden"
+            : activeWorkspace === "station-status"
+              ? "min-h-0 lg:overflow-hidden"
+              : "min-h-0"
         )}
       >
         <React.Suspense

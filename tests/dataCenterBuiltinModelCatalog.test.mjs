@@ -17,6 +17,19 @@ test("VR200 cabinet and Carlo-Next L10 are persistent catalog models", () => {
   assert.match(seedSource, /sourceFileName:\s*"00_carlo-next_l10_outlook_20260715\.stp"/);
 });
 
+test("Carlo-Next is calibrated as a horizontal standard 1U rack module", () => {
+  const carloDefinition = seedSource.match(
+    /"carlo-next-l10-20260715":\s*\{([\s\S]*?)\n\s*\},\n\s*"generic-42u"/,
+  )?.[1];
+
+  assert.ok(carloDefinition, "Carlo-Next catalog definition is missing");
+  assert.match(carloDefinition, /widthMm:\s*482\.6/);
+  assert.match(carloDefinition, /depthMm:\s*800/);
+  assert.match(carloDefinition, /heightMm:\s*44\.45/);
+  assert.match(carloDefinition, /upAxis:\s*"z"/);
+  assert.match(carloDefinition, /rackUnits:\s*1/);
+});
+
 for (const assetName of [
   "vr200-cabinet-20260715",
   "carlo-next-l10-20260715",
