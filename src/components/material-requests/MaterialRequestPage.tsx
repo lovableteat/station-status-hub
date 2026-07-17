@@ -4121,10 +4121,13 @@ export function MaterialRequestPage() {
     });
   }, []);
 
-  const reloadBomWorkspaces = useCallback(async (preferredBomId?: string) => {
+  const reloadBomWorkspaces = useCallback(async (
+    preferredBomId?: string,
+    options: { forceRefresh?: boolean } = {},
+  ) => {
     const requestId = ++workspaceSyncRequestRef.current;
     try {
-      const result = await loadBomWorkspacesDetailed(preferredBomId);
+      const result = await loadBomWorkspacesDetailed(preferredBomId, options);
       if (requestId !== workspaceSyncRequestRef.current) {
         return result.workspaces;
       }
@@ -4146,23 +4149,22 @@ export function MaterialRequestPage() {
       const requestId = ++workspaceSyncRequestRef.current;
       const preferredWorkspaceId = preferredBomId ?? loadActiveBomId();
       let remoteSettled = false;
-      const remoteRequest = loadBomWorkspacesDetailed(preferredWorkspaceId);
-
-      void loadCachedBomWorkspacesDetailed().then((cachedResult) => {
-        if (!shouldApplyBomWorkspaceCache({
+      const cachedResult = await loadCachedBomWorkspacesDetailed();
+      if (
+        shouldApplyBomWorkspaceCache({
           active,
           currentRequest: requestId === workspaceSyncRequestRef.current,
           preferredWorkspaceId,
           remoteSettled,
           result: cachedResult,
-        })) return;
-
+        })
+      ) {
         applyLoadedWorkspaces(cachedResult!.workspaces, preferredWorkspaceId);
         setIsInitialLoading(false);
-      });
+      }
 
       try {
-        const result = await remoteRequest;
+        const result = await loadBomWorkspacesDetailed(preferredWorkspaceId, { cachedResult });
         remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus(result.mode);
@@ -5100,24 +5102,6 @@ export function MaterialRequestPage() {
     const normalizedQuery = searchDraft.normalize("NFKC").replace(/\u3000/g, " ").trim();
     if (isSearchPending || isWorkspaceLoading) return;
 
-    if (isCollaborativeReady) {
-      setIsWorkspaceLoading(true);
-      try {
-        await reloadBomWorkspaces(activeBomId);
-        setPendingRemoteRecordIds([]);
-        setHasPendingWorkspaceUpdate(false);
-      } catch {
-        toast({
-          title: "無法取得伺服器最新資料",
-          description: "為避免顯示可能過期的搜尋結果，本次搜尋尚未執行。",
-          variant: "destructive",
-        });
-        return;
-      } finally {
-        setIsWorkspaceLoading(false);
-      }
-    }
-
     startSearchTransition(() => {
       setQuery(normalizedQuery);
       setExpandedKey(null);
@@ -5157,7 +5141,7 @@ export function MaterialRequestPage() {
   const loadLatestBomData = async () => {
     setIsWorkspaceLoading(true);
     try {
-      await reloadBomWorkspaces(activeBomId);
+      await reloadBomWorkspaces(activeBomId, { forceRefresh: true });
       setPendingRemoteRecordIds([]);
       setHasPendingWorkspaceUpdate(false);
       toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
