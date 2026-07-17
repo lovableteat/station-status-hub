@@ -6,6 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import {
+  SUPABASE_EGRESS_RESTRICTION_MESSAGE,
+  isSupabaseServiceRestrictedError,
+} from "@/integrations/supabase/serviceErrors";
 
 interface LoginPageProps {
   onLogin: (userId: string, username: string, role: string, displayName: string) => void;
@@ -15,6 +19,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isServiceRestricted, setIsServiceRestricted] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -29,18 +34,24 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       if (error) {
         console.error("Authentication error:", error);
+        const serviceRestricted = isSupabaseServiceRestrictedError(error);
+        setIsServiceRestricted(serviceRestricted);
         toast({
-          title: "登入失敗",
-          description: "系統驗證時發生錯誤，請稍後再試。",
+          title: serviceRestricted ? "系統服務暫時中斷" : "登入失敗",
+          description: serviceRestricted
+            ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
+            : "系統驗證時發生錯誤，請稍後再試。",
           variant: "destructive",
         });
       } else if (!data || data.length === 0 || !data[0].success) {
+        setIsServiceRestricted(false);
         toast({
           title: "登入失敗",
           description: "帳號或密碼不正確。",
           variant: "destructive",
         });
       } else {
+        setIsServiceRestricted(false);
         const userInfo = data[0];
         onLogin(userInfo.user_id, userInfo.username, userInfo.role, userInfo.display_name);
         toast({
@@ -50,9 +61,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       }
     } catch (error) {
       console.error("Login error:", error);
+      const serviceRestricted = isSupabaseServiceRestrictedError(error);
+      setIsServiceRestricted(serviceRestricted);
       toast({
-        title: "登入失敗",
-        description: "系統驗證時發生錯誤，請稍後再試。",
+        title: serviceRestricted ? "系統服務暫時中斷" : "登入失敗",
+        description: serviceRestricted
+          ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
+          : "系統驗證時發生錯誤，請稍後再試。",
         variant: "destructive",
       });
     }
@@ -81,6 +96,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <div className="rounded-2xl border border-primary/10 bg-primary/6 px-4 py-3 text-sm leading-6 text-muted-foreground">
             保留原本登入流程與權限驗證，只優化畫面層級、閱讀舒適度與按鈕操作手感。
           </div>
+
+          {isServiceRestricted ? (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm leading-6 text-rose-100"
+            >
+              <p className="font-bold">資料服務目前暫停</p>
+              <p className="mt-1 text-rose-100/80">{SUPABASE_EGRESS_RESTRICTION_MESSAGE}</p>
+            </div>
+          ) : null}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
