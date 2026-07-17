@@ -6,8 +6,9 @@
   "convertedAt": "2026-07-17T10:14:33.754177+00:00",
   "optimizedAt": "2026-07-17T10:28:29.000000+00:00",
   "linearDeflection": 2.5,
-  "sourceUpAxis": "y",
-  "upAxis": "y",
+  "sourceUpAxis": "z",
+  "conversionUpAxis": "y",
+  "upAxis": "z",
   "boundsUnit": "mm",
   "minimum": [
     -282.6,
@@ -24,12 +25,21 @@
     "y": 1794.5,
     "z": 124.9
   },
-  "dimensions": {
+  "rawDimensions": {
     "widthMm": 879.9,
     "depthMm": 124.9,
     "heightMm": 1794.5
   },
-  "rackUnits": 41,
+  "dimensions": {
+    "widthMm": 482.6,
+    "depthMm": 800,
+    "heightMm": 44.45
+  },
+  "calibration": {
+    "profile": "standard-19-inch-1u",
+    "note": "Source assembly is rotated and calibrated to its physical 1U rack envelope at render time."
+  },
+  "rackUnits": 1,
   "shapeCount": 1331,
   "meshCount": 1,
   "webOptimization": {

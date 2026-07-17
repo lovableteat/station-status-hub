@@ -57,12 +57,12 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     sourceFileName: "00_carlo-next_l10_outlook_20260715.stp",
     assetUrl: carloNextL10ModelUrl,
     dimensions: {
-      widthMm: 879.9,
-      depthMm: 124.9,
-      heightMm: 1794.5,
+      widthMm: 482.6,
+      depthMm: 800,
+      heightMm: 44.45,
     },
-    upAxis: "y",
-    rackUnits: 41,
+    upAxis: "z",
+    rackUnits: 1,
     isCalibrated: true,
   },
   "generic-42u": {
