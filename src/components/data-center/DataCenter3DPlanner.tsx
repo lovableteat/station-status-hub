@@ -367,11 +367,11 @@ function RackL10Modules({
   const modelWidth = l10Definition.dimensions.widthMm / 1000;
   const modelDepth = l10Definition.dimensions.depthMm / 1000;
   const modelHeight = l10Definition.dimensions.heightMm / 1000;
-  const fitScale = Math.min(1, (rackWidth * 0.78) / modelWidth, (rackDepth * 0.78) / modelDepth);
+  const fitScale = Math.min(1, (rackWidth * 0.9) / modelWidth, (rackDepth * 0.9) / modelDepth);
   const fittedHeight = modelHeight * fitScale;
-  const verticalGap = Math.max(0.018, fittedHeight * 0.12);
-  const baseY = rackHeight * 0.12;
-  const maxVisible = Math.max(0, Math.floor((rackHeight * 0.72) / (fittedHeight + verticalGap)));
+  const verticalGap = Math.max(0.006, fittedHeight * 0.06);
+  const baseY = rackHeight * 0.08;
+  const maxVisible = Math.max(0, Math.floor((rackHeight * 0.84) / (fittedHeight + verticalGap)));
   const visibleCount = Math.min(rack.l10Count, maxVisible);
 
   if (!visibleCount || !Number.isFinite(fitScale)) return null;
