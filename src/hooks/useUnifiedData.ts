@@ -1,9 +1,13 @@
 import {
+  createContext,
+  createElement,
+  useContext,
   useCallback,
   useEffect,
   useRef,
   useState,
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
 } from "react";
 
@@ -11,6 +15,10 @@ import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  SUPABASE_EGRESS_RESTRICTION_MESSAGE,
+  isSupabaseServiceRestrictedError,
+} from "@/integrations/supabase/serviceErrors";
 
 import { fetchAllPages } from "./fetchAllPages";
 import { useStationStatus } from "./useStationStatus";
@@ -110,7 +118,7 @@ interface ProjectRealtimePayload<T extends ProjectRealtimeRecord> {
   old: Partial<T>;
 }
 
-export function useUnifiedData() {
+function useUnifiedDataSource() {
   const { user } = useUser();
   const { activeProject, activeProjectId, isLoadingProjects } = useTestProject();
   const [systems, setSystems] = useState<UnifiedSystem[]>([]);
@@ -127,7 +135,7 @@ export function useUnifiedData() {
 
   const loadAllData = useCallback(async () => {
     const loadSequence = ++loadSequenceRef.current;
-    if (!activeProjectId) {
+    if (!user || !activeProjectId) {
       setSystems([]);
       setStations([]);
       setTestItems([]);
@@ -233,9 +241,12 @@ export function useUnifiedData() {
       setProgress(nextProgress);
     } catch (error) {
       console.error("Failed to load project-scoped station data:", error);
+      const serviceRestricted = isSupabaseServiceRestrictedError(error);
       toast({
-        title: "Load failed",
-        description: "Unable to load the selected project data.",
+        title: serviceRestricted ? "資料服務暫時中斷" : "資料載入失敗",
+        description: serviceRestricted
+          ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
+          : "無法載入目前專案資料，請稍後再試。",
         variant: "destructive",
       });
     } finally {
@@ -243,7 +254,7 @@ export function useUnifiedData() {
         setIsLoading(false);
       }
     }
-  }, [activeProject?.active_flow_version_id, activeProjectId, toast]);
+  }, [activeProject?.active_flow_version_id, activeProjectId, toast, user]);
 
   const refreshProgress = useCallback(
     async (systemId?: string) => {
@@ -433,7 +444,7 @@ export function useUnifiedData() {
 
     loadAllData();
 
-    if (!activeProjectId) return;
+    if (!user || !activeProjectId) return;
 
     const projectFilter = `project_id=eq.${activeProjectId}`;
     const channel = supabase
@@ -472,6 +483,7 @@ export function useUnifiedData() {
     isLoadingProjects,
     activeProjectId,
     loadAllData,
+    user,
     updateProgressRecords,
     updateStationContents,
     updateStations,
@@ -492,4 +504,24 @@ export function useUnifiedData() {
     refreshProgress,
     updateProgress,
   };
+}
+
+type UnifiedDataContextValue = ReturnType<typeof useUnifiedDataSource>;
+
+const UnifiedDataContext = createContext<UnifiedDataContextValue | null>(null);
+
+export function UnifiedDataProvider({ children }: { children: ReactNode }) {
+  const value = useUnifiedDataSource();
+
+  return createElement(UnifiedDataContext.Provider, { value }, children);
+}
+
+export function useUnifiedData() {
+  const context = useContext(UnifiedDataContext);
+
+  if (!context) {
+    throw new Error("useUnifiedData must be used within a UnifiedDataProvider");
+  }
+
+  return context;
 }

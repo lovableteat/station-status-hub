@@ -9,6 +9,7 @@ import { UserProvider } from "@/components/auth/UserContext";
 import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { PermissionsProvider } from "@/hooks/usePermissions";
+import { UnifiedDataProvider } from "@/hooks/useUnifiedData";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -19,7 +20,14 @@ const ApiManagementPage = lazy(() =>
   }))
 );
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
+});
 
 const App = () => {
   useEffect(() => {
@@ -59,35 +67,37 @@ const App = () => {
       <UserProvider>
         <PermissionsProvider>
           <TestProjectProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <HashRouter>
-              <Suspense fallback={<AppLoadingScreen />}>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route
-                    path="/test-tracker"
-                    element={
-                      <PermissionGuard module="test-tracker">
-                        <TestTrackerPage />
-                      </PermissionGuard>
-                    }
-                  />
-                  <Route
-                    path="/api-management"
-                    element={
-                      <PermissionGuard module="api-management">
-                        <ApiManagementPage />
-                      </PermissionGuard>
-                    }
-                  />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </HashRouter>
-          </TooltipProvider>
+            <UnifiedDataProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <HashRouter>
+                  <Suspense fallback={<AppLoadingScreen />}>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route
+                        path="/test-tracker"
+                        element={
+                          <PermissionGuard module="test-tracker">
+                            <TestTrackerPage />
+                          </PermissionGuard>
+                        }
+                      />
+                      <Route
+                        path="/api-management"
+                        element={
+                          <PermissionGuard module="api-management">
+                            <ApiManagementPage />
+                          </PermissionGuard>
+                        }
+                      />
+                      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                </HashRouter>
+              </TooltipProvider>
+            </UnifiedDataProvider>
           </TestProjectProvider>
         </PermissionsProvider>
       </UserProvider>
