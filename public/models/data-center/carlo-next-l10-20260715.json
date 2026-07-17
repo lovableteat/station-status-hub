@@ -1,0 +1,43 @@
+{
+  "sourceFileName": "00_carlo-next_l10_outlook_20260715.stp",
+  "sourceBytes": 682516405,
+  "outputFileName": "carlo-next-l10-20260715.glb",
+  "outputBytes": 22311464,
+  "convertedAt": "2026-07-17T10:14:33.754177+00:00",
+  "optimizedAt": "2026-07-17T10:28:29.000000+00:00",
+  "linearDeflection": 2.5,
+  "sourceUpAxis": "y",
+  "upAxis": "y",
+  "boundsUnit": "mm",
+  "minimum": [
+    -282.6,
+    -954.7,
+    -65.8
+  ],
+  "maximum": [
+    597.3,
+    839.8,
+    59.1
+  ],
+  "spans": {
+    "x": 879.9,
+    "y": 1794.5,
+    "z": 124.9
+  },
+  "dimensions": {
+    "widthMm": 879.9,
+    "depthMm": 124.9,
+    "heightMm": 1794.5
+  },
+  "rackUnits": 41,
+  "shapeCount": 1331,
+  "meshCount": 1,
+  "webOptimization": {
+    "tool": "gltfpack 1.2",
+    "simplificationRatio": 0.1,
+    "maximumError": 0.02,
+    "mergedMeshes": true,
+    "renderVertexCount": 4498584,
+    "uploadVertexCount": 359675
+  }
+}
