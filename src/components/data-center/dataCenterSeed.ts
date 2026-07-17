@@ -9,6 +9,8 @@ import type {
 } from "./dataCenterTypes";
 
 const companyModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.glb`;
+const vr200CabinetModelUrl = `${import.meta.env.BASE_URL}models/data-center/vr200-cabinet-20260715.glb`;
+const carloNextL10ModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.glb`;
 
 export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   "nv-mgx-rack-v1-2-rev7": {
@@ -26,6 +28,41 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
       heightMm: 2308.315,
     },
     upAxis: "y",
+    isCalibrated: true,
+  },
+  "vr200-cabinet-20260715": {
+    id: "vr200-cabinet-20260715",
+    kind: "rack",
+    manufacturer: "Internal / VR200",
+    name: "VR200 機櫃",
+    revision: "20260715",
+    source: "builtin-glb",
+    sourceFileName: "00_vr_outlook_20260715.stp",
+    assetUrl: vr200CabinetModelUrl,
+    dimensions: {
+      widthMm: 497.1,
+      depthMm: 379.2,
+      heightMm: 1673.8,
+    },
+    upAxis: "y",
+    isCalibrated: true,
+  },
+  "carlo-next-l10-20260715": {
+    id: "carlo-next-l10-20260715",
+    kind: "l10",
+    manufacturer: "Internal / Carlo-Next",
+    name: "Carlo-Next L10",
+    revision: "20260715",
+    source: "builtin-glb",
+    sourceFileName: "00_carlo-next_l10_outlook_20260715.stp",
+    assetUrl: carloNextL10ModelUrl,
+    dimensions: {
+      widthMm: 879.9,
+      depthMm: 124.9,
+      heightMm: 1794.5,
+    },
+    upAxis: "y",
+    rackUnits: 41,
     isCalibrated: true,
   },
   "generic-42u": {

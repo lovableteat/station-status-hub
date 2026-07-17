@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "model:convert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-freecad.ps1",
+    "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-step-to-glb.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
