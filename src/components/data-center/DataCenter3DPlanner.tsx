@@ -16,6 +16,7 @@ import type {
   DataCenterLayer,
   FacilityPlan,
   ImportedStepModel,
+  ModelUpAxis,
   RackDeviceHealth,
   RackModelDefinition,
   RackPlan,
@@ -204,6 +205,12 @@ const ProceduralRackModel = memo(function ProceduralRackModel({
   );
 });
 
+function getModelAxisRotation(upAxis: ModelUpAxis): [number, number, number] {
+  if (upAxis === "x") return [0, 0, Math.PI / 2];
+  if (upAxis === "z") return [-Math.PI / 2, 0, 0];
+  return [0, 0, 0];
+}
+
 const GlbRackModel = memo(function GlbRackModel({
   definition,
 }: {
@@ -212,12 +219,19 @@ const GlbRackModel = memo(function GlbRackModel({
   const gltf = useGLTF(definition.assetUrl ?? "") as { scene: THREE.Group };
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
+    clone.rotation.set(...getModelAxisRotation(definition.upAxis));
     clone.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(clone);
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
+    const desiredWidth = definition.dimensions.widthMm / 1000;
+    const desiredDepth = definition.dimensions.depthMm / 1000;
     const desiredHeight = definition.dimensions.heightMm / 1000;
-    const scale = size.y > 0 ? desiredHeight / size.y : 1;
+    const scale: [number, number, number] = [
+      size.x > 0 ? desiredWidth / size.x : 1,
+      size.y > 0 ? desiredHeight / size.y : 1,
+      size.z > 0 ? desiredDepth / size.z : 1,
+    ];
 
     clone.traverse((object) => {
       if (object instanceof THREE.Mesh) {
@@ -231,7 +245,13 @@ const GlbRackModel = memo(function GlbRackModel({
       position: [-center.x, -bounds.min.y, -center.z] as [number, number, number],
       scale,
     };
-  }, [definition.dimensions.heightMm, gltf.scene]);
+  }, [
+    definition.dimensions.depthMm,
+    definition.dimensions.heightMm,
+    definition.dimensions.widthMm,
+    definition.upAxis,
+    gltf.scene,
+  ]);
 
   return (
     <group scale={prepared.scale}>
@@ -362,13 +382,11 @@ function RackL10Modules({
   l10Definition: RackModelDefinition;
 }) {
   const rackWidth = rackDefinition.dimensions.widthMm / 1000;
-  const rackDepth = rackDefinition.dimensions.depthMm / 1000;
   const rackHeight = rackDefinition.dimensions.heightMm / 1000;
   const modelWidth = l10Definition.dimensions.widthMm / 1000;
-  const modelDepth = l10Definition.dimensions.depthMm / 1000;
   const modelHeight = l10Definition.dimensions.heightMm / 1000;
-  const fitScale = Math.min(1, (rackWidth * 0.9) / modelWidth, (rackDepth * 0.9) / modelDepth);
-  const fittedHeight = modelHeight * fitScale;
+  const fitScale = Math.min(1, (rackWidth * 0.9) / modelWidth);
+  const fittedHeight = modelHeight;
   const verticalGap = Math.max(0.006, fittedHeight * 0.06);
   const baseY = rackHeight * 0.08;
   const maxVisible = Math.max(0, Math.floor((rackHeight * 0.84) / (fittedHeight + verticalGap)));
@@ -379,7 +397,11 @@ function RackL10Modules({
   return (
     <group position={[0, baseY, 0]}>
       {Array.from({ length: visibleCount }, (_, index) => (
-        <group key={`${rack.id}-l10-${index}`} position={[0, index * (fittedHeight + verticalGap), 0]} scale={fitScale}>
+        <group
+          key={`${rack.id}-l10-${index}`}
+          position={[0, index * (fittedHeight + verticalGap), 0]}
+          scale={[fitScale, 1, fitScale]}
+        >
           <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
             {l10Definition.source === "step" && l10Definition.stepModel ? (
               <StepRackModel model={l10Definition.stepModel} />
@@ -417,7 +439,7 @@ function RackSceneCard({
       <div
         className={
           selected
-            ? "pointer-events-none min-w-[190px] rounded-2xl border border-cyan-300/45 bg-[#06111d]/94 p-3 text-left text-white shadow-[0_20px_55px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl"
+            ? "pointer-events-none min-w-[150px] rounded-xl border border-cyan-300/45 bg-[#06111d]/94 p-2 text-left text-white shadow-[0_20px_55px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl sm:min-w-[190px] sm:rounded-2xl sm:p-3"
             : "pointer-events-none min-w-[122px] rounded-xl border border-white/15 bg-[#06111d]/88 px-3 py-2 text-white shadow-xl backdrop-blur-lg"
         }
       >
@@ -735,6 +757,10 @@ function CameraRig({
       maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
       maxPolarAngle={Math.PI / 2.02}
       target={[0, 0.8, 0]}
+      touches={{
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: THREE.TOUCH.DOLLY_PAN,
+      }}
     />
   );
 }
@@ -847,7 +873,7 @@ function ModelLoadingOverlay() {
 
 export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
   return (
-    <div className="relative h-full min-h-[460px] overflow-hidden bg-[#03070c]">
+    <div className="relative h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden bg-[#03070c] sm:min-h-[460px]">
       <ModelLoadingOverlay />
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-white/12 bg-black/70 px-4 py-2 text-[11px] font-medium text-slate-300 shadow-xl backdrop-blur-xl sm:block">
         左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選機櫃查看資料
@@ -857,6 +883,7 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         dpr={[1, 1.5]}
         camera={{ position: [10, 7, 11], fov: 36, near: 0.1, far: 80 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
+        style={{ touchAction: "none" }}
       >
         <Suspense fallback={null}>
           <PlannerScene {...props} />

@@ -1243,7 +1243,9 @@ export function DeploymentPlanningCenter() {
   const [showRackDetails, setShowRackDetails] = useState(false);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
+  const [showLabels, setShowLabels] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 640px)").matches
+  );
   const [layoutEditing, setLayoutEditing] = useState(false);
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
@@ -1334,6 +1336,7 @@ export function DeploymentPlanningCenter() {
 
   const handleRackSelect = (rackId: string) => {
     setSelectedRackId(rackId);
+    setMobileLeftOpen(false);
     setMobileRightOpen(false);
     requestCamera("focus");
   };
@@ -1678,7 +1681,7 @@ export function DeploymentPlanningCenter() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <div className="flex min-h-[640px] min-w-0 flex-col overflow-hidden bg-[#02060b] text-slate-100 lg:h-full lg:min-h-0">
+      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden overscroll-none bg-[#02060b] text-slate-100">
         <input
           ref={fileInputRef}
           type="file"
@@ -1687,18 +1690,18 @@ export function DeploymentPlanningCenter() {
           onChange={handleImportFile}
         />
 
-        <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-3 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-5 py-3 lg:h-[82px] lg:flex-nowrap lg:px-6 lg:py-0">
+        <header className="relative z-20 flex shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-3 py-2 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[82px] lg:flex-nowrap lg:px-6 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-300/15 text-cyan-100">
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-300/15 text-cyan-100 sm:h-11 sm:w-11">
               <Boxes className="h-5 w-5" />
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071420] bg-emerald-400" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-xl font-black tracking-[-0.025em] text-white sm:text-[22px]">Data Center Digital Twin</h1>
+                <h1 className="truncate text-base font-black tracking-[-0.025em] text-white sm:text-[22px]">Data Center Digital Twin</h1>
                 <Badge className="hidden border-emerald-300/20 bg-emerald-400/10 text-[10px] font-bold text-emerald-100 shadow-none sm:inline-flex">LIVE</Badge>
               </div>
-              <p className="mt-1 truncate text-[11px] font-semibold text-cyan-100/70">Physical rack operations · millimeter calibrated</p>
+              <p className="mt-1 hidden truncate text-[11px] font-semibold text-cyan-100/70 sm:block">Physical rack operations · millimeter calibrated</p>
             </div>
           </div>
 
@@ -1722,7 +1725,7 @@ export function DeploymentPlanningCenter() {
             })}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             <Button
               type="button"
               variant="outline"
@@ -1902,7 +1905,7 @@ export function DeploymentPlanningCenter() {
           </aside> : null}
         </div>
         ) : (
-        <div className="relative h-[640px] flex-none bg-black">
+        <div className="relative flex min-h-0 flex-1 bg-black">
           <DataCenter3DPlanner
             racks={selectedSite.racks}
             models={models}
@@ -1914,25 +1917,93 @@ export function DeploymentPlanningCenter() {
             facility={selectedFacility}
             onSelectRack={handleRackSelect}
           />
-          <div className="absolute left-3 top-3 z-20 flex gap-2">
-            <IconTooltipButton label="場景導覽" icon={PanelLeftOpen} onClick={() => setMobileLeftOpen(true)} />
-            <IconTooltipButton label="機櫃詳情" icon={PanelRightOpen} onClick={() => setMobileRightOpen(true)} />
+          <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 py-2 shadow-xl backdrop-blur-xl">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activeLayerOption.color }} />
+            <span className="truncate text-xs font-bold text-white">{activeLayerOption.label}</span>
           </div>
-          <div className="absolute right-3 top-3 z-20 flex gap-2">
-            <IconTooltipButton label="聚焦" icon={Focus} onClick={() => requestCamera("focus")} />
-            <IconTooltipButton label={showLabels ? "隱藏資訊卡" : "顯示資訊卡"} icon={showLabels ? Eye : EyeOff} onClick={() => setShowLabels((value) => !value)} />
+
+          <div
+            data-testid="data-center-touch-help"
+            className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-200/20 bg-[#06111d]/88 px-3 py-1.5 text-[11px] font-semibold text-cyan-50 shadow-xl backdrop-blur-xl"
+            style={{ bottom: "calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.5rem)" }}
+          >
+            單指旋轉 · 雙指縮放／平移
           </div>
+
+          <nav
+            data-testid="data-center-mobile-dock"
+            aria-label="Data-center 手機操作"
+            className="absolute inset-x-3 z-30 flex items-stretch gap-1 rounded-2xl border border-cyan-200/20 bg-[#06111d]/94 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+            style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
+            {[
+              {
+                id: "scene",
+                label: "場景",
+                icon: Layers3,
+                onClick: () => setMobileLeftOpen(true),
+              },
+              {
+                id: "details",
+                label: "詳情",
+                icon: PanelRightOpen,
+                onClick: () => setMobileRightOpen(true),
+              },
+              {
+                id: "models",
+                label: "模型",
+                icon: Box,
+                onClick: () => openModelLibrary("rack"),
+              },
+              {
+                id: "focus",
+                label: "聚焦",
+                icon: Focus,
+                onClick: () => requestCamera("focus"),
+              },
+              ...(canEdit
+                ? [
+                    {
+                      id: "layout",
+                      label: layoutEditing ? "完成" : "編排",
+                      icon: layoutEditing ? Check : Move3d,
+                      onClick: () => setLayoutEditing((value) => !value),
+                    },
+                  ]
+                : []),
+            ].map((action) => {
+              const ActionIcon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-action={action.id}
+                  aria-label={action.label}
+                  onClick={action.onClick}
+                  className={cn(
+                    "flex min-h-12 min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-cyan-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                    action.id === "layout" && layoutEditing
+                      ? "bg-amber-300 text-amber-950"
+                      : "hover:bg-cyan-300/12 active:bg-cyan-300/20"
+                  )}
+                >
+                  <ActionIcon className="h-[18px] w-[18px]" />
+                  <span>{action.label}</span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
         )}
 
         <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
-          <SheetContent side="left" className="w-[min(90vw,340px)] border-r border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[340px]">
+          <SheetContent side="left" className="h-[100dvh] w-[min(90vw,340px)] border-r border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[340px]">
             <SceneNavigator {...navigatorProps} />
           </SheetContent>
         </Sheet>
 
         <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
-          <SheetContent side="right" className="w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
+          <SheetContent side="right" className="h-[100dvh] w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
             <RackInspector {...inspectorProps} />
           </SheetContent>
         </Sheet>
