@@ -9,8 +9,13 @@ import {
   type ReactNode,
 } from "react";
 
+import { useUser } from "@/components/auth/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  SUPABASE_EGRESS_RESTRICTION_MESSAGE,
+  isSupabaseServiceRestrictedError,
+} from "@/integrations/supabase/serviceErrors";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 
 const ACTIVE_PROJECT_STORAGE_KEY = "station-status-hub:active-test-project:v2";
@@ -103,6 +108,7 @@ function updateProjectQuery(projectId: string) {
 
 export function TestProjectProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const { user } = useUser();
   const [allProjects, setAllProjects] = useState<TestProject[]>([]);
   const [projectSummaries, setProjectSummaries] = useState<
     Record<string, TestProjectSummary>
@@ -169,6 +175,10 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.rpc("get_test_project_summaries");
 
     if (error) {
+      if (isSupabaseServiceRestrictedError(error)) {
+        throw error;
+      }
+
       // The additive migration may not have reached an older environment yet.
       console.info("Project summaries are unavailable until the migration is applied.");
       const [systemsResult, issuesResult] = await Promise.all([
@@ -220,6 +230,14 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProjects = useCallback(async () => {
+    if (!user) {
+      setAllProjects([]);
+      setProjectSummaries({});
+      setActiveProjectIdState(null);
+      setIsLoadingProjects(false);
+      return;
+    }
+
     setIsLoadingProjects(true);
 
     try {
@@ -254,15 +272,24 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       await refreshProjectSummaries();
     } catch (error) {
       console.error("Failed to load maintenance projects:", error);
+      const serviceRestricted = isSupabaseServiceRestrictedError(error);
       toast({
-        title: "專案載入失敗",
-        description: "無法載入機台維修專案，請稍後再試。",
+        title: serviceRestricted ? "資料服務暫時中斷" : "專案載入失敗",
+        description: serviceRestricted
+          ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
+          : "無法載入機台維修專案，請稍後再試。",
         variant: "destructive",
       });
     } finally {
       setIsLoadingProjects(false);
     }
-  }, [activeProjectIdState, refreshProjectSummaries, resolvePreferredProjectId, toast]);
+  }, [
+    activeProjectIdState,
+    refreshProjectSummaries,
+    resolvePreferredProjectId,
+    toast,
+    user,
+  ]);
 
   const createProject = useCallback(
     async ({
@@ -405,7 +432,9 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    refreshProjects();
+    void refreshProjects();
+
+    if (!user) return;
 
     const channel = supabase
       .channel("maintenance_project_changes")
@@ -419,7 +448,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [refreshProjects]);
+  }, [refreshProjects, user]);
 
   useEffect(
     () => () => {
