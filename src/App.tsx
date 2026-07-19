@@ -36,30 +36,6 @@ const App = () => {
 
     window.__STATION_APP_READY__ = true;
     window.dispatchEvent(new Event("station-app-ready"));
-
-    const recoveryTimer = window.setTimeout(() => {
-      try {
-        window.sessionStorage.removeItem("station-status-hub:boot-retry");
-        window.sessionStorage.removeItem("station-status-hub:chunk-retry");
-        window.sessionStorage.removeItem("station-status-hub:html-revalidated");
-      } catch {
-        // The app remains usable when storage is unavailable.
-      }
-    }, 15_000);
-
-    const clearRevalidationMarker = () => {
-      try {
-        window.sessionStorage.removeItem("station-status-hub:html-revalidated");
-      } catch {
-        // Ignore blocked storage while the page is closing.
-      }
-    };
-    window.addEventListener("pagehide", clearRevalidationMarker);
-
-    return () => {
-      window.clearTimeout(recoveryTimer);
-      window.removeEventListener("pagehide", clearRevalidationMarker);
-    };
   }, []);
 
   return (
