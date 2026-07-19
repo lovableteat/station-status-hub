@@ -67,6 +67,8 @@ export interface RackPlan {
   modelId: string;
   l10ModelId: string;
   l10Count: number;
+  /** One-based rack unit where the first L10 module is mounted. */
+  l10StartU: number;
   powerKw: number;
   coolingKw: number;
   temperatureC: number;
@@ -193,10 +195,15 @@ export interface RackModelDefinition {
   source: "builtin-glb" | "uploaded-glb" | "step" | "procedural";
   dimensions: ImportedStepDimensions;
   upAxis: ModelUpAxis;
+  assetDepthAlignment?: "center" | "front" | "back";
   assetUrl?: string;
+  mobileAssetUrl?: string;
   sourceFileName?: string;
   stepModel?: ImportedStepModel;
   rackUnits?: number;
+  /** Omit for universal planning assets; an empty list means the matching L11 is not available yet. */
+  compatibleRackModelIds?: string[];
+  compatibilityNote?: string;
   isPlaceholder?: boolean;
   isCalibrated: boolean;
 }
