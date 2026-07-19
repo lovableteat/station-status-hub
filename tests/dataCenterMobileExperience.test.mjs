@@ -15,10 +15,21 @@ const [plannerSource, workspaceSource, indexSource] = await Promise.all([
 ]);
 
 test("L10 models keep one rack-unit height while fitting the rack width", () => {
-  assert.match(plannerSource, /const fittedHeight = modelHeight;/);
-  assert.match(plannerSource, /scale=\{\[fitScale,\s*1,\s*fitScale\]\}/);
+  assert.match(plannerSource, /getRackUnitMountLayout/);
+  assert.match(plannerSource, /rackUnits:\s*l10Definition\.rackUnits \?\? 1/);
+  assert.match(plannerSource, /scale=\{\[fitScale, fitScale, fitScale\]\}/);
   assert.match(plannerSource, /getModelAxisRotation/);
-  assert.match(plannerSource, /desiredHeight\s*\/\s*size\.y/);
+  assert.match(plannerSource, /getUniformModelFit/);
+  assert.match(plannerSource, /depthAlignment:\s*definition\.assetDepthAlignment/);
+});
+
+test("mobile Data-center uses low-poly assets and disables expensive rendering", () => {
+  assert.match(plannerSource, /definition\.mobileAssetUrl/);
+  assert.match(plannerSource, /const isMobile = useIsMobile\(\)/);
+  assert.match(plannerSource, /lowDetail=\{isMobile\}/);
+  assert.match(plannerSource, /shadows=\{!isMobile\}/);
+  assert.match(plannerSource, /dpr=\{isMobile \? 1 : \[1, 1\.5\]\}/);
+  assert.match(plannerSource, /antialias:\s*!isMobile/);
 });
 
 test("mobile Data-center fills the dynamic viewport and exposes primary controls", () => {
@@ -31,6 +42,8 @@ test("mobile Data-center fills the dynamic viewport and exposes primary controls
   assert.match(workspaceSource, /id:\s*"focus"/);
   assert.match(workspaceSource, /data-action=\{action\.id\}/);
   assert.match(workspaceSource, /setMobileLeftOpen\(false\)/);
+  assert.match(workspaceSource, /<SheetTitle>場景導覽<\/SheetTitle>/);
+  assert.match(workspaceSource, /<SheetTitle>機櫃詳情<\/SheetTitle>/);
 });
 
 test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () => {
@@ -38,4 +51,11 @@ test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () 
   assert.match(plannerSource, /ONE:\s*THREE\.TOUCH\.ROTATE/);
   assert.match(plannerSource, /TWO:\s*THREE\.TOUCH\.DOLLY_PAN/);
   assert.match(workspaceSource, /data-testid="data-center-touch-help"/);
+});
+
+test("rack inspector explains the physical U capacity and selectable rail range", () => {
+  assert.match(workspaceSource, /\{rack\.capacityU\}U 機櫃/);
+  assert.match(workspaceSource, /\{usableRackUnits\} 個可用 U 位/);
+  assert.match(workspaceSource, /可用 U\{l10FirstUsableU\}–U\{l10LastUsableU\}/);
+  assert.match(workspaceSource, /從 U\{rack\.l10StartU\} 起可安裝/);
 });

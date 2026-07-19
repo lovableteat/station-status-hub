@@ -1,0 +1,71 @@
+{
+  "sourceFileName": "00_vr_outlook_20260715.stp",
+  "sourceBytes": 266693439,
+  "outputFileName": "vera-rubin-vr-1u-20260715.glb",
+  "outputBytes": 8369932,
+  "rebuiltAt": "2026-07-19T15:15:05.883091Z",
+  "linearDeflection": 2.5,
+  "sourceUpAxis": "y",
+  "upAxis": "z",
+  "boundsUnit": "mm",
+  "minimum": [
+    -248.6007971972148,
+    -0.04800000000000004,
+    -823.8090672402502
+  ],
+  "maximum": [
+    248.59999795225067,
+    43.9638865206446,
+    75.24999999999997
+  ],
+  "spans": {
+    "x": 497.2,
+    "y": 44,
+    "z": 899.1
+  },
+  "dimensions": {
+    "widthMm": 497.2,
+    "depthMm": 899.1,
+    "heightMm": 44
+  },
+  "assembly": {
+    "role": "vr200-l10-1u-module",
+    "rackUnits": 1,
+    "note": "Measured VR200 L10 root assembly from the supplied STEP. It remains a horizontal 1U device independent from the unavailable VR200 L11 model."
+  },
+  "assemblyScope": "root-shapes",
+  "sourceShapeCount": 1326,
+  "shapeCount": 1,
+  "meshCount": 1,
+  "rootCoverage": {
+    "rootShapeCount": 1,
+    "rootSolidCount": 1136,
+    "rootVolumeMm3": 3926257.207935952,
+    "rootSpans": {
+      "x": 497.2,
+      "y": 44,
+      "z": 899.1
+    },
+    "allChildShapeSpans": {
+      "x": 497.2,
+      "y": 379.2,
+      "z": 1673.8
+    },
+    "note": "Child bounds contain duplicated local placements; the single 1136-solid root assembly is authoritative."
+  },
+  "webOptimization": {
+    "tool": "gltfpack 1.2",
+    "triangleCount": 360443,
+    "vertexCount": 336966,
+    "sha256": "12F91076A413FF80F2744F900B896104DF9BA6FFD7BB40FD3288EC7A051F76C8"
+  },
+  "mobileWebOptimization": {
+    "outputFileName": "vera-rubin-vr-1u-20260715.mobile.glb",
+    "outputBytes": 182484,
+    "triangleCount": 14392,
+    "vertexCount": 7927,
+    "simplificationRatio": 0.04,
+    "maximumError": 0.04,
+    "sha256": "DA0FA64B6FD0E1A835DD0EE33C344C802362D3527175A43ADF525083C48285F0"
+  }
+}

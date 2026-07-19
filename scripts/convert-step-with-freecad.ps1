@@ -6,7 +6,7 @@ param(
   [string]$OutputPath,
 
   [ValidateSet("x", "y", "z")]
-  [string]$UpAxis = "z",
+  [string]$UpAxis = "y",
 
   [ValidateRange(0.1, 20)]
   [double]$LinearDeflection = 2.5,
@@ -52,7 +52,8 @@ Write-Host "Converting $inputName with local FreeCAD..."
   -e "MODEL_METADATA=/output/$outputStem.json" `
   -e "SOURCE_UP_AXIS=$UpAxis" `
   -e "LINEAR_DEFLECTION=$LinearDeflection" `
-  ianussimoddocker/freecad:latest /converter/freecad-step-to-glb.py
+  ianussimoddocker/freecad:latest `
+  /usr/local/bin/FreeCADCmd /converter/freecad-step-to-glb.py
 
 if ($LASTEXITCODE -ne 0) {
   throw "FreeCAD conversion failed with exit code $LASTEXITCODE."
