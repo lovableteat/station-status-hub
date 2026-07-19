@@ -66,6 +66,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
+import { DataCenterModelViewer } from "./DataCenterModelViewer";
 import {
   BUILT_IN_RACK_MODELS,
   INITIAL_SITE_PLANS,
@@ -73,9 +74,15 @@ import {
 } from "./dataCenterSeed";
 import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
 import {
+  isL10CompatibleWithRack,
+  mergeModelCatalogOverrides,
+  serializeModelCatalogOverrides,
+} from "./modelCatalog.mjs";
+import {
   convertStepToGlb,
   type ModelConversionProgress,
 } from "./modelConversionWorker";
+import { getRackUnitSelection } from "./rackMount.mjs";
 import type {
   CameraPreset,
   DataCenterAssetKind,
@@ -93,6 +100,9 @@ import type {
 
 const LAYOUT_STORAGE_KEY = "data-center-digital-twin-layout-v2";
 const FACILITY_STORAGE_KEY = "data-center-digital-twin-facility-v1";
+const MODEL_CATALOG_STORAGE_KEY = "data-center-model-catalog-overrides-v1";
+const L10_RESERVED_BOTTOM_U = 2;
+const L10_RESERVED_TOP_U = 2;
 
 const STATUS_LABELS: Record<RackStatus, string> = {
   allocated: "運行中",
@@ -154,24 +164,65 @@ function readInitialSites() {
 
     return parsed.map((site) => ({
       ...site,
-      racks: site.racks.map((rack) => ({
-        ...rack,
-        modelId:
-          BUILT_IN_RACK_MODELS[rack.modelId]?.kind === "rack" ? rack.modelId : "generic-42u",
-        l10ModelId:
+      racks: site.racks.map((rack) => {
+        const isLegacyInvalidVr200Rack = rack.modelId === "vr200-cabinet-20260715";
+        const modelId =
+          isLegacyInvalidVr200Rack
+            ? "nv-mgx-rack-v1-2-rev7"
+            : BUILT_IN_RACK_MODELS[rack.modelId]?.kind === "rack"
+            ? rack.modelId
+            : "generic-42u";
+        const normalizedL10ModelId =
           BUILT_IN_RACK_MODELS[rack.l10ModelId]?.kind === "l10"
             ? rack.l10ModelId
-            : "l10-placeholder",
-        l10Count:
-          typeof rack.l10Count === "number"
-            ? Math.max(0, Math.min(8, Math.round(rack.l10Count)))
-            : rack.status === "available"
-              ? 0
-              : 4,
-      })),
+            : "l10-placeholder";
+        const normalizedL10Model = BUILT_IN_RACK_MODELS[normalizedL10ModelId];
+        const l10MatchesRack =
+          !normalizedL10Model?.compatibleRackModelIds ||
+          normalizedL10Model.compatibleRackModelIds.includes(modelId);
+        const capacityU = typeof rack.capacityU === "number" ? Math.max(1, Math.round(rack.capacityU)) : 42;
+        const firstUsableU = Math.min(capacityU, L10_RESERVED_BOTTOM_U + 1);
+        const lastUsableU = Math.max(firstUsableU, capacityU - L10_RESERVED_TOP_U);
+        const l10StartU = Math.min(
+          lastUsableU,
+          Math.max(firstUsableU, Math.round(Number(rack.l10StartU) || firstUsableU))
+        );
+
+        return {
+          ...rack,
+          capacityU,
+          modelId,
+          l10ModelId: isLegacyInvalidVr200Rack
+            ? "carlo-next-l10-20260715"
+            : l10MatchesRack
+              ? normalizedL10ModelId
+              : "l10-placeholder",
+          l10Count:
+            typeof rack.l10Count === "number"
+              ? Math.max(0, Math.min(8, Math.round(rack.l10Count)))
+              : rack.status === "available"
+                ? 0
+                : 4,
+          l10StartU,
+        };
+      }),
     }));
   } catch {
     return INITIAL_SITE_PLANS;
+  }
+}
+
+function readInitialModels() {
+  if (typeof window === "undefined") return BUILT_IN_RACK_MODELS;
+
+  try {
+    const raw = window.localStorage.getItem(MODEL_CATALOG_STORAGE_KEY);
+    return mergeModelCatalogOverrides(
+      BUILT_IN_RACK_MODELS,
+      raw ? JSON.parse(raw) : null
+    ) as Record<string, RackModelDefinition>;
+  } catch {
+    return BUILT_IN_RACK_MODELS;
   }
 }
 
@@ -248,10 +299,23 @@ function formatDimensions(dimensions: ImportedStepDimensions) {
   return `${dimensions.widthMm.toLocaleString()} × ${dimensions.depthMm.toLocaleString()} × ${dimensions.heightMm.toLocaleString()} mm`;
 }
 
+function getL10RackUnits(model: RackModelDefinition) {
+  return model.rackUnits ?? Math.max(1, Math.ceil(model.dimensions.heightMm / 44.45));
+}
+
+function getL10Placement(rack: RackPlan, model: RackModelDefinition, count = rack.l10Count) {
+  return getRackUnitSelection({
+    capacityU: rack.capacityU,
+    rackUnits: getL10RackUnits(model),
+    moduleCount: count,
+    startU: rack.l10StartU,
+    reservedBottomU: L10_RESERVED_BOTTOM_U,
+    reservedTopU: L10_RESERVED_TOP_U,
+  });
+}
+
 function getL10Capacity(rack: RackPlan, model: RackModelDefinition) {
-  const estimatedRackUnits = model.rackUnits ?? Math.max(1, Math.ceil(model.dimensions.heightMm / 44.45));
-  const availableRackUnits = Math.max(0, rack.capacityU - 8);
-  return Math.max(1, Math.floor(availableRackUnits / estimatedRackUnits));
+  return getL10Placement(rack, model).maxVisible;
 }
 
 function getDeviceIcon(type: RackDevice["type"]): LucideIcon {
@@ -515,13 +579,19 @@ interface RackInspectorProps {
   model: RackModelDefinition;
   l10Model: RackModelDefinition;
   l10Capacity: number;
+  l10FirstUsableU: number;
+  l10LastUsableU: number;
+  l10MaxStartU: number;
   canEdit: boolean;
   layoutEditing: boolean;
   onLayoutEditingChange: (value: boolean) => void;
   onFocus: () => void;
   onOpenModels: () => void;
   onOpenL10Models: () => void;
+  onPreviewRackModel: () => void;
+  onPreviewL10Model: () => void;
   onL10CountChange: (count: number) => void;
+  onL10StartUChange: (startU: number) => void;
   onNudge: (x: number, z: number) => void;
   onRotate: () => void;
   collapsed?: boolean;
@@ -533,13 +603,19 @@ function RackInspector({
   model,
   l10Model,
   l10Capacity,
+  l10FirstUsableU,
+  l10LastUsableU,
+  l10MaxStartU,
   canEdit,
   layoutEditing,
   onLayoutEditingChange,
   onFocus,
   onOpenModels,
   onOpenL10Models,
+  onPreviewRackModel,
+  onPreviewL10Model,
   onL10CountChange,
+  onL10StartUChange,
   onNudge,
   onRotate,
   collapsed = false,
@@ -547,6 +623,15 @@ function RackInspector({
 }: RackInspectorProps) {
   const health = getRackHealth(rack);
   const sortedDevices = [...rack.devices].sort((left, right) => right.slotStart - left.slotStart);
+  const l10RackUnits = getL10RackUnits(l10Model);
+  const occupiedEndU = rack.l10Count
+    ? rack.l10StartU + rack.l10Count * l10RackUnits - 1
+    : rack.l10StartU - 1;
+  const railUnits = Array.from(
+    { length: Math.max(0, l10LastUsableU - l10FirstUsableU + 1) },
+    (_, index) => l10LastUsableU - index
+  );
+  const usableRackUnits = railUnits.length;
 
   if (collapsed) {
     return (
@@ -656,6 +741,13 @@ function RackInspector({
                 {formatDimensions(model.dimensions)}
               </div>
             </button>
+            <button
+              type="button"
+              onClick={onPreviewRackModel}
+              className="mt-2 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/[0.08] text-xs font-bold text-cyan-50 hover:border-cyan-300/45 hover:bg-cyan-400/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+            >
+              <Eye className="h-4 w-4" /> 檢視 L11 細節
+            </button>
           </section>
 
           <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-4">
@@ -666,16 +758,33 @@ function RackInspector({
                   櫃內 L10 1U 機台
                 </div>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
-                  {l10Model.name} · 每座 L11 機櫃最多 {l10Capacity} 台
+                  {l10Model.name} · 19 吋軌道 · 每台佔 {l10RackUnits}U
                 </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-blue-300/30 bg-blue-400/10 px-2 py-1 text-[10px] font-black tabular-nums text-blue-100">
+                    {rack.capacityU}U 機櫃
+                  </span>
+                  <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-[10px] font-black tabular-nums text-cyan-100">
+                    {usableRackUnits} 個可用 U 位
+                  </span>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={onOpenL10Models}
-                className="h-9 cursor-pointer rounded-lg border border-[#214669] bg-[#10283d] px-3 text-xs font-bold text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
-              >
-                更換模型
-              </button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={onPreviewL10Model}
+                  className="h-9 cursor-pointer rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 text-xs font-bold text-cyan-50 hover:border-cyan-300/50 hover:bg-cyan-400/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                >
+                  <Eye className="mr-1.5 inline h-3.5 w-3.5" /> 看細節
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenL10Models}
+                  className="h-9 cursor-pointer rounded-lg border border-[#214669] bg-[#10283d] px-3 text-xs font-bold text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                >
+                  更換模型
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-3">
@@ -685,6 +794,9 @@ function RackInspector({
                   {rack.l10Count}
                   <span className="ml-1 text-sm font-semibold text-slate-400">/ {l10Capacity}</span>
                 </div>
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                  從 U{rack.l10StartU} 起可安裝 {l10Capacity} 台
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -708,16 +820,74 @@ function RackInspector({
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`已安裝 ${rack.l10Count} 台 L10 1U 機台`}>
-              {Array.from({ length: l10Capacity }, (_, index) => (
-                <span
-                  key={index}
-                  className={cn(
-                    "h-2.5 min-w-5 flex-1 rounded-full",
-                    index < rack.l10Count ? "bg-blue-400" : "bg-[#163653]"
-                  )}
-                />
-              ))}
+            <div className="mt-3 rounded-xl border border-cyan-300/20 bg-[#071827] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-cyan-50">
+                    <Layers3 className="h-4 w-4 text-cyan-300" /> 安裝起始層
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-300">
+                    可用 U{l10FirstUsableU}–U{l10LastUsableU}，由起始層向上連續安裝
+                  </p>
+                </div>
+                <Select
+                  value={String(rack.l10StartU)}
+                  onValueChange={(value) => onL10StartUChange(Number(value))}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="h-10 w-[104px] border-cyan-300/30 bg-[#10283d] font-bold text-cyan-50">
+                    <SelectValue aria-label={`起始層 U${rack.l10StartU}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from(
+                      { length: Math.max(0, l10MaxStartU - l10FirstUsableU + 1) },
+                      (_, index) => l10FirstUsableU + index
+                    ).map((unit) => (
+                      <SelectItem key={unit} value={String(unit)}>U{unit}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[#214669] bg-[#0c2235] px-3 py-2">
+                <span className="text-[11px] font-semibold text-slate-300">目前佔用</span>
+                <span className="text-xs font-black tabular-nums text-cyan-100">
+                  {rack.l10Count ? `U${rack.l10StartU}–U${occupiedEndU}` : "尚未放置"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-8 gap-1" aria-label={`${rack.capacityU}U 機櫃軌道配置`}>
+                {railUnits.map((unit) => {
+                  const occupied = rack.l10Count > 0 && unit >= rack.l10StartU && unit <= occupiedEndU;
+                  const canStartHere = canEdit && unit <= l10MaxStartU;
+                  return (
+                    <button
+                      key={unit}
+                      type="button"
+                      title={canStartHere ? `從 U${unit} 開始安裝` : `U${unit} 無法容納目前 ${rack.l10Count} 台機台`}
+                      aria-label={`U${unit}${occupied ? "，已佔用" : ""}`}
+                      aria-pressed={unit === rack.l10StartU}
+                      disabled={!canStartHere}
+                      onClick={() => onL10StartUChange(unit)}
+                      className={cn(
+                        "flex h-7 items-center justify-center rounded-md border text-[10px] font-bold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+                        occupied
+                          ? "border-cyan-200/70 bg-cyan-400 text-[#03131f] shadow-[0_0_12px_rgba(34,211,238,0.28)]"
+                          : unit === rack.l10StartU
+                            ? "border-blue-300/70 bg-blue-400/25 text-blue-50"
+                            : canStartHere
+                              ? "border-[#214669] bg-[#10283d] text-slate-300 hover:border-cyan-300/55 hover:text-cyan-50"
+                              : "cursor-not-allowed border-[#163653]/60 bg-[#081c2d] text-slate-600"
+                      )}
+                    >
+                      {unit}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                底部保留 {L10_RESERVED_BOTTOM_U}U、頂部保留 {L10_RESERVED_TOP_U}U 維修空間；超出容量時不會建立模型。
+              </p>
             </div>
             {l10Model.isPlaceholder ? (
               <p className="mt-3 text-[11px] leading-5 text-amber-100/85">
@@ -852,6 +1022,11 @@ interface ModelLibraryProps {
   onAssignModel: () => void;
   onAssignL10Model: () => void;
   onAddRack: () => void;
+  onUpdateModel: (
+    modelId: string,
+    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions">
+  ) => void;
+  onPreviewModel: (modelId: string) => void;
 }
 
 function ModelLibrary({
@@ -882,8 +1057,16 @@ function ModelLibrary({
   onAssignModel,
   onAssignL10Model,
   onAddRack,
+  onUpdateModel,
+  onPreviewModel,
 }: ModelLibraryProps) {
-  const [view, setView] = useState<"browse" | "import">("browse");
+  const [view, setView] = useState<"browse" | "import" | "edit">("browse");
+  const [editDraft, setEditDraft] = useState<{
+    name: string;
+    manufacturer: string;
+    revision: string;
+    dimensions: ImportedStepDimensions;
+  } | null>(null);
   const catalogModels = Object.values(models).filter((model) => model.kind === catalogKind);
   const selectedModel =
     catalogModels.find((model) => model.id === selectedModelId) ?? catalogModels[0];
@@ -905,6 +1088,31 @@ function ModelLibrary({
       ? selectedRack.modelId === selectedModel.id
       : selectedRack.l10ModelId === selectedModel.id
     : false;
+  const selectedIsCompatible = selectedModel
+    ? selectedModel.kind === "rack" || isL10CompatibleWithRack(selectedModel, selectedRack.modelId)
+    : false;
+
+  const beginEditingSelectedModel = () => {
+    if (!selectedModel) return;
+    setEditDraft({
+      name: selectedModel.name,
+      manufacturer: selectedModel.manufacturer,
+      revision: selectedModel.revision,
+      dimensions: { ...selectedModel.dimensions },
+    });
+    setView("edit");
+  };
+
+  const saveSelectedModel = () => {
+    if (!selectedModel || !editDraft || !editDraft.name.trim()) return;
+    onUpdateModel(selectedModel.id, {
+      ...editDraft,
+      name: editDraft.name.trim(),
+      manufacturer: editDraft.manufacturer.trim() || "未指定廠商",
+      revision: editDraft.revision.trim() || "未指定版本",
+    });
+    setView("browse");
+  };
 
   return (
     <Sheet
@@ -997,6 +1205,12 @@ function ModelLibrary({
               <div className="overflow-hidden rounded-xl border border-white/10">
                 {catalogModels.map((model) => {
                   const selected = model.id === selectedModel?.id;
+                  const compatible =
+                    model.kind === "rack" || isL10CompatibleWithRack(model, selectedRack.modelId);
+                  const waitingForRack =
+                    model.kind === "l10" &&
+                    Array.isArray(model.compatibleRackModelIds) &&
+                    model.compatibleRackModelIds.length === 0;
                   return (
                     <button
                       key={model.id}
@@ -1027,6 +1241,20 @@ function ModelLibrary({
                             )}>
                               {model.isPlaceholder ? "暫代" : model.isCalibrated ? "已校正" : "待校正"}
                             </span>
+                            {model.kind === "l10" ? (
+                              <span
+                                className={cn(
+                                  "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                                  compatible
+                                    ? "border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
+                                    : waitingForRack
+                                      ? "border-amber-300/30 bg-amber-400/10 text-amber-100"
+                                      : "border-rose-300/30 bg-rose-400/10 text-rose-100",
+                                )}
+                              >
+                                {compatible ? "可安裝" : waitingForRack ? "等待對應 L11" : "不相容"}
+                              </span>
+                            ) : null}
                           </div>
                           <div className="mt-1 text-xs text-slate-300">{model.manufacturer} · {model.revision}</div>
                           <div className="mt-2 text-xs tabular-nums text-cyan-100/85">{formatDimensions(model.dimensions)}</div>
@@ -1045,8 +1273,43 @@ function ModelLibrary({
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="font-semibold text-white">已選擇 {selectedModel.name}</span>
                     <span className="text-xs text-slate-300">
-                      {selectedIsAssigned ? `目前已套用至 ${selectedRack.cabinet}` : `準備套用至 ${selectedRack.cabinet}`}
+                      {selectedIsAssigned
+                        ? `目前已套用至 ${selectedRack.cabinet}`
+                        : selectedIsCompatible
+                          ? `準備套用至 ${selectedRack.cabinet}`
+                          : `不能套用至 ${selectedRack.cabinet}`}
                     </span>
+                  </div>
+                  {selectedModel.kind === "l10" && selectedModel.compatibilityNote ? (
+                    <div
+                      className={cn(
+                        "mb-3 rounded-xl border px-3 py-2.5 text-xs leading-5",
+                        selectedIsCompatible
+                          ? "border-cyan-300/20 bg-cyan-400/[0.07] text-cyan-50"
+                          : "border-amber-300/25 bg-amber-400/[0.08] text-amber-50",
+                      )}
+                    >
+                      {selectedModel.compatibilityNote}
+                    </div>
+                  ) : null}
+                  <div className="mb-2 grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onPreviewModel(selectedModel.id)}
+                      className="h-11 rounded-xl border-cyan-300/25 bg-cyan-400/[0.08] text-sm font-bold text-cyan-50 hover:bg-cyan-400/[0.15]"
+                    >
+                      <Eye className="mr-2 h-4 w-4" /> 檢視模型細節
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canEdit}
+                      onClick={beginEditingSelectedModel}
+                      className="h-11 rounded-xl border-blue-300/25 bg-blue-400/[0.08] text-sm font-bold text-blue-50 hover:bg-blue-400/[0.15]"
+                    >
+                      <PencilRuler className="mr-2 h-4 w-4" /> 編輯模型資料
+                    </Button>
                   </div>
                   {catalogKind === "rack" ? (
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1058,12 +1321,92 @@ function ModelLibrary({
                       </Button>
                     </div>
                   ) : (
-                    <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignL10Model} className="h-12 w-full rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
+                    <Button type="button" disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible} onClick={onAssignL10Model} className="h-12 w-full rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
                       <Cpu className="mr-2 h-4 w-4" /> 套用為櫃內 L10
                     </Button>
                   )}
                 </div>
               ) : null}
+            </section>
+            ) : view === "edit" && editDraft && selectedModel ? (
+            <section className="space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-lg font-black text-white">編輯模型資料</div>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    編輯顯示名稱、廠牌、版本與校正尺寸；模型 ID 與 3D 資產不會被更動。
+                  </p>
+                </div>
+                <Badge className="border-cyan-300/20 bg-cyan-400/10 text-cyan-50 shadow-none">
+                  {selectedModel.kind === "rack" ? "L11 機櫃" : "L10 1U"}
+                </Badge>
+              </div>
+
+              <div className="rounded-2xl border border-[#214669] bg-[#0b1b2d] p-4 sm:p-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-1.5 sm:col-span-2">
+                    <span className="text-sm font-bold text-slate-100">模型名稱</span>
+                    <Input
+                      value={editDraft.name}
+                      onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })}
+                      className="h-12 border-[#2a526f] bg-[#10263a] text-base font-semibold text-white"
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-sm font-bold text-slate-100">廠牌</span>
+                    <Input
+                      value={editDraft.manufacturer}
+                      onChange={(event) => setEditDraft({ ...editDraft, manufacturer: event.target.value })}
+                      className="h-11 border-[#2a526f] bg-[#10263a] text-white"
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-sm font-bold text-slate-100">版本</span>
+                    <Input
+                      value={editDraft.revision}
+                      onChange={(event) => setEditDraft({ ...editDraft, revision: event.target.value })}
+                      className="h-11 border-[#2a526f] bg-[#10263a] text-white"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 border-t border-[#214669] pt-5">
+                  <div className="text-sm font-bold text-white">實體校正尺寸</div>
+                  <p className="mt-1 text-xs text-slate-400">單位為毫米，順序固定為寬、深、高。</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {([[
+                      "widthMm",
+                      "寬 mm",
+                    ], ["depthMm", "深 mm"], ["heightMm", "高 mm"]] as const).map(([key, label]) => (
+                      <label key={key} className="space-y-1.5">
+                        <span className="text-xs font-semibold text-cyan-100/75">{label}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={editDraft.dimensions[key]}
+                          onChange={(event) => setEditDraft({
+                            ...editDraft,
+                            dimensions: {
+                              ...editDraft.dimensions,
+                              [key]: Math.max(1, Number(event.target.value) || 1),
+                            },
+                          })}
+                          className="h-11 border-[#2a526f] bg-[#10263a] px-2 tabular-nums text-white"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+                <Button type="button" variant="outline" onClick={() => setView("browse")} className="h-11 border-[#2a526f] bg-[#10263a] text-slate-100 hover:bg-[#17364f]">
+                  取消
+                </Button>
+                <Button type="button" disabled={!editDraft.name.trim()} onClick={saveSelectedModel} className="h-11 bg-cyan-300 px-5 font-bold text-cyan-950 hover:bg-cyan-200">
+                  儲存模型資料
+                </Button>
+              </div>
             </section>
             ) : (
             <div className="space-y-5">
@@ -1198,7 +1541,7 @@ function ModelLibrary({
 
         <div className="shrink-0 border-t border-white/10 bg-black/20 px-6 py-3">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
-            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "L11 機櫃外型" : "L10 1U 機台"}`}</span>
+            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : view === "edit" && selectedModel ? `正在編輯：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "L11 機櫃外型" : "L10 1U 機台"}`}</span>
             {view === "browse" && selectedModel ? <span className="hidden tabular-nums sm:inline">{formatDimensions(selectedModel.dimensions)}</span> : null}
           </div>
         </div>
@@ -1235,7 +1578,7 @@ export function DeploymentPlanningCenter() {
 
   const [sites, setSites] = useState<SitePlan[]>(readInitialSites);
   const [facilityPlans, setFacilityPlans] = useState<Record<string, FacilityPlan>>(readInitialFacilityPlans);
-  const [models, setModels] = useState<Record<string, RackModelDefinition>>(BUILT_IN_RACK_MODELS);
+  const [models, setModels] = useState<Record<string, RackModelDefinition>>(readInitialModels);
   const [selectedSiteId, setSelectedSiteId] = useState(sites[0].id);
   const [selectedRackId, setSelectedRackId] = useState(sites[0].racks[0].id);
   const [activeLayer, setActiveLayer] = useState<DataCenterLayer>("overview");
@@ -1246,6 +1589,7 @@ export function DeploymentPlanningCenter() {
   const [showRackDetails, setShowRackDetails] = useState(false);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [previewModelId, setPreviewModelId] = useState<string | null>(null);
   const [showLabels, setShowLabels] = useState(() =>
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 640px)").matches
   );
@@ -1283,7 +1627,8 @@ export function DeploymentPlanningCenter() {
   const requestedL10Model = models[selectedRack.l10ModelId];
   const selectedL10Model =
     requestedL10Model?.kind === "l10" ? requestedL10Model : models["l10-placeholder"];
-  const selectedL10Capacity = getL10Capacity(selectedRack, selectedL10Model);
+  const selectedL10Placement = getL10Placement(selectedRack, selectedL10Model);
+  const selectedL10Capacity = selectedL10Placement.maxVisible;
   const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
 
   useEffect(() => {
@@ -1293,6 +1638,13 @@ export function DeploymentPlanningCenter() {
   useEffect(() => {
     window.localStorage.setItem(FACILITY_STORAGE_KEY, JSON.stringify(facilityPlans));
   }, [facilityPlans]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      MODEL_CATALOG_STORAGE_KEY,
+      JSON.stringify(serializeModelCatalogOverrides(models, BUILT_IN_RACK_MODELS))
+    );
+  }, [models]);
 
   useEffect(() => {
     if (!facilityPlans[selectedSiteId]) {
@@ -1346,6 +1698,21 @@ export function DeploymentPlanningCenter() {
     setMobileLeftOpen(false);
     setMobileRightOpen(false);
     requestCamera("focus");
+  };
+
+  const updateCatalogModel = (
+    modelId: string,
+    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions">
+  ) => {
+    if (!canEdit) return;
+    setModels((current) => {
+      const model = current[modelId];
+      return model ? { ...current, [modelId]: { ...model, ...updates } } : current;
+    });
+    toast({
+      title: "模型資料已更新",
+      description: `${updates.name} 的顯示名稱、版本與尺寸已儲存。`,
+    });
   };
 
   const handleSiteChange = (siteId: string) => {
@@ -1580,7 +1947,13 @@ export function DeploymentPlanningCenter() {
 
   const assignSelectedModel = () => {
     if (!canEdit || models[selectedModelId]?.kind !== "rack") return;
-    updateSelectedRack((rack) => ({ ...rack, modelId: selectedModelId }));
+    updateSelectedRack((rack) => {
+      const assignedL10 = models[rack.l10ModelId];
+      const l10ModelId = isL10CompatibleWithRack(assignedL10, selectedModelId)
+        ? rack.l10ModelId
+        : "l10-placeholder";
+      return { ...rack, modelId: selectedModelId, l10ModelId };
+    });
     toast({
       title: "L11 機櫃外型已更新",
       description: `${selectedRack.cabinet} 已套用 ${models[selectedModelId].name}。`,
@@ -1590,12 +1963,25 @@ export function DeploymentPlanningCenter() {
   const assignSelectedL10Model = () => {
     const definition = models[selectedModelId];
     if (!canEdit || definition?.kind !== "l10") return;
+    if (!isL10CompatibleWithRack(definition, selectedRack.modelId)) {
+      toast({
+        title: "此 L10 無法安裝",
+        description: definition.compatibilityNote || "此 L10 與目前 L11 機櫃不相容。",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    updateSelectedRack((rack) => ({
-      ...rack,
-      l10ModelId: selectedModelId,
-      l10Count: Math.min(rack.l10Count, getL10Capacity(rack, definition)),
-    }));
+    updateSelectedRack((rack) => {
+      const placement = getL10Placement(rack, definition);
+      const l10StartU = Math.min(rack.l10StartU, placement.maxStartUForCount);
+      const nextRack = { ...rack, l10StartU };
+      return {
+        ...nextRack,
+        l10ModelId: selectedModelId,
+        l10Count: Math.min(rack.l10Count, getL10Capacity(nextRack, definition)),
+      };
+    });
     toast({
       title: "櫃內 L10 機台已更新",
       description: `${selectedRack.cabinet} 內的 ${selectedRack.l10Count} 台 L10 已套用 ${definition.name}。`,
@@ -1608,6 +1994,24 @@ export function DeploymentPlanningCenter() {
       ...rack,
       l10Count: Math.max(0, Math.min(getL10Capacity(rack, selectedL10Model), Math.round(count))),
     }));
+  };
+
+  const changeSelectedRackL10StartU = (startU: number) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const placement = getRackUnitSelection({
+        capacityU: rack.capacityU,
+        rackUnits: getL10RackUnits(selectedL10Model),
+        moduleCount: rack.l10Count,
+        startU,
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
+      return {
+        ...rack,
+        l10StartU: Math.min(placement.startU, placement.maxStartUForCount),
+      };
+    });
   };
 
   const addRackFromSelectedModel = () => {
@@ -1655,13 +2059,19 @@ export function DeploymentPlanningCenter() {
     model: selectedModel,
     l10Model: selectedL10Model,
     l10Capacity: selectedL10Capacity,
+    l10FirstUsableU: selectedL10Placement.firstUsableU,
+    l10LastUsableU: selectedL10Placement.lastUsableU,
+    l10MaxStartU: selectedL10Placement.maxStartUForCount,
     canEdit,
     layoutEditing,
     onLayoutEditingChange: setLayoutEditing,
     onFocus: () => requestCamera("focus"),
     onOpenModels: () => openModelLibrary("rack"),
     onOpenL10Models: () => openModelLibrary("l10"),
+    onPreviewRackModel: () => setPreviewModelId(selectedModel.id),
+    onPreviewL10Model: () => setPreviewModelId(selectedL10Model.id),
     onL10CountChange: changeSelectedRackL10Count,
+    onL10StartUChange: changeSelectedRackL10StartU,
     onNudge: moveSelectedRack,
     onRotate: rotateSelectedRack,
   };
@@ -2005,12 +2415,20 @@ export function DeploymentPlanningCenter() {
 
         <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
           <SheetContent side="left" className="h-[100dvh] w-[min(90vw,340px)] border-r border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[340px]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>場景導覽</SheetTitle>
+              <SheetDescription>選擇廠區、圖層與機櫃。</SheetDescription>
+            </SheetHeader>
             <SceneNavigator {...navigatorProps} />
           </SheetContent>
         </Sheet>
 
         <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
           <SheetContent side="right" className="h-[100dvh] w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>機櫃詳情</SheetTitle>
+              <SheetDescription>查看機櫃狀態並設定 L10 安裝層。</SheetDescription>
+            </SheetHeader>
             <RackInspector {...inspectorProps} />
           </SheetContent>
         </Sheet>
@@ -2206,6 +2624,15 @@ export function DeploymentPlanningCenter() {
           onAssignModel={assignSelectedModel}
           onAssignL10Model={assignSelectedL10Model}
           onAddRack={addRackFromSelectedModel}
+          onUpdateModel={updateCatalogModel}
+          onPreviewModel={setPreviewModelId}
+        />
+        <DataCenterModelViewer
+          open={Boolean(previewModelId)}
+          model={previewModelId ? models[previewModelId] ?? null : null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setPreviewModelId(null);
+          }}
         />
       </div>
     </TooltipProvider>

@@ -2,52 +2,52 @@
   "sourceFileName": "00_carlo-next_l10_outlook_20260715.stp",
   "sourceBytes": 682516405,
   "outputFileName": "carlo-next-l10-20260715.glb",
-  "outputBytes": 22311464,
-  "convertedAt": "2026-07-17T10:14:33.754177+00:00",
-  "optimizedAt": "2026-07-17T10:28:29.000000+00:00",
+  "outputBytes": 18991088,
+  "rebuiltAt": "2026-07-19T15:15:05.883091Z",
   "linearDeflection": 2.5,
   "sourceUpAxis": "z",
-  "conversionUpAxis": "y",
   "upAxis": "z",
   "boundsUnit": "mm",
   "minimum": [
-    -282.6,
-    -954.7,
-    -65.8
+    -240.757,
+    -49.817,
+    -43.564
   ],
   "maximum": [
-    597.3,
-    839.8,
-    59.1
+    240.757,
+    839.824,
+    0.906
   ],
   "spans": {
-    "x": 879.9,
-    "y": 1794.5,
-    "z": 124.9
-  },
-  "rawDimensions": {
-    "widthMm": 879.9,
-    "depthMm": 124.9,
-    "heightMm": 1794.5
+    "x": 481.515,
+    "y": 889.642,
+    "z": 44.471
   },
   "dimensions": {
-    "widthMm": 482.6,
-    "depthMm": 800,
-    "heightMm": 44.45
+    "widthMm": 481.5,
+    "depthMm": 889.6,
+    "heightMm": 44.5
   },
-  "calibration": {
-    "profile": "standard-19-inch-1u",
-    "note": "Source assembly is rotated and calibrated to its physical 1U rack envelope at render time."
+  "assembly": {
+    "role": "gb300-l10-1u-module",
+    "rackUnits": 1,
+    "note": "Independent GB300 L10 1U machine mounted horizontally on the L11 rack-unit rail field."
   },
-  "rackUnits": 1,
-  "shapeCount": 1331,
+  "assemblyScope": "physical-root-envelope",
   "meshCount": 1,
   "webOptimization": {
     "tool": "gltfpack 1.2",
-    "simplificationRatio": 0.1,
-    "maximumError": 0.02,
-    "mergedMeshes": true,
-    "renderVertexCount": 4498584,
-    "uploadVertexCount": 359675
+    "triangleCount": 1300446,
+    "vertexCount": 282049,
+    "sha256": "68B2F6A54838D8EE78B40062139377EB446B13030D1F5303443420B7A2933943"
+  },
+  "mobileWebOptimization": {
+    "outputFileName": "carlo-next-l10-20260715.mobile.glb",
+    "outputBytes": 610588,
+    "triangleCount": 79276,
+    "vertexCount": 11150,
+    "simplificationRatio": 0.03,
+    "maximumError": 0.04,
+    "sha256": "55DAE218579D03F48E5060B184B179EBBD3D6EBF1F7EE33DEECF2E434A765113"
   }
 }
