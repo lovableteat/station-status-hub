@@ -11,17 +11,21 @@ import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/dr
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
+import { useIsMobile } from "@/hooks/use-mobile";
 import type {
   CameraPreset,
   DataCenterLayer,
   FacilityPlan,
   ImportedStepModel,
-  ModelUpAxis,
   RackDeviceHealth,
   RackModelDefinition,
   RackPlan,
   RackStatus,
 } from "./dataCenterTypes";
+import { getUniformModelFit } from "./modelFit.mjs";
+import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
+import { getRackUnitMountLayout } from "./rackMount.mjs";
+import { getModelAxisRotation } from "./modelOrientation.mjs";
 
 interface DataCenter3DPlannerProps {
   racks: RackPlan[];
@@ -45,10 +49,13 @@ function resolveRackDefinition(
 
 function resolveL10Definition(
   models: Record<string, RackModelDefinition>,
-  modelId: string
+  modelId: string,
+  rackModelId: string,
 ) {
   const model = models[modelId];
-  return model?.kind === "l10" ? model : models["l10-placeholder"];
+  return model?.kind === "l10" && isL10CompatibleWithRack(model, rackModelId)
+    ? model
+    : models["l10-placeholder"];
 }
 
 const STATUS_LABELS: Record<RackStatus, string> = {
@@ -221,56 +228,51 @@ const ProceduralRackModel = memo(function ProceduralRackModel({
   );
 });
 
-function getModelAxisRotation(upAxis: ModelUpAxis): [number, number, number] {
-  if (upAxis === "x") return [0, 0, Math.PI / 2];
-  if (upAxis === "z") return [-Math.PI / 2, 0, 0];
-  return [0, 0, 0];
-}
-
 const GlbRackModel = memo(function GlbRackModel({
   definition,
+  lowDetail = false,
 }: {
   definition: RackModelDefinition;
+  lowDetail?: boolean;
 }) {
-  const gltf = useGLTF(definition.assetUrl ?? "") as { scene: THREE.Group };
+  const assetUrl =
+    lowDetail && definition.mobileAssetUrl
+      ? definition.mobileAssetUrl
+      : definition.assetUrl ?? "";
+  const gltf = useGLTF(assetUrl) as { scene: THREE.Group };
+  const dimensions = definition.dimensions;
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
     clone.rotation.set(...getModelAxisRotation(definition.upAxis));
     clone.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(clone);
-    const size = bounds.getSize(new THREE.Vector3());
-    const center = bounds.getCenter(new THREE.Vector3());
-    const desiredWidth = definition.dimensions.widthMm / 1000;
-    const desiredDepth = definition.dimensions.depthMm / 1000;
-    const desiredHeight = definition.dimensions.heightMm / 1000;
-    const scale: [number, number, number] = [
-      size.x > 0 ? desiredWidth / size.x : 1,
-      size.y > 0 ? desiredHeight / size.y : 1,
-      size.z > 0 ? desiredDepth / size.z : 1,
-    ];
+    const fit = getUniformModelFit(bounds, dimensions, {
+      depthAlignment: definition.assetDepthAlignment,
+    });
 
     clone.traverse((object) => {
       if (object instanceof THREE.Mesh) {
-        object.castShadow = true;
-        object.receiveShadow = true;
+        object.castShadow = !lowDetail;
+        object.receiveShadow = !lowDetail;
       }
     });
 
     return {
       clone,
-      position: [-center.x, -bounds.min.y, -center.z] as [number, number, number],
-      scale,
+      position: fit.position as [number, number, number],
+      scale: fit.scale as [number, number, number],
+      depthOffsetMeters: fit.depthOffsetMeters,
     };
   }, [
-    definition.dimensions.depthMm,
-    definition.dimensions.heightMm,
-    definition.dimensions.widthMm,
+    definition.assetDepthAlignment,
     definition.upAxis,
+    dimensions,
     gltf.scene,
+    lowDetail,
   ]);
 
   return (
-    <group scale={prepared.scale}>
+    <group position={[0, 0, prepared.depthOffsetMeters]} scale={prepared.scale}>
       <primitive object={prepared.clone} position={prepared.position} />
     </group>
   );
@@ -392,43 +394,54 @@ function RackL10Modules({
   rack,
   rackDefinition,
   l10Definition,
+  detailed,
+  lowDetail,
 }: {
   rack: RackPlan;
   rackDefinition: RackModelDefinition;
   l10Definition: RackModelDefinition;
+  detailed: boolean;
+  lowDetail: boolean;
 }) {
-  const rackWidth = rackDefinition.dimensions.widthMm / 1000;
-  const rackHeight = rackDefinition.dimensions.heightMm / 1000;
-  const modelWidth = l10Definition.dimensions.widthMm / 1000;
-  const modelHeight = l10Definition.dimensions.heightMm / 1000;
-  const fitScale = Math.min(1, (rackWidth * 0.9) / modelWidth);
-  const fittedHeight = modelHeight;
-  const verticalGap = Math.max(0.006, fittedHeight * 0.06);
-  const baseY = rackHeight * 0.08;
-  const maxVisible = Math.max(0, Math.floor((rackHeight * 0.84) / (fittedHeight + verticalGap)));
-  const visibleCount = Math.min(rack.l10Count, maxVisible);
+  const layout = getRackUnitMountLayout({
+    rackDimensions: rackDefinition.dimensions,
+    capacityU: rack.capacityU,
+    moduleDimensions: l10Definition.dimensions,
+    rackUnits: l10Definition.rackUnits ?? 1,
+    moduleCount: rack.l10Count,
+    startU: rack.l10StartU,
+  });
+  const { fitScale, positions, visibleCount } = layout;
 
   if (!visibleCount || !Number.isFinite(fitScale)) return null;
 
   return (
-    <group position={[0, baseY, 0]}>
-      {Array.from({ length: visibleCount }, (_, index) => (
-        <group
-          key={`${rack.id}-l10-${index}`}
-          position={[0, index * (fittedHeight + verticalGap), 0]}
-          scale={[fitScale, 1, fitScale]}
-        >
-          <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
-            {l10Definition.source === "step" && l10Definition.stepModel ? (
-              <StepRackModel model={l10Definition.stepModel} />
-            ) : l10Definition.assetUrl ? (
-              <GlbRackModel definition={l10Definition} />
+    <group>
+      {Array.from({ length: visibleCount }, (_, index) => {
+        const useDetailedL10 = detailed && index === 0;
+        const position = positions[index];
+        return (
+          <group
+            key={`${rack.id}-l10-${index}`}
+            position={[0, position.y, position.z]}
+            scale={[fitScale, fitScale, fitScale]}
+          >
+            {useDetailedL10 ? (
+              <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
+                {l10Definition.source === "step" && l10Definition.stepModel ? (
+                  <StepRackModel model={l10Definition.stepModel} />
+                ) : l10Definition.assetUrl ? (
+                  <GlbRackModel definition={l10Definition} lowDetail={lowDetail} />
+                ) : (
+                  <PlaceholderL10Model definition={l10Definition} index={index} />
+                )}
+              </Suspense>
             ) : (
               <PlaceholderL10Model definition={l10Definition} index={index} />
             )}
-          </Suspense>
-        </group>
-      ))}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -486,6 +499,7 @@ function RackVisual({
   selected,
   hovered,
   showLabel,
+  lowDetail,
   onSelect,
   onHover,
 }: {
@@ -496,6 +510,7 @@ function RackVisual({
   selected: boolean;
   hovered: boolean;
   showLabel: boolean;
+  lowDetail: boolean;
   onSelect: (rackId: string) => void;
   onHover: (rackId: string | null) => void;
 }) {
@@ -503,6 +518,7 @@ function RackVisual({
   const width = definition.dimensions.widthMm / 1000;
   const depth = definition.dimensions.depthMm / 1000;
   const height = definition.dimensions.heightMm / 1000;
+  const showDetailedModel = selected || hovered;
 
   const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
@@ -533,16 +549,24 @@ function RackVisual({
       </mesh>
 
       <Suspense fallback={<ProceduralRackModel definition={definition} accent={color} />}>
-        {definition.source === "step" && definition.stepModel ? (
+        {!showDetailedModel ? (
+          <ProceduralRackModel definition={definition} accent={color} />
+        ) : definition.source === "step" && definition.stepModel ? (
           <StepRackModel model={definition.stepModel} />
         ) : definition.assetUrl ? (
-          <GlbRackModel definition={definition} />
+          <GlbRackModel definition={definition} lowDetail={lowDetail} />
         ) : (
           <ProceduralRackModel definition={definition} accent={color} />
         )}
       </Suspense>
 
-      <RackL10Modules rack={rack} rackDefinition={definition} l10Definition={l10Definition} />
+      <RackL10Modules
+        rack={rack}
+        rackDefinition={definition}
+        l10Definition={l10Definition}
+        detailed={showDetailedModel}
+        lowDetail={lowDetail}
+      />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
         <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
@@ -791,7 +815,8 @@ function PlannerScene({
   cameraRequestId,
   facility,
   onSelectRack,
-}: DataCenter3DPlannerProps) {
+  lowDetail,
+}: DataCenter3DPlannerProps & { lowDetail: boolean }) {
   const [hoveredRackId, setHoveredRackId] = useState<string | null>(null);
 
   useEffect(
@@ -808,11 +833,11 @@ function PlannerScene({
       <ambientLight intensity={0.58} />
       <hemisphereLight intensity={0.65} color="#c9f6ff" groundColor="#020409" />
       <directionalLight
-        castShadow
+        castShadow={!lowDetail}
         intensity={1.35}
         position={[7, 10, 6]}
-        shadow-mapSize-width={1536}
-        shadow-mapSize-height={1536}
+        shadow-mapSize-width={lowDetail ? 512 : 1536}
+        shadow-mapSize-height={lowDetail ? 512 : 1536}
       />
       <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
       <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
@@ -823,7 +848,7 @@ function PlannerScene({
 
       {racks.map((rack) => {
         const definition = resolveRackDefinition(models, rack.modelId);
-        const l10Definition = resolveL10Definition(models, rack.l10ModelId);
+        const l10Definition = resolveL10Definition(models, rack.l10ModelId, rack.modelId);
         const health = getRackHealth(rack);
         const selected = rack.id === selectedRackId;
         const hovered = rack.id === hoveredRackId;
@@ -839,6 +864,7 @@ function PlannerScene({
             selected={selected}
             hovered={hovered}
             showLabel={showLabel}
+            lowDetail={lowDetail}
             onSelect={onSelectRack}
             onHover={setHoveredRackId}
           />
@@ -888,6 +914,8 @@ function ModelLoadingOverlay() {
 }
 
 export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div className="relative h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden bg-[#03070c] sm:min-h-[460px]">
       <ModelLoadingOverlay />
@@ -895,14 +923,14 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選機櫃查看資料
       </div>
       <Canvas
-        shadows
-        dpr={[1, 1.5]}
+        shadows={!isMobile}
+        dpr={isMobile ? 1 : [1, 1.5]}
         camera={{ position: [10, 7, 11], fov: 36, near: 0.1, far: 80 }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
+        gl={{ antialias: !isMobile, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
       >
         <Suspense fallback={null}>
-          <PlannerScene {...props} />
+          <PlannerScene {...props} lowDetail={isMobile} />
         </Suspense>
       </Canvas>
     </div>
