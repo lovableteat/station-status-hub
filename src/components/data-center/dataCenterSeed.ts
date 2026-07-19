@@ -9,15 +9,17 @@ import type {
 } from "./dataCenterTypes";
 
 const companyModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.glb`;
-const vr200CabinetModelUrl = `${import.meta.env.BASE_URL}models/data-center/vr200-cabinet-20260715.glb`;
+const veraRubinVr1uModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.glb`;
+const veraRubinVr1uMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.mobile.glb`;
 const carloNextL10ModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.glb`;
+const carloNextL10MobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.mobile.glb`;
 
 export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   "nv-mgx-rack-v1-2-rev7": {
     id: "nv-mgx-rack-v1-2-rev7",
     kind: "rack",
     manufacturer: "NVIDIA / Internal",
-    name: "MGX Rack V1.2",
+    name: "GB300 L11 機櫃",
     revision: "REV 7",
     source: "builtin-glb",
     sourceFileName: "000_nv_mgx_rack_v1-2_REV_7.stp",
@@ -30,39 +32,46 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     upAxis: "y",
     isCalibrated: true,
   },
-  "vr200-cabinet-20260715": {
-    id: "vr200-cabinet-20260715",
-    kind: "rack",
+  "vera-rubin-vr-1u-20260715": {
+    id: "vera-rubin-vr-1u-20260715",
+    kind: "l10",
     manufacturer: "Internal / VR200",
-    name: "VR200 L11 機櫃",
+    name: "VR200 L10 1U 機台",
     revision: "20260715",
     source: "builtin-glb",
     sourceFileName: "00_vr_outlook_20260715.stp",
-    assetUrl: vr200CabinetModelUrl,
+    assetUrl: veraRubinVr1uModelUrl,
+    mobileAssetUrl: veraRubinVr1uMobileModelUrl,
     dimensions: {
-      widthMm: 497.1,
-      depthMm: 379.2,
-      heightMm: 1673.8,
+      widthMm: 497.2,
+      depthMm: 899.1,
+      heightMm: 44,
     },
-    upAxis: "y",
+    upAxis: "z",
+    rackUnits: 1,
+    compatibleRackModelIds: [],
+    compatibilityNote: "尚未取得 VR200 L11 原始檔，目前只提供 L10 細節檢視，不允許誤套至其他機櫃。",
     isCalibrated: true,
   },
   "carlo-next-l10-20260715": {
     id: "carlo-next-l10-20260715",
     kind: "l10",
-    manufacturer: "Internal / Carlo-Next",
-    name: "Carlo-Next L10 1U 機台",
+    manufacturer: "Internal / GB300",
+    name: "GB300 L10 1U 機台",
     revision: "20260715",
     source: "builtin-glb",
     sourceFileName: "00_carlo-next_l10_outlook_20260715.stp",
     assetUrl: carloNextL10ModelUrl,
+    mobileAssetUrl: carloNextL10MobileModelUrl,
     dimensions: {
-      widthMm: 482.6,
-      depthMm: 800,
-      heightMm: 44.45,
+      widthMm: 481.5,
+      depthMm: 889.6,
+      heightMm: 44.5,
     },
     upAxis: "z",
     rackUnits: 1,
+    compatibleRackModelIds: ["nv-mgx-rack-v1-2-rev7"],
+    compatibilityNote: "已依 19 吋軌道與 1U 節距校正，可安裝於 GB300 L11 機櫃。",
     isCalibrated: true,
   },
   "generic-42u": {
@@ -160,10 +169,12 @@ function createRack(input: {
   status?: RackStatus;
   health?: RackDeviceHealth;
   modelId?: string;
+  l10ModelId?: string;
   powerKw?: number;
   temperatureC?: number;
   utilizationPercent?: number;
   l10Count?: number;
+  l10StartU?: number;
 }): RackPlan {
   const health = input.health ?? "healthy";
   const status = input.status ?? "allocated";
@@ -182,8 +193,9 @@ function createRack(input: {
     cabinet: input.cabinet,
     status,
     modelId: input.modelId ?? "nv-mgx-rack-v1-2-rev7",
-    l10ModelId: "l10-placeholder",
+    l10ModelId: input.l10ModelId ?? "l10-placeholder",
     l10Count: input.l10Count ?? (status === "available" ? 0 : 4),
+    l10StartU: input.l10StartU ?? 3,
     powerKw: input.powerKw ?? 16.8,
     coolingKw: Math.round((input.powerKw ?? 16.8) * 0.88 * 10) / 10,
     temperatureC: input.temperatureC ?? 24.2,
@@ -220,7 +232,18 @@ function createRack(input: {
 }
 
 const taipeiRacks: RackPlan[] = [
-  createRack({ id: "tpe-a01", cabinet: "TPE-A01", row: "A", positionX: -4.2, positionZ: -2.35, powerKw: 18.4, utilizationPercent: 86, l10Count: 6 }),
+  createRack({
+    id: "tpe-a01",
+    cabinet: "TPE-A01",
+    row: "A",
+    positionX: -4.2,
+    positionZ: -2.35,
+    modelId: "nv-mgx-rack-v1-2-rev7",
+    l10ModelId: "carlo-next-l10-20260715",
+    powerKw: 18.4,
+    utilizationPercent: 86,
+    l10Count: 6,
+  }),
   createRack({ id: "tpe-a02", cabinet: "TPE-A02", row: "A", positionX: -1.4, positionZ: -2.35, health: "warning", temperatureC: 28.6, utilizationPercent: 91, l10Count: 4 }),
   createRack({ id: "tpe-a03", cabinet: "TPE-A03", row: "A", positionX: 1.4, positionZ: -2.35, powerKw: 17.1, utilizationPercent: 78, l10Count: 8 }),
   createRack({ id: "tpe-a04", cabinet: "TPE-A04", row: "A", positionX: 4.2, positionZ: -2.35, status: "reserved", modelId: "partner-48u", powerKw: 8.2, utilizationPercent: 32, l10Count: 2 }),

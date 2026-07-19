@@ -74,12 +74,40 @@ def canonical_dimensions(spans, up_axis):
     }
 
 
+def glb_up_axis(source_up_axis):
+    # FreeCAD's glTF exporter maps source Y to glTF Z and source Z to glTF Y.
+    return {
+        "x": "x",
+        "y": "z",
+        "z": "y",
+    }[source_up_axis]
+
+
 def has_finite_bounds(obj):
     if not hasattr(obj, "Shape") or obj.Shape.isNull():
         return False
     box = obj.Shape.BoundBox
     values = (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
     return all(math.isfinite(value) and abs(value) < 1e50 for value in values)
+
+
+def measure_bounds(objects):
+    minimum = [
+        min(getattr(obj.Shape.BoundBox, axis) for obj in objects)
+        for axis in ("XMin", "YMin", "ZMin")
+    ]
+    maximum = [
+        max(getattr(obj.Shape.BoundBox, axis) for obj in objects)
+        for axis in ("XMax", "YMax", "ZMax")
+    ]
+    return {
+        "minimum": minimum,
+        "maximum": maximum,
+        "spans": [
+            maximum_value - minimum_value
+            for minimum_value, maximum_value in zip(minimum, maximum)
+        ],
+    }
 
 
 args = parse_args()
@@ -103,31 +131,62 @@ try:
     if not shape_objects:
         raise RuntimeError("The STEP file did not contain any renderable shapes.")
 
-    min_values = [
-        min(getattr(obj.Shape.BoundBox, axis) for obj in shape_objects)
-        for axis in ("XMin", "YMin", "ZMin")
+    root_shape_objects = [
+        obj
+        for obj in document.RootObjects
+        if has_finite_bounds(obj)
     ]
-    max_values = [
-        max(getattr(obj.Shape.BoundBox, axis) for obj in shape_objects)
-        for axis in ("XMax", "YMax", "ZMax")
-    ]
-    spans = [maximum - minimum for minimum, maximum in zip(min_values, max_values)]
+    export_objects = root_shape_objects or shape_objects
+    assembly_scope = "root-shapes" if root_shape_objects else "flat-shapes"
+    log(
+        "assembly-selected",
+        scope=assembly_scope,
+        sourceShapeCount=len(shape_objects),
+        exportShapeCount=len(export_objects),
+    )
+
+    export_bounds = measure_bounds(export_objects)
+    all_shape_bounds = measure_bounds(shape_objects)
+    min_values = export_bounds["minimum"]
+    max_values = export_bounds["maximum"]
+    spans = export_bounds["spans"]
     dimensions = canonical_dimensions(spans, args.up_axis)
+    root_coverage = {
+        "rootShapeCount": len(root_shape_objects),
+        "sourceShapeCount": len(shape_objects),
+        "exportShapeCount": len(export_objects),
+        "exportMinimum": export_bounds["minimum"],
+        "exportMaximum": export_bounds["maximum"],
+        "exportSpans": {
+            "x": round_mm(export_bounds["spans"][0]),
+            "y": round_mm(export_bounds["spans"][1]),
+            "z": round_mm(export_bounds["spans"][2]),
+        },
+        "allShapeMinimum": all_shape_bounds["minimum"],
+        "allShapeMaximum": all_shape_bounds["maximum"],
+        "allShapeSpans": {
+            "x": round_mm(all_shape_bounds["spans"][0]),
+            "y": round_mm(all_shape_bounds["spans"][1]),
+            "z": round_mm(all_shape_bounds["spans"][2]),
+        },
+        "rootSolidCount": sum(len(obj.Shape.Solids) for obj in root_shape_objects),
+        "rootVolumeMm3": sum(obj.Shape.Volume for obj in root_shape_objects),
+    }
     log(
         "bounds-measured",
-        shapeCount=len(shape_objects),
+        shapeCount=len(export_objects),
         minimum=min_values,
         maximum=max_values,
         spans={"x": round_mm(spans[0]), "y": round_mm(spans[1]), "z": round_mm(spans[2])},
         dimensions=dimensions,
     )
 
-    for index, obj in enumerate(shape_objects, start=1):
+    for index, obj in enumerate(export_objects, start=1):
         obj.Shape.tessellate(args.linear_deflection)
-        if index == 1 or index % 100 == 0 or index == len(shape_objects):
-            log("tessellating", completed=index, total=len(shape_objects))
+        if index == 1 or index % 100 == 0 or index == len(export_objects):
+            log("tessellating", completed=index, total=len(export_objects))
 
-    Import.export(document.Objects, output_path)
+    Import.export(export_objects, output_path)
     output_bytes = os.path.getsize(output_path)
     if output_bytes < 1024:
         raise RuntimeError("FreeCAD returned an empty or invalid GLB file.")
@@ -141,12 +200,15 @@ try:
         "convertedAt": datetime.now(timezone.utc).isoformat(),
         "linearDeflection": args.linear_deflection,
         "sourceUpAxis": args.up_axis,
-        "upAxis": "y",
+        "upAxis": glb_up_axis(args.up_axis),
         "minimum": min_values,
         "maximum": max_values,
         "spans": {"x": round_mm(spans[0]), "y": round_mm(spans[1]), "z": round_mm(spans[2])},
         "dimensions": dimensions,
-        "shapeCount": len(shape_objects),
+        "assemblyScope": assembly_scope,
+        "sourceShapeCount": len(shape_objects),
+        "shapeCount": len(export_objects),
+        "rootCoverage": root_coverage,
     }
     with open(metadata_path, "w", encoding="utf-8") as metadata_file:
         json.dump(metadata, metadata_file, ensure_ascii=False, indent=2)

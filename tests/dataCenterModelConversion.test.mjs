@@ -16,6 +16,14 @@ const workerUrl = new URL(
   "../src/components/data-center/stepConversion.worker.ts",
   import.meta.url
 );
+const freeCadScriptUrl = new URL(
+  "../scripts/freecad-step-to-glb.py",
+  import.meta.url
+);
+const freeCadRunnerUrl = new URL(
+  "../scripts/convert-step-with-freecad.ps1",
+  import.meta.url
+);
 
 test("STEP conversion derives calibrated millimeter dimensions from assembly bounds", () => {
   const result = getCanonicalModelBounds([
@@ -64,4 +72,20 @@ test("model import UI explains automatic conversion and exposes cancellation", a
   assert.match(planner, /onCancelImport/);
   assert.match(planner, /取消轉換/);
   assert.match(planner, /importProgress/);
+});
+
+test("native conversion exports top-level assembly roots without duplicating child parts", async () => {
+  const [converter, runner] = await Promise.all([
+    readFile(freeCadScriptUrl, "utf8"),
+    readFile(freeCadRunnerUrl, "utf8"),
+  ]);
+
+  assert.match(converter, /document\.RootObjects/);
+  assert.match(converter, /Import\.export\(export_objects,\s*output_path\)/);
+  assert.doesNotMatch(converter, /Import\.export\(document\.Objects,\s*output_path\)/);
+  assert.match(converter, /def glb_up_axis\(source_up_axis\)/);
+  assert.match(converter, /"y":\s*"z"/);
+  assert.match(converter, /"upAxis":\s*glb_up_axis\(args\.up_axis\)/);
+  assert.match(converter, /rootCoverage/);
+  assert.match(runner, /\/usr\/local\/bin\/FreeCADCmd/);
 });
