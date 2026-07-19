@@ -35,6 +35,22 @@ interface DataCenter3DPlannerProps {
   onSelectRack: (rackId: string) => void;
 }
 
+function resolveRackDefinition(
+  models: Record<string, RackModelDefinition>,
+  modelId: string
+) {
+  const model = models[modelId];
+  return model?.kind === "rack" ? model : models["generic-42u"];
+}
+
+function resolveL10Definition(
+  models: Record<string, RackModelDefinition>,
+  modelId: string
+) {
+  const model = models[modelId];
+  return model?.kind === "l10" ? model : models["l10-placeholder"];
+}
+
 const STATUS_LABELS: Record<RackStatus, string> = {
   allocated: "運行中",
   reserved: "預留",
@@ -806,8 +822,8 @@ function PlannerScene({
       <InfrastructureLayer racks={racks} activeLayer={activeLayer} facility={facility} />
 
       {racks.map((rack) => {
-        const definition = models[rack.modelId] ?? models["generic-42u"];
-        const l10Definition = models[rack.l10ModelId] ?? models["l10-placeholder"];
+        const definition = resolveRackDefinition(models, rack.modelId);
+        const l10Definition = resolveL10Definition(models, rack.l10ModelId);
         const health = getRackHealth(rack);
         const selected = rack.id === selectedRackId;
         const hovered = rack.id === hoveredRackId;

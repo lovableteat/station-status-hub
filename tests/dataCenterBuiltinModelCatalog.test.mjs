@@ -6,13 +6,27 @@ const seedSource = await readFile(
   new URL("../src/components/data-center/dataCenterSeed.ts", import.meta.url),
   "utf8",
 );
+const plannerSource = await readFile(
+  new URL("../src/components/data-center/DataCenter3DPlanner.tsx", import.meta.url),
+  "utf8",
+);
+const workspaceSource = await readFile(
+  new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+  "utf8",
+);
 
 test("VR200 cabinet and Carlo-Next L10 are persistent catalog models", () => {
-  assert.match(seedSource, /"vr200-cabinet-20260715":\s*\{[\s\S]*?kind:\s*"rack"/);
+  assert.match(
+    seedSource,
+    /"vr200-cabinet-20260715":\s*\{[\s\S]*?kind:\s*"rack"[\s\S]*?name:\s*"VR200 L11 機櫃"/,
+  );
   assert.match(seedSource, /vr200-cabinet-20260715\.glb/);
   assert.match(seedSource, /sourceFileName:\s*"00_vr_outlook_20260715\.stp"/);
 
-  assert.match(seedSource, /"carlo-next-l10-20260715":\s*\{[\s\S]*?kind:\s*"l10"/);
+  assert.match(
+    seedSource,
+    /"carlo-next-l10-20260715":\s*\{[\s\S]*?kind:\s*"l10"[\s\S]*?name:\s*"Carlo-Next L10 1U 機台"/,
+  );
   assert.match(seedSource, /carlo-next-l10-20260715\.glb/);
   assert.match(seedSource, /sourceFileName:\s*"00_carlo-next_l10_outlook_20260715\.stp"/);
 });
@@ -28,6 +42,31 @@ test("Carlo-Next is calibrated as a horizontal standard 1U rack module", () => {
   assert.match(carloDefinition, /heightMm:\s*44\.45/);
   assert.match(carloDefinition, /upAxis:\s*"z"/);
   assert.match(carloDefinition, /rackUnits:\s*1/);
+});
+
+test("the fallback L10 is also a 1U machine rather than a cabinet-sized block", () => {
+  const placeholderDefinition = seedSource.match(
+    /"l10-placeholder":\s*\{([\s\S]*?)\n\s*\},\n\};/,
+  )?.[1];
+
+  assert.ok(placeholderDefinition, "L10 placeholder catalog definition is missing");
+  assert.match(placeholderDefinition, /heightMm:\s*44\.45/);
+  assert.match(placeholderDefinition, /rackUnits:\s*1/);
+});
+
+test("the scene keeps L11 cabinets outside and only mounts L10 machines inside them", () => {
+  assert.match(plannerSource, /function resolveRackDefinition/);
+  assert.match(plannerSource, /model\?\.kind === "rack"/);
+  assert.match(plannerSource, /function resolveL10Definition/);
+  assert.match(plannerSource, /model\?\.kind === "l10"/);
+  assert.match(
+    plannerSource,
+    /<RackL10Modules rack=\{rack\} rackDefinition=\{definition\} l10Definition=\{l10Definition\} \/>/,
+  );
+
+  assert.match(workspaceSource, /L11 機櫃外型/);
+  assert.match(workspaceSource, /L10 1U 機台/);
+  assert.match(workspaceSource, /L10 只會安裝在目前的 L11 機櫃內/);
 });
 
 for (const assetName of [
