@@ -154,23 +154,21 @@
     <script>
       (function () {
         const RETRY_KEY = "station-status-hub:boot-retry";
-        const REVALIDATE_KEY = "station-status-hub:html-revalidated";
-        const FALLBACK_TITLE = "\u9801\u9762\u91cd\u65b0\u540c\u6b65\u4e2d";
+        const FALLBACK_TITLE = "\u9801\u9762\u6c92\u6709\u5b8c\u6210\u555f\u52d5";
         const FALLBACK_MESSAGE =
-          "\u525b\u525b\u5075\u6e2c\u5230\u700f\u89bd\u5668\u62ff\u5230\u820a\u7248\u8cc7\u6e90\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u91cd\u6574\u4e00\u6b21\u3002\u5982\u679c\u4f60\u9084\u662f\u770b\u5230\u7a7a\u767d\u9801\uff0c\u8acb\u518d\u6309\u4e00\u6b21\u91cd\u65b0\u6574\u7406\u3002";
-        const FALLBACK_BUTTON = "\u91cd\u65b0\u6574\u7406\u9801\u9762";
+          "\u7cfb\u7d71\u5df2\u505c\u6b62\u81ea\u52d5\u91cd\u65b0\u6574\u7406\uff0c\u907f\u514d\u624b\u6a5f\u4e0d\u65b7\u958b\u555f\u65b0\u7684\u700f\u89bd\u7d00\u9304\u3002\u8acb\u6309\u4e0b\u65b9\u6309\u9215\u624b\u52d5\u8f09\u5165\u6700\u65b0\u7248\u672c\u3002";
+        const FALLBACK_BUTTON = "\u624b\u52d5\u8f09\u5165\u6700\u65b0\u7248\u672c";
 
-        try {
-          if (window.sessionStorage.getItem(REVALIDATE_KEY) !== "1") {
-            window.sessionStorage.setItem(REVALIDATE_KEY, "1");
-            const revalidatedUrl = new URL(window.location.href);
-            revalidatedUrl.searchParams.set("reload", Date.now().toString());
-            window.location.replace(revalidatedUrl.toString());
-            return;
+        window.__STATION_MANUAL_RELOAD__ = function () {
+          try {
+            window.sessionStorage.removeItem(RETRY_KEY);
+          } catch {
+            // Manual recovery remains available when storage is blocked.
           }
-        } catch {
-          // Continue with the current document when storage is unavailable.
-        }
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("reload", Date.now().toString());
+          window.location.replace(nextUrl.toString());
+        };
 
         function renderFallbackMessage(force) {
           const root = document.getElementById("root");
@@ -185,24 +183,28 @@
             '<div style="font-size:15px;line-height:1.8;color:#cbd5e1;">' +
             FALLBACK_MESSAGE +
             "</div>" +
-            '<button onclick="window.location.reload()" style="margin-top:18px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#38bdf8;color:#082032;font-size:14px;font-weight:700;cursor:pointer;">' +
+            '<button onclick="window.__STATION_MANUAL_RELOAD__()" style="margin-top:18px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#38bdf8;color:#082032;font-size:14px;font-weight:700;cursor:pointer;">' +
             FALLBACK_BUTTON +
             "</button>" +
             "</div></div>";
         }
 
         function retryBoot(reason) {
-          const hasRetried = sessionStorage.getItem(RETRY_KEY) === "1";
-          if (hasRetried) {
-            console.warn("station-status-hub boot retry already used:", reason);
-            renderFallbackMessage();
-            return;
-          }
+          try {
+            const hasRetried = window.sessionStorage.getItem(RETRY_KEY) === "1";
+            if (hasRetried) {
+              console.warn("station-status-hub boot retry already used:", reason);
+              renderFallbackMessage(true);
+              return;
+            }
 
-          sessionStorage.setItem(RETRY_KEY, "1");
-          const nextUrl = new URL(window.location.href);
-          nextUrl.searchParams.set("reload", Date.now().toString());
-          window.location.replace(nextUrl.toString());
+            window.sessionStorage.setItem(RETRY_KEY, "1");
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.set("reload", Date.now().toString());
+            window.location.replace(nextUrl.toString());
+          } catch {
+            renderFallbackMessage(true);
+          }
         }
 
         window.addEventListener(
@@ -221,7 +223,8 @@
 
             if (event.error) {
               if (window.__STATION_APP_READY__ !== true) {
-                retryBoot("runtime-error-before-mount");
+                console.error("station-status-hub failed before mount:", event.error);
+                renderFallbackMessage(true);
                 return;
               }
 
@@ -236,9 +239,10 @@
           true
         );
 
-        window.addEventListener("unhandledrejection", function () {
+        window.addEventListener("unhandledrejection", function (event) {
           if (window.__STATION_APP_READY__ !== true) {
-            retryBoot("unhandled-rejection-before-mount");
+            console.error("station-status-hub rejected before mount:", event.reason);
+            renderFallbackMessage(true);
           }
         });
 
@@ -248,21 +252,9 @@
 
         window.setTimeout(function () {
           if (window.__STATION_APP_READY__ !== true) {
-            renderFallbackMessage();
+            renderFallbackMessage(true);
           }
-        }, 12000);
-
-        window.addEventListener("load", function () {
-          setTimeout(function () {
-            const root = document.getElementById("root");
-            const hasRendered = window.__STATION_APP_READY__ === true;
-            if (hasRendered) {
-              sessionStorage.removeItem(RETRY_KEY);
-              return;
-            }
-            retryBoot("empty-root-after-load");
-          }, 2200);
-        });
+        }, 15000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
