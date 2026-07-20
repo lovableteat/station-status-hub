@@ -16,16 +16,20 @@ test("slow mobile startup never triggers a cache-busting reload loop", () => {
   assert.doesNotMatch(indexSource, /empty-root-after-load/);
   assert.doesNotMatch(indexSource, /retryBoot\("runtime-error-before-mount"\)/);
   assert.doesNotMatch(indexSource, /retryBoot\("unhandled-rejection-before-mount"\)/);
-  assert.match(indexSource, /retryBoot\("asset-load-error"\)/);
+  assert.match(indexSource, /retryBoot\("asset-load-error", target\.src\)/);
   assert.match(indexSource, /renderFallbackMessage\(true\)/);
 });
 
-test("automatic recovery attempts stay limited for the browser session", () => {
+test("automatic recovery retries each deployed asset once without looping", () => {
   assert.doesNotMatch(
     appSource,
     /sessionStorage\.removeItem\("station-status-hub:(?:boot-retry|chunk-retry|html-revalidated)"\)/,
   );
   assert.doesNotMatch(appSource, /pagehide/);
+  assert.match(indexSource, /function retryBoot\(reason, fingerprint\)/);
+  assert.match(indexSource, /getItem\(RETRY_KEY\) === fingerprint/);
+  assert.match(indexSource, /setItem\(RETRY_KEY, fingerprint\)/);
   assert.match(boundarySource, /station-status-hub:chunk-retry/);
-  assert.match(boundarySource, /getItem\(CHUNK_RETRY_KEY\) === "1"/);
+  assert.match(boundarySource, /getItem\(CHUNK_RETRY_KEY\) === fingerprint/);
+  assert.match(boundarySource, /setItem\(CHUNK_RETRY_KEY, fingerprint\)/);
 });

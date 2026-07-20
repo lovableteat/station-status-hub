@@ -15,3 +15,7 @@ export function mergeServerProgressDrafts(currentDrafts, serverDrafts, dirtyItem
 
   return merged;
 }
+
+export function filterItemsNeedingStationCompletion(items, progressByItemId) {
+  return items.filter((item) => progressByItemId.get(item.id)?.status !== "Done");
+}
