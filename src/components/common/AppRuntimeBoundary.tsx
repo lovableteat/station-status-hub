@@ -43,8 +43,9 @@ export class AppRuntimeBoundary extends Component<
     if (!isChunkLoadError(error)) return;
 
     try {
-      if (window.sessionStorage.getItem(CHUNK_RETRY_KEY) === "1") return;
-      window.sessionStorage.setItem(CHUNK_RETRY_KEY, "1");
+      const fingerprint = error.message || error.name;
+      if (window.sessionStorage.getItem(CHUNK_RETRY_KEY) === fingerprint) return;
+      window.sessionStorage.setItem(CHUNK_RETRY_KEY, fingerprint);
       this.setState({ retrying: true });
       window.setTimeout(replaceWithCacheBuster, 80);
     } catch {

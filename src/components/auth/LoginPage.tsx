@@ -10,6 +10,7 @@ import {
   SUPABASE_EGRESS_RESTRICTION_MESSAGE,
   isSupabaseServiceRestrictedError,
 } from "@/integrations/supabase/serviceErrors";
+import { runLoginWithTransientRetry } from "./loginRetryPolicy.mjs";
 
 interface LoginPageProps {
   onLogin: (userId: string, username: string, role: string, displayName: string) => void;
@@ -27,10 +28,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.rpc("authenticate_user", {
-        username_input: username,
-        password_input: password,
-      });
+      const { data, error } = await runLoginWithTransientRetry(() =>
+        supabase.rpc("authenticate_user", {
+          username_input: username.trim(),
+          password_input: password,
+        })
+      );
 
       if (error) {
         console.error("Authentication error:", error);
