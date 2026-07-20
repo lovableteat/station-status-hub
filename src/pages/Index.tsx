@@ -14,7 +14,6 @@ import {
 
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
-import { FacebookStyleNotifications } from "@/components/common/FacebookStyleNotifications";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
@@ -603,7 +602,6 @@ const Index = () => {
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
-      {!isDemoMode && <FacebookStyleNotifications />}
       {!isDemoMode && <OnlineUsersIndicator />}
       {!isDemoMode && <RealtimeNotifications />}
 

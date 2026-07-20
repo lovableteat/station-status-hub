@@ -56,3 +56,35 @@ test("saved item can accept the next server value after its dirty flag is cleare
 
   assert.equal(merged.itemA.notes, "已儲存");
 });
+
+test("station completion skips every item that is already completed", () => {
+  assert.equal(
+    typeof draftModule?.filterItemsNeedingStationCompletion,
+    "function",
+    "station completion requires a non-destructive item filter"
+  );
+
+  const items = [
+    { id: "timed", station_id: "station-a" },
+    { id: "direct", station_id: "station-a" },
+    { id: "pending", station_id: "station-a" },
+  ];
+  const progressByItemId = new Map([
+    [
+      "timed",
+      {
+        status: "Done",
+        started_at: "2026-07-21T01:00:00.000Z",
+        completed_at: "2026-07-21T01:42:00.000Z",
+        actual_hours: 0.7,
+      },
+    ],
+    ["direct", { status: "Done", completed_at: null, actual_hours: 0 }],
+    ["pending", { status: "On-going", completed_at: null, actual_hours: 0 }],
+  ]);
+
+  assert.deepEqual(
+    draftModule.filterItemsNeedingStationCompletion(items, progressByItemId),
+    [items[2]]
+  );
+});

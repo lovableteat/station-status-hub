@@ -24,7 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SegmentedProgress } from "./SegmentedProgress";
 import { TimeRecordManager } from "./TimeRecordManager";
-import { mergeServerProgressDrafts } from "./systemProgressDrafts.mjs";
+import {
+  filterItemsNeedingStationCompletion,
+  mergeServerProgressDrafts,
+} from "./systemProgressDrafts.mjs";
 
 interface TrackerSystem {
   assigned_engineer?: string | null;
@@ -366,8 +369,14 @@ export function SystemProgressSheet({
   };
 
   const completeStation = async () => {
+    // Completed rows may already contain measured time. Never rewrite them from a
+    // stale drawer draft when completing the remaining rows in the station.
+    const itemsNeedingCompletion = filterItemsNeedingStationCompletion(
+      stationItems,
+      progressByItemId
+    );
     const results = await Promise.all(
-      stationItems.map((item) =>
+      itemsNeedingCompletion.map((item) =>
         saveItem(
           item,
           {
