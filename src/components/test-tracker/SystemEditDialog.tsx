@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Edit, Network, Save, Server, Settings2, X } from "lucide-react";
+import { Edit, Network, Plus, Save, Server, Settings2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,16 +23,23 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+type AddressField =
+  Database["public"]["Tables"]["test_project_address_fields"]["Row"];
 
 interface SystemEditDialogProps {
   systemId: string;
   systemName: string;
   assignedEngineer: string;
   model?: string;
+  onOpenChange?: (open: boolean) => void;
   serialNumber?: string;
+  open?: boolean;
   onUpdate: () => void;
+  showTrigger?: boolean;
   variant?: "button" | "icon";
 }
 
@@ -42,10 +49,18 @@ export function SystemEditDialog({
   assignedEngineer,
   model,
   serialNumber,
+  open,
+  onOpenChange,
   onUpdate,
+  showTrigger = true,
   variant = "icon",
 }: SystemEditDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = (nextOpen: boolean) => {
+    if (open === undefined) setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
   const [editValues, setEditValues] = useState({
     system_name: systemName,
     assigned_engineer: assignedEngineer,
@@ -61,6 +76,14 @@ export function SystemEditDialog({
     exclude_from_dashboard: false,
     team: "",
   });
+  const [projectId, setProjectId] = useState("");
+  const [addressFields, setAddressFields] = useState<AddressField[]>([]);
+  const [addressValues, setAddressValues] = useState<Record<string, string>>({});
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [newAddressPlaceholder, setNewAddressPlaceholder] = useState("");
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
@@ -83,35 +106,105 @@ export function SystemEditDialog({
 
   useEffect(() => {
     const loadSystemDetails = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("test_systems")
         .select("*")
         .eq("id", systemId)
         .maybeSingle();
 
-      if (data) {
-        setEditValues({
-          system_name: data.system_name,
-          assigned_engineer: data.assigned_engineer || "",
-          model: data.model || "GB300",
-          serial_number: data.serial_number || "",
-          cabinet: (data as any).cabinet || "",
-          os_mac_address: data.os_mac_address || "",
-          bmc_address: data.bmc_address || "",
-          old_bmc_address: (data as any).old_bmc_address || "",
-          bom_90: data.bom_90 || "",
-          ubuntu_version: data.ubuntu_version || "",
-          cuda_version: data.cuda_version || "",
-          exclude_from_dashboard: data.exclude_from_dashboard || false,
-          team: (data as any).team || "",
-        });
-      }
+      if (error || !data) return;
+
+      setProjectId(data.project_id);
+      setEditValues({
+        system_name: data.system_name,
+        assigned_engineer: data.assigned_engineer || "",
+        model: data.model || "GB300",
+        serial_number: data.serial_number || "",
+        cabinet: data.cabinet || "",
+        os_mac_address: data.os_mac_address || "",
+        bmc_address: data.bmc_address || "",
+        old_bmc_address: data.old_bmc_address || "",
+        bom_90: data.bom_90 || "",
+        ubuntu_version: data.ubuntu_version || "",
+        cuda_version: data.cuda_version || "",
+        exclude_from_dashboard: data.exclude_from_dashboard || false,
+        team: data.team || "",
+      });
+
+      const [fieldResult, valueResult] = await Promise.all([
+        supabase
+          .from("test_project_address_fields")
+          .select("*")
+          .eq("project_id", data.project_id)
+          .order("sort_order")
+          .order("created_at"),
+        supabase
+          .from("test_system_address_values")
+          .select("field_id,value")
+          .eq("system_id", systemId),
+      ]);
+
+      setAddressFields(fieldResult.data ?? []);
+      setAddressValues(
+        Object.fromEntries(
+          (valueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
+        )
+      );
     };
 
-    loadSystemDetails();
-  }, [systemId]);
+    if (isOpen) void loadSystemDetails();
+  }, [isOpen, systemId]);
+
+  const handleAddAddressField = async () => {
+    const label = newAddressLabel.trim();
+    if (!projectId || !label) {
+      toast({
+        title: "請輸入位址名稱",
+        description: "例如 Management IP、Storage IP 或 Switch Port。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingAddress(true);
+    const { data, error } = await supabase
+      .from("test_project_address_fields")
+      .insert({
+        label,
+        placeholder:
+          newAddressPlaceholder.trim() || `請輸入 ${label}...`,
+        project_id: projectId,
+        sort_order: addressFields.length,
+      })
+      .select("*")
+      .single();
+    setIsAddingAddress(false);
+
+    if (error || !data) {
+      toast({
+        title: "新增位址欄位失敗",
+        description:
+          error?.code === "23505"
+            ? "同一專案已經有相同名稱的位址欄位。"
+            : "請稍後再試，既有機台資料不會受影響。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAddressFields((current) => [...current, data]);
+    setAddressValues((current) => ({ ...current, [data.id]: "" }));
+    setNewAddressLabel("");
+    setNewAddressPlaceholder("");
+    setShowNewAddressForm(false);
+    toast({
+      title: "位址欄位已新增",
+      description: `${label} 已套用到同專案所有機台，每台可分別填寫。`,
+    });
+  };
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const { error } = await supabase
         .from("test_systems")
@@ -134,6 +227,20 @@ export function SystemEditDialog({
 
       if (error) throw error;
 
+      if (addressFields.length) {
+        const { error: addressError } = await supabase
+          .from("test_system_address_values")
+          .upsert(
+            addressFields.map((field) => ({
+              field_id: field.id,
+              system_id: systemId,
+              value: addressValues[field.id]?.trim() || "",
+            })),
+            { onConflict: "field_id,system_id" }
+          );
+        if (addressError) throw addressError;
+      }
+
       toast({
         title: "更新成功",
         description: "系統資料已完成更新。",
@@ -147,12 +254,14 @@ export function SystemEditDialog({
         description: "無法更新系統資料，請稍後再試。",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <MobileDialog open={isOpen} onOpenChange={setIsOpen}>
-      <MobileDialogTrigger asChild>
+      {showTrigger && <MobileDialogTrigger asChild>
         {variant === "button" ? (
           <Button
             variant="outline"
@@ -174,7 +283,7 @@ export function SystemEditDialog({
             {isMobile && "編輯"}
           </Button>
         )}
-      </MobileDialogTrigger>
+      </MobileDialogTrigger>}
 
       <MobileDialogContent
         className={cn(
@@ -298,18 +407,30 @@ export function SystemEditDialog({
               </section>
 
               <section className={cn(sectionClass, "lg:col-span-5")}>
-                <div className="mb-5 flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-300/16 bg-violet-300/[0.08] text-violet-100">
-                    <Network className="h-5 w-5" />
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-300/16 bg-violet-300/[0.08] text-violet-100">
+                      <Network className="h-5 w-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold text-slate-50">
+                        網路位址
+                      </h3>
+                      <p className="text-sm text-slate-300/72">
+                        專案共用欄位名稱，每台機台各自保存位址內容。
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-semibold text-slate-50">
-                      網路位址
-                    </h3>
-                    <p className="text-sm text-slate-300/72">
-                      只保留目前會用到的網路資料，畫面更乾淨，編輯時也不會分心。
-                    </p>
-                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-violet-300/30 bg-violet-300/10 text-violet-50 hover:bg-violet-300/20"
+                    onClick={() => setShowNewAddressForm((current) => !current)}
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    新增位址欄位
+                  </Button>
                 </div>
 
                 <div className="grid gap-4">
@@ -342,6 +463,66 @@ export function SystemEditDialog({
                       className={inputClass}
                     />
                   </div>
+
+                  {addressFields.map((field) => (
+                    <div key={field.id}>
+                      <Label className={fieldLabelClass}>{field.label}</Label>
+                      <Input
+                        value={addressValues[field.id] || ""}
+                        onChange={(event) =>
+                          setAddressValues((current) => ({
+                            ...current,
+                            [field.id]: event.target.value,
+                          }))
+                        }
+                        placeholder={field.placeholder || `請輸入 ${field.label}...`}
+                        className={inputClass}
+                      />
+                    </div>
+                  ))}
+
+                  {showNewAddressForm && (
+                    <div className="space-y-3 rounded-2xl border border-violet-300/25 bg-violet-300/[0.07] p-3">
+                      <div>
+                        <Label className={fieldLabelClass}>新位址名稱</Label>
+                        <Input
+                          value={newAddressLabel}
+                          onChange={(event) => setNewAddressLabel(event.target.value)}
+                          placeholder="例如 Management IP"
+                          className={inputClass}
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <Label className={fieldLabelClass}>輸入提示（選填）</Label>
+                        <Input
+                          value={newAddressPlaceholder}
+                          onChange={(event) => setNewAddressPlaceholder(event.target.value)}
+                          placeholder="例如 10.20.30.40"
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setShowNewAddressForm(false)}
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isAddingAddress}
+                          onClick={handleAddAddressField}
+                        >
+                          <Plus className="mr-1.5 h-4 w-4" />
+                          套用到同專案所有機台
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -454,6 +635,7 @@ export function SystemEditDialog({
 
           <Button
             onClick={handleSave}
+            disabled={isSaving}
             className={cn(
               "rounded-2xl bg-[linear-gradient(135deg,rgba(96,165,250,0.92),rgba(99,102,241,0.9))] text-slate-950 shadow-[0_18px_38px_-24px_rgba(96,165,250,0.72)] hover:brightness-110",
               isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
