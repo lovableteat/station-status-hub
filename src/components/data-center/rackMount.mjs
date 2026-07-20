@@ -82,6 +82,38 @@ export function getRackUnitSelection({
   };
 }
 
+export function normalizeRackUnitSlots({
+  capacityU,
+  rackUnits = 1,
+  rackUnitSlots,
+  reservedBottomU = 2,
+  reservedTopU = 2,
+}) {
+  const normalizedCapacityU = Math.max(1, Math.floor(Number(capacityU) || 1));
+  const normalizedRackUnits = Math.max(1, Math.floor(Number(rackUnits) || 1));
+  const reservedBottom = Math.max(0, Math.floor(Number(reservedBottomU) || 0));
+  const reservedTop = Math.max(0, Math.floor(Number(reservedTopU) || 0));
+  const firstUsableU = Math.min(normalizedCapacityU, reservedBottom + 1);
+  const lastUsableU = Math.max(firstUsableU - 1, normalizedCapacityU - reservedTop);
+  const occupiedUnits = new Set();
+
+  return [...new Set(Array.isArray(rackUnitSlots) ? rackUnitSlots : [])]
+    .map((slot) => Math.round(Number(slot)))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right)
+    .filter((slot) => {
+      const endU = slot + normalizedRackUnits - 1;
+      if (slot < firstUsableU || endU > lastUsableU) return false;
+      for (let unit = slot; unit <= endU; unit += 1) {
+        if (occupiedUnits.has(unit)) return false;
+      }
+      for (let unit = slot; unit <= endU; unit += 1) {
+        occupiedUnits.add(unit);
+      }
+      return true;
+    });
+}
+
 export function getRackUnitMountLayout({
   rackDimensions,
   capacityU,
@@ -89,6 +121,7 @@ export function getRackUnitMountLayout({
   rackUnits = 1,
   moduleCount,
   startU,
+  rackUnitSlots,
   reservedBottomU = 2,
   reservedTopU = 2,
   sideClearanceMm = 35,
@@ -127,7 +160,19 @@ export function getRackUnitMountLayout({
     reservedBottomU,
     reservedTopU,
   });
-  const { startU: normalizedStartU, visibleCount } = selection;
+  const selectedSlots = Array.isArray(rackUnitSlots)
+    ? normalizeRackUnitSlots({
+        capacityU: normalizedCapacityU,
+        rackUnits: normalizedRackUnits,
+        rackUnitSlots,
+        reservedBottomU,
+        reservedTopU,
+      })
+    : Array.from(
+        { length: selection.visibleCount },
+        (_, index) => selection.startU + index * normalizedRackUnits,
+      );
+  const visibleCount = selectedSlots.length;
   const frontFaceZ = rackDepth / 2 - frontClearanceMm / 1000;
   const centerZ = frontFaceZ - fittedDepth / 2;
   return {
@@ -137,11 +182,17 @@ export function getRackUnitMountLayout({
     fittedDepth,
     railOpeningWidth,
     ...selection,
-    positions: Array.from({ length: visibleCount }, (_, index) => ({
-      rackUnit: normalizedStartU + index * normalizedRackUnits,
+    visibleCount,
+    rackUnitSlots: selectedSlots,
+    startU: selectedSlots[0] ?? selection.startU,
+    endU: selectedSlots.length
+      ? selectedSlots.at(-1) + normalizedRackUnits - 1
+      : selection.startU - 1,
+    positions: selectedSlots.map((rackUnit) => ({
+      rackUnit,
       y:
         railBottom
-        + (normalizedStartU - 1 + index * normalizedRackUnits) * RACK_UNIT_HEIGHT_METERS
+        + (rackUnit - 1) * RACK_UNIT_HEIGHT_METERS
         + (slotHeight - fittedHeight) / 2,
       z: centerZ,
     })),

@@ -16,7 +16,7 @@ export type MaintenanceStatus = "open" | "in-progress" | "done";
 
 export type DataCenterLayer = "overview" | "health" | "power" | "network" | "cooling";
 
-export type CameraPreset = "overview" | "top" | "front" | "focus";
+export type CameraPreset = "overview" | "top" | "front" | "focus" | "detail";
 
 export type FacilityAisleKind = "cold" | "hot";
 
@@ -69,6 +69,8 @@ export interface RackPlan {
   l10Count: number;
   /** One-based rack unit where the first L10 module is mounted. */
   l10StartU: number;
+  /** Exact one-based rack units selected for L10 modules. Older data derives these from start/count. */
+  l10Slots?: number[];
   powerKw: number;
   coolingKw: number;
   temperatureC: number;
