@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [plannerSource, workspaceSource, indexSource] = await Promise.all([
+const [plannerSource, workspaceSource, viewerSource, indexSource] = await Promise.all([
   readFile(
     new URL("../src/components/data-center/DataCenter3DPlanner.tsx", import.meta.url),
     "utf8",
   ),
   readFile(
     new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../src/components/data-center/DataCenterModelViewer.tsx", import.meta.url),
     "utf8",
   ),
   readFile(new URL("../src/pages/Index.tsx", import.meta.url), "utf8"),
@@ -51,6 +55,14 @@ test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () 
   assert.match(plannerSource, /ONE:\s*THREE\.TOUCH\.ROTATE/);
   assert.match(plannerSource, /TWO:\s*THREE\.TOUCH\.DOLLY_PAN/);
   assert.match(workspaceSource, /data-testid="data-center-touch-help"/);
+});
+
+test("the model detail viewer keeps its header and controls inside a phone viewport", () => {
+  assert.match(viewerSource, /className="min-w-0 h-\[min\(94dvh,920px\)\]/);
+  assert.match(viewerSource, /<header className="flex min-h-\[76px\] min-w-0/);
+  assert.match(viewerSource, /<aside className="order-2 min-w-0/);
+  assert.match(viewerSource, /className="flex w-full min-w-0 gap-2 overflow-x-auto/);
+  assert.doesNotMatch(viewerSource, /min-w-max gap-2 overflow-x-auto/);
 });
 
 test("rack inspector explains the physical U capacity and selectable rail range", () => {

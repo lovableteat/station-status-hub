@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   RACK_UNIT_HEIGHT_METERS,
   STANDARD_19_INCH_RAIL_WIDTH_METERS,
+  getDefaultRackL10Assignment,
+  getAssignedModuleCount,
   getRackUnitMountLayout,
 } from "../src/components/data-center/rackMount.mjs";
 
@@ -81,4 +83,42 @@ test("selected U is clamped before reserved top space and excess modules are rej
   assert.equal(layout.visibleCount, 2);
   assert.equal(layout.endU, 40);
   assert.deepEqual(layout.positions.map((position) => position.rackUnit), [39, 40]);
+});
+
+test("applying an L10 to an empty compatible rack installs one module", () => {
+  assert.equal(getAssignedModuleCount({ currentCount: 0, capacity: 38 }), 1);
+});
+
+test("applying a replacement model preserves count within rack capacity", () => {
+  assert.equal(getAssignedModuleCount({ currentCount: 5, capacity: 8 }), 5);
+  assert.equal(getAssignedModuleCount({ currentCount: 5, capacity: 3 }), 3);
+  assert.equal(getAssignedModuleCount({ currentCount: 0, capacity: 0 }), 0);
+});
+
+test("new compatible L11 racks receive one L10 at the first usable rack unit", () => {
+  assert.deepEqual(
+    getDefaultRackL10Assignment({
+      rackModelId: "gb300-rack",
+      models: {
+        placeholder: {
+          id: "placeholder",
+          kind: "l10",
+          isPlaceholder: true,
+        },
+        "gb300-l10": {
+          id: "gb300-l10",
+          kind: "l10",
+          compatibleRackModelIds: ["gb300-rack"],
+          isPlaceholder: false,
+          isCalibrated: true,
+        },
+      },
+      firstUsableU: 3,
+    }),
+    {
+      l10ModelId: "gb300-l10",
+      l10Count: 1,
+      l10StartU: 3,
+    },
+  );
 });

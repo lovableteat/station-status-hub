@@ -40,6 +40,7 @@ import {
   ShieldCheck,
   Snowflake,
   Thermometer,
+  Trash2,
   Upload,
   Wifi,
   Wrench,
@@ -49,6 +50,17 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -76,13 +88,18 @@ import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
 import {
   isL10CompatibleWithRack,
   mergeModelCatalogOverrides,
+  removeCatalogModel,
   serializeModelCatalogOverrides,
 } from "./modelCatalog.mjs";
 import {
   convertStepToGlb,
   type ModelConversionProgress,
 } from "./modelConversionWorker";
-import { getRackUnitSelection } from "./rackMount.mjs";
+import {
+  getAssignedModuleCount,
+  getDefaultRackL10Assignment,
+  getRackUnitSelection,
+} from "./rackMount.mjs";
 import type {
   CameraPreset,
   DataCenterAssetKind,
@@ -187,23 +204,39 @@ function readInitialSites() {
           lastUsableU,
           Math.max(firstUsableU, Math.round(Number(rack.l10StartU) || firstUsableU))
         );
+        const shouldInstallDefaultL10 =
+          rack.cabinet.startsWith("NEW-") &&
+          rack.status === "reserved" &&
+          rack.l10ModelId === "l10-placeholder" &&
+          rack.l10Count === 0;
+        const defaultL10Assignment = getDefaultRackL10Assignment({
+          rackModelId: modelId,
+          models: BUILT_IN_RACK_MODELS,
+          firstUsableU,
+        });
 
         return {
           ...rack,
           capacityU,
           modelId,
-          l10ModelId: isLegacyInvalidVr200Rack
-            ? "carlo-next-l10-20260715"
-            : l10MatchesRack
-              ? normalizedL10ModelId
-              : "l10-placeholder",
+          l10ModelId: shouldInstallDefaultL10
+            ? defaultL10Assignment.l10ModelId
+            : isLegacyInvalidVr200Rack
+              ? "carlo-next-l10-20260715"
+              : l10MatchesRack
+                ? normalizedL10ModelId
+                : "l10-placeholder",
           l10Count:
-            typeof rack.l10Count === "number"
+            shouldInstallDefaultL10
+              ? defaultL10Assignment.l10Count
+              : typeof rack.l10Count === "number"
               ? Math.max(0, Math.min(8, Math.round(rack.l10Count)))
               : rack.status === "available"
                 ? 0
                 : 4,
-          l10StartU,
+          l10StartU: shouldInstallDefaultL10
+            ? defaultL10Assignment.l10StartU
+            : l10StartU,
         };
       }),
     }));
@@ -780,9 +813,14 @@ function RackInspector({
                 <button
                   type="button"
                   onClick={onOpenL10Models}
-                  className="h-9 cursor-pointer rounded-lg border border-[#214669] bg-[#10283d] px-3 text-xs font-bold text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                  className={cn(
+                    "h-9 cursor-pointer rounded-lg border px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2",
+                    rack.l10Count === 0
+                      ? "border-cyan-200 bg-cyan-300 text-[#03131f] shadow-[0_0_16px_rgba(34,211,238,0.2)] hover:bg-cyan-200 focus-visible:ring-cyan-100"
+                      : "border-[#214669] bg-[#10283d] text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:ring-blue-300/70"
+                  )}
                 >
-                  更換模型
+                  {rack.l10Count === 0 ? "選擇並安裝 L10" : "更換 L10 模型"}
                 </button>
               </div>
             </div>
@@ -1022,10 +1060,12 @@ interface ModelLibraryProps {
   onAssignModel: () => void;
   onAssignL10Model: () => void;
   onAddRack: () => void;
+  modelUsageById: Record<string, number>;
   onUpdateModel: (
     modelId: string,
     updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions">
   ) => void;
+  onDeleteModel: (modelId: string) => void;
   onPreviewModel: (modelId: string) => void;
 }
 
@@ -1057,7 +1097,9 @@ function ModelLibrary({
   onAssignModel,
   onAssignL10Model,
   onAddRack,
+  modelUsageById,
   onUpdateModel,
+  onDeleteModel,
   onPreviewModel,
 }: ModelLibraryProps) {
   const [view, setView] = useState<"browse" | "import" | "edit">("browse");
@@ -1086,11 +1128,14 @@ function ModelLibrary({
   const selectedIsAssigned = selectedModel
     ? catalogKind === "rack"
       ? selectedRack.modelId === selectedModel.id
-      : selectedRack.l10ModelId === selectedModel.id
+      : selectedRack.l10ModelId === selectedModel.id && selectedRack.l10Count > 0
     : false;
   const selectedIsCompatible = selectedModel
     ? selectedModel.kind === "rack" || isL10CompatibleWithRack(selectedModel, selectedRack.modelId)
     : false;
+  const selectedIsProtected =
+    selectedModel?.id === "generic-42u" || selectedModel?.id === "l10-placeholder";
+  const selectedUsageCount = selectedModel ? modelUsageById[selectedModel.id] ?? 0 : 0;
 
   const beginEditingSelectedModel = () => {
     if (!selectedModel) return;
@@ -1194,7 +1239,7 @@ function ModelLibrary({
                   <p className="mt-1 text-xs leading-5 text-slate-300">
                     {catalogKind === "rack"
                       ? "選取後可套用至目前機櫃，或放入一座新的 L11 機櫃。"
-                      : "L10 只會安裝在目前的 L11 機櫃內；替換模型時會保留機台數量。"}
+                      : "L10 只會安裝在相容的 L11 機櫃軌道內；空機櫃會先安裝 1 台，之後可調整數量與起始 U 位。"}
                   </p>
                 </div>
                 <Badge className="border-cyan-300/18 bg-cyan-400/8 text-[11px] text-cyan-50 shadow-none">
@@ -1311,6 +1356,40 @@ function ModelLibrary({
                       <PencilRuler className="mr-2 h-4 w-4" /> 編輯模型資料
                     </Button>
                   </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!canEdit || selectedIsProtected}
+                        className="mb-2 h-11 w-full rounded-xl border-rose-300/25 bg-rose-400/[0.07] text-sm font-bold text-rose-100 hover:bg-rose-400/[0.14] disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-slate-500"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {selectedIsProtected ? "系統救援模型不可刪除" : "刪除模型"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>確定刪除「{selectedModel.name}」？</AlertDialogTitle>
+                        <AlertDialogDescription className="leading-6 text-slate-300">
+                          {selectedUsageCount > 0
+                            ? `目前有 ${selectedUsageCount} 座機櫃使用此模型。刪除後會自動改用安全替代模型，機櫃位置、L10 數量與 U 位資料不會消失。`
+                            : "此模型目前未被任何機櫃使用。刪除後會從模型型錄移除。"}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-[#2a526f] bg-[#10263a] text-slate-100 hover:bg-[#17364f] hover:text-white">
+                          取消
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => onDeleteModel(selectedModel.id)}
+                          className="bg-rose-500 font-bold text-white hover:bg-rose-400"
+                        >
+                          確認刪除
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   {catalogKind === "rack" ? (
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignModel} className="h-12 rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
@@ -1322,7 +1401,7 @@ function ModelLibrary({
                     </div>
                   ) : (
                     <Button type="button" disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible} onClick={onAssignL10Model} className="h-12 w-full rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
-                      <Cpu className="mr-2 h-4 w-4" /> 套用為櫃內 L10
+                      <Cpu className="mr-2 h-4 w-4" /> {selectedRack.l10Count > 0 ? "替換櫃內 L10 外型" : `安裝 1 台至 U${selectedRack.l10StartU}`}
                     </Button>
                   )}
                 </div>
@@ -1630,6 +1709,18 @@ export function DeploymentPlanningCenter() {
   const selectedL10Placement = getL10Placement(selectedRack, selectedL10Model);
   const selectedL10Capacity = selectedL10Placement.maxVisible;
   const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
+  const modelUsageById = useMemo(() => {
+    const usage: Record<string, number> = {};
+    for (const site of sites) {
+      for (const rack of site.racks) {
+        usage[rack.modelId] = (usage[rack.modelId] ?? 0) + 1;
+        if (rack.l10Count > 0) {
+          usage[rack.l10ModelId] = (usage[rack.l10ModelId] ?? 0) + 1;
+        }
+      }
+    }
+    return usage;
+  }, [sites]);
 
   useEffect(() => {
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(sites));
@@ -1712,6 +1803,47 @@ export function DeploymentPlanningCenter() {
     toast({
       title: "模型資料已更新",
       description: `${updates.name} 的顯示名稱、版本與尺寸已儲存。`,
+    });
+  };
+
+  const deleteCatalogModel = (modelId: string) => {
+    if (!canEdit) return;
+    const deletedModel = models[modelId];
+    const result = removeCatalogModel({ models, sites, modelId });
+
+    if (!result.deleted) {
+      toast({
+        title: result.reason === "protected" ? "系統救援模型不可刪除" : "模型無法刪除",
+        description:
+          result.reason === "protected"
+            ? "Generic 42U 與 L10 暫代機台用來避免場景失去可用模型。"
+            : "請確認型錄中仍保留至少一個同類型模型。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (deletedModel?.assetUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(deletedModel.assetUrl);
+      uploadedUrlsRef.current = uploadedUrlsRef.current.filter(
+        (url) => url !== deletedModel.assetUrl
+      );
+    }
+    setModels(result.models as Record<string, RackModelDefinition>);
+    setSites(result.sites as SitePlan[]);
+    setPreviewModelId((current) => (current === modelId ? null : current));
+
+    const nextSelectedModel =
+      result.models[result.fallbackModelId] ??
+      Object.values(result.models).find((model) => model.kind === deletedModel?.kind);
+    if (nextSelectedModel) setSelectedModelId(nextSelectedModel.id);
+
+    toast({
+      title: "模型已刪除",
+      description:
+        result.affectedRackCount > 0
+          ? `${deletedModel?.name ?? "模型"} 已移除，${result.affectedRackCount} 座受影響機櫃已切換至安全替代模型。`
+          : `${deletedModel?.name ?? "模型"} 已從模型型錄移除。`,
     });
   };
 
@@ -1972,6 +2104,20 @@ export function DeploymentPlanningCenter() {
       return;
     }
 
+    const capacity = getL10Capacity(selectedRack, definition);
+    const assignedCount = getAssignedModuleCount({
+      currentCount: selectedRack.l10Count,
+      capacity,
+    });
+    if (assignedCount === 0) {
+      toast({
+        title: "目前機櫃沒有可用 U 位",
+        description: "請先減少保留空間或調整機櫃容量，再安裝 L10。",
+        variant: "destructive",
+      });
+      return;
+    }
+
     updateSelectedRack((rack) => {
       const placement = getL10Placement(rack, definition);
       const l10StartU = Math.min(rack.l10StartU, placement.maxStartUForCount);
@@ -1979,12 +2125,18 @@ export function DeploymentPlanningCenter() {
       return {
         ...nextRack,
         l10ModelId: selectedModelId,
-        l10Count: Math.min(rack.l10Count, getL10Capacity(nextRack, definition)),
+        l10Count: getAssignedModuleCount({
+          currentCount: rack.l10Count,
+          capacity: getL10Capacity(nextRack, definition),
+        }),
       };
     });
     toast({
-      title: "櫃內 L10 機台已更新",
-      description: `${selectedRack.cabinet} 內的 ${selectedRack.l10Count} 台 L10 已套用 ${definition.name}。`,
+      title: selectedRack.l10Count > 0 ? "櫃內 L10 外型已更新" : "L10 已安裝",
+      description:
+        selectedRack.l10Count > 0
+          ? `${selectedRack.cabinet} 內的 ${assignedCount} 台 L10 已套用 ${definition.name}。`
+          : `${definition.name} 已安裝至 ${selectedRack.cabinet} 的 U${selectedRack.l10StartU}。`,
     });
   };
 
@@ -2017,7 +2169,15 @@ export function DeploymentPlanningCenter() {
   const addRackFromSelectedModel = () => {
     if (!canEdit || models[selectedModelId]?.kind !== "rack") return;
     const definition = models[selectedModelId];
-    const baseRack = createRackFromModel(definition, selectedSite);
+    const defaultL10Assignment = getDefaultRackL10Assignment({
+      rackModelId: definition.id,
+      models,
+      firstUsableU: L10_RESERVED_BOTTOM_U + 1,
+    });
+    const baseRack = {
+      ...createRackFromModel(definition, selectedSite),
+      ...defaultL10Assignment,
+    };
     const slot = selectedSite.racks.length;
     const nextRack = {
       ...baseRack,
@@ -2036,7 +2196,10 @@ export function DeploymentPlanningCenter() {
     requestCamera("focus");
     toast({
       title: "新機櫃已放入場景",
-      description: `${nextRack.cabinet} 使用 ${definition.name}，可在編排模式調整位置。`,
+      description:
+        nextRack.l10Count > 0
+          ? `${nextRack.cabinet} 使用 ${definition.name}，已在 U${nextRack.l10StartU} 安裝相容 L10。`
+          : `${nextRack.cabinet} 使用 ${definition.name}；目前沒有相容 L10，可從型錄另行安裝。`,
     });
   };
 
@@ -2624,7 +2787,9 @@ export function DeploymentPlanningCenter() {
           onAssignModel={assignSelectedModel}
           onAssignL10Model={assignSelectedL10Model}
           onAddRack={addRackFromSelectedModel}
+          modelUsageById={modelUsageById}
           onUpdateModel={updateCatalogModel}
+          onDeleteModel={deleteCatalogModel}
           onPreviewModel={setPreviewModelId}
         />
         <DataCenterModelViewer
