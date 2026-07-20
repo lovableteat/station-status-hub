@@ -190,16 +190,17 @@
             "</div></div>";
         }
 
-        function retryBoot(reason) {
+        function retryBoot(reason, fingerprint) {
           try {
-            const hasRetried = window.sessionStorage.getItem(RETRY_KEY) === "1";
+            fingerprint = fingerprint || reason;
+            const hasRetried = window.sessionStorage.getItem(RETRY_KEY) === fingerprint;
             if (hasRetried) {
               console.warn("station-status-hub boot retry already used:", reason);
               renderFallbackMessage(true);
               return;
             }
 
-            window.sessionStorage.setItem(RETRY_KEY, "1");
+            window.sessionStorage.setItem(RETRY_KEY, fingerprint);
             const nextUrl = new URL(window.location.href);
             nextUrl.searchParams.set("reload", Date.now().toString());
             window.location.replace(nextUrl.toString());
@@ -218,7 +219,7 @@
               typeof target.src === "string" &&
               target.src.includes("/assets/index-")
             ) {
-              retryBoot("asset-load-error");
+              retryBoot("asset-load-error", target.src);
               return;
             }
 
