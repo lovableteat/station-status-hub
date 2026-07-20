@@ -46,6 +46,7 @@ import {
   Wrench,
   X,
   Zap,
+  ZoomIn,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,9 +97,14 @@ import {
   type ModelConversionProgress,
 } from "./modelConversionWorker";
 import {
+  getFacilityAreaSquareMeters,
+  normalizeFacilityDimension,
+} from "./facilityPlan.mjs";
+import {
   getAssignedModuleCount,
   getDefaultRackL10Assignment,
   getRackUnitSelection,
+  normalizeRackUnitSlots,
 } from "./rackMount.mjs";
 import type {
   CameraPreset,
@@ -214,6 +220,28 @@ function readInitialSites() {
           models: BUILT_IN_RACK_MODELS,
           firstUsableU,
         });
+        const normalizedL10Count =
+          shouldInstallDefaultL10
+            ? defaultL10Assignment.l10Count
+            : typeof rack.l10Count === "number"
+              ? Math.max(0, Math.min(38, Math.round(rack.l10Count)))
+              : rack.status === "available"
+                ? 0
+                : 4;
+        const rackUnits = normalizedL10Model?.rackUnits ?? 1;
+        const l10Slots = normalizeRackUnitSlots({
+          capacityU,
+          rackUnits,
+          rackUnitSlots:
+            Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
+              ? rack.l10Slots
+              : Array.from(
+                  { length: normalizedL10Count },
+                  (_, index) => l10StartU + index * rackUnits,
+                ),
+          reservedBottomU: L10_RESERVED_BOTTOM_U,
+          reservedTopU: L10_RESERVED_TOP_U,
+        });
 
         return {
           ...rack,
@@ -226,17 +254,11 @@ function readInitialSites() {
               : l10MatchesRack
                 ? normalizedL10ModelId
                 : "l10-placeholder",
-          l10Count:
-            shouldInstallDefaultL10
-              ? defaultL10Assignment.l10Count
-              : typeof rack.l10Count === "number"
-              ? Math.max(0, Math.min(8, Math.round(rack.l10Count)))
-              : rack.status === "available"
-                ? 0
-                : 4,
+          l10Count: l10Slots.length,
           l10StartU: shouldInstallDefaultL10
             ? defaultL10Assignment.l10StartU
-            : l10StartU,
+            : l10Slots[0] ?? l10StartU,
+          l10Slots,
         };
       }),
     }));
@@ -288,8 +310,8 @@ function readInitialFacilityPlans(): Record<string, FacilityPlan> {
           {
             ...base,
             ...plan,
-            width: Number.isFinite(plan.width) ? Math.max(8, plan.width) : base.width,
-            depth: Number.isFinite(plan.depth) ? Math.max(8, plan.depth) : base.depth,
+            width: normalizeFacilityDimension(plan.width, base.width),
+            depth: normalizeFacilityDimension(plan.depth, base.depth),
             wallHeight: Number.isFinite(plan.wallHeight) ? Math.max(2.4, plan.wallHeight) : base.wallHeight,
             aisles: Array.isArray(plan.aisles) ? plan.aisles : base.aisles,
             powerFeeds: Array.isArray(plan.powerFeeds) ? plan.powerFeeds : base.powerFeeds,
@@ -348,7 +370,31 @@ function getL10Placement(rack: RackPlan, model: RackModelDefinition, count = rac
 }
 
 function getL10Capacity(rack: RackPlan, model: RackModelDefinition) {
-  return getL10Placement(rack, model).maxVisible;
+  return getRackUnitSelection({
+    capacityU: rack.capacityU,
+    rackUnits: getL10RackUnits(model),
+    moduleCount: 0,
+    startU: L10_RESERVED_BOTTOM_U + 1,
+    reservedBottomU: L10_RESERVED_BOTTOM_U,
+    reservedTopU: L10_RESERVED_TOP_U,
+  }).maxVisible;
+}
+
+function getRackL10Slots(rack: RackPlan, model: RackModelDefinition) {
+  const rackUnits = getL10RackUnits(model);
+  return normalizeRackUnitSlots({
+    capacityU: rack.capacityU,
+    rackUnits,
+    rackUnitSlots:
+      Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
+        ? rack.l10Slots
+        : Array.from(
+            { length: rack.l10Count },
+            (_, index) => rack.l10StartU + index * rackUnits,
+          ),
+    reservedBottomU: L10_RESERVED_BOTTOM_U,
+    reservedTopU: L10_RESERVED_TOP_U,
+  });
 }
 
 function getDeviceIcon(type: RackDevice["type"]): LucideIcon {
@@ -625,6 +671,7 @@ interface RackInspectorProps {
   onPreviewL10Model: () => void;
   onL10CountChange: (count: number) => void;
   onL10StartUChange: (startU: number) => void;
+  onL10SlotToggle: (rackUnit: number) => void;
   onNudge: (x: number, z: number) => void;
   onRotate: () => void;
   collapsed?: boolean;
@@ -649,6 +696,7 @@ function RackInspector({
   onPreviewL10Model,
   onL10CountChange,
   onL10StartUChange,
+  onL10SlotToggle,
   onNudge,
   onRotate,
   collapsed = false,
@@ -657,9 +705,12 @@ function RackInspector({
   const health = getRackHealth(rack);
   const sortedDevices = [...rack.devices].sort((left, right) => right.slotStart - left.slotStart);
   const l10RackUnits = getL10RackUnits(l10Model);
-  const occupiedEndU = rack.l10Count
-    ? rack.l10StartU + rack.l10Count * l10RackUnits - 1
-    : rack.l10StartU - 1;
+  const selectedL10Slots = getRackL10Slots(rack, l10Model);
+  const occupiedRackUnits = new Set(
+    selectedL10Slots.flatMap((slot) =>
+      Array.from({ length: l10RackUnits }, (_, index) => slot + index)
+    )
+  );
   const railUnits = Array.from(
     { length: Math.max(0, l10LastUsableU - l10FirstUsableU + 1) },
     (_, index) => l10LastUsableU - index
@@ -829,19 +880,19 @@ function RackInspector({
               <div>
                 <div className="text-[11px] font-semibold text-slate-300">目前數量</div>
                 <div className="mt-0.5 text-2xl font-black tabular-nums text-white">
-                  {rack.l10Count}
+                  {selectedL10Slots.length}
                   <span className="ml-1 text-sm font-semibold text-slate-400">/ {l10Capacity}</span>
                 </div>
                 <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                  從 U{rack.l10StartU} 起可安裝 {l10Capacity} 台
+                  已選 {selectedL10Slots.length} 層，最多可安裝 {l10Capacity} 台
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   aria-label="減少一台 L10 1U 機台"
-                  disabled={!canEdit || rack.l10Count <= 0}
-                  onClick={() => onL10CountChange(rack.l10Count - 1)}
+                   disabled={!canEdit || selectedL10Slots.length <= 0}
+                   onClick={() => onL10CountChange(selectedL10Slots.length - 1)}
                   className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-[#214669] bg-[#10283d] text-slate-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <Minus className="h-4 w-4" />
@@ -849,8 +900,8 @@ function RackInspector({
                 <button
                   type="button"
                   aria-label="增加一台 L10 1U 機台"
-                  disabled={!canEdit || rack.l10Count >= l10Capacity}
-                  onClick={() => onL10CountChange(rack.l10Count + 1)}
+                   disabled={!canEdit || selectedL10Slots.length >= l10Capacity}
+                   onClick={() => onL10CountChange(selectedL10Slots.length + 1)}
                   className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-100/45"
                 >
                   <Plus className="h-4 w-4" />
@@ -862,10 +913,10 @@ function RackInspector({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-bold text-cyan-50">
-                    <Layers3 className="h-4 w-4 text-cyan-300" /> 安裝起始層
+                    <Layers3 className="h-4 w-4 text-cyan-300" /> 選擇安裝層位
                   </div>
                   <p className="mt-1 text-[11px] text-slate-300">
-                    可用 U{l10FirstUsableU}–U{l10LastUsableU}，由起始層向上連續安裝
+                    點選任意可用 U 位；可分開安裝，不必連續排列
                   </p>
                 </div>
                 <Select
@@ -890,30 +941,47 @@ function RackInspector({
               <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[#214669] bg-[#0c2235] px-3 py-2">
                 <span className="text-[11px] font-semibold text-slate-300">目前佔用</span>
                 <span className="text-xs font-black tabular-nums text-cyan-100">
-                  {rack.l10Count ? `U${rack.l10StartU}–U${occupiedEndU}` : "尚未放置"}
+                    {selectedL10Slots.length
+                      ? selectedL10Slots.map((unit) => `U${unit}`).join("、")
+                      : "尚未放置"}
                 </span>
               </div>
 
               <div className="mt-3 grid grid-cols-8 gap-1" aria-label={`${rack.capacityU}U 機櫃軌道配置`}>
                 {railUnits.map((unit) => {
-                  const occupied = rack.l10Count > 0 && unit >= rack.l10StartU && unit <= occupiedEndU;
-                  const canStartHere = canEdit && unit <= l10MaxStartU;
+                  const selected = selectedL10Slots.includes(unit);
+                  const occupiedByAnotherSlot =
+                    occupiedRackUnits.has(unit) && !selected;
+                  const lastRequiredUnit = unit + l10RackUnits - 1;
+                  const fitsInsideRack = lastRequiredUnit <= l10LastUsableU;
+                  const overlapsAnotherSlot = selectedL10Slots.some((slot) => {
+                    if (slot === unit) return false;
+                    const slotEnd = slot + l10RackUnits - 1;
+                    return unit <= slotEnd && lastRequiredUnit >= slot;
+                  });
+                  const canToggle = canEdit && (selected || (fitsInsideRack && !overlapsAnotherSlot));
                   return (
                     <button
                       key={unit}
                       type="button"
-                      title={canStartHere ? `從 U${unit} 開始安裝` : `U${unit} 無法容納目前 ${rack.l10Count} 台機台`}
-                      aria-label={`U${unit}${occupied ? "，已佔用" : ""}`}
-                      aria-pressed={unit === rack.l10StartU}
-                      disabled={!canStartHere}
-                      onClick={() => onL10StartUChange(unit)}
+                      title={
+                        selected
+                          ? `移除 U${unit} 的 L10`
+                          : canToggle
+                            ? `在 U${unit} 安裝 L10`
+                            : `U${unit} 無法安裝：空間不足或與其他 L10 重疊`
+                      }
+                      aria-label={`U${unit}${selected ? "，已選取" : ""}`}
+                      aria-pressed={selected}
+                      disabled={!canToggle}
+                      onClick={() => onL10SlotToggle(unit)}
                       className={cn(
                         "flex h-7 items-center justify-center rounded-md border text-[10px] font-bold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
-                        occupied
+                        selected
                           ? "border-cyan-200/70 bg-cyan-400 text-[#03131f] shadow-[0_0_12px_rgba(34,211,238,0.28)]"
-                          : unit === rack.l10StartU
-                            ? "border-blue-300/70 bg-blue-400/25 text-blue-50"
-                            : canStartHere
+                          : occupiedByAnotherSlot
+                            ? "cursor-not-allowed border-cyan-300/20 bg-cyan-400/10 text-cyan-300/45"
+                            : canToggle
                               ? "border-[#214669] bg-[#10283d] text-slate-300 hover:border-cyan-300/55 hover:text-cyan-50"
                               : "cursor-not-allowed border-[#163653]/60 bg-[#081c2d] text-slate-600"
                       )}
@@ -924,7 +992,7 @@ function RackInspector({
                 })}
               </div>
               <p className="mt-2 text-[10px] leading-4 text-slate-400">
-                底部保留 {L10_RESERVED_BOTTOM_U}U、頂部保留 {L10_RESERVED_TOP_U}U 維修空間；超出容量時不會建立模型。
+                底部保留 {L10_RESERVED_BOTTOM_U}U、頂部保留 {L10_RESERVED_TOP_U}U 維修空間；亮色層位會立即同步到 3D 機櫃。
               </p>
             </div>
             {l10Model.isPlaceholder ? (
@@ -1878,7 +1946,10 @@ export function DeploymentPlanningCenter() {
   const updateFacilityNumber = (field: "width" | "depth", value: string) => {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
-    updateFacility((facility) => ({ ...facility, [field]: next }));
+    updateFacility((facility) => ({
+      ...facility,
+      [field]: normalizeFacilityDimension(next, facility[field]),
+    }));
   };
 
   const addAisle = (kind: FacilityAisleKind) => {
@@ -1959,9 +2030,23 @@ export function DeploymentPlanningCenter() {
   const moveSelectedRack = (deltaX: number, deltaZ: number) => {
     if (!canEdit || !layoutEditing) return;
 
-    const nextX = Math.max(-7.4, Math.min(7.4, selectedRack.positionX + deltaX));
-    const nextZ = Math.max(-5.5, Math.min(5.5, selectedRack.positionZ + deltaZ));
     const footprint = getFootprint(selectedRack);
+    const horizontalLimit = Math.max(
+      0,
+      selectedFacility.width / 2 - footprint.width / 2 - 0.25
+    );
+    const verticalLimit = Math.max(
+      0,
+      selectedFacility.depth / 2 - footprint.depth / 2 - 0.25
+    );
+    const nextX = Math.max(
+      -horizontalLimit,
+      Math.min(horizontalLimit, selectedRack.positionX + deltaX)
+    );
+    const nextZ = Math.max(
+      -verticalLimit,
+      Math.min(verticalLimit, selectedRack.positionZ + deltaZ)
+    );
     const collision = selectedSite.racks.some((rack) => {
       if (rack.id === selectedRack.id) return false;
       const other = getFootprint(rack);
@@ -2119,16 +2204,24 @@ export function DeploymentPlanningCenter() {
     }
 
     updateSelectedRack((rack) => {
+      const existingSlots = getRackL10Slots(rack, definition);
       const placement = getL10Placement(rack, definition);
-      const l10StartU = Math.min(rack.l10StartU, placement.maxStartUForCount);
-      const nextRack = { ...rack, l10StartU };
+      const l10Slots =
+        existingSlots.length > 0
+          ? existingSlots
+          : normalizeRackUnitSlots({
+              capacityU: rack.capacityU,
+              rackUnits: getL10RackUnits(definition),
+              rackUnitSlots: [placement.startU],
+              reservedBottomU: L10_RESERVED_BOTTOM_U,
+              reservedTopU: L10_RESERVED_TOP_U,
+            });
       return {
-        ...nextRack,
+        ...rack,
         l10ModelId: selectedModelId,
-        l10Count: getAssignedModuleCount({
-          currentCount: rack.l10Count,
-          capacity: getL10Capacity(nextRack, definition),
-        }),
+        l10Slots,
+        l10Count: l10Slots.length,
+        l10StartU: l10Slots[0] ?? placement.startU,
       };
     });
     toast({
@@ -2142,10 +2235,41 @@ export function DeploymentPlanningCenter() {
 
   const changeSelectedRackL10Count = (count: number) => {
     if (!canEdit) return;
-    updateSelectedRack((rack) => ({
-      ...rack,
-      l10Count: Math.max(0, Math.min(getL10Capacity(rack, selectedL10Model), Math.round(count))),
-    }));
+    updateSelectedRack((rack) => {
+      const rackUnits = getL10RackUnits(selectedL10Model);
+      const capacity = getL10Capacity(rack, selectedL10Model);
+      const desiredCount = Math.max(0, Math.min(capacity, Math.round(count)));
+      const existingSlots = getRackL10Slots(rack, selectedL10Model);
+      const requestedSlots = existingSlots.slice(0, desiredCount);
+
+      if (requestedSlots.length < desiredCount) {
+        const firstUsableU = L10_RESERVED_BOTTOM_U + 1;
+        const lastUsableU = rack.capacityU - L10_RESERVED_TOP_U;
+        for (
+          let candidate = firstUsableU;
+          candidate + rackUnits - 1 <= lastUsableU && requestedSlots.length < desiredCount;
+          candidate += 1
+        ) {
+          const normalized = normalizeRackUnitSlots({
+            capacityU: rack.capacityU,
+            rackUnits,
+            rackUnitSlots: [...requestedSlots, candidate],
+            reservedBottomU: L10_RESERVED_BOTTOM_U,
+            reservedTopU: L10_RESERVED_TOP_U,
+          });
+          if (normalized.length > requestedSlots.length) {
+            requestedSlots.splice(0, requestedSlots.length, ...normalized);
+          }
+        }
+      }
+
+      return {
+        ...rack,
+        l10Slots: requestedSlots,
+        l10Count: requestedSlots.length,
+        l10StartU: requestedSlots[0] ?? rack.l10StartU,
+      };
+    });
   };
 
   const changeSelectedRackL10StartU = (startU: number) => {
@@ -2159,9 +2283,55 @@ export function DeploymentPlanningCenter() {
         reservedBottomU: L10_RESERVED_BOTTOM_U,
         reservedTopU: L10_RESERVED_TOP_U,
       });
+      const rackUnits = getL10RackUnits(selectedL10Model);
+      const l10Slots = normalizeRackUnitSlots({
+        capacityU: rack.capacityU,
+        rackUnits,
+        rackUnitSlots: Array.from(
+          { length: placement.visibleCount },
+          (_, index) => placement.startU + index * rackUnits
+        ),
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
       return {
         ...rack,
-        l10StartU: Math.min(placement.startU, placement.maxStartUForCount),
+        l10Slots,
+        l10Count: l10Slots.length,
+        l10StartU: l10Slots[0] ?? Math.min(placement.startU, placement.maxStartUForCount),
+      };
+    });
+  };
+
+  const toggleSelectedRackL10Slot = (rackUnit: number) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const existingSlots = getRackL10Slots(rack, selectedL10Model);
+      const requestedSlots = existingSlots.includes(rackUnit)
+        ? existingSlots.filter((slot) => slot !== rackUnit)
+        : [...existingSlots, rackUnit];
+      const l10Slots = normalizeRackUnitSlots({
+        capacityU: rack.capacityU,
+        rackUnits: getL10RackUnits(selectedL10Model),
+        rackUnitSlots: requestedSlots,
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
+
+      if (!existingSlots.includes(rackUnit) && l10Slots.length === existingSlots.length) {
+        toast({
+          title: "此層無法安裝",
+          description: `U${rackUnit} 空間不足或會與其他 L10 重疊。`,
+          variant: "destructive",
+        });
+        return rack;
+      }
+
+      return {
+        ...rack,
+        l10Slots,
+        l10Count: l10Slots.length,
+        l10StartU: l10Slots[0] ?? rack.l10StartU,
       };
     });
   };
@@ -2174,9 +2344,18 @@ export function DeploymentPlanningCenter() {
       models,
       firstUsableU: L10_RESERVED_BOTTOM_U + 1,
     });
+    const defaultL10Model = models[defaultL10Assignment.l10ModelId];
+    const defaultL10RackUnits = getL10RackUnits(
+      defaultL10Model ?? models["l10-placeholder"]
+    );
     const baseRack = {
       ...createRackFromModel(definition, selectedSite),
       ...defaultL10Assignment,
+      l10Slots: Array.from(
+        { length: defaultL10Assignment.l10Count },
+        (_, index) =>
+          defaultL10Assignment.l10StartU + index * defaultL10RackUnits
+      ),
     };
     const slot = selectedSite.racks.length;
     const nextRack = {
@@ -2235,6 +2414,7 @@ export function DeploymentPlanningCenter() {
     onPreviewL10Model: () => setPreviewModelId(selectedL10Model.id),
     onL10CountChange: changeSelectedRackL10Count,
     onL10StartUChange: changeSelectedRackL10StartU,
+    onL10SlotToggle: toggleSelectedRackL10Slot,
     onNudge: moveSelectedRack,
     onRotate: rotateSelectedRack,
   };
@@ -2365,6 +2545,22 @@ export function DeploymentPlanningCenter() {
                   <div className="text-[10px] text-slate-300">{activeLayerOption.description}</div>
                 </div>
               </div>
+              <button
+                type="button"
+                data-testid="facility-size-button"
+                onClick={() => setFacilityPlannerOpen(true)}
+                className="flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-cyan-200/35 bg-[#08283b]/94 px-3 text-left shadow-xl backdrop-blur-xl transition-colors hover:border-cyan-100/70 hover:bg-[#0b3650] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+              >
+                <PencilRuler className="h-4 w-4 shrink-0 text-cyan-200" />
+                <span>
+                  <span className="block text-xs font-black text-white">
+                    地板 {selectedFacility.width} × {selectedFacility.depth} m
+                  </span>
+                  <span className="block text-[10px] font-semibold text-cyan-100/75">
+                    {getFacilityAreaSquareMeters(selectedFacility)} m² · 點擊調整
+                  </span>
+                </span>
+              </button>
 
               {layoutEditing ? (
                 <div className="flex h-11 items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/12 px-3 text-xs font-bold text-amber-100 backdrop-blur-xl">
@@ -2420,6 +2616,7 @@ export function DeploymentPlanningCenter() {
                 ["top", LayoutDashboard, "俯視"],
                 ["front", Menu, "正視"],
                 ["focus", Focus, "聚焦選取"],
+                ["detail", ZoomIn, "近距離檢查"],
               ] as Array<[CameraPreset, LucideIcon, string]>).map(([preset, Icon, label]) => (
                 <Tooltip key={preset}>
                   <TooltipTrigger asChild>
@@ -2537,9 +2734,15 @@ export function DeploymentPlanningCenter() {
               },
               {
                 id: "focus",
-                label: "聚焦",
-                icon: Focus,
-                onClick: () => requestCamera("focus"),
+                label: "近看",
+                icon: ZoomIn,
+                onClick: () => requestCamera("detail"),
+              },
+              {
+                id: "floor",
+                label: "地板",
+                icon: PencilRuler,
+                onClick: () => setFacilityPlannerOpen(true),
               },
               ...(canEdit
                 ? [
@@ -2618,24 +2821,57 @@ export function DeploymentPlanningCenter() {
                     </div>
                     <span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">{selectedSite.label}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {([
-                      ["width", "寬度"],
-                      ["depth", "深度"],
-                    ] as Array<["width" | "depth", string]>).map(([field, label]) => (
-                      <label key={field} className="space-y-1.5">
-                        <span className="block text-[11px] font-bold text-slate-400">{label}</span>
-                        <Input
-                          type="number"
-                          min={8}
-                          step="0.1"
-                          value={selectedFacility[field]}
-                          disabled={!canEdit}
-                          onChange={(event) => updateFacilityNumber(field, event.target.value)}
-                          className="h-10 border-white/12 bg-black/25 px-2 text-sm text-white"
-                        />
+                      ["width", "地板寬度", "facility-width-control"],
+                      ["depth", "地板深度", "facility-depth-control"],
+                    ] as Array<["width" | "depth", string, string]>).map(([field, label, testId]) => (
+                      <label key={field} className="space-y-1.5 rounded-xl border border-cyan-200/15 bg-black/20 p-3">
+                        <span className="block text-[11px] font-bold text-cyan-100">{label}</span>
+                        <span className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label={`減少${label}`}
+                            disabled={!canEdit || selectedFacility[field] <= 8}
+                            onClick={() =>
+                              updateFacilityNumber(field, String(selectedFacility[field] - 1))
+                            }
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-[#10283d] text-slate-100 hover:border-cyan-200/50 disabled:opacity-35"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <Input
+                            data-testid={testId}
+                            type="number"
+                            min={8}
+                            max={80}
+                            step="0.5"
+                            value={selectedFacility[field]}
+                            disabled={!canEdit}
+                            onChange={(event) => updateFacilityNumber(field, event.target.value)}
+                            className="h-10 min-w-0 border-cyan-200/25 bg-[#06111f] px-2 text-center text-sm font-black tabular-nums text-white"
+                          />
+                          <button
+                            type="button"
+                            aria-label={`增加${label}`}
+                            disabled={!canEdit || selectedFacility[field] >= 80}
+                            onClick={() =>
+                              updateFacilityNumber(field, String(selectedFacility[field] + 1))
+                            }
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25 disabled:opacity-35"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </span>
+                        <span className="block text-[10px] text-slate-400">單位：公尺，範圍 8–80 m</span>
                       </label>
                     ))}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-cyan-200/20 bg-cyan-400/[0.08] px-3 py-2.5">
+                    <span className="text-xs font-bold text-slate-300">目前地板面積</span>
+                    <span className="text-base font-black tabular-nums text-cyan-100">
+                      {getFacilityAreaSquareMeters(selectedFacility)} m²
+                    </span>
                   </div>
                   <div className="mt-4">
                     <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">

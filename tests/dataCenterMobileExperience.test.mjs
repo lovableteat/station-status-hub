@@ -65,9 +65,11 @@ test("the model detail viewer keeps its header and controls inside a phone viewp
   assert.doesNotMatch(viewerSource, /min-w-max gap-2 overflow-x-auto/);
 });
 
-test("rack inspector explains the physical U capacity and selectable rail range", () => {
+test("rack inspector exposes individually selectable rack units", () => {
   assert.match(workspaceSource, /\{rack\.capacityU\}U 機櫃/);
   assert.match(workspaceSource, /\{usableRackUnits\} 個可用 U 位/);
-  assert.match(workspaceSource, /可用 U\{l10FirstUsableU\}–U\{l10LastUsableU\}/);
-  assert.match(workspaceSource, /從 U\{rack\.l10StartU\} 起可安裝/);
+  assert.match(workspaceSource, /選擇安裝層位/);
+  assert.match(workspaceSource, /點選任意可用 U 位；可分開安裝，不必連續排列/);
+  assert.match(workspaceSource, /onClick=\{\(\) => onL10SlotToggle\(unit\)\}/);
+  assert.match(workspaceSource, /aria-pressed=\{selected\}/);
 });
