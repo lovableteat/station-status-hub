@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Bounds, Grid, OrbitControls, useGLTF } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Box, Focus, Layers3, Rotate3d, ScanLine, X } from "lucide-react";
+import { Box, Eye, EyeOff, Focus, Layers3, Rotate3d, ScanLine, Search, X } from "lucide-react";
 import * as THREE from "three";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ import { cn } from "@/lib/utils";
 import type { RackModelDefinition } from "./dataCenterTypes";
 import { getUniformModelFit } from "./modelFit.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
+import {
+  collectInspectablePartNames,
+  getInspectablePartName,
+} from "./modelParts.mjs";
 
 type ViewerMode = "solid" | "xray" | "wireframe";
 
@@ -97,14 +101,23 @@ function GlbInspectionModel({
   mode,
   sectionEnabled,
   sectionPercent,
+  hiddenPartNames,
+  onPartNamesChange,
 }: {
   definition: RackModelDefinition;
   assetUrl: string;
   mode: ViewerMode;
   sectionEnabled: boolean;
   sectionPercent: number;
+  hiddenPartNames: ReadonlySet<string>;
+  onPartNamesChange: (partNames: string[]) => void;
 }) {
   const gltf = useGLTF(assetUrl) as { scene: THREE.Group };
+
+  useEffect(() => {
+    onPartNamesChange(collectInspectablePartNames(gltf.scene));
+  }, [gltf.scene, onPartNamesChange]);
+
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
     clone.rotation.set(...getModelAxisRotation(definition.upAxis));
@@ -119,12 +132,15 @@ function GlbInspectionModel({
 
     clone.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
+      object.visible = !hiddenPartNames.has(getInspectablePartName(object));
       const sourceMaterials = Array.isArray(object.material) ? object.material : [object.material];
       const materials = sourceMaterials.map((sourceMaterial) => {
         const material = sourceMaterial.clone();
         material.clippingPlanes = sectionEnabled ? [clippingPlane] : [];
         material.clipShadows = sectionEnabled;
-        material.side = mode === "solid" ? THREE.FrontSide : THREE.DoubleSide;
+        // Imported CAD sheet metal can contain mixed face winding. Rendering both
+        // sides keeps thin covers visible without replacing the source material.
+        material.side = THREE.DoubleSide;
         if (material instanceof THREE.MeshStandardMaterial) {
           material.wireframe = mode === "wireframe";
           if (mode === "wireframe") {
@@ -150,7 +166,7 @@ function GlbInspectionModel({
       scale: fit.scale as [number, number, number],
       ownedMaterials,
     };
-  }, [definition, gltf.scene, mode, sectionEnabled, sectionPercent]);
+  }, [definition, gltf.scene, hiddenPartNames, mode, sectionEnabled, sectionPercent]);
 
   useEffect(
     () => () => prepared.ownedMaterials.forEach((material) => material.dispose()),
@@ -171,6 +187,8 @@ function InspectionScene({
   sectionEnabled,
   sectionPercent,
   resetKey,
+  hiddenPartNames,
+  onPartNamesChange,
 }: {
   definition: RackModelDefinition;
   assetUrl: string;
@@ -178,6 +196,8 @@ function InspectionScene({
   sectionEnabled: boolean;
   sectionPercent: number;
   resetKey: number;
+  hiddenPartNames: ReadonlySet<string>;
+  onPartNamesChange: (partNames: string[]) => void;
 }) {
   return (
     <>
@@ -195,6 +215,8 @@ function InspectionScene({
               mode={mode}
               sectionEnabled={sectionEnabled}
               sectionPercent={sectionPercent}
+              hiddenPartNames={hiddenPartNames}
+              onPartNamesChange={onPartNamesChange}
             />
           ) : (
             <ProceduralInspectionModel definition={definition} />
@@ -232,12 +254,24 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
   const [sectionEnabled, setSectionEnabled] = useState(false);
   const [sectionPercent, setSectionPercent] = useState(50);
   const [resetKey, setResetKey] = useState(0);
+  const [partNames, setPartNames] = useState<string[]>([]);
+  const [hiddenPartNames, setHiddenPartNames] = useState<Set<string>>(() => new Set());
+  const [partSearch, setPartSearch] = useState("");
+
+  const visiblePartNames = useMemo(() => {
+    const query = partSearch.trim().toLocaleLowerCase();
+    if (!query) return partNames;
+    return partNames.filter((partName) => partName.toLocaleLowerCase().includes(query));
+  }, [partNames, partSearch]);
 
   useEffect(() => {
     if (!open) return;
     setMode("solid");
     setSectionEnabled(false);
     setSectionPercent(50);
+    setPartNames([]);
+    setHiddenPartNames(new Set());
+    setPartSearch("");
     setResetKey((value) => value + 1);
   }, [model?.id, open]);
 
@@ -248,9 +282,9 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
-        className="h-[min(94dvh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] sm:rounded-3xl"
+        className="min-w-0 h-[min(94dvh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] sm:rounded-3xl"
       >
-        <header className="flex min-h-[76px] shrink-0 items-center justify-between gap-4 border-b border-[#1f4766] bg-[#081a2a] px-4 py-3 sm:px-6">
+        <header className="flex min-h-[76px] min-w-0 shrink-0 items-center justify-between gap-4 border-b border-[#1f4766] bg-[#081a2a] px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-400/12 text-cyan-100">
               <Box className="h-5 w-5" />
@@ -272,9 +306,9 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
-          <aside className="order-2 overflow-x-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:overflow-y-auto lg:border-r lg:border-t-0 lg:p-5">
-            <div className="flex min-w-max gap-2 lg:min-w-0 lg:flex-col">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
+          <aside className="order-2 min-w-0 max-h-[36dvh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0 lg:p-5">
+            <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-visible">
               {([[
                 "solid",
                 "實體",
@@ -335,6 +369,79 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
               </label>
             ) : null}
 
+            {assetUrl ? (
+              <section className="mt-4 border-t border-[#1f4766] pt-4" aria-label="零件結構">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black text-white">零件結構</div>
+                    <div className="mt-0.5 text-[11px] text-cyan-100/60">
+                      {partNames.length ? `${partNames.length} 個可檢視零件` : "正在讀取零件名稱"}
+                    </div>
+                  </div>
+                  {hiddenPartNames.size ? (
+                    <button
+                      type="button"
+                      onClick={() => setHiddenPartNames(new Set())}
+                      className="shrink-0 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1.5 text-[11px] font-bold text-cyan-100 hover:bg-cyan-300/20"
+                    >
+                      全部顯示
+                    </button>
+                  ) : null}
+                </div>
+
+                <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-3 focus-within:border-cyan-300/55">
+                  <Search className="h-4 w-4 shrink-0 text-cyan-300" />
+                  <input
+                    value={partSearch}
+                    onChange={(event) => setPartSearch(event.target.value)}
+                    placeholder="搜尋零件名稱"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </label>
+
+                <div className="mt-2 max-h-52 space-y-1 overflow-y-auto pr-1">
+                  {visiblePartNames.slice(0, 80).map((partName) => {
+                    const hidden = hiddenPartNames.has(partName);
+                    return (
+                      <button
+                        key={partName}
+                        type="button"
+                        aria-pressed={!hidden}
+                        title={partName}
+                        onClick={() =>
+                          setHiddenPartNames((current) => {
+                            const next = new Set(current);
+                            if (next.has(partName)) next.delete(partName);
+                            else next.add(partName);
+                            return next;
+                          })
+                        }
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
+                          hidden
+                            ? "border-slate-700/70 bg-slate-900/45 text-slate-500"
+                            : "border-cyan-300/15 bg-[#10263a] text-cyan-50 hover:border-cyan-300/35"
+                        )}
+                      >
+                        {hidden ? <EyeOff className="h-3.5 w-3.5 shrink-0" /> : <Eye className="h-3.5 w-3.5 shrink-0 text-cyan-300" />}
+                        <span className="truncate">{partName}</span>
+                      </button>
+                    );
+                  })}
+                  {partNames.length && !visiblePartNames.length ? (
+                    <div className="rounded-lg border border-dashed border-[#2a526f] px-3 py-5 text-center text-xs text-slate-400">
+                      找不到符合的零件
+                    </div>
+                  ) : null}
+                  {visiblePartNames.length > 80 ? (
+                    <div className="px-2 py-1 text-[11px] text-cyan-100/55">
+                      尚有 {visiblePartNames.length - 80} 個結果，請縮小搜尋範圍。
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
             <div className="mt-4 hidden space-y-3 border-t border-[#1f4766] pt-4 text-xs lg:block">
               <div className="font-bold text-white">實際模型資料</div>
               <dl className="space-y-2 text-slate-300">
@@ -345,7 +452,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
             </div>
           </aside>
 
-          <main className="relative order-1 min-h-0 bg-black lg:order-2">
+          <main className="relative order-1 min-h-0 min-w-0 bg-black lg:order-2">
             <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-xl border border-cyan-300/20 bg-[#06111f]/90 px-3 py-2 text-xs font-semibold text-cyan-50 backdrop-blur">
               <Rotate3d className="mr-1.5 inline h-4 w-4 text-cyan-300" /> 拖曳旋轉 · 滾輪或雙指縮放 · 右鍵平移
             </div>
@@ -362,6 +469,8 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                 sectionEnabled={sectionEnabled}
                 sectionPercent={sectionPercent}
                 resetKey={resetKey}
+                hiddenPartNames={hiddenPartNames}
+                onPartNamesChange={setPartNames}
               />
             </Canvas>
           </main>

@@ -1,6 +1,39 @@
 export const RACK_UNIT_HEIGHT_METERS = 0.04445;
 export const STANDARD_19_INCH_RAIL_WIDTH_METERS = 0.4826;
 
+export function getAssignedModuleCount({ currentCount, capacity }) {
+  const normalizedCapacity = Math.max(0, Math.floor(Number(capacity) || 0));
+  if (normalizedCapacity === 0) return 0;
+
+  const normalizedCurrentCount = Math.max(0, Math.floor(Number(currentCount) || 0));
+  return Math.min(Math.max(1, normalizedCurrentCount), normalizedCapacity);
+}
+
+export function getDefaultRackL10Assignment({
+  rackModelId,
+  models,
+  firstUsableU = 3,
+}) {
+  const compatibleModels = Object.values(models ?? {})
+    .filter((model) => {
+      if (!model || model.kind !== "l10") return false;
+      if (!Array.isArray(model.compatibleRackModelIds)) return true;
+      return model.compatibleRackModelIds.includes(rackModelId);
+    })
+    .sort((left, right) => {
+      const leftScore = (left.isPlaceholder ? 0 : 2) + (left.isCalibrated ? 1 : 0);
+      const rightScore = (right.isPlaceholder ? 0 : 2) + (right.isCalibrated ? 1 : 0);
+      return rightScore - leftScore;
+    });
+  const selectedModel = compatibleModels[0];
+
+  return {
+    l10ModelId: selectedModel?.id ?? "l10-placeholder",
+    l10Count: selectedModel ? 1 : 0,
+    l10StartU: Math.max(1, Math.round(Number(firstUsableU) || 1)),
+  };
+}
+
 function positiveMeters(valueMm, label) {
   const value = Number(valueMm) / 1000;
   if (!Number.isFinite(value) || value <= 0) {
