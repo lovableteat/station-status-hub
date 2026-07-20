@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock3, Play, Save, Server, Square, XCircle } from "lucide-react";
 
 import { IssueCreateDialog } from "@/components/issues/IssueCreateDialog";
@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SegmentedProgress } from "./SegmentedProgress";
 import { TimeRecordManager } from "./TimeRecordManager";
+import { mergeServerProgressDrafts } from "./systemProgressDrafts.mjs";
 
 interface TrackerSystem {
   assigned_engineer?: string | null;
@@ -180,6 +181,8 @@ export function SystemProgressSheet({
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({});
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [clockNow, setClockNow] = useState(Date.now());
+  const dirtyItemIdsRef = useRef(new Set<string>());
+  const draftContextRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -189,7 +192,11 @@ export function SystemProgressSheet({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !system) return;
+    if (!open || !system) {
+      dirtyItemIdsRef.current.clear();
+      draftContextRef.current = "";
+      return;
+    }
     const firstStationId = stations[0]?.id ?? "";
     setSelectedStationId((current) =>
       stations.some((station) => station.id === current) ? current : firstStationId
@@ -206,8 +213,28 @@ export function SystemProgressSheet({
         status: current?.status ?? "Not Start",
       };
     });
-    setDrafts(nextDrafts);
+
+    const contextKey = `${system.id}:${open}`;
+    if (draftContextRef.current !== contextKey) {
+      dirtyItemIdsRef.current.clear();
+      draftContextRef.current = contextKey;
+      setDrafts(nextDrafts);
+      return;
+    }
+
+    setDrafts((current) =>
+      mergeServerProgressDrafts(
+        current,
+        nextDrafts,
+        dirtyItemIdsRef.current
+      )
+    );
   }, [items, open, progress, stations, system]);
+
+  const updateItemDraft = (itemId: string, nextDraft: ItemDraft) => {
+    dirtyItemIdsRef.current.add(itemId);
+    setDrafts((current) => ({ ...current, [itemId]: nextDraft }));
+  };
 
   const selectedStation = stations.find((station) => station.id === selectedStationId);
   const progressByItemId = useMemo(() => {
@@ -264,7 +291,10 @@ export function SystemProgressSheet({
     setSavingItemId(item.id);
     const success = await updateProgress(system.id, item.station_id, item.id, updates);
     setSavingItemId(null);
-    if (success && shouldRefresh) onUpdated();
+    if (success) {
+      dirtyItemIdsRef.current.delete(item.id);
+      if (shouldRefresh) onUpdated();
+    }
     return success;
   };
 
@@ -291,6 +321,7 @@ export function SystemProgressSheet({
       toast({ title: "計時啟動失敗", description: "無法寫入開始時間，請稍後再試。", variant: "destructive" });
       return;
     }
+    dirtyItemIdsRef.current.delete(item.id);
     setDrafts((current) => ({ ...current, [item.id]: nextDraft }));
     toast({ title: "已開始計時", description: `${item.item_name} 已切換為進行中。` });
     onUpdated();
@@ -316,6 +347,7 @@ export function SystemProgressSheet({
       toast({ title: "完成計時失敗", description: "無法寫入完成時間，請稍後再試。", variant: "destructive" });
       return;
     }
+    dirtyItemIdsRef.current.delete(item.id);
     setDrafts((current) => ({ ...current, [item.id]: nextDraft }));
     toast({ title: "計時已完成", description: `${item.item_name} 已設為 100% 完成。` });
     onUpdated();
@@ -429,14 +461,11 @@ export function SystemProgressSheet({
                     <Select
                       value={draft.status}
                       onValueChange={(value) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [item.id]: {
-                            ...draft,
-                            progress_percent: value === "Done" ? 100 : value === "Not Start" ? 0 : draft.progress_percent,
-                            status: value,
-                          },
-                        }))
+                        updateItemDraft(item.id, {
+                          ...draft,
+                          progress_percent: value === "Done" ? 100 : value === "Not Start" ? 0 : draft.progress_percent,
+                          status: value,
+                        })
                       }
                     >
                       <SelectTrigger className={cn("h-9 font-semibold", statusControlClass(draft.status))}><SelectValue /></SelectTrigger>
@@ -456,13 +485,10 @@ export function SystemProgressSheet({
                       aria-label={`${item.item_name} 進度百分比`}
                       value={draft.progress_percent}
                       onChange={(event) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [item.id]: {
-                            ...draft,
-                            progress_percent: Math.max(0, Math.min(100, Number(event.target.value))),
-                          },
-                        }))
+                        updateItemDraft(item.id, {
+                          ...draft,
+                          progress_percent: Math.max(0, Math.min(100, Number(event.target.value))),
+                        })
                       }
                     />
                     <Input
@@ -471,10 +497,10 @@ export function SystemProgressSheet({
                       placeholder="備註"
                       value={draft.notes}
                       onChange={(event) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [item.id]: { ...draft, notes: event.target.value },
-                        }))
+                        updateItemDraft(item.id, {
+                          ...draft,
+                          notes: event.target.value,
+                        })
                       }
                     />
                     <Button
