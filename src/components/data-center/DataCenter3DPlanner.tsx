@@ -426,6 +426,7 @@ function RackL10Modules({
     rackUnits: l10Definition.rackUnits ?? 1,
     moduleCount: rack.l10Count,
     startU: rack.l10StartU,
+    rackUnitSlots: rack.l10Slots,
   });
   const { fitScale, positions, visibleCount } = layout;
 
@@ -765,6 +766,9 @@ function CameraRig({
     } else if (preset === "front") {
       desiredPosition.current.set(0, Math.max(4.2, span * 0.34), Math.max(12.5, span * 0.92));
       desiredTarget.current.set(0, 1, 0);
+    } else if (preset === "detail" && selected) {
+      desiredPosition.current.set(selected.positionX + 1.35, 1.65, selected.positionZ + 1.7);
+      desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
     } else if (preset === "focus" && selected) {
       desiredPosition.current.set(selected.positionX + 3.5, 3.2, selected.positionZ + 4.3);
       desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
@@ -809,8 +813,9 @@ function CameraRig({
       dampingFactor={0.08}
       enablePan
       enableZoom
-      minDistance={2.6}
+      minDistance={0.45}
       maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
+      zoomSpeed={1.15}
       maxPolarAngle={Math.PI / 2.02}
       target={[0, 0.8, 0]}
       touches={{

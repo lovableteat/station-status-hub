@@ -7,6 +7,7 @@ import {
   getDefaultRackL10Assignment,
   getAssignedModuleCount,
   getRackUnitMountLayout,
+  normalizeRackUnitSlots,
 } from "../src/components/data-center/rackMount.mjs";
 
 test("GB300 L10 fits the L11 19-inch rails with one uniform scale", () => {
@@ -48,6 +49,33 @@ test("operators can choose the first occupied U and modules continue upward", ()
     Number((layout.positions[1].y - layout.positions[0].y).toFixed(5)),
     RACK_UNIT_HEIGHT_METERS,
   );
+});
+
+test("operators can mount L10 modules on individually selected rack units", () => {
+  assert.deepEqual(
+    normalizeRackUnitSlots({
+      capacityU: 42,
+      rackUnits: 1,
+      rackUnitSlots: [20, 7, 20, 40, 2, 41],
+      reservedBottomU: 2,
+      reservedTopU: 2,
+    }),
+    [7, 20, 40],
+  );
+
+  const layout = getRackUnitMountLayout({
+    rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
+    capacityU: 42,
+    moduleDimensions: { widthMm: 481.5, depthMm: 889.6, heightMm: 44.5 },
+    rackUnits: 1,
+    moduleCount: 3,
+    startU: 3,
+    rackUnitSlots: [7, 20, 40],
+  });
+
+  assert.equal(layout.visibleCount, 3);
+  assert.deepEqual(layout.rackUnitSlots, [7, 20, 40]);
+  assert.deepEqual(layout.positions.map((position) => position.rackUnit), [7, 20, 40]);
 });
 
 test("rack capacity reserves top and bottom service space", () => {
