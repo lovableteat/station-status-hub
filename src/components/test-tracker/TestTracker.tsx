@@ -47,6 +47,7 @@ import { ExportManager } from "./ExportManager";
 import { PDFExportDialog } from "./pdf/PDFExportDialog";
 import { SegmentedProgress } from "./SegmentedProgress";
 import { SystemCloneDialog } from "./SystemCloneDialog";
+import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
@@ -178,6 +179,8 @@ export function TestTracker() {
   });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TRACKER_PAGE_SIZE);
+  const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
+  const [lockedStationId, setLockedStationId] = useState<string | null>(null);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [cloneSourceSystem, setCloneSourceSystem] = useState<{
     id: string;
@@ -297,6 +300,20 @@ export function TestTracker() {
     setPage((value) => Math.min(value, pageCount));
   }, [pageCount]);
   const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
+  const editingSystem = systems.find((system) => system.id === editingSystemId) ?? null;
+  const openSystemProgress = (systemId: string) => {
+    setLockedStationId(null);
+    setSelectedSystemId(systemId);
+  };
+  const openStationProgress = (systemId: string, stationId: string) => {
+    setLockedStationId(stationId);
+    setSelectedSystemId(systemId);
+  };
+  const handleProgressOpenChange = (open: boolean) => {
+    if (open) return;
+    setSelectedSystemId(null);
+    setLockedStationId(null);
+  };
   const projectStatusCounts = useMemo(
     () =>
       systems.reduce(
@@ -576,7 +593,9 @@ export function TestTracker() {
             items={displayItems}
             progress={progress}
             onCloneSystem={setCloneSourceSystem}
-            onSelectSystem={setSelectedSystemId}
+            onEditSystemData={setEditingSystemId}
+            onSelectStation={openStationProgress}
+            onSelectSystem={openSystemProgress}
             onSystemUpdate={loadData}
           />
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#1a3858] bg-[#0a1a2e] px-3 py-2 text-xs text-[#a9c0d1]">
@@ -631,7 +650,7 @@ export function TestTracker() {
                       key={system.id}
                       type="button"
                       className="w-full rounded-lg border border-[#2a526f] bg-[#10263a] p-2.5 text-left hover:border-cyan-300/55"
-                      onClick={() => setSelectedSystemId(system.id)}
+                      onClick={() => openStationProgress(system.id, station.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
@@ -656,16 +675,31 @@ export function TestTracker() {
 
       <SystemProgressSheet
         open={Boolean(selectedSystem)}
-        onOpenChange={(open) => !open && setSelectedSystemId(null)}
+        onOpenChange={handleProgressOpenChange}
         system={selectedSystem}
         stations={displayStations}
         items={displayItems}
         progress={progress}
+        lockedStationId={lockedStationId}
         updateProgress={updateProgress}
         onUpdated={() => {
           if (selectedSystemId) void refreshProgress(selectedSystemId);
         }}
       />
+
+      {editingSystem && (
+        <SystemEditDialog
+          systemId={editingSystem.id}
+          systemName={editingSystem.system_name}
+          assignedEngineer={editingSystem.assigned_engineer || ""}
+          model={editingSystem.model || undefined}
+          serialNumber={editingSystem.serial_number || undefined}
+          onUpdate={loadData}
+          showTrigger={false}
+          open={Boolean(editingSystem)}
+          onOpenChange={(open) => !open && setEditingSystemId(null)}
+        />
+      )}
 
       <SystemCloneDialog
         open={Boolean(cloneSourceSystem)}

@@ -109,6 +109,7 @@ interface ItemDraft {
 
 interface SystemProgressSheetProps {
   items: TrackerItem[];
+  lockedStationId?: string | null;
   onOpenChange: (open: boolean) => void;
   onUpdated: () => void;
   open: boolean;
@@ -167,6 +168,7 @@ function statusSaveButtonClass(status: string) {
 
 export function SystemProgressSheet({
   items,
+  lockedStationId,
   onOpenChange,
   onUpdated,
   open,
@@ -197,10 +199,20 @@ export function SystemProgressSheet({
       draftContextRef.current = "";
       return;
     }
-    const firstStationId = stations[0]?.id ?? "";
-    setSelectedStationId((current) =>
-      stations.some((station) => station.id === current) ? current : firstStationId
-    );
+    if (lockedStationId) {
+      setSelectedStationId(
+        stations.some((station) => station.id === lockedStationId)
+          ? lockedStationId
+          : ""
+      );
+    } else {
+      const firstStationId = stations[0]?.id ?? "";
+      setSelectedStationId((current) =>
+        stations.some((station) => station.id === current)
+          ? current
+          : firstStationId
+      );
+    }
 
     const nextDrafts: Record<string, ItemDraft> = {};
     items.forEach((item) => {
@@ -229,7 +241,7 @@ export function SystemProgressSheet({
         dirtyItemIdsRef.current
       )
     );
-  }, [items, open, progress, stations, system]);
+  }, [items, lockedStationId, open, progress, stations, system]);
 
   const updateItemDraft = (itemId: string, nextDraft: ItemDraft) => {
     dirtyItemIdsRef.current.add(itemId);
@@ -393,30 +405,32 @@ export function SystemProgressSheet({
           </div>
         </SheetHeader>
 
-        <div className="border-b border-[#2a526f]/70 bg-[#0b1b2d] px-5 py-3">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {stations.map((station) => {
-              const stationItemIds = items.filter((item) => item.station_id === station.id).map((item) => item.id);
-              const completed = stationItemIds.filter((itemId) => drafts[itemId]?.status === "Done").length;
-              return (
-                <button
-                  key={station.id}
-                  type="button"
-                  className={cn(
-                    "min-w-[138px] rounded-lg border px-3 py-2 text-left transition-colors",
-                    selectedStationId === station.id
-                      ? "border-[#39c6e8] bg-[#10263a] text-[#f3f8fc]"
-                      : "border-[#2a526f] bg-[#071522] text-[#a9c0d1] hover:bg-[#10263a]"
-                  )}
-                  onClick={() => setSelectedStationId(station.id)}
-                >
-                  <div className="truncate text-sm font-medium">{station.station_name}</div>
-                  <div className="font-data mt-1 text-xs">{completed}/{stationItemIds.length}</div>
-                </button>
-              );
-            })}
+        {!lockedStationId && (
+          <div className="border-b border-[#2a526f]/70 bg-[#0b1b2d] px-5 py-3">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {stations.map((station) => {
+                const stationItemIds = items.filter((item) => item.station_id === station.id).map((item) => item.id);
+                const completed = stationItemIds.filter((itemId) => drafts[itemId]?.status === "Done").length;
+                return (
+                  <button
+                    key={station.id}
+                    type="button"
+                    className={cn(
+                      "min-w-[138px] rounded-lg border px-3 py-2 text-left transition-colors",
+                      selectedStationId === station.id
+                        ? "border-[#39c6e8] bg-[#10263a] text-[#f3f8fc]"
+                        : "border-[#2a526f] bg-[#071522] text-[#a9c0d1] hover:bg-[#10263a]"
+                    )}
+                    onClick={() => setSelectedStationId(station.id)}
+                  >
+                    <div className="truncate text-sm font-medium">{station.station_name}</div>
+                    <div className="font-data mt-1 text-xs">{completed}/{stationItemIds.length}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-center gap-3 border-b border-[#2a526f]/70 px-5 py-3">
           <div className="min-w-0 flex-1">
