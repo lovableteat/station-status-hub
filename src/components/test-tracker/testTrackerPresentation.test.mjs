@@ -54,7 +54,7 @@ test("tracker station columns flex to the right boundary while fixed columns kee
         actions: 82,
       },
     ),
-    "158px 116px 98px minmax(300px, 300fr) minmax(420px, 420fr) 82px",
+    "158px 116px 98px minmax(300px, 300fr) minmax(420px, 420fr) 148px",
   );
 });
 

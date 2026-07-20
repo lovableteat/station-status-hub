@@ -22,5 +22,6 @@ test("machine id cells keep a full-height visible hit area", async () => {
     machineCell,
     /className="flex h-full w-full min-w-0 flex-col items-start justify-center overflow-hidden text-left"/
   );
+  assert.match(machineCell, /onClick=\{\(\) => onEditSystemData\(system\.id\)\}/);
   assert.doesNotMatch(machineCell, /className="w-full min-w-0 py-2 text-left"/);
 });
