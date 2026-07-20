@@ -2068,6 +2068,44 @@ export type Database = {
         }
         Relationships: []
       }
+      test_project_address_fields: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          placeholder: string | null
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          placeholder?: string | null
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          placeholder?: string | null
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_address_fields_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_projects: {
         Row: {
           active_flow_version_id: string | null
@@ -2328,6 +2366,45 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_system_address_values: {
+        Row: {
+          created_at: string
+          field_id: string
+          system_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          field_id: string
+          system_id: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          field_id?: string
+          system_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_system_address_values_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "test_project_address_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_system_address_values_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
             referencedColumns: ["id"]
           },
         ]

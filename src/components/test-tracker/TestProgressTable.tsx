@@ -61,6 +61,8 @@ interface TestProgressTableProps {
   headerControls?: ReactNode;
   items: TrackerItem[];
   onCloneSystem: (system: TrackerSystem) => void;
+  onEditSystemData: (systemId: string) => void;
+  onSelectStation: (systemId: string, stationId: string) => void;
   onSelectSystem: (systemId: string) => void;
   onSystemUpdate: () => void;
   progress: TrackerProgress[];
@@ -213,6 +215,8 @@ export function TestProgressTable({
   headerControls,
   items,
   onCloneSystem,
+  onEditSystemData,
+  onSelectStation,
   onSelectSystem,
   onSystemUpdate,
   progress,
@@ -384,30 +388,37 @@ export function TestProgressTable({
         {systems.map((system) => {
           const status = normalizeStatus(system);
           return (
-            <button
+            <div
               key={system.id}
-              type="button"
-              className="maintenance-panel w-full p-3 text-left [contain-intrinsic-size:96px] [content-visibility:auto] hover:border-cyan-300/50"
-              onClick={() => onSelectSystem(system.id)}
+              className="maintenance-panel w-full p-3 [contain-intrinsic-size:110px] [content-visibility:auto]"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 rounded-md text-left hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                  onClick={() => onEditSystemData(system.id)}
+                >
                   <div className="truncate font-semibold text-[#f3f8fc]">{system.system_name}</div>
                   <div className="mt-1 truncate text-xs text-[#a9c0d1]">
                     {system.serial_number || "無序號"} · {system.assigned_engineer || "未指定"}
                   </div>
-                </div>
+                </button>
                 <Badge variant="outline" className={cn("rounded-md", statusClass(status))}>{status}</Badge>
               </div>
-              <div className="mt-3 flex items-center gap-3">
+              <button
+                type="button"
+                className="mt-3 flex w-full items-center gap-3 rounded-md p-1 text-left hover:bg-[#061426] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                onClick={() => onSelectSystem(system.id)}
+                aria-label={`編輯 ${system.system_name} 的測試進度`}
+              >
                 <SegmentedProgress
                   value={system.overall_progress ?? 0}
                   className="flex-1"
                   label={`${system.system_name} 整體進度`}
                 />
                 <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
-              </div>
-            </button>
+              </button>
+            </div>
           );
         })}
       </div>
@@ -528,7 +539,7 @@ export function TestProgressTable({
                     <button
                       type="button"
                       className="flex h-full w-full min-w-0 flex-col items-start justify-center overflow-hidden text-left"
-                      onClick={() => onSelectSystem(system.id)}
+                      onClick={() => onEditSystemData(system.id)}
                     >
                       <div className="truncate font-semibold leading-4 text-[#f3f8fc]">{system.system_name}</div>
                       <div className="truncate text-[10px] leading-3 text-[#91adc2]">{system.assigned_engineer || "未指定"}</div>
@@ -550,7 +561,7 @@ export function TestProgressTable({
                         <button
                           type="button"
                           className="w-full rounded-md px-1.5 py-2 text-left hover:bg-[#061426] focus-visible:outline-none"
-                          onClick={() => onSelectSystem(system.id)}
+                          onClick={() => onSelectStation(system.id, station.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
                           <div className="mb-0.5 flex items-center justify-between text-[10px] leading-3 text-[#9db6c8]">
