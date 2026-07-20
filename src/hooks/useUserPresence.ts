@@ -1,4 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  createElement,
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
 
@@ -16,49 +26,61 @@ interface OnlineUser {
   };
 }
 
-export function useUserPresence() {
+interface UserPresenceContextValue {
+  onlineUsers: OnlineUser[];
+  updateCurrentModule: (module: string) => void;
+  updateEditingState: (editingInfo?: OnlineUser["isEditing"]) => void;
+  totalOnlineUsers: number;
+}
+
+const UserPresenceContext = createContext<UserPresenceContextValue | null>(null);
+
+export function UserPresenceProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  const [currentModule, setCurrentModule] = useState<string>("dashboard");
-  const presenceChannelRef = useRef<any>(null);
+  const [currentModule, setCurrentModule] = useState("dashboard");
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Track current module
-  const updateCurrentModule = useCallback((module: string) => {
-    setCurrentModule(module);
-    if (presenceChannelRef.current && user) {
-      presenceChannelRef.current.track({
+  const trackPresence = useCallback(
+    (module: string, editingInfo?: OnlineUser["isEditing"]) => {
+      if (!presenceChannelRef.current || !user) return;
+
+      void presenceChannelRef.current.track({
         userId: user.userId,
         username: user.username,
         displayName: user.displayName,
         role: user.role,
         lastSeen: new Date().toISOString(),
         currentModule: module,
-        timestamp: Date.now()
-      });
-    }
-  }, [user]);
-
-  // Track editing state
-  const updateEditingState = useCallback((editingInfo?: { module: string; itemId?: string; itemType?: string }) => {
-    if (presenceChannelRef.current && user) {
-      presenceChannelRef.current.track({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        role: user.role,
-        lastSeen: new Date().toISOString(),
-        currentModule,
         isEditing: editingInfo,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-    }
-  }, [user, currentModule]);
+    },
+    [user]
+  );
+
+  const updateCurrentModule = useCallback(
+    (module: string) => {
+      setCurrentModule(module);
+      trackPresence(module);
+    },
+    [trackPresence]
+  );
+
+  const updateEditingState = useCallback(
+    (editingInfo?: OnlineUser["isEditing"]) => {
+      trackPresence(currentModule, editingInfo);
+    },
+    [currentModule, trackPresence]
+  );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setOnlineUsers([]);
+      return;
+    }
 
-    // Create presence channel
-    const channel = supabase.channel('user_presence', {
+    const channel = supabase.channel("user_presence", {
       config: {
         presence: {
           key: user.userId,
@@ -68,83 +90,69 @@ export function useUserPresence() {
 
     presenceChannelRef.current = channel;
 
-    // Listen to presence events
     channel
-      .on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState();
+      .on("presence", { event: "sync" }, () => {
         const users: OnlineUser[] = [];
-        
-        Object.values(presenceState).forEach((presences: any) => {
-          presences.forEach((presence: any) => {
-            if (presence.userId !== user.userId) {
-              users.push({
-                userId: presence.userId,
-                username: presence.username,
-                displayName: presence.displayName,
-                role: presence.role,
-                lastSeen: presence.lastSeen,
-                currentModule: presence.currentModule,
-                isEditing: presence.isEditing
-              });
+        const presenceState = channel.presenceState();
+
+        Object.values(presenceState).forEach((presences) => {
+          presences.forEach((presence) => {
+            const onlinePresence = presence as unknown as OnlineUser;
+            if (onlinePresence.userId !== user.userId) {
+              users.push(onlinePresence);
             }
           });
         });
-        
+
         setOnlineUsers(users);
       })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.log('User joined:', newPresences);
-      })
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.log('User left:', leftPresences);
-      })
       .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          // Track initial presence
+        if (status === "SUBSCRIBED") {
           await channel.track({
             userId: user.userId,
             username: user.username,
             displayName: user.displayName,
             role: user.role,
             lastSeen: new Date().toISOString(),
-            currentModule: 'dashboard',
-            timestamp: Date.now()
+            currentModule: "dashboard",
+            timestamp: Date.now(),
           });
         }
       });
 
-    // Cleanup on unmount
     return () => {
-      if (presenceChannelRef.current) {
-        supabase.removeChannel(presenceChannelRef.current);
-        presenceChannelRef.current = null;
-      }
+      presenceChannelRef.current = null;
+      void supabase.removeChannel(channel);
     };
   }, [user]);
 
-  // Update presence every 30 seconds to keep it alive
   useEffect(() => {
-    if (!user || !presenceChannelRef.current) return;
+    if (!user) return;
 
-    const interval = setInterval(() => {
-      presenceChannelRef.current?.track({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        role: user.role,
-        lastSeen: new Date().toISOString(),
-        currentModule,
-        timestamp: Date.now()
-      });
-    }, 30000);
+    const interval = window.setInterval(() => {
+      trackPresence(currentModule);
+    }, 30_000);
 
-    return () => clearInterval(interval);
-  }, [user, currentModule]);
+    return () => window.clearInterval(interval);
+  }, [currentModule, trackPresence, user]);
 
-  return {
-    onlineUsers,
-    updateCurrentModule,
-    updateEditingState,
-    totalOnlineUsers: onlineUsers.length // 只計算其他在線用戶，不包含自己
-  };
+  const value = useMemo<UserPresenceContextValue>(
+    () => ({
+      onlineUsers,
+      updateCurrentModule,
+      updateEditingState,
+      totalOnlineUsers: onlineUsers.length,
+    }),
+    [onlineUsers, updateCurrentModule, updateEditingState]
+  );
+
+  return createElement(UserPresenceContext.Provider, { value }, children);
+}
+
+export function useUserPresence() {
+  const context = useContext(UserPresenceContext);
+  if (!context) {
+    throw new Error("useUserPresence must be used within UserPresenceProvider");
+  }
+  return context;
 }

@@ -123,13 +123,18 @@ export function RealtimeNotifications() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeProjectId) return;
 
     console.log('Setting up real-time subscription for notifications...');
 
     const channel = supabase
-      .channel('notification_updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'test_systems' }, (payload) => {
+      .channel(`notification_updates:${user.userId}:${activeProjectId || "none"}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'test_systems',
+        filter: `project_id=eq.${activeProjectId}`
+      }, (payload) => {
         if (!activeProjectId || payload.new.project_id !== activeProjectId) {
           return;
         }
@@ -141,7 +146,12 @@ export function RealtimeNotifications() {
           metadata: { systemId: payload.new.id }
         });
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'test_systems' }, (payload) => {
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'test_systems',
+        filter: `project_id=eq.${activeProjectId}`
+      }, (payload) => {
         if (!activeProjectId || payload.new.project_id !== activeProjectId) {
           return;
         }
@@ -155,7 +165,12 @@ export function RealtimeNotifications() {
           });
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'issues' }, (payload) => {
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'issues',
+        filter: `project_id=eq.${activeProjectId}`
+      }, (payload) => {
         if (!activeProjectId || payload.new.project_id !== activeProjectId) {
           return;
         }
@@ -167,7 +182,12 @@ export function RealtimeNotifications() {
           metadata: { issueId: payload.new.id }
         });
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'test_progress' }, (payload) => {
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'test_progress',
+        filter: `project_id=eq.${activeProjectId}`
+      }, (payload) => {
         if (!activeProjectId || payload.new.project_id !== activeProjectId) {
           return;
         }
