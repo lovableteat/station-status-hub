@@ -440,7 +440,7 @@ export function TestProgressTable({
         >
           <div
             role="row"
-            className="sticky top-0 z-20 grid h-9 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
+            className="sticky top-0 z-20 grid h-11 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
             style={{ gridTemplateColumns: gridColumns }}
           >
             <ResizableColumnHeader

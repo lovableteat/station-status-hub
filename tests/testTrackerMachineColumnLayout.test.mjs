@@ -25,3 +25,16 @@ test("machine id cells keep a full-height visible hit area", async () => {
   assert.match(machineCell, /onClick=\{\(\) => onEditSystemData\(system\.id\)\}/);
   assert.doesNotMatch(machineCell, /className="w-full min-w-0 py-2 text-left"/);
 });
+
+test("tracker column header has enough vertical breathing room", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.match(
+    source,
+    /className="sticky top-0 z-20 grid h-11 items-center/,
+  );
+  assert.doesNotMatch(
+    source,
+    /className="sticky top-0 z-20 grid h-9 items-center/,
+  );
+});
