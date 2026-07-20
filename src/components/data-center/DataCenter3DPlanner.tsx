@@ -243,6 +243,7 @@ const GlbRackModel = memo(function GlbRackModel({
   const dimensions = definition.dimensions;
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
+    const ownedMaterials: THREE.Material[] = [];
     clone.rotation.set(...getModelAxisRotation(definition.upAxis));
     clone.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(clone);
@@ -254,6 +255,14 @@ const GlbRackModel = memo(function GlbRackModel({
       if (object instanceof THREE.Mesh) {
         object.castShadow = !lowDetail;
         object.receiveShadow = !lowDetail;
+        const sourceMaterials = Array.isArray(object.material) ? object.material : [object.material];
+        const materials = sourceMaterials.map((sourceMaterial) => {
+          const material = sourceMaterial.clone();
+          material.side = THREE.DoubleSide;
+          ownedMaterials.push(material);
+          return material;
+        });
+        object.material = Array.isArray(object.material) ? materials : materials[0];
       }
     });
 
@@ -262,6 +271,7 @@ const GlbRackModel = memo(function GlbRackModel({
       position: fit.position as [number, number, number],
       scale: fit.scale as [number, number, number],
       depthOffsetMeters: fit.depthOffsetMeters,
+      ownedMaterials,
     };
   }, [
     definition.assetDepthAlignment,
@@ -270,6 +280,11 @@ const GlbRackModel = memo(function GlbRackModel({
     gltf.scene,
     lowDetail,
   ]);
+
+  useEffect(
+    () => () => prepared.ownedMaterials.forEach((material) => material.dispose()),
+    [prepared],
+  );
 
   return (
     <group position={[0, 0, prepared.depthOffsetMeters]} scale={prepared.scale}>
@@ -347,6 +362,7 @@ const StepRackModel = memo(function StepRackModel({ model }: { model: ImportedSt
               color={part.color ? new THREE.Color(...part.color) : "#9cb6c9"}
               metalness={0.28}
               roughness={0.5}
+              side={THREE.DoubleSide}
             />
           </mesh>
         ))}
@@ -418,7 +434,7 @@ function RackL10Modules({
   return (
     <group>
       {Array.from({ length: visibleCount }, (_, index) => {
-        const useDetailedL10 = detailed && index === 0;
+        const useActualL10 = detailed && Boolean(l10Definition.assetUrl || l10Definition.stepModel);
         const position = positions[index];
         return (
           <group
@@ -426,12 +442,12 @@ function RackL10Modules({
             position={[0, position.y, position.z]}
             scale={[fitScale, fitScale, fitScale]}
           >
-            {useDetailedL10 ? (
+            {useActualL10 ? (
               <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
                 {l10Definition.source === "step" && l10Definition.stepModel ? (
                   <StepRackModel model={l10Definition.stepModel} />
                 ) : l10Definition.assetUrl ? (
-                  <GlbRackModel definition={l10Definition} lowDetail={lowDetail} />
+                  <GlbRackModel definition={l10Definition} lowDetail={lowDetail || index > 0} />
                 ) : (
                   <PlaceholderL10Model definition={l10Definition} index={index} />
                 )}
