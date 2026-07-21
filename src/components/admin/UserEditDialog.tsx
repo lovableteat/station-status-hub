@@ -33,7 +33,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
   const handleSave = async () => {
     try {
-      const updateData: any = {
+      const updateData: Record<string, string> = {
         username: editValues.username,
         role: editValues.role,
         status: editValues.status,
@@ -89,7 +89,10 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
           編輯與重設
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent
+        data-admin-dialog="user-editor"
+        className="max-w-xl border border-cyan-200/35 bg-[#0d263a] text-slate-100 shadow-[0_28px_90px_-45px_rgba(34,211,238,0.8)]"
+      >
         <DialogHeader>
           <DialogTitle>編輯用戶</DialogTitle>
         </DialogHeader>
