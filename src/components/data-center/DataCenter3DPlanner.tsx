@@ -1,6 +1,7 @@
 import {
   memo,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -649,16 +650,63 @@ function ProceduralL10Instances({
   );
 }
 
+function ProceduralL10CoverInstances({
+  layout,
+  name,
+}: {
+  layout: L10MountLayout;
+  name: string;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const { invalidate } = useThree();
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const transform = new THREE.Object3D();
+    const coverHeight = Math.min(0.004, layout.fittedHeight * 0.09);
+    layout.positions.forEach((position, index) => {
+      transform.position.set(
+        0,
+        position.y + layout.fittedHeight - coverHeight / 2 + 0.001,
+        position.z,
+      );
+      transform.scale.set(layout.fittedWidth * 0.992, coverHeight, layout.fittedDepth * 0.992);
+      transform.updateMatrix();
+      mesh.setMatrixAt(index, transform.matrix);
+    });
+    mesh.count = layout.positions.length;
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    invalidate();
+  }, [invalidate, layout]);
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, layout.visibleCount]}
+      frustumCulled={false}
+      name={name}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="#74838c" metalness={0.68} roughness={0.34} />
+    </instancedMesh>
+  );
+}
+
 function RackL10Modules({
   rack,
   rackDefinition,
   l10Definition,
   detailed,
+  interactionPreview,
 }: {
   rack: RackPlan;
   rackDefinition: RackModelDefinition;
   l10Definition: RackModelDefinition;
   detailed: boolean;
+  interactionPreview: boolean;
 }) {
   const layout = useMemo(
     () =>
@@ -698,45 +746,45 @@ function RackL10Modules({
     positions: layout.positions,
     rackUnits: l10Definition.rackUnits ?? 1,
   });
-  const exposedPositions = detailed && l10Definition.assetUrl
-    ? coverVisibility.exposed
-    : [];
-  const optimizedPositions = exposedPositions.length
-    ? coverVisibility.covered
-    : layout.positions;
-  const exposedLayout = {
-    ...layout,
-    visibleCount: exposedPositions.length,
-    positions: exposedPositions,
-  };
   const optimizedLayout = {
     ...layout,
-    visibleCount: optimizedPositions.length,
-    positions: optimizedPositions,
+    visibleCount: layout.positions.length,
+    positions: layout.positions,
+  };
+  const proxyCoverLayout = {
+    ...layout,
+    visibleCount: coverVisibility.exposed.length,
+    positions: coverVisibility.exposed,
   };
 
   return (
     <group name={`${rack.id}-l10-complete`}>
-      <Suspense fallback={null}>
-        {optimizedLayout.visibleCount ? (
-          <InstancedDetailedL10Model
-            definition={l10Definition}
-            assetUrl={sceneAssetUrl}
-            layout={optimizedLayout}
-            name={`${rack.id}-l10-scene-cad`}
-            detailed={detailed}
-          />
-        ) : null}
-        {exposedLayout.visibleCount && l10Definition.assetUrl ? (
-          <InstancedDetailedL10Model
-            definition={l10Definition}
-            assetUrl={l10Definition.assetUrl}
-            layout={exposedLayout}
-            name={`${rack.id}-l10-full-cad`}
-            detailed
-          />
-        ) : null}
-      </Suspense>
+      <group visible={interactionPreview}>
+        <ProceduralL10Instances
+          layout={layout}
+          name={`${rack.id}-l10-interaction-preview`}
+          detailed={false}
+        />
+      </group>
+      <group visible={!interactionPreview}>
+        <Suspense fallback={null}>
+          {optimizedLayout.visibleCount ? (
+            <InstancedDetailedL10Model
+              definition={l10Definition}
+              assetUrl={sceneAssetUrl}
+              layout={optimizedLayout}
+              name={`${rack.id}-l10-scene-cad`}
+              detailed={detailed}
+            />
+          ) : null}
+          {proxyCoverLayout.visibleCount ? (
+            <ProceduralL10CoverInstances
+              layout={proxyCoverLayout}
+              name={`${rack.id}-l10-proxy-covers`}
+            />
+          ) : null}
+        </Suspense>
+      </group>
     </group>
   );
 }
@@ -795,6 +843,7 @@ function RackVisual({
   hovered,
   showLabel,
   lowDetail,
+  interactionPreview,
   onSelect,
   onHover,
 }: {
@@ -806,6 +855,7 @@ function RackVisual({
   hovered: boolean;
   showLabel: boolean;
   lowDetail: boolean;
+  interactionPreview: boolean;
   onSelect: (rackId: string) => void;
   onHover: (rackId: string | null) => void;
 }) {
@@ -841,21 +891,27 @@ function RackVisual({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
-        {definition.source === "step" && definition.stepModel ? (
-          <StepRackModel model={definition.stepModel} />
-        ) : definition.assetUrl ? (
-          <GlbRackModel definition={definition} lowDetail={lowDetail || !selected} />
-        ) : (
-          <ProceduralRackModel definition={definition} accent={color} />
-        )}
-      </Suspense>
+      <group visible={interactionPreview}>
+        <RackOverviewModel rack={rack} definition={definition} accent={color} />
+      </group>
+      <group visible={!interactionPreview}>
+        <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
+          {definition.source === "step" && definition.stepModel ? (
+            <StepRackModel model={definition.stepModel} />
+          ) : definition.assetUrl ? (
+            <GlbRackModel definition={definition} lowDetail={lowDetail || !selected} />
+          ) : (
+            <ProceduralRackModel definition={definition} accent={color} />
+          )}
+        </Suspense>
+      </group>
 
       <RackL10Modules
         rack={rack}
         rackDefinition={definition}
         l10Definition={l10Definition}
         detailed={selected}
+        interactionPreview={interactionPreview}
       />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
@@ -1018,6 +1074,7 @@ function CameraRig({
   preset,
   requestId,
   facility,
+  onInteractionChange,
 }: {
   racks: RackPlan[];
   models: Record<string, RackModelDefinition>;
@@ -1025,12 +1082,44 @@ function CameraRig({
   preset: CameraPreset;
   requestId: number;
   facility: FacilityPlan;
+  onInteractionChange: (active: boolean) => void;
 }) {
   const { camera, invalidate } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const desiredPosition = useRef(new THREE.Vector3(10, 7, 11));
   const desiredTarget = useRef(new THREE.Vector3(0, 0.8, 0));
   const animating = useRef(false);
+  const interactionRestoreTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  const beginInteraction = useCallback(() => {
+    if (interactionRestoreTimer.current !== null) {
+      window.clearTimeout(interactionRestoreTimer.current);
+      interactionRestoreTimer.current = null;
+    }
+    animating.current = false;
+    onInteractionChange(true);
+    invalidate();
+  }, [invalidate, onInteractionChange]);
+
+  const restoreDetailAfterInteraction = useCallback(() => {
+    if (interactionRestoreTimer.current !== null) {
+      window.clearTimeout(interactionRestoreTimer.current);
+    }
+    interactionRestoreTimer.current = window.setTimeout(() => {
+      interactionRestoreTimer.current = null;
+      onInteractionChange(false);
+      invalidate();
+    }, 420);
+  }, [invalidate, onInteractionChange]);
+
+  useEffect(
+    () => () => {
+      if (interactionRestoreTimer.current !== null) {
+        window.clearTimeout(interactionRestoreTimer.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const selected = racks.find((rack) => rack.id === selectedRackId);
@@ -1076,12 +1165,14 @@ function CameraRig({
       controlsRef.current?.target.copy(desiredTarget.current);
       controlsRef.current?.update();
       animating.current = false;
+      onInteractionChange(false);
       invalidate();
     } else {
       animating.current = true;
+      onInteractionChange(true);
       invalidate();
     }
-  }, [camera, facility.depth, facility.width, invalidate, models, preset, racks, requestId, selectedRackId]);
+  }, [camera, facility.depth, facility.width, invalidate, models, onInteractionChange, preset, racks, requestId, selectedRackId]);
 
   useFrame(() => {
     if (!animating.current || !controlsRef.current) return;
@@ -1097,6 +1188,7 @@ function CameraRig({
       camera.position.copy(desiredPosition.current);
       controlsRef.current.target.copy(desiredTarget.current);
       animating.current = false;
+      restoreDetailAfterInteraction();
       return;
     }
 
@@ -1107,22 +1199,19 @@ function CameraRig({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enableDamping
-      dampingFactor={0.08}
       enablePan
       enableZoom
       minDistance={0.12}
       maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
-      zoomSpeed={0.96}
+      zoomSpeed={1.12}
       panSpeed={0.72}
       rotateSpeed={0.68}
       zoomToCursor
       screenSpacePanning
       maxPolarAngle={Math.PI / 2.02}
       target={[0, 0.8, 0]}
-      onStart={() => {
-        animating.current = false;
-      }}
+      onStart={beginInteraction}
+      onEnd={restoreDetailAfterInteraction}
       onChange={invalidate}
       touches={{
         ONE: THREE.TOUCH.ROTATE,
@@ -1145,6 +1234,8 @@ function PlannerScene({
   lowDetail,
 }: DataCenter3DPlannerProps & { lowDetail: boolean }) {
   const [hoveredRackId, setHoveredRackId] = useState<string | null>(null);
+  const [interactionPreview, setInteractionPreview] = useState(false);
+  const renderLowDetail = lowDetail || interactionPreview;
 
   useEffect(
     () => () => {
@@ -1160,11 +1251,11 @@ function PlannerScene({
       <ambientLight intensity={0.58} />
       <hemisphereLight intensity={0.65} color="#c9f6ff" groundColor="#020409" />
       <directionalLight
-        castShadow={!lowDetail}
+        castShadow={!renderLowDetail}
         intensity={1.35}
         position={[7, 10, 6]}
-        shadow-mapSize-width={lowDetail ? 512 : 1024}
-        shadow-mapSize-height={lowDetail ? 512 : 1024}
+        shadow-mapSize-width={renderLowDetail ? 512 : 1024}
+        shadow-mapSize-height={renderLowDetail ? 512 : 1024}
       />
       <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
       <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
@@ -1192,6 +1283,7 @@ function PlannerScene({
             hovered={hovered}
             showLabel={showLabel}
             lowDetail={lowDetail}
+            interactionPreview={interactionPreview}
             onSelect={onSelectRack}
             onHover={setHoveredRackId}
           />
@@ -1205,6 +1297,7 @@ function PlannerScene({
         preset={cameraPreset}
         requestId={cameraRequestId}
         facility={facility}
+        onInteractionChange={setInteractionPreview}
       />
     </>
   );

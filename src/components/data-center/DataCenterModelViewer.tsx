@@ -94,11 +94,9 @@ function InspectionCameraRig({
       enableRotate
       enablePan
       enableZoom
-      enableDamping
-      dampingFactor={0.075}
       minDistance={view.minDistance}
       maxDistance={view.maxDistance}
-      zoomSpeed={0.92}
+      zoomSpeed={1.14}
       zoomToCursor
       screenSpacePanning
       target={view.target}
@@ -577,7 +575,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
             <ModelViewerLoadingOverlay />
             <Canvas
               frameloop="demand"
-              dpr={isMobile ? 1 : [1, 1.45]}
+              dpr={isMobile ? 1 : [1, 1.2]}
               performance={{ min: 0.7 }}
               camera={{ position: cameraView.position, fov: 42, near: 0.001, far: 100 }}
               style={{ touchAction: "none" }}
