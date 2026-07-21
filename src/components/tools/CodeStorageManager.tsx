@@ -41,7 +41,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Code, Plus, Edit2, Trash2, Copy, Eye, ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
+import { Code, Plus, Edit2, Trash2, Copy, Download, Eye, ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -256,6 +256,33 @@ export function CodeStorageManager() {
         variant: "destructive"
       });
     }
+  };
+
+  const downloadCodeFile = (snippet: CodeSnippet) => {
+    const extensionByLanguage: Record<string, string> = {
+      bash: "sh",
+      cpp: "cpp",
+      csharp: "cs",
+      css: "css",
+      html: "html",
+      java: "java",
+      javascript: "js",
+      python: "py",
+      sql: "sql",
+      typescript: "ts",
+    };
+    const extension = extensionByLanguage[snippet.language] || "txt";
+    const safeTitle = snippet.title.trim().replace(/[\\/:*?"<>|]+/g, "-") || "source-code";
+    const blob = new Blob([snippet.code_content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeTitle}.${extension}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast({ title: "下載程式檔", description: `${anchor.download} 已準備完成` });
   };
 
   const resetForm = () => {
@@ -668,6 +695,20 @@ export function CodeStorageManager() {
                             </TooltipTrigger>
                             <TooltipContent>檢視程式碼</TooltipContent>
                           </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => downloadCodeFile(snippet)}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>下載程式檔</TooltipContent>
+                          </Tooltip>
                           
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -732,6 +773,14 @@ export function CodeStorageManager() {
                                     >
                                       <Copy className="h-4 w-4 mr-1" />
                                       快速複製
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => downloadCodeFile(snippet)}
+                                    >
+                                      <Download className="mr-1 h-4 w-4" />
+                                      下載程式檔
                                     </Button>
                                     <Button
                                       variant="outline"
@@ -810,6 +859,14 @@ export function CodeStorageManager() {
                     >
                       <Copy className="h-4 w-4 mr-1" />
                       複製程式碼
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => viewingSnippet && downloadCodeFile(viewingSnippet)}
+                    >
+                      <Download className="mr-1 h-4 w-4" />
+                      下載程式檔
                     </Button>
                   </div>
                 </div>

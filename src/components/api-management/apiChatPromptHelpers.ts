@@ -42,6 +42,82 @@ export function insertClipboardText(
   return `${currentValue.slice(0, selectionStart)}${pastedText}${currentValue.slice(selectionEnd)}`;
 }
 
+export type OrderedClipboardSegment =
+  | { kind: "text"; text: string }
+  | { attachmentIndex: number; kind: "attachment" };
+
+const ATTACHMENT_MARKER_PATTERN = /\[\[attachment:(\d+)\]\]/g;
+
+function decodeClipboardEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'");
+}
+
+export function composeClipboardContent(
+  html: string,
+  plainText: string,
+  imageCount: number,
+  attachmentStartIndex = 0,
+) {
+  if (imageCount <= 0) return plainText;
+
+  let imageIndex = 0;
+  const htmlWithMarkers = html.replace(/<img\b[^>]*>/gi, () => {
+    if (imageIndex >= imageCount) return "";
+    const marker = `[[attachment:${attachmentStartIndex + imageIndex}]]`;
+    imageIndex += 1;
+    return `\n${marker}\n`;
+  });
+
+  let content = decodeClipboardEntities(
+    htmlWithMarkers
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "• ")
+      .replace(/<\/(?:p|div|li|h[1-6]|tr)>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n+\s*(\[\[attachment:\d+\]\])\s*\n+/g, "\n$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!html || imageIndex === 0) content = plainText.trim();
+
+  const missingMarkers = Array.from({ length: imageCount - imageIndex }, (_, index) =>
+    `[[attachment:${attachmentStartIndex + imageIndex + index}]]`,
+  );
+
+  return [content, ...missingMarkers].filter(Boolean).join("\n");
+}
+
+export function splitContentByAttachmentMarkers(content: string): OrderedClipboardSegment[] {
+  const segments: OrderedClipboardSegment[] = [];
+  let cursor = 0;
+  let match = ATTACHMENT_MARKER_PATTERN.exec(content);
+
+  while (match) {
+    if (match.index > cursor) {
+      segments.push({ kind: "text", text: content.slice(cursor, match.index) });
+    }
+    segments.push({ attachmentIndex: Number(match[1]), kind: "attachment" });
+    cursor = match.index + match[0].length;
+    match = ATTACHMENT_MARKER_PATTERN.exec(content);
+  }
+
+  if (cursor < content.length) {
+    segments.push({ kind: "text", text: content.slice(cursor) });
+  }
+
+  ATTACHMENT_MARKER_PATTERN.lastIndex = 0;
+  return segments.length > 0 ? segments : [{ kind: "text", text: content }];
+}
+
 export function getClipboardImageFiles(items: ArrayLike<ClipboardItemLike>) {
   return Array.from(items).flatMap((item) => {
     if (item.kind !== "file" || !item.type?.startsWith("image/") || !item.getAsFile) return [];

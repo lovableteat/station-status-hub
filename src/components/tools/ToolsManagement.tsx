@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import {
+  Code2,
   Download,
   Eye,
   File,
@@ -56,7 +57,7 @@ type CommandRow = Database["public"]["Tables"]["command_library"]["Row"];
 type AssetKind = "tool" | "code" | "command";
 type AssetClass = "tool" | "command" | "general";
 type AssetFilter = "all" | AssetClass;
-type WorkspaceTab = "applied" | "library" | "command-center";
+type WorkspaceTab = "applied" | "library" | "code-library" | "command-center";
 
 type Asset =
   | {
@@ -206,6 +207,7 @@ export function ToolsManagement() {
     if (typeof window === "undefined") return "applied";
     const requested = new URLSearchParams(window.location.search).get("assetView");
     if (requested === "library") return "library";
+    if (requested === "code") return "code-library";
     if (requested === "commands") return "command-center";
     return "applied";
   });
@@ -306,7 +308,8 @@ export function ToolsManagement() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    url.searchParams.set("assetView", tab === "command-center" ? "commands" : tab);
+    const assetView = tab === "command-center" ? "commands" : tab === "code-library" ? "code" : tab;
+    url.searchParams.set("assetView", assetView);
     window.history.replaceState({}, "", url);
   }, [tab]);
 
@@ -603,6 +606,10 @@ export function ToolsManagement() {
           <TabsList className="h-9 min-h-0 rounded-lg p-1">
             <TabsTrigger value="applied" className="h-7 rounded-md px-3 py-1 text-xs">專案已套用</TabsTrigger>
             <TabsTrigger value="library" className="h-7 rounded-md px-3 py-1 text-xs">公司共用庫</TabsTrigger>
+            <TabsTrigger value="code-library" className="h-7 rounded-md px-3 py-1 text-xs">
+              <Code2 className="mr-1.5 h-3.5 w-3.5" />
+              程式碼儲存庫
+            </TabsTrigger>
             <TabsTrigger value="command-center" className="h-7 rounded-md px-3 py-1 text-xs">指令管理</TabsTrigger>
           </TabsList>
 
@@ -659,6 +666,9 @@ export function ToolsManagement() {
             onPreview={setSelectedAsset}
             onToggle={toggleAssignment}
           />
+        </TabsContent>
+        <TabsContent value="code-library" className="mt-3">
+          <CodeStorageManager />
         </TabsContent>
         <TabsContent value="command-center" className="mt-3">
           <CommandCenter />
