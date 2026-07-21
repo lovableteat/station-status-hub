@@ -202,9 +202,9 @@ function ResizableColumnHeader({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={stopDragging}
-        className="group absolute -right-1 top-0 z-40 flex h-full w-3 touch-none cursor-col-resize items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+        className="group absolute -right-1.5 top-0 z-40 flex h-full w-3 touch-none cursor-col-resize items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
       >
-        <span className="h-5 w-px rounded-full bg-[#416985] transition-colors group-hover:bg-cyan-300 group-focus-visible:bg-cyan-200" />
+        <span className="h-5 w-px rounded-full bg-transparent transition-colors group-hover:bg-cyan-300 group-focus-visible:bg-cyan-200" />
       </div>
     </div>
   );
