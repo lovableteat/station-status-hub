@@ -101,7 +101,10 @@ export function Sidebar({
           ]
         )}
       >
-        <div className="flex h-12 shrink-0 items-center border-b border-[#2a526f]/70 px-2">
+        <div className={cn(
+          "flex h-12 shrink-0 items-center border-b border-[#2a526f]/70 px-2",
+          isCompact && "justify-center px-0",
+        )}>
           {!isCompact && (
             <div className="min-w-0 flex-1 px-2 text-sm font-semibold text-[#f3f8fc]">
               維修工作區
@@ -113,7 +116,10 @@ export function Sidebar({
                 variant="ghost"
                 size="icon"
                 onClick={handleToggle}
-                className="h-9 w-9 shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/18 hover:text-emerald-50"
+                className={cn(
+                  "shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/18 hover:text-emerald-50",
+                  isCompact ? "mx-auto grid h-10 w-10 place-items-center p-0" : "h-9 w-9",
+                )}
               >
                 {isCompact ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
                 <span className="sr-only">{isCompact ? "展開側欄" : "收合側欄"}</span>
@@ -134,15 +140,17 @@ export function Sidebar({
                   key={item.id}
                   variant="ghost"
                   className={cn(
-                    "h-11 w-full rounded-lg border px-3 text-sm font-medium transition-colors",
-                    isCompact ? "justify-center px-0" : "justify-start",
+                    "rounded-lg border text-sm font-medium transition-colors",
+                    isCompact ? "mx-auto grid h-10 w-10 place-items-center p-0" : "h-11 w-full justify-start px-3",
                     isActive
                       ? "border-[#4c8dff]/65 bg-[#4c8dff] text-[#06111f] hover:bg-[#6ba2ff] hover:text-[#06111f]"
                       : "border-transparent text-[#b9cddd] hover:border-[#2a526f] hover:bg-[#10263a] hover:text-[#f3f8fc]"
                   )}
                   onClick={() => onModuleChange(item.id)}
                 >
-                  <Icon className={cn("h-4 w-4 shrink-0", !isCompact && "mr-3")} />
+                  <span className={cn("grid place-items-center", !isCompact && "mr-3")}>
+                    <Icon className="h-5 w-5 shrink-0" />
+                  </span>
                   {!isCompact && <span className="truncate">{item.label}</span>}
                 </Button>
               );
