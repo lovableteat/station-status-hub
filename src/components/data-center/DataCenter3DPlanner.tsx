@@ -618,8 +618,6 @@ function RackVisual({
   const width = definition.dimensions.widthMm / 1000;
   const depth = definition.dimensions.depthMm / 1000;
   const height = definition.dimensions.heightMm / 1000;
-  const showDetailedModel = selected;
-
   const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     onHover(rack.id);
@@ -649,26 +647,22 @@ function RackVisual({
       </mesh>
 
       <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
-        {!showDetailedModel ? (
-          <RackOverviewModel rack={rack} definition={definition} accent={color} />
-        ) : definition.source === "step" && definition.stepModel ? (
+        {definition.source === "step" && definition.stepModel ? (
           <StepRackModel model={definition.stepModel} />
         ) : definition.assetUrl ? (
-          <GlbRackModel definition={definition} lowDetail={lowDetail} />
+          <GlbRackModel definition={definition} lowDetail={lowDetail || !selected} />
         ) : (
           <ProceduralRackModel definition={definition} accent={color} />
         )}
       </Suspense>
 
-      {showDetailedModel ? (
-        <RackL10Modules
-          rack={rack}
-          rackDefinition={definition}
-          l10Definition={l10Definition}
-          detailed
-          lowDetail={lowDetail}
-        />
-      ) : null}
+      <RackL10Modules
+        rack={rack}
+        rackDefinition={definition}
+        l10Definition={l10Definition}
+        detailed={selected}
+        lowDetail={lowDetail || !selected}
+      />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
         <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
