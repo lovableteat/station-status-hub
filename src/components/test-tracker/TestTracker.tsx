@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Activity,
   Boxes,
@@ -60,40 +61,78 @@ type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
 
 const KPI_TONES = {
-  blue: "bg-[#102b50] text-[#4c92ff]",
-  cyan: "bg-[#0c3040] text-[#43c9e8]",
-  emerald: "bg-[#0b332f] text-[#45d6aa]",
-  amber: "bg-[#342a17] text-[#f5a524]",
+  blue: {
+    card: "border-blue-400/45 bg-[linear-gradient(135deg,rgba(14,48,91,0.96),rgba(7,24,46,0.98))] shadow-[0_0_22px_rgba(59,130,246,0.18),inset_0_1px_0_rgba(147,197,253,0.12)]",
+    detail: "text-blue-200/55",
+    icon: "bg-blue-500/20 text-blue-300 shadow-[0_0_18px_rgba(59,130,246,0.42)]",
+    label: "text-blue-100/80",
+  },
+  cyan: {
+    card: "border-cyan-400/45 bg-[linear-gradient(135deg,rgba(7,54,70,0.96),rgba(6,27,43,0.98))] shadow-[0_0_22px_rgba(34,211,238,0.17),inset_0_1px_0_rgba(103,232,249,0.12)]",
+    detail: "text-cyan-200/55",
+    icon: "bg-cyan-400/20 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,0.4)]",
+    label: "text-cyan-100/80",
+  },
+  emerald: {
+    card: "border-emerald-400/45 bg-[linear-gradient(135deg,rgba(7,59,51,0.96),rgba(5,31,36,0.98))] shadow-[0_0_22px_rgba(52,211,153,0.17),inset_0_1px_0_rgba(110,231,183,0.12)]",
+    detail: "text-emerald-200/55",
+    icon: "bg-emerald-400/20 text-emerald-200 shadow-[0_0_18px_rgba(52,211,153,0.4)]",
+    label: "text-emerald-100/80",
+  },
+  amber: {
+    card: "border-amber-400/45 bg-[linear-gradient(135deg,rgba(65,45,12,0.96),rgba(31,28,20,0.98))] shadow-[0_0_22px_rgba(245,158,11,0.17),inset_0_1px_0_rgba(252,211,77,0.12)]",
+    detail: "text-amber-200/55",
+    icon: "bg-amber-400/20 text-amber-200 shadow-[0_0_18px_rgba(245,158,11,0.4)]",
+    label: "text-amber-100/80",
+  },
+  violet: {
+    card: "border-violet-400/45 bg-[linear-gradient(135deg,rgba(48,38,91,0.96),rgba(20,24,50,0.98))] shadow-[0_0_22px_rgba(139,92,246,0.18),inset_0_1px_0_rgba(196,181,253,0.12)]",
+    detail: "text-violet-200/55",
+    icon: "bg-violet-400/20 text-violet-200 shadow-[0_0_18px_rgba(139,92,246,0.42)]",
+    label: "text-violet-100/80",
+  },
 } as const;
 
 function TrackerKpi({
+  className,
   detail,
   icon: Icon,
   label,
   tone,
   unit,
   value,
+  visual,
+  testId,
 }: {
+  className?: string;
   detail: string;
   icon: typeof Boxes;
   label: string;
   tone: keyof typeof KPI_TONES;
   unit?: string;
   value: string | number;
+  visual?: ReactNode;
+  testId?: string;
 }) {
+  const toneClasses = KPI_TONES[tone];
+
   return (
-    <div className="flex h-[72px] min-w-0 items-center gap-3 rounded-xl border border-[#1a3858] bg-[#0a1a2e] px-3 py-2">
-      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", KPI_TONES[tone])}>
+    <div
+      data-testid={testId}
+      className={cn("flex h-[72px] min-w-0 items-center gap-3 rounded-xl border px-3 py-2", toneClasses.card, className)}
+    >
+      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", toneClasses.icon)}>
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-[11px] text-[#9eb7ca]">{label}</div>
+        <div className={cn("truncate text-[11px]", toneClasses.label)}>{label}</div>
         <div className="font-data mt-0.5 flex items-baseline gap-1 text-[23px] font-semibold leading-6 text-[#f3f8fc]">
           {value}
-          {unit && <span className="text-[10px] font-normal text-[#9eb7ca]">{unit}</span>}
+          {unit && <span className={cn("text-[10px] font-normal", toneClasses.label)}>{unit}</span>}
         </div>
-        <div className="truncate text-[10px] text-[#7898af]">{detail}</div>
+        <div className={cn("truncate text-[10px]", toneClasses.detail)}>{detail}</div>
       </div>
+      {visual && <div className="ml-auto shrink-0">{visual}</div>}
     </div>
   );
 }
@@ -547,7 +586,7 @@ export function TestTracker() {
           value={systems.length}
           unit="台"
           detail="目前專案全部機台"
-          tone="blue"
+          tone="cyan"
         />
         <TrackerKpi
           icon={Hourglass}
@@ -573,14 +612,16 @@ export function TestTracker() {
           detail={`${systems.length ? Math.round((projectStatusCounts.已完成 / systems.length) * 100) : 0}%`}
           tone="emerald"
         />
-        <div className="col-span-2 flex h-[72px] min-w-0 items-center justify-between rounded-xl border border-[#1a3858] bg-[#0a1a2e] px-3 py-2 lg:col-span-1">
-          <div>
-            <div className="flex items-center gap-1.5 text-[11px] text-[#9eb7ca]"><Gauge className="h-3.5 w-3.5 text-[#43c9e8]" />整體完成率</div>
-            <div className="font-data mt-0.5 text-[23px] font-semibold leading-6 text-[#f3f8fc]">{overallCompletion}%</div>
-            <div className="text-[10px] text-[#7898af]">依所有機台平均進度</div>
-          </div>
-          <ProgressSparkline values={progressDistribution} />
-        </div>
+        <TrackerKpi
+          className="col-span-2 lg:col-span-1"
+          icon={Gauge}
+          label="整體完成率"
+          value={`${overallCompletion}%`}
+          detail="依所有機台平均進度"
+          tone="violet"
+          testId="tracker-kpi-overall"
+          visual={<ProgressSparkline values={progressDistribution} />}
+        />
       </div>
 
       {view === "table" ? (

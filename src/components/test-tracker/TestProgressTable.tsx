@@ -633,11 +633,12 @@ export function TestProgressTable({
                       <PopoverTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0 rounded-lg border border-[#315b7b] text-[#b9cddd] hover:border-cyan-300/60 hover:bg-[#102b48] hover:text-cyan-50"
+                          size="sm"
+                          className="h-9 shrink-0 gap-1.5 rounded-lg border border-[#315b7b] px-2.5 text-xs text-[#b9cddd] hover:border-cyan-300/60 hover:bg-[#102b48] hover:text-cyan-50"
                           aria-label={`${system.system_name} 更多操作`}
                         >
                           <MoreHorizontal className="h-4 w-4" />
+                          <span>其他功能</span>
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="end" className="w-52 space-y-2 p-2">
