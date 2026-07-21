@@ -1,6 +1,7 @@
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { Bounds, Grid, OrbitControls, useGLTF } from "@react-three/drei";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Grid, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Box, Eye, EyeOff, Focus, Layers3, Rotate3d, ScanLine, Search, X } from "lucide-react";
 import * as THREE from "three";
 
@@ -43,12 +44,88 @@ function ConfigureRenderer() {
   return null;
 }
 
-function ModelLoadingState() {
+interface InspectionCameraView {
+  position: [number, number, number];
+  target: [number, number, number];
+  minDistance: number;
+  maxDistance: number;
+}
+
+function getInspectionCameraView(definition: RackModelDefinition): InspectionCameraView {
+  const width = Math.max(0.001, definition.dimensions.widthMm / 1000);
+  const depth = Math.max(0.001, definition.dimensions.depthMm / 1000);
+  const height = Math.max(0.001, definition.dimensions.heightMm / 1000);
+  const radius = Math.sqrt(width ** 2 + depth ** 2 + height ** 2) / 2;
+  const distance = Math.max(0.38, radius * 2.45);
+  const targetY = height / 2;
+
+  return {
+    position: [distance * 0.58, targetY + distance * 0.3, distance * 0.86],
+    target: [0, targetY, 0],
+    minDistance: Math.max(0.015, Math.min(width, depth, height) * 0.12),
+    maxDistance: Math.max(12, distance * 6),
+  };
+}
+
+function InspectionCameraRig({
+  view,
+  resetKey,
+}: {
+  view: InspectionCameraView;
+  resetKey: number;
+}) {
+  const { camera, invalidate } = useThree();
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
+  useLayoutEffect(() => {
+    camera.position.fromArray(view.position);
+    camera.near = 0.001;
+    camera.far = Math.max(100, view.maxDistance * 8);
+    camera.updateProjectionMatrix();
+    controlsRef.current?.target.fromArray(view.target);
+    controlsRef.current?.update();
+    invalidate();
+  }, [camera, invalidate, resetKey, view]);
+
   return (
-    <mesh>
-      <boxGeometry args={[0.35, 0.35, 0.35]} />
-      <meshStandardMaterial color="#38bdf8" wireframe />
-    </mesh>
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableRotate
+      enablePan
+      enableZoom
+      enableDamping
+      dampingFactor={0.075}
+      minDistance={view.minDistance}
+      maxDistance={view.maxDistance}
+      zoomSpeed={0.92}
+      zoomToCursor
+      screenSpacePanning
+      target={view.target}
+      onChange={invalidate}
+    />
+  );
+}
+
+function ModelViewerLoadingOverlay() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-[#02070d]/78 backdrop-blur-sm">
+      <div className="w-64 rounded-2xl border border-cyan-300/25 bg-[#071725]/95 p-4 shadow-2xl">
+        <div className="flex items-center justify-between text-xs font-bold text-cyan-50">
+          <span>正在準備模型細節</span>
+          <span className="tabular-nums text-cyan-200">{Math.round(progress)}%</span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(90deg,#0ea5e9,#22d3ee,#67e8f9)] transition-[width] duration-200"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -59,7 +136,7 @@ function ProceduralInspectionModel({ definition }: { definition: RackModelDefini
 
   if (definition.kind === "l10") {
     return (
-      <group>
+      <group position={[0, height / 2, 0]}>
         <mesh>
           <boxGeometry args={[width, height, depth]} />
           <meshStandardMaterial color="#2a526f" metalness={0.65} roughness={0.4} />
@@ -126,38 +203,47 @@ function GlbInspectionModel({
     const fit = getUniformModelFit(bounds, definition.dimensions, {
       depthAlignment: "center",
     });
-    const sectionX = ((sectionPercent - 50) / 100) * (definition.dimensions.widthMm / 1000);
-    const clippingPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), sectionX);
     const ownedMaterials: THREE.Material[] = [];
+    const meshes: Array<{
+      mesh: THREE.Mesh;
+      partName: string;
+      materials: THREE.Material[];
+      materialStates: Array<{
+        transparent: boolean;
+        opacity: number;
+        depthWrite: boolean;
+        color: THREE.Color | null;
+        emissive: THREE.Color | null;
+        emissiveIntensity: number | null;
+      }>;
+    }> = [];
 
     clone.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.visible = !hiddenPartNames.has(getInspectablePartName(object));
       const sourceMaterials = Array.isArray(object.material) ? object.material : [object.material];
       const materials = sourceMaterials.map((sourceMaterial) => {
         const material = sourceMaterial.clone();
-        material.clippingPlanes = sectionEnabled ? [clippingPlane] : [];
-        material.clipShadows = sectionEnabled;
         // Imported CAD sheet metal can contain mixed face winding. Rendering both
         // sides keeps thin covers visible without replacing the source material.
         material.side = THREE.DoubleSide;
-        if (material instanceof THREE.MeshStandardMaterial) {
-          material.wireframe = mode === "wireframe";
-          if (mode === "wireframe") {
-            material.color.set("#67e8f9");
-            material.emissive.set("#164e63");
-            material.emissiveIntensity = 0.45;
-          }
-        }
-        if (mode === "xray") {
-          material.transparent = true;
-          material.opacity = 0.24;
-          material.depthWrite = false;
-        }
         ownedMaterials.push(material);
         return material;
       });
       object.material = Array.isArray(object.material) ? materials : materials[0];
+      meshes.push({
+        mesh: object,
+        partName: getInspectablePartName(object),
+        materials,
+        materialStates: materials.map((material) => ({
+          transparent: material.transparent,
+          opacity: material.opacity,
+          depthWrite: material.depthWrite,
+          color: material instanceof THREE.MeshStandardMaterial ? material.color.clone() : null,
+          emissive: material instanceof THREE.MeshStandardMaterial ? material.emissive.clone() : null,
+          emissiveIntensity:
+            material instanceof THREE.MeshStandardMaterial ? material.emissiveIntensity : null,
+        })),
+      });
     });
 
     return {
@@ -165,8 +251,40 @@ function GlbInspectionModel({
       position: fit.position as [number, number, number],
       scale: fit.scale as [number, number, number],
       ownedMaterials,
+      meshes,
     };
-  }, [definition, gltf.scene, hiddenPartNames, mode, sectionEnabled, sectionPercent]);
+  }, [definition, gltf.scene]);
+
+  useEffect(() => {
+    const sectionX = ((sectionPercent - 50) / 100) * (definition.dimensions.widthMm / 1000);
+    const clippingPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), sectionX);
+
+    prepared.meshes.forEach(({ mesh, partName, materials, materialStates }) => {
+      mesh.visible = !hiddenPartNames.has(partName);
+      materials.forEach((material, index) => {
+        const original = materialStates[index];
+        material.clippingPlanes = sectionEnabled ? [clippingPlane] : [];
+        material.clipShadows = sectionEnabled;
+        material.transparent = mode === "xray" ? true : original.transparent;
+        material.opacity = mode === "xray" ? 0.24 : original.opacity;
+        material.depthWrite = mode === "xray" ? false : original.depthWrite;
+
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.wireframe = mode === "wireframe";
+          if (mode === "wireframe") {
+            material.color.set("#67e8f9");
+            material.emissive.set("#164e63");
+            material.emissiveIntensity = 0.45;
+          } else {
+            if (original.color) material.color.copy(original.color);
+            if (original.emissive) material.emissive.copy(original.emissive);
+            material.emissiveIntensity = original.emissiveIntensity ?? 0;
+          }
+        }
+        material.needsUpdate = true;
+      });
+    });
+  }, [definition.dimensions.widthMm, hiddenPartNames, mode, prepared.meshes, sectionEnabled, sectionPercent]);
 
   useEffect(
     () => () => prepared.ownedMaterials.forEach((material) => material.dispose()),
@@ -189,6 +307,7 @@ function InspectionScene({
   resetKey,
   hiddenPartNames,
   onPartNamesChange,
+  cameraView,
 }: {
   definition: RackModelDefinition;
   assetUrl: string;
@@ -198,6 +317,7 @@ function InspectionScene({
   resetKey: number;
   hiddenPartNames: ReadonlySet<string>;
   onPartNamesChange: (partNames: string[]) => void;
+  cameraView: InspectionCameraView;
 }) {
   return (
     <>
@@ -206,25 +326,23 @@ function InspectionScene({
       <ambientLight intensity={1.35} />
       <directionalLight position={[4, 5, 6]} intensity={2.2} />
       <directionalLight position={[-4, 2, -4]} color="#38bdf8" intensity={1.1} />
-      <Bounds key={resetKey} fit clip observe margin={1.25}>
-        <Suspense fallback={<ModelLoadingState />}>
-          {assetUrl ? (
-            <GlbInspectionModel
-              definition={definition}
-              assetUrl={assetUrl}
-              mode={mode}
-              sectionEnabled={sectionEnabled}
-              sectionPercent={sectionPercent}
-              hiddenPartNames={hiddenPartNames}
-              onPartNamesChange={onPartNamesChange}
-            />
-          ) : (
-            <ProceduralInspectionModel definition={definition} />
-          )}
-        </Suspense>
-      </Bounds>
+      <Suspense fallback={null}>
+        {assetUrl ? (
+          <GlbInspectionModel
+            definition={definition}
+            assetUrl={assetUrl}
+            mode={mode}
+            sectionEnabled={sectionEnabled}
+            sectionPercent={sectionPercent}
+            hiddenPartNames={hiddenPartNames}
+            onPartNamesChange={onPartNamesChange}
+          />
+        ) : (
+          <ProceduralInspectionModel definition={definition} />
+        )}
+      </Suspense>
       <Grid
-        position={[0, -0.65, 0]}
+        position={[0, 0, 0]}
         args={[12, 12]}
         cellSize={0.1}
         cellThickness={0.6}
@@ -235,15 +353,7 @@ function InspectionScene({
         fadeDistance={8}
         infiniteGrid
       />
-      <OrbitControls
-        makeDefault
-        enableRotate
-        enablePan
-        enableZoom
-        minDistance={0.12}
-        maxDistance={12}
-        zoomToCursor
-      />
+      <InspectionCameraRig view={cameraView} resetKey={resetKey} />
     </>
   );
 }
@@ -272,17 +382,25 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
     setPartNames([]);
     setHiddenPartNames(new Set());
     setPartSearch("");
-    setResetKey((value) => value + 1);
   }, [model?.id, open]);
 
-  if (!model) return null;
-  const assetUrl = isMobile && model.mobileAssetUrl ? model.mobileAssetUrl : model.assetUrl ?? "";
+  const assetUrl = model
+    ? isMobile && model.mobileAssetUrl
+      ? model.mobileAssetUrl
+      : model.assetUrl ?? ""
+    : "";
+  const cameraView = useMemo(
+    () => (model ? getInspectionCameraView(model) : null),
+    [model]
+  );
+
+  if (!model || !cameraView) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
-        className="min-w-0 h-[min(94dvh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] sm:rounded-3xl"
+        className="min-w-0 h-[min(94svh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] data-[state=closed]:!animate-none data-[state=open]:!animate-none sm:rounded-3xl"
       >
         <header className="flex min-h-[76px] min-w-0 shrink-0 items-center justify-between gap-4 border-b border-[#1f4766] bg-[#081a2a] px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -307,7 +425,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
         </header>
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
-          <aside className="order-2 min-w-0 max-h-[36dvh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0 lg:p-5">
+          <aside className="order-2 min-w-0 max-h-[36svh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0 lg:p-5">
             <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-visible">
               {([[
                 "solid",
@@ -456,9 +574,12 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
             <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-xl border border-cyan-300/20 bg-[#06111f]/90 px-3 py-2 text-xs font-semibold text-cyan-50 backdrop-blur">
               <Rotate3d className="mr-1.5 inline h-4 w-4 text-cyan-300" /> 拖曳旋轉 · 滾輪或雙指縮放 · 右鍵平移
             </div>
+            <ModelViewerLoadingOverlay />
             <Canvas
-              dpr={isMobile ? [1, 1.35] : [1, 1.8]}
-              camera={{ position: [1.8, 1.25, 2.4], fov: 42, near: 0.001, far: 100 }}
+              frameloop="demand"
+              dpr={isMobile ? 1 : [1, 1.45]}
+              performance={{ min: 0.7 }}
+              camera={{ position: cameraView.position, fov: 42, near: 0.001, far: 100 }}
               style={{ touchAction: "none" }}
               gl={{ antialias: !isMobile, alpha: false, powerPreference: "high-performance" }}
             >
@@ -471,6 +592,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                 resetKey={resetKey}
                 hiddenPartNames={hiddenPartNames}
                 onPartNamesChange={setPartNames}
+                cameraView={cameraView}
               />
             </Canvas>
           </main>

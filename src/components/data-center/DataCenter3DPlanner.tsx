@@ -228,6 +228,89 @@ const ProceduralRackModel = memo(function ProceduralRackModel({
   );
 });
 
+const RackOverviewModel = memo(function RackOverviewModel({
+  rack,
+  definition,
+  accent,
+}: {
+  rack: RackPlan;
+  definition: RackModelDefinition;
+  accent: string;
+}) {
+  const width = definition.dimensions.widthMm / 1000;
+  const depth = definition.dimensions.depthMm / 1000;
+  const height = definition.dimensions.heightMm / 1000;
+  const post = Math.max(0.045, width * 0.07);
+  const equipmentCount = Math.min(
+    12,
+    Math.max(rack.status === "available" ? 2 : 4, Math.round(rack.l10Count + rack.utilizationPercent / 18))
+  );
+  const equipmentHeight = Math.max(0.055, height * 0.042);
+  const equipmentGap = height * 0.018;
+
+  return (
+    <group>
+      <mesh position={[0, height / 2, -depth / 2 + 0.025]}>
+        <boxGeometry args={[width * 0.88, height * 0.88, 0.05]} />
+        <meshStandardMaterial color="#142837" metalness={0.5} roughness={0.52} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * (width / 2 - 0.018), height / 2, 0]}>
+          <boxGeometry args={[0.036, height * 0.9, depth * 0.9]} />
+          <meshStandardMaterial color="#243b4b" metalness={0.62} roughness={0.4} />
+        </mesh>
+      ))}
+      <mesh position={[0, height - 0.035, 0]}>
+        <boxGeometry args={[width, 0.07, depth]} />
+        <meshStandardMaterial color="#314a59" metalness={0.64} roughness={0.36} />
+      </mesh>
+      {[-1, 1].flatMap((xSide) =>
+        [-1, 1].map((zSide) => (
+          <mesh
+            key={`${xSide}-${zSide}`}
+            position={[
+              xSide * (width / 2 - post / 2),
+              height / 2,
+              zSide * (depth / 2 - post / 2),
+            ]}
+          >
+            <boxGeometry args={[post, height, post]} />
+            <meshStandardMaterial color="#3d5665" metalness={0.7} roughness={0.34} />
+          </mesh>
+        ))
+      )}
+      {Array.from({ length: equipmentCount }, (_, index) => {
+        const y = height * 0.16 + index * (equipmentHeight + equipmentGap);
+        const highlighted = index < rack.l10Count || index % 4 === 0;
+        return (
+          <group key={index} position={[0, y, depth / 2 - 0.025]}>
+            <mesh>
+              <boxGeometry args={[width * 0.78, equipmentHeight, 0.095]} />
+              <meshStandardMaterial
+                color={highlighted ? "#607b89" : "#344b59"}
+                metalness={0.6}
+                roughness={0.38}
+              />
+            </mesh>
+            <mesh position={[0, 0, 0.052]}>
+              <boxGeometry args={[width * 0.66, equipmentHeight * 0.22, 0.012]} />
+              <meshBasicMaterial
+                color={highlighted ? accent : "#4a6070"}
+                transparent
+                opacity={highlighted ? 0.82 : 0.5}
+              />
+            </mesh>
+          </group>
+        );
+      })}
+      <mesh position={[0, 0.035, 0]} receiveShadow>
+        <boxGeometry args={[width + 0.1, 0.07, depth + 0.1]} />
+        <meshStandardMaterial color="#0b1822" metalness={0.48} roughness={0.6} />
+      </mesh>
+    </group>
+  );
+});
+
 const GlbRackModel = memo(function GlbRackModel({
   definition,
   lowDetail = false,
@@ -535,7 +618,7 @@ function RackVisual({
   const width = definition.dimensions.widthMm / 1000;
   const depth = definition.dimensions.depthMm / 1000;
   const height = definition.dimensions.heightMm / 1000;
-  const showDetailedModel = selected || hovered;
+  const showDetailedModel = selected;
 
   const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
@@ -565,9 +648,9 @@ function RackVisual({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <Suspense fallback={<ProceduralRackModel definition={definition} accent={color} />}>
+      <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
         {!showDetailedModel ? (
-          <ProceduralRackModel definition={definition} accent={color} />
+          <RackOverviewModel rack={rack} definition={definition} accent={color} />
         ) : definition.source === "step" && definition.stepModel ? (
           <StepRackModel model={definition.stepModel} />
         ) : definition.assetUrl ? (
@@ -577,13 +660,15 @@ function RackVisual({
         )}
       </Suspense>
 
-      <RackL10Modules
-        rack={rack}
-        rackDefinition={definition}
-        l10Definition={l10Definition}
-        detailed={showDetailedModel}
-        lowDetail={lowDetail}
-      />
+      {showDetailedModel ? (
+        <RackL10Modules
+          rack={rack}
+          rackDefinition={definition}
+          l10Definition={l10Definition}
+          detailed
+          lowDetail={lowDetail}
+        />
+      ) : null}
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
         <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
@@ -740,18 +825,20 @@ function FacilityShell({ activeLayer, facility }: { activeLayer: DataCenterLayer
 
 function CameraRig({
   racks,
+  models,
   selectedRackId,
   preset,
   requestId,
   facility,
 }: {
   racks: RackPlan[];
+  models: Record<string, RackModelDefinition>;
   selectedRackId: string;
   preset: CameraPreset;
   requestId: number;
   facility: FacilityPlan;
 }) {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const desiredPosition = useRef(new THREE.Vector3(10, 7, 11));
   const desiredTarget = useRef(new THREE.Vector3(0, 0.8, 0));
@@ -766,12 +853,27 @@ function CameraRig({
     } else if (preset === "front") {
       desiredPosition.current.set(0, Math.max(4.2, span * 0.34), Math.max(12.5, span * 0.92));
       desiredTarget.current.set(0, 1, 0);
-    } else if (preset === "detail" && selected) {
-      desiredPosition.current.set(selected.positionX + 1.35, 1.65, selected.positionZ + 1.7);
-      desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
-    } else if (preset === "focus" && selected) {
-      desiredPosition.current.set(selected.positionX + 3.5, 3.2, selected.positionZ + 4.3);
-      desiredTarget.current.set(selected.positionX, 1.05, selected.positionZ);
+    } else if ((preset === "detail" || preset === "focus") && selected) {
+      const definition = resolveRackDefinition(models, selected.modelId);
+      const rackHeight = definition.dimensions.heightMm / 1000;
+      const rackDepth = definition.dimensions.depthMm / 1000;
+      const focusDistance =
+        preset === "detail"
+          ? Math.max(1.55, rackHeight * 0.78, rackDepth * 1.45)
+          : Math.max(2.8, rackHeight * 1.45, rackDepth * 2.5);
+      const rotation = (selected.rotation * Math.PI) / 180;
+      const forwardX = Math.sin(rotation);
+      const forwardZ = Math.cos(rotation);
+      const rightX = Math.cos(rotation);
+      const rightZ = -Math.sin(rotation);
+      const targetY = rackHeight * 0.5;
+
+      desiredPosition.current.set(
+        selected.positionX + forwardX * focusDistance * 0.82 + rightX * focusDistance * 0.46,
+        targetY + focusDistance * 0.34,
+        selected.positionZ + forwardZ * focusDistance * 0.82 + rightZ * focusDistance * 0.46
+      );
+      desiredTarget.current.set(selected.positionX, targetY, selected.positionZ);
     } else {
       desiredPosition.current.set(span * 0.72, Math.max(7, span * 0.46), span * 0.82);
       desiredTarget.current.set(0, 0.8, 0);
@@ -783,10 +885,12 @@ function CameraRig({
       controlsRef.current?.target.copy(desiredTarget.current);
       controlsRef.current?.update();
       animating.current = false;
+      invalidate();
     } else {
       animating.current = true;
+      invalidate();
     }
-  }, [camera, facility.depth, facility.width, preset, racks, requestId, selectedRackId]);
+  }, [camera, facility.depth, facility.width, invalidate, models, preset, racks, requestId, selectedRackId]);
 
   useFrame(() => {
     if (!animating.current || !controlsRef.current) return;
@@ -802,7 +906,10 @@ function CameraRig({
       camera.position.copy(desiredPosition.current);
       controlsRef.current.target.copy(desiredTarget.current);
       animating.current = false;
+      return;
     }
+
+    invalidate();
   });
 
   return (
@@ -813,11 +920,19 @@ function CameraRig({
       dampingFactor={0.08}
       enablePan
       enableZoom
-      minDistance={0.45}
+      minDistance={0.12}
       maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
-      zoomSpeed={1.15}
+      zoomSpeed={0.96}
+      panSpeed={0.72}
+      rotateSpeed={0.68}
+      zoomToCursor
+      screenSpacePanning
       maxPolarAngle={Math.PI / 2.02}
       target={[0, 0.8, 0]}
+      onStart={() => {
+        animating.current = false;
+      }}
+      onChange={invalidate}
       touches={{
         ONE: THREE.TOUCH.ROTATE,
         TWO: THREE.TOUCH.DOLLY_PAN,
@@ -857,8 +972,8 @@ function PlannerScene({
         castShadow={!lowDetail}
         intensity={1.35}
         position={[7, 10, 6]}
-        shadow-mapSize-width={lowDetail ? 512 : 1536}
-        shadow-mapSize-height={lowDetail ? 512 : 1536}
+        shadow-mapSize-width={lowDetail ? 512 : 1024}
+        shadow-mapSize-height={lowDetail ? 512 : 1024}
       />
       <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
       <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
@@ -894,6 +1009,7 @@ function PlannerScene({
 
       <CameraRig
         racks={racks}
+        models={models}
         selectedRackId={selectedRackId}
         preset={cameraPreset}
         requestId={cameraRequestId}
@@ -945,8 +1061,10 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
       </div>
       <Canvas
         shadows={!isMobile}
-        dpr={isMobile ? 1 : [1, 1.5]}
-        camera={{ position: [10, 7, 11], fov: 36, near: 0.1, far: 80 }}
+        frameloop="demand"
+        dpr={isMobile ? 1 : [1, 1.3]}
+        performance={{ min: 0.65 }}
+        camera={{ position: [10, 7, 11], fov: 36, near: 0.03, far: 80 }}
         gl={{ antialias: !isMobile, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
       >
