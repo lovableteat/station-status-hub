@@ -77,3 +77,25 @@ test("clipboard helpers collect direct image files and embedded data images", ()
     ["data:image/png;base64,AAAA", "https://example.com/a.png"],
   );
 });
+
+test("mixed rich clipboard content keeps images between the surrounding paragraphs", () => {
+  const composition = helpers.composeClipboardContent(
+    '<p>第一段說明</p><p><img src="data:image/png;base64,AAAA"></p><p>第二段說明</p>',
+    "第一段說明\n第二段說明",
+    1,
+  );
+
+  assert.equal(composition, "第一段說明\n[[attachment:0]]\n第二段說明");
+  assert.deepEqual(
+    helpers.splitContentByAttachmentMarkers(composition),
+    [
+      { kind: "text", text: "第一段說明\n" },
+      { attachmentIndex: 0, kind: "attachment" },
+      { kind: "text", text: "\n第二段說明" },
+    ],
+  );
+});
+
+test("plain clipboard content stays unchanged when no image is present", () => {
+  assert.equal(helpers.composeClipboardContent("<p>只有文字</p>", "只有文字", 0), "只有文字");
+});
