@@ -87,12 +87,13 @@ test("the scene keeps rack envelopes outside and only mounts 1U machines inside"
   assert.match(workspaceSource, /L10 1U/);
 });
 
-test("mounted L10 machines use full CAD for every exposed top cover", () => {
+test("mounted L10 machines use fast scene geometry and close every exposed proxy cover", () => {
   assert.match(plannerSource, /const sceneAssetUrl = l10Definition\.mobileAssetUrl \?\? l10Definition\.assetUrl;/);
   assert.match(plannerSource, /<InstancedDetailedL10Model/);
   assert.match(plannerSource, /splitRackUnitMountPositionsByCoverVisibility/);
-  assert.match(plannerSource, /const exposedPositions = detailed && l10Definition\.assetUrl/);
-  assert.match(plannerSource, /assetUrl=\{l10Definition\.assetUrl\}/);
+  assert.match(plannerSource, /l10-proxy-covers/);
+  assert.match(plannerSource, /ProceduralL10CoverInstances/);
+  assert.doesNotMatch(plannerSource, /assetUrl=\{l10Definition\.assetUrl\}/);
   assert.match(plannerSource, /material\.side = THREE\.DoubleSide/);
   assert.doesNotMatch(plannerSource, /index > 0/);
   assert.match(plannerSource, /detailed=\{selected\}/);
@@ -165,7 +166,10 @@ for (const assetName of [
     assert.equal(metadata.mobileWebOptimization.outputFileName, `${assetName}.mobile.glb`);
     assert.equal(metadata.mobileWebOptimization.outputBytes, mobileStat.size);
     assert.ok(metadata.mobileWebOptimization.triangleCount <= 350_000);
-    assert.equal(metadata.mobileWebOptimization.borderVerticesLocked, true);
+    assert.equal(
+      metadata.mobileWebOptimization.coverStrategy,
+      "calibrated-proxy-overlay",
+    );
     assert.ok(metadata.dimensions.widthMm > 0);
     assert.ok(metadata.dimensions.depthMm > 0);
     assert.ok(metadata.dimensions.heightMm > 0);
