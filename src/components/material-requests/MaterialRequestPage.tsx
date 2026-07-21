@@ -313,7 +313,12 @@ function CompactHoverValue({
           }}
           className="group block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
         >
-          <span className={cn("line-clamp-2 break-words", previewClassName)}>{summary.preview}</span>
+          <span
+            data-testid="compact-hover-preview"
+            className={cn("truncate whitespace-nowrap", previewClassName)}
+          >
+            {summary.preview}
+          </span>
           {summary.remainingCount > 0 && (
             <span className="mt-1 inline-flex rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[11px] font-bold text-cyan-200">
               +{summary.remainingCount} 項
@@ -3736,7 +3741,7 @@ function CompactAlternativeRows({
               <CompactHoverValue
                 label="REF DES"
                 values={refValues.length > 0 ? refValues : groupRefDes}
-                maxItems={4}
+                maxItems={1}
                 onCopy={groupRefDes !== "-" ? () => onCopy(groupRefDes) : undefined}
                 previewClassName="font-mono text-[15px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
               />
@@ -5551,7 +5556,11 @@ export function MaterialRequestPage() {
 
       <div className={cn("mt-3 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
-      <section className="rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] p-3">
+      <section
+        data-testid="material-table-card"
+        className="overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]"
+      >
+        <div data-testid="material-table-toolbar" className="bg-[#0c1f33] p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
@@ -5630,9 +5639,9 @@ export function MaterialRequestPage() {
           <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
           <p>{showMarkedOnly ? `目前只顯示我的標記 · ${markedGroupCount.toLocaleString()} 筆` : `${dataset.meta.sourceFile} · ${dataset.meta.sheetName} · ${formatTimestamp(dataset.meta.generatedAt)}`}</p>
         </div>
-      </section>
+        </div>
 
-      <section className="mt-3 overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]">
+        <div className="border-t border-[#2a526f]">
         <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
@@ -5816,7 +5825,7 @@ export function MaterialRequestPage() {
                         <CompactHoverValue
                           label="REF DES"
                           values={groupRefValues.length > 0 ? groupRefValues : groupRefDes}
-                          maxItems={4}
+                          maxItems={1}
                           onCopy={groupRefDes !== "-" ? () => handleCopy(groupRefDes) : undefined}
                           previewClassName="font-mono text-[15px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
                         />
@@ -6009,6 +6018,7 @@ export function MaterialRequestPage() {
         <div className="flex flex-col gap-3 border-t border-blue-400/15 bg-[#101d33] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 text-sm text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger className="h-9 w-24 border-blue-400/20 bg-[#0b1527] text-slate-200"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
           <div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-9 border-blue-400/20 bg-[#0b1527] text-sm text-slate-300"><ChevronLeft className="mr-1 h-4 w-4" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-9 border-blue-400/20 bg-[#0b1527] text-sm text-slate-300">下一頁<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
+        </div>
         </div>
       </section>
         </div>
