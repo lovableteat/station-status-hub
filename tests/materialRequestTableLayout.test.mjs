@@ -7,10 +7,14 @@ const source = await readFile(sourceUrl, "utf8");
 
 test("material search controls are contained by the material table card", () => {
   const cardStart = source.indexOf('data-testid="material-table-card"');
+  const headingStart = source.indexOf("<h2", cardStart);
+  const headingEnd = source.indexOf("料號總表", headingStart);
   const toolbarStart = source.indexOf('data-testid="material-table-toolbar"');
   const tableStart = source.indexOf('data-testid="material-table-scroll"');
 
   assert.ok(cardStart >= 0, "material table card marker is missing");
+  assert.ok(headingStart > cardStart && headingEnd > headingStart, "material table heading is missing");
+  assert.ok(toolbarStart > headingEnd, "search toolbar must appear directly below the material table heading");
   assert.ok(toolbarStart > cardStart, "search toolbar must be inside the material table card");
   assert.ok(tableStart > toolbarStart, "search toolbar must appear above the material table");
 });
