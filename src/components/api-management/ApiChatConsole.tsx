@@ -19,6 +19,7 @@ import {
   LibraryBig,
   MessageSquareText,
   Paperclip,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -58,6 +59,7 @@ import {
 } from "./aiProviderCatalog";
 import type { ProviderChatMessage } from "./aiProviderCatalog";
 import {
+  composeClipboardContent,
   createFileFromDataImageUrl,
   extractEmbeddedImageSources,
   filterSharedPrompts,
@@ -65,6 +67,7 @@ import {
   getSharedPromptCreatorId,
   getSlashPromptQuery,
   insertClipboardText,
+  splitContentByAttachmentMarkers,
 } from "./apiChatPromptHelpers";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
@@ -113,6 +116,7 @@ interface ChatConnectionState {
 }
 
 interface SavedWorkspaceItem {
+  category: string;
   id: string;
   title: string;
   content: string;
@@ -143,6 +147,8 @@ const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
 const AUTO_SAVED_CONVERSATION_ID = "conversation-active-workspace";
 const SHARED_PROMPT_CATEGORY = "ai_prompt";
 const SHARED_PROMPT_PLATFORM = "api-chat";
+const SHARED_PROMPT_PAGE_SIZE = 8;
+const DEFAULT_SHARED_PROMPT_CATEGORY = "未分類";
 const LEGACY_ASSISTANT_SYSTEM_PROMPT =
   "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。";
 const DEFAULT_QUERY_SYSTEM_PROMPT = [
@@ -331,7 +337,12 @@ function buildAttachmentFingerprint(attachment: UploadedAttachment) {
 }
 
 function mapSharedPromptRowToItem(row: SharedPromptRow): SavedWorkspaceItem {
+  const rawCategory = row.description?.trim();
   return {
+    category:
+      !rawCategory || rawCategory === "AI 查詢共享提示詞"
+        ? DEFAULT_SHARED_PROMPT_CATEGORY
+        : rawCategory,
     id: row.id,
     title: row.name,
     content: row.command,
@@ -595,6 +606,57 @@ function QueryLoadingCard() {
 
 function MessageCard({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+  const contentSegments = splitContentByAttachmentMarkers(message.content || "");
+  const inlineAttachmentIndexes = new Set(
+    contentSegments.flatMap((segment) =>
+      segment.kind === "attachment" ? [segment.attachmentIndex] : [],
+    ),
+  );
+
+  const renderAttachment = (attachment: UploadedAttachment, index: number, inline = false) => {
+    if (attachment.kind === "image" && attachment.src) {
+      return (
+        <div
+          key={`${attachment.id}-${inline ? "inline" : "attached"}`}
+          className={cn(
+            "overflow-hidden rounded-[20px] border border-white/10 bg-[#060c16]",
+            inline ? "my-3" : "",
+          )}
+        >
+          <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+              <ImageIcon className="h-3.5 w-3.5 text-cyan-200" />
+              貼上圖片 {index + 1}
+            </div>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {attachment.mimeType.replace("image/", "")}
+            </span>
+          </div>
+          <div className="bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_45%),#08101d] p-3">
+            <img
+              src={attachment.src}
+              alt={`貼上圖片 ${index + 1}`}
+              className="max-h-[680px] w-full rounded-2xl border border-white/8 bg-slate-950/40 object-contain"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={`${attachment.id}-${inline ? "inline" : "attached"}`}
+        className={cn(
+          "flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 px-3 py-2 text-xs text-slate-200",
+          inline ? "my-3 w-fit" : "",
+        )}
+      >
+        <FileText className="h-3.5 w-3.5 text-cyan-200" />
+        <span className="max-w-[240px] truncate">{attachment.name || `附件 ${index + 1}`}</span>
+        <span className="text-slate-500">{formatFileSize(attachment.size)}</span>
+      </div>
+    );
+  };
 
   return (
     <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
@@ -634,25 +696,29 @@ function MessageCard({ message }: { message: ChatMessage }) {
         </div>
 
         {message.content ? (
-          <div className="whitespace-pre-wrap break-words">{message.content}</div>
+          <div className="break-words">
+            {contentSegments.map((segment, segmentIndex) => {
+              if (segment.kind === "text") {
+                return (
+                  <span key={`text-${segmentIndex}`} className="whitespace-pre-wrap">
+                    {segment.text}
+                  </span>
+                );
+              }
+
+              const attachment = message.attachments?.[segment.attachmentIndex];
+              return attachment
+                ? renderAttachment(attachment, segment.attachmentIndex, true)
+                : null;
+            })}
+          </div>
         ) : null}
 
         {message.attachments?.length ? (
           <div className={cn("flex flex-wrap gap-2", message.content ? "mt-4" : "")}>
-            {message.attachments.map((attachment, index) => (
-              <div
-                key={attachment.id}
-                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 px-3 py-2 text-xs text-slate-200"
-              >
-                {attachment.kind === "image" ? (
-                  <ImageIcon className="h-3.5 w-3.5 text-cyan-200" />
-                ) : (
-                  <FileText className="h-3.5 w-3.5 text-cyan-200" />
-                )}
-                <span className="max-w-[180px] truncate">{attachment.name || `附件 ${index + 1}`}</span>
-                <span className="text-slate-500">{formatFileSize(attachment.size)}</span>
-              </div>
-            ))}
+            {message.attachments.map((attachment, index) =>
+              inlineAttachmentIndexes.has(index) ? null : renderAttachment(attachment, index),
+            )}
           </div>
         ) : null}
 
@@ -714,10 +780,15 @@ export function ApiChatConsole({
   const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
   const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
   const [promptLibraryQuery, setPromptLibraryQuery] = useState("");
+  const [promptLibraryCategory, setPromptLibraryCategory] = useState("all");
+  const [promptLibrarySort, setPromptLibrarySort] = useState<"name" | "recent">("recent");
+  const [promptLibraryPage, setPromptLibraryPage] = useState(1);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   const [slashHighlightedIndex, setSlashHighlightedIndex] = useState(0);
   const [promptDialogTitle, setPromptDialogTitle] = useState("");
   const [promptDialogContent, setPromptDialogContent] = useState("");
+  const [promptDialogCategory, setPromptDialogCategory] = useState(DEFAULT_SHARED_PROMPT_CATEGORY);
+  const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [libraryApplyTitle, setLibraryApplyTitle] = useState("");
   const [libraryApplyContent, setLibraryApplyContent] = useState("");
@@ -744,11 +815,34 @@ export function ApiChatConsole({
     () => filterSharedPrompts(savedPrompts, slashPromptQuery ?? "").slice(0, 6),
     [savedPrompts, slashPromptQuery],
   );
-  const filteredLibraryPrompts = useMemo(
-    () => filterSharedPrompts(savedPrompts, promptLibraryQuery),
-    [promptLibraryQuery, savedPrompts],
+  const promptLibraryCategories = useMemo(
+    () => Array.from(new Set(savedPrompts.map((item) => item.category))).sort((a, b) => a.localeCompare(b, "zh-TW")),
+    [savedPrompts],
   );
+  const filteredLibraryPrompts = useMemo(() => {
+    const filtered = filterSharedPrompts(savedPrompts, promptLibraryQuery).filter(
+      (item) => promptLibraryCategory === "all" || item.category === promptLibraryCategory,
+    );
+    return filtered.sort((a, b) =>
+      promptLibrarySort === "name"
+        ? a.title.localeCompare(b.title, "zh-TW")
+        : b.savedAt - a.savedAt,
+    );
+  }, [promptLibraryCategory, promptLibraryQuery, promptLibrarySort, savedPrompts]);
+  const promptLibraryPageCount = Math.max(1, Math.ceil(filteredLibraryPrompts.length / SHARED_PROMPT_PAGE_SIZE));
+  const pagedLibraryPrompts = useMemo(() => {
+    const start = (promptLibraryPage - 1) * SHARED_PROMPT_PAGE_SIZE;
+    return filteredLibraryPrompts.slice(start, start + SHARED_PROMPT_PAGE_SIZE);
+  }, [filteredLibraryPrompts, promptLibraryPage]);
   const slashMenuOpen = slashPromptQuery !== null && !slashMenuDismissed && !loading;
+
+  useEffect(() => {
+    setPromptLibraryPage(1);
+  }, [promptLibraryCategory, promptLibraryQuery, promptLibrarySort]);
+
+  useEffect(() => {
+    setPromptLibraryPage((current) => Math.min(current, promptLibraryPageCount));
+  }, [promptLibraryPageCount]);
 
   const selectedMetadata = useMemo(() => {
     return selectedApiKey
@@ -1262,10 +1356,7 @@ export function ApiChatConsole({
     }
 
     const userAttachments = [...uploadedAttachments];
-    const userImages = userAttachments
-      .filter((item) => item.kind === "image" && item.src)
-      .map((item) => ({ id: item.id, src: item.src as string, mimeType: item.mimeType }));
-    const userMessage = createMessage("user", content, "normal", userImages, userAttachments);
+    const userMessage = createMessage("user", content, "normal", [], userAttachments);
     const nextHistory = [...messages, userMessage];
 
     setMessages(nextHistory);
@@ -1379,8 +1470,19 @@ export function ApiChatConsole({
 
   const openSavePromptDialog = () => {
     const draft = buildWorkspaceItemDraft("新提示詞");
+    setEditingPromptId(null);
     setPromptDialogTitle(draft.title);
     setPromptDialogContent(draft.content);
+    setPromptDialogCategory(DEFAULT_SHARED_PROMPT_CATEGORY);
+    setPromptLibraryOpen(false);
+    setSavePromptDialogOpen(true);
+  };
+
+  const openEditPromptDialog = (item: SavedWorkspaceItem) => {
+    setEditingPromptId(item.id);
+    setPromptDialogTitle(item.title);
+    setPromptDialogContent(item.content);
+    setPromptDialogCategory(item.category);
     setPromptLibraryOpen(false);
     setSavePromptDialogOpen(true);
   };
@@ -1408,23 +1510,26 @@ export function ApiChatConsole({
       }
 
       const title = promptDialogTitle.trim() || content.split(/\r?\n/)[0] || "未命名提示詞";
+      const category = promptDialogCategory.trim() || DEFAULT_SHARED_PROMPT_CATEGORY;
       setSavingPrompt(true);
 
       try {
-        const { data, error } = await supabase
-          .from("command_library")
-          .insert({
-            category: SHARED_PROMPT_CATEGORY,
-            platform: SHARED_PROMPT_PLATFORM,
-            name: title.slice(0, 32),
-            command: content,
-            description: "AI 查詢共享提示詞",
-            created_by: getSharedPromptCreatorId(user?.userId),
-            examples: null,
-            notes: null,
-            tags: ["shared", "ai-workspace", "prompt"],
-            is_active: true,
-          })
+        const payload = {
+          category: SHARED_PROMPT_CATEGORY,
+          platform: SHARED_PROMPT_PLATFORM,
+          name: title.slice(0, 32),
+          command: content,
+          description: category.slice(0, 40),
+          created_by: getSharedPromptCreatorId(user?.userId),
+          examples: null,
+          notes: null,
+          tags: ["shared", "ai-workspace", "prompt"],
+          is_active: true,
+        };
+        const query = editingPromptId
+          ? supabase.from("command_library").update(payload).eq("id", editingPromptId)
+          : supabase.from("command_library").insert(payload);
+        const { data, error } = await query
           .select("id,name,command,description,created_by,created_at,updated_at")
           .single();
 
@@ -1433,7 +1538,8 @@ export function ApiChatConsole({
         const savedPrompt = mapSharedPromptRowToItem(data as SharedPromptRow);
         setSavedPrompts((current) => [savedPrompt, ...current.filter((item) => item.id !== savedPrompt.id)]);
         setSavePromptDialogOpen(false);
-        toast.success("已儲存到輸入區的共享提示詞庫，輸入 / 也能快速套用");
+        setEditingPromptId(null);
+        toast.success(editingPromptId ? "共享提示詞已更新" : "已儲存到共享提示詞庫，輸入 / 也能快速套用");
       } catch (error) {
         const message = error instanceof Error ? error.message : "資料庫未接受這筆提示詞";
         console.error("Failed to save shared prompt:", error);
@@ -1490,12 +1596,12 @@ export function ApiChatConsole({
   };
 
   const appendUploadedFiles = async (files: File[]) => {
-    if (!files.length) return;
+    if (!files.length) return [] as UploadedAttachment[];
     const availableSlots = MAX_UPLOAD_ATTACHMENT_COUNT - uploadedAttachments.length;
 
     if (availableSlots <= 0) {
       toast.error(`一次最多加入 ${MAX_UPLOAD_ATTACHMENT_COUNT} 個附件`);
-      return;
+      return [] as UploadedAttachment[];
     }
 
     const selectedFiles = files.slice(0, availableSlots);
@@ -1513,24 +1619,24 @@ export function ApiChatConsole({
       return true;
     });
 
-    if (!validFiles.length) return;
+    if (!validFiles.length) return [] as UploadedAttachment[];
 
     try {
       const attachments = await Promise.all(validFiles.map(createUploadedAttachmentFromFile));
-      setUploadedAttachments((current) => {
-        const seen = new Set(current.map(buildAttachmentFingerprint));
-        const deduped = attachments.filter((attachment) => {
-          const fingerprint = buildAttachmentFingerprint(attachment);
-          if (seen.has(fingerprint)) return false;
-          seen.add(fingerprint);
-          return true;
-        });
-        return [...current, ...deduped].slice(0, MAX_UPLOAD_ATTACHMENT_COUNT);
+      const seen = new Set(uploadedAttachments.map(buildAttachmentFingerprint));
+      const deduped = attachments.filter((attachment) => {
+        const fingerprint = buildAttachmentFingerprint(attachment);
+        if (seen.has(fingerprint)) return false;
+        seen.add(fingerprint);
+        return true;
       });
-      toast.success(`已加入 ${attachments.length} 個附件`);
+      setUploadedAttachments((current) => [...current, ...deduped].slice(0, MAX_UPLOAD_ATTACHMENT_COUNT));
+      if (deduped.length) toast.success(`已加入 ${deduped.length} 個附件`);
+      return deduped;
     } catch (error) {
       console.error(error);
       toast.error("附件讀取失敗");
+      return [] as UploadedAttachment[];
     }
   };
 
@@ -1601,9 +1707,10 @@ export function ApiChatConsole({
 
   const handleComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
     const directImageFiles = getClipboardImageFiles(event.clipboardData.items);
+    const clipboardHtml = event.clipboardData.getData("text/html");
     const embeddedImageSources = directImageFiles.length
       ? []
-      : extractEmbeddedImageSources(event.clipboardData.getData("text/html"));
+      : extractEmbeddedImageSources(clipboardHtml);
 
     if (!directImageFiles.length && !embeddedImageSources.length) return;
 
@@ -1613,16 +1720,6 @@ export function ApiChatConsole({
     const selectionStart = event.currentTarget.selectionStart ?? draftMessage.length;
     const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
 
-    if (pastedText) {
-      const nextValue = insertClipboardText(draftMessage, pastedText, selectionStart, selectionEnd);
-      const nextCursor = selectionStart + pastedText.length;
-      setDraftMessage(nextValue);
-      setSlashMenuDismissed(false);
-      window.requestAnimationFrame(() => {
-        composerTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
-      });
-    }
-
     void (async () => {
       const sourceFiles = directImageFiles.length
         ? directImageFiles
@@ -1631,11 +1728,33 @@ export function ApiChatConsole({
         )).filter((file): file is File => Boolean(file));
 
       if (!sourceFiles.length) {
+        if (pastedText) {
+          setDraftMessage(insertClipboardText(draftMessage, pastedText, selectionStart, selectionEnd));
+        }
         toast.error("剪貼簿含有圖片，但原始網站不允許讀取；請單獨複製圖片或直接拖入輸入框");
         return;
       }
 
-      await appendUploadedFiles(sourceFiles);
+      const attachmentStartIndex = uploadedAttachments.length;
+      const addedAttachments = await appendUploadedFiles(sourceFiles);
+      const composedContent = composeClipboardContent(
+        clipboardHtml,
+        pastedText,
+        addedAttachments.length,
+        attachmentStartIndex,
+      );
+      const nextValue = insertClipboardText(
+        draftMessage,
+        composedContent,
+        selectionStart,
+        selectionEnd,
+      );
+      const nextCursor = selectionStart + composedContent.length;
+      setDraftMessage(nextValue);
+      setSlashMenuDismissed(false);
+      window.requestAnimationFrame(() => {
+        composerTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
     })();
   };
 
@@ -1692,7 +1811,20 @@ export function ApiChatConsole({
   }, [isDragOverComposer]);
 
   const removeUploadedAttachment = (id: string) => {
+    const removedIndex = uploadedAttachments.findIndex((attachment) => attachment.id === id);
     setUploadedAttachments((current) => current.filter((attachment) => attachment.id !== id));
+    if (removedIndex < 0) return;
+
+    setDraftMessage((current) =>
+      current
+        .replace(new RegExp(`\\s*\\[\\[attachment:${removedIndex}\\]\\]\\s*`, "g"), "\n")
+        .replace(/\[\[attachment:(\d+)\]\]/g, (marker, rawIndex: string) => {
+          const index = Number(rawIndex);
+          return index > removedIndex ? `[[attachment:${index - 1}]]` : marker;
+        })
+        .replace(/\n{3,}/g, "\n\n")
+        .trim(),
+    );
   };
 
   const totalMessages = messages.length.toString();
@@ -1769,7 +1901,7 @@ export function ApiChatConsole({
           <DialogHeader className="shrink-0 space-y-3">
             <DialogTitle className="flex items-center gap-3 text-3xl font-black tracking-tight text-white">
               <LibraryBig className="h-7 w-7 text-blue-300" />
-              建立共享提示詞
+              {editingPromptId ? "編輯提示詞" : "建立共享提示詞"}
             </DialogTitle>
             <DialogDescription className="text-base leading-7 text-slate-300">
               把常用查詢方式存進團隊提示詞庫。儲存後，可從輸入區的「提示詞庫」或輸入 / 快速套用。
@@ -1822,6 +1954,17 @@ export function ApiChatConsole({
 
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label className="text-base font-bold text-white">分類</Label>
+                <Input
+                  data-ai-surface="true"
+                  value={promptDialogCategory}
+                  onChange={(event) => setPromptDialogCategory(event.target.value)}
+                  placeholder="例如：日報、文件比對、程式開發"
+                  className="h-[52px] rounded-xl border-slate-500/60 bg-[#0b1628] px-4 text-base text-white placeholder:text-slate-400 hover:border-blue-300/60 focus:ring-2 focus:ring-blue-400/30"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-base font-bold text-white">提示詞名稱</Label>
                 <Input
                   data-ai-surface="true"
@@ -1864,7 +2007,7 @@ export function ApiChatConsole({
               className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-wait disabled:opacity-50"
             >
               <Bookmark className="mr-2 h-4 w-4" />
-              {savingPrompt ? "儲存中..." : "儲存到提示詞庫"}
+              {savingPrompt ? "儲存中..." : editingPromptId ? "儲存變更" : "儲存到提示詞庫"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1937,7 +2080,6 @@ export function ApiChatConsole({
       open={promptLibraryOpen}
       onOpenChange={(open) => {
         setPromptLibraryOpen(open);
-        if (!open) setPromptLibraryQuery("");
       }}
     >
       <PopoverTrigger asChild>
@@ -1958,7 +2100,7 @@ export function ApiChatConsole({
         side="top"
         align="start"
         sideOffset={10}
-        className="w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]"
+        className="w-[min(760px,calc(100vw-24px))] overflow-hidden rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]"
       >
         <div className="border-b border-blue-300/20 px-4 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -1976,31 +2118,62 @@ export function ApiChatConsole({
               新增
             </Button>
           </div>
-          <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200" />
-            <Input
-              value={promptLibraryQuery}
-              onChange={(event) => setPromptLibraryQuery(event.target.value)}
-              placeholder="搜尋名稱或提示詞內容"
-              className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 pl-10 text-sm text-white placeholder:text-slate-400 focus-visible:ring-blue-400/35"
-            />
+          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200" />
+              <Input
+                value={promptLibraryQuery}
+                onChange={(event) => setPromptLibraryQuery(event.target.value)}
+                placeholder="搜尋名稱或提示詞內容"
+                className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 pl-10 text-sm text-white placeholder:text-slate-400 focus-visible:ring-blue-400/35"
+              />
+            </div>
+            <Select value={promptLibraryCategory} onValueChange={setPromptLibraryCategory}>
+              <SelectTrigger className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 text-sm text-white">
+                <SelectValue placeholder="全部分類" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部分類</SelectItem>
+                {promptLibraryCategories.map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={promptLibrarySort}
+              onValueChange={(value) => setPromptLibrarySort(value as "name" | "recent")}
+            >
+              <SelectTrigger className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 text-sm text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">最近更新</SelectItem>
+                <SelectItem value="name">名稱排序</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        <div className="max-h-[360px] space-y-2 overflow-y-auto p-3">
+        <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">
           {filteredLibraryPrompts.length ? (
-            filteredLibraryPrompts.map((item) => (
+            pagedLibraryPrompts.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-stretch gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
+                className="group grid gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a] sm:grid-cols-[minmax(0,1fr)_auto]"
               >
                 <button
                   type="button"
                   onClick={() => applySharedPromptToDraft(item)}
                   className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                 >
-                  <span className="block truncate text-base font-black text-white">{item.title}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-base font-black text-white">{item.title}</span>
+                    <Badge className="shrink-0 border-cyan-300/20 bg-cyan-400/10 text-[10px] text-cyan-100 hover:bg-cyan-400/10">
+                      {item.category}
+                    </Badge>
+                  </span>
                   <span className="mt-1 block line-clamp-2 text-sm leading-5 text-slate-300">{item.content}</span>
+                  <span className="mt-1 block text-[11px] text-slate-500">更新 {formatSavedItemTime(item.savedAt)}</span>
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
@@ -2010,6 +2183,14 @@ export function ApiChatConsole({
                     aria-label={`調整後套用：${item.title}`}
                   >
                     調整
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEditPromptDialog(item)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 hover:bg-blue-400/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                    aria-label={`編輯提示詞：${item.title}`}
+                  >
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
@@ -2043,6 +2224,37 @@ export function ApiChatConsole({
             </div>
           )}
         </div>
+        {filteredLibraryPrompts.length ? (
+          <div className="flex items-center justify-between gap-3 border-t border-blue-300/20 px-4 py-3 text-xs text-slate-300">
+            <span>
+              共 {filteredLibraryPrompts.length} 筆，每頁 {SHARED_PROMPT_PAGE_SIZE} 筆 · 第 {promptLibraryPage}/{promptLibraryPageCount} 頁
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={promptLibraryPage <= 1}
+                onClick={() => setPromptLibraryPage((page) => Math.max(1, page - 1))}
+                className="h-8 border-blue-300/25 bg-slate-950/30 px-2.5 text-slate-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                上一頁
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={promptLibraryPage >= promptLibraryPageCount}
+                onClick={() => setPromptLibraryPage((page) => Math.min(promptLibraryPageCount, page + 1))}
+                className="h-8 border-blue-300/25 bg-slate-950/30 px-2.5 text-slate-100"
+              >
+                下一頁
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
