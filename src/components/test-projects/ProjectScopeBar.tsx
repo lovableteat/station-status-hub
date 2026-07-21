@@ -272,7 +272,10 @@ export function ProjectScopeBar() {
   };
 
   return (
-    <div className="maintenance-project-bar sticky top-[72px] z-30 flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2">
+    <div
+      data-ui="project-command-bar"
+      className="maintenance-project-bar sticky top-[72px] z-30 flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2"
+    >
       <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-100 sm:flex">
         <FolderKanban className="h-4 w-4" />
       </div>
@@ -305,63 +308,70 @@ export function ProjectScopeBar() {
       </Select>
 
       {activeProject && (
-        <>
+        <div
+          data-ui="project-metadata"
+          className="hidden min-w-0 items-center gap-3 lg:flex"
+        >
           <Badge
             variant="outline"
-            className={cn("hidden h-7 rounded-lg px-2.5 md:inline-flex", activeStatusMeta.className)}
+            className={cn("h-8 shrink-0 rounded-lg px-2.5", activeStatusMeta.className)}
           >
             {activeStatusMeta.label}
           </Badge>
-          <div className="hidden items-center gap-4 border-l border-[#2a526f]/70 pl-4 text-xs text-[#a9c0d1] xl:flex">
-            <span>
+          <div className="hidden items-center gap-1 rounded-lg border border-[#294861]/80 bg-[#071827]/70 p-1 xl:flex">
+            <span className="rounded-md px-2.5 py-1 text-xs text-[#9fb8ca]">
               機台 <strong className="font-mono text-[#f3f8fc]">{activeSummary?.machine_count ?? 0}</strong>
             </span>
-            <span>
+            <span className="rounded-md border-l border-[#294861]/70 px-2.5 py-1 text-xs text-[#9fb8ca]">
               待處理問題 <strong className="font-mono text-amber-100">{activeSummary?.open_issue_count ?? 0}</strong>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 rounded-md border-l border-[#294861]/70 px-2.5 py-1 text-xs text-[#9fb8ca]">
               <CalendarDays className="h-3.5 w-3.5" />
               {formatDate(activeProject.planned_end_date)}
             </span>
           </div>
-        </>
+        </div>
       )}
 
-      {activeProject && canCreateSystems && (
-        <SystemManager
-          onSystemUpdate={refreshProjects}
-          showDeleteAll={false}
-          trigger={
-            <Button
-              type="button"
-              aria-label="新增機台"
-              className="h-10 shrink-0 rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 text-cyan-50 shadow-[0_8px_24px_-16px_rgba(34,211,238,0.9)] hover:border-cyan-200/60 hover:bg-cyan-400/25 hover:text-white"
-            >
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">新增機台</span>
-            </Button>
-          }
-        />
-      )}
+      <div
+        data-ui="project-actions"
+        className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-[#294861]/80 bg-[#071827]/65 p-1"
+      >
+        {activeProject && canCreateSystems && (
+          <SystemManager
+            onSystemUpdate={refreshProjects}
+            showDeleteAll={false}
+            trigger={
+              <Button
+                type="button"
+                aria-label="新增機台"
+                className="h-9 shrink-0 rounded-lg border border-cyan-300/45 bg-cyan-400/18 px-3 text-cyan-50 shadow-none hover:border-cyan-200/65 hover:bg-cyan-400/28 hover:text-white"
+              >
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">新增機台</span>
+              </Button>
+            }
+          />
+        )}
 
-      {activeProject && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-10 shrink-0 rounded-lg border border-[#2a526f] bg-[#10263a] px-3 text-[#d8e6f0] hover:border-cyan-300/50 hover:bg-[#15344d]"
-              onClick={() => openEditForm(activeProject)}
-            >
-              <Pencil className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">編輯專案</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>直接編輯目前專案</TooltipContent>
-        </Tooltip>
-      )}
+        {activeProject && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-9 shrink-0 rounded-lg border border-[#315873] bg-[#10263a] px-3 text-[#d8e6f0] hover:border-cyan-300/50 hover:bg-[#15344d] hover:text-white"
+                onClick={() => openEditForm(activeProject)}
+              >
+                <Pencil className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">編輯專案</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>直接編輯目前專案</TooltipContent>
+          </Tooltip>
+        )}
 
-      <Sheet
+        <Sheet
         open={isOpen}
         onOpenChange={(open) => {
           setIsOpen(open);
@@ -372,7 +382,10 @@ export function ProjectScopeBar() {
         }}
       >
         <SheetTrigger asChild>
-          <Button className="h-10 shrink-0 rounded-lg px-3.5" variant="outline">
+          <Button
+            className="h-9 shrink-0 rounded-lg border-[#315873] bg-[#10263a] px-3 text-[#d8e6f0] hover:border-cyan-300/50 hover:bg-[#15344d] hover:text-white"
+            variant="outline"
+          >
             <Layers3 className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">專案中心</span>
           </Button>
@@ -665,7 +678,8 @@ export function ProjectScopeBar() {
             </div>
           )}
         </SheetContent>
-      </Sheet>
+        </Sheet>
+      </div>
     </div>
   );
 }

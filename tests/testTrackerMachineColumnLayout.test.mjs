@@ -38,3 +38,13 @@ test("tracker column header has enough vertical breathing room", async () => {
     /className="sticky top-0 z-20 grid h-9 items-center/,
   );
 });
+
+test("tracker table exposes consistent visual regions without changing row actions", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.match(source, /data-ui="tracker-table"/);
+  assert.match(source, /data-ui="tracker-header"/);
+  assert.match(source, /data-ui="tracker-row"/);
+  assert.match(source, /data-ui="tracker-actions"/);
+  assert.match(source, /onClick=\{\(\) => onSelectSystem\(system\.id\)\}/);
+});

@@ -46,3 +46,12 @@ test("system editor supports project address definitions and per-system values",
   assert.match(source, /新增位址欄位/);
   assert.match(source, /同專案所有機台/);
 });
+
+test("project address definitions can be renamed without replacing their stored values", async () => {
+  const source = await readFile(editorSourceUrl, "utf8");
+
+  assert.match(source, /handleUpdateAddressField/);
+  assert.match(source, /\.from\("test_project_address_fields"\)[\s\S]*?\.update\(\{/);
+  assert.match(source, /aria-label=\{`編輯 \$\{field\.label\} 位址欄位`\}/);
+  assert.match(source, /位址欄位已更新/);
+});

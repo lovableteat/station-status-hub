@@ -16,3 +16,11 @@ test("project command bar exposes the existing add-system workflow to editors", 
   assert.match(systemManager, /trigger\?: ReactNode/);
   assert.match(systemManager, /trigger \?\?/);
 });
+
+test("project command bar keeps metadata and actions in explicit visual groups", async () => {
+  const scopeBar = await read("../src/components/test-projects/ProjectScopeBar.tsx");
+
+  assert.match(scopeBar, /data-ui="project-command-bar"/);
+  assert.match(scopeBar, /data-ui="project-metadata"/);
+  assert.match(scopeBar, /data-ui="project-actions"/);
+});
