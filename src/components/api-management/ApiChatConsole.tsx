@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -2159,27 +2160,55 @@ export function ApiChatConsole({
             pagedLibraryPrompts.map((item) => (
               <div
                 key={item.id}
-                className="group grid gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a] sm:grid-cols-[minmax(0,1fr)_auto]"
+                data-testid={`prompt-library-item-${item.id}`}
+                className="group grid min-h-14 items-center gap-1 rounded-xl border border-blue-300/18 bg-[#10263a] px-2 py-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a] sm:grid-cols-[minmax(0,1fr)_auto]"
               >
-                <button
-                  type="button"
-                  onClick={() => applySharedPromptToDraft(item)}
-                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-base font-black text-white">{item.title}</span>
-                    <Badge className="shrink-0 border-cyan-300/20 bg-cyan-400/10 text-[10px] text-cyan-100 hover:bg-cyan-400/10">
-                      {item.category}
-                    </Badge>
-                  </span>
-                  <span className="mt-1 block line-clamp-2 text-sm leading-5 text-slate-300">{item.content}</span>
-                  <span className="mt-1 block text-[11px] text-slate-500">更新 {formatSavedItemTime(item.savedAt)}</span>
-                </button>
+                <HoverCard openDelay={320} closeDelay={120}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => applySharedPromptToDraft(item)}
+                      className="min-w-0 rounded-lg px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-black text-white">{item.title}</span>
+                        <Badge className="shrink-0 border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0 text-[10px] text-cyan-100 hover:bg-cyan-400/10">
+                          {item.category}
+                        </Badge>
+                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">
+                          {formatSavedItemTime(item.savedAt)}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block line-clamp-1 text-xs leading-4 text-slate-300">
+                        {item.content}
+                      </span>
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    side="left"
+                    align="start"
+                    sideOffset={12}
+                    className="max-h-[min(420px,70vh)] w-[min(460px,calc(100vw-32px))] overflow-y-auto rounded-xl border-blue-300/35 bg-[#0b1b2d] p-4 text-slate-100 shadow-none"
+                  >
+                    <div className="flex min-w-0 items-center gap-2 border-b border-blue-300/20 pb-2.5">
+                      <p className="min-w-0 flex-1 truncate text-sm font-black text-white">{item.title}</p>
+                      <Badge className="shrink-0 border-cyan-300/20 bg-cyan-400/10 text-[10px] text-cyan-100 hover:bg-cyan-400/10">
+                        {item.category}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">
+                      {item.content}
+                    </p>
+                    <p className="mt-3 border-t border-blue-300/15 pt-2 text-[11px] text-slate-500">
+                      更新 {formatSavedItemTime(item.savedAt)} · 點選清單即可套用
+                    </p>
+                  </HoverCardContent>
+                </HoverCard>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
                     onClick={() => openLibraryApplyDialog(item)}
-                    className="flex h-10 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-400/10 px-2.5 text-xs font-black text-blue-100 hover:bg-blue-400/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                    className="flex h-8 items-center justify-center rounded-lg border border-blue-300/20 bg-blue-400/10 px-2.5 text-xs font-black text-blue-100 hover:bg-blue-400/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                     aria-label={`調整後套用：${item.title}`}
                   >
                     調整
@@ -2187,7 +2216,7 @@ export function ApiChatConsole({
                   <button
                     type="button"
                     onClick={() => openEditPromptDialog(item)}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 hover:bg-blue-400/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-blue-400/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                     aria-label={`編輯提示詞：${item.title}`}
                   >
                     <Pencil className="h-4 w-4" />
@@ -2195,7 +2224,7 @@ export function ApiChatConsole({
                   <button
                     type="button"
                     onClick={() => removeSavedPrompt(item.id)}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-rose-500/15 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-500/15 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
                     aria-label={`刪除共享提示詞：${item.title}`}
                   >
                     <Trash2 className="h-4 w-4" />
