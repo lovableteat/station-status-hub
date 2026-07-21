@@ -855,12 +855,15 @@ function CameraRig({
       desiredTarget.current.set(0, 1, 0);
     } else if ((preset === "detail" || preset === "focus") && selected) {
       const definition = resolveRackDefinition(models, selected.modelId);
+      const rackWidth = definition.dimensions.widthMm / 1000;
       const rackHeight = definition.dimensions.heightMm / 1000;
       const rackDepth = definition.dimensions.depthMm / 1000;
+      const rackRadius = Math.hypot(rackWidth, rackHeight, rackDepth) / 2;
+      const fitDistance = rackRadius / Math.tan(THREE.MathUtils.degToRad(36 / 2));
       const focusDistance =
         preset === "detail"
-          ? Math.max(1.55, rackHeight * 0.78, rackDepth * 1.45)
-          : Math.max(2.8, rackHeight * 1.45, rackDepth * 2.5);
+          ? Math.max(3.6, fitDistance * 1.02)
+          : Math.max(5, fitDistance * 1.32);
       const rotation = (selected.rotation * Math.PI) / 180;
       const forwardX = Math.sin(rotation);
       const forwardZ = Math.cos(rotation);
