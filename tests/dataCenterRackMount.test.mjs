@@ -5,6 +5,7 @@ import {
   RACK_UNIT_HEIGHT_METERS,
   STANDARD_19_INCH_RAIL_WIDTH_METERS,
   getDefaultRackL10Assignment,
+  splitRackUnitMountPositionsByCoverVisibility,
   getAssignedModuleCount,
   getRackUnitMountLayout,
   normalizeRackUnitSlots,
@@ -111,6 +112,28 @@ test("selected U is clamped before reserved top space and excess modules are rej
   assert.equal(layout.visibleCount, 2);
   assert.equal(layout.endU, 40);
   assert.deepEqual(layout.positions.map((position) => position.rackUnit), [39, 40]);
+});
+
+test("only the top machine in a contiguous L10 stack needs exposed full-cover CAD", () => {
+  const positions = [3, 4, 5, 6].map((rackUnit) => ({ rackUnit, y: rackUnit, z: 0 }));
+  const visibility = splitRackUnitMountPositionsByCoverVisibility({
+    positions,
+    rackUnits: 1,
+  });
+
+  assert.deepEqual(visibility.exposed.map((position) => position.rackUnit), [6]);
+  assert.deepEqual(visibility.covered.map((position) => position.rackUnit), [3, 4, 5]);
+});
+
+test("every separated L10 keeps its own exposed full-cover CAD", () => {
+  const positions = [3, 7, 20].map((rackUnit) => ({ rackUnit, y: rackUnit, z: 0 }));
+  const visibility = splitRackUnitMountPositionsByCoverVisibility({
+    positions,
+    rackUnits: 1,
+  });
+
+  assert.deepEqual(visibility.exposed.map((position) => position.rackUnit), [3, 7, 20]);
+  assert.deepEqual(visibility.covered, []);
 });
 
 test("applying an L10 to an empty compatible rack installs one module", () => {
