@@ -55,3 +55,24 @@ test("project address definitions can be renamed without replacing their stored 
   assert.match(source, /aria-label=\{`編輯 \$\{field\.label\} 位址欄位`\}/);
   assert.match(source, /位址欄位已更新/);
 });
+
+test("adding a project address persists the current machine value atomically", async () => {
+  const source = await readFile(editorSourceUrl, "utf8");
+  const addHandlerStart = source.indexOf("const handleAddAddressField");
+  const editHandlerStart = source.indexOf("const beginAddressFieldEdit", addHandlerStart);
+  const addHandler = source.slice(addHandlerStart, editHandlerStart);
+
+  assert.match(addHandler, /newAddressValue/);
+  assert.match(addHandler, /\.from\("test_system_address_values"\)[\s\S]*?\.upsert\(/);
+  assert.match(addHandler, /\.from\("test_project_address_fields"\)[\s\S]*?\.delete\(\)/);
+  assert.match(addHandler, /error\?\.message|valueError\.message/);
+});
+
+test("system editor presents a clear workspace and explicit full save action", async () => {
+  const source = await readFile(editorSourceUrl, "utf8");
+
+  assert.match(source, /data-testid="system-editor-workspace"/);
+  assert.match(source, /data-testid="network-address-manager"/);
+  assert.match(source, /新增至專案/);
+  assert.match(source, /儲存全部變更/);
+});
