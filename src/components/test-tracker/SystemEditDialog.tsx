@@ -83,24 +83,28 @@ export function SystemEditDialog({
   const [newAddressPlaceholder, setNewAddressPlaceholder] = useState("");
   const [showNewAddressForm, setShowNewAddressForm] = useState(false);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [editingAddressFieldId, setEditingAddressFieldId] = useState<string | null>(null);
+  const [editingAddressLabel, setEditingAddressLabel] = useState("");
+  const [editingAddressPlaceholder, setEditingAddressPlaceholder] = useState("");
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
   const panelClass =
-    "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.82))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+    "rounded-2xl border border-[#2a526f] bg-[#071522] shadow-[0_24px_70px_-50px_rgba(56,189,248,0.75)]";
   const sectionClass =
-    "rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(15,23,42,0.62))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+    "rounded-xl border border-[#294861] bg-[#0b1b2d] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]";
   const fieldLabelClass = cn(
     "mb-2 block text-sm font-medium text-slate-100",
     isMobile && "text-base"
   );
   const inputClass = cn(
-    "h-11 rounded-2xl border-white/10 bg-slate-900/55 text-slate-50 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-sky-300/40",
+    "h-11 rounded-lg border-[#315b7b] bg-[#10263a] text-slate-50 placeholder:text-[#7893a8] focus-visible:border-cyan-300/60 focus-visible:ring-1 focus-visible:ring-cyan-300/35",
     isMobile && "h-12 text-base"
   );
   const selectTriggerClass = cn(
-    "h-11 rounded-2xl border-white/10 bg-slate-900/55 text-slate-50 focus:ring-1 focus:ring-sky-300/40",
+    "h-11 rounded-lg border-[#315b7b] bg-[#10263a] text-slate-50 focus:border-cyan-300/60 focus:ring-1 focus:ring-cyan-300/35",
     isMobile && "h-12 text-base"
   );
 
@@ -150,6 +154,8 @@ export function SystemEditDialog({
           (valueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
         )
       );
+      setEditingAddressFieldId(null);
+      setShowNewAddressForm(false);
     };
 
     if (isOpen) void loadSystemDetails();
@@ -200,6 +206,65 @@ export function SystemEditDialog({
     toast({
       title: "位址欄位已新增",
       description: `${label} 已套用到同專案所有機台，每台可分別填寫。`,
+    });
+  };
+
+  const beginAddressFieldEdit = (field: AddressField) => {
+    setEditingAddressFieldId(field.id);
+    setEditingAddressLabel(field.label);
+    setEditingAddressPlaceholder(field.placeholder || "");
+  };
+
+  const cancelAddressFieldEdit = () => {
+    setEditingAddressFieldId(null);
+    setEditingAddressLabel("");
+    setEditingAddressPlaceholder("");
+  };
+
+  const handleUpdateAddressField = async (field: AddressField) => {
+    const label = editingAddressLabel.trim();
+    if (!projectId || !label) {
+      toast({
+        title: "請輸入位址名稱",
+        description: "位址欄位名稱不能留白。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingAddress(true);
+    const { data, error } = await supabase
+      .from("test_project_address_fields")
+      .update({
+        label,
+        placeholder:
+          editingAddressPlaceholder.trim() || `請輸入 ${label}...`,
+      })
+      .eq("id", field.id)
+      .eq("project_id", projectId)
+      .select("*")
+      .single();
+    setIsUpdatingAddress(false);
+
+    if (error || !data) {
+      toast({
+        title: "更新位址欄位失敗",
+        description:
+          error?.code === "23505"
+            ? "同一專案已經有相同名稱的位址欄位。"
+            : "請稍後再試，既有機台位址內容不會受影響。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAddressFields((current) =>
+      current.map((item) => (item.id === data.id ? data : item))
+    );
+    cancelAddressFieldEdit();
+    toast({
+      title: "位址欄位已更新",
+      description: `${label} 已同步套用到同專案機台，原有位址內容保持不變。`,
     });
   };
 
@@ -287,43 +352,43 @@ export function SystemEditDialog({
 
       <MobileDialogContent
         className={cn(
-          "border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.96),rgba(15,23,42,0.95))] p-0 text-slate-50",
+          "border-[#2a526f] bg-[#06111f] p-0 text-slate-50 shadow-[0_32px_90px_-42px_rgba(34,211,238,0.6)]",
           isMobile
-            ? "rounded-t-[28px]"
-            : "sm:max-h-[92vh] sm:max-w-[min(94vw,72rem)] sm:overflow-y-auto sm:rounded-[30px]"
+            ? "rounded-t-2xl"
+            : "sm:max-h-[92vh] sm:max-w-[min(94vw,72rem)] sm:overflow-y-auto sm:rounded-2xl"
         )}
       >
-        <MobileDialogHeader className="space-y-4 border-b border-white/8 px-6 py-6">
+        <MobileDialogHeader className="space-y-4 border-b border-[#2a526f] bg-[#081827] px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/16 bg-sky-300/[0.08] px-3 py-1 text-xs font-medium tracking-[0.16em] text-sky-100/90">
+              <div className="inline-flex w-fit items-center gap-2 rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-xs font-medium tracking-[0.14em] text-cyan-100">
                 <Server className="h-3.5 w-3.5" />
                 SYSTEM EDITOR
               </div>
               <div className="space-y-2">
                 <MobileDialogTitle
                   className={cn(
-                    "text-left text-3xl font-semibold tracking-tight",
+                    "text-left text-2xl font-semibold tracking-tight",
                     isMobile && "text-2xl"
                   )}
                 >
                   編輯系統資料
                 </MobileDialogTitle>
-                <MobileDialogDescription className="max-w-2xl text-left text-sm text-slate-300/78">
-                  移除較少使用的欄位後，重新依照資料類型分區，讓每個區塊更集中也更好編輯。
+                <MobileDialogDescription className="max-w-2xl text-left text-sm text-[#9fb8ca]">
+                  編輯機台識別、網路位址與軟體版本；專案共用位址欄位可直接新增或修改。
                 </MobileDialogDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Badge className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-100">
+              <Badge className="rounded-md border border-[#315b7b] bg-[#10263a] px-2.5 py-1 text-xs text-slate-100">
                 {editValues.model || "GB300"}
               </Badge>
-              <Badge className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-100">
+              <Badge className="rounded-md border border-[#315b7b] bg-[#10263a] px-2.5 py-1 text-xs text-slate-100">
                 {editValues.system_name || "未命名機台"}
               </Badge>
               {editValues.serial_number && (
-                <Badge className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs text-slate-100">
+                <Badge className="rounded-md border border-[#315b7b] bg-[#10263a] px-2.5 py-1 text-xs text-slate-100">
                   SN {editValues.serial_number}
                 </Badge>
               )}
@@ -331,12 +396,12 @@ export function SystemEditDialog({
           </div>
         </MobileDialogHeader>
 
-        <div className="space-y-5 px-6 py-6">
+        <div className="space-y-5 px-5 py-5 sm:px-6">
           <div className={cn(panelClass, "p-4 sm:p-5")}>
             <div className="grid gap-5 lg:grid-cols-12">
               <section className={cn(sectionClass, "lg:col-span-7")}>
                 <div className="mb-5 flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-300/16 bg-sky-300/[0.08] text-sky-100">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100">
                     <Server className="h-5 w-5" />
                   </div>
                   <div className="space-y-1">
@@ -409,7 +474,7 @@ export function SystemEditDialog({
               <section className={cn(sectionClass, "lg:col-span-5")}>
                 <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-300/16 bg-violet-300/[0.08] text-violet-100">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-300/25 bg-blue-300/[0.08] text-blue-100">
                       <Network className="h-5 w-5" />
                     </div>
                     <div className="space-y-1">
@@ -425,7 +490,7 @@ export function SystemEditDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="border-violet-300/30 bg-violet-300/10 text-violet-50 hover:bg-violet-300/20"
+                    className="h-9 rounded-lg border-cyan-300/35 bg-cyan-300/10 text-cyan-50 hover:border-cyan-200/60 hover:bg-cyan-300/20"
                     onClick={() => setShowNewAddressForm((current) => !current)}
                   >
                     <Plus className="mr-1.5 h-4 w-4" />
@@ -464,25 +529,91 @@ export function SystemEditDialog({
                     />
                   </div>
 
-                  {addressFields.map((field) => (
-                    <div key={field.id}>
-                      <Label className={fieldLabelClass}>{field.label}</Label>
-                      <Input
-                        value={addressValues[field.id] || ""}
-                        onChange={(event) =>
-                          setAddressValues((current) => ({
-                            ...current,
-                            [field.id]: event.target.value,
-                          }))
-                        }
-                        placeholder={field.placeholder || `請輸入 ${field.label}...`}
-                        className={inputClass}
-                      />
-                    </div>
-                  ))}
+                  {addressFields.map((field) => {
+                    const isEditing = editingAddressFieldId === field.id;
+                    return (
+                      <div
+                        key={field.id}
+                        className="rounded-xl border border-[#294861] bg-[#081827] p-3"
+                      >
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <Label className={fieldLabelClass}>位址欄位名稱</Label>
+                              <Input
+                                value={editingAddressLabel}
+                                onChange={(event) => setEditingAddressLabel(event.target.value)}
+                                className={inputClass}
+                                autoFocus
+                              />
+                            </div>
+                            <div>
+                              <Label className={fieldLabelClass}>輸入提示</Label>
+                              <Input
+                                value={editingAddressPlaceholder}
+                                onChange={(event) => setEditingAddressPlaceholder(event.target.value)}
+                                placeholder={`請輸入 ${editingAddressLabel || field.label}...`}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 rounded-lg text-[#a9c0d1]"
+                                onClick={cancelAddressFieldEdit}
+                              >
+                                取消
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 rounded-lg bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
+                                disabled={isUpdatingAddress}
+                                onClick={() => handleUpdateAddressField(field)}
+                              >
+                                <Save className="mr-1.5 h-3.5 w-3.5" />
+                                儲存欄位
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <Label className="text-sm font-semibold text-[#e8f2f8]">
+                                {field.label}
+                              </Label>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                aria-label={`編輯 ${field.label} 位址欄位`}
+                                className="h-8 w-8 rounded-lg border border-transparent text-[#9fb8ca] hover:border-cyan-300/35 hover:bg-cyan-300/10 hover:text-cyan-100"
+                                onClick={() => beginAddressFieldEdit(field)}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <Input
+                              value={addressValues[field.id] || ""}
+                              onChange={(event) =>
+                                setAddressValues((current) => ({
+                                  ...current,
+                                  [field.id]: event.target.value,
+                                }))
+                              }
+                              placeholder={field.placeholder || `請輸入 ${field.label}...`}
+                              className={inputClass}
+                            />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {showNewAddressForm && (
-                    <div className="space-y-3 rounded-2xl border border-violet-300/25 bg-violet-300/[0.07] p-3">
+                    <div className="space-y-3 rounded-xl border border-cyan-300/30 bg-cyan-300/[0.06] p-3">
                       <div>
                         <Label className={fieldLabelClass}>新位址名稱</Label>
                         <Input
@@ -528,7 +659,7 @@ export function SystemEditDialog({
 
               <section className={cn(sectionClass, "lg:col-span-12")}>
                 <div className="mb-5 flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300/16 bg-emerald-300/[0.08] text-emerald-100">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-100">
                     <Settings2 className="h-5 w-5" />
                   </div>
                   <div className="space-y-1">
@@ -620,12 +751,12 @@ export function SystemEditDialog({
           </div>
         </div>
 
-        <MobileDialogFooter className="border-t border-white/8 bg-slate-950/70 px-6 py-4 backdrop-blur-xl">
+        <MobileDialogFooter className="border-t border-[#2a526f] bg-[#081827] px-6 py-4">
           <Button
             variant="outline"
             onClick={() => setIsOpen(false)}
             className={cn(
-              "rounded-2xl border-white/10 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08]",
+              "rounded-lg border-[#315b7b] bg-[#10263a] text-slate-100 hover:bg-[#15344d]",
               isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
             )}
           >
@@ -637,7 +768,7 @@ export function SystemEditDialog({
             onClick={handleSave}
             disabled={isSaving}
             className={cn(
-              "rounded-2xl bg-[linear-gradient(135deg,rgba(96,165,250,0.92),rgba(99,102,241,0.9))] text-slate-950 shadow-[0_18px_38px_-24px_rgba(96,165,250,0.72)] hover:brightness-110",
+              "rounded-lg border border-cyan-200/40 bg-cyan-300 text-[#06111f] shadow-none hover:bg-cyan-200",
               isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
             )}
           >
