@@ -69,3 +69,20 @@ test("fixed identity columns keep continuous separators across headers and rows"
     /data-testid=\{`status-cell-\$\{system\.id\}`\}[\s\S]*?TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS/,
   );
 });
+
+test("column resize handles do not draw a second divider line", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.match(
+    source,
+    /className="group absolute -right-1\.5 top-0[^"]*cursor-col-resize/,
+  );
+  assert.match(
+    source,
+    /className="h-5 w-px rounded-full bg-transparent[^"]*group-hover:bg-cyan-300/,
+  );
+  assert.doesNotMatch(
+    source,
+    /className="h-5 w-px rounded-full bg-\[#416985\]/,
+  );
+});
