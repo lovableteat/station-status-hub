@@ -426,11 +426,14 @@ export function TestProgressTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-[#315b7b] p-px">
+    <div
+      data-ui="tracker-table"
+      className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#061321] shadow-[0_18px_50px_-38px_rgba(34,211,238,0.55)]"
+    >
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto rounded-[11px] bg-[#08182a] [scrollbar-gutter:stable]"
+        className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto bg-[#071522] [scrollbar-gutter:stable]"
       >
         <div
           role="table"
@@ -440,7 +443,8 @@ export function TestProgressTable({
         >
           <div
             role="row"
-            className="sticky top-0 z-20 grid h-11 items-center gap-2 border-b border-[#254866] bg-[#0d2137] px-3 text-[11px] font-semibold text-[#dcebf5]"
+            data-ui="tracker-header"
+            className="sticky top-0 z-20 grid h-11 items-center gap-2 border-b border-[#37617e] bg-[#10263a] px-3 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#dcebf5] shadow-[0_8px_24px_-22px_rgba(56,189,248,0.9)]"
             style={{ gridTemplateColumns: gridColumns }}
           >
             <ResizableColumnHeader
@@ -449,7 +453,7 @@ export function TestProgressTable({
               onResize={resizeColumn}
               onReset={resetColumn}
               className={cn(
-                "sticky left-0 z-30 bg-[#0d2137] pr-2",
+                "sticky left-0 z-30 bg-[#10263a] pr-2",
                 TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
               )}
             >
@@ -494,7 +498,7 @@ export function TestProgressTable({
               onResize={resizeColumn}
               onReset={resetColumn}
               testId="progress-actions-header"
-              className="sticky right-0 z-50 border-l border-[#315b7b] bg-[#0c263c] px-2 text-center"
+              className="sticky right-0 z-50 border-l border-[#416985] bg-[#102b43] px-2 text-center"
             >
               <div className="flex items-center justify-center gap-1">
                 <span>操作</span>
@@ -517,9 +521,14 @@ export function TestProgressTable({
                   role="row"
                   aria-rowindex={absoluteIndex + 2}
                   data-machine-row={system.id}
+                  data-ui="tracker-row"
                   className={cn(
-                    "group absolute left-0 right-0 grid items-center gap-2 border-b border-[#1e3b56]/55 px-3 py-2.5 text-[13px] transition-colors hover:bg-[#102b48]",
-                    status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
+                    "group absolute left-0 right-0 grid items-center gap-2 border-b border-[#1e3b56]/70 px-3 py-2.5 text-[13px] transition-colors duration-150 hover:bg-[#112b43]",
+                    status === "進行中"
+                      ? "bg-[#0c2340] shadow-[inset_3px_0_0_#3b82f6]"
+                      : absoluteIndex % 2 === 0
+                        ? "bg-[#081827]"
+                        : "bg-[#091b2c]"
                   )}
                   style={{
                     gridTemplateColumns: gridColumns,
@@ -531,9 +540,13 @@ export function TestProgressTable({
                     role="cell"
                     data-testid={`machine-cell-${system.id}`}
                     className={cn(
-                      "sticky left-0 z-10 flex h-full min-w-0 items-stretch overflow-hidden group-hover:bg-[#102b48]",
+                      "sticky left-0 z-10 flex h-full min-w-0 items-stretch overflow-hidden border-r border-[#2a526f]/80 pr-3 group-hover:bg-[#112b43]",
                       TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
-                      status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
+                      status === "進行中"
+                        ? "bg-[#0c2340]"
+                        : absoluteIndex % 2 === 0
+                          ? "bg-[#081827]"
+                          : "bg-[#091b2c]"
                     )}
                   >
                     <button
@@ -557,10 +570,10 @@ export function TestProgressTable({
                   {sortedStations.map((station) => {
                     const percent = getStationPercent(system.id, station.id);
                     return (
-                      <div key={station.id} role="cell">
+                      <div key={station.id} role="cell" className="min-w-0 px-0.5">
                         <button
                           type="button"
-                          className="w-full rounded-md px-1.5 py-2 text-left hover:bg-[#061426] focus-visible:outline-none"
+                          className="w-full rounded-lg border border-transparent bg-[#0a1a2a]/55 px-2 py-2 text-left transition-colors hover:border-[#315b7b] hover:bg-[#10263a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
                           onClick={() => onSelectStation(system.id, station.id)}
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
@@ -580,9 +593,14 @@ export function TestProgressTable({
                   <div
                     role="cell"
                     data-testid={`progress-actions-${system.id}`}
+                    data-ui="tracker-actions"
                     className={cn(
-                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[#315b7b] px-1.5 group-hover:bg-[#102b48]",
-                      status === "進行中" ? "bg-[#0b2443]" : "bg-[#08182a]"
+                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[#416985] px-2 shadow-[-12px_0_22px_-22px_rgba(56,189,248,0.9)] group-hover:bg-[#112b43]",
+                      status === "進行中"
+                        ? "bg-[#0d2946]"
+                        : absoluteIndex % 2 === 0
+                          ? "bg-[#0a1d30]"
+                          : "bg-[#0b2034]"
                     )}
                   >
                     <Button
