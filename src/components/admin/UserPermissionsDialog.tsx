@@ -260,7 +260,10 @@ export function UserPermissionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden p-0">
+      <DialogContent
+        data-admin-dialog="permissions"
+        className="w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
+      >
         <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_28%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.94))] px-6 py-5">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-2">
