@@ -464,7 +464,7 @@ export function TestProgressTable({
               width={columnWidths.serial}
               onResize={resizeColumn}
               onReset={resetColumn}
-              className="pr-2"
+              className={cn("pr-2", TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS)}
             >
               序號
             </ResizableColumnHeader>
@@ -473,7 +473,7 @@ export function TestProgressTable({
               width={columnWidths.status}
               onResize={resizeColumn}
               onReset={resetColumn}
-              className="pr-2"
+              className={cn("pr-2", TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS)}
             >
               狀態
             </ResizableColumnHeader>
@@ -558,10 +558,25 @@ export function TestProgressTable({
                       <div className="truncate text-[10px] leading-3 text-[#91adc2]">{system.assigned_engineer || "未指定"}</div>
                     </button>
                   </div>
-                  <div role="cell" className="truncate font-data text-xs text-[#b9cddd]" title={system.serial_number || ""}>
+                  <div
+                    role="cell"
+                    data-testid={`serial-cell-${system.id}`}
+                    className={cn(
+                      "flex h-full min-w-0 items-center truncate pr-3 font-data text-xs text-[#b9cddd]",
+                      TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
+                    )}
+                    title={system.serial_number || ""}
+                  >
                     {system.serial_number || "-"}
                   </div>
-                  <div role="cell">
+                  <div
+                    role="cell"
+                    data-testid={`status-cell-${system.id}`}
+                    className={cn(
+                      "flex h-full min-w-0 items-center pr-3",
+                      TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
+                    )}
+                  >
                     <Badge variant="outline" className={cn("w-fit rounded-full px-2 text-[10px]", statusClass(status))}>
                       {status}
                     </Badge>
