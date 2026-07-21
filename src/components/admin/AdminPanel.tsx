@@ -425,11 +425,17 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   ).length;
 
   return (
-    <div className="maintenance-workspace min-h-full w-full min-w-0 bg-[#06111f] px-3 pb-3 pt-3 sm:px-4 lg:px-5">
+    <div
+      data-admin-surface="control-room"
+      className="maintenance-workspace min-h-full w-full min-w-0 bg-[radial-gradient(circle_at_12%_0%,rgba(34,211,238,0.13),transparent_28%),radial-gradient(circle_at_86%_8%,rgba(59,130,246,0.12),transparent_24%),linear-gradient(180deg,#071827_0%,#06111f_42%,#081522_100%)] px-3 pb-3 pt-3 sm:px-4 lg:px-5"
+    >
       <div className="flex min-h-full w-full min-w-0 flex-col gap-4">
         {/* Header */}
-        <header className="relative overflow-hidden rounded-[14px] border border-[#356985] bg-[#10263a] p-5 sm:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-400/10 blur-3xl" />
+        <header
+          data-admin-zone="command"
+          className="relative overflow-hidden rounded-[14px] border border-cyan-200/40 bg-[linear-gradient(135deg,#173f5b_0%,#123149_52%,#153750_100%)] p-5 shadow-[0_22px_70px_-42px_rgba(56,189,248,0.85)] sm:p-6"
+        >
+          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-0 left-1/3 h-px w-1/2 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -457,7 +463,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               {canViewApiManagement ? (
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl border-cyan-300/15 bg-slate-950/25 text-slate-200 hover:border-cyan-200/30 hover:bg-cyan-300/10 hover:text-cyan-50"
+                  className="h-10 rounded-xl border-cyan-200/30 bg-[#0a2033]/80 text-slate-100 shadow-sm hover:border-cyan-100/55 hover:bg-cyan-300/15 hover:text-white"
                   onClick={() => setActiveTab("api-management")}
                 >
                   <Network className="mr-2 h-4 w-4 text-cyan-200" />
@@ -466,7 +472,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               ) : null}
               <Button
                 variant="outline"
-                className="h-10 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-rose-300/20 hover:bg-rose-400/10 hover:text-rose-100"
+                className="h-10 rounded-xl border-slate-200/20 bg-[#0a2033]/80 text-slate-200 shadow-sm hover:border-rose-300/35 hover:bg-rose-400/12 hover:text-rose-100"
                 onClick={logout}
               >
                 <LogOut className="mr-2 h-4 w-4" />
@@ -477,8 +483,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
-          <TabsList className={`grid h-auto w-full gap-1 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-1.5 ${canViewApiManagement ? "grid-cols-2 sm:w-[420px]" : "grid-cols-1 sm:w-[210px]"}`}>
-            <TabsTrigger value="users" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
+          <TabsList
+            data-admin-zone="navigation"
+            className={`grid h-auto w-full gap-1 rounded-xl border border-sky-200/30 bg-[#0d2437] p-1.5 shadow-[0_16px_36px_-28px_rgba(56,189,248,0.9)] ${canViewApiManagement ? "grid-cols-2 sm:w-[420px]" : "grid-cols-1 sm:w-[210px]"}`}
+          >
+            <TabsTrigger value="users" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-300 data-[state=active]:to-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
           </TabsTrigger>
@@ -487,7 +496,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             工程師管理
           </TabsTrigger> : null}
           {canViewApiManagement ? (
-            <TabsTrigger value="api-management" className="h-10 rounded-lg text-[#a9c0d1] data-[state=active]:bg-[#163a5c] data-[state=active]:text-cyan-50">
+            <TabsTrigger value="api-management" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-300 data-[state=active]:to-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
               <Network className="h-4 w-4 mr-2" />
               API 管理
             </TabsTrigger>
@@ -496,7 +505,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
         {/* User Management Tab */}
         <TabsContent value="users" className="mt-0 flex flex-1 flex-col gap-3">
-          <section className="flex flex-col gap-4 rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <section className="flex flex-col gap-4 rounded-[14px] border border-sky-200/30 bg-[linear-gradient(120deg,#143852,#102b42)] px-5 py-4 shadow-[0_18px_48px_-38px_rgba(56,189,248,0.9)] sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
                 <Users className="h-4.5 w-4.5 text-sky-200" />
@@ -597,8 +606,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Dialog>
           </section>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Card className="group relative overflow-hidden rounded-[14px] border-[#2a526f] bg-[#10263a]">
+          <div data-admin-zone="status-overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className="group relative overflow-hidden rounded-[14px] border-sky-300/35 bg-[linear-gradient(145deg,#173f5e,#102c45)] shadow-[0_18px_42px_-34px_rgba(56,189,248,0.9)]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -612,7 +621,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[14px] border-emerald-300/25 bg-[#0d292c]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-emerald-300/35 bg-[linear-gradient(145deg,#12413f,#0d3035)] shadow-[0_18px_42px_-34px_rgba(52,211,153,0.8)]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -626,7 +635,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[14px] border-amber-300/25 bg-[#2a271c]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-amber-300/35 bg-[linear-gradient(145deg,#443b20,#27302e)] shadow-[0_18px_42px_-34px_rgba(251,191,36,0.75)]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -640,7 +649,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </CardContent>
             </Card>
 
-            <Card className="group relative overflow-hidden rounded-[14px] border-cyan-300/20 bg-[#10263a]">
+            <Card className="group relative overflow-hidden rounded-[14px] border-cyan-300/35 bg-[linear-gradient(145deg,#164255,#103047)] shadow-[0_18px_42px_-34px_rgba(34,211,238,0.8)]">
               <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
               <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
                 <div>
@@ -655,13 +664,13 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Card>
           </div>
 
-          <Card className="rounded-[14px] border-[#2a526f] bg-[#0b1b2d]">
+          <Card data-admin-zone="filters" className="rounded-[14px] border-sky-200/30 bg-[#102b40] shadow-[0_18px_46px_-38px_rgba(56,189,248,0.85)]">
             <CardContent className="space-y-3 p-4 sm:p-5">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
                 <div className="relative">
                   <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-200/60" />
                   <Input
-                    className="h-11 rounded-xl border-white/10 bg-slate-950/40 pl-10 text-slate-100 shadow-none focus-visible:border-sky-300/30 focus-visible:ring-sky-300/15"
+                    className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] pl-10 text-slate-100 shadow-none focus-visible:border-sky-300/55 focus-visible:ring-sky-300/20"
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
                     placeholder="搜尋帳號、顯示名稱、建立者或工作區"
@@ -669,7 +678,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </div>
 
                 <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
-                  <SelectTrigger className="h-11 rounded-xl border-white/10 bg-slate-950/40 text-slate-200 shadow-none">
+                  <SelectTrigger className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] text-slate-100 shadow-none">
                     <SelectValue placeholder="角色" />
                   </SelectTrigger>
                   <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
@@ -682,7 +691,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 </Select>
 
                 <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
-                  <SelectTrigger className="h-11 rounded-xl border-white/10 bg-slate-950/40 text-slate-200 shadow-none">
+                  <SelectTrigger className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] text-slate-100 shadow-none">
                     <SelectValue placeholder="狀態" />
                   </SelectTrigger>
                   <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
@@ -705,7 +714,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
 
-          <Card className="flex min-h-[280px] flex-1 flex-col rounded-[14px] border-[#2a526f] bg-[#0b1b2d]">
+          <Card data-admin-zone="accounts" className="flex min-h-[280px] flex-1 flex-col rounded-[14px] border-sky-200/30 bg-[#0c2235] shadow-[0_22px_60px_-48px_rgba(56,189,248,0.9)]">
             <CardContent className="flex flex-1 flex-col p-3 sm:p-4">
               <div className="flex-1 space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
@@ -715,7 +724,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group relative overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#10263a] p-4 transition-colors duration-200 hover:border-cyan-300/45 sm:p-5"
+                      className="group relative overflow-hidden rounded-[14px] border border-sky-200/25 bg-[linear-gradient(135deg,#14354e,#102a40)] p-4 shadow-[0_16px_38px_-34px_rgba(56,189,248,0.75)] transition-all duration-200 hover:border-cyan-200/55 hover:bg-[linear-gradient(135deg,#173c57,#123149)] sm:p-5"
                     >
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
