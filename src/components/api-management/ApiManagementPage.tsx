@@ -47,8 +47,11 @@ export function ApiManagementPage() {
   };
 
   return (
-    <div className="space-y-4 p-4 lg:p-5">
-      <section className="overflow-hidden rounded-[14px] border border-[#356985] bg-[#10263a]">
+    <div
+      data-admin-surface="api-control-room"
+      className="space-y-4 rounded-[16px] border border-sky-200/20 bg-[radial-gradient(circle_at_90%_0%,rgba(34,211,238,0.12),transparent_28%),linear-gradient(180deg,#0b2134,#081827)] p-4 lg:p-5"
+    >
+      <section className="overflow-hidden rounded-[14px] border border-cyan-200/40 bg-[linear-gradient(135deg,#17425d,#123149_55%,#15394f)] shadow-[0_22px_70px_-44px_rgba(56,189,248,0.9)]">
         <div className="space-y-6 p-6 lg:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-3">
@@ -67,19 +70,19 @@ export function ApiManagementPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-4 py-3">
+              <div className="rounded-xl border border-cyan-300/35 bg-[linear-gradient(145deg,#16445a,#103048)] px-4 py-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-100/90">
                   Auth
                 </p>
                 <p className="mt-2 text-base font-bold text-slate-50">API Key / Provider Key</p>
               </div>
-              <div className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-4 py-3">
+              <div className="rounded-xl border border-sky-300/35 bg-[linear-gradient(145deg,#173f5e,#102c45)] px-4 py-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-100/90">
                   Scope
                 </p>
                 <p className="mt-2 text-base font-bold text-slate-50">內部 API + 外部串接 API</p>
               </div>
-              <div className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-4 py-3">
+              <div className="rounded-xl border border-emerald-300/35 bg-[linear-gradient(145deg,#12413f,#0d3035)] px-4 py-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-100/90">
                   Status
                 </p>
@@ -119,7 +122,7 @@ export function ApiManagementPage() {
       </section>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-2 text-slate-200 sm:grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-xl border border-sky-200/30 bg-[#0d263a] p-2 text-slate-200 shadow-[0_16px_38px_-32px_rgba(56,189,248,0.9)] sm:grid-cols-3">
           <TabsTrigger
             value="keys"
             className="rounded-xl border border-transparent py-2.5 text-sm font-bold data-[state=active]:border-cyan-300/30 data-[state=active]:bg-cyan-400/16 data-[state=active]:text-cyan-50"

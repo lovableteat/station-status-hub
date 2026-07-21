@@ -192,8 +192,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
+      <div data-admin-zone="api-key-status" className="grid gap-4 lg:grid-cols-4">
+        <Card className="border-cyan-300/35 bg-[linear-gradient(145deg,#16445a,#103048)] shadow-[0_20px_45px_-34px_rgba(34,211,238,0.85)]">
           <CardContent className="pt-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-100/90">
               Total Keys
@@ -203,7 +203,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
+        <Card className="border-emerald-300/35 bg-[linear-gradient(145deg,#12413f,#0d3035)] shadow-[0_20px_45px_-34px_rgba(52,211,153,0.75)]">
           <CardContent className="pt-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-100/90">
               Active
@@ -213,7 +213,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-amber-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
+        <Card className="border-amber-300/35 bg-[linear-gradient(145deg,#443b20,#27302e)] shadow-[0_20px_45px_-34px_rgba(251,191,36,0.72)]">
           <CardContent className="pt-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/90">
               Expiring Soon
@@ -223,7 +223,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-violet-300/18 bg-[#17253d] shadow-[0_20px_45px_rgba(2,8,23,0.22)]">
+        <Card className="border-violet-300/35 bg-[linear-gradient(145deg,#342c59,#1e2943)] shadow-[0_20px_45px_-34px_rgba(167,139,250,0.75)]">
           <CardContent className="pt-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-100/90">
               Usage Count
@@ -234,7 +234,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
         </Card>
       </div>
 
-      <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
+      <Card data-admin-zone="api-key-list" className="border-cyan-300/30 bg-[linear-gradient(145deg,#13354d,#10283d)] shadow-[0_24px_60px_-42px_rgba(34,211,238,0.85)]">
         <CardHeader className="flex flex-col gap-4 border-b border-cyan-300/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
@@ -278,7 +278,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
               </Button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-cyan-300/12 bg-[#111d33]">
+            <div className="overflow-hidden rounded-3xl border border-cyan-200/25 bg-[#0b2235] shadow-inner shadow-cyan-950/30">
               <Table>
                 <TableHeader>
                   <TableRow className="border-cyan-300/10 hover:bg-transparent">
