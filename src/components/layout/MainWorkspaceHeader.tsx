@@ -1,6 +1,7 @@
 import { Bell, ChevronDown, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ interface MainWorkspaceHeaderProps {
   onOpenWorkspaceHome?: () => void;
   userName?: string;
   userRoleLabel?: string;
+  showOnlineUsers?: boolean;
   userMenuItems?: Array<{
     id: string;
     label: string;
@@ -42,6 +44,7 @@ export function MainWorkspaceHeader({
   onOpenWorkspaceHome,
   userName,
   userRoleLabel,
+  showOnlineUsers = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
   const brand = (
@@ -102,18 +105,20 @@ export function MainWorkspaceHeader({
             variant="ghost"
             size="icon"
             onClick={onOpenNotifications}
-            className="h-10 w-10 rounded-xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            className="h-12 w-12 shrink-0 rounded-2xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
           >
             <Bell className="h-4 w-4" />
           </Button>
+
+          {showOnlineUsers && <OnlineUsersIndicator />}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="interactive-lift flex min-w-0 items-center gap-2 rounded-xl border border-primary/15 bg-background/20 px-2 py-2 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] sm:gap-3 sm:rounded-2xl sm:px-3"
+                className="interactive-lift flex h-12 w-[140px] shrink-0 items-center gap-2 rounded-2xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-12 max-sm:justify-center max-sm:px-0 sm:gap-3"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/15 text-xs font-bold text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] sm:h-10 sm:w-10 sm:text-sm">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/15 text-xs font-bold text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] sm:text-sm">
                   {(userName ?? "OP").slice(0, 2).toUpperCase()}
                 </div>
                 <div className="hidden min-w-0 sm:block">
@@ -124,7 +129,7 @@ export function MainWorkspaceHeader({
                     {userRoleLabel ?? "使用者"}
                   </div>
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-sm:hidden" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -174,7 +179,7 @@ export function MainWorkspaceHeader({
             variant="outline"
             size="sm"
             onClick={onLogout}
-            className="hidden h-10 rounded-xl border-primary/20 bg-background/20 px-4 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive 2xl:inline-flex"
+            className="hidden h-12 rounded-2xl border-primary/20 bg-background/20 px-4 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive 2xl:inline-flex"
           >
             <LogOut className="mr-2 h-4 w-4" />
             登出

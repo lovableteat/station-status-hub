@@ -30,21 +30,25 @@ export function OnlineUsersIndicator() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className={cn(
-          "fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all duration-300",
-          "bg-primary/10 border border-primary/20 backdrop-blur-sm hover:bg-primary/20",
-          "animate-fade-in"
-        )}>
+        <button
+          type="button"
+          aria-label={totalOnlineUsers > 0 ? `${totalOnlineUsers} 位其他用戶在線` : "無其他用戶在線"}
+          className={cn(
+            "interactive-lift flex h-12 w-[140px] shrink-0 items-center justify-center gap-2 rounded-2xl border px-3 transition-all duration-200 max-xl:w-12 max-xl:px-0",
+            "border-primary/15 bg-background/20 shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] backdrop-blur-sm",
+            "text-primary hover:border-primary/30 hover:bg-primary/10"
+          )}
+        >
           <div className="relative">
             <Users className="h-4 w-4 text-primary" />
             <Circle className="absolute -top-1 -right-1 h-3 w-3 fill-green-500 text-green-500" />
           </div>
-          <span className="text-sm font-medium text-primary">
+          <span className="truncate text-sm font-semibold text-primary max-xl:hidden">
             {totalOnlineUsers > 0 ? `${totalOnlineUsers} 在線` : '無其他用戶在線'}
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
+      <PopoverContent align="end" className="w-80">
         <div className="space-y-3">
           <h4 className="font-semibold text-sm">其他在線用戶 ({totalOnlineUsers})</h4>
           
