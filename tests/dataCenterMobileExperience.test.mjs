@@ -57,6 +57,17 @@ test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () 
   assert.match(workspaceSource, /data-testid="data-center-touch-help"/);
 });
 
+test("3D navigation uses lightweight interaction previews without delayed wheel damping", () => {
+  assert.match(plannerSource, /interactionPreview/);
+  assert.match(plannerSource, /l10-interaction-preview/);
+  assert.match(plannerSource, /onStart=\{beginInteraction\}/);
+  assert.match(plannerSource, /onEnd=\{restoreDetailAfterInteraction\}/);
+  assert.match(plannerSource, /\}, 420\);/);
+  assert.doesNotMatch(plannerSource, /enableDamping/);
+  assert.doesNotMatch(viewerSource, /enableDamping/);
+  assert.match(viewerSource, /dpr=\{isMobile \? 1 : \[1, 1\.2\]\}/);
+});
+
 test("the model detail viewer keeps its header and controls inside a phone viewport", () => {
   assert.match(viewerSource, /className="min-w-0 h-\[min\(94svh,920px\)\]/);
   assert.match(viewerSource, /<header className="flex min-h-\[76px\] min-w-0/);

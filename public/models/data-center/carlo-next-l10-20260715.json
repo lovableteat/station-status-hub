@@ -43,13 +43,14 @@
   },
   "mobileWebOptimization": {
     "outputFileName": "carlo-next-l10-20260715.mobile.glb",
-    "outputBytes": 2571816,
-    "triangleCount": 316240,
-    "vertexCount": 56103,
-    "simplificationRatio": 0.12,
-    "maximumError": 0.01,
-    "borderVerticesLocked": true,
-    "note": "Higher-fidelity scene LOD regenerated with locked borders; the planner uses full CAD for every exposed top cover.",
-    "sha256": "F795766794743E4435A090E0B15789A49A990B732B284987874A0A63FB4233CC"
+    "outputBytes": 610588,
+    "triangleCount": 79276,
+    "vertexCount": 11150,
+    "simplificationRatio": 0.03,
+    "maximumError": 0.04,
+    "borderVerticesLocked": false,
+    "coverStrategy": "calibrated-proxy-overlay",
+    "note": "Fast scene LOD with calibrated proxy covers for every exposed L10. The detail viewer always uses the original CAD.",
+    "sha256": "55DAE218579D03F48E5060B184B179EBBD3D6EBF1F7EE33DEECF2E434A765113"
   }
 }
