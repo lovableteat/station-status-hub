@@ -35,7 +35,7 @@ test("both supplied STEP files stay L10-only while VR200 L11 is unavailable", ()
 
 test("the supplied VR outlook STEP is labeled and calibrated as VR200 L10", () => {
   const vrUnitDefinition = seedSource.match(
-    /"vera-rubin-vr-1u-20260715":\s*\{([\s\S]*?)\n\s*\},\n\s*"carlo-next-l10-20260715"/,
+    /"vera-rubin-vr-1u-20260715":\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*"carlo-next-l10-20260715"/,
   )?.[1];
 
   assert.ok(vrUnitDefinition, "VR200 L10 catalog definition is missing");
@@ -52,7 +52,7 @@ test("the supplied VR outlook STEP is labeled and calibrated as VR200 L10", () =
 
 test("the supplied Carlo-Next STEP is labeled and calibrated as GB300 L10", () => {
   const carloDefinition = seedSource.match(
-    /"carlo-next-l10-20260715":\s*\{([\s\S]*?)\n\s*\},\n\s*"generic-42u"/,
+    /"carlo-next-l10-20260715":\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*"generic-42u"/,
   )?.[1];
 
   assert.ok(carloDefinition, "GB300 L10 catalog definition is missing");
@@ -68,7 +68,7 @@ test("the supplied Carlo-Next STEP is labeled and calibrated as GB300 L10", () =
 
 test("the fallback L10 is also a 1U machine rather than a cabinet-sized block", () => {
   const placeholderDefinition = seedSource.match(
-    /"l10-placeholder":\s*\{([\s\S]*?)\n\s*\},\n\};/,
+    /"l10-placeholder":\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\};/,
   )?.[1];
 
   assert.ok(placeholderDefinition, "L10 placeholder catalog definition is missing");
@@ -82,15 +82,16 @@ test("the scene keeps rack envelopes outside and only mounts 1U machines inside"
   assert.match(plannerSource, /function resolveL10Definition/);
   assert.match(plannerSource, /model\?\.kind === "l10"/);
   assert.match(plannerSource, /<RackL10Modules[\s\S]*?rack=\{rack\}/);
-  assert.match(plannerSource, /l10Definition=\{l10Definition\}[\s\S]*?detailed=\{showDetailedModel\}/);
+  assert.match(plannerSource, /l10Definition=\{l10Definition\}[\s\S]*?detailed=\{selected\}/);
   assert.match(workspaceSource, /L11/);
   assert.match(workspaceSource, /L10 1U/);
 });
 
-test("the scene limits detailed CAD geometry to the active rack", () => {
-  assert.match(plannerSource, /const showDetailedModel = selected \|\| hovered;/);
-  assert.match(plannerSource, /const useDetailedL10 = detailed && index === 0;/);
-  assert.match(plannerSource, /detailed=\{showDetailedModel\}/);
+test("the scene keeps high-detail CAD geometry on the active rack", () => {
+  assert.match(plannerSource, /const useActualL10 = detailed && Boolean\(l10Definition\.assetUrl \|\| l10Definition\.stepModel\);/);
+  assert.match(plannerSource, /lowDetail=\{lowDetail \|\| index > 0\}/);
+  assert.match(plannerSource, /detailed=\{selected\}/);
+  assert.match(plannerSource, /lowDetail=\{lowDetail \|\| !selected\}/);
 });
 
 test("mounted L10 machines keep one uniform scale inside the L11 cabinet", () => {
@@ -112,7 +113,7 @@ test("GB300 defaults and legacy invalid VR200 racks migrate to the matched L11 a
 
 test("the NVIDIA rack catalog label is GB300 L11 without changing its stable model id", () => {
   const gb300Definition = seedSource.match(
-    /"nv-mgx-rack-v1-2-rev7":\s*\{([\s\S]*?)\n\s*\},\n\s*"vera-rubin-vr-1u-20260715"/,
+    /"nv-mgx-rack-v1-2-rev7":\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*"vera-rubin-vr-1u-20260715"/,
   )?.[1];
 
   assert.ok(gb300Definition, "GB300 catalog definition is missing");
