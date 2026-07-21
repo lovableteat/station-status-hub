@@ -16,14 +16,39 @@ test("material search controls are contained by the material table card", () => 
 });
 
 test("compact hover previews stay on one line", () => {
+  const compactHoverBlock = source.match(/function CompactHoverValue\([\s\S]*?\r?\n}\r?\n\r?\nfunction/)?.[0] ?? "";
+
+  assert.match(compactHoverBlock, /data-testid="compact-hover-trigger"/);
+  assert.match(compactHoverBlock, /className="[^"]*inline-flex[^"]*items-center[^"]*"/);
   assert.match(
     source,
-    /data-testid="compact-hover-preview"[^>]*className=\{cn\("truncate whitespace-nowrap"/,
+    /data-testid="compact-hover-preview"[^>]*className=\{cn\("block min-w-0 flex-1 truncate whitespace-nowrap"/,
   );
 });
 
 test("REF DES previews show one value before the remaining item count", () => {
-  const refDesBlock = source.match(/<CompactHoverValue\s+label="REF DES"[\s\S]*?\/>/)?.[0] ?? "";
+  const refDesBlocks = [...source.matchAll(/<CompactHoverValue\s+label="REF DES"[\s\S]*?\/>/g)]
+    .map((match) => match[0]);
 
-  assert.match(refDesBlock, /maxItems=\{1\}/);
+  assert.ok(refDesBlocks.length >= 2, "expected REF DES previews for primary and alternative rows");
+  refDesBlocks.forEach((block) => assert.match(block, /maxItems=\{1\}/));
+});
+
+test("tracking table summaries remain compact instead of stretching material rows", () => {
+  const cellBlock = source.match(
+    /function TrackingHistoryCell\([\s\S]*?\r?\n}\r?\n\r?\nfunction TrackingHistoryDialog/,
+  )?.[0] ?? "";
+
+  assert.match(cellBlock, /data-testid="tracking-history-cell"/);
+  assert.match(cellBlock, /min-h-\[54px\]/);
+  assert.doesNotMatch(cellBlock, /h-14 w-1\.5/);
+  assert.doesNotMatch(cellBlock, /line-clamp-2/);
+});
+
+test("tracking dialog separates current status, update form, history, and footer actions", () => {
+  assert.match(source, /data-testid="tracking-current-summary"/);
+  assert.match(source, /data-testid="tracking-compose-panel"/);
+  assert.match(source, /data-testid="tracking-history-panel"/);
+  assert.match(source, /data-testid="tracking-dialog-footer"/);
+  assert.match(source, /onPaste=\{handleImagePaste\}/);
 });

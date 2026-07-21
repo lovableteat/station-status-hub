@@ -306,21 +306,22 @@ function CompactHoverValue({
       <HoverCardTrigger asChild>
         <button
           type="button"
+          data-testid="compact-hover-trigger"
           aria-label={`查看${label}完整內容`}
           onClick={(event) => {
             event.stopPropagation();
             if (onCopy && summary.fullText !== "-") onCopy(summary.fullText);
           }}
-          className="group block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+          className="group inline-flex w-full min-w-0 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
         >
           <span
             data-testid="compact-hover-preview"
-            className={cn("truncate whitespace-nowrap", previewClassName)}
+            className={cn("block min-w-0 flex-1 truncate whitespace-nowrap", previewClassName)}
           >
             {summary.preview}
           </span>
           {summary.remainingCount > 0 && (
-            <span className="mt-1 inline-flex rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[11px] font-bold text-cyan-200">
+            <span className="inline-flex flex-none rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-cyan-200">
               +{summary.remainingCount} 項
             </span>
           )}
@@ -2028,52 +2029,49 @@ function TrackingHistoryCell({
   return (
     <button
       type="button"
+      data-testid="tracking-history-cell"
       onClick={() => onOpen(record)}
       className={cn(
-        "group flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+        "group flex min-h-[54px] w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
         cardTone.wrapper,
       )}
       title="查看狀態追蹤歷史"
     >
-      <span className={cn("mt-1 h-14 w-1.5 flex-none rounded-full", cardTone.accent)} />
+      <span className={cn("h-8 w-1 flex-none rounded-full", cardTone.accent)} />
       <div className="min-w-0 flex-1">
-        <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", getTrackingStatusTone(workflowStatus))}>
-          {getTrackingStatusDisplayLabel(workflowStatus)}
-        </span>
-        <p
-          className={cn(
-            "mt-2 rounded-lg px-2.5 py-2 text-sm leading-6",
-            latestEntry?.note ? `${cardTone.note} line-clamp-2` : "bg-slate-950/25 text-slate-400",
-          )}
-        >
-          {latestEntry?.note || (latestEntry ? "點擊查看完整歷史與圖片" : "點擊建立第一筆狀態追蹤")}
-        </p>
-        <p className={cn("mt-2 text-xs", cardTone.meta)}>
-          {historyCount} 筆紀錄
-          {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
-        </p>
-        {requestMeta.ticket && (
-          <div className="mt-2">
-            {requestMeta.url ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn("inline-flex flex-none rounded-full border px-2 py-0.5 text-[11px] font-bold", getTrackingStatusTone(workflowStatus))}>
+            {getTrackingStatusDisplayLabel(workflowStatus)}
+          </span>
+          <span className={cn("truncate text-xs", cardTone.meta)}>
+            {historyCount} 筆{latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
+          </span>
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <p className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-slate-200" : "text-slate-400")}>
+            {latestEntry?.note || (latestEntry ? "查看完整歷史與圖片" : "建立第一筆狀態追蹤")}
+          </p>
+          {requestMeta.ticket && (
+            requestMeta.url ? (
               <a
                 href={requestMeta.url}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(event) => event.stopPropagation()}
-                className="inline-flex max-w-full items-center rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-100 hover:bg-amber-400/24"
-                title={requestMeta.url}
+                className="inline-flex max-w-24 flex-none truncate rounded border border-amber-300/30 bg-amber-400/12 px-1.5 py-0.5 text-[10px] font-bold text-amber-100 hover:bg-amber-400/22"
+                title={`${requestMeta.ticket} · ${requestMeta.url}`}
               >
-                單號 {requestMeta.ticket}
+                {requestMeta.ticket}
               </a>
             ) : (
-              <span className="inline-flex max-w-full items-center rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-100">
-                單號 {requestMeta.ticket}
+              <span className="inline-flex max-w-24 flex-none truncate rounded border border-amber-300/30 bg-amber-400/12 px-1.5 py-0.5 text-[10px] font-bold text-amber-100" title={requestMeta.ticket}>
+                {requestMeta.ticket}
               </span>
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
-      <History className={cn("mt-1 h-4 w-4 flex-none opacity-90 transition-opacity group-hover:opacity-100", cardTone.icon)} />
+      <History className={cn("h-4 w-4 flex-none opacity-75 transition-opacity group-hover:opacity-100", cardTone.icon)} />
     </button>
   );
 }
@@ -2225,8 +2223,8 @@ function TrackingHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent onPaste={handleImagePaste} className="max-h-[92vh] max-w-5xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
-          <DialogHeader>
+        <DialogContent onPaste={handleImagePaste} className="max-h-[92vh] max-w-6xl gap-0 overflow-hidden border-cyan-300/25 bg-[#071422] p-0 text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
+          <DialogHeader className="border-b border-cyan-300/15 bg-[linear-gradient(115deg,rgba(24,83,118,0.38),rgba(8,25,42,0.96)_52%,rgba(10,57,63,0.34))] px-6 py-5 pr-14">
             <DialogTitle className="text-2xl text-slate-50">狀態追蹤</DialogTitle>
             <DialogDescription className="text-slate-400">
               {record
@@ -2236,9 +2234,9 @@ function TrackingHistoryDialog({
           </DialogHeader>
 
           {record && (
-            <div className="grid gap-5 py-2 xl:grid-cols-[1.15fr_0.95fr]">
-              <section className="rounded-2xl border border-sky-400/20 bg-[#101d33] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="grid max-h-[calc(92vh-108px)] items-start gap-4 overflow-y-auto px-5 py-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <section className="self-start overflow-hidden rounded-2xl border border-sky-300/20 bg-[linear-gradient(155deg,rgba(16,41,65,0.96),rgba(8,24,40,0.98))]">
+                <div data-testid="tracking-current-summary" className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-300/15 bg-sky-300/[0.055] px-5 py-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-bold text-slate-50">最新狀態</h3>
                     <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]", getTrackingStatusTone(latestWorkflowStatus))}>
@@ -2258,15 +2256,16 @@ function TrackingHistoryDialog({
                     </Button>
                   )}
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                  <span>歷史筆數 {historyEntries.length}</span>
-                  {latestEntry?.createdAt && <span>最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
-                  {latestEntry?.createdBy && <span>更新人 {latestEntry.createdBy}</span>}
-                  {getTrackingRequestMeta(record).ticket && <span>單號 {getTrackingRequestMeta(record).ticket}</span>}
-                </div>
+                <div className="px-5 py-4">
+                  <p className="text-sm leading-6 text-slate-300">
+                    {latestEntry?.note || "目前還沒有追蹤備註，建立第一筆後就會在這裡顯示最新內容。"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                    <span className="rounded-md border border-slate-400/15 bg-slate-950/20 px-2 py-1">歷史 {historyEntries.length} 筆</span>
+                    {latestEntry?.createdAt && <span className="rounded-md border border-slate-400/15 bg-slate-950/20 px-2 py-1">最後更新 {formatTimestamp(latestEntry.createdAt)}</span>}
+                    {latestEntry?.createdBy && <span className="rounded-md border border-slate-400/15 bg-slate-950/20 px-2 py-1">更新人 {latestEntry.createdBy}</span>}
+                    {getTrackingRequestMeta(record).ticket && <span className="rounded-md border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-amber-100">單號 {getTrackingRequestMeta(record).ticket}</span>}
+                  </div>
                 {latestEntry?.requestInfo && (
                   <div className="mt-3">
                     <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2">
@@ -2286,11 +2285,15 @@ function TrackingHistoryDialog({
                     </div>
                   </div>
                 )}
+                </div>
 
-                <div className="mt-5 rounded-2xl border border-blue-400/20 bg-[#0a1527] p-4">
-                  <div className="flex items-center gap-2">
+                <div data-testid="tracking-compose-panel" className="border-t border-cyan-300/15 bg-[#081726] px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                     <ImagePlus className="h-4 w-4 text-cyan-300" />
-                    <p className="text-sm font-bold text-cyan-200">新增追蹤紀錄</p>
+                    <p className="text-sm font-bold text-cyan-100">建立一筆進度更新</p>
+                    </div>
+                    <span className="text-xs text-slate-500">狀態為必填，其餘依工作情況補充</span>
                   </div>
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
@@ -2370,15 +2373,21 @@ function TrackingHistoryDialog({
                     </div>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
+                  <div data-testid="tracking-dialog-footer" className="sticky bottom-0 -mx-5 mt-5 flex items-center justify-between gap-3 border-t border-cyan-300/15 bg-[#081726]/95 px-5 pt-4 backdrop-blur">
+                    <p className="hidden text-xs text-slate-500 sm:block">圖片可用 Ctrl+V 貼上，儲存後才會寫入歷史。</p>
+                    <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">
+                      取消
+                    </Button>
                     <Button type="button" onClick={handleSave} disabled={!status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
                       儲存這次追蹤
                     </Button>
+                    </div>
                   </div>
                 </div>
               </section>
 
-            <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-4">
+            <section data-testid="tracking-history-panel" className="self-start rounded-2xl border border-blue-300/20 bg-[linear-gradient(160deg,rgba(15,37,62,0.96),rgba(8,22,38,0.98))] p-4">
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-blue-300" />
                 <h3 className="text-lg font-bold text-slate-50">過去歷史</h3>
@@ -2386,7 +2395,7 @@ function TrackingHistoryDialog({
 
               <div className="mt-4 space-y-3">
                 {historyEntries.length === 0 && (
-                  <div className="rounded-xl border border-slate-400/15 bg-[#0a1527] px-4 py-6 text-center">
+                  <div className="rounded-xl border border-dashed border-slate-400/20 bg-[#071522] px-4 py-5 text-center">
                     <p className="text-sm font-semibold text-slate-300">目前還沒有歷史紀錄</p>
                     <p className="mt-1 text-sm text-slate-500">新增第一筆後，之後每次更新都會留在這裡。</p>
                   </div>
@@ -3680,19 +3689,19 @@ function CompactAlternativeRows({
               "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]"
             )}
           >
-            <td className="border-r border-blue-400/10 px-3 py-3.5 text-center align-middle">
+            <td className="border-r border-blue-400/10 px-3 py-2 text-center align-middle">
               <div className="flex flex-col items-center justify-center">
                 <span className="font-mono text-base font-black text-slate-100">{itemValue}</span>
                 <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/85">Alt</span>
               </div>
             </td>
 
-            <td className="border-r border-blue-400/10 px-2 py-3.5 text-center align-middle">
+            <td className="border-r border-blue-400/10 px-2 py-2 text-center align-middle">
               <button
                 type="button"
                 onClick={onToggleMarked}
                 className={cn(
-                  "inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
+                  "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
                   isMarked
                     ? "border-amber-300/40 bg-amber-400/18 text-amber-200 hover:bg-amber-400/24"
                     : "border-slate-500/25 bg-slate-900/35 text-slate-500 hover:border-amber-300/24 hover:bg-amber-400/10 hover:text-amber-200",
@@ -3703,10 +3712,10 @@ function CompactAlternativeRows({
               </button>
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
-              <div className="flex items-center gap-3 pl-8">
+            <td className="border-r border-blue-400/10 px-3 py-2">
+              <div className="flex items-center gap-2">
                 <span
-                  className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg font-mono text-sm font-black", preferred ? "text-slate-950" : "text-slate-100")}
+                  className={cn("flex h-7 min-w-7 items-center justify-center rounded-md font-mono text-xs font-black", preferred ? "text-slate-950" : "text-slate-100")}
                   style={{ backgroundColor: preferred ? withAlpha(colorTheme.alternative, 0.92) : withAlpha(colorTheme.secondary, 0.46) }}
                 >
                   {index + 1}
@@ -3732,12 +3741,12 @@ function CompactAlternativeRows({
                       </span>
                     )}
                   </div>
-                  <p className={cn("mt-1 text-xs", preferred ? "text-slate-200" : "text-slate-400")}>替代料 #{index + 1}</p>
+                  <p className={cn("mt-0.5 text-[11px]", preferred ? "text-slate-200" : "text-slate-400")}>替代料 #{index + 1}</p>
                 </div>
               </div>
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               <CompactHoverValue
                 label="REF DES"
                 values={refValues.length > 0 ? refValues : groupRefDes}
@@ -3747,7 +3756,7 @@ function CompactAlternativeRows({
               />
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               {record.manufacturerPartNumber ? (
                 <button type="button" onClick={() => onCopy(record.manufacturerPartNumber)} className="group flex max-w-full items-center gap-2 text-left" title="複製 MPN">
                   <span className="break-all font-mono text-[15px] font-black text-blue-200 group-hover:text-blue-100">{record.manufacturerPartNumber}</span>
@@ -3759,7 +3768,7 @@ function CompactAlternativeRows({
               {record.manufacturerPartNumberAlt && <p className="mt-1 break-all font-mono text-sm text-slate-500">Alt: {record.manufacturerPartNumberAlt}</p>}
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               {record.partNumber ? (
                 <button type="button" onClick={() => onCopy(record.partNumber)} className="group inline-flex max-w-full items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-left hover:bg-cyan-300/20" title="複製內部料號">
                   <span className="break-all font-mono text-[15px] font-black text-cyan-200">{record.partNumber}</span>
@@ -3770,27 +3779,27 @@ function CompactAlternativeRows({
               )}
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               <InlineVirtualAlternativeEditor value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill record={record} />
                 <ActionPill record={record} />
               </div>
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5">
+            <td className="border-r border-blue-400/10 px-3 py-2">
               <p className="line-clamp-2 text-[15px] leading-6 text-slate-200">{record.partSpec || record.partName || "-"}</p>
               {record.remark && <p className="mt-1 text-sm text-slate-500">{record.remark}</p>}
             </td>
 
-            <td className="border-r border-blue-400/10 px-4 py-3.5" onClick={(event) => event.stopPropagation()}>
+            <td className="border-r border-blue-400/10 px-3 py-2" onClick={(event) => event.stopPropagation()}>
               <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
             </td>
 
-            <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-3 py-3.5")}>
+            <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-3 py-2")}>
               <div className="flex justify-center gap-2">
                 <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                   <Eye className="h-4 w-4" />
@@ -5813,8 +5822,8 @@ export function MaterialRequestPage() {
                               <CompactHoverValue
                                 label="主料 / 廠商"
                                 values={materialHoverValues}
-                                maxItems={2}
-                                previewClassName="text-base font-bold leading-6 text-slate-50"
+                                maxItems={1}
+                                previewClassName="text-[15px] font-bold leading-5 text-slate-50"
                               />
                             </div>
                             <p className="mt-1 truncate text-sm text-slate-400">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
