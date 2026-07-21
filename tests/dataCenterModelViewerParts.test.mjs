@@ -5,6 +5,12 @@ import {
   collectInspectablePartNames,
   getInspectablePartName,
 } from "../src/components/data-center/modelParts.mjs";
+import { readFile } from "node:fs/promises";
+
+const viewerSource = await readFile(
+  new URL("../src/components/data-center/DataCenterModelViewer.tsx", import.meta.url),
+  "utf8",
+);
 
 function createNode(name, { isMesh = false, children = [] } = {}) {
   const node = { name, isMesh, children, parent: null };
@@ -64,4 +70,13 @@ test("model viewer falls back to mesh names when no STEP assembly name exists", 
 
   assert.equal(getInspectablePartName(generatedMesh), "mesh_7");
   assert.deepEqual(collectInspectablePartNames(root), ["mesh_7"]);
+});
+
+test("model viewer uses one deterministic camera fit instead of refitting loading geometry", () => {
+  assert.doesNotMatch(viewerSource, /<Bounds/);
+  assert.match(viewerSource, /function InspectionCameraRig/);
+  assert.match(viewerSource, /frameloop="demand"/);
+  assert.match(viewerSource, /<Suspense fallback=\{null\}>/);
+  assert.match(viewerSource, /data-\[state=open\]:!animate-none/);
+  assert.match(viewerSource, /h-\[min\(94svh,920px\)\]/);
 });

@@ -25,9 +25,17 @@ test("facility dimensions are bounded and expose a readable floor area", () => {
 });
 
 test("the 3D camera supports close inspection and an explicit detail view", () => {
-  assert.match(plannerSource, /minDistance=\{0\.45\}/);
-  assert.match(plannerSource, /zoomSpeed=\{1\.15\}/);
+  assert.match(plannerSource, /minDistance=\{0\.12\}/);
+  assert.match(plannerSource, /zoomSpeed=\{0\.96\}/);
+  assert.match(plannerSource, /zoomToCursor/);
+  assert.match(plannerSource, /onStart=\{\(\) => \{\s*animating\.current = false;/);
   assert.match(workspaceSource, /\["detail",\s*ZoomIn/);
+});
+
+test("the overview stays responsive without swapping detailed CAD models on hover", () => {
+  assert.match(plannerSource, /const showDetailedModel = selected;/);
+  assert.match(plannerSource, /<RackOverviewModel rack=\{rack\}/);
+  assert.match(plannerSource, /frameloop="demand"/);
 });
 
 test("floor size control is directly visible in the 3D workspace", () => {
