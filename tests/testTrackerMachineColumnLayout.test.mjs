@@ -10,7 +10,7 @@ const sourceUrl = new URL(
 test("machine id cells keep a full-height visible hit area", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const cellStart = source.indexOf('data-testid={`machine-cell-${system.id}`}');
-  const serialStart = source.indexOf('<div role="cell" className="truncate font-data', cellStart);
+  const serialStart = source.indexOf('data-testid={`serial-cell-${system.id}`}', cellStart);
 
   assert.notEqual(cellStart, -1, "machine cell needs a stable test id");
   assert.notEqual(serialStart, -1, "machine cell block could not be isolated");
@@ -47,4 +47,25 @@ test("tracker table exposes consistent visual regions without changing row actio
   assert.match(source, /data-ui="tracker-row"/);
   assert.match(source, /data-ui="tracker-actions"/);
   assert.match(source, /onClick=\{\(\) => onSelectSystem\(system\.id\)\}/);
+});
+
+test("fixed identity columns keep continuous separators across headers and rows", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.match(
+    source,
+    /columnKey="serial"[\s\S]*?className=\{cn\("pr-2", TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS\)\}/,
+  );
+  assert.match(
+    source,
+    /columnKey="status"[\s\S]*?className=\{cn\("pr-2", TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS\)\}/,
+  );
+  assert.match(
+    source,
+    /data-testid=\{`serial-cell-\$\{system\.id\}`\}[\s\S]*?TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS/,
+  );
+  assert.match(
+    source,
+    /data-testid=\{`status-cell-\$\{system\.id\}`\}[\s\S]*?TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS/,
+  );
 });
