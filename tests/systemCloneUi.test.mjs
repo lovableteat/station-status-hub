@@ -14,6 +14,7 @@ test("each tracker row exposes sequential machine cloning", async () => {
 
   assert.match(table, /onCloneSystem: \(system: TrackerSystem\) => void/);
   assert.match(table, /onClick=\{\(\) => onCloneSystem\(system\)\}/);
+  assert.match(table, />\s*其他功能\s*</);
   assert.match(table, />\s*複製為連號機台\s*</);
   assert.match(tracker, /<SystemCloneDialog/);
   assert.match(tracker, /sourceSystem=\{cloneSourceSystem\}/);

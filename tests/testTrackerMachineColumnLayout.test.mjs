@@ -6,6 +6,10 @@ const sourceUrl = new URL(
   "../src/components/test-tracker/TestProgressTable.tsx",
   import.meta.url
 );
+const presentationUrl = new URL(
+  "../src/components/test-tracker/testTrackerPresentation.ts",
+  import.meta.url
+);
 
 test("machine id cells keep a full-height visible hit area", async () => {
   const source = await readFile(sourceUrl, "utf8");
@@ -85,4 +89,15 @@ test("column resize handles do not draw a second divider line", async () => {
     source,
     /className="h-5 w-px rounded-full bg-\[#416985\]/,
   );
+});
+
+test("tracker actions column is wide enough for both labeled controls", async () => {
+  const source = await readFile(presentationUrl, "utf8");
+  const actionsSpec = source.match(
+    /actions:\s*\{\s*defaultWidth:\s*(\d+),\s*minWidth:\s*(\d+),/
+  );
+
+  assert.ok(actionsSpec, "actions column specification is missing");
+  assert.ok(Number(actionsSpec[1]) >= 220, "default actions width clips the labeled controls");
+  assert.ok(Number(actionsSpec[2]) >= 208, "minimum actions width clips the labeled controls");
 });
