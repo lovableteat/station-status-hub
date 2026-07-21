@@ -14,7 +14,6 @@ import {
 
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
-import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
@@ -602,7 +601,6 @@ const Index = () => {
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
-      {!isDemoMode && <OnlineUsersIndicator />}
       {!isDemoMode && <RealtimeNotifications />}
 
       <MainWorkspaceHeader
@@ -615,6 +613,7 @@ const Index = () => {
         onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}
         userRoleLabel={getRoleLabel(user?.role)}
+        showOnlineUsers={!isDemoMode}
         userMenuItems={[
           ...(canViewModule("users")
             ? [
