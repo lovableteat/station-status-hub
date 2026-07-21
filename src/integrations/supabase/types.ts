@@ -886,6 +886,74 @@ export type Database = {
         }
         Relationships: []
       }
+      material_bom_records: {
+        Row: {
+          created_at: string
+          data: Json
+          order_index: number
+          record_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          order_index?: number
+          record_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          order_index?: number
+          record_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_bom_records_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "material_bom_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_bom_workspaces: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: string
+          name: string
+          record_count: number
+          sheet_name: string
+          source_file: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id: string
+          name: string
+          record_count?: number
+          sheet_name: string
+          source_file: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          name?: string
+          record_count?: number
+          sheet_name?: string
+          source_file?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_analytics: {
         Row: {
           action: string
@@ -1373,17 +1441,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "station_time_records_station_id_fkey"
-            columns: ["station_id"]
-            isOneToOne: false
-            referencedRelation: "test_flow_stations"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "station_time_records_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "station_time_records_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "test_flow_stations"
             referencedColumns: ["id"]
           },
           {
@@ -1906,6 +1974,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "test_flow_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "test_flow_versions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -1961,8 +2036,8 @@ export type Database = {
           id: string
           item_id: string
           notes: string | null
-          project_id: string
           progress_percent: number | null
+          project_id: string
           started_at: string | null
           station_id: string
           status: string | null
@@ -1977,8 +2052,8 @@ export type Database = {
           id?: string
           item_id: string
           notes?: string | null
-          project_id: string
           progress_percent?: number | null
+          project_id: string
           started_at?: string | null
           station_id: string
           status?: string | null
@@ -1993,8 +2068,8 @@ export type Database = {
           id?: string
           item_id?: string
           notes?: string | null
-          project_id?: string
           progress_percent?: number | null
+          project_id?: string
           started_at?: string | null
           station_id?: string
           status?: string | null
@@ -2068,40 +2143,116 @@ export type Database = {
         }
         Relationships: []
       }
-      test_project_address_fields: {
+      test_project_code_assignments: {
         Row: {
+          code_snippet_id: string
           created_at: string
-          id: string
-          label: string
-          placeholder: string | null
+          notes: string | null
           project_id: string
-          sort_order: number
-          updated_at: string
         }
         Insert: {
+          code_snippet_id: string
           created_at?: string
-          id?: string
-          label: string
-          placeholder?: string | null
+          notes?: string | null
           project_id: string
-          sort_order?: number
-          updated_at?: string
         }
         Update: {
+          code_snippet_id?: string
           created_at?: string
-          id?: string
-          label?: string
-          placeholder?: string | null
+          notes?: string | null
           project_id?: string
-          sort_order?: number
-          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "test_project_address_fields_project_id_fkey"
+            foreignKeyName: "test_project_code_assignments_code_snippet_id_fkey"
+            columns: ["code_snippet_id"]
+            isOneToOne: false
+            referencedRelation: "code_snippets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_project_code_assignments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_project_command_assignments: {
+        Row: {
+          command_id: string
+          created_at: string
+          notes: string | null
+          project_id: string
+        }
+        Insert: {
+          command_id: string
+          created_at?: string
+          notes?: string | null
+          project_id: string
+        }
+        Update: {
+          command_id?: string
+          created_at?: string
+          notes?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_command_assignments_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "command_library"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_project_command_assignments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_project_tool_assignments: {
+        Row: {
+          created_at: string
+          is_required: boolean
+          notes: string | null
+          pinned_version: string | null
+          project_id: string
+          tool_id: string
+        }
+        Insert: {
+          created_at?: string
+          is_required?: boolean
+          notes?: string | null
+          pinned_version?: string | null
+          project_id: string
+          tool_id: string
+        }
+        Update: {
+          created_at?: string
+          is_required?: boolean
+          notes?: string | null
+          pinned_version?: string | null
+          project_id?: string
+          tool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_tool_assignments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_project_tool_assignments_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools_management"
             referencedColumns: ["id"]
           },
         ]
@@ -2168,75 +2319,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      test_project_code_assignments: {
-        Row: {
-          code_snippet_id: string
-          created_at: string
-          notes: string | null
-          project_id: string
-        }
-        Insert: {
-          code_snippet_id: string
-          created_at?: string
-          notes?: string | null
-          project_id: string
-        }
-        Update: {
-          code_snippet_id?: string
-          created_at?: string
-          notes?: string | null
-          project_id?: string
-        }
-        Relationships: []
-      }
-      test_project_command_assignments: {
-        Row: {
-          command_id: string
-          created_at: string
-          notes: string | null
-          project_id: string
-        }
-        Insert: {
-          command_id: string
-          created_at?: string
-          notes?: string | null
-          project_id: string
-        }
-        Update: {
-          command_id?: string
-          created_at?: string
-          notes?: string | null
-          project_id?: string
-        }
-        Relationships: []
-      }
-      test_project_tool_assignments: {
-        Row: {
-          created_at: string
-          is_required: boolean
-          notes: string | null
-          pinned_version: string | null
-          project_id: string
-          tool_id: string
-        }
-        Insert: {
-          created_at?: string
-          is_required?: boolean
-          notes?: string | null
-          pinned_version?: string | null
-          project_id: string
-          tool_id: string
-        }
-        Update: {
-          created_at?: string
-          is_required?: boolean
-          notes?: string | null
-          pinned_version?: string | null
-          project_id?: string
-          tool_id?: string
-        }
-        Relationships: []
       }
       test_stations: {
         Row: {
@@ -2366,45 +2448,6 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "test_projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      test_system_address_values: {
-        Row: {
-          created_at: string
-          field_id: string
-          system_id: string
-          updated_at: string
-          value: string
-        }
-        Insert: {
-          created_at?: string
-          field_id: string
-          system_id: string
-          updated_at?: string
-          value?: string
-        }
-        Update: {
-          created_at?: string
-          field_id?: string
-          system_id?: string
-          updated_at?: string
-          value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "test_system_address_values_field_id_fkey"
-            columns: ["field_id"]
-            isOneToOne: false
-            referencedRelation: "test_project_address_fields"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "test_system_address_values_system_id_fkey"
-            columns: ["system_id"]
-            isOneToOne: false
-            referencedRelation: "test_systems"
             referencedColumns: ["id"]
           },
         ]
@@ -2894,112 +2937,73 @@ export type Database = {
       }
     }
     Functions: {
-        authenticate_user: {
-          Args: { password_input: string; username_input: string }
-          Returns: {
-            display_name: string
-            role: string
-            success: boolean
-            user_id: string
-            username: string
-          }[]
+      authenticate_user: {
+        Args: { password_input: string; username_input: string }
+        Returns: {
+          display_name: string
+          role: string
+          success: boolean
+          user_id: string
+          username: string
+        }[]
+      }
+      calculate_daily_production_stats: { Args: never; Returns: undefined }
+      cleanup_old_notifications: { Args: never; Returns: undefined }
+      create_test_flow_draft: {
+        Args: { p_created_by?: string; p_project_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          notes: string | null
+          project_id: string
+          published_at: string | null
+          status: string
+          updated_at: string
+          version_number: number
         }
-        calculate_daily_production_stats: { Args: never; Returns: undefined }
-        cleanup_old_notifications: { Args: never; Returns: undefined }
-        create_test_project: {
-          Args: {
-            p_clone_from_project_id?: string | null
-            p_description?: string | null
-            p_name: string
-          }
-          Returns: {
-            active_flow_version_id: string | null
-            completed_at: string | null
-            created_at: string
-            description: string | null
-            id: string
-            is_archived: boolean
-            name: string
-            owner_user_id: string | null
-            planned_end_date: string | null
-            planned_start_date: string | null
-            started_at: string | null
-            status: string
-            updated_at: string
-          }
+        SetofOptions: {
+          from: "*"
+          to: "test_flow_versions"
+          isOneToOne: true
+          isSetofReturn: false
         }
-        create_test_flow_draft: {
-          Args: { p_created_by?: string | null; p_project_id: string }
-          Returns: {
-            created_at: string
-            created_by: string | null
-            id: string
-            label: string | null
-            notes: string | null
-            project_id: string
-            published_at: string | null
-            status: string
-            updated_at: string
-            version_number: number
-          }
+      }
+      create_test_project: {
+        Args: {
+          p_clone_from_project_id?: string
+          p_description?: string
+          p_name: string
         }
-        discard_test_flow_draft: {
-          Args: { p_project_id: string }
-          Returns: boolean
+        Returns: {
+          active_flow_version_id: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          owner_user_id: string | null
+          planned_end_date: string | null
+          planned_start_date: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
         }
-        get_test_project_summaries: {
-          Args: never
-          Returns: {
-            active_machine_count: number
-            flow_version_label: string | null
-            machine_count: number
-            open_issue_count: number
-            project_id: string
-          }[]
+        SetofOptions: {
+          from: "*"
+          to: "test_projects"
+          isOneToOne: true
+          isSetofReturn: false
         }
-        publish_test_flow_version: {
-          Args: { p_project_id: string; p_version_id: string }
-          Returns: {
-            created_at: string
-            created_by: string | null
-            id: string
-            label: string | null
-            notes: string | null
-            project_id: string
-            published_at: string | null
-            status: string
-            updated_at: string
-            version_number: number
-          }
-        }
-        reorder_test_flow_items: {
-          Args: {
-            p_flow_version_id: string
-            p_item_ids: string[]
-            p_project_id: string
-            p_station_id: string
-          }
-          Returns: undefined
-        }
-        reorder_test_flow_stations: {
-          Args: {
-            p_flow_version_id: string
-            p_project_id: string
-            p_station_ids: string[]
-          }
-          Returns: undefined
-        }
-        delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
-        generate_api_key: { Args: never; Returns: string }
-        set_user_access_permissions: {
-          Args: {
-            p_granted_by?: string
-            p_permissions: Database["public"]["Enums"]["page_permission"][]
-            p_user_id: string
-            p_workspace_access: Json
-          }
-          Returns: undefined
-        }
+      }
+      delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
+      discard_test_flow_draft: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
+      generate_api_key: { Args: never; Returns: string }
       get_notification_stats: {
         Args: { user_uuid: string }
         Returns: {
@@ -3010,7 +3014,64 @@ export type Database = {
           urgent_priority_unread: number
         }[]
       }
+      get_test_project_summaries: {
+        Args: never
+        Returns: {
+          active_machine_count: number
+          flow_version_label: string
+          machine_count: number
+          open_issue_count: number
+          project_id: string
+        }[]
+      }
       hash_password: { Args: { password: string }; Returns: string }
+      publish_test_flow_version: {
+        Args: { p_project_id: string; p_version_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          notes: string | null
+          project_id: string
+          published_at: string | null
+          status: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_flow_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reorder_test_flow_items: {
+        Args: {
+          p_flow_version_id: string
+          p_item_ids: string[]
+          p_project_id: string
+          p_station_id: string
+        }
+        Returns: undefined
+      }
+      reorder_test_flow_stations: {
+        Args: {
+          p_flow_version_id: string
+          p_project_id: string
+          p_station_ids: string[]
+        }
+        Returns: undefined
+      }
+      set_user_access_permissions: {
+        Args: {
+          p_granted_by?: string
+          p_permissions: Database["public"]["Enums"]["page_permission"][]
+          p_user_id: string
+          p_workspace_access: Json
+        }
+        Returns: undefined
+      }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
         Returns: Json
@@ -3026,8 +3087,6 @@ export type Database = {
         | "dashboard_edit"
         | "test_tracker_view"
         | "test_tracker_edit"
-        | "flow_info_view"
-        | "flow_info_edit"
         | "issues_view"
         | "issues_edit"
         | "production_view"
@@ -3046,6 +3105,8 @@ export type Database = {
         | "api_management_edit"
         | "troubleshooting_view"
         | "troubleshooting_edit"
+        | "flow_info_view"
+        | "flow_info_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3178,8 +3239,6 @@ export const Constants = {
         "dashboard_edit",
         "test_tracker_view",
         "test_tracker_edit",
-        "flow_info_view",
-        "flow_info_edit",
         "issues_view",
         "issues_edit",
         "production_view",
@@ -3198,6 +3257,8 @@ export const Constants = {
         "api_management_edit",
         "troubleshooting_view",
         "troubleshooting_edit",
+        "flow_info_view",
+        "flow_info_edit",
       ],
     },
   },
