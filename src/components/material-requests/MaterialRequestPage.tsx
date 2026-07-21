@@ -5569,6 +5569,29 @@ export function MaterialRequestPage() {
         data-testid="material-table-card"
         className="overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]"
       >
+        <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
+            <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTableColorDraft(activeTableColorTheme);
+                setTableColorDialogOpen(true);
+              }}
+              className="border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
+            >
+              自訂表格配色
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
+            {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
+          </div>
+        </div>
+
         <div data-testid="material-table-toolbar" className="bg-[#0c1f33] p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
@@ -5651,29 +5674,6 @@ export function MaterialRequestPage() {
         </div>
 
         <div className="border-t border-[#2a526f]">
-        <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
-            <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setTableColorDraft(activeTableColorTheme);
-                setTableColorDialogOpen(true);
-              }}
-              className="border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
-            >
-              自訂表格配色
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
-            {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
-          </div>
-        </div>
-
         <div
           className="relative max-h-[70vh] overflow-auto"
           data-testid="material-table-scroll"
