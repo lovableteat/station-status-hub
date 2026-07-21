@@ -24,7 +24,10 @@ import type {
 } from "./dataCenterTypes";
 import { getUniformModelFit } from "./modelFit.mjs";
 import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
-import { getRackUnitMountLayout } from "./rackMount.mjs";
+import {
+  getRackUnitMountLayout,
+  splitRackUnitMountPositionsByCoverVisibility,
+} from "./rackMount.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
 
 interface DataCenter3DPlannerProps {
@@ -454,94 +457,286 @@ const StepRackModel = memo(function StepRackModel({ model }: { model: ImportedSt
   );
 });
 
-const PlaceholderL10Model = memo(function PlaceholderL10Model({
-  definition,
-  index,
+interface L10MountLayout {
+  fitScale: number;
+  fittedDepth: number;
+  fittedHeight: number;
+  fittedWidth: number;
+  visibleCount: number;
+  positions: Array<{ rackUnit: number; y: number; z: number }>;
+}
+
+interface InstancedL10Part {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material | THREE.Material[];
+  matrix: THREE.Matrix4;
+  name: string;
+}
+
+function InstancedL10PartMesh({
+  part,
+  layout,
+  detailed,
 }: {
-  definition: RackModelDefinition;
-  index: number;
+  part: InstancedL10Part;
+  layout: L10MountLayout;
+  detailed: boolean;
 }) {
-  const width = definition.dimensions.widthMm / 1000;
-  const depth = definition.dimensions.depthMm / 1000;
-  const height = definition.dimensions.heightMm / 1000;
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const { invalidate } = useThree();
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    const instanceMatrix = new THREE.Matrix4();
+    const rackScale = new THREE.Matrix4().makeScale(
+      layout.fitScale,
+      layout.fitScale,
+      layout.fitScale,
+    );
+    const mountTranslation = new THREE.Matrix4();
+
+    layout.positions.forEach((position, index) => {
+      mountTranslation.makeTranslation(0, position.y, position.z);
+      instanceMatrix
+        .copy(part.matrix)
+        .premultiply(rackScale)
+        .premultiply(mountTranslation);
+      mesh.setMatrixAt(index, instanceMatrix);
+    });
+
+    mesh.count = layout.positions.length;
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingBox();
+    mesh.computeBoundingSphere();
+    invalidate();
+  }, [invalidate, layout.fitScale, layout.positions, part.matrix]);
 
   return (
-    <group>
-      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[width, height, depth]} />
-        <meshStandardMaterial color="#192936" metalness={0.62} roughness={0.34} />
-      </mesh>
-      <mesh position={[0, height / 2, depth / 2 + 0.004]}>
-        <boxGeometry args={[width * 0.92, height * 0.72, 0.012]} />
-        <meshStandardMaterial color="#0b1822" metalness={0.45} roughness={0.42} />
-      </mesh>
-      {[-0.24, -0.08, 0.08, 0.24].map((offset, ventIndex) => (
-        <mesh key={offset} position={[width * offset, height / 2, depth / 2 + 0.012]}>
-          <boxGeometry args={[width * 0.11, height * 0.42, 0.008]} />
-          <meshStandardMaterial color={ventIndex === index % 4 ? "#22d3ee" : "#426073"} emissive={ventIndex === index % 4 ? "#0891b2" : "#000000"} emissiveIntensity={0.28} />
-        </mesh>
+    <instancedMesh
+      ref={meshRef}
+      args={[part.geometry, part.material, layout.visibleCount]}
+      castShadow={detailed}
+      receiveShadow={detailed}
+      frustumCulled={false}
+      name={part.name}
+    />
+  );
+}
+
+function InstancedDetailedL10Model({
+  definition,
+  assetUrl,
+  layout,
+  name,
+  detailed,
+}: {
+  definition: RackModelDefinition;
+  assetUrl: string;
+  layout: L10MountLayout;
+  name: string;
+  detailed: boolean;
+}) {
+  const gltf = useGLTF(assetUrl) as { scene: THREE.Group };
+  const prepared = useMemo(() => {
+    const normalizedRoot = new THREE.Group();
+    const model = gltf.scene.clone(true);
+    const ownedMaterials: THREE.Material[] = [];
+    const parts: InstancedL10Part[] = [];
+
+    model.rotation.set(...getModelAxisRotation(definition.upAxis));
+    model.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(model);
+    const fit = getUniformModelFit(bounds, definition.dimensions, {
+      depthAlignment: definition.assetDepthAlignment,
+    });
+
+    model.position.fromArray(fit.position);
+    normalizedRoot.position.z = fit.depthOffsetMeters;
+    normalizedRoot.scale.set(...fit.scale);
+    normalizedRoot.add(model);
+    normalizedRoot.updateMatrixWorld(true);
+
+    model.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+
+      const sourceMaterials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+      const clonedMaterials = sourceMaterials.map((sourceMaterial) => {
+        const material = sourceMaterial.clone();
+        material.side = THREE.DoubleSide;
+        ownedMaterials.push(material);
+        return material;
+      });
+
+      parts.push({
+        geometry: object.geometry,
+        material: Array.isArray(object.material) ? clonedMaterials : clonedMaterials[0],
+        matrix: object.matrixWorld.clone(),
+        name: object.name || `${definition.id}-mesh-${parts.length + 1}`,
+      });
+    });
+
+    return { ownedMaterials, parts };
+  }, [definition, gltf.scene]);
+
+  useEffect(
+    () => () => prepared.ownedMaterials.forEach((material) => material.dispose()),
+    [prepared],
+  );
+
+  return (
+    <group name={name}>
+      {prepared.parts.map((part) => (
+        <InstancedL10PartMesh
+          key={`${part.name}-${part.geometry.uuid}`}
+          part={part}
+          layout={layout}
+          detailed={detailed}
+        />
       ))}
-      <mesh position={[width * 0.39, height * 0.28, depth / 2 + 0.018]}>
-        <sphereGeometry args={[0.008, 10, 10]} />
-        <meshBasicMaterial color="#34d399" />
-      </mesh>
     </group>
   );
-});
+}
+
+function ProceduralL10Instances({
+  layout,
+  name,
+  detailed,
+}: {
+  layout: L10MountLayout;
+  name: string;
+  detailed: boolean;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const { invalidate } = useThree();
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const transform = new THREE.Object3D();
+    layout.positions.forEach((position, index) => {
+      transform.position.set(0, position.y + layout.fittedHeight / 2, position.z);
+      transform.scale.set(layout.fittedWidth, layout.fittedHeight, layout.fittedDepth);
+      transform.updateMatrix();
+      mesh.setMatrixAt(index, transform.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    invalidate();
+  }, [invalidate, layout]);
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, layout.visibleCount]}
+      castShadow={detailed}
+      receiveShadow={detailed}
+      frustumCulled={false}
+      name={name}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial
+        color="#334a5d"
+        metalness={0.5}
+        roughness={0.45}
+        side={THREE.DoubleSide}
+      />
+    </instancedMesh>
+  );
+}
 
 function RackL10Modules({
   rack,
   rackDefinition,
   l10Definition,
   detailed,
-  lowDetail,
 }: {
   rack: RackPlan;
   rackDefinition: RackModelDefinition;
   l10Definition: RackModelDefinition;
   detailed: boolean;
-  lowDetail: boolean;
 }) {
-  const layout = getRackUnitMountLayout({
-    rackDimensions: rackDefinition.dimensions,
-    capacityU: rack.capacityU,
-    moduleDimensions: l10Definition.dimensions,
-    rackUnits: l10Definition.rackUnits ?? 1,
-    moduleCount: rack.l10Count,
-    startU: rack.l10StartU,
-    rackUnitSlots: rack.l10Slots,
-  });
-  const { fitScale, positions, visibleCount } = layout;
+  const layout = useMemo(
+    () =>
+      getRackUnitMountLayout({
+        rackDimensions: rackDefinition.dimensions,
+        capacityU: rack.capacityU,
+        moduleDimensions: l10Definition.dimensions,
+        rackUnits: l10Definition.rackUnits ?? 1,
+        moduleCount: rack.l10Count,
+        startU: rack.l10StartU,
+        rackUnitSlots: rack.l10Slots,
+      }),
+    [
+      l10Definition.dimensions,
+      l10Definition.rackUnits,
+      rack.capacityU,
+      rack.l10Count,
+      rack.l10Slots,
+      rack.l10StartU,
+      rackDefinition.dimensions,
+    ],
+  );
+  if (!layout.visibleCount) return null;
 
-  if (!visibleCount || !Number.isFinite(fitScale)) return null;
+  const sceneAssetUrl = l10Definition.mobileAssetUrl ?? l10Definition.assetUrl;
+  if (!sceneAssetUrl) {
+    return (
+      <ProceduralL10Instances
+        layout={layout}
+        name={`${rack.id}-l10-preview`}
+        detailed={detailed}
+      />
+    );
+  }
+
+  const coverVisibility = splitRackUnitMountPositionsByCoverVisibility({
+    positions: layout.positions,
+    rackUnits: l10Definition.rackUnits ?? 1,
+  });
+  const exposedPositions = detailed && l10Definition.assetUrl
+    ? coverVisibility.exposed
+    : [];
+  const optimizedPositions = exposedPositions.length
+    ? coverVisibility.covered
+    : layout.positions;
+  const exposedLayout = {
+    ...layout,
+    visibleCount: exposedPositions.length,
+    positions: exposedPositions,
+  };
+  const optimizedLayout = {
+    ...layout,
+    visibleCount: optimizedPositions.length,
+    positions: optimizedPositions,
+  };
 
   return (
-    <group>
-      {Array.from({ length: visibleCount }, (_, index) => {
-        const useActualL10 = detailed && Boolean(l10Definition.assetUrl || l10Definition.stepModel);
-        const position = positions[index];
-        return (
-          <group
-            key={`${rack.id}-l10-${index}`}
-            position={[0, position.y, position.z]}
-            scale={[fitScale, fitScale, fitScale]}
-          >
-            {useActualL10 ? (
-              <Suspense fallback={<PlaceholderL10Model definition={l10Definition} index={index} />}>
-                {l10Definition.source === "step" && l10Definition.stepModel ? (
-                  <StepRackModel model={l10Definition.stepModel} />
-                ) : l10Definition.assetUrl ? (
-                  <GlbRackModel definition={l10Definition} lowDetail={lowDetail || index > 0} />
-                ) : (
-                  <PlaceholderL10Model definition={l10Definition} index={index} />
-                )}
-              </Suspense>
-            ) : (
-              <PlaceholderL10Model definition={l10Definition} index={index} />
-            )}
-          </group>
-        );
-      })}
+    <group name={`${rack.id}-l10-complete`}>
+      <Suspense fallback={null}>
+        {optimizedLayout.visibleCount ? (
+          <InstancedDetailedL10Model
+            definition={l10Definition}
+            assetUrl={sceneAssetUrl}
+            layout={optimizedLayout}
+            name={`${rack.id}-l10-scene-cad`}
+            detailed={detailed}
+          />
+        ) : null}
+        {exposedLayout.visibleCount && l10Definition.assetUrl ? (
+          <InstancedDetailedL10Model
+            definition={l10Definition}
+            assetUrl={l10Definition.assetUrl}
+            layout={exposedLayout}
+            name={`${rack.id}-l10-full-cad`}
+            detailed
+          />
+        ) : null}
+      </Suspense>
     </group>
   );
 }
@@ -661,7 +856,6 @@ function RackVisual({
         rackDefinition={definition}
         l10Definition={l10Definition}
         detailed={selected}
-        lowDetail={lowDetail || !selected}
       />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>

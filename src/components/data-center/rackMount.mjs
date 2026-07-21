@@ -198,3 +198,26 @@ export function getRackUnitMountLayout({
     })),
   };
 }
+
+export function splitRackUnitMountPositionsByCoverVisibility({
+  positions,
+  rackUnits = 1,
+}) {
+  const normalizedPositions = Array.isArray(positions) ? positions : [];
+  const normalizedRackUnits = Math.max(1, Math.floor(Number(rackUnits) || 1));
+  const occupiedRackUnits = new Set(
+    normalizedPositions.map((position) => Number(position.rackUnit)),
+  );
+  const exposed = normalizedPositions.filter(
+    (position) =>
+      !occupiedRackUnits.has(Number(position.rackUnit) + normalizedRackUnits),
+  );
+  const exposedRackUnits = new Set(exposed.map((position) => position.rackUnit));
+
+  return {
+    exposed,
+    covered: normalizedPositions.filter(
+      (position) => !exposedRackUnits.has(position.rackUnit),
+    ),
+  };
+}

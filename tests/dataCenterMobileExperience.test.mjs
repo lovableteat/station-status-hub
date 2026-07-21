@@ -21,7 +21,7 @@ const [plannerSource, workspaceSource, viewerSource, indexSource] = await Promis
 test("L10 models keep one rack-unit height while fitting the rack width", () => {
   assert.match(plannerSource, /getRackUnitMountLayout/);
   assert.match(plannerSource, /rackUnits:\s*l10Definition\.rackUnits \?\? 1/);
-  assert.match(plannerSource, /scale=\{\[fitScale, fitScale, fitScale\]\}/);
+  assert.match(plannerSource, /makeScale\(\s*layout\.fitScale,\s*layout\.fitScale,\s*layout\.fitScale/);
   assert.match(plannerSource, /getModelAxisRotation/);
   assert.match(plannerSource, /getUniformModelFit/);
   assert.match(plannerSource, /depthAlignment:\s*definition\.assetDepthAlignment/);

@@ -61,11 +61,13 @@
   },
   "mobileWebOptimization": {
     "outputFileName": "vera-rubin-vr-1u-20260715.mobile.glb",
-    "outputBytes": 182484,
-    "triangleCount": 14392,
-    "vertexCount": 7927,
-    "simplificationRatio": 0.04,
-    "maximumError": 0.04,
-    "sha256": "DA0FA64B6FD0E1A835DD0EE33C344C802362D3527175A43ADF525083C48285F0"
+    "outputBytes": 669172,
+    "triangleCount": 42911,
+    "vertexCount": 34224,
+    "simplificationRatio": 0.12,
+    "maximumError": 0.01,
+    "borderVerticesLocked": true,
+    "note": "Higher-fidelity scene LOD regenerated with locked borders; the planner uses full CAD for every exposed enclosure surface.",
+    "sha256": "78605AD054EB4BDBC0B0DFD68C7F73491D7E43B2AB66C40A31817727911FB7E6"
   }
 }

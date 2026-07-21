@@ -846,6 +846,9 @@ function RackInspector({
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   {l10Model.name} · 19 吋軌道 · 每台佔 {l10RackUnits}U
                 </p>
+                <p className="mt-1 text-[10px] leading-4 text-cyan-100/65">
+                  選取機櫃時，可見上蓋使用完整原始 CAD；堆疊內層則共用高品質場景模型以維持流暢。
+                </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <span className="rounded-full border border-blue-300/30 bg-blue-400/10 px-2 py-1 text-[10px] font-black tabular-nums text-blue-100">
                     {rack.capacityU}U 機櫃
