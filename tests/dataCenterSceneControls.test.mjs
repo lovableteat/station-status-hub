@@ -29,6 +29,8 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
   assert.match(plannerSource, /zoomSpeed=\{0\.96\}/);
   assert.match(plannerSource, /zoomToCursor/);
   assert.match(plannerSource, /onStart=\{\(\) => \{\s*animating\.current = false;/);
+  assert.match(plannerSource, /const rackRadius = Math\.hypot\(rackWidth, rackHeight, rackDepth\) \/ 2;/);
+  assert.match(plannerSource, /Math\.max\(5, fitDistance \* 1\.32\)/);
   assert.match(workspaceSource, /\["detail",\s*ZoomIn/);
 });
 
