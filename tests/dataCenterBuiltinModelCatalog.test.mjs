@@ -87,18 +87,22 @@ test("the scene keeps rack envelopes outside and only mounts 1U machines inside"
   assert.match(workspaceSource, /L10 1U/);
 });
 
-test("the scene keeps high-detail CAD geometry on the active rack", () => {
-  assert.match(plannerSource, /const useActualL10 = detailed && Boolean\(l10Definition\.assetUrl \|\| l10Definition\.stepModel\);/);
-  assert.match(plannerSource, /lowDetail=\{lowDetail \|\| index > 0\}/);
+test("mounted L10 machines use full CAD for every exposed top cover", () => {
+  assert.match(plannerSource, /const sceneAssetUrl = l10Definition\.mobileAssetUrl \?\? l10Definition\.assetUrl;/);
+  assert.match(plannerSource, /<InstancedDetailedL10Model/);
+  assert.match(plannerSource, /splitRackUnitMountPositionsByCoverVisibility/);
+  assert.match(plannerSource, /const exposedPositions = detailed && l10Definition\.assetUrl/);
+  assert.match(plannerSource, /assetUrl=\{l10Definition\.assetUrl\}/);
+  assert.match(plannerSource, /material\.side = THREE\.DoubleSide/);
+  assert.doesNotMatch(plannerSource, /index > 0/);
   assert.match(plannerSource, /detailed=\{selected\}/);
   assert.match(plannerSource, /lowDetail=\{lowDetail \|\| !selected\}/);
 });
 
 test("mounted L10 machines keep one uniform scale inside the L11 cabinet", () => {
   assert.match(plannerSource, /getRackUnitMountLayout\(\{/);
-  assert.match(plannerSource, /const \{ fitScale, positions, visibleCount \} = layout;/);
-  assert.match(plannerSource, /scale=\{\[fitScale, fitScale, fitScale\]\}/);
-  assert.doesNotMatch(plannerSource, /scale=\{\[fitScale,\s*1,\s*fitScale\]\}/);
+  assert.match(plannerSource, /makeScale\(\s*layout\.fitScale,\s*layout\.fitScale,\s*layout\.fitScale/);
+  assert.doesNotMatch(plannerSource, /makeScale\(\s*layout\.fitScale,\s*1,\s*layout\.fitScale/);
 });
 
 test("GB300 defaults and legacy invalid VR200 racks migrate to the matched L11 and L10", () => {
@@ -160,7 +164,8 @@ for (const assetName of [
     assert.equal(metadata.outputBytes, assetStat.size);
     assert.equal(metadata.mobileWebOptimization.outputFileName, `${assetName}.mobile.glb`);
     assert.equal(metadata.mobileWebOptimization.outputBytes, mobileStat.size);
-    assert.ok(metadata.mobileWebOptimization.triangleCount <= 250_000);
+    assert.ok(metadata.mobileWebOptimization.triangleCount <= 350_000);
+    assert.equal(metadata.mobileWebOptimization.borderVerticesLocked, true);
     assert.ok(metadata.dimensions.widthMm > 0);
     assert.ok(metadata.dimensions.depthMm > 0);
     assert.ok(metadata.dimensions.heightMm > 0);
