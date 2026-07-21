@@ -2322,7 +2322,7 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[minmax(280px,1fr)_280px] lg:justify-end">
+        <div data-testid="ai-model-control" className="w-full sm:w-[380px]">
           {isChatOnly ? (
             <div className="flex items-center gap-2">
               <Select
@@ -2330,7 +2330,7 @@ export function ApiChatConsole({
                 onValueChange={(value) => onSelectApiKey?.(value)}
               >
                 <SelectTrigger
-                  aria-label="選擇 AI 模型"
+                  aria-label="選擇 API 金鑰與模型"
                   className="h-12 w-full rounded-xl border-blue-300/30 bg-slate-950/45 px-4 text-left text-base font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40"
                 >
                   <SelectValue placeholder="選擇模型" />
@@ -2356,18 +2356,19 @@ export function ApiChatConsole({
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-          ) : null}
-          <div className="hidden h-12 items-center justify-between rounded-xl border border-blue-300/25 bg-slate-950/40 px-4 text-left shadow-none 2xl:flex">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">目前模型</p>
-              <p className="truncate text-sm font-bold text-white">{provider || "gemini"} / {model || "-"}</p>
+          ) : (
+            <div className="flex h-12 items-center justify-between rounded-xl border border-blue-300/25 bg-slate-950/40 px-4 text-left shadow-none">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">目前模型</p>
+                <p className="truncate text-sm font-bold text-white">{provider || "gemini"} / {model || "-"}</p>
+              </div>
+              {availableApiKeys.length > 1 ? (
+                <span className="ml-3 shrink-0 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100">
+                  自動輪替
+                </span>
+              ) : null}
             </div>
-            {availableApiKeys.length > 1 ? (
-              <span className="ml-3 shrink-0 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100">
-                自動輪替
-              </span>
-            ) : null}
-          </div>
+          )}
         </div>
       </div>
 
