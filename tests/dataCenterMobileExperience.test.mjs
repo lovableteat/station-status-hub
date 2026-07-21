@@ -32,7 +32,7 @@ test("mobile Data-center uses low-poly assets and disables expensive rendering",
   assert.match(plannerSource, /const isMobile = useIsMobile\(\)/);
   assert.match(plannerSource, /lowDetail=\{isMobile\}/);
   assert.match(plannerSource, /shadows=\{!isMobile\}/);
-  assert.match(plannerSource, /dpr=\{isMobile \? 1 : \[1, 1\.5\]\}/);
+  assert.match(plannerSource, /dpr=\{isMobile \? 1 : \[1, 1\.3\]\}/);
   assert.match(plannerSource, /antialias:\s*!isMobile/);
 });
 
@@ -43,7 +43,7 @@ test("mobile Data-center fills the dynamic viewport and exposes primary controls
   assert.match(workspaceSource, /id:\s*"scene"/);
   assert.match(workspaceSource, /id:\s*"details"/);
   assert.match(workspaceSource, /id:\s*"models"/);
-  assert.match(workspaceSource, /id:\s*"focus"/);
+  assert.match(workspaceSource, /id:\s*"plan"/);
   assert.match(workspaceSource, /data-action=\{action\.id\}/);
   assert.match(workspaceSource, /setMobileLeftOpen\(false\)/);
   assert.match(workspaceSource, /<SheetTitle>場景導覽<\/SheetTitle>/);
@@ -58,7 +58,7 @@ test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () 
 });
 
 test("the model detail viewer keeps its header and controls inside a phone viewport", () => {
-  assert.match(viewerSource, /className="min-w-0 h-\[min\(94dvh,920px\)\]/);
+  assert.match(viewerSource, /className="min-w-0 h-\[min\(94svh,920px\)\]/);
   assert.match(viewerSource, /<header className="flex min-h-\[76px\] min-w-0/);
   assert.match(viewerSource, /<aside className="order-2 min-w-0/);
   assert.match(viewerSource, /className="flex w-full min-w-0 gap-2 overflow-x-auto/);

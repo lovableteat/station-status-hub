@@ -31,12 +31,15 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
   assert.match(plannerSource, /onStart=\{\(\) => \{\s*animating\.current = false;/);
   assert.match(plannerSource, /const rackRadius = Math\.hypot\(rackWidth, rackHeight, rackDepth\) \/ 2;/);
   assert.match(plannerSource, /Math\.max\(5, fitDistance \* 1\.32\)/);
-  assert.match(workspaceSource, /\["detail",\s*ZoomIn/);
+  assert.match(workspaceSource, /onClick=\{\(\) => requestCamera\("focus"\)\}/);
 });
 
-test("the overview stays responsive without swapping detailed CAD models on hover", () => {
-  assert.match(plannerSource, /const showDetailedModel = selected;/);
-  assert.match(plannerSource, /<RackOverviewModel rack=\{rack\}/);
+test("the overview preserves each assigned rack model while reducing distant detail", () => {
+  assert.match(plannerSource, /definition\.source === "step" && definition\.stepModel/);
+  assert.match(plannerSource, /<GlbRackModel definition=\{definition\} lowDetail=\{lowDetail \|\| !selected\}/);
+  assert.match(plannerSource, /<ProceduralRackModel definition=\{definition\}/);
+  assert.match(plannerSource, /detailed=\{selected\}/);
+  assert.doesNotMatch(plannerSource, /const showDetailedModel/);
   assert.match(plannerSource, /frameloop="demand"/);
 });
 

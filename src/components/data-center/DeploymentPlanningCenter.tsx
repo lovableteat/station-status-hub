@@ -23,6 +23,7 @@ import {
   HardDrive,
   Layers3,
   LayoutDashboard,
+  Map,
   Menu,
   Minus,
   Move3d,
@@ -79,6 +80,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
+import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
 import {
   BUILT_IN_RACK_MODELS,
@@ -1705,7 +1707,6 @@ function useDesktopDataCenterLayout() {
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 1024px)");
     const syncLayout = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
-
     setIsDesktop(mediaQuery.matches);
     mediaQuery.addEventListener("change", syncLayout);
     return () => mediaQuery.removeEventListener("change", syncLayout);
@@ -1741,6 +1742,7 @@ export function DeploymentPlanningCenter() {
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 640px)").matches
   );
   const [layoutEditing, setLayoutEditing] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<"3d" | "2d">("3d");
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
   const [facilityPlannerOpen, setFacilityPlannerOpen] = useState(false);
@@ -1856,7 +1858,7 @@ export function DeploymentPlanningCenter() {
     setSelectedRackId(rackId);
     setMobileLeftOpen(false);
     setMobileRightOpen(false);
-    requestCamera("focus");
+    if (workspaceMode === "3d") requestCamera("focus");
   };
 
   const updateCatalogModel = (
@@ -2025,6 +2027,49 @@ export function DeploymentPlanningCenter() {
       width: (rotated ? definition.dimensions.depthMm : definition.dimensions.widthMm) / 1000,
       depth: (rotated ? definition.dimensions.widthMm : definition.dimensions.depthMm) / 1000,
     };
+  };
+
+  const placeRackOnPlan = (rackId: string, x: number, z: number) => {
+    if (!canEdit) return;
+    setSites((currentSites) =>
+      currentSites.map((site) => {
+        if (site.id !== selectedSiteId) return site;
+        const movingRack = site.racks.find((rack) => rack.id === rackId);
+        if (!movingRack) return site;
+        const footprint = getFootprint(movingRack);
+        const collision = site.racks.some((rack) => {
+          if (rack.id === rackId) return false;
+          const other = getFootprint(rack);
+          return (
+            Math.abs(x - rack.positionX) < (footprint.width + other.width) / 2 + 0.12 &&
+            Math.abs(z - rack.positionZ) < (footprint.depth + other.depth) / 2 + 0.12
+          );
+        });
+        if (collision) return site;
+        return {
+          ...site,
+          racks: site.racks.map((rack) =>
+            rack.id === rackId ? { ...rack, positionX: x, positionZ: z } : rack
+          ),
+        };
+      })
+    );
+  };
+
+  const rotateRackOnPlan = (rackId: string) => {
+    if (!canEdit) return;
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) =>
+                rack.id === rackId ? { ...rack, rotation: (rack.rotation + 90) % 360 } : rack
+              ),
+            }
+          : site
+      )
+    );
   };
 
   const moveSelectedRack = (deltaX: number, deltaZ: number) => {
@@ -2501,16 +2546,19 @@ export function DeploymentPlanningCenter() {
             {canEdit ? (
               <Button
                 type="button"
-                onClick={() => setLayoutEditing((value) => !value)}
+                onClick={() => {
+                  setWorkspaceMode("2d");
+                  setLayoutEditing(true);
+                }}
                 className={cn(
                   "h-11 rounded-xl px-4 text-sm font-bold",
-                  layoutEditing
+                  workspaceMode === "2d"
                     ? "bg-amber-300 text-amber-950 hover:bg-amber-200"
                     : "bg-cyan-400 text-cyan-950 hover:bg-cyan-300"
                 )}
               >
-                <Move3d className="mr-2 h-4 w-4" />
-                {layoutEditing ? "編排中" : "編排場景"}
+                <Map className="mr-2 h-4 w-4" />
+                {workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃"}
               </Button>
             ) : null}
           </div>
@@ -2523,19 +2571,43 @@ export function DeploymentPlanningCenter() {
           </aside> : null}
 
           <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
-            <DataCenter3DPlanner
-              racks={selectedSite.racks}
-              models={models}
-              selectedRackId={selectedRackId}
-              activeLayer={activeLayer}
-              showLabels={showLabels}
-              cameraPreset={cameraPreset}
-              cameraRequestId={cameraRequestId}
-              facility={selectedFacility}
-              onSelectRack={handleRackSelect}
-            />
+            {workspaceMode === "3d" ? (
+              <DataCenter3DPlanner
+                racks={selectedSite.racks}
+                models={models}
+                selectedRackId={selectedRackId}
+                activeLayer={activeLayer}
+                showLabels={showLabels}
+                cameraPreset={cameraPreset}
+                cameraRequestId={cameraRequestId}
+                facility={selectedFacility}
+                onSelectRack={handleRackSelect}
+              />
+            ) : (
+              <DataCenter2DPlanner
+                racks={selectedSite.racks}
+                models={models}
+                selectedRackId={selectedRackId}
+                facility={selectedFacility}
+                canEdit={canEdit}
+                onSelectRack={handleRackSelect}
+                onMoveRack={placeRackOnPlan}
+                onRotateRack={rotateRackOnPlan}
+                onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+                onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
+                onAddAisle={addAisle}
+                onAddPowerFeed={addPowerFeed}
+                onOpenModels={() => openModelLibrary("rack")}
+                onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
+                onView3D={() => {
+                  setWorkspaceMode("3d");
+                  setLayoutEditing(false);
+                  requestCamera("overview");
+                }}
+              />
+            )}
 
-            <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center gap-2">
+            <div className={cn("absolute left-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center gap-2", workspaceMode !== "3d" && "hidden")}>
               <div className="flex h-11 items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 shadow-xl backdrop-blur-xl">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${activeLayerOption.color}1f`, color: activeLayerOption.color }}>
                   <activeLayerOption.icon className="h-4 w-4" />
@@ -2569,7 +2641,7 @@ export function DeploymentPlanningCenter() {
               ) : null}
             </div>
 
-            <div className="absolute right-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center justify-end gap-1.5 rounded-xl border border-white/12 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="hidden">
               <IconTooltipButton
                 label={showSceneTools ? "關閉場景工具" : "開啟場景工具"}
                 icon={showSceneTools ? PanelLeftClose : PanelLeftOpen}
@@ -2651,7 +2723,51 @@ export function DeploymentPlanningCenter() {
               </Tooltip>
             </div>
 
-            <div className="absolute bottom-4 left-4 z-20 hidden items-center gap-3 rounded-xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] text-slate-300 backdrop-blur-xl sm:flex">
+            <div
+              data-testid="data-center-simple-toolbar"
+              className={cn(
+                "absolute right-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center justify-end gap-2 rounded-2xl border border-cyan-200/18 bg-[#06111d]/92 p-2 shadow-2xl backdrop-blur-xl",
+                workspaceMode !== "3d" && "hidden"
+              )}
+            >
+              <Button
+                type="button"
+                onClick={() => {
+                  setWorkspaceMode("2d");
+                  setLayoutEditing(true);
+                }}
+                className="h-9 bg-cyan-300 px-3 text-xs font-black text-[#04131f] hover:bg-cyan-200"
+              >
+                <Map className="mr-2 h-4 w-4" /> 2D 規劃
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setMobileLeftOpen(true)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
+                <Layers3 className="mr-2 h-4 w-4" /> 機櫃清單
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setMobileRightOpen(true)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
+                <Server className="mr-2 h-4 w-4" /> 機櫃設定
+              </Button>
+              <Select value={activeLayer} onValueChange={(value) => setActiveLayer(value as DataCenterLayer)}>
+                <SelectTrigger aria-label="選擇 3D 顯示圖層" className="h-9 w-[126px] rounded-lg border-white/12 bg-white/[0.04] text-xs font-bold text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
+                  {LAYER_OPTIONS.map((layer) => (
+                    <SelectItem key={layer.id} value={layer.id}>{layer.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" onClick={() => requestCamera("overview")} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
+                <Boxes className="mr-2 h-4 w-4" /> 全景
+              </Button>
+              <Button type="button" variant="outline" onClick={() => requestCamera("top")} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
+                <LayoutDashboard className="mr-2 h-4 w-4" /> 俯視
+              </Button>
+              <Button type="button" variant="outline" onClick={() => requestCamera("focus")} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
+                <Focus className="mr-2 h-4 w-4" /> 聚焦
+              </Button>
+            </div>
+
+            <div className={cn("absolute bottom-4 left-4 z-20 hidden items-center gap-3 rounded-xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] text-slate-300 backdrop-blur-xl sm:flex", workspaceMode !== "3d" && "!hidden")}>
               <span className="flex items-center gap-1.5 font-semibold text-sky-100">
                 <span className="h-2 w-2 rounded-full bg-sky-400" /> 冷通道
               </span>
@@ -2683,25 +2799,49 @@ export function DeploymentPlanningCenter() {
         </div>
         ) : (
         <div className="relative flex min-h-0 flex-1 bg-black">
-          <DataCenter3DPlanner
-            racks={selectedSite.racks}
-            models={models}
-            selectedRackId={selectedRackId}
-            activeLayer={activeLayer}
-            showLabels={showLabels}
-            cameraPreset={cameraPreset}
-            cameraRequestId={cameraRequestId}
-            facility={selectedFacility}
-            onSelectRack={handleRackSelect}
-          />
-          <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 py-2 shadow-xl backdrop-blur-xl">
+          {workspaceMode === "3d" ? (
+            <DataCenter3DPlanner
+              racks={selectedSite.racks}
+              models={models}
+              selectedRackId={selectedRackId}
+              activeLayer={activeLayer}
+              showLabels={showLabels}
+              cameraPreset={cameraPreset}
+              cameraRequestId={cameraRequestId}
+              facility={selectedFacility}
+              onSelectRack={handleRackSelect}
+            />
+          ) : (
+            <DataCenter2DPlanner
+              racks={selectedSite.racks}
+              models={models}
+              selectedRackId={selectedRackId}
+              facility={selectedFacility}
+              canEdit={canEdit}
+              onSelectRack={handleRackSelect}
+              onMoveRack={placeRackOnPlan}
+              onRotateRack={rotateRackOnPlan}
+              onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+              onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
+              onAddAisle={addAisle}
+              onAddPowerFeed={addPowerFeed}
+              onOpenModels={() => openModelLibrary("rack")}
+              onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
+              onView3D={() => {
+                setWorkspaceMode("3d");
+                setLayoutEditing(false);
+                requestCamera("overview");
+              }}
+            />
+          )}
+          <div className={cn("pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 py-2 shadow-xl backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activeLayerOption.color }} />
             <span className="truncate text-xs font-bold text-white">{activeLayerOption.label}</span>
           </div>
 
           <div
             data-testid="data-center-touch-help"
-            className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-200/20 bg-[#06111d]/88 px-3 py-1.5 text-[11px] font-semibold text-cyan-50 shadow-xl backdrop-blur-xl"
+            className={cn("pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-200/20 bg-[#06111d]/88 px-3 py-1.5 text-[11px] font-semibold text-cyan-50 shadow-xl backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}
             style={{ bottom: "calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.5rem)" }}
           >
             單指旋轉 · 雙指縮放／平移
@@ -2710,7 +2850,7 @@ export function DeploymentPlanningCenter() {
           <nav
             data-testid="data-center-mobile-dock"
             aria-label="Data-center 手機操作"
-            className="absolute inset-x-3 z-30 flex items-stretch gap-1 rounded-2xl border border-cyan-200/20 bg-[#06111d]/94 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+            className={cn("absolute inset-x-3 z-30 flex items-stretch gap-1 rounded-2xl border border-cyan-200/20 bg-[#06111d]/94 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}
             style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
           >
             {[
@@ -2733,27 +2873,14 @@ export function DeploymentPlanningCenter() {
                 onClick: () => openModelLibrary("rack"),
               },
               {
-                id: "focus",
-                label: "近看",
-                icon: ZoomIn,
-                onClick: () => requestCamera("detail"),
+                id: "plan",
+                label: "2D 規劃",
+                icon: Map,
+                onClick: () => {
+                  setWorkspaceMode("2d");
+                  setLayoutEditing(true);
+                },
               },
-              {
-                id: "floor",
-                label: "地板",
-                icon: PencilRuler,
-                onClick: () => setFacilityPlannerOpen(true),
-              },
-              ...(canEdit
-                ? [
-                    {
-                      id: "layout",
-                      label: layoutEditing ? "完成" : "編排",
-                      icon: layoutEditing ? Check : Move3d,
-                      onClick: () => setLayoutEditing((value) => !value),
-                    },
-                  ]
-                : []),
             ].map((action) => {
               const ActionIcon = action.icon;
               return (
@@ -2765,9 +2892,7 @@ export function DeploymentPlanningCenter() {
                   onClick={action.onClick}
                   className={cn(
                     "flex min-h-12 min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-cyan-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
-                    action.id === "layout" && layoutEditing
-                      ? "bg-amber-300 text-amber-950"
-                      : "hover:bg-cyan-300/12 active:bg-cyan-300/20"
+                    "hover:bg-cyan-300/12 active:bg-cyan-300/20"
                   )}
                 >
                   <ActionIcon className="h-[18px] w-[18px]" />
