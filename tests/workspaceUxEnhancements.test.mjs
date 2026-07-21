@@ -34,6 +34,15 @@ test("shared prompt library supports scalable management controls", async () => 
   assert.match(consoleSource, /每頁/);
 });
 
+test("shared prompt library keeps rows compact and reveals full content on hover", async () => {
+  const consoleSource = await read("../src/components/api-management/ApiChatConsole.tsx");
+
+  assert.match(consoleSource, /HoverCard/);
+  assert.match(consoleSource, /line-clamp-1/);
+  assert.match(consoleSource, /whitespace-pre-wrap/);
+  assert.match(consoleSource, /prompt-library-item-/);
+});
+
 test("AI messages render ordered clipboard attachments inside their original text position", async () => {
   const consoleSource = await read("../src/components/api-management/ApiChatConsole.tsx");
 
