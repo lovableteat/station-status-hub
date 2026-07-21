@@ -19,7 +19,7 @@ const TRACKER_COLUMN_SPECS: Record<TrackerColumnKind, TrackerColumnSpec> = {
   serial: { defaultWidth: 116, minWidth: 96, maxWidth: 320 },
   status: { defaultWidth: 98, minWidth: 82, maxWidth: 220 },
   station: { defaultWidth: 300, minWidth: 180, maxWidth: 620 },
-  actions: { defaultWidth: 168, minWidth: 148, maxWidth: 240 },
+  actions: { defaultWidth: 220, minWidth: 208, maxWidth: 320 },
 };
 
 export function getTrackerColumnKind(columnKey: string): TrackerColumnKind {
