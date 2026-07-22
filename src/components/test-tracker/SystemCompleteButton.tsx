@@ -21,6 +21,7 @@ interface SystemCompleteButtonProps {
     item_name: string;
   }>;
   onSystemUpdate: (newSystemId?: string) => void;
+  triggerVariant?: "default" | "menu";
 }
 
 export function SystemCompleteButton({
@@ -28,7 +29,8 @@ export function SystemCompleteButton({
   systemName,
   stations,
   items,
-  onSystemUpdate
+  onSystemUpdate,
+  triggerVariant = "default",
 }: SystemCompleteButtonProps) {
   const [isCompleting, setIsCompleting] = useState(false);
   const { toast } = useToast();
@@ -185,10 +187,22 @@ export function SystemCompleteButton({
           variant="outline" 
           size="sm" 
           disabled={isCompleting}
-          className="text-success hover:text-success hover:bg-success/10 border-success/30"
+          className={
+            triggerVariant === "menu"
+              ? "h-10 w-full justify-start gap-3 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-[#dceaf4] shadow-none hover:border-emerald-300/25 hover:bg-emerald-300/10 hover:text-emerald-50"
+              : "border-success/30 text-success hover:bg-success/10 hover:text-success"
+          }
         >
-          <CheckSquare className={`${isMobile ? 'h-4 w-4 mr-2' : 'h-3 w-3 mr-1'}`} />
-          {isMobile ? "一鍵完成" : "完成"}
+          <CheckSquare
+            className={
+              triggerVariant === "menu"
+                ? "h-4 w-4 shrink-0 text-emerald-300"
+                : isMobile
+                  ? "mr-2 h-4 w-4"
+                  : "mr-1 h-3 w-3"
+            }
+          />
+          {triggerVariant === "menu" ? "標記整台完成" : isMobile ? "一鍵完成" : "完成"}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent className="border-slate-700/80 bg-slate-950/95 text-slate-50 shadow-2xl">
