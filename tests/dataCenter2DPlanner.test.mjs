@@ -32,14 +32,23 @@ test("2D planning exposes working entry points for every planning task", () => {
   assert.match(plannerSource, /新增機櫃/);
   assert.match(plannerSource, /刪除機櫃/);
   assert.match(plannerSource, /onClick=\{onOpenModels\}/);
-  assert.match(plannerSource, /onClick=\{\(\) => onAddAisle\("cold"\)\}/);
-  assert.match(plannerSource, /onClick=\{\(\) => onAddAisle\("hot"\)\}/);
+  assert.match(plannerSource, /onAddAisle\("cold", "horizontal"\)/);
+  assert.match(plannerSource, /onAddAisle\("cold", "vertical"\)/);
+  assert.match(plannerSource, /onAddAisle\("hot", "horizontal"\)/);
+  assert.match(plannerSource, /onAddAisle\("hot", "vertical"\)/);
   assert.match(plannerSource, /onClick=\{onAddPowerFeed\}/);
   assert.match(plannerSource, /onClick=\{onOpenFacilitySettings\}/);
   assert.match(plannerSource, /onClick=\{onView3D\}/);
   assert.match(workspaceSource, /data-testid="data-center-simple-toolbar"/);
   assert.match(workspaceSource, /setWorkspaceMode\("2d"\)/);
   assert.match(workspaceSource, /setWorkspaceMode\("3d"\)/);
+});
+
+test("cold and hot aisles can be added horizontally or vertically", () => {
+  assert.match(workspaceSource, /orientation === "horizontal" \? 0 : 90/);
+  assert.match(workspaceSource, /orientation === "horizontal" \? facility\.width : facility\.depth/);
+  assert.match(workspaceSource, /冷通道 · \{orientation === "horizontal" \? "橫向" : "直向"\}/);
+  assert.match(workspaceSource, /熱通道 · \{orientation === "horizontal" \? "橫向" : "直向"\}/);
 });
 
 test("rack instance deletion keeps the shared scene valid", () => {
