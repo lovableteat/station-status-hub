@@ -113,6 +113,7 @@ import type {
   DataCenterAssetKind,
   DataCenterLayer,
   FacilityAisleKind,
+  FacilityAisleOrientation,
   FacilityPlan,
   ImportedStepDimensions,
   RackDevice,
@@ -1957,7 +1958,7 @@ export function DeploymentPlanningCenter() {
     }));
   };
 
-  const addAisle = (kind: FacilityAisleKind) => {
+  const addAisle = (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => {
     const index = selectedFacility.aisles.filter((aisle) => aisle.kind === kind).length + 1;
     updateFacility((facility) => ({
       ...facility,
@@ -1965,13 +1966,16 @@ export function DeploymentPlanningCenter() {
         ...facility.aisles,
         {
           id: `${kind}-${crypto.randomUUID()}`,
-          label: `${kind === "cold" ? "冷通道" : "熱通道"} ${index}`,
+          label: `${kind === "cold" ? "冷通道" : "熱通道"} ${index} · ${orientation === "horizontal" ? "橫向" : "直向"}`,
           kind,
           x: 0,
           z: 0,
-          width: Math.max(4, facility.width - 3.8),
+          width: Math.max(
+            4,
+            (orientation === "horizontal" ? facility.width : facility.depth) - 3.8
+          ),
           depth: kind === "cold" ? 2.1 : 1.15,
-          rotation: 0,
+          rotation: orientation === "horizontal" ? 0 : 90,
         },
       ],
     }));
@@ -3109,14 +3113,18 @@ export function DeploymentPlanningCenter() {
                       <h2 className="text-sm font-black text-white">冷熱通道</h2>
                       <p className="mt-1 text-[11px] text-slate-400">可調整位置、寬度、深度與方向。</p>
                     </div>
-                    <div className="flex gap-1.5">
-                      <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("cold")} className="h-8 border-sky-300/20 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20">
-                        <Snowflake className="mr-1 h-3.5 w-3.5" />冷
+                  </div>
+                  <div className="mb-3 grid grid-cols-2 gap-2">
+                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
+                      <Button key={`cold-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("cold", orientation)} className="h-9 border-sky-300/20 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20">
+                        <Snowflake className="mr-1 h-3.5 w-3.5" />冷通道 · {orientation === "horizontal" ? "橫向" : "直向"}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("hot")} className="h-8 border-orange-300/20 bg-orange-400/10 px-2.5 text-[11px] text-orange-100 hover:bg-orange-400/20">
-                        <Thermometer className="mr-1 h-3.5 w-3.5" />熱
+                    ))}
+                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
+                      <Button key={`hot-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("hot", orientation)} className="h-9 border-orange-300/20 bg-orange-400/10 px-2.5 text-[11px] text-orange-100 hover:bg-orange-400/20">
+                        <Thermometer className="mr-1 h-3.5 w-3.5" />熱通道 · {orientation === "horizontal" ? "橫向" : "直向"}
                       </Button>
-                    </div>
+                    ))}
                   </div>
                   <div className="space-y-3">
                     {selectedFacility.aisles.map((aisle) => (
