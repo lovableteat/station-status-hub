@@ -188,6 +188,7 @@ function GlbInspectionModel({
   onPartNamesChange: (partNames: string[]) => void;
 }) {
   const gltf = useGLTF(assetUrl) as { scene: THREE.Group };
+  const { invalidate } = useThree();
 
   useEffect(() => {
     onPartNamesChange(collectInspectablePartNames(gltf.scene));
@@ -282,7 +283,8 @@ function GlbInspectionModel({
         material.needsUpdate = true;
       });
     });
-  }, [definition.dimensions.widthMm, hiddenPartNames, mode, prepared.meshes, sectionEnabled, sectionPercent]);
+    invalidate();
+  }, [definition.dimensions.widthMm, hiddenPartNames, invalidate, mode, prepared.meshes, sectionEnabled, sectionPercent]);
 
   useEffect(
     () => () => prepared.ownedMaterials.forEach((material) => material.dispose()),

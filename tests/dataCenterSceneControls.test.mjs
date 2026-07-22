@@ -57,3 +57,10 @@ test("floor size control is directly visible in the 3D workspace", () => {
   assert.match(workspaceSource, /"facility-depth-control"/);
   assert.match(workspaceSource, /data-testid=\{testId\}/);
 });
+
+test("the overview applies a stable exposure and balanced fill lighting", () => {
+  assert.match(plannerSource, /toneMappingExposure\s*=\s*1\.22/);
+  assert.match(plannerSource, /ambientLight intensity=\{0\.82\}/);
+  assert.match(plannerSource, /hemisphereLight intensity=\{1\.05\}/);
+  assert.match(plannerSource, /directionalLight[\s\S]*?position=\{\[-8, 6, -4\]\}/);
+});

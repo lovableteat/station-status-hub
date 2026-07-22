@@ -57,3 +57,22 @@ test("rack instance deletion keeps the shared scene valid", () => {
   assert.match(workspaceSource, /setSelectedRackId\(nextRack\.id\)/);
   assert.match(workspaceSource, /findAvailableRackPosition\(baseRack\)/);
 });
+
+test("2D planning owns wheel zoom instead of zooming the browser page", () => {
+  assert.match(plannerSource, /addEventListener\("wheel"/);
+  assert.match(plannerSource, /\{ passive: false \}/);
+  assert.match(plannerSource, /event\.preventDefault\(\)/);
+  assert.match(plannerSource, /setViewport/);
+  assert.match(plannerSource, /放大 2D 配置/);
+  assert.match(plannerSource, /縮小 2D 配置/);
+  assert.match(plannerSource, /重設 2D 視圖/);
+  assert.match(plannerSource, /touchAction:\s*"none"/);
+});
+
+test("cold and hot aisle dimensions can be edited from the selected aisle panel", () => {
+  assert.match(plannerSource, /onUpdateAisle/);
+  assert.match(plannerSource, /通道長度/);
+  assert.match(plannerSource, /通道寬度/);
+  assert.match(plannerSource, /selectedAisleId/);
+  assert.match(workspaceSource, /onUpdateAisle=\{\(aisleId, patch\)/);
+});
