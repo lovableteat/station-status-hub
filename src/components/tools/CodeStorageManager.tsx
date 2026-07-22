@@ -75,6 +75,9 @@ const CATEGORY_OPTIONS = [
   ["other", "其他"],
 ] as const;
 
+const normalizeCodeContent = (content: string) =>
+  content.replace(/[ \t]+$/gm, "").replace(/(?:\r\n|\r|\n)+$/g, "");
+
 export function CodeStorageManager() {
   const [codeSnippets, setCodeSnippets] = useState<CodeSnippet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +126,7 @@ export function CodeStorageManager() {
       );
     } catch (error) {
       console.error("Error loading code snippets:", error);
-      toast({ title: "載入失敗", description: "無法載入程式碼片段", variant: "destructive" });
+      toast({ title: "載入失敗", description: "無法載入程式開發內容", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +147,7 @@ export function CodeStorageManager() {
       setFormData({
         title: snippet.title,
         description: snippet.description || "",
-        code_content: snippet.code_content,
+        code_content: normalizeCodeContent(snippet.code_content),
         language: snippet.language,
         category: snippet.category,
         tags: snippet.tags.join(", "),
@@ -162,7 +165,7 @@ export function CodeStorageManager() {
       const snippetData = {
         title: formData.title.trim(),
         description: formData.description || null,
-        code_content: formData.code_content,
+        code_content: normalizeCodeContent(formData.code_content),
         language: formData.language,
         category: formData.category,
         tags: formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
@@ -175,11 +178,11 @@ export function CodeStorageManager() {
           .update(snippetData)
           .eq("id", editingSnippet.id);
         if (error) throw error;
-        toast({ title: "更新成功", description: "程式碼片段已更新" });
+        toast({ title: "更新成功", description: "程式開發內容已更新" });
       } else {
         const { error } = await supabase.from("code_snippets").insert([snippetData]);
         if (error) throw error;
-        toast({ title: "新增成功", description: "程式碼片段已新增" });
+        toast({ title: "新增成功", description: "程式開發內容已新增" });
       }
 
       setIsDialogOpen(false);
@@ -187,27 +190,27 @@ export function CodeStorageManager() {
       await loadCodeSnippets();
     } catch (error) {
       console.error("Error saving code snippet:", error);
-      toast({ title: "儲存失敗", description: "無法儲存程式碼片段", variant: "destructive" });
+      toast({ title: "儲存失敗", description: "無法儲存程式開發內容", variant: "destructive" });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("確認要刪除這個程式碼片段嗎？此操作無法復原。")) return;
+    if (!window.confirm("確認要刪除這個程式開發內容嗎？此操作無法復原。")) return;
     try {
       const { error } = await supabase.from("code_snippets").delete().eq("id", id);
       if (error) throw error;
-      toast({ title: "刪除成功", description: "程式碼片段已刪除" });
+      toast({ title: "刪除成功", description: "程式開發內容已刪除" });
       await loadCodeSnippets();
     } catch (error) {
       console.error("Error deleting code snippet:", error);
-      toast({ title: "刪除失敗", description: "無法刪除程式碼片段", variant: "destructive" });
+      toast({ title: "刪除失敗", description: "無法刪除程式開發內容", variant: "destructive" });
     }
   };
 
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      toast({ title: "已複製", description: "程式碼已複製到剪貼簿" });
+      toast({ title: "已複製", description: "程式開發內容已複製到剪貼簿" });
     } catch {
       toast({ title: "複製失敗", description: "無法存取剪貼簿", variant: "destructive" });
     }
@@ -247,12 +250,12 @@ export function CodeStorageManager() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-base font-semibold text-[#f3f8fc]">
-            <Code2 className="h-4 w-4 text-[#62d8f3]" />程式碼儲存庫
-            <Badge variant="outline" className="border-[#2a526f] bg-[#10263a] text-[#bfeaf5]">
+            <Code2 className="h-4 w-4 text-[#67e8f9]" />程式開發庫
+            <Badge variant="outline" className="border-[#67e8f9]/50 bg-[#083344] text-[#cffafe]">
               {filteredSnippets.length}
             </Badge>
           </div>
-          <p className="mt-1 text-xs text-[#91aabd]">選取程式碼後可直接預覽或編輯，原始換行與縮排完整保留。</p>
+          <p className="mt-1 text-xs text-[#b7d7e8]">選取程式開發內容後可直接預覽、編輯或一鍵複製，原始換行與縮排完整保留。</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -260,19 +263,19 @@ export function CodeStorageManager() {
         }}>
           <DialogTrigger asChild>
             <Button size="sm" onClick={() => openEditor()}>
-              <Plus className="mr-2 h-4 w-4" />新增程式碼
+              <Plus className="mr-2 h-4 w-4" />新增程式開發
             </Button>
           </DialogTrigger>
           <DialogContent
-            className="max-h-[88vh] max-w-5xl overflow-y-auto border-[#2a526f] bg-[#071522]"
+            className="max-h-[88vh] max-w-5xl overflow-y-auto border-[#38d7ff]/60 bg-gradient-to-br from-[#09253a] via-[#071522] to-[#06111f] shadow-[0_0_42px_rgba(56,215,255,0.18)]"
             onPointerDownOutside={(event) => {
               const target = event.target as HTMLElement;
               if (target?.closest(".rich-text-editor") || target?.closest('input[type="file"]')) event.preventDefault();
             }}
           >
             <DialogHeader>
-              <DialogTitle>{editingSnippet ? "編輯程式碼" : "新增程式碼"}</DialogTitle>
-              <DialogDescription>程式碼以原始文字儲存，不會壓縮換行或合併縮排。</DialogDescription>
+              <DialogTitle>{editingSnippet ? "編輯程式開發" : "新增程式開發"}</DialogTitle>
+              <DialogDescription>程式開發內容以原始文字儲存；保存時只移除尾端空白行，不會壓縮有效換行或合併縮排。</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -302,18 +305,30 @@ export function CodeStorageManager() {
 
               <div className="space-y-2">
                 <Label>用途說明</Label>
-                <RichTextEditor content={formData.description} onChange={(description) => setFormData((current) => ({ ...current, description }))} placeholder="說明這段程式碼解決什麼問題" className="min-h-[80px]" />
+                <RichTextEditor content={formData.description} onChange={(description) => setFormData((current) => ({ ...current, description }))} placeholder="說明這段程式開發內容解決什麼問題" className="min-h-[80px]" />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="code_content">程式碼內容 *</Label>
-                <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
-                  <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-2 text-xs text-[#9fc8dc]">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="code_content">程式開發內容 *</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-[#67e8f9]/50 bg-[#083344] text-[#cffafe] hover:bg-[#0e7490]"
+                    disabled={!formData.code_content.trim()}
+                    onClick={() => void handleCopy(normalizeCodeContent(formData.code_content))}
+                  >
+                    <Copy className="mr-2 h-4 w-4" />一鍵複製
+                  </Button>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-[#38d7ff]/55 bg-[#06111f] focus-within:border-[#67e8f9] focus-within:ring-2 focus-within:ring-[#42c9e8]/25">
+                  <div className="flex items-center justify-between border-b border-[#38d7ff]/45 bg-gradient-to-r from-[#0b3b55] to-[#10263a] px-4 py-2 text-xs text-[#cffafe]">
                     <span>原始格式編輯器 · 保留換行與縮排</span>
                     <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
                   </div>
                   <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
-                    <pre ref={codeLineNumbersRef} aria-hidden="true" className="m-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none">
+                    <pre ref={codeLineNumbersRef} aria-hidden="true" className="m-0 max-h-[336px] overflow-hidden border-r border-[#38d7ff]/35 bg-[#082033] px-3 py-3 text-right font-mono text-sm leading-6 text-[#7dd3fc] select-none">
                       {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
                     </pre>
                     <textarea
@@ -330,9 +345,9 @@ export function CodeStorageManager() {
                       spellCheck={false}
                       autoCapitalize="off"
                       autoCorrect="off"
-                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0]"
+                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#08111f] px-4 py-3 font-mono text-sm leading-6 text-[#effaff] caret-[#67e8f9] outline-none placeholder:text-[#668ba0]"
                       style={{ tabSize: 4 }}
-                      placeholder="貼上或輸入程式碼"
+                      placeholder="貼上或輸入程式開發內容"
                       required
                     />
                   </div>
@@ -341,11 +356,11 @@ export function CodeStorageManager() {
 
               <div className="space-y-2">
                 <Label>SOP 操作說明</Label>
-                <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px]" />
+                <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px] [&_hr]:my-5 [&_p]:my-2 [&_p:empty]:min-h-[1rem]" />
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button>
-                <Button type="submit"><Check className="mr-2 h-4 w-4" />{editingSnippet ? "儲存變更" : "建立程式碼"}</Button>
+                <Button type="submit"><Check className="mr-2 h-4 w-4" />{editingSnippet ? "儲存變更" : "建立程式開發"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -355,10 +370,10 @@ export function CodeStorageManager() {
       <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
         <div className="relative min-w-[240px] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" />
-          <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder={advancedSearch ? "搜尋名稱、說明、標籤或程式碼內容" : "搜尋名稱、說明或標籤"} />
+          <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder={advancedSearch ? "搜尋名稱、說明、標籤或程式開發內容" : "搜尋名稱、說明或標籤"} />
         </div>
         <Button type="button" size="sm" variant={advancedSearch ? "default" : "outline"} onClick={() => setAdvancedSearch((value) => !value)}>
-          <Filter className="mr-2 h-4 w-4" />搜尋程式內容
+          <Filter className="mr-2 h-4 w-4" />搜尋程式開發
         </Button>
         <Select value={filterLanguage} onValueChange={setFilterLanguage}>
           <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="語言" /></SelectTrigger>
@@ -397,7 +412,7 @@ export function CodeStorageManager() {
                 <div className="mt-1 line-clamp-2 text-xs leading-5 text-[#8fa9b9]">{snippet.category} · {snippet.tags.join(" · ") || "無標籤"}</div>
               </button>
             ))}
-            {!isLoading && filteredSnippets.length === 0 && <div className="px-4 py-12 text-center text-sm text-[#7896a8]">找不到符合條件的程式碼</div>}
+            {!isLoading && filteredSnippets.length === 0 && <div className="px-4 py-12 text-center text-sm text-[#7896a8]">找不到符合條件的程式開發內容</div>}
           </div>
         </aside>
 
@@ -406,7 +421,7 @@ export function CodeStorageManager() {
             <div className="flex h-full min-h-[520px] flex-col">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-5 py-4">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#62d8f3]">程式碼預覽</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#67e8f9]">程式開發預覽</div>
                   <h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{selectedSnippet.title}</h3>
                   <div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedSnippet.language}</Badge><Badge variant="outline">{selectedSnippet.category}</Badge>{selectedSnippet.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div>
                 </div>
@@ -419,14 +434,14 @@ export function CodeStorageManager() {
               <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">
                 {selectedSnippet.description && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.description) }} />}
                 <pre className="max-h-[520px] overflow-auto whitespace-pre rounded-xl border border-[#23445d] bg-[#020913] p-5 font-mono text-sm leading-6 text-[#d9edf7]"><code>{selectedSnippet.code_content}</code></pre>
-                {selectedSnippet.sop_content && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.sop_content) }} />}
+                {selectedSnippet.sop_content && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8] [&_hr]:my-5 [&_p]:my-2 [&_p:empty]:min-h-[1rem]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.sop_content) }} />}
               </div>
             </div>
           ) : (
             <div className="flex min-h-[520px] flex-col items-center justify-center px-8 text-center">
               <Code2 className="h-10 w-10 text-[#315975]" />
-              <div className="mt-4 text-base font-semibold text-[#dbeaf2]">尚未選取程式碼</div>
-              <p className="mt-1 text-sm text-[#7896a8]">選取程式碼後可直接預覽或編輯</p>
+              <div className="mt-4 text-base font-semibold text-[#dbeaf2]">尚未選取程式開發內容</div>
+              <p className="mt-1 text-sm text-[#7896a8]">選取程式開發內容後可直接預覽、複製或編輯</p>
             </div>
           )}
         </section>
