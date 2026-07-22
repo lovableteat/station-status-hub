@@ -7,6 +7,7 @@ import {
 import {
   Box,
   Cable,
+  ChevronDown,
   Eye,
   Grid2X2,
   PencilRuler,
@@ -29,10 +30,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import type {
   FacilityAisleKind,
+  FacilityAisleOrientation,
   FacilityPlan,
   RackModelDefinition,
   RackPlan,
@@ -60,7 +69,7 @@ interface DataCenter2DPlannerProps {
   onMovePowerFeed: (feedId: string, x: number, z: number) => void;
   onAddRack: () => void;
   onDeleteRack: (rackId: string) => void;
-  onAddAisle: (kind: FacilityAisleKind) => void;
+  onAddAisle: (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => void;
   onAddPowerFeed: () => void;
   onOpenModels: () => void;
   onOpenFacilitySettings: () => void;
@@ -214,12 +223,38 @@ export function DataCenter2DPlanner({
         <Button type="button" variant="outline" onClick={onOpenModels} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
           <Box className="mr-2 h-4 w-4" /> 選擇模型
         </Button>
-        <Button type="button" variant="outline" onClick={() => onAddAisle("cold")} disabled={!canEdit} className="h-9 border-sky-300/20 bg-sky-400/8 text-sky-50 hover:bg-sky-400/15">
-          <Snowflake className="mr-2 h-4 w-4" /> 冷通道
-        </Button>
-        <Button type="button" variant="outline" onClick={() => onAddAisle("hot")} disabled={!canEdit} className="h-9 border-orange-300/20 bg-orange-400/8 text-orange-50 hover:bg-orange-400/15">
-          <ThermometerSun className="mr-2 h-4 w-4" /> 熱通道
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" disabled={!canEdit} className="h-9 border-sky-300/20 bg-sky-400/8 text-sky-50 hover:bg-sky-400/15">
+              <Snowflake className="mr-2 h-4 w-4" /> 冷通道 <ChevronDown className="ml-2 h-3.5 w-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="border-sky-300/20 bg-[#081725] text-slate-100">
+            <DropdownMenuLabel className="text-[11px] text-sky-200">選擇冷通道方向</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => onAddAisle("cold", "horizontal")} className="cursor-pointer focus:bg-sky-400/15 focus:text-white">
+              橫向新增
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAddAisle("cold", "vertical")} className="cursor-pointer focus:bg-sky-400/15 focus:text-white">
+              直向新增
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" disabled={!canEdit} className="h-9 border-orange-300/20 bg-orange-400/8 text-orange-50 hover:bg-orange-400/15">
+              <ThermometerSun className="mr-2 h-4 w-4" /> 熱通道 <ChevronDown className="ml-2 h-3.5 w-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="border-orange-300/20 bg-[#081725] text-slate-100">
+            <DropdownMenuLabel className="text-[11px] text-orange-200">選擇熱通道方向</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => onAddAisle("hot", "horizontal")} className="cursor-pointer focus:bg-orange-400/15 focus:text-white">
+              橫向新增
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAddAisle("hot", "vertical")} className="cursor-pointer focus:bg-orange-400/15 focus:text-white">
+              直向新增
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button type="button" variant="outline" onClick={onAddPowerFeed} disabled={!canEdit} className="h-9 border-amber-300/20 bg-amber-400/8 text-amber-50 hover:bg-amber-400/15">
           <Cable className="mr-2 h-4 w-4" /> PDU
         </Button>

@@ -20,6 +20,8 @@ export type CameraPreset = "overview" | "top" | "front" | "focus" | "detail";
 
 export type FacilityAisleKind = "cold" | "hot";
 
+export type FacilityAisleOrientation = "horizontal" | "vertical";
+
 export type ModelUpAxis = "x" | "y" | "z";
 
 export type DataCenterAssetKind = "rack" | "l10";
