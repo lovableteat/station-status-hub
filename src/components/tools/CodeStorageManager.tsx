@@ -1,11 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
+import { Check, Code2, Copy, Download, Edit2, Filter, Loader2, Plus, Search, Trash2 } from "lucide-react";
 
-import { useState, useEffect, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +13,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -22,28 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Code, Plus, Edit2, Trash2, Copy, Download, Eye, ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface CodeSnippet {
   id: string;
@@ -58,62 +40,71 @@ interface CodeSnippet {
   updated_at: string;
 }
 
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  code_content: "",
+  language: "javascript",
+  category: "utility",
+  tags: "",
+  sop_content: "",
+};
+
+const LANGUAGE_OPTIONS = [
+  ["javascript", "JavaScript"],
+  ["typescript", "TypeScript"],
+  ["python", "Python"],
+  ["java", "Java"],
+  ["csharp", "C#"],
+  ["cpp", "C++"],
+  ["html", "HTML"],
+  ["css", "CSS"],
+  ["sql", "SQL"],
+  ["bash", "Bash"],
+  ["other", "其他"],
+] as const;
+
+const CATEGORY_OPTIONS = [
+  ["utility", "工具函數"],
+  ["component", "元件"],
+  ["algorithm", "演算法"],
+  ["api", "API"],
+  ["database", "資料庫"],
+  ["config", "設定"],
+  ["template", "範本"],
+  ["other", "其他"],
+] as const;
+
 export function CodeStorageManager() {
   const [codeSnippets, setCodeSnippets] = useState<CodeSnippet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<CodeSnippet | null>(null);
   const [viewingSnippet, setViewingSnippet] = useState<CodeSnippet | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterLanguage, setFilterLanguage] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState(false);
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const codeEditorRef = useRef<HTMLTextAreaElement>(null);
   const codeLineNumbersRef = useRef<HTMLPreElement>(null);
   const { toast } = useToast();
-
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    code_content: "",
-    language: "javascript",
-    category: "utility",
-    tags: "",
-    sop_content: ""
-  });
 
   const codeLineCount = formData.code_content.length === 0
     ? 1
     : formData.code_content.split(/\r\n|\r|\n/).length;
 
-  const handleCodeEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Tab") return;
-
-    event.preventDefault();
-    const editor = event.currentTarget;
-    const { selectionStart, selectionEnd } = editor;
-    const nextCode = `${formData.code_content.slice(0, selectionStart)}  ${formData.code_content.slice(selectionEnd)}`;
-
-    setFormData({ ...formData, code_content: nextCode });
-    requestAnimationFrame(() => {
-      codeEditorRef.current?.setSelectionRange(selectionStart + 2, selectionStart + 2);
-    });
-  };
-
-  const loadCodeSnippets = async () => {
+  const loadCodeSnippets = useCallback(async () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('code_snippets')
-        .select('*')
-        .order('updated_at', { ascending: false });
+        .from("code_snippets")
+        .select("*")
+        .order("updated_at", { ascending: false });
 
       if (error) throw error;
-      
-      // Type the data properly
-      const typedData: CodeSnippet[] = (data || []).map(item => ({
+
+      const nextSnippets: CodeSnippet[] = (data || []).map((item) => ({
         id: item.id,
         title: item.title,
         description: item.description || undefined,
@@ -123,138 +114,102 @@ export function CodeStorageManager() {
         tags: item.tags || [],
         sop_content: item.sop_content || undefined,
         created_at: item.created_at,
-        updated_at: item.updated_at
+        updated_at: item.updated_at,
       }));
-      
-      setCodeSnippets(typedData);
+
+      setCodeSnippets(nextSnippets);
+      setViewingSnippet((current) =>
+        nextSnippets.find((snippet) => snippet.id === current?.id) || nextSnippets[0] || null,
+      );
     } catch (error) {
-      console.error('Error loading code snippets:', error);
-      toast({
-        title: "載入失敗",
-        description: "無法載入程式碼片段",
-        variant: "destructive"
-      });
+      console.error("Error loading code snippets:", error);
+      toast({ title: "載入失敗", description: "無法載入程式碼片段", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    loadCodeSnippets();
-  }, []);
+    void loadCodeSnippets();
+  }, [loadCodeSnippets]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const resetForm = () => {
+    setFormData(EMPTY_FORM);
+    setEditingSnippet(null);
+  };
+
+  const openEditor = (snippet?: CodeSnippet) => {
+    if (snippet) {
+      setEditingSnippet(snippet);
+      setFormData({
+        title: snippet.title,
+        description: snippet.description || "",
+        code_content: snippet.code_content,
+        language: snippet.language,
+        category: snippet.category,
+        tags: snippet.tags.join(", "),
+        sop_content: snippet.sop_content || "",
+      });
+    } else {
+      resetForm();
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     try {
       const snippetData = {
-        title: formData.title,
+        title: formData.title.trim(),
         description: formData.description || null,
         code_content: formData.code_content,
         language: formData.language,
         category: formData.category,
-        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        tags: formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         sop_content: formData.sop_content || null,
       };
 
       if (editingSnippet) {
         const { error } = await supabase
-          .from('code_snippets')
+          .from("code_snippets")
           .update(snippetData)
-          .eq('id', editingSnippet.id);
-
+          .eq("id", editingSnippet.id);
         if (error) throw error;
-        
-        toast({
-          title: "更新成功",
-          description: "程式碼片段已更新",
-        });
+        toast({ title: "更新成功", description: "程式碼片段已更新" });
       } else {
-        const { error } = await supabase
-          .from('code_snippets')
-          .insert([snippetData]);
-
+        const { error } = await supabase.from("code_snippets").insert([snippetData]);
         if (error) throw error;
-        
-        toast({
-          title: "新增成功",
-          description: "程式碼片段已新增",
-        });
+        toast({ title: "新增成功", description: "程式碼片段已新增" });
       }
 
-      resetForm();
       setIsDialogOpen(false);
-      loadCodeSnippets();
+      resetForm();
+      await loadCodeSnippets();
     } catch (error) {
-      console.error('Error saving code snippet:', error);
-      toast({
-        title: "儲存失敗",
-        description: "無法儲存程式碼片段",
-        variant: "destructive"
-      });
+      console.error("Error saving code snippet:", error);
+      toast({ title: "儲存失敗", description: "無法儲存程式碼片段", variant: "destructive" });
     }
   };
 
-  const handleEdit = (snippet: CodeSnippet) => {
-    setEditingSnippet(snippet);
-    setFormData({
-      title: snippet.title,
-      description: snippet.description || "",
-      code_content: snippet.code_content,
-      language: snippet.language,
-      category: snippet.category,
-      tags: snippet.tags.join(', '),
-      sop_content: snippet.sop_content || ""
-    });
-    setIsDialogOpen(true);
-  };
-
   const handleDelete = async (id: string) => {
+    if (!window.confirm("確認要刪除這個程式碼片段嗎？此操作無法復原。")) return;
     try {
-      // 顯示確認對話框
-      const confirmed = window.confirm('確認要刪除這個程式碼片段嗎？此操作無法復原。');
-      if (!confirmed) return;
-
-      const { error } = await supabase
-        .from('code_snippets')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error('刪除程式碼片段錯誤:', error);
-        throw error;
-      }
-
-      toast({
-        title: "刪除成功",
-        description: "程式碼片段已成功刪除",
-      });
-
-      // 重新載入列表
+      const { error } = await supabase.from("code_snippets").delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "刪除成功", description: "程式碼片段已刪除" });
       await loadCodeSnippets();
     } catch (error) {
-      console.error('Error deleting code snippet:', error);
-      toast({
-        title: "刪除失敗",
-        description: "無法刪除程式碼片段，請稍後再試",
-        variant: "destructive"
-      });
+      console.error("Error deleting code snippet:", error);
+      toast({ title: "刪除失敗", description: "無法刪除程式碼片段", variant: "destructive" });
     }
   };
 
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      toast({
-        title: "複製成功",
-        description: "程式碼已複製到剪貼簿",
-      });
-    } catch (error) {
-      toast({
-        title: "複製失敗",
-        description: "無法複製程式碼",
-        variant: "destructive"
-      });
+      toast({ title: "已複製", description: "程式碼已複製到剪貼簿" });
+    } catch {
+      toast({ title: "複製失敗", description: "無法存取剪貼簿", variant: "destructive" });
     }
   };
 
@@ -273,614 +228,234 @@ export function CodeStorageManager() {
     };
     const extension = extensionByLanguage[snippet.language] || "txt";
     const safeTitle = snippet.title.trim().replace(/[\\/:*?"<>|]+/g, "-") || "source-code";
-    const blob = new Blob([snippet.code_content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([snippet.code_content], { type: "text/plain;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${safeTitle}.${extension}`;
-    document.body.appendChild(anchor);
     anchor.click();
-    anchor.remove();
     URL.revokeObjectURL(url);
     toast({ title: "下載程式檔", description: `${anchor.download} 已準備完成` });
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: "",
-      description: "",
-      code_content: "",
-      language: "javascript",
-      category: "utility",
-      tags: "",
-      sop_content: ""
-    });
-    setEditingSnippet(null);
+  const handleCodeEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    const editor = event.currentTarget;
+    const { selectionStart, selectionEnd } = editor;
+    const nextCode = `${formData.code_content.slice(0, selectionStart)}  ${formData.code_content.slice(selectionEnd)}`;
+    setFormData((current) => ({ ...current, code_content: nextCode }));
+    requestAnimationFrame(() => codeEditorRef.current?.setSelectionRange(selectionStart + 2, selectionStart + 2));
   };
 
-  // 切換行展開狀態
-
-  const toggleRowExpansion = (id: string) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedRows(newExpanded);
-  };
-
-  const filteredSnippets = codeSnippets.filter(snippet => {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredSnippets = codeSnippets.filter((snippet) => {
     const matchesCategory = filterCategory === "all" || snippet.category === filterCategory;
     const matchesLanguage = filterLanguage === "all" || snippet.language === filterLanguage;
-    
-    if (advancedSearch && searchTerm) {
-      // 進階搜尋：支援程式碼內容搜尋
-      const matchesSearch = searchTerm === "" || 
-        snippet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snippet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snippet.code_content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snippet.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesCategory && matchesLanguage && matchesSearch;
-    } else {
-      // 一般搜尋：不搜尋程式碼內容
-      const matchesSearch = searchTerm === "" || 
-        snippet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snippet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snippet.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesCategory && matchesLanguage && matchesSearch;
-    }
+    const searchable = [
+      snippet.title,
+      snippet.description || "",
+      snippet.tags.join(" "),
+      advancedSearch ? snippet.code_content : "",
+    ].join(" ").toLowerCase();
+    return matchesCategory && matchesLanguage && (!normalizedSearch || searchable.includes(normalizedSearch));
   });
 
-  const categories = [...new Set(codeSnippets.map(s => s.category))];
-  const languages = [...new Set(codeSnippets.map(s => s.language))];
+  const categories = [...new Set(codeSnippets.map((snippet) => snippet.category))];
+  const languages = [...new Set(codeSnippets.map((snippet) => snippet.language))];
+  const selectedSnippet = filteredSnippets.find((snippet) => snippet.id === viewingSnippet?.id)
+    || filteredSnippets[0]
+    || null;
 
   return (
-    <TooltipProvider>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Code className="h-5 w-5" />
-            <h2 className="text-xl font-semibold">程式碼片段管理</h2>
-            <Badge variant="secondary" className="ml-2">
-              {filteredSnippets.length} 個片段
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-base font-semibold text-[#f3f8fc]">
+            <Code2 className="h-4 w-4 text-[#62d8f3]" />程式碼儲存庫
+            <Badge variant="outline" className="border-[#2a526f] bg-[#10263a] text-[#bfeaf5]">
+              {filteredSnippets.length}
             </Badge>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="h-4 w-4 mr-2" />
-                新增程式碼
-              </Button>
-            </DialogTrigger>
-          <DialogContent 
-            className="max-w-4xl max-h-[80vh] overflow-y-auto" 
-            onPointerDownOutside={(e) => {
-              // 檢查點擊的元素是否為文件上傳相關
-              const target = e.target as HTMLElement;
-              if (target?.closest('input[type="file"]') || target?.closest('.rich-text-editor')) {
-                e.preventDefault();
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              // 檢查是否在編輯器中，如果是則不關閉對話框
-              const target = document.activeElement as HTMLElement;
-              if (target?.closest('.ProseMirror') || target?.closest('.rich-text-editor')) {
-                e.preventDefault();
-              }
-            }}
-            onInteractOutside={(e) => {
-              // 檢查交互的元素是否為編輯器相關
-              const target = e.target as HTMLElement;
-              if (target?.closest('.rich-text-editor') || target?.closest('input[type="file"]') || target?.closest('.lightbox')) {
-                e.preventDefault();
-              }
+          <p className="mt-1 text-xs text-[#91aabd]">選取程式碼後可直接預覽或編輯，原始換行與縮排完整保留。</p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) resetForm();
+        }}>
+          <DialogTrigger asChild>
+            <Button size="sm" onClick={() => openEditor()}>
+              <Plus className="mr-2 h-4 w-4" />新增程式碼
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            className="max-h-[88vh] max-w-5xl overflow-y-auto border-[#2a526f] bg-[#071522]"
+            onPointerDownOutside={(event) => {
+              const target = event.target as HTMLElement;
+              if (target?.closest(".rich-text-editor") || target?.closest('input[type="file"]')) event.preventDefault();
             }}
           >
             <DialogHeader>
-              <DialogTitle>
-                {editingSnippet ? "編輯程式碼片段" : "新增程式碼片段"}
-              </DialogTitle>
-              <DialogDescription>
-                儲存和管理你的程式碼片段，支援多種程式語言和分類。
-              </DialogDescription>
+              <DialogTitle>{editingSnippet ? "編輯程式碼" : "新增程式碼"}</DialogTitle>
+              <DialogDescription>程式碼以原始文字儲存，不會壓縮換行或合併縮排。</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="title">標題 *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    required
-                  />
+                  <Label htmlFor="code-title">名稱 *</Label>
+                  <Input id="code-title" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="language">程式語言</Label>
-                  <Select value={formData.language} onValueChange={(value) => setFormData({...formData, language: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="javascript">JavaScript</SelectItem>
-                      <SelectItem value="typescript">TypeScript</SelectItem>
-                      <SelectItem value="python">Python</SelectItem>
-                      <SelectItem value="java">Java</SelectItem>
-                      <SelectItem value="csharp">C#</SelectItem>
-                      <SelectItem value="cpp">C++</SelectItem>
-                      <SelectItem value="html">HTML</SelectItem>
-                      <SelectItem value="css">CSS</SelectItem>
-                      <SelectItem value="sql">SQL</SelectItem>
-                      <SelectItem value="bash">Bash</SelectItem>
-                      <SelectItem value="other">其他</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">分類</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="utility">工具函數</SelectItem>
-                      <SelectItem value="component">元件</SelectItem>
-                      <SelectItem value="algorithm">演算法</SelectItem>
-                      <SelectItem value="api">API</SelectItem>
-                      <SelectItem value="database">資料庫</SelectItem>
-                      <SelectItem value="config">設定</SelectItem>
-                      <SelectItem value="template">範本</SelectItem>
-                      <SelectItem value="other">其他</SelectItem>
-                    </SelectContent>
+                  <Label htmlFor="code-language">程式語言</Label>
+                  <Select value={formData.language} onValueChange={(value) => setFormData((current) => ({ ...current, language: value }))}>
+                    <SelectTrigger id="code-language"><SelectValue /></SelectTrigger>
+                    <SelectContent>{LANGUAGE_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
-                  <Input
-                    id="tags"
-                    value={formData.tags}
-                    onChange={(e) => setFormData({...formData, tags: e.target.value})}
-                    placeholder="react, hook, utility"
-                  />
+                  <Label htmlFor="code-category">分類</Label>
+                  <Select value={formData.category} onValueChange={(value) => setFormData((current) => ({ ...current, category: value }))}>
+                    <SelectTrigger id="code-category"><SelectValue /></SelectTrigger>
+                    <SelectContent>{CATEGORY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="code-tags">標籤</Label>
+                  <Input id="code-tags" value={formData.tags} onChange={(event) => setFormData((current) => ({ ...current, tags: event.target.value }))} placeholder="以逗號分隔" />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
-                <Label htmlFor="description">描述</Label>
-                <RichTextEditor
-                  content={formData.description}
-                  onChange={(content) => setFormData({...formData, description: content})}
-                  placeholder="請輸入程式碼片段的描述..."
-                  className="min-h-[80px]"
-                />
+                <Label>用途說明</Label>
+                <RichTextEditor content={formData.description} onChange={(description) => setFormData((current) => ({ ...current, description }))} placeholder="說明這段程式碼解決什麼問題" className="min-h-[80px]" />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="code_content">程式碼內容 *</Label>
-                <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] shadow-inner shadow-black/20 focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
+                <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
                   <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-2 text-xs text-[#9fc8dc]">
                     <span>原始格式編輯器 · 保留換行與縮排</span>
                     <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
                   </div>
                   <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
-                    <pre
-                      ref={codeLineNumbersRef}
-                      aria-hidden="true"
-                      className="m-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none"
-                    >
+                    <pre ref={codeLineNumbersRef} aria-hidden="true" className="m-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none">
                       {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
                     </pre>
                     <textarea
                       ref={codeEditorRef}
                       id="code_content"
                       value={formData.code_content}
-                      onChange={(e) => setFormData({ ...formData, code_content: e.target.value })}
+                      onChange={(event) => setFormData((current) => ({ ...current, code_content: event.target.value }))}
                       onKeyDown={handleCodeEditorKeyDown}
                       onScroll={(event) => {
-                        if (codeLineNumbersRef.current) {
-                          codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
-                        }
+                        if (codeLineNumbersRef.current) codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
                       }}
                       rows={14}
                       wrap="off"
                       spellCheck={false}
                       autoCapitalize="off"
                       autoCorrect="off"
-                      aria-describedby="code_content_help"
-                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0]"
                       style={{ tabSize: 4 }}
-                      placeholder="貼上或輸入程式碼，原始換行、空白與縮排都會保留。"
+                      placeholder="貼上或輸入程式碼"
                       required
                     />
                   </div>
                 </div>
-                <p id="code_content_help" className="text-xs text-muted-foreground">
-                  長行不會自動折行，可左右捲動查看；按 Tab 可插入縮排。
-                </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sop_content">SOP 操作說明</Label>
-                <RichTextEditor
-                  content={formData.sop_content}
-                  onChange={(content) => setFormData({...formData, sop_content: content})}
-                  placeholder="請輸入詳細的SOP操作說明，包含：&#10;1. 使用前準備&#10;2. 操作步驟詳解&#10;3. 注意事項&#10;4. 常見問題處理&#10;5. 相關資源連結"
-                  className="min-h-[200px]"
-                />
-                <div className="text-xs text-muted-foreground mt-1">
-                  <strong>建議包含以下內容：</strong>
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    <li>使用前的環境準備與相依性檢查</li>
-                    <li>詳細的操作步驟說明（含截圖或範例）</li>
-                    <li>重要的注意事項與限制條件</li>
-                    <li>常見錯誤的排除方法</li>
-                    <li>相關文件或資源的連結</li>
-                  </ul>
-                </div>
+                <Label>SOP 操作說明</Label>
+                <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px]" />
               </div>
-              
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button type="submit">
-                  {editingSnippet ? "更新" : "新增"}
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button>
+                <Button type="submit"><Check className="mr-2 h-4 w-4" />{editingSnippet ? "儲存變更" : "建立程式碼"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-        {/* 進階搜尋和篩選器 */}
-        <div className="space-y-4">
-          <div className="flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2 flex-1 min-w-[300px]">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={advancedSearch ? "搜尋標題、描述、標籤或程式碼內容..." : "搜尋標題、描述、標籤..."}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value.trim().slice(0, 100))}
-                className="flex-1"
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={advancedSearch ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAdvancedSearch(!advancedSearch)}
-                  >
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {advancedSearch ? "關閉進階搜尋" : "開啟進階搜尋 (包含程式碼內容)"}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="分類" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有分類</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Select value={filterLanguage} onValueChange={setFilterLanguage}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="語言" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有語言</SelectItem>
-                {languages.map(language => (
-                  <SelectItem key={language} value={language}>{language}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" />
+          <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder={advancedSearch ? "搜尋名稱、說明、標籤或程式碼內容" : "搜尋名稱、說明或標籤"} />
+        </div>
+        <Button type="button" size="sm" variant={advancedSearch ? "default" : "outline"} onClick={() => setAdvancedSearch((value) => !value)}>
+          <Filter className="mr-2 h-4 w-4" />搜尋程式內容
+        </Button>
+        <Select value={filterLanguage} onValueChange={setFilterLanguage}>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="語言" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">所有語言</SelectItem>{languages.map((language) => <SelectItem key={language} value={language}>{language}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="分類" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+
+      <div data-testid="code-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">
+        <aside className="border-b border-[#2a526f] bg-[#081827] lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between border-b border-[#23445d] px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb0c2]">程式清單</span>
+            <span className="font-mono text-xs text-[#62d8f3]">{filteredSnippets.length}</span>
           </div>
-          
-          {searchTerm && (
-            <div className="text-sm text-muted-foreground">
-              找到 {filteredSnippets.length} 個匹配的程式碼片段
-              {advancedSearch && " (包含程式碼內容搜尋)"}
+          <div className="max-h-[560px] space-y-1 overflow-y-auto p-2">
+            {isLoading && <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#91aabd]"><Loader2 className="h-4 w-4 animate-spin" />載入中</div>}
+            {!isLoading && filteredSnippets.map((snippet) => (
+              <button
+                key={snippet.id}
+                type="button"
+                onClick={() => setViewingSnippet(snippet)}
+                className={cn(
+                  "w-full rounded-lg border px-3 py-3 text-left transition-colors",
+                  selectedSnippet?.id === snippet.id
+                    ? "border-[#42c9e8] bg-[#123149]"
+                    : "border-transparent bg-transparent hover:border-[#2a526f] hover:bg-[#0b1f31]",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm font-semibold text-[#eef8fc]">{snippet.title}</span>
+                  <Badge variant="outline" className="shrink-0 border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{snippet.language}</Badge>
+                </div>
+                <div className="mt-1 line-clamp-2 text-xs leading-5 text-[#8fa9b9]">{snippet.category} · {snippet.tags.join(" · ") || "無標籤"}</div>
+              </button>
+            ))}
+            {!isLoading && filteredSnippets.length === 0 && <div className="px-4 py-12 text-center text-sm text-[#7896a8]">找不到符合條件的程式碼</div>}
+          </div>
+        </aside>
+
+        <section className="min-w-0 bg-[#06111f]">
+          {selectedSnippet ? (
+            <div className="flex h-full min-h-[520px] flex-col">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-5 py-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#62d8f3]">程式碼預覽</div>
+                  <h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{selectedSnippet.title}</h3>
+                  <div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedSnippet.language}</Badge><Badge variant="outline">{selectedSnippet.category}</Badge>{selectedSnippet.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => void handleCopy(selectedSnippet.code_content)}><Copy className="mr-2 h-4 w-4" />複製</Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadCodeFile(selectedSnippet)}><Download className="mr-2 h-4 w-4" />下載</Button>
+                  <Button size="sm" onClick={() => openEditor(selectedSnippet)}><Edit2 className="mr-2 h-4 w-4" />編輯</Button>
+                  <Button size="sm" variant="destructive" onClick={() => void handleDelete(selectedSnippet.id)}><Trash2 className="mr-2 h-4 w-4" />刪除</Button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">
+                {selectedSnippet.description && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.description) }} />}
+                <pre className="max-h-[520px] overflow-auto whitespace-pre rounded-xl border border-[#23445d] bg-[#020913] p-5 font-mono text-sm leading-6 text-[#d9edf7]"><code>{selectedSnippet.code_content}</code></pre>
+                {selectedSnippet.sop_content && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.sop_content) }} />}
+              </div>
+            </div>
+          ) : (
+            <div className="flex min-h-[520px] flex-col items-center justify-center px-8 text-center">
+              <Code2 className="h-10 w-10 text-[#315975]" />
+              <div className="mt-4 text-base font-semibold text-[#dbeaf2]">尚未選取程式碼</div>
+              <p className="mt-1 text-sm text-[#7896a8]">選取程式碼後可直接預覽或編輯</p>
             </div>
           )}
-        </div>
-
-        {/* 表格式程式碼片段列表 */}
-        {isLoading ? (
-          <div className="text-center py-8">載入中...</div>
-        ) : filteredSnippets.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchTerm ? "沒有找到匹配的程式碼片段" : "還沒有程式碼片段，點擊上方按鈕新增第一個"}
-          </div>
-        ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead className="min-w-[200px]">標題</TableHead>
-                  <TableHead className="w-[100px]">語言</TableHead>
-                  <TableHead className="w-[120px]">分類</TableHead>
-                  <TableHead className="w-[200px]">標籤</TableHead>
-                  <TableHead className="w-[120px]">更新時間</TableHead>
-                  <TableHead className="w-[160px] text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSnippets.map((snippet) => (
-                  <>
-                    <TableRow key={snippet.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => toggleRowExpansion(snippet.id)}
-                        >
-                          {expandedRows.has(snippet.id) ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <div>
-                          <div className="font-semibold">{snippet.title}</div>
-                          {snippet.description && (
-                            <div className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                              {snippet.description}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {snippet.language}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {snippet.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {snippet.tags.slice(0, 3).map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              #{tag}
-                            </Badge>
-                          ))}
-                          {snippet.tags.length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              +{snippet.tags.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(snippet.updated_at).toLocaleDateString('zh-TW', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1 justify-end">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => {
-                                  setViewingSnippet(snippet);
-                                  setIsViewDialogOpen(true);
-                                }}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>檢視程式碼</TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => downloadCodeFile(snippet)}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>下載程式檔</TooltipContent>
-                          </Tooltip>
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => handleCopy(snippet.code_content)}
-                              >
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>複製程式碼</TooltipContent>
-                          </Tooltip>
-                          
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => handleEdit(snippet)}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>編輯</TooltipContent>
-                          </Tooltip>
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-destructive"
-                                onClick={() => handleDelete(snippet.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>刪除</TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    
-                    {/* 展開的程式碼內容 */}
-                    {expandedRows.has(snippet.id) && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="bg-muted/30 p-0">
-                          <Collapsible open={true}>
-                            <CollapsibleContent>
-                              <div className="p-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <h4 className="font-medium text-sm">程式碼內容</h4>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleCopy(snippet.code_content)}
-                                    >
-                                      <Copy className="h-4 w-4 mr-1" />
-                                      快速複製
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => downloadCodeFile(snippet)}
-                                    >
-                                      <Download className="mr-1 h-4 w-4" />
-                                      下載程式檔
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setViewingSnippet(snippet);
-                                        setIsViewDialogOpen(true);
-                                      }}
-                                    >
-                                      <Eye className="h-4 w-4 mr-1" />
-                                      全螢幕檢視
-                                    </Button>
-                                  </div>
-                                </div>
-                                <div className="relative">
-                                  <pre className="max-h-80 overflow-auto whitespace-pre rounded-lg border bg-background p-3 font-mono text-sm leading-6">
-                                    <code className="language-{snippet.language}">
-                                      {snippet.code_content}
-                                    </code>
-                                  </pre>
-                                </div>
-                                {snippet.tags.length > 3 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    <span className="text-sm text-muted-foreground mr-2">所有標籤:</span>
-                                    {snippet.tags.map((tag, index) => (
-                                      <Badge key={index} variant="secondary" className="text-xs">
-                                        #{tag}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        {/* 檢視程式碼對話框 */}
-        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Code className="h-5 w-5" />
-                {viewingSnippet?.title}
-              </DialogTitle>
-              {viewingSnippet?.description && (
-                <DialogDescription>{viewingSnippet.description}</DialogDescription>
-              )}
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex gap-2 items-center flex-wrap">
-                <Badge>{viewingSnippet?.language}</Badge>
-                <Badge variant="outline">{viewingSnippet?.category}</Badge>
-                {viewingSnippet?.tags.map((tag, index) => (
-                  <Badge key={index} variant="secondary">#{tag}</Badge>
-                ))}
-                <div className="ml-auto text-sm text-muted-foreground">
-                  更新於 {viewingSnippet && new Date(viewingSnippet.updated_at).toLocaleString('zh-TW')}
-                </div>
-              </div>
-              <div className="relative">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">程式碼內容</span>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => viewingSnippet && handleCopy(viewingSnippet.code_content)}
-                    >
-                      <Copy className="h-4 w-4 mr-1" />
-                      複製程式碼
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => viewingSnippet && downloadCodeFile(viewingSnippet)}
-                    >
-                      <Download className="mr-1 h-4 w-4" />
-                      下載程式檔
-                    </Button>
-                  </div>
-                </div>
-                <pre className="max-h-[60vh] overflow-auto whitespace-pre rounded-lg border bg-muted p-4 font-mono text-sm leading-6">
-                  <code className="language-{viewingSnippet?.language}">
-                    {viewingSnippet?.code_content}
-                  </code>
-                </pre>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
+        </section>
       </div>
-    </TooltipProvider>
+    </div>
   );
 }
