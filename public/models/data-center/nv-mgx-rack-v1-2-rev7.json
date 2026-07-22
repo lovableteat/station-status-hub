@@ -1,0 +1,73 @@
+﻿{
+    "sourceFileName":  "000_nv_mgx_rack_v1-2_REV_7.stp",
+    "sourceBytes":  59733625,
+    "outputFileName":  "nv-mgx-rack-v1-2-rev7.glb",
+    "outputBytes":  3751416,
+    "rebuiltAt":  "2026-07-20T21:04:47.0237468Z",
+    "linearDeflection":  2.5,
+    "sourceUpAxis":  "y",
+    "upAxis":  "y",
+    "boundsUnit":  "mm",
+    "minimum":  [
+                    -354.4849413917955,
+                    -1202.2522481334277,
+                    -536.963128958744
+                ],
+    "maximum":  [
+                    354.4849413917442,
+                    1108.0849413917465,
+                    536.1849413917441
+                ],
+    "spans":  {
+                  "x":  709.0,
+                  "y":  2310.3,
+                  "z":  1073.1
+              },
+    "dimensions":  {
+                       "widthMm":  709.0,
+                       "depthMm":  1073.1,
+                       "heightMm":  2310.3
+                   },
+    "assembly":  {
+                     "kind":  "rack",
+                     "role":  "gb300-l11-rack-cabinet",
+                     "rackUnits":  null,
+                     "note":  "Rack cabinet preserving STEP assembly names, rail geometry, and source colors."
+                 },
+    "assemblyScope":  "xcaf-solid-color-preserving",
+    "solidCount":  1549,
+    "namedSolidCount":  1549,
+    "styleCount":  58605,
+    "coloredSolidCount":  1180,
+    "coloredFaceCount":  0,
+    "nodeCount":  1549,
+    "meshCount":  77,
+    "primitiveCount":  77,
+    "materialCount":  13,
+    "coloredMaterialCount":  13,
+    "saturatedMaterialCount":  11,
+    "topCoverNode":  null,
+    "requiredNodePattern":  "",
+    "requiredNode":  null,
+    "webOptimization":  {
+                            "tool":  "gltfpack 1.2",
+                            "triangleCount":  165176,
+                            "vertexCount":  155621,
+                            "simplificationRatio":  0.3,
+                            "maximumError":  0.01,
+                            "preservesNamedNodes":  true,
+                            "preservesNamedMaterials":  true,
+                            "sha256":  "043893B8FDED972580219F0EE9DD7515329CBF9A2E6FD82346F655D7727E135C"
+                        },
+    "mobileWebOptimization":  {
+                                  "outputFileName":  "nv-mgx-rack-v1-2-rev7.mobile.glb",
+                                  "outputBytes":  829820,
+                                  "triangleCount":  32652,
+                                  "vertexCount":  22866,
+                                  "simplificationRatio":  0.06,
+                                  "maximumError":  0.04,
+                                  "preservesNamedNodes":  true,
+                                  "preservesNamedMaterials":  true,
+                                  "sha256":  "3DC82EAF80AEA2FE59C34FC411D45900DE75BD803A10972763A3E6FBDA501506"
+                              }
+}

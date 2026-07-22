@@ -38,12 +38,16 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
   assert.match(workspaceSource, /onClick=\{\(\) => requestCamera\("focus"\)\}/);
 });
 
-test("the overview preserves each assigned rack model while reducing distant detail", () => {
+test("the overview preserves each assigned rack model and geometry at every distance", () => {
   assert.match(plannerSource, /definition\.source === "step" && definition\.stepModel/);
-  assert.match(plannerSource, /<GlbRackModel definition=\{definition\} lowDetail=\{lowDetail \|\| !selected\}/);
+  assert.match(
+    plannerSource,
+    /<GlbRackModel[\s\S]*?definition=\{definition\}[\s\S]*?lowDetail=\{lowDetail\}/,
+  );
   assert.match(plannerSource, /<ProceduralRackModel definition=\{definition\}/);
   assert.match(plannerSource, /detailed=\{selected\}/);
   assert.doesNotMatch(plannerSource, /const showDetailedModel/);
+  assert.doesNotMatch(plannerSource, /lowDetail \|\| !selected/);
   assert.match(plannerSource, /frameloop="demand"/);
 });
 

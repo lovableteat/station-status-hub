@@ -44,7 +44,7 @@ test("the supplied VR outlook STEP is labeled and calibrated as VR200 L10", () =
   assert.match(vrUnitDefinition, /widthMm:\s*497\.2/);
   assert.match(vrUnitDefinition, /depthMm:\s*899\.1/);
   assert.match(vrUnitDefinition, /heightMm:\s*44/);
-  assert.match(vrUnitDefinition, /upAxis:\s*"z"/);
+  assert.match(vrUnitDefinition, /upAxis:\s*"y"/);
   assert.match(vrUnitDefinition, /rackUnits:\s*1/);
   assert.match(vrUnitDefinition, /compatibleRackModelIds:\s*\[\]/);
   assert.match(vrUnitDefinition, /尚未取得 VR200 L11/);
@@ -58,10 +58,10 @@ test("the supplied Carlo-Next STEP is labeled and calibrated as GB300 L10", () =
   assert.ok(carloDefinition, "GB300 L10 catalog definition is missing");
   assert.match(carloDefinition, /name:\s*"GB300 L10 1U 機台"/);
   assert.match(carloDefinition, /manufacturer:\s*"Internal \/ GB300"/);
-  assert.match(carloDefinition, /widthMm:\s*481\.5/);
-  assert.match(carloDefinition, /depthMm:\s*889\.6/);
-  assert.match(carloDefinition, /heightMm:\s*44\.5/);
-  assert.match(carloDefinition, /upAxis:\s*"z"/);
+  assert.match(carloDefinition, /widthMm:\s*482\.1/);
+  assert.match(carloDefinition, /depthMm:\s*912\.3/);
+  assert.match(carloDefinition, /heightMm:\s*43\.8/);
+  assert.match(carloDefinition, /upAxis:\s*"y"/);
   assert.match(carloDefinition, /rackUnits:\s*1/);
   assert.match(carloDefinition, /compatibleRackModelIds:\s*\["nv-mgx-rack-v1-2-rev7"\]/);
 });
@@ -87,17 +87,28 @@ test("the scene keeps rack envelopes outside and only mounts 1U machines inside"
   assert.match(workspaceSource, /L10 1U/);
 });
 
-test("mounted L10 machines use fast scene geometry and close every exposed proxy cover", () => {
-  assert.match(plannerSource, /const sceneAssetUrl = l10Definition\.mobileAssetUrl \?\? l10Definition\.assetUrl;/);
+test("rack and L10 geometry stay visually stable when selection or camera distance changes", () => {
+  assert.match(
+    plannerSource,
+    /const sceneAssetUrl =\s+lowDetail && l10Definition\.mobileAssetUrl\s+\? l10Definition\.mobileAssetUrl\s+: l10Definition\.assetUrl;/,
+  );
   assert.match(plannerSource, /<InstancedDetailedL10Model/);
-  assert.match(plannerSource, /splitRackUnitMountPositionsByCoverVisibility/);
-  assert.match(plannerSource, /l10-proxy-covers/);
-  assert.match(plannerSource, /ProceduralL10CoverInstances/);
+  assert.doesNotMatch(plannerSource, /visible=\{interactionPreview\}/);
+  assert.doesNotMatch(plannerSource, /l10-interaction-preview/);
+  assert.doesNotMatch(plannerSource, /l10-proxy-covers/);
   assert.doesNotMatch(plannerSource, /assetUrl=\{l10Definition\.assetUrl\}/);
   assert.match(plannerSource, /material\.side = THREE\.DoubleSide/);
   assert.doesNotMatch(plannerSource, /index > 0/);
   assert.match(plannerSource, /detailed=\{selected\}/);
-  assert.match(plannerSource, /lowDetail=\{lowDetail \|\| !selected\}/);
+  assert.match(plannerSource, /lowDetail=\{lowDetail\}/);
+  assert.match(plannerSource, /lowDetail && l10Definition\.mobileAssetUrl/);
+});
+
+test("an empty rack exposes an explicit L10 installation action", () => {
+  assert.match(
+    workspaceSource,
+    /rack\.l10Count === 0 \? "選擇並安裝 L10" : "更換 L10 模型"/,
+  );
 });
 
 test("mounted L10 machines keep one uniform scale inside the L11 cabinet", () => {
@@ -166,10 +177,8 @@ for (const assetName of [
     assert.equal(metadata.mobileWebOptimization.outputFileName, `${assetName}.mobile.glb`);
     assert.equal(metadata.mobileWebOptimization.outputBytes, mobileStat.size);
     assert.ok(metadata.mobileWebOptimization.triangleCount <= 350_000);
-    assert.equal(
-      metadata.mobileWebOptimization.coverStrategy,
-      "calibrated-proxy-overlay",
-    );
+    assert.equal(metadata.mobileWebOptimization.preservesNamedNodes, true);
+    assert.equal(metadata.mobileWebOptimization.preservesNamedMaterials, true);
     assert.ok(metadata.dimensions.widthMm > 0);
     assert.ok(metadata.dimensions.depthMm > 0);
     assert.ok(metadata.dimensions.heightMm > 0);
@@ -197,12 +206,12 @@ test("deployed metadata identifies both STEP files as distinct 1U assemblies", a
   );
 
   assert.equal(vrMetadata.sourceUpAxis, "y");
-  assert.equal(vrMetadata.upAxis, "z");
+  assert.equal(vrMetadata.upAxis, "y");
   assert.equal(vrMetadata.assembly.role, "vr200-l10-1u-module");
   assert.equal(vrMetadata.dimensions.heightMm, 44);
   assert.equal(vrMetadata.assembly.rackUnits, 1);
-  assert.equal(l10Metadata.sourceUpAxis, "z");
-  assert.equal(l10Metadata.upAxis, "z");
+  assert.equal(l10Metadata.sourceUpAxis, "y");
+  assert.equal(l10Metadata.upAxis, "y");
   assert.equal(l10Metadata.assembly.role, "gb300-l10-1u-module");
   assert.equal(l10Metadata.assembly.rackUnits, 1);
 });

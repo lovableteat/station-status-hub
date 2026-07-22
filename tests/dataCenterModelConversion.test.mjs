@@ -24,6 +24,18 @@ const freeCadRunnerUrl = new URL(
   "../scripts/convert-step-with-freecad.ps1",
   import.meta.url
 );
+const occtConverterUrl = new URL(
+  "../scripts/occt-xcaf-step-to-glb.py",
+  import.meta.url
+);
+const occtRunnerUrl = new URL(
+  "../scripts/convert-step-with-occt.ps1",
+  import.meta.url
+);
+const largeStepConverterUrl = new URL(
+  "../scripts/convert-large-step-to-glb.mjs",
+  import.meta.url
+);
 
 test("STEP conversion derives calibrated millimeter dimensions from assembly bounds", () => {
   const result = getCanonicalModelBounds([
@@ -88,4 +100,46 @@ test("native conversion exports top-level assembly roots without duplicating chi
   assert.match(converter, /"upAxis":\s*glb_up_axis\(args\.up_axis\)/);
   assert.match(converter, /rootCoverage/);
   assert.match(runner, /\/usr\/local\/bin\/FreeCADCmd/);
+  assert.match(runner, /-kn/);
+  assert.match(runner, /-km/);
+  assert.match(runner, /-vpf/);
+  assert.doesNotMatch(runner, /-mm/);
+});
+
+test("production XCAF conversion preserves parts and validates desktop and mobile assets before publishing", async () => {
+  const [converter, runner] = await Promise.all([
+    readFile(occtConverterUrl, "utf8"),
+    readFile(occtRunnerUrl, "utf8"),
+  ]);
+
+  assert.match(converter, /STEPCAFControl_Reader/);
+  assert.match(converter, /SetColorMode\(True\)/);
+  assert.doesNotMatch(converter, /CollectStyleSettings/);
+  assert.match(converter, /RWGltf_CafWriter/);
+  assert.match(converter, /source_bounds/);
+  assert.match(converter, /SetMergeFaces\(False\)/);
+  assert.match(runner, /cadquery-ocp-7\.9\.3\.1\.1/);
+  assert.match(runner, /cadquery-ocp==7\.9\.3\.1\.1/);
+  assert.match(runner, /OCP[\\/]__init__\.py/);
+  assert.match(runner, /-kn/);
+  assert.match(runner, /-km/);
+  assert.match(runner, /-vpf/);
+  assert.doesNotMatch(runner, /-mm/);
+  assert.match(runner, /mobile\.glb/);
+  assert.match(runner, /scripts[\\/]inspect-glb\.mjs/);
+  assert.match(runner, /& node \$inspectorPath \$GlbPath/);
+  assert.doesNotMatch(runner, /--input-type=module|-e \$summaryScript/);
+  assert.match(runner, /Move-Item/);
+});
+
+test("large local STEP conversion avoids giant strings and preserves colored assembly parts", async () => {
+  const converter = await readFile(largeStepConverterUrl, "utf8");
+
+  assert.match(converter, /await readFile\(inputPath\)/);
+  assert.doesNotMatch(converter, /readFile\(inputPath,\s*["']utf8["']\)/);
+  assert.match(converter, /occt\.ReadStepFile\(source/);
+  assert.match(converter, /sourceMesh\.brep_faces/);
+  assert.match(converter, /groupedIndices/);
+  assert.match(converter, /MILLIMETERS_TO_METERS\s*=\s*0\.001/);
+  assert.match(converter, /doubleSided:\s*true/);
 });
