@@ -51,7 +51,7 @@ interface SystemEditDialogProps {
   open?: boolean;
   onUpdate: () => void;
   showTrigger?: boolean;
-  variant?: "button" | "icon";
+  variant?: "button" | "icon" | "menu";
 }
 
 export function SystemEditDialog({
@@ -380,7 +380,16 @@ export function SystemEditDialog({
     <MobileDialog open={isOpen} onOpenChange={setIsOpen}>
       {showTrigger && (
         <MobileDialogTrigger asChild>
-          {variant === "button" ? (
+          {variant === "menu" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 w-full justify-start rounded-xl border-sky-300/30 bg-sky-300/[0.08] px-3 font-semibold text-sky-100 hover:border-sky-200/50 hover:bg-sky-300/15 hover:text-sky-50"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              編輯機台資料
+            </Button>
+          ) : variant === "button" ? (
             <Button
               variant="outline"
               size={isMobile ? "default" : "sm"}
