@@ -22,6 +22,7 @@ interface MainWorkspaceHeaderProps {
   onSelect: (id: string) => void;
   onLogout: () => void;
   onOpenNotifications?: () => void;
+  notificationUnreadCount?: number;
   onBrandClick?: () => void;
   onOpenWorkspaceHome?: () => void;
   userName?: string;
@@ -40,6 +41,7 @@ export function MainWorkspaceHeader({
   onSelect,
   onLogout,
   onOpenNotifications,
+  notificationUnreadCount = 0,
   onBrandClick,
   onOpenWorkspaceHome,
   userName,
@@ -105,9 +107,15 @@ export function MainWorkspaceHeader({
             variant="ghost"
             size="icon"
             onClick={onOpenNotifications}
-            className="h-12 w-12 shrink-0 rounded-2xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            aria-label={notificationUnreadCount > 0 ? `開啟協作中心，${notificationUnreadCount} 則未讀通知` : "開啟協作中心"}
+            className="relative h-12 w-12 shrink-0 rounded-2xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
           >
             <Bell className="h-4 w-4" />
+            {notificationUnreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0d1728] bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+              </span>
+            )}
           </Button>
 
           {showOnlineUsers && <OnlineUsersIndicator />}

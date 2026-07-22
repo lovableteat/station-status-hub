@@ -9,11 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Network, Clock3, Lock, UserCog, CircleHelp } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Network, Clock3, Lock, UserCog, CircleHelp, RadioTower } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
+import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollaborationPanel";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -44,7 +45,7 @@ interface SystemUser {
   password_hash?: string;
 }
 
-type AdminTab = "users" | "api-management";
+type AdminTab = "users" | "collaboration" | "api-management";
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
@@ -485,11 +486,15 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
           <TabsList
             data-admin-zone="navigation"
-            className={`grid h-auto w-full gap-1 rounded-xl border border-sky-200/30 bg-[#0d2437] p-1.5 shadow-[0_16px_36px_-28px_rgba(56,189,248,0.9)] ${canViewApiManagement ? "grid-cols-2 sm:w-[420px]" : "grid-cols-1 sm:w-[210px]"}`}
+            className={`grid h-auto w-full gap-1 rounded-xl border border-sky-200/30 bg-[#0d2437] p-1.5 shadow-[0_16px_36px_-28px_rgba(56,189,248,0.9)] ${canViewApiManagement ? "grid-cols-3 sm:w-[660px]" : "grid-cols-2 sm:w-[440px]"}`}
           >
             <TabsTrigger value="users" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-300 data-[state=active]:to-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
             <Users className="h-4 w-4 mr-2" />
             用戶管理
+          </TabsTrigger>
+          <TabsTrigger value="collaboration" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-300 data-[state=active]:to-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
+            <RadioTower className="h-4 w-4 mr-2" />
+            通知與在線
           </TabsTrigger>
           {SHOW_ENGINEER_ADMIN ? <TabsTrigger value="engineers">
             <UserPlus className="h-4 w-4 mr-2" />
@@ -1015,6 +1020,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
         </TabsContent> : null}
+
+        <TabsContent value="collaboration" className="mt-0 flex-1">
+          <AdminCollaborationPanel canSend={canEditUsers} />
+        </TabsContent>
 
         {canViewApiManagement ? (
           <TabsContent value="api-management" className="mt-0 flex-1">

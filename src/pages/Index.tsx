@@ -14,7 +14,7 @@ import {
 
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
-import { RealtimeNotifications } from "@/components/common/RealtimeNotifications";
+import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
@@ -89,7 +89,7 @@ type StationModuleId =
   | "issues"
   | "tools";
 
-type AdminModuleId = "users" | "api-management";
+type AdminModuleId = "users" | "collaboration" | "api-management";
 
 const stationModuleItems: Array<{
   id: StationModuleId;
@@ -112,6 +112,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   issues: "station-status",
   tools: "station-status",
   users: "user-management",
+  collaboration: "user-management",
   "api-management": "user-management",
   "material-requests": "material-requests",
   data: "data-center",
@@ -170,7 +171,7 @@ function getInitialWorkspace(): WorkspaceId | null {
   const workspace = params.get("workspace");
   const module = params.get("module");
 
-  if (module === "users" || module === "api-management") {
+  if (module === "users" || module === "collaboration" || module === "api-management") {
     return "user-management";
   }
 
@@ -217,7 +218,7 @@ function getInitialAdminModule(): AdminModuleId {
   }
 
   const value = new URLSearchParams(window.location.search).get("module");
-  if (value === "users" || value === "api-management") {
+  if (value === "users" || value === "collaboration" || value === "api-management") {
     return value;
   }
 
@@ -235,6 +236,7 @@ const Index = () => {
     getInitialAdminModule
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
   const { login, isLoggedIn, logout, user } = useUser();
@@ -318,8 +320,8 @@ const Index = () => {
   );
   const availableAdminModules = useMemo<AdminModuleId[]>(
     () =>
-      (["users", "api-management"] as AdminModuleId[]).filter((module) =>
-        canViewModule(module)
+      (["users", "collaboration", "api-management"] as AdminModuleId[]).filter((module) =>
+        module === "collaboration" ? canViewModule("users") : canViewModule(module)
       ),
     [canViewModule]
   );
@@ -377,7 +379,9 @@ const Index = () => {
       }
 
       if (targetWorkspace === "user-management") {
-        setActiveAdminModule(module === "api-management" ? "api-management" : "users");
+        setActiveAdminModule(
+          module === "api-management" || module === "collaboration" ? module : "users",
+        );
       }
     };
 
@@ -385,6 +389,15 @@ const Index = () => {
     return () => {
       window.removeEventListener("navigate", handleNavigationEvent as EventListener);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleUnreadChange = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
+      setNotificationUnreadCount(typeof count === "number" ? count : 0);
+    };
+    window.addEventListener("collaboration-unread-change", handleUnreadChange);
+    return () => window.removeEventListener("collaboration-unread-change", handleUnreadChange);
   }, []);
 
   useEffect(() => {
@@ -448,7 +461,9 @@ const Index = () => {
   };
 
   const handleOpenNotifications = () => {
-    window.dispatchEvent(new CustomEvent("open-global-notifications"));
+    window.dispatchEvent(
+      new CustomEvent("open-global-collaboration", { detail: { tab: "notifications" } }),
+    );
   };
 
   const handleStationNavigation = (module: string, params?: Record<string, string>) => {
@@ -601,7 +616,7 @@ const Index = () => {
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
-      {!isDemoMode && <RealtimeNotifications />}
+      {!isDemoMode && <CollaborationCenter />}
 
       <MainWorkspaceHeader
         items={workspaceItems}
@@ -609,6 +624,7 @@ const Index = () => {
         onSelect={handleWorkspaceChange}
         onLogout={logout}
         onOpenNotifications={handleOpenNotifications}
+        notificationUnreadCount={notificationUnreadCount}
         onBrandClick={() => handleWorkspaceChange("workspace-home")}
         onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}
@@ -621,6 +637,11 @@ const Index = () => {
                   id: "users",
                   label: "後台管理",
                   onSelect: () => handleAdminNavigation("users"),
+                },
+                {
+                  id: "collaboration",
+                  label: "通知與在線",
+                  onSelect: () => handleAdminNavigation("collaboration"),
                 },
               ]
             : []),
