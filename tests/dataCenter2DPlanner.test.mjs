@@ -19,12 +19,18 @@ test("2D planning edits the same rack and facility coordinates used by 3D", () =
   assert.match(plannerSource, /onMoveAisle\(aisle\.id, x, z\)/);
   assert.match(plannerSource, /onMovePowerFeed\(dragging\.id, x, z\)/);
   assert.match(plannerSource, /onRotateRack\(selectedRack\.id\)/);
+  assert.match(plannerSource, /onClick=\{onAddRack\}/);
+  assert.match(plannerSource, /onClick=\{\(\) => onDeleteRack\(selectedRack\.id\)\}/);
   assert.match(workspaceSource, /onMoveRack=\{placeRackOnPlan\}/);
+  assert.match(workspaceSource, /onAddRack=\{addRackFromCurrentModel\}/);
+  assert.match(workspaceSource, /onDeleteRack=\{removeRackFromPlan\}/);
   assert.match(workspaceSource, /onMoveAisle=\{\(aisleId, x, z\) => updateAisle/);
   assert.match(workspaceSource, /onMovePowerFeed=\{\(feedId, x, z\) => updatePowerFeed/);
 });
 
 test("2D planning exposes working entry points for every planning task", () => {
+  assert.match(plannerSource, /新增機櫃/);
+  assert.match(plannerSource, /刪除機櫃/);
   assert.match(plannerSource, /onClick=\{onOpenModels\}/);
   assert.match(plannerSource, /onClick=\{\(\) => onAddAisle\("cold"\)\}/);
   assert.match(plannerSource, /onClick=\{\(\) => onAddAisle\("hot"\)\}/);
@@ -34,4 +40,11 @@ test("2D planning exposes working entry points for every planning task", () => {
   assert.match(workspaceSource, /data-testid="data-center-simple-toolbar"/);
   assert.match(workspaceSource, /setWorkspaceMode\("2d"\)/);
   assert.match(workspaceSource, /setWorkspaceMode\("3d"\)/);
+});
+
+test("rack instance deletion keeps the shared scene valid", () => {
+  assert.match(workspaceSource, /selectedSite\.racks\.length <= 1/);
+  assert.match(workspaceSource, /racks: remainingRacks/);
+  assert.match(workspaceSource, /setSelectedRackId\(nextRack\.id\)/);
+  assert.match(workspaceSource, /findAvailableRackPosition\(baseRack\)/);
 });
