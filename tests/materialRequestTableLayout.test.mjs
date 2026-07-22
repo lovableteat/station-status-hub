@@ -56,6 +56,32 @@ test("material vendor cells keep relation metadata inside the hover card", () =>
   assert.doesNotMatch(primaryCellBlock, /個 MPN/);
 });
 
+test("material hover cards expose searchable, scrollable, and explicit copy controls", () => {
+  const compactHoverBlock = source.match(
+    /function CompactHoverValue\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialIdentityHover/,
+  )?.[0] ?? "";
+  const identityBlock = source.match(
+    /function MaterialIdentityHover\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialFieldLabel/,
+  )?.[0] ?? "";
+
+  assert.match(compactHoverBlock, /data-testid="compact-hover-content"/);
+  assert.match(compactHoverBlock, /data-testid="compact-hover-search"/);
+  assert.match(compactHoverBlock, /data-testid="compact-hover-copy-all"/);
+  assert.match(compactHoverBlock, /<ScrollArea/);
+  assert.match(identityBlock, /data-testid="material-identity-metrics"/);
+  assert.match(identityBlock, /data-testid="material-identity-ref-list"/);
+  assert.match(identityBlock, /data-testid="material-identity-mpn-list"/);
+  assert.match(identityBlock, /<ScrollArea/);
+});
+
+test("material identity hover shows module metadata once", () => {
+  const identityBlock = source.match(
+    /function MaterialIdentityHover\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialFieldLabel/,
+  )?.[0] ?? "";
+
+  assert.equal((identityBlock.match(/模組：/g) ?? []).length, 1);
+});
+
 test("tracking table summaries remain compact instead of stretching material rows", () => {
   const cellBlock = source.match(
     /function TrackingHistoryCell\([\s\S]*?\r?\n}\r?\n\r?\nfunction TrackingHistoryDialog/,
