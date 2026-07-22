@@ -744,9 +744,56 @@ export function FlowInfo() {
   };
 
   const deleteItem = async (item: TestItem) => {
-    if (!canEdit || !editingVersionId) return;
-    const { error } = await supabase.from("test_flow_items").delete().eq("id", item.id).eq("flow_version_id", editingVersionId);
-    if (error) return toast({ title: "測項刪除失敗", description: error.message, variant: "destructive" });
+    if (!canEdit || !activeProjectId || !editingVersionId) return;
+
+    const { data: progressRows, error: progressFetchError } = await supabase
+      .from("test_progress")
+      .select("*")
+      .eq("item_id", item.id)
+      .eq("project_id", activeProjectId);
+    if (progressFetchError) {
+      return toast({
+        title: "測項刪除失敗",
+        description: `無法確認既有進度：${progressFetchError.message}`,
+        variant: "destructive",
+      });
+    }
+
+    if (progressRows.length > 0) {
+      const { error: progressDeleteError } = await supabase
+        .from("test_progress")
+        .delete()
+        .eq("item_id", item.id)
+        .eq("project_id", activeProjectId);
+      if (progressDeleteError) {
+        return toast({
+          title: "測項刪除失敗",
+          description: `無法移除關聯進度：${progressDeleteError.message}`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    const { error } = await supabase
+      .from("test_flow_items")
+      .delete()
+      .eq("id", item.id)
+      .eq("project_id", activeProjectId)
+      .eq("flow_version_id", editingVersionId);
+    if (error) {
+      const { error: restoreError } = progressRows.length
+        ? await supabase.from("test_progress").insert(progressRows)
+        : { error: null };
+      return toast({
+        title: "測項刪除失敗",
+        description: restoreError
+          ? `${error.message}；進度資料回復失敗：${restoreError.message}`
+          : error.message,
+        variant: "destructive",
+      });
+    }
+    setSelectedItemId(null);
+    toast({ title: "測項已移除", description: `${item.item_name} 與其機台進度已從目前流程刪除。` });
     await loadData();
   };
 
@@ -1420,7 +1467,28 @@ export function FlowInfo() {
                       <h2 className="text-sm font-semibold text-[#f3f8fc]">測項設定</h2>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateItem(selectedItem)}><Copy className="h-4 w-4" /><span className="sr-only">複製測項</span></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100" onClick={() => deleteItem(selectedItem)}><Trash2 className="h-4 w-4" /><span className="sr-only">刪除測項</span></Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-100"><Trash2 className="h-4 w-4" /><span className="sr-only">刪除測項</span></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>刪除測項「{selectedItem.item_name}」？</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                此測項及所有機台在此測項的進度紀錄會一併刪除，這個動作無法復原。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-rose-500 text-white hover:bg-rose-400"
+                                onClick={() => void deleteItem(selectedItem)}
+                              >
+                                確認刪除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
