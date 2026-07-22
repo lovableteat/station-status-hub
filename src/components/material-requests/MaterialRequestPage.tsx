@@ -350,6 +350,132 @@ function CompactHoverValue({
   );
 }
 
+function MaterialIdentityHover({
+  assemblyName,
+  manufacturer,
+  mpnValues,
+  name,
+  qty,
+  refValues,
+}: {
+  assemblyName: string;
+  manufacturer: string;
+  mpnValues: string[];
+  name: string;
+  qty: number;
+  refValues: string[];
+}) {
+  const cleanValues = (values: string[]) => Array.from(new Set(
+    values.map((value) => value.trim()).filter((value) => value && value !== "-"),
+  ));
+  const refs = cleanValues(refValues);
+  const mpns = cleanValues(mpnValues);
+
+  return (
+    <HoverCard openDelay={160} closeDelay={120}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          data-testid="material-identity-trigger"
+          aria-label={`查看${name}的 REF DES 與 MPN`}
+          onClick={(event) => event.stopPropagation()}
+          className="group/identity flex w-full min-w-0 items-start gap-3 rounded-xl px-1 py-1 text-left outline-none transition-colors hover:bg-cyan-300/[0.06] focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+        >
+          <span className="min-w-0 flex-1">
+            <span
+              data-testid="material-primary-name"
+              className="block line-clamp-2 text-[15px] font-black leading-5 text-slate-50"
+            >
+              {name || "未命名料件"}
+            </span>
+            <span
+              data-testid="material-primary-vendor"
+              className="mt-1 block truncate text-sm font-semibold text-cyan-200"
+            >
+              {manufacturer || "未填廠商"}
+            </span>
+          </span>
+          <span className="mt-0.5 inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200 transition-colors group-hover/identity:border-cyan-200/45 group-hover/identity:bg-cyan-300/[0.14] group-hover/identity:text-cyan-50">
+            <CircleHelp className="h-4 w-4" />
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        side="top"
+        sideOffset={10}
+        collisionPadding={16}
+        className="w-[min(500px,calc(100vw-32px))] overflow-hidden rounded-2xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_24px_70px_-24px_rgba(6,182,212,0.45)]"
+      >
+        <div className="border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(59,130,246,0.06))] px-4 py-3.5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-cyan-200/30 bg-cyan-300/12 text-cyan-100">
+              <Factory className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[15px] font-black leading-5 text-white">{name || "未命名料件"}</p>
+              <p className="mt-1 text-sm font-semibold text-cyan-200">{manufacturer || "未填廠商"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
+          <section className="min-w-0 rounded-xl border border-sky-300/20 bg-sky-400/[0.06]">
+            <div className="flex items-center justify-between border-b border-sky-300/15 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <Layers3 className="h-4 w-4 text-sky-200" />
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-sky-100">REF DES</p>
+              </div>
+              <span className="rounded-md bg-sky-300/12 px-2 py-0.5 font-mono text-xs font-black text-sky-100">{refs.length}</span>
+            </div>
+            <div className="max-h-36 overflow-y-auto p-2.5">
+              {refs.length > 0 ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {refs.map((value) => (
+                    <span key={value} className="truncate rounded-md border border-white/[0.07] bg-black/20 px-2 py-1.5 font-mono text-xs text-sky-50" title={value}>
+                      {value}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-1 py-3 text-center text-sm text-slate-500">尚未設定</p>
+              )}
+            </div>
+          </section>
+
+          <section className="min-w-0 rounded-xl border border-emerald-300/20 bg-emerald-400/[0.05]">
+            <div className="flex items-center justify-between border-b border-emerald-300/15 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="h-4 w-4 text-emerald-200" />
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-100">MPN</p>
+              </div>
+              <span className="rounded-md bg-emerald-300/12 px-2 py-0.5 font-mono text-xs font-black text-emerald-100">{mpns.length}</span>
+            </div>
+            <div className="max-h-36 overflow-y-auto p-2.5">
+              {mpns.length > 0 ? (
+                <div className="space-y-1.5">
+                  {mpns.map((value) => (
+                    <p key={value} className="break-all rounded-md border border-white/[0.07] bg-black/20 px-2 py-1.5 font-mono text-xs leading-5 text-emerald-50">
+                      {value}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-1 py-3 text-center text-sm text-slate-500">尚未設定</p>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-white/[0.07] bg-black/15 px-4 py-3 text-xs text-slate-400">
+          <span>模組：<strong className="font-semibold text-slate-200">{assemblyName || "未指定"}</strong></span>
+          <span>數量：<strong className="font-mono text-slate-200">{qty}</strong></span>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 function MaterialFieldLabel({
   field,
   htmlFor,
@@ -5736,18 +5862,17 @@ export function MaterialRequestPage() {
                 <th className={MATERIAL_STICKY_COLUMN_CLASSES.filter}><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>
-              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives, uniqueMpnCount }, rowIndex) => {
+              {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives }, rowIndex) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
-                const noAlternative = uniqueMpnCount <= 1;
                 const primaryReady = Boolean(primaryAlternative?.isPreferred);
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const groupRefValues = splitRefDesignators(groupRefDes);
-                const materialHoverValues = [
-                  group.name || "未命名料件",
-                  primaryAlternative?.manufacturer || "未填廠商",
-                ];
+                const materialRefValues = splitRefDesignators(group.displayRef || groupRefDes);
+                const materialMpnValues = group.records
+                  .flatMap((record) => [getDisplayMpn(record), record.manufacturerPartNumberAlt || ""])
+                  .filter(Boolean);
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
                 const editingNames = Array.from(new Set(
@@ -5805,28 +5930,23 @@ export function MaterialRequestPage() {
                         <div className="flex items-start gap-3">
                           <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span>
-                              {isMarked && (
-                                <span className="rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-200">
-                                  已標記
-                                </span>
-                              )}
-                              {noAlternative ? (
-                                <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-xs font-bold text-orange-300">單一料・無替代</span>
-                              ) : (
-                                <span className="rounded bg-blue-400/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{uniqueMpnCount} 個 MPN</span>
-                              )}
-                            </div>
-                            <div className="mt-1.5">
-                              <CompactHoverValue
-                                label="主料 / 廠商"
-                                values={materialHoverValues}
-                                maxItems={1}
-                                previewClassName="text-[15px] font-bold leading-5 text-slate-50"
-                              />
-                            </div>
-                            <p className="mt-1 truncate text-sm text-slate-400">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
+                            <MaterialIdentityHover
+                              assemblyName={group.assemblyName || ""}
+                              manufacturer={
+                                primaryAlternative?.manufacturer ||
+                                group.primaryRecord.manufacturer ||
+                                ""
+                              }
+                              mpnValues={materialMpnValues}
+                              name={group.name || ""}
+                              qty={group.qty}
+                              refValues={materialRefValues}
+                            />
+                            {isMarked && (
+                              <span className="mt-2 inline-flex rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-200">
+                                已標記
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
