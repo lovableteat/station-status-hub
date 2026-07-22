@@ -66,7 +66,9 @@ Write-Host "Optimizing the GLB for browser rendering..."
   -si $SimplificationRatio `
   -se 0.02 `
   -sp `
-  -mm
+  -vpf `
+  -kn `
+  -km
 
 if ($LASTEXITCODE -ne 0) {
   throw "gltfpack optimization failed with exit code $LASTEXITCODE."
@@ -84,7 +86,9 @@ $metadata | Add-Member -NotePropertyName webOptimization -NotePropertyValue ([or
     tool = "gltfpack 1.2"
     simplificationRatio = $SimplificationRatio
     maximumError = 0.02
-    mergedMeshes = $true
+    mergedMeshes = $false
+    preservedNodes = $true
+    preservedMaterials = $true
   }) -Force
 $metadata | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $metadataPath -Encoding utf8
 

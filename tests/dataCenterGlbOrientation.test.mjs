@@ -23,7 +23,7 @@ async function loadBounds(relativePath, upAxis) {
 test("VR200 L10 stays horizontal after scene axis conversion", async () => {
   const size = await loadBounds(
     "../public/models/data-center/vera-rubin-vr-1u-20260715.glb",
-    "z",
+    "y",
   );
 
   assert.ok(size.x > size.y * 10, `expected width to exceed 1U height, got ${size.toArray()}`);
@@ -34,10 +34,10 @@ test("VR200 L10 stays horizontal after scene axis conversion", async () => {
 test("GB300 L10 stays horizontal after scene axis conversion", async () => {
   const size = await loadBounds(
     "../public/models/data-center/carlo-next-l10-20260715.glb",
-    "z",
+    "y",
   );
 
   assert.ok(size.x > size.y * 10, `expected width to exceed 1U height, got ${size.toArray()}`);
   assert.ok(size.z > size.y * 15, `expected depth to exceed 1U height, got ${size.toArray()}`);
-  assert.ok(Math.abs(size.x / size.z - 481.5 / 889.6) < 0.02);
+  assert.ok(Math.abs(size.x / size.z - 482.1 / 912.3) < 0.02);
 });
