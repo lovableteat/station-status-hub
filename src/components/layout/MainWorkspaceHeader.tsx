@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut } from "lucide-react";
+import { Bell, BellRing, ChevronDown, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
@@ -107,14 +107,22 @@ export function MainWorkspaceHeader({
             variant="ghost"
             size="icon"
             onClick={onOpenNotifications}
-            aria-label={notificationUnreadCount > 0 ? `開啟協作中心，${notificationUnreadCount} 則未讀通知` : "開啟協作中心"}
-            className="relative h-12 w-12 shrink-0 rounded-2xl border border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            aria-label={notificationUnreadCount > 0 ? `協作中心有未讀通知，${notificationUnreadCount} 則，點擊開啟` : "開啟協作中心"}
+            className={cn(
+              "relative h-12 w-12 shrink-0 rounded-2xl border transition-colors",
+              notificationUnreadCount > 0
+                ? "motion-safe:animate-pulse border-cyan-300/80 bg-cyan-300/20 text-cyan-100 shadow-[0_0_28px_rgba(34,211,238,0.55)] hover:bg-cyan-300/30"
+                : "border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground",
+            )}
           >
-            <Bell className="h-4 w-4" />
+            {notificationUnreadCount > 0 ? <BellRing className="h-5 w-5" /> : <Bell className="h-4 w-4" />}
             {notificationUnreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0d1728] bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
-                {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
-              </span>
+              <>
+                <span className="absolute inset-1 rounded-xl border border-cyan-200/60 motion-safe:animate-ping" aria-hidden="true" />
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0d1728] bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                  {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+                </span>
+              </>
             )}
           </Button>
 

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bell,
   CheckCheck,
   LoaderCircle,
+  Megaphone,
   MessageSquareText,
   Radio,
   RefreshCw,
@@ -14,6 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
@@ -101,6 +110,9 @@ export function CollaborationCenter() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
+  const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
+  const autoAnnouncementShownRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
     if (!user?.userId) return;
@@ -157,19 +169,54 @@ export function CollaborationCenter() {
     () => notifications.filter((notification) => !notification.is_read).length,
     [notifications],
   );
+  const unreadAnnouncementCount = useMemo(
+    () => notifications.filter(
+      (notification) => !notification.is_read && notification.notification_type === "admin_announcement",
+    ).length,
+    [notifications],
+  );
+
+  useEffect(() => {
+    if (loading || autoAnnouncementShownRef.current) return;
+    const announcement = notifications.find(
+      (notification) => !notification.is_read && notification.notification_type === "admin_announcement",
+    );
+    if (!announcement) return;
+    autoAnnouncementShownRef.current = true;
+    setActiveAnnouncement(announcement);
+  }, [loading, notifications]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("collaboration-unread-change", { detail: { count: unreadCount } }));
   }, [unreadCount]);
 
   const markAsRead = async (notification: NotificationRow) => {
-    if (notification.is_read) return;
+    if (notification.is_read) return true;
     setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item));
     const { error: updateError } = await supabase
       .from("user_notifications")
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq("id", notification.id);
-    if (updateError) void loadNotifications();
+    if (updateError) {
+      await loadNotifications();
+      setError("通知已讀狀態儲存失敗，請稍後再試。");
+      return false;
+    }
+    return true;
+  };
+
+  const acknowledgeAnnouncement = async () => {
+    if (!activeAnnouncement || acknowledgingAnnouncement) return;
+    setAcknowledgingAnnouncement(true);
+    const saved = await markAsRead(activeAnnouncement);
+    setAcknowledgingAnnouncement(false);
+    if (saved) setActiveAnnouncement(null);
+  };
+
+  const openAnnouncementInCenter = () => {
+    setActiveAnnouncement(null);
+    setActiveTab("notifications");
+    setOpen(true);
   };
 
   const markAllAsRead = async () => {
@@ -201,20 +248,62 @@ export function CollaborationCenter() {
     }
   };
 
-  if (!open) return null;
-
   return (
     <>
-      <button
-        type="button"
-        aria-label="關閉協作中心"
-        className="fixed inset-0 z-[78] bg-black/45 backdrop-blur-[2px]"
-        onClick={() => setOpen(false)}
-      />
-      <aside
-        aria-label="全站協作中心"
-        className="fixed inset-x-2 bottom-2 top-20 z-[79] flex flex-col overflow-hidden rounded-[22px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(720px,calc(100dvh-92px))] sm:w-[460px]"
+      <Dialog
+        open={Boolean(activeAnnouncement)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !acknowledgingAnnouncement) setActiveAnnouncement(null);
+        }}
       >
+        <DialogContent className="z-[100] max-w-[min(92vw,620px)] overflow-hidden border-cyan-200/30 bg-[#071523] p-0 text-slate-100 shadow-[0_36px_120px_-28px_rgba(34,211,238,0.6)]">
+          <DialogHeader className="border-b border-cyan-200/15 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.2),transparent_48%),linear-gradient(135deg,#10263a,#0b1b2d)] px-6 py-5 text-left">
+            <div className="mb-3 flex items-center justify-between gap-3 pr-7">
+              <Badge className="gap-1.5 border border-amber-200/30 bg-amber-300/15 text-amber-100">
+                <Megaphone className="h-3.5 w-3.5" />重要公告
+              </Badge>
+              {unreadAnnouncementCount > 1 && (
+                <span className="text-xs font-medium text-cyan-100">尚有 {unreadAnnouncementCount} 則未讀公告</span>
+              )}
+            </div>
+            <DialogTitle className="text-balance text-2xl font-black leading-tight text-white">
+              {activeAnnouncement?.title}
+            </DialogTitle>
+            <DialogDescription className="pt-1 text-sm text-slate-400">
+              發布於 {activeAnnouncement ? new Date(activeAnnouncement.created_at).toLocaleString("zh-TW") : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-6">
+            <p className="whitespace-pre-wrap text-base leading-8 text-slate-200">{activeAnnouncement?.message}</p>
+          </div>
+          <DialogFooter className="gap-2 border-t border-cyan-200/10 bg-[#091827] px-6 py-4 sm:justify-between">
+            <Button variant="ghost" onClick={openAnnouncementInCenter} className="text-slate-300 hover:bg-white/10 hover:text-white">
+              前往協作中心
+            </Button>
+            <Button
+              onClick={() => void acknowledgeAnnouncement()}
+              disabled={acknowledgingAnnouncement}
+              className="bg-cyan-300 font-bold text-[#06111f] shadow-[0_12px_28px_-14px_rgba(34,211,238,0.9)] hover:bg-cyan-200"
+            >
+              {acknowledgingAnnouncement && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+              我知道了，標為已讀
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="關閉協作中心"
+            className="fixed inset-0 z-[78] bg-black/45 backdrop-blur-[2px]"
+            onClick={() => setOpen(false)}
+          />
+          <aside
+            aria-label="全站協作中心"
+            className="fixed inset-x-2 bottom-2 top-20 z-[79] flex flex-col overflow-hidden rounded-[22px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(720px,calc(100dvh-92px))] sm:w-[460px]"
+          >
         <header className="border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -297,7 +386,9 @@ export function CollaborationCenter() {
             </ScrollArea>
           </TabsContent>
         </Tabs>
-      </aside>
+          </aside>
+        </>
+      )}
     </>
   );
 }
