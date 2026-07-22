@@ -618,47 +618,81 @@ export function TestProgressTable({
                       <PopoverTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0 rounded-lg border border-[#315b7b] text-[#b9cddd] hover:border-cyan-300/60 hover:bg-[#102b48] hover:text-cyan-50"
+                          size="sm"
+                          className="h-9 shrink-0 gap-1.5 rounded-lg border border-[#315b7b] px-2.5 text-xs text-[#b9cddd] hover:border-cyan-300/60 hover:bg-[#102b48] hover:text-cyan-50"
                           aria-label={`${system.system_name} 更多操作`}
                         >
                           <MoreHorizontal className="h-4 w-4" />
+                          <span>其他功能</span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" className="w-52 space-y-2 p-2">
-                        <SystemCompleteButton
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          stations={stations as never[]}
-                          items={items as never[]}
-                          onSystemUpdate={onSystemUpdate}
-                        />
-                        <SystemEditDialog
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          assignedEngineer={system.assigned_engineer || ""}
-                          onUpdate={onSystemUpdate}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20 hover:text-cyan-50"
-                          onClick={() => onCloneSystem(system)}
+                      <PopoverContent
+                        align="end"
+                        data-ui="tracker-action-menu"
+                        className="w-[17.5rem] overflow-hidden rounded-2xl border border-[#315b7b] bg-[#081827]/98 p-0 text-slate-50 shadow-[0_24px_70px_-24px_rgba(14,165,233,0.55)]"
+                      >
+                        <div className="border-b border-[#294b65] bg-gradient-to-br from-[#102d45] to-[#0a1c2d] px-3.5 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-100">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-50">機台操作</p>
+                              <p className="truncate text-xs text-slate-400">{system.system_name}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div data-ui="tracker-action-menu-primary" className="space-y-2 p-2.5">
+                          <SystemCompleteButton
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            stations={stations as never[]}
+                            items={items as never[]}
+                            onSystemUpdate={onSystemUpdate}
+                            variant="menu"
+                          />
+                          <SystemEditDialog
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            assignedEngineer={system.assigned_engineer || ""}
+                            onUpdate={onSystemUpdate}
+                            variant="menu"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-10 w-full justify-start rounded-xl border-cyan-300/30 bg-cyan-300/[0.08] px-3 font-semibold text-cyan-100 hover:border-cyan-200/50 hover:bg-cyan-300/15 hover:text-cyan-50"
+                            onClick={() => onCloneSystem(system)}
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            複製為連號機台
+                          </Button>
+                        </div>
+
+                        <div
+                          data-ui="tracker-action-menu-danger"
+                          className="border-t border-[#294b65] bg-[#07131f] px-2.5 pb-2.5 pt-2"
                         >
-                          <Copy className="mr-2 h-3.5 w-3.5" />
-                          複製為連號機台
-                        </Button>
-                        <SystemResetDialog
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          onReset={onSystemUpdate}
-                        />
-                        <SystemDeleteButton
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          onSystemUpdate={onSystemUpdate}
-                        />
+                          <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                            管理操作
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <SystemResetDialog
+                              systemId={system.id}
+                              systemName={system.system_name}
+                              onReset={onSystemUpdate}
+                              variant="menu"
+                            />
+                            <SystemDeleteButton
+                              systemId={system.id}
+                              systemName={system.system_name}
+                              onSystemUpdate={onSystemUpdate}
+                              variant="menu"
+                            />
+                          </div>
+                        </div>
                       </PopoverContent>
                     </Popover>
                   </div>
