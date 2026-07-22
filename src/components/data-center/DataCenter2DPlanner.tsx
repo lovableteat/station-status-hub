@@ -10,11 +10,24 @@ import {
   Eye,
   Grid2X2,
   PencilRuler,
+  Plus,
   RotateCw,
   Snowflake,
   ThermometerSun,
+  Trash2,
 } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +58,8 @@ interface DataCenter2DPlannerProps {
   onRotateRack: (rackId: string) => void;
   onMoveAisle: (aisleId: string, x: number, z: number) => void;
   onMovePowerFeed: (feedId: string, x: number, z: number) => void;
+  onAddRack: () => void;
+  onDeleteRack: (rackId: string) => void;
   onAddAisle: (kind: FacilityAisleKind) => void;
   onAddPowerFeed: () => void;
   onOpenModels: () => void;
@@ -83,6 +98,8 @@ export function DataCenter2DPlanner({
   onRotateRack,
   onMoveAisle,
   onMovePowerFeed,
+  onAddRack,
+  onDeleteRack,
   onAddAisle,
   onAddPowerFeed,
   onOpenModels,
@@ -191,8 +208,11 @@ export function DataCenter2DPlanner({
           </div>
           <p className="mt-1 hidden text-[11px] text-slate-400 sm:block">拖曳機櫃、通道與 PDU；切回 3D 會立即顯示相同配置。</p>
         </div>
+        <Button type="button" onClick={onAddRack} disabled={!canEdit} className="h-9 bg-cyan-300 text-[#04131f] hover:bg-cyan-200">
+          <Plus className="mr-2 h-4 w-4" /> 新增機櫃
+        </Button>
         <Button type="button" variant="outline" onClick={onOpenModels} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
-          <Box className="mr-2 h-4 w-4" /> 新增機櫃
+          <Box className="mr-2 h-4 w-4" /> 選擇模型
         </Button>
         <Button type="button" variant="outline" onClick={() => onAddAisle("cold")} disabled={!canEdit} className="h-9 border-sky-300/20 bg-sky-400/8 text-sky-50 hover:bg-sky-400/15">
           <Snowflake className="mr-2 h-4 w-4" /> 冷通道
@@ -320,6 +340,38 @@ export function DataCenter2DPlanner({
             <Button type="button" variant="outline" onClick={() => onRotateRack(selectedRack.id)} disabled={!canEdit} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
               <RotateCw className="mr-2 h-4 w-4" /> 旋轉 90°
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!canEdit || racks.length <= 1}
+                  className="h-9 border-rose-300/25 bg-rose-400/8 text-rose-100 hover:bg-rose-400/16 hover:text-white"
+                  title={racks.length <= 1 ? "場景至少需要保留一座機櫃" : `刪除 ${selectedRack.cabinet}`}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" /> 刪除機櫃
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>確定刪除「{selectedRack.cabinet}」？</AlertDialogTitle>
+                  <AlertDialogDescription className="leading-6 text-slate-300">
+                    此機櫃及其櫃內配置會同時從 2D 與 3D 場景移除，這個動作無法復原。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="border-[#2a526f] bg-[#10263a] text-slate-100 hover:bg-[#17364f] hover:text-white">
+                    取消
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => onDeleteRack(selectedRack.id)}
+                    className="bg-rose-500 text-white hover:bg-rose-400"
+                  >
+                    確定刪除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         ) : null}
 

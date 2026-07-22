@@ -2075,6 +2075,79 @@ export function DeploymentPlanningCenter() {
     );
   };
 
+  const findAvailableRackPosition = (rack: RackPlan) => {
+    const footprint = getFootprint(rack);
+    const padding = 0.25;
+    const minX = -selectedFacility.width / 2 + footprint.width / 2 + padding;
+    const maxX = selectedFacility.width / 2 - footprint.width / 2 - padding;
+    const minZ = -selectedFacility.depth / 2 + footprint.depth / 2 + padding;
+    const maxZ = selectedFacility.depth / 2 - footprint.depth / 2 - padding;
+    if (minX > maxX || minZ > maxZ) return null;
+
+    const isAvailable = (x: number, z: number) =>
+      selectedSite.racks.every((otherRack) => {
+        const other = getFootprint(otherRack);
+        return (
+          Math.abs(x - otherRack.positionX) >= (footprint.width + other.width) / 2 + 0.12 ||
+          Math.abs(z - otherRack.positionZ) >= (footprint.depth + other.depth) / 2 + 0.12
+        );
+      });
+    const snap = (value: number) => Math.round(value * 4) / 4;
+    const clampToFloor = (value: number, min: number, max: number) =>
+      snap(Math.min(max, Math.max(min, value)));
+    const xStep = Math.max(1.25, footprint.width + 0.5);
+    const zStep = Math.max(1.5, footprint.depth + 0.5);
+    const nearbyCandidates = [
+      [selectedRack.positionX + xStep, selectedRack.positionZ],
+      [selectedRack.positionX - xStep, selectedRack.positionZ],
+      [selectedRack.positionX, selectedRack.positionZ + zStep],
+      [selectedRack.positionX, selectedRack.positionZ - zStep],
+    ].map(([x, z]) => ({
+      x: clampToFloor(x, minX, maxX),
+      z: clampToFloor(z, minZ, maxZ),
+    }));
+
+    for (const candidate of nearbyCandidates) {
+      if (isAvailable(candidate.x, candidate.z)) return candidate;
+    }
+    for (let z = minZ; z <= maxZ + 0.001; z += 0.5) {
+      for (let x = minX; x <= maxX + 0.001; x += 0.5) {
+        const candidate = { x: snap(x), z: snap(z) };
+        if (isAvailable(candidate.x, candidate.z)) return candidate;
+      }
+    }
+    return null;
+  };
+
+  const removeRackFromPlan = (rackId: string) => {
+    if (!canEdit) return;
+    const rackIndex = selectedSite.racks.findIndex((rack) => rack.id === rackId);
+    if (rackIndex < 0) return;
+    if (selectedSite.racks.length <= 1) {
+      toast({
+        title: "無法刪除最後一座機櫃",
+        description: "場景至少需要保留一座機櫃，才能維持 2D、3D 與詳情面板正常運作。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const removedRack = selectedSite.racks[rackIndex];
+    const remainingRacks = selectedSite.racks.filter((rack) => rack.id !== rackId);
+    const nextRack = remainingRacks[Math.min(rackIndex, remainingRacks.length - 1)];
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId ? { ...site, racks: remainingRacks } : site
+      )
+    );
+    setSelectedRackId(nextRack.id);
+    setLayoutEditing(false);
+    toast({
+      title: "機櫃已刪除",
+      description: `${removedRack.cabinet} 已同步從 2D 與 3D 場景移除。`,
+    });
+  };
+
   const moveSelectedRack = (deltaX: number, deltaZ: number) => {
     if (!canEdit || !layoutEditing) return;
 
@@ -2384,9 +2457,9 @@ export function DeploymentPlanningCenter() {
     });
   };
 
-  const addRackFromSelectedModel = () => {
-    if (!canEdit || models[selectedModelId]?.kind !== "rack") return;
-    const definition = models[selectedModelId];
+  const addRackUsingModel = (modelId: string, closeModelLibrary: boolean) => {
+    if (!canEdit || models[modelId]?.kind !== "rack") return;
+    const definition = models[modelId];
     const defaultL10Assignment = getDefaultRackL10Assignment({
       rackModelId: definition.id,
       models,
@@ -2405,11 +2478,19 @@ export function DeploymentPlanningCenter() {
           defaultL10Assignment.l10StartU + index * defaultL10RackUnits
       ),
     };
-    const slot = selectedSite.racks.length;
+    const position = findAvailableRackPosition(baseRack);
+    if (!position) {
+      toast({
+        title: "目前沒有可放置的位置",
+        description: "請先移動機櫃或放大廠房尺寸，再新增機櫃。",
+        variant: "destructive",
+      });
+      return;
+    }
     const nextRack = {
       ...baseRack,
-      positionX: ((slot % 5) - 2) * 1.7,
-      positionZ: 4.75 + Math.floor(slot / 5) * 1.5,
+      positionX: position.x,
+      positionZ: position.z,
     };
 
     setSites((currentSites) =>
@@ -2419,8 +2500,8 @@ export function DeploymentPlanningCenter() {
     );
     setSelectedRackId(nextRack.id);
     setLayoutEditing(true);
-    setModelLibraryOpen(false);
-    requestCamera("focus");
+    if (closeModelLibrary) setModelLibraryOpen(false);
+    if (workspaceMode === "3d") requestCamera("focus");
     toast({
       title: "新機櫃已放入場景",
       description:
@@ -2429,6 +2510,9 @@ export function DeploymentPlanningCenter() {
           : `${nextRack.cabinet} 使用 ${definition.name}；目前沒有相容 L10，可從型錄另行安裝。`,
     });
   };
+
+  const addRackFromSelectedModel = () => addRackUsingModel(selectedModelId, true);
+  const addRackFromCurrentModel = () => addRackUsingModel(selectedRack.modelId, false);
 
   const navigatorProps: SceneNavigatorProps = {
     sites,
@@ -2596,6 +2680,8 @@ export function DeploymentPlanningCenter() {
                 onSelectRack={handleRackSelect}
                 onMoveRack={placeRackOnPlan}
                 onRotateRack={rotateRackOnPlan}
+                onAddRack={addRackFromCurrentModel}
+                onDeleteRack={removeRackFromPlan}
                 onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
                 onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
                 onAddAisle={addAisle}
@@ -2824,6 +2910,8 @@ export function DeploymentPlanningCenter() {
               onSelectRack={handleRackSelect}
               onMoveRack={placeRackOnPlan}
               onRotateRack={rotateRackOnPlan}
+              onAddRack={addRackFromCurrentModel}
+              onDeleteRack={removeRackFromPlan}
               onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
               onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
               onAddAisle={addAisle}
