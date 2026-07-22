@@ -3072,6 +3072,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      send_admin_announcement: {
+        Args: {
+          p_message?: string
+          p_metadata?: Json
+          p_recipient_ids?: string[] | null
+          p_sender_id: string
+          p_title?: string
+        }
+        Returns: Json
+      }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
         Returns: Json
