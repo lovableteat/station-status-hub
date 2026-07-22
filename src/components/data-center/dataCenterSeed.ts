@@ -306,8 +306,13 @@ export function createRackFromModel(
   model: RackModelDefinition,
   site: SitePlan
 ): RackPlan {
-  const nextIndex = site.racks.length + 1;
-  const id = `${site.id}-rack-${Date.now()}`;
+  const existingCabinets = new Set(site.racks.map((rack) => rack.cabinet));
+  let nextIndex = site.racks.length + 1;
+  while (existingCabinets.has(`NEW-${String(nextIndex).padStart(2, "0")}`)) {
+    nextIndex += 1;
+  }
+  const uniqueId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+  const id = `${site.id}-rack-${uniqueId}`;
   const rack = createRack({
     id,
     cabinet: `NEW-${String(nextIndex).padStart(2, "0")}`,
