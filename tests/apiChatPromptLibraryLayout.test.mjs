@@ -32,6 +32,7 @@ test("shared prompt hover preview opens at the upper-right with structured conte
 
   assert.match(hoverPreview, /side="right"/);
   assert.match(hoverPreview, /align="start"/);
+  assert.match(hoverPreview, /z-\[60\]/);
   assert.match(hoverPreview, /完整提示詞/);
   assert.match(hoverPreview, /點選原列立即套用/);
   assert.doesNotMatch(hoverPreview, /shadow-none/);
