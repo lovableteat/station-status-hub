@@ -27,3 +27,16 @@ test("REF DES previews show one value before the remaining item count", () => {
 
   assert.match(refDesBlock, /maxItems=\{1\}/);
 });
+
+test("main material column only shows material name and manufacturer", () => {
+  const cellBlock = source.match(
+    /<td[^>]*data-testid="main-material-vendor-cell"[\s\S]*?<\/td>/,
+  )?.[0] ?? "";
+
+  assert.match(cellBlock, /group\.name \|\| "未命名料件"/);
+  assert.match(cellBlock, /primaryAlternative\?\.manufacturer \|\| "未填廠商"/);
+  assert.doesNotMatch(cellBlock, /group\.displayRef/);
+  assert.doesNotMatch(cellBlock, /uniqueMpnCount/);
+  assert.doesNotMatch(cellBlock, /group\.assemblyName/);
+  assert.doesNotMatch(cellBlock, /CompactHoverValue/);
+});

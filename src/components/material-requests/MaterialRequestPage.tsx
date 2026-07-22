@@ -5735,10 +5735,6 @@ export function MaterialRequestPage() {
                 const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const groupRefValues = splitRefDesignators(groupRefDes);
-                const materialHoverValues = [
-                  group.name || "未命名料件",
-                  primaryAlternative?.manufacturer || "未填廠商",
-                ];
                 const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
                 const isMarked = markedGroupKeySet.has(group.key);
                 const editingNames = Array.from(new Set(
@@ -5788,36 +5784,26 @@ export function MaterialRequestPage() {
                           <Star className={cn("h-4.5 w-4.5", isMarked && "fill-current")} />
                         </button>
                       </td>
-                      <td className="relative overflow-hidden border-r border-blue-400/10 px-4 py-3">
+                      <td
+                        data-testid="main-material-vendor-cell"
+                        className="relative overflow-hidden border-r border-blue-400/10 px-4 py-3 align-middle"
+                      >
                         <span
                           aria-hidden
                           className="absolute inset-y-0 left-0 w-1 bg-[var(--material-row-accent)]"
                         />
-                        <div className="flex items-start gap-3">
-                          <span className={cn("mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-sm font-bold text-blue-300">{group.displayRef}</span>
-                              {isMarked && (
-                                <span className="rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-200">
-                                  已標記
-                                </span>
-                              )}
-                              {noAlternative ? (
-                                <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2.5 py-1 text-xs font-bold text-orange-300">單一料・無替代</span>
-                              ) : (
-                                <span className="rounded bg-blue-400/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{uniqueMpnCount} 個 MPN</span>
-                              )}
-                            </div>
-                            <div className="mt-1.5">
-                              <CompactHoverValue
-                                label="主料 / 廠商"
-                                values={materialHoverValues}
-                                maxItems={2}
-                                previewClassName="text-base font-bold leading-6 text-slate-50"
-                              />
-                            </div>
-                            <p className="mt-1 truncate text-sm text-slate-400">{group.assemblyName || "未指定模組"} · Qty {group.qty}</p>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className={cn("flex h-7 w-7 flex-none items-center justify-center rounded border", secondaryAlternatives.length > 0 ? expanded ? "border-blue-300/40 bg-blue-400/20 text-blue-200" : "border-blue-400/20 bg-blue-400/10 text-blue-300" : "border-slate-600/30 bg-slate-700/20 text-slate-600")}>{secondaryAlternatives.length > 0 ? expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="text-sm">—</span>}</span>
+                          <div
+                            className="min-w-0"
+                            title={`${group.name || "未命名料件"}\n${primaryAlternative?.manufacturer || "未填廠商"}`}
+                          >
+                            <p className="truncate text-base font-bold leading-6 text-slate-50">
+                              {group.name || "未命名料件"}
+                            </p>
+                            <p className="mt-1 truncate text-sm font-medium text-slate-400">
+                              {primaryAlternative?.manufacturer || "未填廠商"}
+                            </p>
                           </div>
                         </div>
                       </td>
