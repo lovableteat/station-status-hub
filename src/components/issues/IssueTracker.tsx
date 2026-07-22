@@ -338,10 +338,16 @@ export function IssueTracker() {
       />
 
       <Tabs value={activeView} onValueChange={setActiveView}>
-        <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-          <TabsList className="h-9 min-h-0 rounded-lg p-1">
-            <TabsTrigger value="list" className="h-7 rounded-md px-3 py-1 text-xs"><ListChecks className="mr-2 h-3.5 w-3.5" />問題列表</TabsTrigger>
-            <TabsTrigger value="analytics" className="h-7 rounded-md px-3 py-1 text-xs"><BarChart3 className="mr-2 h-3.5 w-3.5" />統計報告</TabsTrigger>
+        <div
+          data-ui="issue-view-toolbar"
+          className="flex flex-wrap items-center gap-2 border-b border-[#2a526f]/70 pb-2"
+        >
+          <TabsList
+            data-ui="issue-view-switch"
+            className="h-9 min-h-0 rounded-lg border-0 bg-[#0b1b2d] p-1 shadow-none"
+          >
+            <TabsTrigger value="list" className="h-7 rounded-md border-0 px-3 py-1 text-xs shadow-none data-[state=active]:border-0"><ListChecks className="mr-2 h-3.5 w-3.5" />問題列表</TabsTrigger>
+            <TabsTrigger value="analytics" className="h-7 rounded-md border-0 px-3 py-1 text-xs shadow-none data-[state=active]:border-0"><BarChart3 className="mr-2 h-3.5 w-3.5" />統計報告</TabsTrigger>
           </TabsList>
 
           {activeView === "list" && (
