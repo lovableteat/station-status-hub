@@ -57,9 +57,15 @@ test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () 
   assert.match(workspaceSource, /data-testid="data-center-touch-help"/);
 });
 
-test("3D navigation uses lightweight interaction previews without delayed wheel damping", () => {
+test("3D navigation keeps the same CAD geometry while reducing render cost", () => {
   assert.match(plannerSource, /interactionPreview/);
-  assert.match(plannerSource, /l10-interaction-preview/);
+  assert.match(plannerSource, /const renderLowDetail = lowDetail \|\| interactionPreview/);
+  assert.match(
+    plannerSource,
+    /lowDetail && l10Definition\.mobileAssetUrl\s+\? l10Definition\.mobileAssetUrl\s+: l10Definition\.assetUrl/,
+  );
+  assert.doesNotMatch(plannerSource, /l10-interaction-preview/);
+  assert.doesNotMatch(plannerSource, /l10-proxy-covers/);
   assert.match(plannerSource, /onStart=\{beginInteraction\}/);
   assert.match(plannerSource, /onEnd=\{restoreDetailAfterInteraction\}/);
   assert.match(plannerSource, /\}, 420\);/);
