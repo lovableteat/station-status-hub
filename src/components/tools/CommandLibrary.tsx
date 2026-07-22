@@ -1,45 +1,49 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Check,
+  Cloud,
+  Code2,
+  Copy,
+  Cpu,
+  Database,
+  Edit2,
+  HardDrive,
+  Loader2,
+  Monitor,
+  Network,
+  Package,
+  Plus,
+  Search,
+  Settings,
+  Shield,
+  Terminal,
+  Trash2,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Terminal,
-  Copy,
-  Plus,
-  Edit2,
-  Trash2,
-  Search,
-  ChevronDown,
-  ChevronRight,
-  Code2,
-  BookOpen,
-  Zap,
-  Settings,
-  Database,
-  Network,
-  Shield,
-  Cpu,
-  HardDrive,
-  Monitor,
-  Package,
-  Cloud
-} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface Command {
   id: string;
@@ -55,760 +59,335 @@ interface Command {
   updated_at: string;
 }
 
-interface Category {
-  id: string;
+interface CommandDraft {
   name: string;
-  icon: React.ReactNode;
-  color: string;
+  command: string;
+  description: string;
+  category: string;
+  platform: string;
+  tags: string;
+  examples: string;
+  notes: string;
 }
 
-const categories: Category[] = [
-  { id: "system", name: "系統管理", icon: <Settings className="h-4 w-4" />, color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  { id: "network", name: "網路相關", icon: <Network className="h-4 w-4" />, color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  { id: "database", name: "資料庫", icon: <Database className="h-4 w-4" />, color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
-  { id: "security", name: "安全性", icon: <Shield className="h-4 w-4" />, color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-  { id: "hardware", name: "硬體檢測", icon: <Cpu className="h-4 w-4" />, color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" },
-  { id: "storage", name: "儲存管理", icon: <HardDrive className="h-4 w-4" />, color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  { id: "monitor", name: "監控診斷", icon: <Monitor className="h-4 w-4" />, color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200" },
-  { id: "package", name: "套件管理", icon: <Package className="h-4 w-4" />, color: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200" },
-  { id: "cloud", name: "雲端服務", icon: <Cloud className="h-4 w-4" />, color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200" },
-  { id: "other", name: "其他", icon: <Code2 className="h-4 w-4" />, color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" }
-];
+const EMPTY_DRAFT: CommandDraft = {
+  name: "",
+  command: "",
+  description: "",
+  category: "system",
+  platform: "linux",
+  tags: "",
+  examples: "",
+  notes: "",
+};
+
+const categories = [
+  { id: "system", name: "系統管理", icon: Settings },
+  { id: "network", name: "網路相關", icon: Network },
+  { id: "database", name: "資料庫", icon: Database },
+  { id: "security", name: "安全性", icon: Shield },
+  { id: "hardware", name: "硬體檢測", icon: Cpu },
+  { id: "storage", name: "儲存管理", icon: HardDrive },
+  { id: "monitor", name: "監控診斷", icon: Monitor },
+  { id: "package", name: "套件管理", icon: Package },
+  { id: "cloud", name: "雲端服務", icon: Cloud },
+  { id: "other", name: "其他", icon: Code2 },
+] as const;
 
 const platforms = [
   { value: "linux", label: "Linux" },
   { value: "windows", label: "Windows" },
   { value: "macos", label: "macOS" },
   { value: "docker", label: "Docker" },
-  { value: "universal", label: "通用" }
+  { value: "universal", label: "通用" },
+] as const;
+
+const DEFAULT_COMMANDS = [
+  {
+    name: "檢查系統資訊",
+    command: "uname -a",
+    description: "顯示完整的系統資訊，包括核心版本、主機名稱等",
+    category: "system",
+    platform: "linux",
+    tags: ["系統", "資訊", "核心"],
+    examples: "uname -a",
+    notes: "常用於確認系統版本和架構",
+  },
+  {
+    name: "查看磁碟使用量",
+    command: "df -h",
+    description: "以人類可讀的格式顯示文件系統的磁碟使用量",
+    category: "storage",
+    platform: "linux",
+    tags: ["磁碟", "儲存", "空間"],
+    examples: "df -h",
+    notes: "監控磁碟空間使用情況的基本指令",
+  },
+  {
+    name: "查看網路連線",
+    command: "netstat -tulpn",
+    description: "顯示所有 TCP 和 UDP 連接以及監聽的埠",
+    category: "network",
+    platform: "linux",
+    tags: ["網路", "連線", "埠"],
+    examples: "netstat -tulpn",
+    notes: "用於網路問題診斷和安全檢查",
+  },
 ];
+
+function mapCommand(item: {
+  id: string;
+  name: string;
+  command: string;
+  description: string | null;
+  category: string;
+  platform: string;
+  tags: string[] | null;
+  examples: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}): Command {
+  return {
+    id: item.id,
+    name: item.name,
+    command: item.command,
+    description: item.description || "",
+    category: item.category,
+    platform: item.platform,
+    tags: item.tags || [],
+    examples: item.examples || undefined,
+    notes: item.notes || undefined,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  };
+}
 
 export function CommandLibrary() {
   const [commands, setCommands] = useState<Command[]>([]);
+  const [selectedCommand, setSelectedCommand] = useState<Command | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [platformFilter, setPlatformFilter] = useState("all");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<Command | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["system"]));
+  const [draft, setDraft] = useState<CommandDraft>(EMPTY_DRAFT);
   const { toast } = useToast();
 
-  const [newCommand, setNewCommand] = useState({
-    name: "",
-    command: "",
-    description: "",
-    category: "system",
-    platform: "linux",
-    tags: "",
-    examples: "",
-    notes: ""
-  });
-
-  useEffect(() => {
-    loadCommands();
-  }, []);
-
-  const loadCommands = async () => {
+  const loadCommands = useCallback(async () => {
     try {
       setIsLoading(true);
-      
-      // 從 Supabase 資料庫載入指令
       const { data, error } = await supabase
-        .from('command_library')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .from("command_library")
+        .select("*")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
 
-      if (error) {
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        setCommands(data);
-      } else {
-        // 如果資料庫為空，插入預設指令
-        const defaultCommands = [
-          {
-            name: "檢查系統資訊",
-            command: "uname -a",
-            description: "顯示完整的系統資訊，包括核心版本、主機名稱等",
-            category: "system",
-            platform: "linux",
-            tags: ["系統", "資訊", "核心"],
-            examples: "uname -a\n# 輸出範例：Linux hostname 5.4.0-42-generic #46-Ubuntu SMP Fri Jul 10 00:24:02 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux",
-            notes: "常用於確認系統版本和架構"
-          },
-          {
-            name: "查看磁碟使用量",
-            command: "df -h",
-            description: "以人類可讀的格式顯示文件系統的磁碟使用量",
-            category: "storage",
-            platform: "linux",
-            tags: ["磁碟", "儲存", "空間"],
-            examples: "df -h\n# 輸出範例：\n# Filesystem      Size  Used Avail Use% Mounted on\n# /dev/sda1        20G   15G  4.2G  79% /",
-            notes: "監控磁碟空間使用情況的基本指令"
-          },
-          {
-            name: "查看網路連線",
-            command: "netstat -tulpn",
-            description: "顯示所有TCP和UDP連接以及監聽的埠",
-            category: "network", 
-            platform: "linux",
-            tags: ["網路", "連線", "埠"],
-            examples: "netstat -tulpn\n# 顯示所有網路連線和監聽埠",
-            notes: "用於網路問題診斷和安全檢查"
-          }
-        ];
-
-        const { data: insertedData, error: insertError } = await supabase
-          .from('command_library')
-          .insert(defaultCommands)
+      let nextCommands = (data || []).map(mapCommand);
+      if (!nextCommands.length) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("command_library")
+          .insert(DEFAULT_COMMANDS)
           .select();
-
-        if (insertError) {
-          console.error('Error inserting default commands:', insertError);
-        } else if (insertedData) {
-          setCommands(insertedData);
-        }
+        if (insertError) throw insertError;
+        nextCommands = (inserted || []).map(mapCommand);
       }
+
+      setCommands(nextCommands);
+      setSelectedCommand((current) =>
+        nextCommands.find((command) => command.id === current?.id) || nextCommands[0] || null,
+      );
     } catch (error) {
-      console.error('Error loading commands:', error);
-      toast({
-        title: "載入失敗",
-        description: "無法載入指令庫",
-        variant: "destructive"
-      });
+      console.error("Error loading commands:", error);
+      toast({ title: "載入失敗", description: "無法載入指令庫", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
+  }, [toast]);
+
+  useEffect(() => {
+    void loadCommands();
+  }, [loadCommands]);
+
+  const openEditor = (command?: Command) => {
+    setEditingCommand(command || null);
+    setDraft(command ? {
+      name: command.name,
+      command: command.command,
+      description: command.description,
+      category: command.category,
+      platform: command.platform,
+      tags: command.tags.join(", "),
+      examples: command.examples || "",
+      notes: command.notes || "",
+    } : EMPTY_DRAFT);
+    setIsDialogOpen(true);
   };
 
-  const handleAddCommand = async () => {
-    if (!newCommand.name.trim() || !newCommand.command.trim()) {
-      toast({
-        title: "驗證錯誤",
-        description: "請輸入指令名稱和指令內容",
-        variant: "destructive"
-      });
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!draft.name.trim() || !draft.command.trim()) {
+      toast({ title: "資料不完整", description: "請輸入指令名稱與內容", variant: "destructive" });
       return;
     }
 
-    try {
-      const commandData = {
-        name: newCommand.name.trim(),
-        command: newCommand.command.trim(),
-        description: newCommand.description.trim(),
-        category: newCommand.category,
-        platform: newCommand.platform,
-        tags: newCommand.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        examples: newCommand.examples.trim() || null,
-        notes: newCommand.notes.trim() || null
-      };
-
-      const { data, error } = await supabase
-        .from('command_library')
-        .insert([commandData])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      setCommands(prev => [data, ...prev]);
-
-      toast({
-        title: "新增成功",
-        description: "指令已新增到指令庫",
-      });
-
-      setNewCommand({
-        name: "",
-        command: "",
-        description: "",
-        category: "system",
-        platform: "linux",
-        tags: "",
-        examples: "",
-        notes: ""
-      });
-      setIsAddDialogOpen(false);
-    } catch (error) {
-      console.error('Error adding command:', error);
-      toast({
-        title: "新增失敗",
-        description: "無法新增指令到資料庫",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEditCommand = async () => {
-    if (!editingCommand) return;
+    const payload = {
+      name: draft.name.trim(),
+      command: draft.command.trim(),
+      description: draft.description.trim(),
+      category: draft.category,
+      platform: draft.platform,
+      tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      examples: draft.examples.trim() || null,
+      notes: draft.notes.trim() || null,
+    };
 
     try {
-      const updateData = {
-        name: editingCommand.name.trim(),
-        command: editingCommand.command.trim(),
-        description: editingCommand.description.trim(),
-        category: editingCommand.category,
-        platform: editingCommand.platform,
-        tags: editingCommand.tags,
-        examples: editingCommand.examples?.trim() || null,
-        notes: editingCommand.notes?.trim() || null
-      };
-
-      const { error } = await supabase
-        .from('command_library')
-        .update(updateData)
-        .eq('id', editingCommand.id);
-
-      if (error) {
-        throw error;
-      }
-
-      // 更新本地狀態
-      setCommands(prev => prev.map(cmd => 
-        cmd.id === editingCommand.id 
-          ? { ...editingCommand, ...updateData, updated_at: new Date().toISOString() }
-          : cmd
-      ));
-
-      toast({
-        title: "更新成功",
-        description: "指令已更新",
-      });
-
-      setEditingCommand(null);
-    } catch (error) {
-      console.error('Error updating command:', error);
-      toast({
-        title: "更新失敗",
-        description: "無法更新指令",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteCommand = async (id: string) => {
-    if (!confirm('確認要刪除這個指令嗎？')) return;
-
-    try {
-      const { error } = await supabase
-        .from('command_library')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        throw error;
-      }
-
-      setCommands(prev => prev.filter(cmd => cmd.id !== id));
-
-      toast({
-        title: "刪除成功",
-        description: "指令已刪除",
-      });
-    } catch (error) {
-      console.error('Error deleting command:', error);
-      toast({
-        title: "刪除失敗",
-        description: "無法刪除指令",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast({
-        title: "複製成功",
-        description: "指令已複製到剪貼簿",
-      });
-    });
-  };
-
-  const toggleCategory = (categoryId: string) => {
-    setExpandedCategories(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(categoryId)) {
-        newSet.delete(categoryId);
+      if (editingCommand) {
+        const { error } = await supabase.from("command_library").update(payload).eq("id", editingCommand.id);
+        if (error) throw error;
+        toast({ title: "更新成功", description: "指令內容已儲存" });
       } else {
-        newSet.add(categoryId);
+        const { error } = await supabase.from("command_library").insert([payload]);
+        if (error) throw error;
+        toast({ title: "新增成功", description: "指令已加入共用庫" });
       }
-      return newSet;
-    });
+
+      setIsDialogOpen(false);
+      setEditingCommand(null);
+      setDraft(EMPTY_DRAFT);
+      await loadCommands();
+    } catch (error) {
+      console.error("Error saving command:", error);
+      toast({ title: "儲存失敗", description: "無法儲存指令", variant: "destructive" });
+    }
   };
 
-  const filteredCommands = commands.filter(command => {
-    const matchesSearch = command.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         command.command.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         command.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         command.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = categoryFilter === "all" || command.category === categoryFilter;
-    const matchesPlatform = platformFilter === "all" || command.platform === platformFilter;
-    return matchesSearch && matchesCategory && matchesPlatform;
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("確認要刪除這個指令嗎？")) return;
+    try {
+      const { error } = await supabase.from("command_library").delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "刪除成功", description: "指令已刪除" });
+      await loadCommands();
+    } catch (error) {
+      console.error("Error deleting command:", error);
+      toast({ title: "刪除失敗", description: "無法刪除指令", variant: "destructive" });
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "已複製", description: "指令已複製到剪貼簿" });
+    } catch {
+      toast({ title: "複製失敗", description: "無法存取剪貼簿", variant: "destructive" });
+    }
+  };
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredCommands = commands.filter((command) => {
+    const searchable = [command.name, command.command, command.description, command.tags.join(" ")].join(" ").toLowerCase();
+    return (categoryFilter === "all" || command.category === categoryFilter)
+      && (platformFilter === "all" || command.platform === platformFilter)
+      && (!normalizedSearch || searchable.includes(normalizedSearch));
   });
 
-  const commandsByCategory = categories.reduce((acc, category) => {
-    acc[category.id] = filteredCommands.filter(cmd => cmd.category === category.id);
-    return acc;
-  }, {} as Record<string, Command[]>);
+  const activeCommand = filteredCommands.find((command) => command.id === selectedCommand?.id)
+    || filteredCommands[0]
+    || null;
+  const selectedCategory = categories.find((category) => category.id === activeCommand?.category);
+  const SelectedCategoryIcon = selectedCategory?.icon || Code2;
 
   return (
-    <div className="space-y-6">
-      {/* 標題區域 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Terminal className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold">指令集管理</h2>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-base font-semibold text-[#f3f8fc]">
+            <Terminal className="h-4 w-4 text-amber-200" />指令庫
+            <Badge variant="outline" className="border-[#5e5632] bg-amber-300/[0.08] text-amber-100">{filteredCommands.length}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-[#91aabd]">選取指令後可直接複製或編輯，平台、範例與備註集中顯示。</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              新增指令
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+        <Dialog open={isDialogOpen} onOpenChange={(open) => setIsDialogOpen(open)}>
+          <DialogTrigger asChild><Button size="sm" onClick={() => openEditor()}><Plus className="mr-2 h-4 w-4" />新增指令</Button></DialogTrigger>
+          <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto border-[#2a526f] bg-[#071522]">
             <DialogHeader>
-              <DialogTitle>新增指令</DialogTitle>
+              <DialogTitle>{editingCommand ? "編輯指令" : "新增指令"}</DialogTitle>
+              <DialogDescription>填寫可辨識的名稱、執行內容與適用平台，方便同仁搜尋與重複使用。</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">指令名稱 *</Label>
-                  <Input
-                    id="name"
-                    value={newCommand.name}
-                    onChange={(e) => setNewCommand({...newCommand, name: e.target.value})}
-                    placeholder="例如：檢查系統資訊"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">分類</Label>
-                  <Select value={newCommand.category} onValueChange={(value) => setNewCommand({...newCommand, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map(cat => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          <div className="flex items-center gap-2">
-                            {cat.icon}
-                            {cat.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2"><Label htmlFor="command-name">指令名稱 *</Label><Input id="command-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></div>
+                <div className="space-y-2"><Label htmlFor="command-category">分類</Label><Select value={draft.category} onValueChange={(category) => setDraft((current) => ({ ...current, category }))}><SelectTrigger id="command-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(({ id, name, icon: Icon }) => <SelectItem key={id} value={id}><span className="flex items-center gap-2"><Icon className="h-4 w-4" />{name}</span></SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label htmlFor="command-platform">平台</Label><Select value={draft.platform} onValueChange={(platform) => setDraft((current) => ({ ...current, platform }))}><SelectTrigger id="command-platform"><SelectValue /></SelectTrigger><SelectContent>{platforms.map((platform) => <SelectItem key={platform.value} value={platform.value}>{platform.label}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label htmlFor="command-tags">標籤</Label><Input id="command-tags" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="以逗號分隔" /></div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="platform">平台</Label>
-                  <Select value={newCommand.platform} onValueChange={(value) => setNewCommand({...newCommand, platform: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {platforms.map(platform => (
-                        <SelectItem key={platform.value} value={platform.value}>
-                          {platform.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tags">標籤 (用逗號分隔)</Label>
-                  <Input
-                    id="tags"
-                    value={newCommand.tags}
-                    onChange={(e) => setNewCommand({...newCommand, tags: e.target.value})}
-                    placeholder="例如：系統,資訊,核心"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="command">指令內容 *</Label>
-                <Textarea
-                  id="command"
-                  value={newCommand.command}
-                  onChange={(e) => setNewCommand({...newCommand, command: e.target.value})}
-                  placeholder="例如：uname -a"
-                  rows={3}
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">描述</Label>
-                <Textarea
-                  id="description"
-                  value={newCommand.description}
-                  onChange={(e) => setNewCommand({...newCommand, description: e.target.value})}
-                  placeholder="簡要描述這個指令的功能和用途"
-                  rows={2}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="examples">使用範例</Label>
-                <Textarea
-                  id="examples"
-                  value={newCommand.examples}
-                  onChange={(e) => setNewCommand({...newCommand, examples: e.target.value})}
-                  placeholder="提供使用範例和預期輸出"
-                  rows={3}
-                  className="font-mono text-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">備註</Label>
-                <Textarea
-                  id="notes"
-                  value={newCommand.notes}
-                  onChange={(e) => setNewCommand({...newCommand, notes: e.target.value})}
-                  placeholder="其他注意事項或相關資訊"
-                  rows={2}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={handleAddCommand}>
-                新增指令
-              </Button>
-            </div>
+              <div className="space-y-2"><Label htmlFor="command-content">指令內容 *</Label><Textarea id="command-content" value={draft.command} onChange={(event) => setDraft((current) => ({ ...current, command: event.target.value }))} rows={5} wrap="off" className="whitespace-pre bg-[#06111f] font-mono leading-6" /></div>
+              <div className="space-y-2"><Label htmlFor="command-description">用途說明</Label><Textarea id="command-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} rows={3} /></div>
+              <div className="space-y-2"><Label htmlFor="command-examples">使用範例</Label><Textarea id="command-examples" value={draft.examples} onChange={(event) => setDraft((current) => ({ ...current, examples: event.target.value }))} rows={5} wrap="off" className="whitespace-pre bg-[#06111f] font-mono leading-6" /></div>
+              <div className="space-y-2"><Label htmlFor="command-notes">備註與風險</Label><Textarea id="command-notes" value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} /></div>
+              <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button><Button type="submit"><Check className="mr-2 h-4 w-4" />{editingCommand ? "儲存變更" : "建立指令"}</Button></DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* 搜尋和篩選 */}
-      <div className="flex gap-4 items-center flex-wrap">
-        <div className="flex-1 min-w-64">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="搜尋指令名稱、內容或標籤..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="分類" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">所有分類</SelectItem>
-            {categories.map(cat => (
-              <SelectItem key={cat.id} value={cat.id}>
-                <div className="flex items-center gap-2">
-                  {cat.icon}
-                  {cat.name}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={platformFilter} onValueChange={setPlatformFilter}>
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="平台" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">所有平台</SelectItem>
-            {platforms.map(platform => (
-              <SelectItem key={platform.value} value={platform.value}>
-                {platform.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
+        <div className="relative min-w-[240px] flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder="搜尋名稱、內容、說明或標籤" /></div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+        <Select value={platformFilter} onValueChange={setPlatformFilter}><SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有平台</SelectItem>{platforms.map((platform) => <SelectItem key={platform.value} value={platform.value}>{platform.label}</SelectItem>)}</SelectContent></Select>
       </div>
 
-      {/* 統計資訊 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{commands.length}</div>
-            <div className="text-sm text-muted-foreground">總指令數</div>
+      <div data-testid="command-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">
+        <aside className="border-b border-[#2a526f] bg-[#081827] lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between border-b border-[#23445d] px-4 py-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb0c2]">指令清單</span><span className="font-mono text-xs text-amber-200">{filteredCommands.length}</span></div>
+          <div className="max-h-[560px] space-y-1 overflow-y-auto p-2">
+            {isLoading && <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#91aabd]"><Loader2 className="h-4 w-4 animate-spin" />載入中</div>}
+            {!isLoading && filteredCommands.map((command) => {
+              const category = categories.find((item) => item.id === command.category);
+              const Icon = category?.icon || Code2;
+              return (
+                <button key={command.id} type="button" onClick={() => setSelectedCommand(command)} className={cn("w-full rounded-lg border px-3 py-3 text-left transition-colors", activeCommand?.id === command.id ? "border-amber-200/60 bg-amber-300/[0.08]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1f31]")}>
+                  <div className="flex items-center gap-2"><Icon className="h-4 w-4 shrink-0 text-[#87cce1]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#eef8fc]">{command.name}</span><Badge variant="outline" className="border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{platforms.find((platform) => platform.value === command.platform)?.label || command.platform}</Badge></div>
+                  <code className="mt-2 block truncate rounded bg-[#06111f] px-2 py-1.5 text-xs text-[#bbd7e4]">{command.command}</code>
+                </button>
+              );
+            })}
+            {!isLoading && filteredCommands.length === 0 && <div className="px-4 py-12 text-center text-sm text-[#7896a8]">找不到符合條件的指令</div>}
           </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{new Set(commands.map(c => c.category)).size}</div>
-            <div className="text-sm text-muted-foreground">分類數量</div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{new Set(commands.map(c => c.platform)).size}</div>
-            <div className="text-sm text-muted-foreground">支援平台</div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{filteredCommands.length}</div>
-            <div className="text-sm text-muted-foreground">搜尋結果</div>
-          </div>
-        </Card>
-      </div>
+        </aside>
 
-      {/* 分類展示 */}
-      <div className="space-y-4">
-        {categories.map(category => {
-          const categoryCommands = commandsByCategory[category.id] || [];
-          if (categoryCommands.length === 0) return null;
-
-          return (
-            <Card key={category.id}>
-              <Collapsible 
-                open={expandedCategories.has(category.id)} 
-                onOpenChange={() => toggleCategory(category.id)}
-              >
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {expandedCategories.has(category.id) ? 
-                          <ChevronDown className="h-4 w-4" /> : 
-                          <ChevronRight className="h-4 w-4" />
-                        }
-                        <Badge className={category.color}>
-                          {category.icon}
-                          <span className="ml-1">{category.name}</span>
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          ({categoryCommands.length} 個指令)
-                        </span>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {categoryCommands.map(command => (
-                        <div key={command.id} className="border border-border rounded-lg p-4 hover:bg-muted/20 transition-colors">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-semibold">{command.name}</h4>
-                                <Badge variant="outline" className="text-xs">
-                                  {platforms.find(p => p.value === command.platform)?.label}
-                                </Badge>
-                              </div>
-                              <div className="bg-muted p-3 rounded font-mono text-sm break-all">
-                                {command.command}
-                              </div>
-                              {command.description && (
-                                <p className="text-sm text-muted-foreground">{command.description}</p>
-                              )}
-                              {command.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {command.tags.map(tag => (
-                                    <Badge key={tag} variant="secondary" className="text-xs">
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                              {command.examples && (
-                                <details className="text-sm">
-                                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                                    使用範例
-                                  </summary>
-                                  <pre className="mt-2 bg-muted p-2 rounded text-xs overflow-x-auto">
-                                    {command.examples}
-                                  </pre>
-                                </details>
-                              )}
-                              {command.notes && (
-                                <p className="text-xs text-muted-foreground bg-yellow-50 dark:bg-yellow-950/20 p-2 rounded">
-                                  💡 {command.notes}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => copyToClipboard(command.command)}
-                                title="複製指令"
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditingCommand(command)}
-                                title="編輯指令"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDeleteCommand(command.id)}
-                                title="刪除指令"
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* 編輯對話框 */}
-      {editingCommand && (
-        <Dialog open={!!editingCommand} onOpenChange={() => setEditingCommand(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>編輯指令</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">指令名稱 *</Label>
-                  <Input
-                    id="edit-name"
-                    value={editingCommand.name}
-                    onChange={(e) => setEditingCommand({...editingCommand, name: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-category">分類</Label>
-                  <Select value={editingCommand.category} onValueChange={(value) => setEditingCommand({...editingCommand, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map(cat => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          <div className="flex items-center gap-2">
-                            {cat.icon}
-                            {cat.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+        <section className="min-w-0 bg-[#06111f]">
+          {activeCommand ? (
+            <div className="flex h-full min-h-[520px] flex-col">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-5 py-4">
+                <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200"><SelectedCategoryIcon className="h-4 w-4" />指令預覽</div><h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{activeCommand.name}</h3><div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedCategory?.name || activeCommand.category}</Badge><Badge variant="outline">{platforms.find((platform) => platform.value === activeCommand.platform)?.label || activeCommand.platform}</Badge>{activeCommand.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div></div>
+                <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => void copyToClipboard(activeCommand.command)}><Copy className="mr-2 h-4 w-4" />複製</Button><Button size="sm" onClick={() => openEditor(activeCommand)}><Edit2 className="mr-2 h-4 w-4" />編輯</Button><Button size="sm" variant="destructive" onClick={() => void handleDelete(activeCommand.id)}><Trash2 className="mr-2 h-4 w-4" />刪除</Button></div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-platform">平台</Label>
-                  <Select value={editingCommand.platform} onValueChange={(value) => setEditingCommand({...editingCommand, platform: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {platforms.map(platform => (
-                        <SelectItem key={platform.value} value={platform.value}>
-                          {platform.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-tags">標籤 (用逗號分隔)</Label>
-                  <Input
-                    id="edit-tags"
-                    value={editingCommand.tags.join(', ')}
-                    onChange={(e) => setEditingCommand({...editingCommand, tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)})}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-command">指令內容 *</Label>
-                <Textarea
-                  id="edit-command"
-                  value={editingCommand.command}
-                  onChange={(e) => setEditingCommand({...editingCommand, command: e.target.value})}
-                  rows={3}
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">描述</Label>
-                <Textarea
-                  id="edit-description"
-                  value={editingCommand.description}
-                  onChange={(e) => setEditingCommand({...editingCommand, description: e.target.value})}
-                  rows={2}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-examples">使用範例</Label>
-                <Textarea
-                  id="edit-examples"
-                  value={editingCommand.examples || ''}
-                  onChange={(e) => setEditingCommand({...editingCommand, examples: e.target.value})}
-                  rows={3}
-                  className="font-mono text-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-notes">備註</Label>
-                <Textarea
-                  id="edit-notes"
-                  value={editingCommand.notes || ''}
-                  onChange={(e) => setEditingCommand({...editingCommand, notes: e.target.value})}
-                  rows={2}
-                />
+              <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">
+                <div><div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7ea3b8]">執行內容</div><pre className="overflow-auto whitespace-pre rounded-xl border border-[#3c4c45] bg-[#020913] p-5 font-mono text-sm leading-6 text-[#e8f4d6]"><code>{activeCommand.command}</code></pre></div>
+                {activeCommand.description && <PreviewBlock label="用途說明" content={activeCommand.description} />}
+                {activeCommand.examples && <PreviewBlock label="使用範例" content={activeCommand.examples} code />}
+                {activeCommand.notes && <PreviewBlock label="備註與風險" content={activeCommand.notes} tone="warning" />}
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingCommand(null)}>
-                取消
-              </Button>
-              <Button onClick={handleEditCommand}>
-                更新指令
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          ) : (
+            <div className="flex min-h-[520px] flex-col items-center justify-center px-8 text-center"><Terminal className="h-10 w-10 text-[#315975]" /><div className="mt-4 text-base font-semibold text-[#dbeaf2]">尚未選取指令</div><p className="mt-1 text-sm text-[#7896a8]">選取指令後可直接複製或編輯</p></div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
 
-      {/* 空狀態 */}
-      {!isLoading && filteredCommands.length === 0 && (
-        <Card className="p-8">
-          <div className="text-center text-muted-foreground">
-            <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium mb-2">找不到相關指令</h3>
-            <p className="text-sm">
-              {searchTerm || categoryFilter !== "all" || platformFilter !== "all" 
-                ? "嘗試調整搜尋條件或篩選設定" 
-                : "還沒有任何指令，點擊上方按鈕新增第一個指令"
-              }
-            </p>
-          </div>
-        </Card>
-      )}
+function PreviewBlock({ content, code = false, label, tone = "default" }: { content: string; code?: boolean; label: string; tone?: "default" | "warning" }) {
+  return (
+    <div className={cn("rounded-xl border p-4", tone === "warning" ? "border-amber-300/25 bg-amber-300/[0.06]" : "border-[#274a64] bg-[#0b1b2d]")}>
+      <div className={cn("mb-2 text-xs font-semibold uppercase tracking-[0.12em]", tone === "warning" ? "text-amber-200" : "text-[#7ea3b8]")}>{label}</div>
+      {code ? <pre className="overflow-auto whitespace-pre font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre> : <p className="whitespace-pre-line text-sm leading-6 text-[#c8dce8]">{content}</p>}
     </div>
   );
 }
