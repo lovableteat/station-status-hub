@@ -1,56 +1,69 @@
 {
   "sourceFileName": "00_carlo-next_l10_outlook_20260715.stp",
   "sourceBytes": 682516405,
+  "sourceFormat": "STEP AP242",
+  "sourceRevision": "20260715",
   "outputFileName": "carlo-next-l10-20260715.glb",
-  "outputBytes": 18991088,
-  "rebuiltAt": "2026-07-19T15:15:05.883091Z",
-  "linearDeflection": 2.5,
-  "sourceUpAxis": "z",
-  "upAxis": "z",
+  "outputBytes": 2855476,
+  "rebuiltAt": "2026-07-22T04:39:45Z",
+  "geometryConverter": "FreeCAD 0.20.2",
+  "geometrySource": "authoritative-step-assembly",
+  "displayMaterialMode": "semantic-part-name-palette",
+  "displayMaterialNote": "The STEP assembly geometry and named parts are preserved. Display materials are assigned from CAD part semantics because the FreeCAD mesh export does not retain the AP242 appearance table.",
+  "sourceUpAxis": "y",
+  "upAxis": "y",
   "boundsUnit": "mm",
   "minimum": [
-    -240.757,
-    -49.817,
-    -43.564
+    -247.374,
+    -0.11,
+    -72.301
   ],
   "maximum": [
-    240.757,
-    839.824,
-    0.906
+    247.374,
+    43.601,
+    842.245
   ],
   "spans": {
-    "x": 481.515,
-    "y": 889.642,
-    "z": 44.471
+    "x": 494.748,
+    "y": 43.71,
+    "z": 914.546
   },
   "dimensions": {
-    "widthMm": 481.5,
-    "depthMm": 889.6,
-    "heightMm": 44.5
+    "widthMm": 482.1,
+    "depthMm": 912.3,
+    "heightMm": 43.8
+  },
+  "measuredAssetDimensions": {
+    "widthMm": 494.748,
+    "depthMm": 914.546,
+    "heightMm": 43.71
   },
   "assembly": {
     "role": "gb300-l10-1u-module",
     "rackUnits": 1,
-    "note": "Independent GB300 L10 1U machine mounted horizontally on the L11 rack-unit rail field."
+    "note": "Independent GB300 L10 1U machine mounted horizontally on the GB300 L11 rack-unit rail field."
   },
-  "assemblyScope": "physical-root-envelope",
-  "meshCount": 1,
+  "assemblyScope": "source-assembly-tree",
+  "topCoverNode": "GB3_MGX102_TOP_COVER_766_1_V08",
+  "coverStrategy": "source-assembly",
+  "isConverted": true,
+  "meshCount": 411,
+  "nodeCount": 752,
+  "materialCount": 9,
   "webOptimization": {
     "tool": "gltfpack 1.2",
-    "triangleCount": 1300446,
-    "vertexCount": 282049,
-    "sha256": "68B2F6A54838D8EE78B40062139377EB446B13030D1F5303443420B7A2933943"
+    "triangleCount": 365506,
+    "preservesNamedNodes": true,
+    "preservesNamedMaterials": true,
+    "sha256": "94E5DE12A8AB30DF33F332ED5AC7C30F9E24CC1F14BE85417CA1D17C98532396"
   },
   "mobileWebOptimization": {
     "outputFileName": "carlo-next-l10-20260715.mobile.glb",
-    "outputBytes": 610588,
-    "triangleCount": 79276,
-    "vertexCount": 11150,
-    "simplificationRatio": 0.03,
-    "maximumError": 0.04,
-    "borderVerticesLocked": false,
-    "coverStrategy": "calibrated-proxy-overlay",
-    "note": "Fast scene LOD with calibrated proxy covers for every exposed L10. The detail viewer always uses the original CAD.",
-    "sha256": "55DAE218579D03F48E5060B184B179EBBD3D6EBF1F7EE33DEECF2E434A765113"
+    "outputBytes": 1427036,
+    "triangleCount": 164825,
+    "preservesNamedNodes": true,
+    "preservesNamedMaterials": true,
+    "coverStrategy": "source-assembly",
+    "sha256": "623CB6F046312826CC15DAB13FABF2F8AF7EF4A8DBB971678DFA3E65FC55BA1B"
   }
 }

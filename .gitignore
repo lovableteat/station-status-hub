@@ -14,6 +14,16 @@ dist-ssr
 __pycache__/
 *.py[cod]
 
+# Generated QA and model-conversion output
+.playwright-cli/
+output/
+tmp/codex-*/
+tmp/parse-test/
+tmp/ref_location_*
+tmp/timer-*.pid
+tmp/*.xlsx
+tmp_preflight_*.sql
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -9,6 +9,7 @@ import type {
 } from "./dataCenterTypes";
 
 const companyModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.glb`;
+const companyMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.mobile.glb`;
 const veraRubinVr1uModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.glb`;
 const veraRubinVr1uMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.mobile.glb`;
 const carloNextL10ModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.glb`;
@@ -24,6 +25,7 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     source: "builtin-glb",
     sourceFileName: "000_nv_mgx_rack_v1-2_REV_7.stp",
     assetUrl: companyModelUrl,
+    mobileAssetUrl: companyMobileModelUrl,
     dimensions: {
       widthMm: 708.8,
       depthMm: 1072.2,
@@ -47,7 +49,7 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
       depthMm: 899.1,
       heightMm: 44,
     },
-    upAxis: "z",
+    upAxis: "y",
     rackUnits: 1,
     compatibleRackModelIds: [],
     compatibilityNote: "尚未取得 VR200 L11 原始檔，目前只提供 L10 細節檢視，不允許誤套至其他機櫃。",
@@ -64,11 +66,11 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     assetUrl: carloNextL10ModelUrl,
     mobileAssetUrl: carloNextL10MobileModelUrl,
     dimensions: {
-      widthMm: 481.5,
-      depthMm: 889.6,
-      heightMm: 44.5,
+      widthMm: 482.1,
+      depthMm: 912.3,
+      heightMm: 43.8,
     },
-    upAxis: "z",
+    upAxis: "y",
     rackUnits: 1,
     compatibleRackModelIds: ["nv-mgx-rack-v1-2-rev7"],
     compatibilityNote: "已依 19 吋軌道與 1U 節距校正，可安裝於 GB300 L11 機櫃。",

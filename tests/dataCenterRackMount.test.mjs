@@ -15,7 +15,7 @@ test("GB300 L10 fits the L11 19-inch rails with one uniform scale", () => {
   const layout = getRackUnitMountLayout({
     rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
     capacityU: 42,
-    moduleDimensions: { widthMm: 481.5, depthMm: 889.6, heightMm: 44.5 },
+    moduleDimensions: { widthMm: 482.1, depthMm: 912.3, heightMm: 43.8 },
     rackUnits: 1,
     moduleCount: 8,
   });
@@ -37,7 +37,7 @@ test("operators can choose the first occupied U and modules continue upward", ()
   const layout = getRackUnitMountLayout({
     rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
     capacityU: 42,
-    moduleDimensions: { widthMm: 481.5, depthMm: 889.6, heightMm: 44.5 },
+    moduleDimensions: { widthMm: 482.1, depthMm: 912.3, heightMm: 43.8 },
     rackUnits: 1,
     moduleCount: 3,
     startU: 10,
@@ -67,7 +67,7 @@ test("operators can mount L10 modules on individually selected rack units", () =
   const layout = getRackUnitMountLayout({
     rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
     capacityU: 42,
-    moduleDimensions: { widthMm: 481.5, depthMm: 889.6, heightMm: 44.5 },
+    moduleDimensions: { widthMm: 482.1, depthMm: 912.3, heightMm: 43.8 },
     rackUnits: 1,
     moduleCount: 3,
     startU: 3,
@@ -100,7 +100,7 @@ test("selected U is clamped before reserved top space and excess modules are rej
   const layout = getRackUnitMountLayout({
     rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
     capacityU: 42,
-    moduleDimensions: { widthMm: 481.5, depthMm: 889.6, heightMm: 44.5 },
+    moduleDimensions: { widthMm: 482.1, depthMm: 912.3, heightMm: 43.8 },
     rackUnits: 1,
     moduleCount: 8,
     startU: 39,

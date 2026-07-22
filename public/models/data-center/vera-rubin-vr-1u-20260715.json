@@ -2,11 +2,11 @@
   "sourceFileName": "00_vr_outlook_20260715.stp",
   "sourceBytes": 266693439,
   "outputFileName": "vera-rubin-vr-1u-20260715.glb",
-  "outputBytes": 8369932,
-  "rebuiltAt": "2026-07-19T15:15:05.883091Z",
-  "linearDeflection": 2.5,
+  "outputBytes": 2218324,
+  "rebuiltAt": "2026-07-20T04:01:50.737Z",
+  "linearDeflection": 0.35,
   "sourceUpAxis": "y",
-  "upAxis": "z",
+  "upAxis": "y",
   "boundsUnit": "mm",
   "minimum": [
     -248.6007971972148,
@@ -33,10 +33,16 @@
     "rackUnits": 1,
     "note": "Measured VR200 L10 root assembly from the supplied STEP. It remains a horizontal 1U device independent from the unavailable VR200 L11 model."
   },
-  "assemblyScope": "root-shapes",
+  "assemblyScope": "xcaf-assembly-hierarchy",
   "sourceShapeCount": 1326,
-  "shapeCount": 1,
-  "meshCount": 1,
+  "shapeCount": 417,
+  "nodeCount": 892,
+  "meshCount": 137,
+  "primitiveCount": 255,
+  "materialCount": 105,
+  "coloredMaterialCount": 105,
+  "saturatedMaterialCount": 84,
+  "topCoverNode": "1_TOP-COVER_VR",
   "rootCoverage": {
     "rootShapeCount": 1,
     "rootSolidCount": 1136,
@@ -55,20 +61,23 @@
   },
   "webOptimization": {
     "tool": "gltfpack 1.2",
-    "triangleCount": 360443,
-    "vertexCount": 336966,
-    "sha256": "12F91076A413FF80F2744F900B896104DF9BA6FFD7BB40FD3288EC7A051F76C8"
+    "triangleCount": 404050,
+    "vertexCount": 387903,
+    "simplificationRatio": 0.35,
+    "maximumError": 0.005,
+    "preservesNamedNodes": true,
+    "preservesNamedMaterials": true,
+    "sha256": "EED1C6ADE41331B350AC3AF2D08A37CF330B57439159237B78A201BE47516ECF"
   },
   "mobileWebOptimization": {
     "outputFileName": "vera-rubin-vr-1u-20260715.mobile.glb",
-    "outputBytes": 182484,
-    "triangleCount": 14392,
-    "vertexCount": 7927,
-    "simplificationRatio": 0.04,
-    "maximumError": 0.04,
-    "borderVerticesLocked": false,
-    "coverStrategy": "calibrated-proxy-overlay",
-    "note": "Fast scene LOD with calibrated proxy covers for every exposed L10. The detail viewer always uses the original CAD.",
-    "sha256": "DA0FA64B6FD0E1A835DD0EE33C344C802362D3527175A43ADF525083C48285F0"
+    "outputBytes": 1344496,
+    "triangleCount": 209830,
+    "vertexCount": 232593,
+    "simplificationRatio": 0.08,
+    "maximumError": 0.03,
+    "preservesNamedNodes": true,
+    "preservesNamedMaterials": true,
+    "sha256": "5C74AB84680A3E8A8DA5258791E03D72285875BB9D4A4C60C4B2EE420E4D200F"
   }
 }

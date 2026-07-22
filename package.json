@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "model:convert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-freecad.ps1",
-    "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-step-to-glb.mjs",
+    "model:convert:xcaf": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-occt.ps1",
+    "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-large-step-to-glb.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -95,6 +96,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@gltf-transform/core": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.3",
@@ -106,6 +109,7 @@
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
     "lovable-tagger": "^1.1.7",
+    "meshoptimizer": "^1.2.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
