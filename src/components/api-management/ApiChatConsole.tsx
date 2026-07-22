@@ -1992,7 +1992,7 @@ export function ApiChatConsole({
             filteredLibraryPrompts.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-stretch gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
+                className="group flex h-20 items-stretch gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
               >
                 <button
                   type="button"
@@ -2000,7 +2000,7 @@ export function ApiChatConsole({
                   className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                 >
                   <span className="block truncate text-base font-black text-white">{item.title}</span>
-                  <span className="mt-1 block line-clamp-2 text-sm leading-5 text-slate-300">{item.content}</span>
+                  <span className="mt-1 block truncate text-sm leading-5 text-slate-300">{item.content}</span>
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
