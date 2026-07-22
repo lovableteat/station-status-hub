@@ -24,3 +24,15 @@ test("shared prompt rows stay compact while full content remains available on ho
     "the complete prompt content should remain available in an accessible hover card",
   );
 });
+
+test("shared prompt hover preview opens at the upper-right with structured content", () => {
+  const hoverPreview = source.match(
+    /<HoverCardContent[\s\S]*?data-testid="prompt-hover-preview"[\s\S]*?<\/HoverCardContent>/,
+  )?.[0] ?? "";
+
+  assert.match(hoverPreview, /side="right"/);
+  assert.match(hoverPreview, /align="start"/);
+  assert.match(hoverPreview, /完整提示詞/);
+  assert.match(hoverPreview, /點選原列立即套用/);
+  assert.doesNotMatch(hoverPreview, /shadow-none/);
+});
