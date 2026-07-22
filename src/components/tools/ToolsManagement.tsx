@@ -876,9 +876,9 @@ function CommandCenter() {
   return (
     <div className="maintenance-panel overflow-hidden">
       <Tabs defaultValue="commands">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a526f] bg-gradient-to-r from-amber-300/[0.08] via-[#0b1b2d] to-blue-300/[0.06] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a526f] bg-[linear-gradient(90deg,rgba(34,211,238,0.07),#0b1b2d_42%,rgba(59,130,246,0.04))] px-4 py-3">
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#f3f8fc]"><Terminal className="h-4 w-4 text-amber-200" />指令管理</div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#f3f8fc]"><Terminal className="h-4 w-4 text-cyan-100" />指令管理</div>
             <div className="mt-0.5 text-xs text-[#9eb8c9]">執行指令與程式碼片段統一歸類為「指令」，在此分別維護內容。</div>
           </div>
           <TabsList className="h-9 min-h-0 rounded-lg p-1">
