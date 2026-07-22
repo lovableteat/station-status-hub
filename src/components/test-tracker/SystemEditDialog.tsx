@@ -51,7 +51,7 @@ interface SystemEditDialogProps {
   open?: boolean;
   onUpdate: () => void;
   showTrigger?: boolean;
-  variant?: "button" | "icon";
+  variant?: "button" | "icon" | "menu";
 }
 
 export function SystemEditDialog({
@@ -390,6 +390,15 @@ export function SystemEditDialog({
               )}
             >
               {assignedEngineer}
+            </Button>
+          ) : variant === "menu" ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 w-full justify-start gap-3 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-[#dceaf4] shadow-none hover:border-cyan-300/25 hover:bg-cyan-300/10 hover:text-cyan-50"
+            >
+              <Edit className="h-4 w-4 shrink-0 text-cyan-300" />
+              編輯機台資料
             </Button>
           ) : (
             <Button

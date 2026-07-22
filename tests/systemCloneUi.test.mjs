@@ -20,6 +20,17 @@ test("each tracker row exposes sequential machine cloning", async () => {
   assert.match(tracker, /sourceSystem=\{cloneSourceSystem\}/);
 });
 
+test("machine actions use one compact menu and separate destructive data controls", async () => {
+  const table = await readFile(tableUrl, "utf8");
+
+  assert.match(table, /className="w-64 overflow-hidden rounded-xl/);
+  assert.match(table, />\s*機台操作\s*</);
+  assert.match(table, />\s*資料管理\s*</);
+  assert.match(table, /triggerVariant="menu"/);
+  assert.match(table, /variant="menu"/);
+  assert.match(table, />\s*複製為連號機台\s*</);
+});
+
 test("clone dialog previews the series and invokes the clone service", async () => {
   const dialog = await readFile(dialogUrl, "utf8");
 

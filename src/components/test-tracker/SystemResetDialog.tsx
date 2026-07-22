@@ -19,9 +19,15 @@ interface SystemResetDialogProps {
   systemId: string;
   systemName: string;
   onReset: () => void;
+  triggerVariant?: "default" | "menu";
 }
 
-export function SystemResetDialog({ systemId, systemName, onReset }: SystemResetDialogProps) {
+export function SystemResetDialog({
+  systemId,
+  systemName,
+  onReset,
+  triggerVariant = "default",
+}: SystemResetDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const { toast } = useToast();
@@ -83,12 +89,17 @@ export function SystemResetDialog({ systemId, systemName, onReset }: SystemReset
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button 
-          variant="destructive" 
+          variant={triggerVariant === "menu" ? "ghost" : "destructive"}
           size="sm"
-          className="w-8 h-8 p-0"
+          className={
+            triggerVariant === "menu"
+              ? "h-10 w-full justify-start gap-3 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-[#dceaf4] shadow-none hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-50"
+              : "h-8 w-8 p-0"
+          }
           title={`重置 ${systemName} 進度`}
         >
-          <RotateCcw className="h-4 w-4" />
+          <RotateCcw className={triggerVariant === "menu" ? "h-4 w-4 shrink-0 text-amber-300" : "h-4 w-4"} />
+          {triggerVariant === "menu" && <span>重設測試進度</span>}
         </Button>
       </DialogTrigger>
       <DialogContent>

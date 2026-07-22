@@ -370,11 +370,13 @@ export function SystemManager({ onSystemUpdate, showDeleteAll = true, trigger }:
 export function SystemDeleteButton({ 
   systemId, 
   systemName, 
-  onSystemUpdate 
+  onSystemUpdate,
+  triggerVariant = "default",
 }: { 
   systemId: string; 
   systemName: string; 
   onSystemUpdate: () => void; 
+  triggerVariant?: "default" | "menu";
 }) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -411,9 +413,18 @@ export function SystemDeleteButton({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isDeleting}>
-          <Trash2 className="h-3 w-3 mr-1" />
-          刪除
+        <Button
+          variant={triggerVariant === "menu" ? "ghost" : "outline"}
+          size="sm"
+          disabled={isDeleting}
+          className={
+            triggerVariant === "menu"
+              ? "h-10 w-full justify-start gap-3 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-[#dceaf4] shadow-none hover:border-rose-300/25 hover:bg-rose-300/10 hover:text-rose-50"
+              : undefined
+          }
+        >
+          <Trash2 className={triggerVariant === "menu" ? "h-4 w-4 shrink-0 text-rose-300" : "mr-1 h-3 w-3"} />
+          {triggerVariant === "menu" ? "刪除這台機台" : "刪除"}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
