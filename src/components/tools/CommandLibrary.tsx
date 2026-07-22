@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,14 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Terminal,
   Copy,
@@ -63,16 +55,16 @@ interface Category {
 }
 
 const categories: Category[] = [
-  { id: "system", name: "系統管理", icon: <Settings className="h-4 w-4" />, color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  { id: "network", name: "網路相關", icon: <Network className="h-4 w-4" />, color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  { id: "database", name: "資料庫", icon: <Database className="h-4 w-4" />, color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
-  { id: "security", name: "安全性", icon: <Shield className="h-4 w-4" />, color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-  { id: "hardware", name: "硬體檢測", icon: <Cpu className="h-4 w-4" />, color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" },
-  { id: "storage", name: "儲存管理", icon: <HardDrive className="h-4 w-4" />, color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  { id: "monitor", name: "監控診斷", icon: <Monitor className="h-4 w-4" />, color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200" },
-  { id: "package", name: "套件管理", icon: <Package className="h-4 w-4" />, color: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200" },
-  { id: "cloud", name: "雲端服務", icon: <Cloud className="h-4 w-4" />, color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200" },
-  { id: "other", name: "其他", icon: <Code2 className="h-4 w-4" />, color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" }
+  { id: "system", name: "系統管理", icon: <Settings className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "network", name: "網路相關", icon: <Network className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "database", name: "資料庫", icon: <Database className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "security", name: "安全性", icon: <Shield className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "hardware", name: "硬體檢測", icon: <Cpu className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "storage", name: "儲存管理", icon: <HardDrive className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "monitor", name: "監控診斷", icon: <Monitor className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "package", name: "套件管理", icon: <Package className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "cloud", name: "雲端服務", icon: <Cloud className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" },
+  { id: "other", name: "其他", icon: <Code2 className="h-4 w-4" />, color: "border border-[#37617d] bg-[#102a3d] text-[#d8edf7]" }
 ];
 
 const platforms = [
@@ -357,16 +349,21 @@ export function CommandLibrary() {
   }, {} as Record<string, Command[]>);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 標題區域 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Terminal className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold">指令集管理</h2>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <Terminal className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-[#f3f8fc]">指令集管理</h2>
+            <p className="mt-0.5 text-xs text-[#91aabd]">集中搜尋、複製與維護常用操作指令</p>
+          </div>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="h-10 rounded-xl border border-cyan-200/30 bg-cyan-300 px-4 text-[#06131f] shadow-[0_14px_30px_-20px_rgba(103,232,249,0.85)] hover:bg-cyan-200 hover:text-[#06131f]">
               <Plus className="h-4 w-4 mr-2" />
               新增指令
             </Button>
@@ -492,20 +489,20 @@ export function CommandLibrary() {
       </div>
 
       {/* 搜尋和篩選 */}
-      <div className="flex gap-4 items-center flex-wrap">
-        <div className="flex-1 min-w-64">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#294b63] bg-[#0b1b2d]/85 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+        <div className="min-w-64 flex-1">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7fa6bc]" />
             <Input
               placeholder="搜尋指令名稱、內容或標籤..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="h-11 rounded-xl border-[#31546b] bg-[#071522] pl-10 text-[#edf7fc] placeholder:text-[#7894a6] focus-visible:border-cyan-300/50 focus-visible:ring-cyan-300/20"
             />
           </div>
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="h-11 w-full rounded-xl border-[#31546b] bg-[#0a1827] text-[#d8e6f0] focus:ring-cyan-300/20 sm:w-40">
             <SelectValue placeholder="分類" />
           </SelectTrigger>
           <SelectContent>
@@ -521,7 +518,7 @@ export function CommandLibrary() {
           </SelectContent>
         </Select>
         <Select value={platformFilter} onValueChange={setPlatformFilter}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="h-11 w-full rounded-xl border-[#31546b] bg-[#0a1827] text-[#d8e6f0] focus:ring-cyan-300/20 sm:w-36">
             <SelectValue placeholder="平台" />
           </SelectTrigger>
           <SelectContent>
@@ -536,29 +533,41 @@ export function CommandLibrary() {
       </div>
 
       {/* 統計資訊 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{commands.length}</div>
-            <div className="text-sm text-muted-foreground">總指令數</div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="rounded-2xl border-[#294b63] bg-[linear-gradient(145deg,#102337,#0b1929)] p-4 shadow-none">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-data text-2xl font-semibold text-[#f3f8fc]">{commands.length}</div>
+              <div className="mt-1 text-xs text-[#91aabd]">總指令數</div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] text-cyan-100"><Terminal className="h-4 w-4" /></div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{new Set(commands.map(c => c.category)).size}</div>
-            <div className="text-sm text-muted-foreground">分類數量</div>
+        <Card className="rounded-2xl border-[#294b63] bg-[linear-gradient(145deg,#102337,#0b1929)] p-4 shadow-none">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-data text-2xl font-semibold text-[#f3f8fc]">{new Set(commands.map(c => c.category)).size}</div>
+              <div className="mt-1 text-xs text-[#91aabd]">分類數量</div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] text-cyan-100"><BookOpen className="h-4 w-4" /></div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{new Set(commands.map(c => c.platform)).size}</div>
-            <div className="text-sm text-muted-foreground">支援平台</div>
+        <Card className="rounded-2xl border-[#294b63] bg-[linear-gradient(145deg,#102337,#0b1929)] p-4 shadow-none">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-data text-2xl font-semibold text-[#f3f8fc]">{new Set(commands.map(c => c.platform)).size}</div>
+              <div className="mt-1 text-xs text-[#91aabd]">支援平台</div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] text-cyan-100"><Monitor className="h-4 w-4" /></div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{filteredCommands.length}</div>
-            <div className="text-sm text-muted-foreground">搜尋結果</div>
+        <Card className="rounded-2xl border-[#294b63] bg-[linear-gradient(145deg,#102337,#0b1929)] p-4 shadow-none">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-data text-2xl font-semibold text-[#f3f8fc]">{filteredCommands.length}</div>
+              <div className="mt-1 text-xs text-[#91aabd]">搜尋結果</div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] text-cyan-100"><Search className="h-4 w-4" /></div>
           </div>
         </Card>
       </div>
@@ -570,24 +579,24 @@ export function CommandLibrary() {
           if (categoryCommands.length === 0) return null;
 
           return (
-            <Card key={category.id}>
+            <Card key={category.id} className="overflow-hidden rounded-2xl border-[#294b63] bg-[#0b1929] shadow-[0_18px_40px_-34px_rgba(3,12,22,0.95)]">
               <Collapsible 
                 open={expandedCategories.has(category.id)} 
                 onOpenChange={() => toggleCategory(category.id)}
               >
                 <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <CardHeader className="cursor-pointer border-b border-transparent bg-[linear-gradient(90deg,rgba(35,78,104,0.18),rgba(10,24,39,0.22))] px-4 py-4 transition-colors hover:bg-[#10263a] data-[state=open]:border-[#294b63]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {expandedCategories.has(category.id) ? 
                           <ChevronDown className="h-4 w-4" /> : 
                           <ChevronRight className="h-4 w-4" />
                         }
-                        <Badge className={category.color}>
+                        <Badge className={`${category.color} rounded-lg px-2.5 py-1 font-medium shadow-none hover:bg-[#153248]`}>
                           {category.icon}
                           <span className="ml-1">{category.name}</span>
                         </Badge>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="font-data text-xs text-[#91aabd]">
                           ({categoryCommands.length} 個指令)
                         </span>
                       </div>
@@ -595,28 +604,28 @@ export function CommandLibrary() {
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <CardContent>
-                    <div className="space-y-4">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
                       {categoryCommands.map(command => (
-                        <div key={command.id} className="border border-border rounded-lg p-4 hover:bg-muted/20 transition-colors">
+                        <div key={command.id} className="rounded-xl border border-[#29485e] bg-[#0c1a2a] p-4 transition-colors hover:border-cyan-300/30 hover:bg-[#0e2032]">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-semibold">{command.name}</h4>
-                                <Badge variant="outline" className="text-xs">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-semibold text-[#f3f8fc]">{command.name}</h4>
+                                <Badge variant="outline" className="rounded-md border-[#35556a] bg-[#14283a] text-[10px] text-[#b9cddd]">
                                   {platforms.find(p => p.value === command.platform)?.label}
                                 </Badge>
                               </div>
-                              <div className="bg-muted p-3 rounded font-mono text-sm break-all">
+                              <div className="break-all rounded-lg border border-[#263f52] bg-[#06111f] p-3 font-mono text-sm text-[#d9edf7] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
                                 {command.command}
                               </div>
                               {command.description && (
-                                <p className="text-sm text-muted-foreground">{command.description}</p>
+                                <p className="text-sm leading-6 text-[#a9c0d1]">{command.description}</p>
                               )}
                               {command.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1">
                                   {command.tags.map(tag => (
-                                    <Badge key={tag} variant="secondary" className="text-xs">
+                                    <Badge key={tag} variant="secondary" className="rounded-md border border-[#29485e] bg-[#102337] text-[10px] text-[#9fc0d3]">
                                       {tag}
                                     </Badge>
                                   ))}
@@ -624,26 +633,28 @@ export function CommandLibrary() {
                               )}
                               {command.examples && (
                                 <details className="text-sm">
-                                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                                  <summary className="cursor-pointer text-[#8faabd] hover:text-cyan-100">
                                     使用範例
                                   </summary>
-                                  <pre className="mt-2 bg-muted p-2 rounded text-xs overflow-x-auto">
+                                  <pre className="mt-2 overflow-x-auto rounded-lg border border-[#263f52] bg-[#06111f] p-3 text-xs text-[#c9dce7]">
                                     {command.examples}
                                   </pre>
                                 </details>
                               )}
                               {command.notes && (
-                                <p className="text-xs text-muted-foreground bg-yellow-50 dark:bg-yellow-950/20 p-2 rounded">
-                                  💡 {command.notes}
-                                </p>
+                                <div className="flex gap-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.045] p-2.5 text-xs leading-5 text-[#b9c9d3]">
+                                  <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-200/80" />
+                                  <span>{command.notes}</span>
+                                </div>
                               )}
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1.5">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => copyToClipboard(command.command)}
                                 title="複製指令"
+                                className="h-9 w-9 rounded-lg border-[#2b4b61] bg-[#102336] p-0 text-[#c8dbe7] hover:border-cyan-300/35 hover:bg-cyan-300/[0.08] hover:text-cyan-100"
                               >
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -652,6 +663,7 @@ export function CommandLibrary() {
                                 variant="outline"
                                 onClick={() => setEditingCommand(command)}
                                 title="編輯指令"
+                                className="h-9 w-9 rounded-lg border-[#2b4b61] bg-[#102336] p-0 text-[#c8dbe7] hover:border-cyan-300/35 hover:bg-cyan-300/[0.08] hover:text-cyan-100"
                               >
                                 <Edit2 className="h-3 w-3" />
                               </Button>
@@ -660,7 +672,7 @@ export function CommandLibrary() {
                                 variant="outline"
                                 onClick={() => handleDeleteCommand(command.id)}
                                 title="刪除指令"
-                                className="text-destructive hover:text-destructive"
+                                className="h-9 w-9 rounded-lg border-[#2b4b61] bg-[#102336] p-0 text-rose-300/80 hover:border-rose-300/30 hover:bg-rose-300/[0.08] hover:text-rose-200"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -796,11 +808,11 @@ export function CommandLibrary() {
 
       {/* 空狀態 */}
       {!isLoading && filteredCommands.length === 0 && (
-        <Card className="p-8">
-          <div className="text-center text-muted-foreground">
-            <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium mb-2">找不到相關指令</h3>
-            <p className="text-sm">
+        <Card className="rounded-2xl border-[#294b63] bg-[#0b1929] p-10 shadow-none">
+          <div className="text-center text-[#91aabd]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-100"><Terminal className="h-5 w-5" /></div>
+            <h3 className="mb-2 text-base font-medium text-[#edf7fc]">找不到相關指令</h3>
+            <p className="text-sm text-[#91aabd]">
               {searchTerm || categoryFilter !== "all" || platformFilter !== "all" 
                 ? "嘗試調整搜尋條件或篩選設定" 
                 : "還沒有任何指令，點擊上方按鈕新增第一個指令"
