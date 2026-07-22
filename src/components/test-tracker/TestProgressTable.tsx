@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
   UIEvent as ReactUIEvent,
 } from "react";
-import { Copy, MoreHorizontal, Pencil } from "lucide-react";
+import { Check, Copy, MoreHorizontal, Palette, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,167 @@ interface TestProgressTableProps {
 interface ColumnLayoutState {
   storageKey: string;
   widths: Record<string, number>;
+}
+
+const TRACKER_TABLE_PALETTE_STORAGE_KEY = "maintenance:test-tracker:table-palette";
+
+const TRACKER_TABLE_PALETTES = {
+  ocean: {
+    label: "深海藍",
+    frame: "#061321",
+    surface: "#071522",
+    header: "#10263a",
+    headerAccent: "#102b43",
+    even: "#081827",
+    odd: "#091b2c",
+    active: "#0c2340",
+    actionEven: "#0a1d30",
+    actionOdd: "#0b2034",
+    actionActive: "#0d2946",
+    hover: "#112b43",
+    border: "#2a526f",
+  },
+  graphite: {
+    label: "石墨灰",
+    frame: "#0b1017",
+    surface: "#101720",
+    header: "#1a2633",
+    headerAccent: "#202e3d",
+    even: "#111a24",
+    odd: "#151f2a",
+    active: "#172b42",
+    actionEven: "#172330",
+    actionOdd: "#1a2836",
+    actionActive: "#19334e",
+    hover: "#223447",
+    border: "#40556a",
+  },
+  teal: {
+    label: "青綠",
+    frame: "#041516",
+    surface: "#06191b",
+    header: "#0d2c31",
+    headerAccent: "#10363b",
+    even: "#071d20",
+    odd: "#092326",
+    active: "#0a3137",
+    actionEven: "#0b292d",
+    actionOdd: "#0d3034",
+    actionActive: "#0d3a41",
+    hover: "#123a3f",
+    border: "#2b6469",
+  },
+  contrast: {
+    label: "高對比",
+    frame: "#02060c",
+    surface: "#050b13",
+    header: "#17324d",
+    headerAccent: "#1b3b5b",
+    even: "#07111d",
+    odd: "#0c1928",
+    active: "#102f54",
+    actionEven: "#0c1d2f",
+    actionOdd: "#10243a",
+    actionActive: "#123861",
+    hover: "#173b5d",
+    border: "#3e7296",
+  },
+} as const;
+
+type TrackerTablePaletteId = keyof typeof TRACKER_TABLE_PALETTES;
+
+function loadStoredPalette(): TrackerTablePaletteId {
+  if (typeof window === "undefined") return "ocean";
+
+  try {
+    const stored = window.localStorage.getItem(TRACKER_TABLE_PALETTE_STORAGE_KEY);
+    return stored && stored in TRACKER_TABLE_PALETTES
+      ? stored as TrackerTablePaletteId
+      : "ocean";
+  } catch {
+    return "ocean";
+  }
+}
+
+function persistPalette(paletteId: TrackerTablePaletteId) {
+  try {
+    window.localStorage.setItem(TRACKER_TABLE_PALETTE_STORAGE_KEY, paletteId);
+  } catch {
+    // Keep the selected palette for this session when storage is unavailable.
+  }
+}
+
+function TrackerPaletteControl({
+  onChange,
+  value,
+}: {
+  onChange: (paletteId: TrackerTablePaletteId) => void;
+  value: TrackerTablePaletteId;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="表格配色"
+          title="表格配色"
+          className="h-7 w-7 rounded-md border border-[#416985] bg-[#071522]/70 text-cyan-100 hover:border-cyan-300/70 hover:bg-cyan-300/10 hover:text-cyan-50"
+        >
+          <Palette className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-72 rounded-xl border border-[#315b7b] bg-[#071522]/98 p-3 text-[#f3f8fc] shadow-[0_24px_70px_-28px_rgba(34,211,238,0.5)]"
+      >
+        <div className="flex items-start gap-2.5 border-b border-[#294b65] pb-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-300/10 text-cyan-100">
+            <Palette className="h-4 w-4" />
+          </span>
+          <div>
+            <span className="block text-sm font-bold">表格配色</span>
+            <span className="mt-0.5 block text-[11px] leading-4 text-[#91adc2]">立即套用並記住這台電腦的選擇。</span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(Object.entries(TRACKER_TABLE_PALETTES) as Array<[
+            TrackerTablePaletteId,
+            (typeof TRACKER_TABLE_PALETTES)[TrackerTablePaletteId],
+          ]>).map(([paletteId, palette]) => {
+            const selected = value === paletteId;
+            return (
+              <button
+                key={paletteId}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onChange(paletteId)}
+                className={cn(
+                  "rounded-lg border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+                  selected
+                    ? "border-cyan-300/70 bg-cyan-300/10"
+                    : "border-[#294b65] bg-[#0b1b2d] hover:border-[#477593] hover:bg-[#10263a]"
+                )}
+              >
+                <span className="flex items-center justify-between gap-2 text-xs font-semibold">
+                  {palette.label}
+                  {selected && <Check className="h-3.5 w-3.5 text-cyan-200" />}
+                </span>
+                <span className="mt-2 flex overflow-hidden rounded border border-white/10">
+                  {[palette.header, palette.even, palette.odd, palette.active].map((color) => (
+                    <span key={color} className="h-4 flex-1" style={{ backgroundColor: color }} />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function normalizeStatus(system: TrackerSystem) {
@@ -230,6 +392,7 @@ export function TestProgressTable({
     storageKey: columnStorageKey,
     widths: loadStoredColumnWidths(columnStorageKey),
   }));
+  const [paletteId, setPaletteId] = useState<TrackerTablePaletteId>(loadStoredPalette);
   const [viewport, setViewport] = useState({ height: 520, scrollTop: 0 });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
@@ -280,6 +443,21 @@ export function TestProgressTable({
     viewportHeight: viewport.height,
   });
   const visibleSystems = systems.slice(virtualRange.start, virtualRange.end);
+  const activePalette = TRACKER_TABLE_PALETTES[paletteId];
+  const paletteStyle = {
+    "--tracker-table-frame": activePalette.frame,
+    "--tracker-table-surface": activePalette.surface,
+    "--tracker-table-header": activePalette.header,
+    "--tracker-table-header-accent": activePalette.headerAccent,
+    "--tracker-row-even": activePalette.even,
+    "--tracker-row-odd": activePalette.odd,
+    "--tracker-row-active": activePalette.active,
+    "--tracker-action-even": activePalette.actionEven,
+    "--tracker-action-odd": activePalette.actionOdd,
+    "--tracker-action-active": activePalette.actionActive,
+    "--tracker-row-hover": activePalette.hover,
+    "--tracker-table-border": activePalette.border,
+  } as CSSProperties & Record<`--${string}`, string>;
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 1024px)");
@@ -305,6 +483,10 @@ export function TestProgressTable({
     }, 160);
     return () => window.clearTimeout(timer);
   }, [columnLayout, columnStorageKey]);
+
+  useEffect(() => {
+    persistPalette(paletteId);
+  }, [paletteId]);
 
   useEffect(() => () => {
     const latestLayout = latestColumnLayoutRef.current;
@@ -428,12 +610,13 @@ export function TestProgressTable({
   return (
     <div
       data-ui="tracker-table"
-      className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#061321] shadow-[0_18px_50px_-38px_rgba(34,211,238,0.55)]"
+      style={paletteStyle}
+      className="overflow-hidden rounded-xl border border-[var(--tracker-table-border)] bg-[var(--tracker-table-frame)] shadow-[0_18px_50px_-38px_rgba(34,211,238,0.55)]"
     >
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto bg-[#071522] [scrollbar-gutter:stable]"
+        className="max-h-[calc(100vh-238px)] min-h-[420px] overflow-auto bg-[var(--tracker-table-surface)] [scrollbar-gutter:stable]"
       >
         <div
           role="table"
@@ -444,7 +627,7 @@ export function TestProgressTable({
           <div
             role="row"
             data-ui="tracker-header"
-            className="sticky top-0 z-20 grid h-11 items-center gap-2 border-b border-[#37617e] bg-[#10263a] px-3 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#dcebf5] shadow-[0_8px_24px_-22px_rgba(56,189,248,0.9)]"
+            className="sticky top-0 z-20 grid h-11 items-center gap-2 border-b border-[var(--tracker-table-border)] bg-[var(--tracker-table-header)] px-3 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#dcebf5] shadow-[0_8px_24px_-22px_rgba(56,189,248,0.9)]"
             style={{ gridTemplateColumns: gridColumns }}
           >
             <ResizableColumnHeader
@@ -453,7 +636,7 @@ export function TestProgressTable({
               onResize={resizeColumn}
               onReset={resetColumn}
               className={cn(
-                "sticky left-0 z-30 bg-[#10263a] pr-2",
+                "sticky left-0 z-30 bg-[var(--tracker-table-header)] pr-2",
                 TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
               )}
             >
@@ -498,10 +681,11 @@ export function TestProgressTable({
               onResize={resizeColumn}
               onReset={resetColumn}
               testId="progress-actions-header"
-              className="sticky right-0 z-50 border-l border-[#416985] bg-[#102b43] px-2 text-center"
+              className="sticky right-0 z-50 border-l border-[var(--tracker-table-border)] bg-[var(--tracker-table-header-accent)] px-2 text-center"
             >
               <div className="flex items-center justify-center gap-1">
                 <span>操作</span>
+                <TrackerPaletteControl value={paletteId} onChange={setPaletteId} />
                 {headerControls}
               </div>
             </ResizableColumnHeader>
@@ -515,6 +699,23 @@ export function TestProgressTable({
             {visibleSystems.map((system, visibleIndex) => {
               const status = normalizeStatus(system);
               const absoluteIndex = virtualRange.start + visibleIndex;
+              const rowSurface = status === "進行中"
+                ? "var(--tracker-row-active)"
+                : absoluteIndex % 2 === 0
+                  ? "var(--tracker-row-even)"
+                  : "var(--tracker-row-odd)";
+              const actionSurface = status === "進行中"
+                ? "var(--tracker-action-active)"
+                : absoluteIndex % 2 === 0
+                  ? "var(--tracker-action-even)"
+                  : "var(--tracker-action-odd)";
+              const rowStyle = {
+                gridTemplateColumns: gridColumns,
+                height: TRACKER_ROW_HEIGHT,
+                top: absoluteIndex * TRACKER_ROW_HEIGHT,
+                "--tracker-row-surface": rowSurface,
+                "--tracker-action-surface": actionSurface,
+              } as CSSProperties & Record<`--${string}`, string>;
               return (
                 <div
                   key={system.id}
@@ -523,30 +724,17 @@ export function TestProgressTable({
                   data-machine-row={system.id}
                   data-ui="tracker-row"
                   className={cn(
-                    "group absolute left-0 right-0 grid items-center gap-2 border-b border-[#1e3b56]/70 px-3 py-2.5 text-[13px] transition-colors duration-150 hover:bg-[#112b43]",
-                    status === "進行中"
-                      ? "bg-[#0c2340] shadow-[inset_3px_0_0_#3b82f6]"
-                      : absoluteIndex % 2 === 0
-                        ? "bg-[#081827]"
-                        : "bg-[#091b2c]"
+                    "group absolute left-0 right-0 grid items-center gap-2 border-b border-[var(--tracker-table-border)] bg-[var(--tracker-row-surface)] px-3 py-2.5 text-[13px] transition-colors duration-150 hover:bg-[var(--tracker-row-hover)]",
+                    status === "進行中" && "shadow-[inset_3px_0_0_#3b82f6]"
                   )}
-                  style={{
-                    gridTemplateColumns: gridColumns,
-                    height: TRACKER_ROW_HEIGHT,
-                    top: absoluteIndex * TRACKER_ROW_HEIGHT,
-                  }}
+                  style={rowStyle}
                 >
                   <div
                     role="cell"
                     data-testid={`machine-cell-${system.id}`}
                     className={cn(
-                      "sticky left-0 z-10 flex h-full min-w-0 items-stretch overflow-hidden border-r border-[#2a526f]/80 pr-3 group-hover:bg-[#112b43]",
-                      TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
-                      status === "進行中"
-                        ? "bg-[#0c2340]"
-                        : absoluteIndex % 2 === 0
-                          ? "bg-[#081827]"
-                          : "bg-[#091b2c]"
+                      "sticky left-0 z-10 flex h-full min-w-0 items-stretch overflow-hidden border-r border-[var(--tracker-table-border)] bg-[var(--tracker-row-surface)] pr-3 group-hover:bg-[var(--tracker-row-hover)]",
+                      TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS
                     )}
                   >
                     <button
@@ -595,12 +783,7 @@ export function TestProgressTable({
                     data-testid={`progress-actions-${system.id}`}
                     data-ui="tracker-actions"
                     className={cn(
-                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[#416985] px-2 shadow-[-12px_0_22px_-22px_rgba(56,189,248,0.9)] group-hover:bg-[#112b43]",
-                      status === "進行中"
-                        ? "bg-[#0d2946]"
-                        : absoluteIndex % 2 === 0
-                          ? "bg-[#0a1d30]"
-                          : "bg-[#0b2034]"
+                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[var(--tracker-table-border)] bg-[var(--tracker-action-surface)] px-2 shadow-[-12px_0_22px_-22px_rgba(56,189,248,0.9)] group-hover:bg-[var(--tracker-row-hover)]"
                     )}
                   >
                     <Button
