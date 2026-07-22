@@ -25,10 +25,7 @@ import type {
 } from "./dataCenterTypes";
 import { getUniformModelFit } from "./modelFit.mjs";
 import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
-import {
-  getRackUnitMountLayout,
-  splitRackUnitMountPositionsByCoverVisibility,
-} from "./rackMount.mjs";
+import { getRackUnitMountLayout } from "./rackMount.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
 
 interface DataCenter3DPlannerProps {
@@ -650,63 +647,18 @@ function ProceduralL10Instances({
   );
 }
 
-function ProceduralL10CoverInstances({
-  layout,
-  name,
-}: {
-  layout: L10MountLayout;
-  name: string;
-}) {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const { invalidate } = useThree();
-
-  useEffect(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    const transform = new THREE.Object3D();
-    const coverHeight = Math.min(0.004, layout.fittedHeight * 0.09);
-    layout.positions.forEach((position, index) => {
-      transform.position.set(
-        0,
-        position.y + layout.fittedHeight - coverHeight / 2 + 0.001,
-        position.z,
-      );
-      transform.scale.set(layout.fittedWidth * 0.992, coverHeight, layout.fittedDepth * 0.992);
-      transform.updateMatrix();
-      mesh.setMatrixAt(index, transform.matrix);
-    });
-    mesh.count = layout.positions.length;
-    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    invalidate();
-  }, [invalidate, layout]);
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, layout.visibleCount]}
-      frustumCulled={false}
-      name={name}
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#74838c" metalness={0.68} roughness={0.34} />
-    </instancedMesh>
-  );
-}
-
 function RackL10Modules({
   rack,
   rackDefinition,
   l10Definition,
   detailed,
-  interactionPreview,
+  lowDetail,
 }: {
   rack: RackPlan;
   rackDefinition: RackModelDefinition;
   l10Definition: RackModelDefinition;
   detailed: boolean;
-  interactionPreview: boolean;
+  lowDetail: boolean;
 }) {
   const layout = useMemo(
     () =>
@@ -731,7 +683,10 @@ function RackL10Modules({
   );
   if (!layout.visibleCount) return null;
 
-  const sceneAssetUrl = l10Definition.mobileAssetUrl ?? l10Definition.assetUrl;
+  const sceneAssetUrl =
+    lowDetail && l10Definition.mobileAssetUrl
+      ? l10Definition.mobileAssetUrl
+      : l10Definition.assetUrl;
   if (!sceneAssetUrl) {
     return (
       <ProceduralL10Instances
@@ -742,49 +697,23 @@ function RackL10Modules({
     );
   }
 
-  const coverVisibility = splitRackUnitMountPositionsByCoverVisibility({
-    positions: layout.positions,
-    rackUnits: l10Definition.rackUnits ?? 1,
-  });
   const optimizedLayout = {
     ...layout,
     visibleCount: layout.positions.length,
     positions: layout.positions,
   };
-  const proxyCoverLayout = {
-    ...layout,
-    visibleCount: coverVisibility.exposed.length,
-    positions: coverVisibility.exposed,
-  };
 
   return (
     <group name={`${rack.id}-l10-complete`}>
-      <group visible={interactionPreview}>
-        <ProceduralL10Instances
-          layout={layout}
-          name={`${rack.id}-l10-interaction-preview`}
-          detailed={false}
+      <Suspense fallback={null}>
+        <InstancedDetailedL10Model
+          definition={l10Definition}
+          assetUrl={sceneAssetUrl}
+          layout={optimizedLayout}
+          name={`${rack.id}-l10-scene-cad`}
+          detailed={detailed}
         />
-      </group>
-      <group visible={!interactionPreview}>
-        <Suspense fallback={null}>
-          {optimizedLayout.visibleCount ? (
-            <InstancedDetailedL10Model
-              definition={l10Definition}
-              assetUrl={sceneAssetUrl}
-              layout={optimizedLayout}
-              name={`${rack.id}-l10-scene-cad`}
-              detailed={detailed}
-            />
-          ) : null}
-          {proxyCoverLayout.visibleCount ? (
-            <ProceduralL10CoverInstances
-              layout={proxyCoverLayout}
-              name={`${rack.id}-l10-proxy-covers`}
-            />
-          ) : null}
-        </Suspense>
-      </group>
+      </Suspense>
     </group>
   );
 }
@@ -843,7 +772,6 @@ function RackVisual({
   hovered,
   showLabel,
   lowDetail,
-  interactionPreview,
   onSelect,
   onHover,
 }: {
@@ -855,7 +783,6 @@ function RackVisual({
   hovered: boolean;
   showLabel: boolean;
   lowDetail: boolean;
-  interactionPreview: boolean;
   onSelect: (rackId: string) => void;
   onHover: (rackId: string | null) => void;
 }) {
@@ -891,27 +818,25 @@ function RackVisual({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <group visible={interactionPreview}>
-        <RackOverviewModel rack={rack} definition={definition} accent={color} />
-      </group>
-      <group visible={!interactionPreview}>
-        <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
-          {definition.source === "step" && definition.stepModel ? (
-            <StepRackModel model={definition.stepModel} />
-          ) : definition.assetUrl ? (
-            <GlbRackModel definition={definition} lowDetail={lowDetail || !selected} />
-          ) : (
-            <ProceduralRackModel definition={definition} accent={color} />
-          )}
-        </Suspense>
-      </group>
+      <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
+        {definition.source === "step" && definition.stepModel ? (
+          <StepRackModel model={definition.stepModel} />
+        ) : definition.assetUrl ? (
+          <GlbRackModel
+            definition={definition}
+            lowDetail={lowDetail}
+          />
+        ) : (
+          <ProceduralRackModel definition={definition} accent={color} />
+        )}
+      </Suspense>
 
       <RackL10Modules
         rack={rack}
         rackDefinition={definition}
         l10Definition={l10Definition}
         detailed={selected}
-        interactionPreview={interactionPreview}
+        lowDetail={lowDetail}
       />
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
@@ -1283,7 +1208,6 @@ function PlannerScene({
             hovered={hovered}
             showLabel={showLabel}
             lowDetail={lowDetail}
-            interactionPreview={interactionPreview}
             onSelect={onSelectRack}
             onHover={setHoveredRackId}
           />
