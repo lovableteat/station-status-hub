@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  CircleHelp,
   Edit,
   MapPin,
   Network,
@@ -32,6 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +47,37 @@ import { cn } from "@/lib/utils";
 
 type AddressField =
   Database["public"]["Tables"]["test_project_address_fields"]["Row"];
+
+const PROJECT_SHARED_ADDRESS_EXPLANATION =
+  "欄位名稱與類型會套用到同一專案的所有機台，但每台機台會各自保存自己的位址值，不會互相覆蓋。";
+
+function ProjectSharedAddressHint({ compact = false }: { compact?: boolean }) {
+  return (
+    <TooltipProvider delayDuration={120}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="什麼是專案共用位址欄位？"
+            className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#091827]"
+          >
+            <Badge className="gap-1 rounded-md border border-blue-300/25 bg-blue-300/[0.09] px-2 py-0.5 text-[0.68rem] font-medium text-blue-100 hover:border-cyan-200/45 hover:bg-cyan-300/10">
+              專案共用
+              {!compact && <CircleHelp className="h-3 w-3" />}
+            </Badge>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          align="start"
+          className="max-w-[20rem] border-[#315b7b] bg-[#10263a] px-3 py-2 text-xs leading-5 text-slate-100 shadow-xl"
+        >
+          {PROJECT_SHARED_ADDRESS_EXPLANATION}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 interface SystemEditDialogProps {
   systemId: string;
@@ -460,8 +498,11 @@ export function SystemEditDialog({
           data-testid="system-editor-workspace"
           className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5"
         >
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.02fr)_minmax(24rem,0.98fr)]">
-            <section className={sectionClass}>
+          <div
+            data-testid="system-editor-three-row-layout"
+            className="grid gap-4"
+          >
+            <section data-testid="system-editor-basic-row" className={sectionClass}>
               <div className="flex items-center gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
                 <span className="font-mono text-xs font-semibold text-cyan-300">01</span>
                 <Server className="h-4 w-4 text-cyan-200" />
@@ -471,8 +512,8 @@ export function SystemEditDialog({
                 </div>
               </div>
 
-              <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
-                <div className="sm:col-span-2">
+              <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
+                <div className="sm:col-span-2 lg:col-span-2">
                   <Label className={fieldLabelClass}>機台 ID</Label>
                   <Input
                     value={editValues.system_name}
@@ -505,7 +546,7 @@ export function SystemEditDialog({
                     className={inputClass}
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 lg:col-span-4">
                   <Label className={cn(fieldLabelClass, "flex items-center gap-1.5")}>
                     <MapPin className="h-3.5 w-3.5 text-cyan-300" />
                     機台位置
@@ -523,37 +564,49 @@ export function SystemEditDialog({
               </div>
             </section>
 
-            <section data-testid="network-address-manager" className={sectionClass}>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-semibold text-blue-300">02</span>
-                  <Router className="h-4 w-4 text-blue-200" />
-                  <div>
-                    <h3 className="font-semibold text-slate-50">網路位址</h3>
-                    <p className="text-xs text-[#8eaabd]">專案共用欄位，機台各自保存內容</p>
+            <section
+              data-testid="system-editor-address-row"
+              className={sectionClass}
+            >
+              <div data-testid="network-address-manager">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-semibold text-blue-300">02</span>
+                    <Router className="h-4 w-4 text-blue-200" />
+                    <div>
+                      <h3 className="font-semibold text-slate-50">網路位址</h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-[#8eaabd]">
+                          集中管理所有連線位置，欄位再多也能清楚瀏覽
+                        </p>
+                        <ProjectSharedAddressHint />
+                      </div>
+                    </div>
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 rounded-lg border border-cyan-200/40 bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
+                    onClick={() => setShowNewAddressForm(true)}
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    新增位址
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 rounded-lg border border-cyan-200/40 bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
-                  onClick={() => setShowNewAddressForm(true)}
-                >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  新增位址
-                </Button>
-              </div>
 
-              <div className="space-y-3 p-4 sm:p-5">
+              <div className="p-4 sm:p-5">
                 {addressLoadError && (
-                  <div className="flex gap-2 rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-2.5 text-sm text-amber-100">
+                  <div className="mb-3 flex gap-2 rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-2.5 text-sm text-amber-100">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>位址欄位載入失敗：{addressLoadError}</span>
                   </div>
                 )}
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
+                <div
+                  data-testid="system-editor-address-grid"
+                  className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3"
+                >
+                  <div className="rounded-xl border border-[#294c65] bg-[#0b1d2e] p-3.5">
                     <Label className={fieldLabelClass}>NIC MAC Address</Label>
                     <Input
                       value={editValues.os_mac_address}
@@ -567,7 +620,7 @@ export function SystemEditDialog({
                       className={inputClass}
                     />
                   </div>
-                  <div>
+                  <div className="rounded-xl border border-[#294c65] bg-[#0b1d2e] p-3.5">
                     <Label className={fieldLabelClass}>BMC Address</Label>
                     <Input
                       value={editValues.bmc_address}
@@ -578,14 +631,16 @@ export function SystemEditDialog({
                       className={inputClass}
                     />
                   </div>
-                </div>
 
                 {addressFields.map((field) => {
                   const isEditing = editingAddressFieldId === field.id;
                   return (
                     <div
                       key={field.id}
-                      className="border-t border-[#203e54] pt-3 first:border-t-0 first:pt-0"
+                      className={cn(
+                        "rounded-xl border border-[#294c65] bg-[#0b1d2e] p-3.5",
+                        isEditing && "lg:col-span-2 2xl:col-span-3"
+                      )}
                     >
                       {isEditing ? (
                         <div className="grid gap-3 rounded-lg border border-cyan-300/30 bg-cyan-300/[0.055] p-3 sm:grid-cols-2">
@@ -638,9 +693,7 @@ export function SystemEditDialog({
                               <Label className="text-sm font-medium text-[#dceaf3]">
                                 {field.label}
                               </Label>
-                              <Badge className="rounded border border-blue-300/20 bg-blue-300/[0.07] px-1.5 py-0 text-[0.62rem] font-medium text-blue-100">
-                                專案共用
-                              </Badge>
+                              <ProjectSharedAddressHint compact />
                             </div>
                             <Input
                               value={addressValues[field.id] || ""}
@@ -671,7 +724,7 @@ export function SystemEditDialog({
                 })}
 
                 {showNewAddressForm && (
-                  <div className="rounded-xl border border-cyan-300/35 bg-[#0b2233] p-4 shadow-[0_16px_36px_-28px_rgba(34,211,238,0.8)]">
+                  <div className="rounded-xl border border-cyan-300/35 bg-[#0b2233] p-4 shadow-[0_16px_36px_-28px_rgba(34,211,238,0.8)] lg:col-span-2 2xl:col-span-3">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div>
                         <h4 className="font-semibold text-cyan-50">建立專案共用位址</h4>
@@ -742,10 +795,12 @@ export function SystemEditDialog({
                     </div>
                   </div>
                 )}
+                </div>
+              </div>
               </div>
             </section>
 
-            <section className={cn(sectionClass, "lg:col-span-2")}>
+            <section data-testid="system-editor-software-row" className={sectionClass}>
               <div className="flex items-center gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
                 <span className="font-mono text-xs font-semibold text-emerald-300">03</span>
                 <Settings2 className="h-4 w-4 text-emerald-200" />
