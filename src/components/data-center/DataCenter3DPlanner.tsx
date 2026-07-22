@@ -1171,19 +1171,21 @@ function PlannerScene({
 
   return (
     <>
-      <color attach="background" args={["#03070c"]} />
-      <fog attach="fog" args={["#03070c", 14, 28]} />
-      <ambientLight intensity={0.58} />
-      <hemisphereLight intensity={0.65} color="#c9f6ff" groundColor="#020409" />
+      <SceneRendererSetup />
+      <color attach="background" args={["#050c13"]} />
+      <fog attach="fog" args={["#07111a", 42, 95]} />
+      <ambientLight intensity={0.82} />
+      <hemisphereLight intensity={1.05} color="#d8f7ff" groundColor="#07111a" />
       <directionalLight
         castShadow={!renderLowDetail}
-        intensity={1.35}
+        intensity={1.55}
         position={[7, 10, 6]}
         shadow-mapSize-width={renderLowDetail ? 512 : 1024}
         shadow-mapSize-height={renderLowDetail ? 512 : 1024}
       />
-      <pointLight intensity={0.72} position={[-7, 4, -5]} color="#22d3ee" />
-      <pointLight intensity={0.45} position={[7, 3, 5]} color="#3b82f6" />
+      <directionalLight intensity={0.72} position={[-8, 6, -4]} color="#9bdcf5" />
+      <pointLight intensity={0.86} position={[-7, 4, -5]} color="#22d3ee" />
+      <pointLight intensity={0.58} position={[7, 3, 5]} color="#60a5fa" />
 
       <FacilityShell activeLayer={activeLayer} facility={facility} />
       <ThermalAisles aisles={facility.aisles} active={activeLayer === "cooling"} />
@@ -1225,6 +1227,26 @@ function PlannerScene({
       />
     </>
   );
+}
+
+function SceneRendererSetup() {
+  const { gl, invalidate } = useThree();
+
+  useEffect(() => {
+    const previousToneMapping = gl.toneMapping;
+    const previousExposure = gl.toneMappingExposure;
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = 1.22;
+    invalidate();
+
+    return () => {
+      gl.toneMapping = previousToneMapping;
+      gl.toneMappingExposure = previousExposure;
+      invalidate();
+    };
+  }, [gl, invalidate]);
+
+  return null;
 }
 
 function ModelLoadingOverlay() {
@@ -1272,7 +1294,7 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         frameloop="demand"
         dpr={isMobile ? 1 : [1, 1.3]}
         performance={{ min: 0.65 }}
-        camera={{ position: [10, 7, 11], fov: 36, near: 0.03, far: 80 }}
+        camera={{ position: [10, 7, 11], fov: 36, near: 0.03, far: 160 }}
         gl={{ antialias: !isMobile, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
       >

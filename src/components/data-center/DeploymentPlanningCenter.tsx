@@ -26,7 +26,6 @@ import {
   Map,
   Menu,
   Minus,
-  Move3d,
   Network,
   PackagePlus,
   PanelLeftClose,
@@ -665,8 +664,6 @@ interface RackInspectorProps {
   l10LastUsableU: number;
   l10MaxStartU: number;
   canEdit: boolean;
-  layoutEditing: boolean;
-  onLayoutEditingChange: (value: boolean) => void;
   onFocus: () => void;
   onOpenModels: () => void;
   onOpenL10Models: () => void;
@@ -675,8 +672,7 @@ interface RackInspectorProps {
   onL10CountChange: (count: number) => void;
   onL10StartUChange: (startU: number) => void;
   onL10SlotToggle: (rackUnit: number) => void;
-  onNudge: (x: number, z: number) => void;
-  onRotate: () => void;
+  onL10SlotsChange: (rackUnits: number[]) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -690,8 +686,6 @@ function RackInspector({
   l10LastUsableU,
   l10MaxStartU,
   canEdit,
-  layoutEditing,
-  onLayoutEditingChange,
   onFocus,
   onOpenModels,
   onOpenL10Models,
@@ -700,8 +694,7 @@ function RackInspector({
   onL10CountChange,
   onL10StartUChange,
   onL10SlotToggle,
-  onNudge,
-  onRotate,
+  onL10SlotsChange,
   collapsed = false,
   onToggleCollapse,
 }: RackInspectorProps) {
@@ -730,14 +723,6 @@ function RackInspector({
         <IconTooltipButton label="聚焦機櫃" icon={Focus} onClick={onFocus} />
         <IconTooltipButton label="模型與尺寸" icon={Box} onClick={onOpenModels} />
         <IconTooltipButton label="櫃內 L10 1U 機台" icon={Cpu} onClick={onOpenL10Models} />
-        {canEdit ? (
-          <IconTooltipButton
-            label={layoutEditing ? "結束編排" : "編排機櫃"}
-            icon={Move3d}
-            active={layoutEditing}
-            onClick={() => onLayoutEditingChange(!layoutEditing)}
-          />
-        ) : null}
         <div className="mt-auto mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d]">
           <span className={cn("h-2.5 w-2.5 rounded-full", health === "healthy" ? "bg-emerald-400" : health === "critical" ? "bg-rose-400" : "bg-amber-400")} />
         </div>
@@ -953,6 +938,60 @@ function RackInspector({
                 </span>
               </div>
 
+              <div className="mt-3 rounded-xl border border-blue-300/20 bg-blue-400/[0.06] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-black text-blue-50">快速安裝層位</div>
+                    <p className="mt-1 text-[10px] leading-4 text-blue-100/65">
+                      一鍵配置連續層位；仍可在下方逐層微調。
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-cyan-300/25 bg-cyan-400/10 px-2 py-1 text-[10px] font-black tabular-nums text-cyan-100">
+                    可用 {l10Capacity} 層
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() =>
+                      onL10SlotsChange(
+                        Array.from(
+                          { length: l10Capacity },
+                          (_, index) => l10FirstUsableU + index * l10RackUnits,
+                        ),
+                      )
+                    }
+                    className="h-9 rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-2 text-[11px] font-bold text-cyan-50 hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    由下往上填滿
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() =>
+                      onL10SlotsChange(
+                        Array.from(
+                          { length: l10Capacity },
+                          (_, index) => l10LastUsableU - l10RackUnits + 1 - index * l10RackUnits,
+                        ).sort((left, right) => left - right),
+                      )
+                    }
+                    className="h-9 rounded-lg border border-blue-300/25 bg-blue-400/10 px-2 text-[11px] font-bold text-blue-50 hover:bg-blue-400/18 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    由上往下填滿
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canEdit || selectedL10Slots.length === 0}
+                    onClick={() => onL10SlotsChange([])}
+                    className="h-9 rounded-lg border border-rose-300/25 bg-rose-400/[0.08] px-2 text-[11px] font-bold text-rose-100 hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    清空層位
+                  </button>
+                </div>
+              </div>
+
               <div className="mt-3 grid grid-cols-8 gap-1" aria-label={`${rack.capacityU}U 機櫃軌道配置`}>
                 {railUnits.map((unit) => {
                   const selected = selectedL10Slots.includes(unit);
@@ -1047,50 +1086,6 @@ function RackInspector({
             </section>
           ) : null}
 
-          {canEdit ? (
-            <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-white">
-                    <PencilRuler className="h-4 w-4 text-blue-300" />
-                    編排模式
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-400">以 250mm 網格移動，比例不變形</p>
-                </div>
-                <button
-                  type="button"
-                  aria-pressed={layoutEditing}
-                  onClick={() => onLayoutEditingChange(!layoutEditing)}
-                  className={cn(
-                    "relative h-7 w-12 cursor-pointer rounded-full border transition-colors",
-                    layoutEditing ? "border-blue-300/50 bg-blue-500/35" : "border-[#214669] bg-[#10283d]"
-                  )}
-                >
-                  <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform", layoutEditing ? "translate-x-5" : "translate-x-1")} />
-                  <span className="sr-only">切換編排模式</span>
-                </button>
-              </div>
-
-              {layoutEditing ? (
-                <div className="mt-3 space-y-2 border-t border-[#163653] pt-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <span />
-                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0, -0.25)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-white/[0.07]">Z−</Button>
-                    <span />
-                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(-0.25, 0)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-white/[0.07]">X−</Button>
-                    <Button type="button" variant="outline" size="sm" onClick={onRotate} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-100 hover:bg-cyan-400/15"><RotateCw className="h-4 w-4" /></Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0.25, 0)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-white/[0.07]">X＋</Button>
-                    <span />
-                    <Button type="button" variant="outline" size="sm" onClick={() => onNudge(0, 0.25)} className="h-9 border-white/12 bg-black/20 text-slate-200 hover:bg-white/[0.07]">Z＋</Button>
-                    <span />
-                  </div>
-                  <div className="text-center text-[11px] tabular-nums text-slate-400">
-                    X {rack.positionX.toFixed(2)}m · Z {rack.positionZ.toFixed(2)}m · {rack.rotation}°
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
         </div>
       </ScrollArea>
 
@@ -1745,7 +1740,6 @@ export function DeploymentPlanningCenter() {
   const [showLabels, setShowLabels] = useState(() =>
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 640px)").matches
   );
-  const [layoutEditing, setLayoutEditing] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<"3d" | "2d">("3d");
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
@@ -2145,57 +2139,10 @@ export function DeploymentPlanningCenter() {
       )
     );
     setSelectedRackId(nextRack.id);
-    setLayoutEditing(false);
     toast({
       title: "機櫃已刪除",
       description: `${removedRack.cabinet} 已同步從 2D 與 3D 場景移除。`,
     });
-  };
-
-  const moveSelectedRack = (deltaX: number, deltaZ: number) => {
-    if (!canEdit || !layoutEditing) return;
-
-    const footprint = getFootprint(selectedRack);
-    const horizontalLimit = Math.max(
-      0,
-      selectedFacility.width / 2 - footprint.width / 2 - 0.25
-    );
-    const verticalLimit = Math.max(
-      0,
-      selectedFacility.depth / 2 - footprint.depth / 2 - 0.25
-    );
-    const nextX = Math.max(
-      -horizontalLimit,
-      Math.min(horizontalLimit, selectedRack.positionX + deltaX)
-    );
-    const nextZ = Math.max(
-      -verticalLimit,
-      Math.min(verticalLimit, selectedRack.positionZ + deltaZ)
-    );
-    const collision = selectedSite.racks.some((rack) => {
-      if (rack.id === selectedRack.id) return false;
-      const other = getFootprint(rack);
-      return (
-        Math.abs(nextX - rack.positionX) < (footprint.width + other.width) / 2 + 0.16 &&
-        Math.abs(nextZ - rack.positionZ) < (footprint.depth + other.depth) / 2 + 0.16
-      );
-    });
-
-    if (collision) {
-      toast({
-        title: "位置有碰撞",
-        description: "機櫃實際尺寸已重疊，請改用其他網格位置。",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    updateSelectedRack((rack) => ({ ...rack, positionX: nextX, positionZ: nextZ }));
-  };
-
-  const rotateSelectedRack = () => {
-    if (!canEdit || !layoutEditing) return;
-    updateSelectedRack((rack) => ({ ...rack, rotation: (rack.rotation + 90) % 360 }));
   };
 
   const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2461,6 +2408,26 @@ export function DeploymentPlanningCenter() {
     });
   };
 
+  const changeSelectedRackL10Slots = (rackUnitSlots: number[]) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const l10Slots = normalizeRackUnitSlots({
+        capacityU: rack.capacityU,
+        rackUnits: getL10RackUnits(selectedL10Model),
+        rackUnitSlots,
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
+
+      return {
+        ...rack,
+        l10Slots,
+        l10Count: l10Slots.length,
+        l10StartU: l10Slots[0] ?? rack.l10StartU,
+      };
+    });
+  };
+
   const addRackUsingModel = (modelId: string, closeModelLibrary: boolean) => {
     if (!canEdit || models[modelId]?.kind !== "rack") return;
     const definition = models[modelId];
@@ -2503,7 +2470,6 @@ export function DeploymentPlanningCenter() {
       )
     );
     setSelectedRackId(nextRack.id);
-    setLayoutEditing(true);
     if (closeModelLibrary) setModelLibraryOpen(false);
     if (workspaceMode === "3d") requestCamera("focus");
     toast({
@@ -2541,8 +2507,6 @@ export function DeploymentPlanningCenter() {
     l10LastUsableU: selectedL10Placement.lastUsableU,
     l10MaxStartU: selectedL10Placement.maxStartUForCount,
     canEdit,
-    layoutEditing,
-    onLayoutEditingChange: setLayoutEditing,
     onFocus: () => requestCamera("focus"),
     onOpenModels: () => openModelLibrary("rack"),
     onOpenL10Models: () => openModelLibrary("l10"),
@@ -2551,8 +2515,7 @@ export function DeploymentPlanningCenter() {
     onL10CountChange: changeSelectedRackL10Count,
     onL10StartUChange: changeSelectedRackL10StartU,
     onL10SlotToggle: toggleSelectedRackL10Slot,
-    onNudge: moveSelectedRack,
-    onRotate: rotateSelectedRack,
+    onL10SlotsChange: changeSelectedRackL10Slots,
   };
 
   const desktopGridClass = leftCollapsed
@@ -2639,7 +2602,6 @@ export function DeploymentPlanningCenter() {
                 type="button"
                 onClick={() => {
                   setWorkspaceMode("2d");
-                  setLayoutEditing(true);
                 }}
                 className={cn(
                   "h-11 rounded-xl px-4 text-sm font-bold",
@@ -2687,6 +2649,7 @@ export function DeploymentPlanningCenter() {
                 onAddRack={addRackFromCurrentModel}
                 onDeleteRack={removeRackFromPlan}
                 onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+                onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
                 onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
                 onAddAisle={addAisle}
                 onAddPowerFeed={addPowerFeed}
@@ -2694,7 +2657,6 @@ export function DeploymentPlanningCenter() {
                 onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
                 onView3D={() => {
                   setWorkspaceMode("3d");
-                  setLayoutEditing(false);
                   requestCamera("overview");
                 }}
               />
@@ -2727,11 +2689,6 @@ export function DeploymentPlanningCenter() {
                 </span>
               </button>
 
-              {layoutEditing ? (
-                <div className="flex h-11 items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/12 px-3 text-xs font-bold text-amber-100 backdrop-blur-xl">
-                  <Move3d className="h-4 w-4" /> 250mm 編排網格
-                </div>
-              ) : null}
             </div>
 
             <div className="hidden">
@@ -2827,7 +2784,6 @@ export function DeploymentPlanningCenter() {
                 type="button"
                 onClick={() => {
                   setWorkspaceMode("2d");
-                  setLayoutEditing(true);
                 }}
                 className="h-9 bg-cyan-300 px-3 text-xs font-black text-[#04131f] hover:bg-cyan-200"
               >
@@ -2917,6 +2873,7 @@ export function DeploymentPlanningCenter() {
               onAddRack={addRackFromCurrentModel}
               onDeleteRack={removeRackFromPlan}
               onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+              onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
               onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
               onAddAisle={addAisle}
               onAddPowerFeed={addPowerFeed}
@@ -2924,7 +2881,6 @@ export function DeploymentPlanningCenter() {
               onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
               onView3D={() => {
                 setWorkspaceMode("3d");
-                setLayoutEditing(false);
                 requestCamera("overview");
               }}
             />
@@ -2973,7 +2929,6 @@ export function DeploymentPlanningCenter() {
                 icon: Map,
                 onClick: () => {
                   setWorkspaceMode("2d");
-                  setLayoutEditing(true);
                 },
               },
             ].map((action) => {
