@@ -641,40 +641,62 @@ export function TestProgressTable({
                           <span>其他功能</span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" className="w-52 space-y-2 p-2">
-                        <SystemCompleteButton
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          stations={stations as never[]}
-                          items={items as never[]}
-                          onSystemUpdate={onSystemUpdate}
-                        />
-                        <SystemEditDialog
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          assignedEngineer={system.assigned_engineer || ""}
-                          onUpdate={onSystemUpdate}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20 hover:text-cyan-50"
-                          onClick={() => onCloneSystem(system)}
-                        >
-                          <Copy className="mr-2 h-3.5 w-3.5" />
-                          複製為連號機台
-                        </Button>
-                        <SystemResetDialog
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          onReset={onSystemUpdate}
-                        />
-                        <SystemDeleteButton
-                          systemId={system.id}
-                          systemName={system.system_name}
-                          onSystemUpdate={onSystemUpdate}
-                        />
+                      <PopoverContent
+                        align="end"
+                        className="w-64 overflow-hidden rounded-xl border-[#315b7b] bg-[#081827] p-0 text-[#dceaf4] shadow-[0_22px_55px_-24px_rgba(34,211,238,0.45)]"
+                      >
+                        <div className="border-b border-[#284b65] bg-[#0c2033] px-4 py-3">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-cyan-200/70">
+                            機台操作
+                          </p>
+                          <p className="mt-1 truncate text-sm font-semibold text-[#f3f8fc]">
+                            {system.system_name}
+                          </p>
+                        </div>
+                        <div className="space-y-1 p-2">
+                          <SystemCompleteButton
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            stations={stations as never[]}
+                            items={items as never[]}
+                            onSystemUpdate={onSystemUpdate}
+                            triggerVariant="menu"
+                          />
+                          <SystemEditDialog
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            assignedEngineer={system.assigned_engineer || ""}
+                            onUpdate={onSystemUpdate}
+                            variant="menu"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 w-full justify-start gap-3 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-[#dceaf4] shadow-none hover:border-blue-300/25 hover:bg-blue-300/10 hover:text-blue-50"
+                            onClick={() => onCloneSystem(system)}
+                          >
+                            <Copy className="h-4 w-4 shrink-0 text-blue-300" />
+                            複製為連號機台
+                          </Button>
+                        </div>
+                        <div className="border-t border-[#284b65] bg-[#071522] px-2 pb-2 pt-2">
+                          <p className="px-3 pb-1 text-[0.62rem] font-semibold tracking-[0.16em] text-[#7895aa]">
+                            資料管理
+                          </p>
+                          <SystemResetDialog
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            onReset={onSystemUpdate}
+                            triggerVariant="menu"
+                          />
+                          <SystemDeleteButton
+                            systemId={system.id}
+                            systemName={system.system_name}
+                            onSystemUpdate={onSystemUpdate}
+                            triggerVariant="menu"
+                          />
+                        </div>
                       </PopoverContent>
                     </Popover>
                   </div>
