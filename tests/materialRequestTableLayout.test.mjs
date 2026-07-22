@@ -38,6 +38,24 @@ test("REF DES previews show one value before the remaining item count", () => {
   refDesBlocks.forEach((block) => assert.match(block, /maxItems=\{1\}/));
 });
 
+test("material vendor cells keep relation metadata inside the hover card", () => {
+  const identityBlock = source.match(
+    /function MaterialIdentityHover\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialFieldLabel/,
+  )?.[0] ?? "";
+  const primaryCellBlock = source.match(
+    /<td className="relative overflow-hidden[\s\S]*?<\/td>\r?\n\s*<td className="border-r border-blue-400\/10 px-4 py-3 align-middle"/,
+  )?.[0] ?? "";
+
+  assert.match(identityBlock, /data-testid="material-identity-trigger"/);
+  assert.match(identityBlock, /data-testid="material-primary-name"/);
+  assert.match(identityBlock, /data-testid="material-primary-vendor"/);
+  assert.match(identityBlock, />REF DES</);
+  assert.match(identityBlock, />MPN</);
+  assert.match(primaryCellBlock, /<MaterialIdentityHover/);
+  assert.doesNotMatch(primaryCellBlock, /group\.displayRef/);
+  assert.doesNotMatch(primaryCellBlock, /個 MPN/);
+});
+
 test("tracking table summaries remain compact instead of stretching material rows", () => {
   const cellBlock = source.match(
     /function TrackingHistoryCell\([\s\S]*?\r?\n}\r?\n\r?\nfunction TrackingHistoryDialog/,
