@@ -300,9 +300,21 @@ function CompactHoverValue({
   values: string | string[];
 }) {
   const summary = createCompactValueSummary(values, { maxItems });
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredValues = normalizedQuery
+    ? summary.values.filter((value) => value.toLocaleLowerCase().includes(normalizedQuery))
+    : summary.values;
+  const canSearch = summary.values.length > 10;
 
   return (
-    <HoverCard openDelay={180} closeDelay={100}>
+    <HoverCard
+      openDelay={160}
+      closeDelay={140}
+      onOpenChange={(open) => {
+        if (!open) setQuery("");
+      }}
+    >
       <HoverCardTrigger asChild>
         <button
           type="button"
@@ -328,22 +340,91 @@ function CompactHoverValue({
         </button>
       </HoverCardTrigger>
       <HoverCardContent
+        data-testid="compact-hover-content"
         align="start"
         side="top"
-        className="w-[min(460px,calc(100vw-32px))] border-cyan-300/25 bg-[#081727] p-0 text-slate-100 shadow-2xl"
+        sideOffset={10}
+        collisionPadding={16}
+        className="w-[min(540px,calc(100vw-24px))] overflow-hidden rounded-2xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_28px_80px_-28px_rgba(6,182,212,0.55)]"
       >
-        <div className="border-b border-cyan-300/15 px-4 py-3">
-          <p className="text-sm font-black text-cyan-100">{label}</p>
-          <p className="mt-1 text-xs text-slate-400">{onCopy ? "點一下欄位可複製完整內容" : "完整內容"}</p>
-        </div>
-        <div className="max-h-64 overflow-y-auto px-4 py-3">
-          <div className="flex flex-wrap gap-2">
-            {summary.values.map((value, index) => (
-              <span key={`${value}-${index}`} className="max-w-full break-all rounded-md border border-sky-300/16 bg-sky-400/[0.08] px-2.5 py-1.5 font-mono text-sm leading-5 text-sky-100">
-                {value}
-              </span>
-            ))}
+        <div className="flex items-center justify-between gap-4 border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.16),rgba(59,130,246,0.05))] px-4 py-3.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-cyan-200/25 bg-cyan-300/10 text-cyan-100">
+              <Layers3 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-white">{label}</p>
+              <p className="mt-0.5 text-xs text-cyan-100/65">共 {summary.values.length} 項完整資料</p>
+            </div>
           </div>
+          <span className="rounded-full border border-cyan-200/20 bg-black/20 px-2.5 py-1 font-mono text-xs font-black text-cyan-100">
+            {filteredValues.length}/{summary.values.length}
+          </span>
+        </div>
+
+        {canSearch ? (
+          <div className="border-b border-white/[0.07] px-4 py-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/70" />
+              <input
+                data-testid="compact-hover-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={`搜尋${label}...`}
+                className="h-9 w-full rounded-xl border border-cyan-200/20 bg-black/25 pl-9 pr-9 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-200/55 focus:ring-2 focus:ring-cyan-300/10"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  aria-label="清除搜尋"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <ScrollArea className="h-[min(288px,42vh)]">
+          <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredValues.length > 0 ? filteredValues.map((value, index) => (
+              <div
+                key={`${value}-${index}`}
+                className="group/value flex min-w-0 items-center gap-2 rounded-xl border border-sky-300/14 bg-sky-400/[0.055] px-2.5 py-2 transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/[0.09]"
+                title={value}
+              >
+                <span className="inline-flex h-5 min-w-5 flex-none items-center justify-center rounded-md bg-cyan-300/10 px-1 font-mono text-[10px] font-black text-cyan-200">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 truncate font-mono text-xs text-sky-50">{value}</span>
+              </div>
+            )) : (
+              <div className="col-span-full py-10 text-center">
+                <Search className="mx-auto h-5 w-5 text-slate-600" />
+                <p className="mt-2 text-sm font-semibold text-slate-400">找不到符合「{query}」的內容</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] bg-black/15 px-4 py-3">
+          <p className="text-xs text-slate-400">滑鼠可停留瀏覽；搜尋不會改動原始資料</p>
+          {onCopy && summary.fullText !== "-" ? (
+            <button
+              type="button"
+              data-testid="compact-hover-copy-all"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCopy(summary.fullText);
+              }}
+              className="inline-flex h-8 flex-none items-center gap-1.5 rounded-lg border border-cyan-200/30 bg-cyan-300/10 px-3 text-xs font-black text-cyan-100 transition-colors hover:border-cyan-100/60 hover:bg-cyan-300/20"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              複製全部
+            </button>
+          ) : null}
         </div>
       </HoverCardContent>
     </HoverCard>
@@ -405,71 +486,85 @@ function MaterialIdentityHover({
         side="top"
         sideOffset={10}
         collisionPadding={16}
-        className="w-[min(500px,calc(100vw-32px))] overflow-hidden rounded-2xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_24px_70px_-24px_rgba(6,182,212,0.45)]"
+        className="w-[min(580px,calc(100vw-24px))] overflow-hidden rounded-2xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_28px_80px_-28px_rgba(6,182,212,0.55)]"
       >
-        <div className="border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(59,130,246,0.06))] px-4 py-3.5">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-cyan-200/30 bg-cyan-300/12 text-cyan-100">
-              <Factory className="h-4.5 w-4.5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[15px] font-black leading-5 text-white">{name || "未命名料件"}</p>
-              <p className="mt-1 text-sm font-semibold text-cyan-200">{manufacturer || "未填廠商"}</p>
+        <div className="border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.16),rgba(59,130,246,0.05))] px-4 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-200/30 bg-cyan-300/12 text-cyan-100">
+                <Factory className="h-4.5 w-4.5" />
+              </span>
+              <div className="min-w-0">
+                <p className="line-clamp-2 text-[15px] font-black leading-5 text-white">{name || "未命名料件"}</p>
+                <p className="mt-1 truncate text-sm font-semibold text-cyan-200">{manufacturer || "未填廠商"}</p>
+              </div>
             </div>
+            <span className="flex-none rounded-full border border-cyan-200/25 bg-black/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100">料件快覽</span>
           </div>
         </div>
 
-        <div className="grid gap-3 p-4 sm:grid-cols-2">
-          <section className="min-w-0 rounded-xl border border-sky-300/20 bg-sky-400/[0.06]">
-            <div className="flex items-center justify-between border-b border-sky-300/15 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <Layers3 className="h-4 w-4 text-sky-200" />
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-sky-100">REF DES</p>
-              </div>
-              <span className="rounded-md bg-sky-300/12 px-2 py-0.5 font-mono text-xs font-black text-sky-100">{refs.length}</span>
+        <div data-testid="material-identity-metrics" className="grid grid-cols-3 border-b border-white/[0.07] bg-black/10">
+          {[
+            ["REF DES", refs.length],
+            ["MPN", mpns.length],
+            ["數量", qty],
+          ].map(([metricLabel, metricValue], index) => (
+            <div key={metricLabel} className={cn("px-4 py-3", index > 0 && "border-l border-white/[0.07]") }>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{metricLabel}</p>
+              <p className="mt-1 font-mono text-lg font-black text-white">{metricValue}</p>
             </div>
-            <div className="max-h-36 overflow-y-auto p-2.5">
+          ))}
+        </div>
+
+        <div className="grid min-h-0 sm:grid-cols-2">
+          <section data-testid="material-identity-ref-list" className="min-w-0 border-b border-white/[0.07] sm:border-b-0 sm:border-r">
+            <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
+              <Layers3 className="h-4 w-4 text-sky-200" />
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-sky-100">REF DES</p>
+              <span className="text-[10px] font-semibold text-slate-500">位置清單</span>
+            </div>
+            <ScrollArea className="h-44">
+              <div className="space-y-1.5 p-3">
               {refs.length > 0 ? (
-                <div className="grid grid-cols-2 gap-1.5">
-                  {refs.map((value) => (
-                    <span key={value} className="truncate rounded-md border border-white/[0.07] bg-black/20 px-2 py-1.5 font-mono text-xs text-sky-50" title={value}>
-                      {value}
-                    </span>
-                  ))}
-                </div>
+                refs.map((value, index) => (
+                  <div key={value} className="flex items-center gap-2 rounded-lg border border-sky-300/12 bg-sky-400/[0.05] px-2.5 py-2" title={value}>
+                    <span className="font-mono text-[10px] font-black text-sky-300/70">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="min-w-0 truncate font-mono text-xs text-sky-50">{value}</span>
+                  </div>
+                ))
               ) : (
-                <p className="px-1 py-3 text-center text-sm text-slate-500">尚未設定</p>
+                <p className="py-12 text-center text-sm text-slate-500">尚未設定 REF DES</p>
               )}
-            </div>
+              </div>
+            </ScrollArea>
           </section>
 
-          <section className="min-w-0 rounded-xl border border-emerald-300/20 bg-emerald-400/[0.05]">
-            <div className="flex items-center justify-between border-b border-emerald-300/15 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <FileCode2 className="h-4 w-4 text-emerald-200" />
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-100">MPN</p>
-              </div>
-              <span className="rounded-md bg-emerald-300/12 px-2 py-0.5 font-mono text-xs font-black text-emerald-100">{mpns.length}</span>
+          <section data-testid="material-identity-mpn-list" className="min-w-0">
+            <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
+              <FileCode2 className="h-4 w-4 text-emerald-200" />
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-100">MPN</p>
+              <span className="text-[10px] font-semibold text-slate-500">原廠料號</span>
             </div>
-            <div className="max-h-36 overflow-y-auto p-2.5">
+            <ScrollArea className="h-44">
+              <div className="space-y-1.5 p-3">
               {mpns.length > 0 ? (
-                <div className="space-y-1.5">
-                  {mpns.map((value) => (
-                    <p key={value} className="break-all rounded-md border border-white/[0.07] bg-black/20 px-2 py-1.5 font-mono text-xs leading-5 text-emerald-50">
-                      {value}
-                    </p>
-                  ))}
-                </div>
+                mpns.map((value, index) => (
+                  <div key={value} className="flex items-start gap-2 rounded-lg border border-emerald-300/12 bg-emerald-400/[0.045] px-2.5 py-2">
+                    <span className="pt-0.5 font-mono text-[10px] font-black text-emerald-300/70">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="min-w-0 break-all font-mono text-xs leading-4 text-emerald-50">{value}</span>
+                  </div>
+                ))
               ) : (
-                <p className="px-1 py-3 text-center text-sm text-slate-500">尚未設定</p>
+                <p className="py-12 text-center text-sm text-slate-500">尚未設定 MPN</p>
               )}
-            </div>
+              </div>
+            </ScrollArea>
           </section>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-white/[0.07] bg-black/15 px-4 py-3 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-t border-white/[0.07] bg-black/15 px-4 py-3 text-xs text-slate-400">
           <span>模組：<strong className="font-semibold text-slate-200">{assemblyName || "未指定"}</strong></span>
-          <span>數量：<strong className="font-mono text-slate-200">{qty}</strong></span>
+          <span className="text-slate-500">移入內容區可捲動查看完整資料</span>
         </div>
       </HoverCardContent>
     </HoverCard>
