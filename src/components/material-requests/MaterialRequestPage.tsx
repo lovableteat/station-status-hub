@@ -122,6 +122,7 @@ import {
   shouldApplyBomWorkspaceCache,
 } from "./materialRequestPresentation";
 import { useMaterialBomPresence } from "./useMaterialBomPresence";
+import { canReuseBomPayloadReference } from "./materialBomPerformance";
 import {
   logMaterialRecordChange,
   logMaterialReportExport,
@@ -4347,7 +4348,16 @@ export function MaterialRequestPage() {
       return;
     }
 
-    setBomWorkspaces(storedWorkspaces);
+    setBomWorkspaces((currentWorkspaces) => storedWorkspaces.map((workspace) => {
+      const currentWorkspace = currentWorkspaces.find((candidate) => candidate.id === workspace.id);
+      if (
+        currentWorkspace
+        && canReuseBomPayloadReference(currentWorkspace.payload, workspace.payload)
+      ) {
+        return { ...workspace, payload: currentWorkspace.payload };
+      }
+      return workspace;
+    }));
     setActiveBomId((current) => {
       const candidateBomId = preferredBomId ?? current ?? loadActiveBomId();
       return storedWorkspaces.some((workspace) => workspace.id === candidateBomId)
