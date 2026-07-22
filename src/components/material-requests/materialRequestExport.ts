@@ -139,6 +139,28 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#039;");
 }
 
+function renderCollapsibleRefDes(value: string) {
+  const items = value
+    .split(/[\n,;，；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) return '<small class="muted">未填寫</small>';
+  if (items.length <= 4 && value.length <= 120) {
+    return `<small class="ref-preview">${escapeHtml(items.join(", "))}</small>`;
+  }
+
+  const preview = items.slice(0, 2).join(", ");
+  return `<details class="cell-details">
+    <summary class="cell-details__summary">
+      <span class="cell-details__preview">${escapeHtml(preview)}</span>
+      <span class="cell-details__count">共 ${items.length.toLocaleString()} 項</span>
+      <span class="cell-details__chevron" aria-hidden="true"></span>
+    </summary>
+    <div class="cell-details__content">${items.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+  </details>`;
+}
+
 function parseDataUrl(dataUrl: string) {
   const match = /^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,(.+)$/i.exec(dataUrl);
   if (!match) return null;
@@ -376,7 +398,7 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
     return `<tr>
       <td>${escapeHtml(row.item)}</td>
       <td>${row.marked ? "★" : ""}</td>
-      <td><strong>${escapeHtml(row.refGroup)}</strong><small>${escapeHtml(row.refDes)}</small></td>
+      <td class="ref-cell"><strong>${escapeHtml(row.refGroup)}</strong>${renderCollapsibleRefDes(row.refDes)}</td>
       <td><strong>${escapeHtml(row.materialName)}</strong><small>${escapeHtml(row.assembly)} · Qty ${escapeHtml(row.qty)}</small></td>
       <td>${escapeHtml(row.manufacturer)}<small>${escapeHtml(row.manufacturerPartNumber)}${row.manufacturerPartNumberAlt ? `<br>${escapeHtml(row.manufacturerPartNumberAlt)}` : ""}</small></td>
       <td>${escapeHtml(row.internalPartNumber)}<small>${escapeHtml(row.symbol)} / ${escapeHtml(row.footprint)}</small></td>
@@ -395,13 +417,16 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
 :root{color-scheme:light;--ink:#102033;--muted:#587086;--line:#cddce7;--blue:#155e85;--cyan:#dff3f7;--paper:#f4f8fb}*{box-sizing:border-box}body{margin:0;background:#e9f0f5;color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif}.report{max-width:1800px;margin:0 auto;background:white;min-height:100vh}.hero{padding:28px 32px;background:linear-gradient(135deg,#123a61,#17677c);color:white}.hero h1{margin:0;font-size:28px}.hero p{margin:8px 0 0;color:#d7eef5}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:18px 32px;background:#f7fafc;border-bottom:1px solid var(--line)}.meta div,.stat{border:1px solid var(--line);border-radius:10px;background:white;padding:12px 14px}.meta span,.stat span{display:block;color:var(--muted);font-size:12px}.meta strong,.stat strong{display:block;margin-top:4px;font-size:16px}.filters,.stats{display:flex;flex-wrap:wrap;gap:8px;padding:14px 32px;border-bottom:1px solid var(--line)}.filter{border:1px solid #8ac6d5;border-radius:999px;background:var(--cyan);padding:6px 10px;font-size:12px}.stats .stat{min-width:140px}.table-wrap{overflow:auto;padding:0 24px 32px}table{width:100%;min-width:1500px;border-collapse:separate;border-spacing:0;font-size:12px}thead th{position:sticky;top:0;z-index:2;background:var(--blue);color:white;text-align:left;padding:11px 10px;border-right:1px solid rgba(255,255,255,.2)}tbody td{vertical-align:top;padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);max-width:260px;overflow-wrap:anywhere}tbody tr:nth-child(even){background:var(--paper)}td small{display:block;margin-top:5px;color:var(--muted);line-height:1.45}.status{display:inline-block;border:1px solid #7bb8c7;border-radius:999px;background:#e5f5f7;padding:4px 8px;font-weight:700}.link{color:#075f9a}.images{display:flex;flex-wrap:wrap;gap:6px}.images a{display:block;color:var(--muted);text-decoration:none}.images img{display:block;width:96px;height:68px;object-fit:cover;border:1px solid var(--line);border-radius:6px}.images small{max-width:110px}.muted{color:var(--muted)}.footer{padding:16px 32px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}@media(max-width:900px){.meta{grid-template-columns:1fr}.hero,.meta,.filters,.stats{padding-left:18px;padding-right:18px}}@media print{body{background:white}.report{max-width:none}.hero{print-color-adjust:exact;-webkit-print-color-adjust:exact}.table-wrap{overflow:visible;padding:0}table{min-width:0;font-size:8px}thead{display:table-header-group}.images img{width:56px;height:40px}.footer{page-break-before:avoid}}
 </style>
 <style>
+.report-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 32px;border-bottom:1px solid var(--line);background:#f7fafc}.report-actions__hint{color:var(--muted);font-size:12px}.report-actions__buttons{display:flex;gap:8px}.report-actions button{border:1px solid #8ac6d5;border-radius:8px;background:#fff;color:#164e63;padding:7px 12px;font:inherit;font-weight:700;cursor:pointer}.report-actions button:hover,.report-actions button:focus-visible{background:var(--cyan);border-color:#3c9db3;outline:none}.ref-cell{min-width:220px}.ref-preview{line-height:1.5}.cell-details{margin-top:7px}.cell-details__summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:7px;min-height:36px;padding:7px 8px;border:1px solid #b7cedd;border-radius:8px;background:#f7fbfd;color:var(--ink);cursor:pointer;list-style:none}.cell-details__summary::-webkit-details-marker{display:none}.cell-details__summary:hover,.cell-details__summary:focus-visible{border-color:#4ba7ba;background:#eaf7fa;outline:none}.cell-details__preview{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.45}.cell-details__count{white-space:nowrap;border-radius:999px;background:#dff3f7;color:#155e75;padding:3px 7px;font-size:11px;font-weight:700}.cell-details__chevron::before{content:"展開";color:#0d6f89;font-size:11px;font-weight:700}.cell-details[open] .cell-details__chevron::before{content:"收合"}.cell-details[open] .cell-details__summary{border-bottom-left-radius:0;border-bottom-right-radius:0;background:#eaf7fa}.cell-details__content{display:flex;flex-wrap:wrap;gap:5px;padding:9px;border:1px solid #8ac6d5;border-top:0;border-radius:0 0 8px 8px;background:#fff}.cell-details__content span{border:1px solid #d4e3ec;border-radius:6px;background:#f4f8fb;padding:3px 6px;line-height:1.35}
 .image-link{cursor:zoom-in}.image-link img{transition:transform .18s ease,box-shadow .18s ease}.image-link:hover img,.image-link:focus-visible img{transform:scale(1.04);box-shadow:0 8px 22px rgba(16,32,51,.2)}.image-link:focus-visible{outline:2px solid #155e85;outline-offset:3px;border-radius:8px}.image-lightbox{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:clamp(16px,4vw,48px);background:rgba(4,14,25,.84);backdrop-filter:blur(8px)}.image-lightbox[hidden]{display:none}.image-lightbox__backdrop{position:absolute;inset:0;border:0;background:transparent;cursor:zoom-out}.image-lightbox__content{position:relative;z-index:1;max-width:min(1200px,92vw);max-height:90vh;margin:0;border:1px solid #8ac6d5;border-radius:16px;background:#fff;padding:12px;box-shadow:0 24px 70px rgba(4,14,25,.45)}.image-lightbox__content img{display:block;max-width:calc(92vw - 24px);max-height:calc(84vh - 52px);width:auto;height:auto;object-fit:contain;border-radius:10px}.image-lightbox__content figcaption{padding:10px 4px 2px;color:var(--muted);font-size:12px}.image-lightbox__close{position:absolute;right:10px;top:10px;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:rgba(16,32,51,.85);color:#fff;cursor:pointer;font-size:24px;line-height:1}
 body.image-preview-open{overflow:hidden}
+@media(max-width:900px){.report-actions{align-items:flex-start;flex-direction:column;padding-left:18px;padding-right:18px}}@media print{.report-actions{display:none}.cell-details__summary{display:none}.cell-details__content{display:flex!important;border:0;padding:0}.cell-details__content span{border:0;background:transparent;padding:0}.cell-details__content span:not(:last-child)::after{content:", "}}
 </style>
 </head><body><main class="report">
 <header class="hero"><h1>${escapeHtml(snapshot.reportName)}</h1><p>${escapeHtml(snapshot.workspaceName)} · 資料截至 ${escapeHtml(formatDateTime(snapshot.dataAsOf))}</p></header>
 <section class="meta"><div><span>匯出範圍</span><strong>${escapeHtml(snapshot.scopeLabel)}</strong></div><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
+<section class="report-actions"><span class="report-actions__hint">長內容已預設收合，可逐筆展開或一次控制全部資料。</span><div class="report-actions__buttons"><button type="button" data-details-action="expand">全部展開</button><button type="button" data-details-action="collapse">全部收合</button></div></section>
 <div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>REF</th><th>料件</th><th>廠商 / MPN</th><th>內部料號 / 圖面</th><th>TX</th><th>狀態追蹤</th><th>申請資訊</th><th>規格 / 備註</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
 </main>
@@ -414,6 +439,25 @@ body.image-preview-open{overflow:hidden}
   </figure>
 </div>
 <script>
+(() => {
+  const details = Array.from(document.querySelectorAll(".cell-details"));
+  const controls = document.querySelectorAll("[data-details-action]");
+  const setAllDetails = (open) => details.forEach((entry) => { entry.open = open; });
+
+  controls.forEach((control) => control.addEventListener("click", () => {
+    setAllDetails(control.getAttribute("data-details-action") === "expand");
+  }));
+
+  let printState = [];
+  window.addEventListener("beforeprint", () => {
+    printState = details.map((entry) => entry.open);
+    setAllDetails(true);
+  });
+  window.addEventListener("afterprint", () => {
+    details.forEach((entry, index) => { entry.open = Boolean(printState[index]); });
+  });
+})();
+
 (() => {
   const lightbox = document.getElementById("image-lightbox");
   const previewImage = document.getElementById("image-lightbox-image");
