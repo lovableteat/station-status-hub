@@ -19,6 +19,14 @@ import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageH
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -675,8 +683,8 @@ export function ToolsManagement() {
         </TabsContent>
       </Tabs>
 
-      <Sheet open={Boolean(selectedAsset)} onOpenChange={(open) => !open && setSelectedAsset(null)}>
-        <SheetContent className="w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[580px]">
+      <Dialog open={Boolean(selectedAsset)} onOpenChange={(open) => !open && setSelectedAsset(null)}>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto border-[#38d7ff]/55 bg-gradient-to-br from-[#09253a] via-[#071522] to-[#06111f] p-0 shadow-[0_0_42px_rgba(56,215,255,0.18)]">
           {selectedAsset && (
             <AssetDetails
               asset={selectedAsset}
@@ -687,8 +695,8 @@ export function ToolsManagement() {
               onToggle={toggleAssignment}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <Sheet open={toolSheetOpen} onOpenChange={setToolSheetOpen}>
         <SheetContent className="w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[540px]">
@@ -845,29 +853,41 @@ function AssetDetails({
   const Icon = meta.icon;
   const content = asset.kind === "code" ? asset.raw.code_content : asset.kind === "command" ? asset.raw.command : null;
   const isGeneralAsset = asset.assetClass === "general";
+  const contentLines = content?.split(/\r\n|\r|\n/) || [];
 
   return (
     <>
-      <SheetHeader className="text-left">
+      <DialogHeader className="border-b border-[#2a526f] bg-[#0b1b2d] px-6 py-5 text-left">
         <div className="mb-2 flex items-center gap-2"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge>{assigned && <Badge variant="outline" className="rounded-md border-emerald-300/30 bg-emerald-300/10 text-emerald-100">已套用</Badge>}</div>
-        <SheetTitle className="pr-8 text-xl text-[#f3f8fc]">{asset.name}</SheetTitle>
-        <SheetDescription className="text-[#a9c0d1]">{asset.description}</SheetDescription>
-      </SheetHeader>
-      <div className="mt-6 space-y-4">
+        <DialogTitle className="pr-8 text-xl text-[#f3f8fc]">{asset.name}</DialogTitle>
+        <DialogDescription className="text-[#a9c0d1]">{asset.description || "無描述資訊"}</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-5 px-6 py-5">
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">分類</div><div className="mt-1 text-sm text-[#f3f8fc]">{meta.label}</div></div>
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "格式／大小" : "版本／平台"}</div><div className="font-data mt-1 text-sm text-[#f3f8fc]">{asset.detail}</div></div>
         </div>
-        {content && <pre className="max-h-[360px] overflow-auto whitespace-pre rounded-lg border border-[#2a526f] bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
+        {content && (
+          <div className="overflow-hidden rounded-xl border border-[#38d7ff]/55 bg-[#06111f]">
+            <div className="flex items-center justify-between border-b border-[#38d7ff]/40 bg-gradient-to-r from-[#0b3b55] to-[#10263a] px-4 py-2 text-xs text-[#cffafe]">
+              <span className="font-semibold">程式碼內容</span>
+              <span className="font-mono text-[#d9f6ff]">{contentLines.length} 行</span>
+            </div>
+            <div className="grid max-h-[440px] grid-cols-[3.25rem_minmax(0,1fr)] overflow-auto">
+              <pre aria-hidden="true" className="m-0 border-r border-[#38d7ff]/35 bg-[#082033] px-3 py-4 text-right font-mono text-sm leading-6 text-[#7dd3fc] select-none">{contentLines.map((_, index) => index + 1).join("\n")}</pre>
+              <pre className="m-0 min-w-max whitespace-pre px-4 py-4 font-mono text-sm leading-6 text-[#effaff]">{content}</pre>
+            </div>
+          </div>
+        )}
         {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
         {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "傳輸檔案" : "附件"}</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
       </div>
-      <SheetFooter className="mt-6 flex-row flex-wrap justify-end gap-2">
+      <DialogFooter className="border-t border-[#2a526f] bg-[#071522] px-6 py-4 flex-row flex-wrap justify-end gap-2">
         {asset.kind === "tool" && asset.raw.file_path && <Button variant="outline" onClick={() => onDownloadTool(asset.raw)}><Download className="mr-2 h-4 w-4" />下載</Button>}
         {asset.kind === "tool" && <Button variant="outline" onClick={() => onEditTool(asset.raw)}>{isGeneralAsset ? "編輯檔案資訊" : "編輯工具"}</Button>}
         {asset.kind === "tool" && <Button variant="destructive" onClick={() => onDeleteTool(asset.raw)}><Trash2 className="mr-2 h-4 w-4" />{isGeneralAsset ? "刪除檔案" : "刪除"}</Button>}
         <Button onClick={() => onToggle(asset)}>{assigned ? "移出目前專案" : "套用到目前專案"}</Button>
-      </SheetFooter>
+      </DialogFooter>
     </>
   );
 }
