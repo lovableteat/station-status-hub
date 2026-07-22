@@ -7,7 +7,6 @@ import {
   Files,
   Library,
   Loader2,
-  PackageCheck,
   Plus,
   Search,
   Terminal,
@@ -16,7 +15,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +54,7 @@ type CommandRow = Database["public"]["Tables"]["command_library"]["Row"];
 type AssetKind = "tool" | "code" | "command";
 type AssetClass = "tool" | "command" | "general";
 type AssetFilter = "all" | AssetClass;
-type WorkspaceTab = "applied" | "library" | "command-center";
+type WorkspaceTab = "applied" | "tools" | "code" | "commands" | "files";
 
 type Asset =
   | {
@@ -205,8 +203,8 @@ export function ToolsManagement() {
   const [tab, setTab] = useState<WorkspaceTab>(() => {
     if (typeof window === "undefined") return "applied";
     const requested = new URLSearchParams(window.location.search).get("assetView");
-    if (requested === "library") return "library";
-    if (requested === "commands") return "command-center";
+    if (requested === "library" || requested === "tools") return "tools";
+    if (requested === "code" || requested === "commands" || requested === "files") return requested;
     return "applied";
   });
   const [search, setSearch] = useState("");
@@ -306,7 +304,7 @@ export function ToolsManagement() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    url.searchParams.set("assetView", tab === "command-center" ? "commands" : tab);
+    url.searchParams.set("assetView", tab);
     window.history.replaceState({}, "", url);
   }, [tab]);
 
@@ -351,8 +349,14 @@ export function ToolsManagement() {
   const normalizedSearch = search.trim().toLowerCase();
   const visibleAssets = assets.filter((asset) => {
     const isAssigned = assignments[asset.kind].has(asset.id);
-    const matchesScope = tab === "library" || isAssigned;
-    const matchesKind = kindFilter === "all" || asset.assetClass === kindFilter;
+    const matchesScope = tab === "applied"
+      ? isAssigned
+      : tab === "tools"
+        ? asset.assetClass === "tool"
+        : tab === "files"
+          ? asset.assetClass === "general"
+          : false;
+    const matchesKind = tab !== "applied" || kindFilter === "all" || asset.assetClass === kindFilter;
     const matchesSearch =
       !normalizedSearch ||
       asset.name.toLowerCase().includes(normalizedSearch) ||
@@ -371,7 +375,7 @@ export function ToolsManagement() {
   );
 
   const handleWorkspaceTabChange = (nextTab: WorkspaceTab) => {
-    if (tab === "command-center" && nextTab !== "command-center") {
+    if ((tab === "code" || tab === "commands") && nextTab !== tab) {
       setRefreshKey((value) => value + 1);
     }
     setTab(nextTab);
@@ -583,15 +587,6 @@ export function ToolsManagement() {
         }
       />
 
-      <MaintenanceMetricStrip
-        metrics={[
-          { accent: "cyan", icon: PackageCheck, label: "專案已套用", value: appliedCount },
-          { accent: "blue", icon: Wrench, label: "工具", value: classCounts.tool },
-          { accent: "amber", icon: Terminal, label: "指令", value: classCounts.command },
-          { accent: "emerald", icon: Files, label: "不特定", value: classCounts.general },
-        ]}
-      />
-
       {!assignmentsReady && (
         <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">
           目前以舊資料相容模式顯示全部資產；資料庫遷移完成後即可逐項套用到專案。
@@ -599,14 +594,16 @@ export function ToolsManagement() {
       )}
 
       <Tabs value={tab} onValueChange={(value) => handleWorkspaceTabChange(value as WorkspaceTab)}>
-        <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-          <TabsList className="h-9 min-h-0 rounded-lg p-1">
-            <TabsTrigger value="applied" className="h-7 rounded-md px-3 py-1 text-xs">專案已套用</TabsTrigger>
-            <TabsTrigger value="library" className="h-7 rounded-md px-3 py-1 text-xs">公司共用庫</TabsTrigger>
-            <TabsTrigger value="command-center" className="h-7 rounded-md px-3 py-1 text-xs">指令管理</TabsTrigger>
+        <div data-testid="asset-workspace-navigation" className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
+          <TabsList className="h-auto min-h-10 flex-wrap justify-start rounded-lg border border-[#23445d] bg-[#06111f] p-1">
+            <TabsTrigger value="applied" className="h-8 rounded-md px-3 py-1.5 text-xs">專案已套用 <span className="ml-1.5 font-mono text-[10px] opacity-75">{appliedCount}</span></TabsTrigger>
+            <TabsTrigger value="tools" className="h-8 rounded-md px-3 py-1.5 text-xs">工具 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.tool}</span></TabsTrigger>
+            <TabsTrigger value="code" className="h-8 rounded-md px-3 py-1.5 text-xs">程式碼 <span className="ml-1.5 font-mono text-[10px] opacity-75">{snippets.length}</span></TabsTrigger>
+            <TabsTrigger value="commands" className="h-8 rounded-md px-3 py-1.5 text-xs">指令 <span className="ml-1.5 font-mono text-[10px] opacity-75">{commands.length}</span></TabsTrigger>
+            <TabsTrigger value="files" className="h-8 rounded-md px-3 py-1.5 text-xs">不特定檔案 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.general}</span></TabsTrigger>
           </TabsList>
 
-          {(tab === "applied" || tab === "library") && (
+          {(tab === "applied" || tab === "tools" || tab === "files") && (
             <>
               <div className="relative min-w-[220px] flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
@@ -617,7 +614,7 @@ export function ToolsManagement() {
                   placeholder="搜尋名稱、分類、版本或說明"
                 />
               </div>
-              <div className="flex min-h-9 items-center gap-1 overflow-x-auto rounded-lg border border-[#2a526f] bg-[#06111f] p-1" aria-label="資產分類">
+              {tab === "applied" && <div className="flex min-h-9 items-center gap-1 overflow-x-auto rounded-lg border border-[#2a526f] bg-[#06111f] p-1" aria-label="資產分類">
                 {ASSET_FILTERS.map((filter) => {
                   const count = filter.value === "all" ? assets.length : classCounts[filter.value];
                   return (
@@ -635,7 +632,7 @@ export function ToolsManagement() {
                     </button>
                   );
                 })}
-              </div>
+              </div>}
             </>
           )}
         </div>
@@ -650,7 +647,7 @@ export function ToolsManagement() {
             onToggle={toggleAssignment}
           />
         </TabsContent>
-        <TabsContent value="library" className="mt-3">
+        <TabsContent value="tools" className="mt-3">
           <AssetList
             assets={visibleAssets}
             assignments={assignments}
@@ -660,8 +657,21 @@ export function ToolsManagement() {
             onToggle={toggleAssignment}
           />
         </TabsContent>
-        <TabsContent value="command-center" className="mt-3">
-          <CommandCenter />
+        <TabsContent value="code" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
+          <CodeStorageManager />
+        </TabsContent>
+        <TabsContent value="commands" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
+          <CommandLibrary />
+        </TabsContent>
+        <TabsContent value="files" className="mt-3">
+          <AssetList
+            assets={visibleAssets}
+            assignments={assignments}
+            assigningKey={assigningKey}
+            loading={loading}
+            onPreview={setSelectedAsset}
+            onToggle={toggleAssignment}
+          />
         </TabsContent>
       </Tabs>
 
@@ -859,30 +869,5 @@ function AssetDetails({
         <Button onClick={() => onToggle(asset)}>{assigned ? "移出目前專案" : "套用到目前專案"}</Button>
       </SheetFooter>
     </>
-  );
-}
-
-function CommandCenter() {
-  return (
-    <div className="maintenance-panel overflow-hidden">
-      <Tabs defaultValue="commands">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a526f] bg-gradient-to-r from-amber-300/[0.08] via-[#0b1b2d] to-blue-300/[0.06] px-4 py-3">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#f3f8fc]"><Terminal className="h-4 w-4 text-amber-200" />指令管理</div>
-            <div className="mt-0.5 text-xs text-[#9eb8c9]">執行指令與程式碼片段統一歸類為「指令」，在此分別維護內容。</div>
-          </div>
-          <TabsList className="h-9 min-h-0 rounded-lg p-1">
-            <TabsTrigger value="commands" className="h-7 rounded-md px-3 py-1 text-xs">指令範本</TabsTrigger>
-            <TabsTrigger value="snippets" className="h-7 rounded-md px-3 py-1 text-xs">程式碼片段</TabsTrigger>
-          </TabsList>
-        </div>
-        <TabsContent value="commands" className="m-0 p-3">
-          <CommandLibrary />
-        </TabsContent>
-        <TabsContent value="snippets" className="m-0 p-3">
-          <CodeStorageManager />
-        </TabsContent>
-      </Tabs>
-    </div>
   );
 }
