@@ -242,3 +242,15 @@ test("detail viewer exposes searchable per-part visibility controls", async () =
   assert.match(viewerSource, /setHiddenPartNames/);
   assert.match(viewerSource, /visiblePartNames/);
 });
+
+test("detail viewer redraws immediately after mode, section or part visibility changes", async () => {
+  const viewerSource = await readFile(
+    new URL("../src/components/data-center/DataCenterModelViewer.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    viewerSource,
+    /function GlbInspectionModel[\s\S]*?const \{ invalidate \} = useThree\(\)[\s\S]*?material\.needsUpdate = true;[\s\S]*?invalidate\(\)/,
+  );
+});

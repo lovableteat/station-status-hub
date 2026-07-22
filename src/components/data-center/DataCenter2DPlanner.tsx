@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -16,6 +17,9 @@ import {
   Snowflake,
   ThermometerSun,
   Trash2,
+  ZoomIn,
+  ZoomOut,
+  Scan,
 } from "lucide-react";
 
 import {
@@ -66,6 +70,10 @@ interface DataCenter2DPlannerProps {
   onMoveRack: (rackId: string, x: number, z: number) => void;
   onRotateRack: (rackId: string) => void;
   onMoveAisle: (aisleId: string, x: number, z: number) => void;
+  onUpdateAisle: (
+    aisleId: string,
+    patch: Partial<FacilityPlan["aisles"][number]>,
+  ) => void;
   onMovePowerFeed: (feedId: string, x: number, z: number) => void;
   onAddRack: () => void;
   onDeleteRack: (rackId: string) => void;
@@ -106,6 +114,7 @@ export function DataCenter2DPlanner({
   onMoveRack,
   onRotateRack,
   onMoveAisle,
+  onUpdateAisle,
   onMovePowerFeed,
   onAddRack,
   onDeleteRack,
@@ -117,6 +126,8 @@ export function DataCenter2DPlanner({
 }: DataCenter2DPlannerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [selectedAisleId, setSelectedAisleId] = useState<string | null>(null);
+  const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
 
   const geometry = useMemo(() => {
     const scale = Math.min(
@@ -141,10 +152,53 @@ export function DataCenter2DPlanner({
     if (!rect) return null;
     const svgX = ((clientX - rect.left) / rect.width) * VIEW_WIDTH;
     const svgY = ((clientY - rect.top) / rect.height) * VIEW_HEIGHT;
+    const contentX = (svgX - viewport.x) / viewport.zoom;
+    const contentY = (svgY - viewport.y) / viewport.zoom;
     return {
-      x: (svgX - geometry.left) / geometry.scale - facility.width / 2,
-      z: (svgY - geometry.top) / geometry.scale - facility.depth / 2,
+      x: (contentX - geometry.left) / geometry.scale - facility.width / 2,
+      z: (contentY - geometry.top) / geometry.scale - facility.depth / 2,
     };
+  };
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const svgX = ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH;
+      const svgY = ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT;
+
+      setViewport((current) => {
+        const nextZoom = clamp(
+          current.zoom * (event.deltaY < 0 ? 1.14 : 1 / 1.14),
+          0.6,
+          6,
+        );
+        const scaleChange = nextZoom / current.zoom;
+        return {
+          zoom: nextZoom,
+          x: svgX - (svgX - current.x) * scaleChange,
+          y: svgY - (svgY - current.y) * scaleChange,
+        };
+      });
+    };
+
+    svg.addEventListener("wheel", handleWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", handleWheel);
+  }, []);
+
+  const zoomAtCenter = (factor: number) => {
+    setViewport((current) => {
+      const nextZoom = clamp(current.zoom * factor, 0.6, 6);
+      const scaleChange = nextZoom / current.zoom;
+      return {
+        zoom: nextZoom,
+        x: VIEW_WIDTH / 2 - (VIEW_WIDTH / 2 - current.x) * scaleChange,
+        y: VIEW_HEIGHT / 2 - (VIEW_HEIGHT / 2 - current.y) * scaleChange,
+      };
+    });
   };
 
   const beginDrag = (
@@ -207,6 +261,7 @@ export function DataCenter2DPlanner({
   const selectedModel = selectedRack
     ? models[selectedRack.modelId] ?? models["generic-42u"]
     : null;
+  const selectedAisle = facility.aisles.find((aisle) => aisle.id === selectedAisleId) ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#07111c]">
@@ -274,6 +329,7 @@ export function DataCenter2DPlanner({
           aria-label="Data Center 2D 廠房配置圖"
           viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
           className={cn("h-full w-full select-none", canEdit ? "cursor-default" : "cursor-not-allowed")}
+          style={{ touchAction: "none" }}
           onPointerMove={handlePointerMove}
           onPointerUp={() => setDragging(null)}
           onPointerCancel={() => setDragging(null)}
@@ -287,6 +343,8 @@ export function DataCenter2DPlanner({
               <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#02070d" floodOpacity="0.8" />
             </filter>
           </defs>
+
+          <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`}>
 
           <rect x={geometry.left} y={geometry.top} width={geometry.floorWidth} height={geometry.floorHeight} rx="18" fill="#081725" stroke="#5ea7cf" strokeWidth="3" />
           {facility.showGrid ? (
@@ -304,7 +362,14 @@ export function DataCenter2DPlanner({
                 data-plan-item={`aisle-${aisle.id}`}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
                 transform={`rotate(${aisle.rotation} ${center.x} ${center.y})`}
-                onPointerDown={(event) => beginDrag(event, "aisle", aisle.id, aisle.x, aisle.z)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedAisleId(aisle.id);
+                }}
+                onPointerDown={(event) => {
+                  setSelectedAisleId(aisle.id);
+                  beginDrag(event, "aisle", aisle.id, aisle.x, aisle.z);
+                }}
               >
                 <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="10" fill={cold ? "#0ea5e933" : "#f9731630"} stroke={cold ? "#38bdf8" : "#fb923c"} strokeWidth="2" strokeDasharray="8 6" />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill={cold ? "#bae6fd" : "#fed7aa"} fontSize="15" fontWeight="700">{aisle.label}</text>
@@ -335,6 +400,7 @@ export function DataCenter2DPlanner({
                 filter="url(#dc-plan-shadow)"
                 onClick={() => onSelectRack(rack.id)}
                 onPointerDown={(event) => {
+                  setSelectedAisleId(null);
                   onSelectRack(rack.id);
                   beginDrag(event, "rack", rack.id, rack.positionX, rack.positionZ);
                 }}
@@ -364,9 +430,98 @@ export function DataCenter2DPlanner({
           })}
 
           <text x={geometry.left + 16} y={geometry.top + 28} fill="#cfefff" fontSize="13" fontWeight="700">{facility.width}m × {facility.depth}m</text>
+          </g>
         </svg>
 
-        {selectedRack && selectedModel ? (
+        <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border border-cyan-300/20 bg-[#071522]/94 p-1.5 shadow-2xl backdrop-blur-xl">
+          <button
+            type="button"
+            aria-label="縮小 2D 配置"
+            onClick={() => zoomAtCenter(1 / 1.25)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-200 hover:bg-cyan-400/12 hover:text-white"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <span className="min-w-12 px-1 text-center text-[11px] font-black tabular-nums text-cyan-100">
+            {Math.round(viewport.zoom * 100)}%
+          </span>
+          <button
+            type="button"
+            aria-label="放大 2D 配置"
+            onClick={() => zoomAtCenter(1.25)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-200 hover:bg-cyan-400/12 hover:text-white"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="重設 2D 視圖"
+            onClick={() => setViewport({ zoom: 1, x: 0, y: 0 })}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border-l border-white/10 text-slate-200 hover:bg-cyan-400/12 hover:text-white"
+          >
+            <Scan className="h-4 w-4" />
+          </button>
+        </div>
+
+        {selectedAisle ? (
+          <div className="absolute bottom-4 left-4 z-20 w-[min(430px,calc(100%-32px))] rounded-2xl border border-cyan-300/25 bg-[#071522]/96 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  {selectedAisle.kind === "cold" ? <Snowflake className="h-4 w-4 text-sky-300" /> : <ThermometerSun className="h-4 w-4 text-orange-300" />}
+                  {selectedAisle.label}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">調整後會立即同步到 3D 場景。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAisleId(null)}
+                className="rounded-lg px-2 py-1 text-xs font-bold text-slate-400 hover:bg-white/8 hover:text-white"
+              >
+                關閉
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {([
+                ["width", "通道長度", Math.max(facility.width, facility.depth)],
+                ["depth", "通道寬度", Math.min(facility.width, facility.depth)],
+              ] as const).map(([field, label, max]) => (
+                <label key={field} className="rounded-xl border border-white/10 bg-[#10263a] p-3">
+                  <span className="block text-[11px] font-bold text-slate-300">{label}</span>
+                  <span className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0.5"
+                      max={max}
+                      step="0.25"
+                      disabled={!canEdit}
+                      value={selectedAisle[field]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          onUpdateAisle(selectedAisle.id, { [field]: clamp(value, 0.5, max) });
+                        }
+                      }}
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-cyan-300/25 bg-[#06111f] px-3 text-sm font-black tabular-nums text-white outline-none focus:border-cyan-200"
+                    />
+                    <span className="text-xs font-bold text-cyan-100">m</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canEdit}
+              onClick={() => onUpdateAisle(selectedAisle.id, { rotation: (selectedAisle.rotation + 90) % 360 })}
+              className="mt-3 h-9 w-full border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15"
+            >
+              <RotateCw className="mr-2 h-4 w-4" /> 旋轉通道 90°
+            </Button>
+          </div>
+        ) : null}
+
+        {selectedRack && selectedModel && !selectedAisle ? (
           <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-300/20 bg-[#071522]/94 p-3 shadow-2xl backdrop-blur-xl sm:left-auto sm:max-w-xl">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-white">{selectedRack.cabinet} · {selectedModel.name}</div>

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 
 import {
   RACK_UNIT_HEIGHT_METERS,
@@ -172,4 +173,18 @@ test("new compatible L11 racks receive one L10 at the first usable rack unit", (
       l10StartU: 3,
     },
   );
+});
+
+test("rack inspector offers fast layer assignment without a separate layout mode", async () => {
+  const workspaceSource = await readFile(
+    new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workspaceSource, /快速安裝層位/);
+  assert.match(workspaceSource, /由下往上填滿/);
+  assert.match(workspaceSource, /由上往下填滿/);
+  assert.match(workspaceSource, /清空層位/);
+  assert.doesNotMatch(workspaceSource, /編排模式/);
+  assert.doesNotMatch(workspaceSource, /layoutEditing/);
 });
