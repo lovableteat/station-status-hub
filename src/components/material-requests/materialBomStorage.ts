@@ -3,6 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
+import { chunkBomRecordFetchRanges, createBomRecordFetchRanges } from "./materialBomPerformance";
 import { canReuseBomWorkspaceCache } from "./materialBomSyncPolicy";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
@@ -562,24 +563,39 @@ async function loadPageTrackerMap() {
   return pageTrackerByWorkspace;
 }
 
-async function loadRemoteRecordRowsForWorkspace(workspaceId: string) {
+async function loadRemoteRecordRowsForWorkspace(workspaceId: string, expectedRecordCount: number) {
   const rows: BomRecordRow[] = [];
 
-  for (let start = 0; ; start += REMOTE_RECORD_FETCH_BATCH_SIZE) {
-    const end = start + REMOTE_RECORD_FETCH_BATCH_SIZE - 1;
+  const fetchRange = async (from: number, to: number) => {
     const { data, error } = await supabaseClient
       .from(RECORD_TABLE)
       .select("workspace_id, record_id, order_index, data, updated_at")
       .eq("workspace_id", workspaceId)
       .order("order_index", { ascending: true })
-      .range(start, end);
+      .range(from, to);
 
     if (error) throw error;
+    return (data ?? []) as BomRecordRow[];
+  };
 
-    const batch = (data ?? []) as BomRecordRow[];
-    rows.push(...batch);
+  const ranges = createBomRecordFetchRanges(expectedRecordCount, REMOTE_RECORD_FETCH_BATCH_SIZE);
+  if (ranges.length === 0) return rows;
 
-    if (batch.length < REMOTE_RECORD_FETCH_BATCH_SIZE) break;
+  // Supabase limits each response to 1,000 rows. Fetch independent ranges in
+  // parallel so a 3,000+ row BOM pays one network round trip instead of four.
+  const batches: BomRecordRow[][] = [];
+  for (const wave of chunkBomRecordFetchRanges(ranges)) {
+    const waveBatches = await Promise.all(wave.map(({ from, to }) => fetchRange(from, to)));
+    batches.push(...waveBatches);
+    waveBatches.forEach((batch) => rows.push(...batch));
+  }
+
+  let lastBatch = batches.at(-1) ?? [];
+  let nextStart = ranges.at(-1)!.to + 1;
+  while (lastBatch.length === REMOTE_RECORD_FETCH_BATCH_SIZE) {
+    lastBatch = await fetchRange(nextStart, nextStart + REMOTE_RECORD_FETCH_BATCH_SIZE - 1);
+    rows.push(...lastBatch);
+    nextStart += REMOTE_RECORD_FETCH_BATCH_SIZE;
   }
 
   return rows;
@@ -646,7 +662,7 @@ async function loadRemoteBomWorkspaces(
       },
     });
   const activeRecordRows = activeWorkspaceId && !canReuseCache
-    ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId)
+    ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId, activeWorkspaceRow?.record_count ?? 0)
     : [];
 
   return sortWorkspaces(
