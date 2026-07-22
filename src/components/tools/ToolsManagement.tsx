@@ -324,7 +324,7 @@ export function ToolsManagement() {
     })),
     ...snippets.map<Asset>((snippet) => ({
       category: snippet.category,
-      description: toPlainText(snippet.description, "未填寫程式碼說明"),
+      description: toPlainText(snippet.description, "未填寫程式開發說明"),
       detail: snippet.language,
       id: snippet.id,
       kind: "code",
@@ -598,7 +598,7 @@ export function ToolsManagement() {
           <TabsList className="h-auto min-h-10 flex-wrap justify-start rounded-lg border border-[#23445d] bg-[#06111f] p-1">
             <TabsTrigger value="applied" className="h-8 rounded-md px-3 py-1.5 text-xs">專案已套用 <span className="ml-1.5 font-mono text-[10px] opacity-75">{appliedCount}</span></TabsTrigger>
             <TabsTrigger value="tools" className="h-8 rounded-md px-3 py-1.5 text-xs">工具 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.tool}</span></TabsTrigger>
-            <TabsTrigger value="code" className="h-8 rounded-md px-3 py-1.5 text-xs">程式碼 <span className="ml-1.5 font-mono text-[10px] opacity-75">{snippets.length}</span></TabsTrigger>
+            <TabsTrigger value="code" className="h-8 rounded-md border border-transparent px-3 py-1.5 text-xs text-[#cffafe] data-[state=active]:border-[#67e8f9]/60 data-[state=active]:bg-[#0e7490] data-[state=active]:text-white">程式開發 <span className="ml-1.5 font-mono text-[10px] opacity-90">{snippets.length}</span></TabsTrigger>
             <TabsTrigger value="commands" className="h-8 rounded-md px-3 py-1.5 text-xs">指令 <span className="ml-1.5 font-mono text-[10px] opacity-75">{commands.length}</span></TabsTrigger>
             <TabsTrigger value="files" className="h-8 rounded-md px-3 py-1.5 text-xs">不特定檔案 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.general}</span></TabsTrigger>
           </TabsList>
@@ -657,7 +657,7 @@ export function ToolsManagement() {
             onToggle={toggleAssignment}
           />
         </TabsContent>
-        <TabsContent value="code" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
+        <TabsContent value="code" className="mt-3 rounded-xl border border-[#38d7ff]/45 bg-gradient-to-br from-[#082033] via-[#071522] to-[#06111f] p-3 shadow-[0_0_26px_rgba(56,215,255,0.1)]">
           <CodeStorageManager />
         </TabsContent>
         <TabsContent value="commands" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
@@ -793,7 +793,7 @@ function AssetList({
           const sourceLabel = asset.assetClass === "general"
             ? "檔案傳輸"
             : asset.kind === "code"
-              ? "程式碼片段"
+              ? "程式開發"
               : asset.kind === "command"
                 ? "指令範本"
                 : CATEGORY_LABELS[asset.category] || asset.category;
@@ -858,8 +858,8 @@ function AssetDetails({
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">分類</div><div className="mt-1 text-sm text-[#f3f8fc]">{meta.label}</div></div>
           <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "格式／大小" : "版本／平台"}</div><div className="font-data mt-1 text-sm text-[#f3f8fc]">{asset.detail}</div></div>
         </div>
-        {content && <pre className="max-h-[360px] overflow-auto whitespace-pre rounded-lg border border-[#2a526f] bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
-        {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
+        {content && <pre className="max-h-[360px] overflow-auto whitespace-pre rounded-lg border border-[#38d7ff]/45 bg-[#06111f] p-4 font-mono text-sm leading-6 text-[#d9edf7]">{content}</pre>}
+        {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0] [&_hr]:my-5 [&_p]:my-2 [&_p:empty]:min-h-[1rem]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
         {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "傳輸檔案" : "附件"}</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
       </div>
       <SheetFooter className="mt-6 flex-row flex-wrap justify-end gap-2">

@@ -19,8 +19,8 @@ test("code library uses a persistent list and preview workspace", async () => {
   const editor = await read("../src/components/tools/CodeStorageManager.tsx");
 
   assert.match(editor, /data-testid="code-library-workspace"/);
-  assert.match(editor, /程式碼預覽/);
-  assert.match(editor, /選取程式碼後可直接預覽或編輯/);
+  assert.match(editor, /程式開發預覽/);
+  assert.match(editor, /選取程式開發內容後可直接預覽、複製或編輯/);
   assert.doesNotMatch(editor, /@\/components\/ui\/table/);
   assert.doesNotMatch(editor, /isViewDialogOpen/);
 });
