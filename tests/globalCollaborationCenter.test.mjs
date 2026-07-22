@@ -25,6 +25,26 @@ test("the workspace uses one collaboration center for notifications and presence
   assert.match(centerSource, /目前只有您在線上/);
 });
 
+test("unread admin announcements open once and require explicit acknowledgement", async () => {
+  const source = await readSource("src/components/collaboration/CollaborationCenter.tsx");
+
+  assert.match(source, /notification_type === "admin_announcement"/);
+  assert.match(source, /autoAnnouncementShownRef/);
+  assert.match(source, /重要公告/);
+  assert.match(source, /我知道了，標為已讀/);
+  assert.match(source, /markAsRead\(activeAnnouncement\)/);
+  assert.doesNotMatch(source, /setActiveAnnouncement\([^)]*\)[\s\S]{0,160}markAsRead/);
+});
+
+test("the collaboration icon visibly pulses while notifications remain unread", async () => {
+  const source = await readSource("src/components/layout/MainWorkspaceHeader.tsx");
+
+  assert.match(source, /notificationUnreadCount > 0/);
+  assert.match(source, /motion-safe:animate-pulse/);
+  assert.match(source, /BellRing/);
+  assert.match(source, /協作中心有未讀通知/);
+});
+
 test("presence exposes all users, other users and connection state", async () => {
   const source = await readSource("src/hooks/useUserPresence.ts");
 
