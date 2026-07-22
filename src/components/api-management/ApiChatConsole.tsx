@@ -2194,7 +2194,7 @@ export function ApiChatConsole({
                     align="start"
                     sideOffset={16}
                     collisionPadding={16}
-                    className="w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-cyan-200/35 bg-[linear-gradient(155deg,#10283d_0%,#081725_58%,#07131f_100%)] p-0 text-slate-100 shadow-[0_26px_70px_-26px_rgba(34,211,238,0.5)]"
+                    className="z-[60] w-[min(420px,calc(100vw-32px))] origin-top-left overflow-hidden rounded-2xl border border-cyan-200/35 bg-[linear-gradient(155deg,#10283d_0%,#081725_58%,#07131f_100%)] p-0 text-slate-100 shadow-[0_26px_70px_-26px_rgba(34,211,238,0.5)]"
                   >
                     <div className="border-b border-cyan-200/15 bg-cyan-300/[0.06] px-4 py-3.5">
                       <div className="flex min-w-0 items-start gap-3">
