@@ -2161,14 +2161,15 @@ export function ApiChatConsole({
               <div
                 key={item.id}
                 data-testid={`prompt-library-item-${item.id}`}
-                className="group grid min-h-14 items-center gap-1 rounded-xl border border-blue-300/18 bg-[#10263a] px-2 py-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a] sm:grid-cols-[minmax(0,1fr)_auto]"
+                className="group flex h-20 items-stretch gap-1 overflow-hidden rounded-xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
               >
                 <HoverCard openDelay={320} closeDelay={120}>
                   <HoverCardTrigger asChild>
                     <button
                       type="button"
                       onClick={() => applySharedPromptToDraft(item)}
-                      className="min-w-0 rounded-lg px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                      className="min-w-0 flex-1 overflow-hidden rounded-lg px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                      aria-describedby={`prompt-library-summary-${item.id}`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-sm font-black text-white">{item.title}</span>
@@ -2179,7 +2180,10 @@ export function ApiChatConsole({
                           {formatSavedItemTime(item.savedAt)}
                         </span>
                       </span>
-                      <span className="mt-0.5 block line-clamp-1 text-xs leading-4 text-slate-300">
+                      <span
+                        id={`prompt-library-summary-${item.id}`}
+                        className="mt-1 block line-clamp-1 truncate text-sm leading-5 text-slate-300"
+                      >
                         {item.content}
                       </span>
                     </button>
@@ -2204,7 +2208,7 @@ export function ApiChatConsole({
                     </p>
                   </HoverCardContent>
                 </HoverCard>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1 self-center">
                   <button
                     type="button"
                     onClick={() => openLibraryApplyDialog(item)}
