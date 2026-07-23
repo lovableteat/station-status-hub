@@ -19,3 +19,22 @@ test("code snippets preserve pasted line breaks and indentation", async () => {
   assert.match(assetPreview, /whitespace-pre/);
   assert.doesNotMatch(assetPreview, /whitespace-pre-wrap/);
 });
+
+test("large code snippets cannot stretch the line-number grid beyond the editor viewport", async () => {
+  const editor = await read("../src/components/tools/CodeStorageManager.tsx");
+
+  assert.match(
+    editor,
+    /data-testid="code-editor-viewport"[\s\S]*?className="grid h-\[336px\] min-h-0 grid-cols-\[3\.25rem_minmax\(0,1fr\)\] overflow-hidden"/,
+  );
+  assert.match(
+    editor,
+    /data-testid="code-editor-line-numbers"[\s\S]*?className="m-0 h-full min-h-0 overflow-hidden/,
+  );
+  assert.match(
+    editor,
+    /id="code_content"[\s\S]*?className="h-full min-h-0 min-w-0 resize-none overflow-auto/,
+  );
+  assert.doesNotMatch(editor, /max-h-\[336px\]/);
+  assert.doesNotMatch(editor, /resize-y/);
+});
