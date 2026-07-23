@@ -124,7 +124,10 @@ test("GB300 defaults and legacy invalid VR200 racks migrate to the matched L11 a
   );
   assert.match(workspaceSource, /const isLegacyInvalidVr200Rack =/);
   assert.match(workspaceSource, /isLegacyInvalidVr200Rack\s*\?\s*"nv-mgx-rack-v1-2-rev7"/);
-  assert.match(workspaceSource, /isLegacyInvalidVr200Rack\s*\?\s*"carlo-next-l10-20260715"/);
+  assert.match(
+    workspaceSource,
+    /isLegacyInvalidVr200Rack \|\| shouldRestoreGb300L10[\s\S]*?\? "carlo-next-l10-20260715"/,
+  );
 });
 
 test("the NVIDIA rack catalog label is GB300 L11 without changing its stable model id", () => {
@@ -135,6 +138,19 @@ test("the NVIDIA rack catalog label is GB300 L11 without changing its stable mod
   assert.ok(gb300Definition, "GB300 catalog definition is missing");
   assert.match(gb300Definition, /id:\s*"nv-mgx-rack-v1-2-rev7"/);
   assert.match(gb300Definition, /name:\s*"GB300 L11 機櫃"/);
+  assert.match(gb300Definition, /scenePresentation:\s*"enclosed"/);
+});
+
+test("every seeded GB300 rack restores the matched GB300 L10 instead of a placeholder", () => {
+  assert.match(
+    seedSource,
+    /modelId === GB300_RACK_MODEL_ID \? GB300_L10_MODEL_ID : "l10-placeholder"/,
+  );
+  assert.match(workspaceSource, /const shouldRestoreGb300L10 =/);
+  assert.match(
+    workspaceSource,
+    /isLegacyInvalidVr200Rack \|\| shouldRestoreGb300L10[\s\S]*?"carlo-next-l10-20260715"/,
+  );
 });
 
 for (const assetName of [
