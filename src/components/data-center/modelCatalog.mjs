@@ -1,5 +1,15 @@
 const EDITABLE_FIELDS = ["name", "manufacturer", "revision"];
-const PROTECTED_MODEL_IDS = new Set(["generic-42u", "l10-placeholder"]);
+const PROTECTED_MODEL_IDS = new Set([
+  "generic-42u",
+  "l10-placeholder",
+  "nv-mgx-rack-v1-2-rev7",
+  "carlo-next-l10-20260715",
+  "vera-rubin-vr-1u-20260715",
+]);
+
+export function isProtectedCatalogModel(modelId) {
+  return typeof modelId === "string" && PROTECTED_MODEL_IDS.has(modelId);
+}
 
 export function isL10CompatibleWithRack(model, rackModelId) {
   if (!model || model.kind !== "l10") return false;
@@ -40,7 +50,7 @@ export function mergeModelCatalogOverrides(baseModels, overrides) {
     ? overrides.__deletedModelIds
     : [];
   for (const modelId of deletedModelIds) {
-    if (typeof modelId === "string" && !PROTECTED_MODEL_IDS.has(modelId)) {
+    if (typeof modelId === "string" && !isProtectedCatalogModel(modelId)) {
       delete next[modelId];
     }
   }
@@ -68,7 +78,7 @@ export function mergeModelCatalogOverrides(baseModels, overrides) {
 export function serializeModelCatalogOverrides(models, baseModels) {
   const overrides = {};
   const deletedModelIds = Object.keys(baseModels)
-    .filter((modelId) => !models[modelId] && !PROTECTED_MODEL_IDS.has(modelId))
+    .filter((modelId) => !models[modelId] && !isProtectedCatalogModel(modelId))
     .sort();
 
   if (deletedModelIds.length > 0) {
@@ -103,7 +113,7 @@ export function removeCatalogModel({ models, sites, modelId }) {
   if (!model) {
     return { deleted: false, reason: "missing", models, sites, affectedRackCount: 0 };
   }
-  if (PROTECTED_MODEL_IDS.has(modelId)) {
+  if (isProtectedCatalogModel(modelId)) {
     return { deleted: false, reason: "protected", models, sites, affectedRackCount: 0 };
   }
 
