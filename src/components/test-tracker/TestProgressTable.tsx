@@ -681,7 +681,7 @@ export function TestProgressTable({
               onResize={resizeColumn}
               onReset={resetColumn}
               testId="progress-actions-header"
-              className="sticky right-0 z-50 border-l border-[var(--tracker-table-border)] bg-[var(--tracker-table-header-accent)] px-2 text-center"
+              className="border-l border-[var(--tracker-table-border)] bg-[var(--tracker-table-header-accent)] px-2 text-center"
             >
               <div className="flex items-center justify-center gap-1">
                 <span>操作</span>
@@ -798,7 +798,7 @@ export function TestProgressTable({
                     data-testid={`progress-actions-${system.id}`}
                     data-ui="tracker-actions"
                     className={cn(
-                      "sticky right-0 z-20 flex h-full items-center justify-end gap-1.5 border-l border-[var(--tracker-table-border)] bg-[var(--tracker-action-surface)] px-2 shadow-[-12px_0_22px_-22px_rgba(56,189,248,0.9)] group-hover:bg-[var(--tracker-row-hover)]"
+                      "flex h-full items-center justify-end gap-1.5 border-l border-[var(--tracker-table-border)] bg-[var(--tracker-action-surface)] px-2 group-hover:bg-[var(--tracker-row-hover)]"
                     )}
                   >
                     <Button
