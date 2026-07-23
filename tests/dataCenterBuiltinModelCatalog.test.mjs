@@ -138,7 +138,9 @@ test("the NVIDIA rack catalog label is GB300 L11 without changing its stable mod
   assert.ok(gb300Definition, "GB300 catalog definition is missing");
   assert.match(gb300Definition, /id:\s*"nv-mgx-rack-v1-2-rev7"/);
   assert.match(gb300Definition, /name:\s*"GB300 L11 機櫃"/);
-  assert.match(gb300Definition, /scenePresentation:\s*"enclosed"/);
+  assert.match(gb300Definition, /assetUrl:\s*companyModelUrl/);
+  assert.match(gb300Definition, /mobileAssetUrl:\s*companyMobileModelUrl/);
+  assert.doesNotMatch(gb300Definition, /scenePresentation/);
 });
 
 test("every seeded GB300 rack restores the matched GB300 L10 instead of a placeholder", () => {
