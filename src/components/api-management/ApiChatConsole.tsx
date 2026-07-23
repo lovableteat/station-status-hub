@@ -71,6 +71,7 @@ import {
   splitContentByAttachmentMarkers,
 } from "./apiChatPromptHelpers";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import { MarkdownMessage } from "./MarkdownMessage";
 import {
   bytesToBase64,
   extractPptxContent,
@@ -163,6 +164,7 @@ const DEFAULT_QUERY_SYSTEM_PROMPT = [
   "你是使用者專屬的 AI 助理，請用繁體中文回覆。",
   "你可以支援資料查詢、工作討論、學習說明、內容整理與一般對話，但都要以使用者當前需求為主。",
   "當使用者在查資料或要你比對欄位時，請優先整理結果、重點與依據；若資訊不足，直接說缺少哪些資料，不要自行亂猜。",
+  "整理型回答請使用 Markdown：適合比較的資料使用表格，段落之間可用分隔線，程式碼與指令必須放在標示語言的程式碼區塊。",
   "不要主動岔題，也不要塞入無關建議；除非使用者要求，否則保持回答簡潔實用。",
 ].join(" ");
 const DEFAULT_IMAGE_OCR_PROMPT =
@@ -722,9 +724,13 @@ function MessageCard({ message }: { message: ChatMessage }) {
             {contentSegments.map((segment, segmentIndex) => {
               if (segment.kind === "text") {
                 return (
-                  <span key={`text-${segmentIndex}`} className="whitespace-pre-wrap">
-                    {segment.text}
-                  </span>
+                  isUser ? (
+                    <span key={`text-${segmentIndex}`} className="whitespace-pre-wrap">
+                      {segment.text}
+                    </span>
+                  ) : (
+                    <MarkdownMessage key={`text-${segmentIndex}`} content={segment.text} />
+                  )
                 );
               }
 
