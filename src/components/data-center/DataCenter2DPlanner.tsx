@@ -70,6 +70,7 @@ interface DataCenter2DPlannerProps {
   onMoveRack: (rackId: string, x: number, z: number) => void;
   onRotateRack: (rackId: string) => void;
   onMoveAisle: (aisleId: string, x: number, z: number) => void;
+  onDeleteAisle: (aisleId: string) => void;
   onUpdateAisle: (
     aisleId: string,
     patch: Partial<FacilityPlan["aisles"][number]>,
@@ -114,6 +115,7 @@ export function DataCenter2DPlanner({
   onMoveRack,
   onRotateRack,
   onMoveAisle,
+  onDeleteAisle,
   onUpdateAisle,
   onMovePowerFeed,
   onAddRack,
@@ -509,15 +511,51 @@ export function DataCenter2DPlanner({
                 </label>
               ))}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!canEdit}
-              onClick={() => onUpdateAisle(selectedAisle.id, { rotation: (selectedAisle.rotation + 90) % 360 })}
-              className="mt-3 h-9 w-full border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15"
-            >
-              <RotateCw className="mr-2 h-4 w-4" /> 旋轉通道 90°
-            </Button>
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canEdit}
+                onClick={() => onUpdateAisle(selectedAisle.id, { rotation: (selectedAisle.rotation + 90) % 360 })}
+                className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15"
+              >
+                <RotateCw className="mr-2 h-4 w-4" /> 旋轉通道 90°
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!canEdit}
+                    className="h-9 border-rose-300/25 bg-rose-400/8 px-3 text-rose-100 hover:bg-rose-400/16 hover:text-white"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> 刪除通道
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>刪除「{selectedAisle.label}」？</AlertDialogTitle>
+                    <AlertDialogDescription className="leading-6 text-slate-300">
+                      此通道會同時從 2D 規劃與 3D 場景移除，這個動作無法復原。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="border-white/12 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08] hover:text-white">
+                      取消
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        onDeleteAisle(selectedAisle.id);
+                        setSelectedAisleId(null);
+                      }}
+                      className="bg-rose-500 text-white hover:bg-rose-400"
+                    >
+                      確認刪除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         ) : null}
 

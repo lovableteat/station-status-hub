@@ -1014,6 +1014,7 @@ function CameraRig({
   const desiredPosition = useRef(new THREE.Vector3(10, 7, 11));
   const desiredTarget = useRef(new THREE.Vector3(0, 0.8, 0));
   const animating = useRef(false);
+  const lastAppliedRequestId = useRef<number | null>(null);
   const interactionRestoreTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   const beginInteraction = useCallback(() => {
@@ -1047,6 +1048,9 @@ function CameraRig({
   );
 
   useEffect(() => {
+    if (lastAppliedRequestId.current === requestId) return;
+    lastAppliedRequestId.current = requestId;
+
     const selected = racks.find((rack) => rack.id === selectedRackId);
     const span = Math.max(facility.width, facility.depth);
     if (preset === "top") {
