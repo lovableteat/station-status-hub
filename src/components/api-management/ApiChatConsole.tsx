@@ -71,6 +71,12 @@ import {
   splitContentByAttachmentMarkers,
 } from "./apiChatPromptHelpers";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import {
+  bytesToBase64,
+  extractPptxContent,
+  isPptxFile,
+  type PptxInlineImage,
+} from "./pptxAttachment";
 
 interface ApiChatConsoleProps {
   selectedApiKey?: ApiKeyRecord | null;
@@ -92,6 +98,7 @@ interface UploadedAttachment {
   kind: "file" | "image";
   mimeType: string;
   name: string;
+  supplementalImages?: PptxInlineImage[];
   size: number;
   src?: string;
 }
@@ -200,7 +207,6 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   "bmp",
   "xls",
   "xlsx",
-  "ppt",
   "pptx",
   "txt",
 ]);
@@ -400,6 +406,21 @@ function readFileAsDataUrl(file: File) {
 }
 
 async function createUploadedAttachmentFromFile(file: File): Promise<UploadedAttachment> {
+  if (isPptxFile(file)) {
+    const extracted = await extractPptxContent(file);
+    const textBytes = new TextEncoder().encode(extracted.text);
+
+    return {
+      id: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      inlineData: bytesToBase64(textBytes),
+      kind: "file",
+      mimeType: "text/plain",
+      name: file.name,
+      supplementalImages: extracted.images,
+      size: file.size,
+    };
+  }
+
   const dataUrl = await readFileAsDataUrl(file);
   const dataUrlMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!dataUrlMatch) {
@@ -1153,10 +1174,16 @@ export function ApiChatConsole({
       providerMessages.push({
         role: message.role,
         text: message.content,
-        images: supportedAttachments.map((attachment) => ({
-          data: attachment.inlineData,
-          mimeType: attachment.mimeType,
-        })),
+        images: supportedAttachments.flatMap((attachment) => [
+          {
+            data: attachment.inlineData,
+            mimeType: attachment.mimeType,
+          },
+          ...(attachment.supplementalImages ?? []).map((image) => ({
+            data: image.data,
+            mimeType: image.mimeType,
+          })),
+        ]),
       });
     });
 
@@ -1636,7 +1663,7 @@ export function ApiChatConsole({
       return deduped;
     } catch (error) {
       console.error(error);
-      toast.error("附件讀取失敗");
+      toast.error(error instanceof Error ? error.message : "附件讀取失敗");
       return [] as UploadedAttachment[];
     }
   };
@@ -2464,7 +2491,7 @@ export function ApiChatConsole({
           <input
             ref={imageInputRef}
             type="file"
-            accept=".csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.xls,.xlsx,.ppt,.pptx,.txt,image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            accept=".csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.xls,.xlsx,.pptx,.txt,image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             multiple
             className="hidden"
             onChange={(event) => {
