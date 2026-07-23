@@ -11,20 +11,20 @@ const toolsManagementSource = readFileSync(
   "utf8",
 );
 
-test("command library uses one cool accent palette with restrained semantic colors", () => {
-  assert.match(commandLibrarySource, /集中搜尋、複製與維護常用操作指令/);
-  assert.match(commandLibrarySource, /border-cyan-200\/30 bg-cyan-300/);
-  assert.match(commandLibrarySource, /border-\[#294b63\] bg-\[#0b1b2d\]\/85/);
-  assert.match(commandLibrarySource, /bg-\[linear-gradient\(145deg,#102337,#0b1929\)\]/);
+test("command library uses one focused master-detail workspace", () => {
+  assert.match(commandLibrarySource, /選取指令後可直接複製或編輯/);
+  assert.match(commandLibrarySource, /border-\[#2a526f\] bg-\[#071522\]/);
+  assert.match(commandLibrarySource, /border-amber-200\/60 bg-amber-300/);
+  assert.match(commandLibrarySource, /指令預覽/);
   assert.doesNotMatch(commandLibrarySource, /bg-(?:blue|green|purple|orange|pink|yellow)-100/);
   assert.doesNotMatch(commandLibrarySource, /text-(?:blue|green|orange)-600/);
-  assert.match(toolsManagementSource, /Terminal className="h-4 w-4 text-cyan-100"/);
+  assert.match(toolsManagementSource, /<TabsContent value="commands"/);
 });
 
-test("command library keeps search, collapse, and command actions wired", () => {
-  assert.match(commandLibrarySource, /onChange=\{\(e\) => setSearchTerm\(e\.target\.value\)\}/);
-  assert.match(commandLibrarySource, /onOpenChange=\{\(\) => toggleCategory\(category\.id\)\}/);
-  assert.match(commandLibrarySource, /onClick=\{\(\) => copyToClipboard\(command\.command\)\}/);
-  assert.match(commandLibrarySource, /onClick=\{\(\) => setEditingCommand\(command\)\}/);
-  assert.match(commandLibrarySource, /onClick=\{\(\) => handleDeleteCommand\(command\.id\)\}/);
+test("command library keeps search, selection, and command actions wired", () => {
+  assert.match(commandLibrarySource, /setSearchTerm\(event\.target\.value\.slice\(0, 100\)\)/);
+  assert.match(commandLibrarySource, /onClick=\{\(\) => setSelectedCommand\(command\)\}/);
+  assert.match(commandLibrarySource, /copyToClipboard\(activeCommand\.command\)/);
+  assert.match(commandLibrarySource, /openEditor\(activeCommand\)/);
+  assert.match(commandLibrarySource, /handleDelete\(activeCommand\.id\)/);
 });
