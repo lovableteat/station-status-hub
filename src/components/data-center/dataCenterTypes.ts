@@ -202,6 +202,7 @@ export interface RackModelDefinition {
   assetDepthAlignment?: "center" | "front" | "back";
   assetUrl?: string;
   mobileAssetUrl?: string;
+  scenePresentation?: "cad" | "enclosed";
   sourceFileName?: string;
   stepModel?: ImportedStepModel;
   rackUnits?: number;

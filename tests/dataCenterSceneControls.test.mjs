@@ -39,6 +39,10 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
 });
 
 test("the overview preserves each assigned rack model and geometry at every distance", () => {
+  assert.match(
+    plannerSource,
+    /definition\.scenePresentation === "enclosed"[\s\S]*?<RackOverviewModel rack=\{rack\} definition=\{definition\}/,
+  );
   assert.match(plannerSource, /definition\.source === "step" && definition\.stepModel/);
   assert.match(
     plannerSource,

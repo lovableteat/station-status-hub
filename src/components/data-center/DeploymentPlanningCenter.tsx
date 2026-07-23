@@ -217,6 +217,10 @@ function readInitialSites() {
           rack.status === "reserved" &&
           rack.l10ModelId === "l10-placeholder" &&
           rack.l10Count === 0;
+        const shouldRestoreGb300L10 =
+          modelId === "nv-mgx-rack-v1-2-rev7" &&
+          normalizedL10ModelId === "l10-placeholder" &&
+          Number(rack.l10Count) > 0;
         const defaultL10Assignment = getDefaultRackL10Assignment({
           rackModelId: modelId,
           models: BUILT_IN_RACK_MODELS,
@@ -230,7 +234,14 @@ function readInitialSites() {
               : rack.status === "available"
                 ? 0
                 : 4;
-        const rackUnits = normalizedL10Model?.rackUnits ?? 1;
+        const resolvedL10ModelId = shouldInstallDefaultL10
+          ? defaultL10Assignment.l10ModelId
+          : isLegacyInvalidVr200Rack || shouldRestoreGb300L10
+            ? "carlo-next-l10-20260715"
+            : l10MatchesRack
+              ? normalizedL10ModelId
+              : "l10-placeholder";
+        const rackUnits = BUILT_IN_RACK_MODELS[resolvedL10ModelId]?.rackUnits ?? 1;
         const l10Slots = normalizeRackUnitSlots({
           capacityU,
           rackUnits,
@@ -249,13 +260,7 @@ function readInitialSites() {
           ...rack,
           capacityU,
           modelId,
-          l10ModelId: shouldInstallDefaultL10
-            ? defaultL10Assignment.l10ModelId
-            : isLegacyInvalidVr200Rack
-              ? "carlo-next-l10-20260715"
-              : l10MatchesRack
-                ? normalizedL10ModelId
-                : "l10-placeholder",
+          l10ModelId: resolvedL10ModelId,
           l10Count: l10Slots.length,
           l10StartU: shouldInstallDefaultL10
             ? defaultL10Assignment.l10StartU

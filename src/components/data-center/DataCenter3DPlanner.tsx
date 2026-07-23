@@ -819,7 +819,9 @@ function RackVisual({
       </mesh>
 
       <Suspense fallback={<RackOverviewModel rack={rack} definition={definition} accent={color} />}>
-        {definition.source === "step" && definition.stepModel ? (
+        {definition.scenePresentation === "enclosed" ? (
+          <RackOverviewModel rack={rack} definition={definition} accent={color} />
+        ) : definition.source === "step" && definition.stepModel ? (
           <StepRackModel model={definition.stepModel} />
         ) : definition.assetUrl ? (
           <GlbRackModel
