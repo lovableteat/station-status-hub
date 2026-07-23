@@ -22,11 +22,11 @@ test("test progress rows expose editing as a primary action", async () => {
   assert.match(source, />\s*編輯進度\s*</);
   assert.match(
     source,
-    /testId="progress-actions-header"[\s\S]*?className="[^"]*sticky[^"]*right-0[^"]*"/
+    /testId="progress-actions-header"[\s\S]*?className="[^"]*border-l[^"]*"/
   );
   assert.match(
     source,
-    /data-testid={`progress-actions-\${system\.id}`}[\s\S]*?className=\{cn\(\s*"[^"]*sticky[^"]*right-0[^"]*"/
+    /data-testid={`progress-actions-\${system\.id}`}[\s\S]*?className=\{cn\(\s*"[^"]*border-l[^"]*"/
   );
 
   const popoverStart = source.indexOf("<PopoverContent");
