@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -1994,14 +1995,59 @@ export function ApiChatConsole({
                 key={item.id}
                 className="group flex h-20 items-stretch gap-1 rounded-2xl border border-blue-300/18 bg-[#10263a] p-1.5 transition-colors hover:border-blue-300/45 hover:bg-[#16324a]"
               >
-                <button
-                  type="button"
-                  onClick={() => applySharedPromptToDraft(item)}
-                  className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
-                >
-                  <span className="block truncate text-base font-black text-white">{item.title}</span>
-                  <span className="mt-1 block truncate text-sm leading-5 text-slate-300">{item.content}</span>
-                </button>
+                <HoverCard openDelay={320} closeDelay={120}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => applySharedPromptToDraft(item)}
+                      className="min-w-0 flex-1 overflow-hidden rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                      aria-describedby={`prompt-library-summary-${item.id}`}
+                    >
+                      <span className="block truncate text-base font-black text-white">{item.title}</span>
+                      <span
+                        id={`prompt-library-summary-${item.id}`}
+                        className="mt-1 block truncate text-sm leading-5 text-slate-300"
+                      >
+                        {item.content}
+                      </span>
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    data-testid="prompt-hover-preview"
+                    side="right"
+                    align="start"
+                    sideOffset={16}
+                    collisionPadding={16}
+                    className="w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-cyan-200/35 bg-[linear-gradient(155deg,#10283d_0%,#081725_58%,#07131f_100%)] p-0 text-slate-100 shadow-[0_26px_70px_-26px_rgba(34,211,238,0.5)]"
+                  >
+                    <div className="border-b border-cyan-200/15 bg-cyan-300/[0.06] px-4 py-3.5">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-200/25 bg-cyan-300/10 text-cyan-100">
+                          <LibraryBig className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-black text-white">{item.title}</p>
+                          <p className="mt-1 text-xs font-medium text-slate-400">
+                            更新於 {formatSavedItemTime(item.savedAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="max-h-[min(320px,58vh)] overflow-y-auto px-4 py-4">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-cyan-200">
+                        <FileText className="h-3.5 w-3.5" />
+                        完整提示詞
+                      </div>
+                      <p className="mt-3 whitespace-pre-wrap break-words border-l-2 border-cyan-300/35 pl-3.5 text-sm leading-6 text-slate-100">
+                        {item.content}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 border-t border-white/[0.07] bg-slate-950/30 px-4 py-3 text-xs font-bold text-cyan-100">
+                      <ArrowRight className="h-3.5 w-3.5" />
+                      點選原列立即套用
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
