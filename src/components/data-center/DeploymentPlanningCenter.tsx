@@ -89,6 +89,7 @@ import {
 import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
 import {
   isL10CompatibleWithRack,
+  isProtectedCatalogModel,
   mergeModelCatalogOverrides,
   removeCatalogModel,
   serializeModelCatalogOverrides,
@@ -1207,8 +1208,7 @@ function ModelLibrary({
   const selectedIsCompatible = selectedModel
     ? selectedModel.kind === "rack" || isL10CompatibleWithRack(selectedModel, selectedRack.modelId)
     : false;
-  const selectedIsProtected =
-    selectedModel?.id === "generic-42u" || selectedModel?.id === "l10-placeholder";
+  const selectedIsProtected = isProtectedCatalogModel(selectedModel?.id);
   const selectedUsageCount = selectedModel ? modelUsageById[selectedModel.id] ?? 0 : 0;
 
   const beginEditingSelectedModel = () => {
@@ -1439,7 +1439,7 @@ function ModelLibrary({
                         className="mb-2 h-11 w-full rounded-xl border-rose-300/25 bg-rose-400/[0.07] text-sm font-bold text-rose-100 hover:bg-rose-400/[0.14] disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-slate-500"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        {selectedIsProtected ? "系統救援模型不可刪除" : "刪除模型"}
+                        {selectedIsProtected ? "內建核心模型不可刪除" : "刪除模型"}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
@@ -1886,10 +1886,10 @@ export function DeploymentPlanningCenter() {
 
     if (!result.deleted) {
       toast({
-        title: result.reason === "protected" ? "系統救援模型不可刪除" : "模型無法刪除",
+        title: result.reason === "protected" ? "內建核心模型不可刪除" : "模型無法刪除",
         description:
           result.reason === "protected"
-            ? "Generic 42U 與 L10 暫代機台用來避免場景失去可用模型。"
+            ? "官方 GB300、VR200 與系統救援模型會永久保留，避免舊設定讓型錄或場景缺少必要模型。"
             : "請確認型錄中仍保留至少一個同類型模型。",
         variant: "destructive",
       });

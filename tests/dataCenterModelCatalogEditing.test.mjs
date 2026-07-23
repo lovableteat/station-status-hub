@@ -101,6 +101,46 @@ test("L10 compatibility prevents a VR200 unit from being mounted in a GB300 rack
   );
 });
 
+test("stale deletion settings cannot hide official GB300 and VR200 models", async () => {
+  const {
+    isProtectedCatalogModel,
+    mergeModelCatalogOverrides,
+    removeCatalogModel,
+    serializeModelCatalogOverrides,
+  } = await import("../src/components/data-center/modelCatalog.mjs");
+
+  const officialModelIds = [
+    "nv-mgx-rack-v1-2-rev7",
+    "carlo-next-l10-20260715",
+    "vera-rubin-vr-1u-20260715",
+  ];
+  const baseModels = Object.fromEntries(
+    officialModelIds.map((id, index) => [
+      id,
+      {
+        id,
+        kind: index === 0 ? "rack" : "l10",
+        name: id,
+        manufacturer: "Official",
+        revision: "1",
+        dimensions: { widthMm: 700, depthMm: 1000, heightMm: 2200 },
+      },
+    ]),
+  );
+  const staleOverrides = { __deletedModelIds: [...officialModelIds] };
+
+  const restored = mergeModelCatalogOverrides(baseModels, staleOverrides);
+  assert.deepEqual(Object.keys(restored).sort(), [...officialModelIds].sort());
+  assert.equal(serializeModelCatalogOverrides(restored, baseModels).__deletedModelIds, undefined);
+
+  for (const modelId of officialModelIds) {
+    assert.equal(isProtectedCatalogModel(modelId), true);
+    const result = removeCatalogModel({ models: restored, sites: [], modelId });
+    assert.equal(result.deleted, false);
+    assert.equal(result.reason, "protected");
+  }
+});
+
 test("deleting an assigned model safely reassigns racks and records built-in deletion", async () => {
   const {
     mergeModelCatalogOverrides,
@@ -194,6 +234,7 @@ test("model library exposes edit and detail actions and persists catalog overrid
   assert.match(workspaceSource, /onUpdateModel/);
   assert.match(workspaceSource, /onDeleteModel/);
   assert.match(workspaceSource, /removeCatalogModel/);
+  assert.match(workspaceSource, /isProtectedCatalogModel\(selectedModel\?\.id\)/);
   assert.match(workspaceSource, /getDefaultRackL10Assignment/);
   assert.match(workspaceSource, /確認刪除/);
   assert.match(workspaceSource, /onPreviewModel/);
