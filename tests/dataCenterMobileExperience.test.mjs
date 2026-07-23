@@ -46,8 +46,9 @@ test("mobile Data-center fills the dynamic viewport and exposes primary controls
   assert.match(workspaceSource, /id:\s*"plan"/);
   assert.match(workspaceSource, /data-action=\{action\.id\}/);
   assert.match(workspaceSource, /setMobileLeftOpen\(false\)/);
-  assert.match(workspaceSource, /<SheetTitle>場景導覽<\/SheetTitle>/);
-  assert.match(workspaceSource, /<SheetTitle>機櫃詳情<\/SheetTitle>/);
+  assert.match(workspaceSource, /<DialogTitle>場景導覽<\/DialogTitle>/);
+  assert.match(workspaceSource, /<DialogTitle>機櫃設定<\/DialogTitle>/);
+  assert.doesNotMatch(workspaceSource, /<Sheet/);
 });
 
 test("the 3D canvas supports direct touch rotation and two-finger zoom/pan", () => {
