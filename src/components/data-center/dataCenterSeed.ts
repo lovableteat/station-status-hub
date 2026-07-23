@@ -28,7 +28,6 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     sourceFileName: "000_nv_mgx_rack_v1-2_REV_7.stp",
     assetUrl: companyModelUrl,
     mobileAssetUrl: companyMobileModelUrl,
-    scenePresentation: "enclosed",
     dimensions: {
       widthMm: 708.8,
       depthMm: 1072.2,
