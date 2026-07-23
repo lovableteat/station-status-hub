@@ -327,8 +327,16 @@ export function CodeStorageManager() {
                     <span>原始格式編輯器 · 保留換行與縮排</span>
                     <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
                   </div>
-                  <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
-                    <pre ref={codeLineNumbersRef} aria-hidden="true" className="m-0 max-h-[336px] overflow-hidden border-r border-[#38d7ff]/35 bg-[#082033] px-3 py-3 text-right font-mono text-sm leading-6 text-[#7dd3fc] select-none">
+                  <div
+                    data-testid="code-editor-viewport"
+                    className="grid h-[336px] min-h-0 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden"
+                  >
+                    <pre
+                      ref={codeLineNumbersRef}
+                      data-testid="code-editor-line-numbers"
+                      aria-hidden="true"
+                      className="m-0 h-full min-h-0 overflow-hidden border-r border-[#38d7ff]/35 bg-[#082033] px-3 py-3 text-right font-mono text-sm leading-6 text-[#7dd3fc] select-none"
+                    >
                       {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
                     </pre>
                     <textarea
@@ -345,7 +353,7 @@ export function CodeStorageManager() {
                       spellCheck={false}
                       autoCapitalize="off"
                       autoCorrect="off"
-                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#08111f] px-4 py-3 font-mono text-sm leading-6 text-[#effaff] caret-[#67e8f9] outline-none placeholder:text-[#668ba0]"
+                      className="h-full min-h-0 min-w-0 resize-none overflow-auto whitespace-pre bg-[#08111f] px-4 py-3 font-mono text-sm leading-6 text-[#effaff] caret-[#67e8f9] outline-none placeholder:text-[#668ba0]"
                       style={{ tabSize: 4 }}
                       placeholder="貼上或輸入程式開發內容"
                       required
