@@ -8,8 +8,9 @@ test("tools workspace exposes a dedicated source code repository", async () => {
   const workspace = await read("../src/components/tools/ToolsManagement.tsx");
   const repository = await read("../src/components/tools/CodeStorageManager.tsx");
 
-  assert.match(workspace, /value="code-library"/);
-  assert.match(workspace, /程式碼儲存庫/);
+  assert.match(workspace, /<TabsTrigger value="code"/);
+  assert.match(workspace, /<TabsContent value="code"/);
+  assert.match(workspace, /<CodeStorageManager \/>/);
   assert.match(repository, /downloadCodeFile/);
   assert.match(repository, /下載程式檔/);
   assert.match(repository, /wrap="off"/);

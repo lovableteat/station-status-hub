@@ -14,6 +14,8 @@ const veraRubinVr1uModelUrl = `${import.meta.env.BASE_URL}models/data-center/ver
 const veraRubinVr1uMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.mobile.glb`;
 const carloNextL10ModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.glb`;
 const carloNextL10MobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.mobile.glb`;
+const GB300_RACK_MODEL_ID = "nv-mgx-rack-v1-2-rev7";
+const GB300_L10_MODEL_ID = "carlo-next-l10-20260715";
 
 export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
   "nv-mgx-rack-v1-2-rev7": {
@@ -26,6 +28,7 @@ export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
     sourceFileName: "000_nv_mgx_rack_v1-2_REV_7.stp",
     assetUrl: companyModelUrl,
     mobileAssetUrl: companyMobileModelUrl,
+    scenePresentation: "enclosed",
     dimensions: {
       widthMm: 708.8,
       depthMm: 1072.2,
@@ -143,6 +146,7 @@ function createDevice(
   };
 
   const id = `${rackId}-${type}-${index}`;
+
   return {
     id,
     name: `${typeNames[type]} ${String(index).padStart(2, "0")}`,
@@ -180,6 +184,7 @@ function createRack(input: {
 }): RackPlan {
   const health = input.health ?? "healthy";
   const status = input.status ?? "allocated";
+  const modelId = input.modelId ?? GB300_RACK_MODEL_ID;
   const devices: RackDevice[] = [
     createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
     createDevice(input.id, 2, "switch-tray", health === "critical" ? "warning" : "healthy", 38, 2),
@@ -194,8 +199,10 @@ function createRack(input: {
     row: input.row,
     cabinet: input.cabinet,
     status,
-    modelId: input.modelId ?? "nv-mgx-rack-v1-2-rev7",
-    l10ModelId: input.l10ModelId ?? "l10-placeholder",
+    modelId,
+    l10ModelId:
+      input.l10ModelId ??
+      (modelId === GB300_RACK_MODEL_ID ? GB300_L10_MODEL_ID : "l10-placeholder"),
     l10Count: input.l10Count ?? (status === "available" ? 0 : 4),
     l10StartU: input.l10StartU ?? 3,
     powerKw: input.powerKw ?? 16.8,
