@@ -1,0 +1,39 @@
+{
+  "sourceFileName": "vr200-l11-planning-cabinet-20260719.stp",
+  "sourceBytes": 242223,
+  "outputFileName": "vr200-l11-cabinet-20260719.glb",
+  "outputBytes": 5000,
+  "generatedAt": "2026-07-19T15:48:17.591566+00:00",
+  "sourceUpAxis": "z",
+  "upAxis": "y",
+  "boundsUnit": "mm",
+  "dimensions": {
+    "widthMm": 600,
+    "depthMm": 1200,
+    "heightMm": 2200
+  },
+  "assembly": {
+    "role": "vr200-l11-placeholder-envelope",
+    "acceptsRackUnits": true,
+    "capacityU": 42,
+    "rackUnitPitchMm": 44.45,
+    "sourceGeometryNotice": "placeholder-no-vr200-l11-source",
+    "note": "Temporary full-height envelope only; no VR200 L11 STEP has been supplied. The 00_vr_outlook STEP is a separate VR200 L10 1U assembly and is never stretched."
+  },
+  "shapeCount": 32,
+  "sha256": "D267D2CE9BCFF9958257603B0B19FDD9482A26DF1E0432F9404C026337A51488",
+  "webOptimization": {
+    "tool": "gltfpack 1.2",
+    "triangleCount": 384,
+    "vertexCount": 708,
+    "sha256": "D267D2CE9BCFF9958257603B0B19FDD9482A26DF1E0432F9404C026337A51488"
+  },
+  "mobileWebOptimization": {
+    "outputFileName": "vr200-l11-cabinet-20260719.mobile.glb",
+    "outputBytes": 5000,
+    "triangleCount": 384,
+    "vertexCount": 708,
+    "sha256": "D267D2CE9BCFF9958257603B0B19FDD9482A26DF1E0432F9404C026337A51488"
+  },
+  "stepSha256": "383E566074FE7C39D3455A74681BE7F04BDDFF3E0821E9716C7A1C8F2054D1C0"
+}

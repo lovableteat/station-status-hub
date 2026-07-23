@@ -1,0 +1,78 @@
+﻿{
+    "sourceFileName":  "00_carlo-next_l10_outlook_20260715.stp",
+    "sourceBytes":  682516405,
+    "outputFileName":  "carlo-next-l10-20260715.glb",
+    "outputBytes":  7606756,
+    "convertedAt":  "2026-07-21T23:27:08.119393+00:00",
+    "linearDeflection":  2.5,
+    "sourceUpAxis":  "y",
+    "upAxis":  "z",
+    "minimum":  [
+                    -241.05394158517407,
+                    -0.10603333702512682,
+                    -72.3008063922162
+                ],
+    "maximum":  [
+                    241.05394158521904,
+                    43.67711222623,
+                    839.9488377788512
+                ],
+    "spans":  {
+                  "x":  482.1,
+                  "y":  43.8,
+                  "z":  912.2
+              },
+    "dimensions":  {
+                       "widthMm":  482.1,
+                       "depthMm":  912.2,
+                       "heightMm":  43.8
+                   },
+    "assemblyScope":  "root-shapes",
+    "sourceShapeCount":  815,
+    "shapeCount":  1,
+    "rootCoverage":  {
+                         "rootShapeCount":  1,
+                         "sourceShapeCount":  815,
+                         "exportShapeCount":  1,
+                         "exportMinimum":  [
+                                               -241.05394158517407,
+                                               -0.10603333702512682,
+                                               -72.3008063922162
+                                           ],
+                         "exportMaximum":  [
+                                               241.05394158521904,
+                                               43.67711222623,
+                                               839.9488377788512
+                                           ],
+                         "exportSpans":  {
+                                             "x":  482.1,
+                                             "y":  43.8,
+                                             "z":  912.2
+                                         },
+                         "allShapeMinimum":  [
+                                                 -282.6,
+                                                 -59.30917567751064,
+                                                 -954.7216020249384
+                                             ],
+                         "allShapeMaximum":  [
+                                                 597.4093052913643,
+                                                 66.42043323975,
+                                                 839.9488377788512
+                                             ],
+                         "allShapeSpans":  {
+                                               "x":  880.0,
+                                               "y":  125.7,
+                                               "z":  1794.7
+                                           },
+                         "rootSolidCount":  643,
+                         "rootVolumeMm3":  1484761.9960109051
+                     },
+    "webOptimization":  {
+                            "tool":  "gltfpack 1.2",
+                            "simplificationRatio":  0.18,
+                            "maximumError":  0.02,
+                            "mergedMeshes":  false,
+                            "preservedNodes":  true,
+                            "preservedMaterials":  true
+                        }
+}
