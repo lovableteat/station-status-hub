@@ -101,3 +101,16 @@ test("tracker actions column is wide enough for both labeled controls", async ()
   assert.ok(Number(actionsSpec[1]) >= 220, "default actions width clips the labeled controls");
   assert.ok(Number(actionsSpec[2]) >= 208, "minimum actions width clips the labeled controls");
 });
+
+test("tracker actions stay in normal flow so the final station is not covered", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.doesNotMatch(
+    source,
+    /testId="progress-actions-header"[\s\S]*?className="[^"]*sticky[^"]*right-0[^"]*"/,
+  );
+  assert.doesNotMatch(
+    source,
+    /data-testid={`progress-actions-\${system\.id}`}[\s\S]*?className=\{cn\(\s*"[^"]*sticky[^"]*right-0[^"]*"/,
+  );
+});
