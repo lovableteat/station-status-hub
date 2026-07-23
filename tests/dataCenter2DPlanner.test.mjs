@@ -25,6 +25,7 @@ test("2D planning edits the same rack and facility coordinates used by 3D", () =
   assert.match(workspaceSource, /onAddRack=\{addRackFromCurrentModel\}/);
   assert.match(workspaceSource, /onDeleteRack=\{removeRackFromPlan\}/);
   assert.match(workspaceSource, /onMoveAisle=\{\(aisleId, x, z\) => updateAisle/);
+  assert.match(workspaceSource, /onDeleteAisle=\{removeAisle\}/);
   assert.match(workspaceSource, /onMovePowerFeed=\{\(feedId, x, z\) => updatePowerFeed/);
 });
 
@@ -75,4 +76,11 @@ test("cold and hot aisle dimensions can be edited from the selected aisle panel"
   assert.match(plannerSource, /通道寬度/);
   assert.match(plannerSource, /selectedAisleId/);
   assert.match(workspaceSource, /onUpdateAisle=\{\(aisleId, patch\)/);
+});
+
+test("a selected cold or hot aisle can be deleted from the 2D plan", () => {
+  assert.match(plannerSource, /onDeleteAisle/);
+  assert.match(plannerSource, /刪除通道/);
+  assert.match(plannerSource, /onDeleteAisle\(selectedAisle\.id\)/);
+  assert.match(plannerSource, /setSelectedAisleId\(null\)/);
 });

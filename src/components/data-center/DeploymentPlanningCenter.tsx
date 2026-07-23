@@ -63,16 +63,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
@@ -1234,27 +1234,27 @@ function ModelLibrary({
   };
 
   return (
-    <Sheet
+    <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
         if (!nextOpen) setView("browse");
       }}
     >
-      <SheetContent className="flex w-[min(96vw,760px)] flex-col border-l border-cyan-300/18 bg-[linear-gradient(180deg,#081725,#040a11)] p-0 text-slate-100 sm:max-w-[760px]">
-        <SheetHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
+      <DialogContent className="flex h-[min(90dvh,880px)] w-[min(96vw,960px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/18 bg-[linear-gradient(180deg,#081725,#040a11)] p-0 text-slate-100 sm:max-w-[960px]">
+        <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-400/12 text-cyan-200">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
-              <SheetTitle className="text-2xl font-black tracking-[-0.025em] text-white">模型型錄</SheetTitle>
-              <SheetDescription className="mt-1 text-sm leading-5 text-slate-300">
+              <DialogTitle className="text-2xl font-black tracking-[-0.025em] text-white">模型型錄</DialogTitle>
+              <DialogDescription className="mt-1 text-sm leading-5 text-slate-300">
                 為 {selectedRack.cabinet} 選擇 L11 機櫃外型或櫃內 L10 1U 機台。
-              </SheetDescription>
+              </DialogDescription>
             </div>
           </div>
-        </SheetHeader>
+        </DialogHeader>
 
         <div className="flex shrink-0 gap-2 border-b border-white/10 px-6 py-3" role="tablist" aria-label="模型型錄工作模式">
           {([
@@ -1698,8 +1698,8 @@ function ModelLibrary({
             {view === "browse" && selectedModel ? <span className="hidden tabular-nums sm:inline">{formatDimensions(selectedModel.dimensions)}</span> : null}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2654,6 +2654,7 @@ export function DeploymentPlanningCenter() {
                 onAddRack={addRackFromCurrentModel}
                 onDeleteRack={removeRackFromPlan}
                 onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+                onDeleteAisle={removeAisle}
                 onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
                 onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
                 onAddAisle={addAisle}
@@ -2878,6 +2879,7 @@ export function DeploymentPlanningCenter() {
               onAddRack={addRackFromCurrentModel}
               onDeleteRack={removeRackFromPlan}
               onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+              onDeleteAisle={removeAisle}
               onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
               onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
               onAddAisle={addAisle}
@@ -2959,39 +2961,39 @@ export function DeploymentPlanningCenter() {
         </div>
         )}
 
-        <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
-          <SheetContent side="left" className="h-[100dvh] w-[min(90vw,340px)] border-r border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[340px]">
-            <SheetHeader className="sr-only">
-              <SheetTitle>場景導覽</SheetTitle>
-              <SheetDescription>選擇廠區、圖層與機櫃。</SheetDescription>
-            </SheetHeader>
+        <Dialog open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
+          <DialogContent className="h-[min(88dvh,780px)] w-[min(94vw,720px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[720px]">
+            <DialogHeader className="sr-only">
+              <DialogTitle>場景導覽</DialogTitle>
+              <DialogDescription>選擇廠區、圖層與機櫃。</DialogDescription>
+            </DialogHeader>
             <SceneNavigator {...navigatorProps} />
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
-        <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
-          <SheetContent side="right" className="h-[100dvh] w-[min(92vw,370px)] border-l border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[370px]">
-            <SheetHeader className="sr-only">
-              <SheetTitle>機櫃詳情</SheetTitle>
-              <SheetDescription>查看機櫃狀態並設定 L10 安裝層。</SheetDescription>
-            </SheetHeader>
+        <Dialog open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
+          <DialogContent className="h-[min(90dvh,900px)] w-[min(96vw,980px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[980px]">
+            <DialogHeader className="sr-only">
+              <DialogTitle>機櫃設定</DialogTitle>
+              <DialogDescription>查看機櫃狀態並設定 L10 安裝層。</DialogDescription>
+            </DialogHeader>
             <RackInspector {...inspectorProps} />
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
-        <Sheet open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
-          <SheetContent side="right" className="w-[min(94vw,480px)] border-l border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[480px]">
-            <SheetHeader className="border-b border-white/10 px-6 py-5 text-left">
-              <SheetTitle className="flex items-center gap-2 text-white">
+        <Dialog open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
+          <DialogContent className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[980px]">
+            <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
+              <DialogTitle className="flex items-center gap-2 text-white">
                 <PencilRuler className="h-5 w-5 text-cyan-300" />
                 廠房與佈線規劃
-              </SheetTitle>
-              <SheetDescription className="text-slate-400">
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
                 設定廠房邊界、冷熱通道與 PDU 饋線，變更會自動保存在目前廠區。
-              </SheetDescription>
-            </SheetHeader>
+              </DialogDescription>
+            </DialogHeader>
 
-            <ScrollArea className="h-[calc(100dvh-112px)]">
+            <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-5 px-6 py-5">
                 <section className="rounded-2xl border border-cyan-300/15 bg-[#0b2234] p-4">
                   <div className="mb-3 flex items-center justify-between">
@@ -3176,8 +3178,8 @@ export function DeploymentPlanningCenter() {
                 </section>
               </div>
             </ScrollArea>
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
         <ModelLibrary
           open={modelLibraryOpen}
