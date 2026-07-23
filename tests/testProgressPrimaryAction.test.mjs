@@ -35,6 +35,6 @@ test("test progress rows expose editing as a primary action", async () => {
   assert.doesNotMatch(popoverSource, /編輯測試進度|編輯進度/);
   assert.match(
     presentation,
-    /actions:\s*\{\s*defaultWidth:\s*168,\s*minWidth:\s*148,\s*maxWidth:\s*240\s*\}/
+    /actions:\s*\{\s*defaultWidth:\s*220,\s*minWidth:\s*208,\s*maxWidth:\s*320\s*\}/
   );
 });

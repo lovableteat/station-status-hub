@@ -1,0 +1,78 @@
+﻿{
+    "sourceFileName":  "as1-oc-214.stp",
+    "sourceBytes":  441968,
+    "outputFileName":  "test.glb",
+    "outputBytes":  103756,
+    "convertedAt":  "2026-07-21T22:31:08.246743+00:00",
+    "linearDeflection":  2.5,
+    "sourceUpAxis":  "y",
+    "upAxis":  "z",
+    "minimum":  [
+                    -10.000000000000002,
+                    0.0,
+                    -4.0
+                ],
+    "maximum":  [
+                    190.0,
+                    150.0,
+                    80.00000000000003
+                ],
+    "spans":  {
+                  "x":  200.0,
+                  "y":  150.0,
+                  "z":  84.0
+              },
+    "dimensions":  {
+                       "widthMm":  200.0,
+                       "depthMm":  84.0,
+                       "heightMm":  150.0
+                   },
+    "assemblyScope":  "root-shapes",
+    "sourceShapeCount":  38,
+    "shapeCount":  1,
+    "rootCoverage":  {
+                         "rootShapeCount":  1,
+                         "sourceShapeCount":  38,
+                         "exportShapeCount":  1,
+                         "exportMinimum":  [
+                                               -10.000000000000002,
+                                               0.0,
+                                               -4.0
+                                           ],
+                         "exportMaximum":  [
+                                               190.0,
+                                               150.0,
+                                               80.00000000000003
+                                           ],
+                         "exportSpans":  {
+                                             "x":  200.0,
+                                             "y":  150.0,
+                                             "z":  84.0
+                                         },
+                         "allShapeMinimum":  [
+                                                 -22.5,
+                                                 -100.0,
+                                                 -24.0
+                                             ],
+                         "allShapeMaximum":  [
+                                                 190.0,
+                                                 150.0,
+                                                 200.0
+                                             ],
+                         "allShapeSpans":  {
+                                               "x":  212.5,
+                                               "y":  250.0,
+                                               "z":  224.0
+                                           },
+                         "rootSolidCount":  18,
+                         "rootVolumeMm3":  764520.2352522602
+                     },
+    "webOptimization":  {
+                            "tool":  "gltfpack 1.2",
+                            "simplificationRatio":  0.8,
+                            "maximumError":  0.02,
+                            "mergedMeshes":  false,
+                            "preservedNodes":  true,
+                            "preservedMaterials":  true
+                        }
+}

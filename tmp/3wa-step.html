@@ -1,0 +1,3305 @@
+<!doctype html>
+<html lang="zh-Hant"><head>  
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />  
+  <!--
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'self' data: gap://ready file:; style-src * 'unsafe-inline'; script-src * 'self' 'unsafe-inline' 'unsafe-eval'">
+  -->
+  <title>歡迎來到3WA問題解決專家工作室</title>
+  <link rel="shortcut icon" href="/favicon.ico">
+  <meta name="Resource-Type" content="document">
+  <meta name="Distribution" content="Global">
+  <meta name="Author" content="羽山秋人">
+  <meta name="Keywords" content="blog,fzr,fz2,fzers,fz,codejob,diy,home made,systems,c,php,vb,c++,programmer,download,client,server,windows,linux,opensource">
+  <meta name="Generator" content="3WA-Company">
+  <meta name="description" content="羽山的個人網站，一個喜歡機車又愛寫程式的年輕人，腦海中總有許多新奇古怪的創意，動動雙手，做做自己喜歡的事。" />
+  <link href="https://3wa.tw/inc/reset.css" rel="stylesheet" type="text/css">   
+   
+  <!--// 2021-06-26-->
+  <!--
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-1.11.3.min.js"></script>    
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-migrate-1.4.1.min.js"></script>
+  -->
+  <!--
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-3.6.0.min.js"></script>        
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-migrate-3.3.2.min.js"></script>
+  -->
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-3.7.1.min.js"></script>        
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-migrate-3.4.0.min.js"></script>
+
+     
+  <!--bootstrip-->
+  <link rel="stylesheet" href="https://3wa.tw/inc/javascript/bootstrap/3.4.0/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://3wa.tw/inc/javascript/bootstrap/3.4.0/css/bootstrap-theme.min.css" />
+  <link rel="stylesheet" href="https://3wa.tw/inc/javascript/bootstrap/3.4.0/css_custom/css_patch.css" />  
+  
+  <script src="https://3wa.tw/inc/javascript/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+  <!--下拉選單-->
+  <!--From : https://www.minwt.com/webdesign-dev/html/16998.html-->
+  <script src="https://3wa.tw/inc/javascript/bootstrap/3.4.0/js_custom/drop_down_menu.js"></script>
+  <link rel="stylesheet" href="https://3wa.tw/inc/javascript/bootstrap/3.4.0/css_custom/drop_down_menu.css" />
+  
+  <!--<script src="https://3wa.tw/inc/javascript/jquery/velocity.min.js"></script>--> 
+  <script src="https://3wa.tw/inc/javascript/php/myphp.js"></script>
+  <!--script src="https://3wa.tw/inc/javascript/jquery.sprintf.js"></script-->
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-placeholder/jquery.placeholder.min.js"></script>
+  <script src="https://3wa.tw/inc/javascript/js.cookie.js"></script>  
+  <!--fix placeholder  
+     $('input, textarea').placeholder();
+  -->  
+  <script> 
+    // 修正 placeholder
+    $(document).ready(function() {
+      $('input, textarea').placeholder();      
+    });                
+  </script>
+  <script src="https://3wa.tw/inc/javascript/config.js?_t=1784670940"></script>
+  <script src="https://3wa.tw/inc/javascript/include.js?_t=1784670940"></script>    
+  
+  <script src="https://3wa.tw/inc/javascript/jquery/mybox/mybox-lastest.min.js"></script>
+
+
+  <!--推播-->
+  <!--push api-->
+  <!--script src="https://3wa.tw/inc/javascript/push_api_js/main.js?_t=1784670940"></script-->
+  <!-- Google tag (gtag.js) -->
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-SVZYMCQL8L"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+  
+    gtag('config', 'G-SVZYMCQL8L');
+  </script>
+
+  
+  <script>
+  /*
+  setTimeout(function(){
+    $(document).ready(function () {
+      //先定義按鈕，不要也可以
+      push_api.pushButton = null; 
+      //預載
+      push_api.init();
+      setTimeout(function(){
+        push_api.run_subscribe(function () {
+          //初次成功
+          //把使用者的 token 儲存起來
+          console.log("初次成功呦");
+          console.log(push_api.UserToken);        
+          var o = new Object();
+          o["name"] = "";
+          o["token"] = push_api.UserToken;
+          o["browser"] = push_api.get_user_browser();                    
+          //把使用者資訊綁定到後端
+          myAjax_async("https://3wa.tw/ajax/api.php?mode=push_save_token", o, "",function (data) {
+            smallComment("謝謝您的支持",5000,false,{});
+          });
+        }, function () {
+          //已註冊過的
+          //console.log("使用者已註冊過了，又點了一次");
+          //alert("已註冊過了啦");
+          //console.log(push_api.UserToken);
+          //$("div[reqc='console']").html(push_api.UserToken);
+        }, function () {
+          //被使用者拒絕了
+          //console.log("糟，被使用者拒絕了，要出 UI 教使用者解除鎖定");
+          //alert("完了，你怎麼可以拒絕!");
+          //$("div[reqc='console']").html("完了，你怎麼可以拒絕!\n糟，被使用者拒絕了，請作 UI 教使用者解除鎖定");
+        });
+      },5000);
+    });
+  },1500);
+  */
+  </script>  
+    
+  <!--sort-table-->
+  <!--sortTable(jsdom, field(num), direct(-1,1)) -->
+  <script src="https://3wa.tw/inc/javascript/jquery/sort-table/sort-table.js"></script>
+
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery-image-lazy-loading/js/jquery.lazyload.min.js"></script>
+  
+  <link href="https://3wa.tw/inc/style.css" rel="stylesheet" type="text/css">
+  
+  
+  <script>
+      
+    $(document).ready(function(){
+      //console保護
+            //載入鼠標
+      //init_wagtail_cursor();
+      if(navigator.platform != "iPad")
+  	  {
+  	    //原本的圖片要改用
+  	    // <img src="https://3wa.tw/inc/javascript/jquery/jquery-image-lazy-loading/images/grey.gif" data-original="原圖路徑">
+  	    // 之後皆改用 php function lazyimg('src',"{'id','name','style'}");
+        $("img").lazyload({
+          effect:"fadeIn",
+          placeholder: "https://3wa.tw/inc/javascript/jquery/jquery-image-lazy-loading/images/grey.gif"
+        });
+  	  }
+//       $("img").each(function(){
+//         //console.log($(this).attr('alt'));
+//         if(typeof($(this).attr('alt'))=="undefined")
+//         {
+//           $(this).attr('alt',"");
+//         }
+//         if(typeof($(this).attr('title'))=="undefined")
+//         {
+//           $(this).attr('title',"");
+//         }
+//       });
+    });
+  </script>
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/three.min.js"></script>
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/OrbitControls.js"></script>
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/GLTFLoader.js"></script>        
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/DRACOLoader.js"></script>    
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/KTX2Loader.js"></script>
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/STLLoader.js"></script>
+    <script src="https://3wa.tw/inc/javascript/three.js/r155/meshopt_decoder.js"></script>
+        
+  
+      
+  <script src="https://3wa.tw/inc/javascript/jquery/jquery.form.js"></script>
+                    
+      <!--[if IE]><script src="https://3wa.tw/inc/javascript/html5/excanvas.compiled.js"></script><![endif]-->
+<!--
+      <script src="https://3wa.tw/inc/javascript/iepngfix/iepngfix_tilebg.min.js"></script>
+-->  
+    <script>
+      function run_3wa_funny()
+      {
+        window['is_running_上上下下左右左右baba']=true;
+        var now_scroll=$(window).scrollTop();
+        $(window).scrollTop(0);//捲到最上
+        //$("*").addClass("overflow_show");
+        //$("#holiuken").remove();
+        /*$("body").append(sprintf("<img id='holiuken' src='%s/pic/holiuken.png'>","https://3wa.tw"));
+        $("#holiuken").css({
+         'position':'fixed',
+         'left':'30px',
+         'top':'50px',
+         'z-index':'-1'
+        });*/
+        //alert('Ho~Liu~Ken !!!');
+        $.getScript("https://3wa.tw/inc/javascript/jquery/jquery_UI/jquery-ui-1.8.16/ui/jquery-ui.js");
+        $.getScript("https://3wa.tw/inc/javascript/jquery/jquery-firefly.js",function(){
+         $.firefly();
+        });
+        $("head").append("<link>");
+        css = $("head").children(":last");
+        css.attr({
+          rel:  "stylesheet",
+          type: "text/css",
+          href: "https://3wa.tw/inc/javascript/jquery/jquery_UI/jquery-ui-1.8.16/themes/base/jquery.ui.all.css"
+             });
+             window['holuken_counter']=1;
+             $("img,div,font,input,select").each(function(index,dom){
+             //$("body").append($(dom).attr('id')+"<br>");
+        		 //if(typeof($(dom).attr('id'))!='undefined')
+        		 {
+        	 	   setTimeout(function(){
+               
+                 //now_show=$(dom).is(":visible");
+                 //now_opacity=$(dom).css('opacity');
+                 $(dom).addClass("opacity_20");                         
+        		     $(dom).effect("shake", { times:3 }, 300);                                                             
+        		   },200*window['holuken_counter']++);
+        		 }
+        });
+        window['holiuken'] = "";
+        //$("*").removeClass("overflow_show");
+        $.getScript("https://3wa.tw/inc/javascript/jquery/jquery.blockUI.js",function(){
+          $.blockUI({ 
+              message: '偶爾也讓眼睛休息一下吧~~~',
+              css:{
+                'opacity':0.5,
+                'filter':'Alpha(opacity=50)',
+                'padding':'25px'
+              }, 
+              timeout: 2500 
+          }); 
+        });
+        setTimeout(function(){
+         $(window).scrollTop(now_scroll);//捲回
+         $("*").removeClass("opacity_20");
+         window['is_running_上上下下左右左右baba']=false;
+        },20000);
+        //break;
+      }
+      $(document).ready(function(){
+        //jsAddSlashes($str)
+                var tmp="";
+        $("body").append("<div id='upupdown'>\x3Cdiv class=\"text-center\" style=\"margin-top:500px;\"\x3E\r\n  \x3Chr width=\"80%\" color=\"red\"\x3E\r\n  \x3Cdiv id=\"footer_design\" style=\"color:orange;\"\x3E \r\n  Designed By \x3Ca href=\"mailto:linainverseshadow@gmail.com\"\x3E羽山\x3C/a\x3E \x3Ca style=\"color: white;\" target=\"_blank\" href=\"https://3wa.tw\"\x3E3WA Studio\x3C/a\x3E ©2007\r\n  \x3C/div\x3E\r\n  試看看用鍵盤輸入「上上下下左右左右baba」\x3C/div\x3E\r\n\x3Cbr\x3E\r\n\x3Cbr\x3E\r\n</div>");
+        //chat
+        //$("body").append(myAjax("https://3wa.tw/mychat/div.php",""));
+        //holiuken
+        window['code']=new Array();
+        array_push(window['code'],'112,112,100,100,104,108,104,108,194,196,194,196');
+        array_push(window['code'],'112,112,100,100,104,108,104,108,196,194,196,194');
+        array_push(window['code'],'38,38,40,40,37,39,37,39,97,98,97,98');
+        array_push(window['code'],'38,38,40,40,37,39,37,39,98,97,98,97');        
+        array_push(window['code'],'38,38,40,40,37,39,37,39,98,97');
+        array_push(window['code'],'38,38,40,40,37,39,37,39,97,98');
+      	array_push(window['code'],'38,38,40,40,37,39,37,39,66,65');
+      	array_push(window['code'],'38,38,40,40,37,39,37,39,66,65,66,65');
+        array_push(window['code'],'56,56,50,50,52,54,52,54,97,98,97,98');
+        array_push(window['code'],'56,56,50,50,52,54,52,54,65,66,65,66');
+        array_push(window['code'],'56,56,50,50,52,54,52,54,66,65');
+        array_push(window['code'],'112,112,100,100,104,108,104,108,130,132,130,132');
+        array_push(window['code'],'76,76,80,80,74,78,74,78,130,132,130,132');
+        array_push(window['code'],'208,208,196,196,200,204,200,204,130,132,130,132');
+        array_push(window['code'],'76,76,80,80,74,78,74,78,132,130');
+        array_push(window['code'],'208,208,196,196,200,204,200,204,132,130');
+        window['holiuken'] = "";
+
+
+/*window.onload = function() {
+  document.onkeydown = register;
+  document.onkeyup = register;
+  //document.onmousewheel = wheel;
+}        
+         function register(e)
+         {
+           alert(print_r(e,true));
+         }  */
+        
+        $("html").keyup(function(e){
+           //$("body").append(e.which+",");////keycode +","+e.which+"<br>");
+           //$("body").append(e.type+"<br>");
+           window['holiuken']+=(e.keyCode+e.which)+",";
+           //alert(print_r(e,true));
+           //$("body").append(window['holiuken']+"<br>");
+           
+           for(var v in window['code'])
+           {
+             if(
+               strpos(window['holiuken'],window['code'][v])!==false
+             )
+             {
+               if(typeof(window['is_running_上上下下左右左右baba'])!="undefined" && 
+                  window['is_running_上上下下左右左右baba']==true)
+               {
+                 return;
+               }
+               run_3wa_funny();
+             }
+            }
+        });
+        //div_motion("thebody");
+      });
+    </script>
+
+<title>歡迎來到3WA問題解決專家工作室</title>
+  <style>
+    body {
+        margin: 0;
+        overflow: auto;
+        background:
+          radial-gradient(circle at top left, rgba(56, 189, 248, 0.10), transparent 28%),
+          linear-gradient(180deg, #08111f 0%, #0b1424 100%);
+        color:#e2e8f0;
+    }
+    .thecanvasClass{
+        margin-left:auto;
+        margin-right:auto;
+        background-color: #0f172a;
+        display:block;
+        max-width:calc(100vw - 24px);
+        border-radius:14px;
+    }
+    .front-toolbar{
+        width:100%;
+        max-width:none;
+        margin:0 0 6px 0;
+        text-align:right;
+    }
+    /* 拖放區 */
+    .drop-zone{
+        width:100%;
+        max-width:none;
+        box-sizing:border-box;
+        margin:0 0 10px 0;
+        padding:10px 20px;
+        background:rgba(15,23,42,0.82);
+        border:2px dashed rgba(56,189,248,0.35);
+        border-radius:10px;
+        backdrop-filter:blur(8px);
+        text-align:center;
+        color:#94a3b8;
+        cursor:pointer;
+        transition:border-color .2s, background .2s;
+        user-select:none;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        flex-wrap:wrap;
+    }
+    .drop-zone:hover, .drop-zone.drag-over{
+        border-color:#38bdf8;
+        background:rgba(14,30,54,0.92);
+        color:#e2e8f0;
+    }
+    .drop-zone .dz-icon{ font-size:1.2rem; opacity:.6; flex-shrink:0; }
+    .drop-zone .dz-label{ font-size:.85rem; }
+    .drop-zone .dz-selected{
+        font-size:.8rem;
+        color:#38bdf8;
+        font-weight:600;
+    }
+    .delete-pwd-input {
+        width: 100%;
+        margin: 8px 0 10px 0;
+        padding: 3px;
+        color: #fff;
+        background:
+            linear-gradient(#090f1b, #090f1b) padding-box,
+            repeating-linear-gradient(90deg, #ef4444 0 8px, #38bdf8 8px 16px, #ef4444 16px 24px, transparent 24px 32px) border-box;
+        background-size: auto, 64px 100%;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .18);
+        outline: none;
+        animation: deletePwdBorderMarch 1.1s linear infinite;
+    }
+    .delete-pwd-input::placeholder {
+        color: rgba(255,255,255,.72);
+    }
+    @keyframes deletePwdBorderMarch {
+        to { background-position: 0 0, 64px 0; }
+    }
+    .delete-fail-overlay,
+    .delete-success-dialog {
+        position: absolute;
+        inset: 0;
+        z-index: 35;
+        display: none;
+        pointer-events: none;
+        align-items: center;
+        justify-content: center;
+    }
+    #viewer-wrap.delete-failed {
+        animation: deleteFailShake .12s linear 10;
+        box-shadow: inset 0 0 140px rgba(239, 68, 68, .65);
+    }
+    #viewer-wrap.delete-failed .delete-fail-overlay {
+        display: flex;
+        background: radial-gradient(circle, rgba(239,68,68,.18), rgba(20,0,0,.72));
+    }
+    .delete-fail-card {
+        text-align: center;
+        color: #fff;
+        text-shadow: 3px 0 #38bdf8, -4px 0 #ef4444, 0 0 32px rgba(239,68,68,.95);
+        font-weight: 900;
+    }
+    .delete-fail-card strong {
+        display: block;
+        font-size: clamp(52px, 8vw, 118px);
+        line-height: .9;
+    }
+    .delete-fail-card span {
+        display: block;
+        margin-top: 16px;
+        font-size: 16px;
+    }
+    @keyframes deleteFailShake {
+        0%, 100% { transform: translate(0,0); }
+        25% { transform: translate(8px,-4px); }
+        50% { transform: translate(-9px,5px); }
+        75% { transform: translate(5px,7px); }
+    }
+    .delete-ritual {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        display: none;
+        pointer-events: none;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 50% 48%, rgba(239,68,68,.08), transparent 38%),
+            radial-gradient(circle at 50% 50%, transparent 26%, rgba(5,7,11,.4) 100%);
+    }
+    #viewer-wrap.delete-ritual-active .delete-ritual {
+        display: block;
+    }
+    #viewer-wrap.delete-ritual-active canvas {
+        filter: brightness(1.25) saturate(1.25) contrast(1.08);
+    }
+    .delete-comms {
+        position: absolute;
+        left: 50%;
+        top: 74px;
+        width: min(620px, calc(100% - 48px));
+        transform: translateX(-50%);
+        padding: 12px 16px;
+        border: 1px solid rgba(239,68,68,.45);
+        border-radius: 8px;
+        background: rgba(5,7,11,.78);
+        color: #fff;
+        box-shadow: 0 0 50px rgba(239,68,68,.22);
+        line-height: 1.35;
+    }
+    .delete-comms span {
+        display: block;
+        color: #ef4444;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .08em;
+    }
+    .delete-comms strong {
+        display: block;
+        margin-top: 4px;
+        font-size: clamp(16px, 2vw, 24px);
+        line-height: 1.25;
+    }
+    .delete-countdown {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: clamp(90px, 16vw, 220px);
+        font-weight: 900;
+        text-shadow: 0 0 80px rgba(239,68,68,.85);
+    }
+    .delete-ship,
+    .delete-bullet,
+    .delete-missile,
+    .delete-laser,
+    .delete-scatter,
+    .delete-impact,
+    .delete-bolt,
+    .delete-warhead,
+    .delete-shockwave {
+        position: absolute;
+        pointer-events: none;
+    }
+    .delete-ship {
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 18px;
+        clip-path: polygon(0 50%, 72% 6%, 100% 50%, 72% 94%);
+        background: linear-gradient(90deg, rgba(56,189,248,.3), #fff, rgba(239,68,68,.8));
+        filter: drop-shadow(0 0 12px rgba(56,189,248,.8));
+        animation: deleteShipOrbit 4.8s ease-in-out infinite;
+    }
+    .delete-bullet,
+    .delete-missile {
+        left: 50%;
+        top: 50%;
+        width: 24px;
+        height: 4px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #fff, #f59e0b, #ef4444);
+        box-shadow: 0 0 14px rgba(245,158,11,.8);
+        animation: deleteProjectile 1.1s linear both;
+    }
+    .delete-missile {
+        width: 38px;
+        height: 6px;
+        background: linear-gradient(90deg, #e0f2fe, #f97316, #ef4444);
+        animation-duration: 1.55s;
+    }
+    .delete-laser {
+        left: 50%;
+        top: 50%;
+        width: 34vw;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(224,242,254,0), #e0f2fe, #38bdf8);
+        box-shadow: 0 0 18px rgba(56,189,248,.95);
+        animation: deleteProjectile .42s linear both;
+    }
+    .delete-scatter {
+        left: 50%;
+        top: 50%;
+        width: 10px;
+        height: 4px;
+        border-radius: 999px;
+        background: #fde68a;
+        box-shadow: 0 0 10px rgba(245,158,11,.9);
+        animation: deleteProjectile .72s linear both;
+    }
+    .delete-impact {
+        left: 50%;
+        top: 50%;
+        width: 42px;
+        height: 42px;
+        margin: -21px 0 0 -21px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff 0 10%, #f59e0b 24%, rgba(239,68,68,.72) 42%, rgba(239,68,68,0) 70%);
+        filter: drop-shadow(0 0 20px rgba(239,68,68,.9));
+        animation: deleteImpact .48s ease-out both;
+    }
+    .delete-bolt {
+        left: 50%;
+        top: 50%;
+        width: 46vw;
+        height: 5px;
+        clip-path: polygon(0 50%, 12% 20%, 22% 64%, 34% 28%, 48% 72%, 62% 22%, 78% 62%, 100% 46%);
+        background: #e0f2fe;
+        filter: drop-shadow(0 0 18px rgba(56,189,248,.95));
+        animation: deleteLightning .72s steps(2,end) both;
+    }
+    .delete-warhead {
+        left: 50%;
+        top: 50%;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff7bb, #f59e0b 34%, #05070b 68%);
+        animation: deleteProjectile 2.1s cubic-bezier(.18,.66,.14,1) both;
+    }
+    .delete-shockwave {
+        left: 50%;
+        top: 50%;
+        width: 160px;
+        height: 160px;
+        margin: -80px 0 0 -80px;
+        border: 2px solid rgba(255,247,187,.88);
+        border-radius: 50%;
+        box-shadow: 0 0 80px rgba(245,158,11,.55);
+        animation: deleteShockwave 1.4s ease-out both;
+    }
+    @keyframes deleteShipOrbit {
+        0% { opacity: 0; transform: translate(calc(var(--ox) * 2.8), calc(var(--oy) * 2.4)) rotate(var(--a)) scale(.35); }
+        18% { opacity: 1; transform: translate(var(--ox), var(--oy)) rotate(var(--a)) scale(1); }
+        58% { opacity: 1; transform: translate(calc(var(--ox) * -1), calc(var(--oy) * -1)) rotate(var(--b)) scale(1); }
+        100% { opacity: 1; transform: translate(var(--ox), var(--oy)) rotate(var(--a)) scale(1); }
+    }
+    @keyframes deleteProjectile {
+        from { opacity: 0; transform: translate(var(--sx), var(--sy)) rotate(var(--a)) scaleX(.4); }
+        12%, 85% { opacity: 1; }
+        to { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--a)) scaleX(1.6); }
+    }
+    @keyframes deleteLightning {
+        0%, 100% { opacity: 0; }
+        20%, 48%, 76% { opacity: 1; }
+        34%, 62% { opacity: .24; }
+    }
+    @keyframes deleteImpact {
+        from { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(.2); }
+        to { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(2.8); }
+    }
+    @keyframes deleteShockwave {
+        from { opacity: 1; transform: scale(.2); }
+        to { opacity: 0; transform: scale(5); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .delete-ship,
+        .delete-bullet,
+        .delete-missile,
+        .delete-laser,
+        .delete-scatter,
+        .delete-impact,
+        .delete-bolt,
+        .delete-warhead,
+        .delete-shockwave {
+            animation: none !important;
+        }
+    }
+    /* canvas wrapper */
+    #viewer-wrap{
+        position:relative;
+        display:inline-block;
+        line-height:0;
+    }
+    /* 操作提示 */
+    #ctrl-hint{
+        position:absolute;
+        bottom:14px;
+        left:14px;
+        background:rgba(8,17,31,0.62);
+        backdrop-filter:blur(4px);
+        color:#94a3b8;
+        font-size:.72rem;
+        padding:5px 10px;
+        border-radius:8px;
+        border:1px solid rgba(148,163,184,0.14);
+        pointer-events:none;
+        transition:opacity .8s;
+        white-space:nowrap;
+        z-index:10;
+    }
+    /* 工具列 */
+    #viewer-toolbar{
+        position:absolute;
+        top:10px;
+        right:10px;
+        display:flex;
+        gap:6px;
+        z-index:10;
+    }
+    #viewer-toolbar .btn{
+        opacity:.88;
+        transition:opacity .15s;
+    }
+    #viewer-toolbar .btn:hover{
+        opacity:1;
+    }
+    #viewer-wrap.is-move-part-mode canvas{
+        cursor:grab;
+    }
+    #viewer-wrap.is-moving-part canvas{
+        cursor:grabbing;
+    }
+    #exposure-wrap, #explode-wrap{
+        display:flex;
+        align-items:center;
+        gap:5px;
+        background:rgba(8,17,31,0.70);
+        border:1px solid rgba(148,163,184,0.22);
+        border-radius:6px;
+        padding:3px 10px;
+        opacity:.88;
+    }
+    #exposure-icon{ font-size:.9rem; color:#fbbf24; line-height:1; }
+    #exposure-val, #explode-val{ font-size:.75rem; color:#cbd5e1; min-width:22px; text-align:right; }
+    #explode-icon{ font-size:.9rem; line-height:1; }
+    #exposure-slider, #explode-slider{
+        -webkit-appearance:none;
+        appearance:none;
+        width:80px;
+        height:4px;
+        border-radius:2px;
+        background:rgba(148,163,184,0.3);
+        outline:none;
+        cursor:pointer;
+    }
+    #exposure-slider::-webkit-slider-thumb, #explode-slider::-webkit-slider-thumb{
+        -webkit-appearance:none;
+        width:13px;
+        height:13px;
+        border-radius:50%;
+        background:#38bdf8;
+        cursor:pointer;
+    }
+    #exposure-slider::-moz-range-thumb, #explode-slider::-moz-range-thumb{
+        width:13px;
+        height:13px;
+        border-radius:50%;
+        background:#38bdf8;
+        border:none;
+        cursor:pointer;
+    }
+    /* 右側零件屬性面板 */
+    #part-info-panel{
+        position:absolute;
+        top:50px;
+        right:12px;
+        width:286px;
+        max-width:calc(100% - 24px);
+        max-height:calc(100% - 82px);
+        overflow:auto;
+        padding:12px 14px;
+        background:rgba(8,17,31,0.86);
+        border:1px solid rgba(251,191,36,0.48);
+        border-left:3px solid #fbbf24;
+        border-radius:8px;
+        box-shadow:0 12px 28px rgba(2,6,23,0.34);
+        backdrop-filter:blur(8px);
+        line-height:1.45;
+        text-align:left;
+        pointer-events:none;
+        z-index:11;
+    }
+    #part-info-panel .pi-kicker{
+        color:#fbbf24;
+        font-size:.68rem;
+        font-weight:700;
+        letter-spacing:.04em;
+        margin-bottom:4px;
+    }
+    #part-info-panel .pi-title{
+        color:#f8fafc;
+        font-size:.9rem;
+        font-weight:700;
+        word-break:break-word;
+    }
+    #part-info-panel .pi-sub{
+        color:#94a3b8;
+        font-size:.72rem;
+        margin-top:4px;
+        word-break:break-word;
+    }
+    #pi-fields{
+        margin-top:10px;
+        display:grid;
+        gap:6px;
+    }
+    #pi-fields .pi-row{
+        display:grid;
+        grid-template-columns:78px minmax(0, 1fr);
+        gap:8px;
+        align-items:start;
+        font-size:.73rem;
+    }
+    #pi-fields .pi-key{
+        color:#64748b;
+        white-space:nowrap;
+    }
+    #pi-fields .pi-val{
+        color:#cbd5e1;
+        word-break:break-word;
+    }
+    /* 模型資訊列 */
+    #model-info{
+        width:100%;
+        max-width:none;
+        box-sizing:border-box;
+        margin:10px 0 0 0;
+        padding:9px 16px;
+        background:rgba(15,23,42,0.70);
+        border:1px solid rgba(148,163,184,0.13);
+        border-radius:10px;
+        font-size:.78rem;
+        color:#94a3b8;
+        display:flex;
+        gap:18px;
+        flex-wrap:wrap;
+        align-items:center;
+    }
+    #model-info .mi-item{ display:flex; gap:5px; align-items:center; }
+    #model-info .mi-label{ color:#64748b; }
+    #model-info .mi-val{ color:#cbd5e1; font-weight:600; }
+    /* 全螢幕模式 */
+    #viewer-wrap:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #08111f;
+    }
+    #viewer-wrap:fullscreen .thecanvasClass {
+        max-width: 100vw;
+        max-height: 100vh;
+        width: 100vw !important;
+        height: 100vh !important;
+        border-radius: 0;
+    }
+    #viewer-wrap:fullscreen #viewer-toolbar {
+        top: 20px;
+        right: 20px;
+    }
+    #viewer-wrap:fullscreen #ctrl-hint {
+        bottom: 20px;
+        left: 20px;
+    }
+    #btn-fullscreen {
+        background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
+    }
+    #btn-fullscreen:hover {
+        background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(56, 189, 248, 0.35);
+    }
+    #btn-fullscreen:active {
+        transform: translateY(0);
+    }
+    html, body {
+        min-height: 100%;
+    }
+    body {
+        overflow: auto;
+    }
+    .step-workbench {
+        height: calc(100vh - 52px);
+        min-height: min(680px, 100vh);
+        display: grid;
+        grid-template-rows: 52px minmax(0, 1fr) 34px;
+        grid-template-columns: 320px minmax(520px, 1fr) 336px;
+        grid-template-areas:
+            "header header header"
+            "left viewer right"
+            "status status status";
+        gap: 10px;
+        padding: 10px;
+        box-sizing: border-box;
+        color: #dbe4f0;
+    }
+    .wb-header {
+        grid-area: header;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        padding: 0 12px;
+        background: rgba(8, 17, 31, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 8px;
+    }
+    .wb-brand {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        min-width: 0;
+    }
+    .wb-brand-title {
+        color: #f8fafc;
+        font-size: 1rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .wb-brand-sub {
+        color: #64748b;
+        font-size: .74rem;
+        white-space: nowrap;
+    }
+    .wb-file-state {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: #94a3b8;
+        font-size: .78rem;
+        flex: 1;
+    }
+    .wb-file-name {
+        max-width: 42vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #cbd5e1;
+    }
+    .wb-state-pill {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, .12);
+        border: 1px solid rgba(56, 189, 248, .24);
+        color: #7dd3fc;
+        white-space: nowrap;
+    }
+    .wb-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+    }
+    .wb-left {
+        grid-area: left;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 10px;
+    }
+    .wb-viewer {
+        grid-area: viewer;
+        min-width: 0;
+        min-height: 0;
+        position: relative;
+        background: #101827;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .wb-right {
+        grid-area: right;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: rgba(8, 17, 31, 0.86);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .wb-statusbar {
+        grid-area: status;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        min-width: 0;
+        padding: 0 12px;
+        background: rgba(8, 17, 31, 0.86);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 8px;
+        color: #94a3b8;
+        font-size: .74rem;
+        overflow: hidden;
+    }
+    .wb-statusbar span { white-space: nowrap; }
+    .wb-panel {
+        min-height: 0;
+        background: rgba(8, 17, 31, 0.84);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .wb-panel-head {
+        height: 38px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        color: #e2e8f0;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+    .wb-panel-body { padding: 12px; }
+    .wb-panel-body-scroll {
+        height: calc(100% - 38px);
+        overflow: auto;
+        padding: 10px;
+    }
+    .wb-left .drop-zone {
+        width: auto;
+        max-width: none;
+        margin: 0;
+        min-height: 86px;
+        padding: 12px;
+        border-radius: 8px;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .wb-left #convert-panel {
+        width: auto !important;
+        max-width: none !important;
+        margin: 10px 0 0 0 !important;
+        padding: 14px !important;
+        border-radius: 8px !important;
+    }
+    #viewer-wrap {
+        width: 100%;
+        height: 100%;
+        display: block;
+        position: relative;
+        line-height: 0;
+        background:
+            linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+            #121a2b;
+        background-size: 36px 36px;
+    }
+    .thecanvasClass {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: none;
+        border-radius: 0;
+    }
+    .wb-empty-state {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        color: #64748b;
+        text-align: center;
+        line-height: 1.6;
+        z-index: 1;
+    }
+    .wb-empty-state strong {
+        display: block;
+        color: #cbd5e1;
+        font-size: 1rem;
+    }
+    #part-info-panel {
+        position: static;
+        display: block;
+        width: auto;
+        max-width: none;
+        max-height: none;
+        height: 100%;
+        overflow: auto;
+        padding: 12px 14px;
+        border: 0;
+        border-left: 3px solid #fbbf24;
+        border-radius: 0;
+        pointer-events: auto;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        line-height: 1.45;
+        text-align: left;
+    }
+    .part-structure-tools {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    #part-search {
+        width: 100%;
+        min-width: 0;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(15, 23, 42, 0.8);
+        color: #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: .78rem;
+    }
+    .part-structure-list { display: grid; gap: 4px; }
+    .part-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) repeat(3, 26px);
+        gap: 4px;
+        align-items: center;
+        min-height: 30px;
+        padding: 3px;
+        border-radius: 6px;
+        color: #cbd5e1;
+        font-size: .74rem;
+    }
+    .part-row:hover, .part-row.is-active { background: rgba(56, 189, 248, 0.1); }
+    .part-row.is-hidden { opacity: .45; }
+    .part-row-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .part-row button {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 5px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.72);
+        color: #94a3b8;
+        line-height: 1;
+    }
+    .part-row button:hover {
+        color: #f8fafc;
+        border-color: rgba(56, 189, 248, 0.45);
+    }
+    .inspector-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .ghost-controls {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    @media (max-width: 1180px) {
+        body { overflow: auto; }
+        .step-workbench {
+            height: auto;
+            min-height: 100vh;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: auto auto minmax(520px, 70vh) auto auto;
+            grid-template-areas:
+                "header"
+                "left"
+                "viewer"
+                "right"
+                "status";
+        }
+        .wb-left { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body id="thebody">
+<noscript>
+  <div style="position:fixed;width:100%;height:100%;line-height:100%;text-align:center;font-size:2em;opacity:0.5;background-color:black;color:red;z-index:5000;"></div>
+  <div style="width:100%;height:100%;position:fixed;z-index:5001;">
+    <table border="1" style="width:100%;height:100%;font-size:2em;background-color:black;color:red;">
+      <tr>
+        <td align="center">
+          本站一定要打開 javascript 才可以正常瀏覽呦        </td>
+      </tr>
+    </table>
+  </div>
+</noscript>
+
+<script>
+  //3WA 看板娘
+  //外部引用
+  //  if( ""==""){
+    //setTimeout(function(){
+        //$("<script>").attr('src',"https://3wa.tw/inc/javascript/live2d_demo/assets/autoload.js").appendTo("body");
+     // },100);
+  //  }
+</script>
+
+
+<div class="navbar navbar-inverse" role="navigation" reqc='3wa上方標題'>
+  <div class="container-fluid">
+    <div class="navbar-header">      
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">        
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand mb-0" href="https://3wa.tw" style="text-decoration:none;"><img src="https://3wa.tw/pic/3wa_logo.png" alt="3WA問題解決專家工作室" style="width:35px;height:35px;position:relative;bottom:10px;left:-10px;display:inline;">3WA問題解決專家工作室</a>
+    </div>
+    
+    <div class="collapse navbar-collapse">
+      <ul class="nav navbar-nav navbar-right">
+                  <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">首頁</a>
+            <ul class="dropdown-menu">
+                                
+                        <li><a href="https://3wa.tw" style=""  title="首頁" alt="首頁">首頁</a></li>
+                                        
+                        <li><a href="https://3wa.tw/profile" style=""  title="自我介紹" alt="自我介紹">自我介紹</a></li>
+                                  </ul>
+          </li>
+                    <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">網站服務項目</a>
+            <ul class="dropdown-menu">
+                                
+                        <li><a href="https://3wa.tw/blog" style=""  title="BLOG" alt="BLOG">BLOG</a></li>
+                                          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">開放源始碼</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/htm/db_dumper" title="db_dumper 資料結構匯出機" alt="db_dumper 資料結構匯出機">db_dumper 資料結構匯出機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/mybox" title="mybox 哥的光箱" alt="mybox 哥的光箱">mybox 哥的光箱</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/myVideo" title="myVideo 哥的播放機" alt="myVideo 哥的播放機">myVideo 哥的播放機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/uclliu" title="肥米輸入法(Python)" alt="肥米輸入法(Python)">肥米輸入法(Python)</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/uclliu_CSharp" title="肥米輸入法(C#)" alt="肥米輸入法(C#)">肥米輸入法(C#)</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/myclip" title="畫面選擇器1" alt="畫面選擇器1">畫面選擇器1</a></li>
+                                                
+                          <li><a href="https://3wa.tw/inc/javascript/jquery/jquery.annotation/sample.html" title="畫面選擇器2(改寫)" alt="畫面選擇器2(改寫)">畫面選擇器2(改寫)</a></li>
+                                                </ul>
+                    </li>
+                                      
+                        <li><a href="https://3wa.tw/fzers/DAYRUNTIGER" style=""  title="虎大FZR相簿" alt="虎大FZR相簿">虎大FZR相簿</a></li>
+                                          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">轉檔服務</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/php/image_beautiful" title="我的圖片加工" alt="我的圖片加工">我的圖片加工</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/ai_video" title="我的影像清晰機" alt="我的影像清晰機">我的影像清晰機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/youtube" title="Youtube 影片下載機" alt="Youtube 影片下載機">Youtube 影片下載機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/fb_video" title="Facebook 影片下載機" alt="Facebook 影片下載機">Facebook 影片下載機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/qrcode_encode" title="QRCODE 產生器" alt="QRCODE 產生器">QRCODE 產生器</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/tts/google.php" title="Google 文字轉語音" alt="Google 文字轉語音">Google 文字轉語音</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/pdf_convert" title="PDF線上轉檔機" alt="PDF線上轉檔機">PDF線上轉檔機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/pdf2html" title="PDF To HTML 線上轉檔機" alt="PDF To HTML 線上轉檔機">PDF To HTML 線上轉檔機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/odt_convert" title="ODT線上轉檔機" alt="ODT線上轉檔機">ODT線上轉檔機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/csv_to_sqlite" title="CSV轉SQLite" alt="CSV轉SQLite">CSV轉SQLite</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/timeout_exec" title="檔案時限器" alt="檔案時限器">檔案時限器</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/3D/gltftodracoglb" title="Draco GLB" alt="Draco GLB">Draco GLB</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/3D/jpgtoglb" title="圖片或影片轉 3D 模型 Draco GLB" alt="圖片或影片轉 3D 模型 Draco GLB">圖片或影片轉 3D 模型 Draco GLB</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/3D/rvtto3dtiles/web/upload_bim.php" title="BIM Ifc 轉 glb、 3dtiles" alt="BIM Ifc 轉 glb、 3dtiles">BIM Ifc 轉 glb、 3dtiles</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">資安相關</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/myapache_banip/mybanip.php" title="防火牆設置清單" alt="防火牆設置清單">防火牆設置清單</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">AI 相關</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/myai/yolo" title="Yolo" alt="Yolo">Yolo</a></li>
+                                                
+                          <li><a href="https://3wa.tw/myai/sam3" title="sam3語意分割" alt="sam3語意分割">sam3語意分割</a></li>
+                                                
+                          <li><a href="https://3wa.tw/myai/mytree" title="我的點樹精靈" alt="我的點樹精靈">我的點樹精靈</a></li>
+                                                
+                          <li><a href="https://3wa.tw/myai/myai_voice/test_voice.php" title="MyAI Voice 即時語音辨識測試" alt="MyAI Voice 即時語音辨識測試">MyAI Voice 即時語音辨識測試</a></li>
+                                                
+                          <li><a href="https://3wa.tw/myai/myocr" title="圖片 OCR 處理平台" alt="圖片 OCR 處理平台">圖片 OCR 處理平台</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">OCR</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/php/ocr_projects/postgov/" title="郵局包裏查詢" alt="郵局包裏查詢">郵局包裏查詢</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/ocr_projects/711/" title="7-11 包裏查詢" alt="7-11 包裏查詢">7-11 包裏查詢</a></li>
+                                                  <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">火車訂票</a>
+                          <ul class="dropdown-menu">
+                                              
+                            <li><a href="https://3wa.tw/demo/php/ocr_projects/railway_ocr_v1.0/" title="火車訂票-V1.0" alt="火車訂票-V1.0">火車訂票-V1.0</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/php/ocr_projects/railway_ocr_v1.1/" title="火車訂票-V1.1" alt="火車訂票-V1.1">火車訂票-V1.1</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/php/ocr_projects/railway_ocr_v1.2/" title="火車訂票-V1.2" alt="火車訂票-V1.2">火車訂票-V1.2</a></li>
+                                                      </ul>
+                        </li>
+                                              
+                          <li><a href="https://3wa.tw/demo/php/ocr_projects/ocr_face" title="人臉偵測系統" alt="人臉偵測系統">人臉偵測系統</a></li>
+                                                </ul>
+                    </li>
+                                      
+                        <li><a href="https://3wa.tw/demo/php/mesi" style="display:none;"  title="名片機" alt="名片機">名片機</a></li>
+                                        
+                        <li><a href="https://3wa.tw/chat" style=""  title="聊天室" alt="聊天室">聊天室</a></li>
+                                        
+                        <li><a href="https://3wa.tw/demo/php/connection" style=""  title="3WA網路狀況" alt="3WA網路狀況">3WA網路狀況</a></li>
+                                        
+                        <li><a href="https://3wa.tw/mycanvas" style=""  title="CANVAS畫板" alt="CANVAS畫板">CANVAS畫板</a></li>
+                                          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">地圖工具</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/mymap" title="我的地圖" alt="我的地圖">我的地圖</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/mymap_new/index_db.php" title="我的向量地圖" alt="我的向量地圖">我的向量地圖</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/coord" title="坐標轉換工具" alt="坐標轉換工具">坐標轉換工具</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/lat_lng_change" title="批次坐標轉換工具" alt="批次坐標轉換工具">批次坐標轉換工具</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/address_to_map/" title="批次地址轉坐標" alt="批次地址轉坐標">批次地址轉坐標</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/map-snapshot-service/" title="地圖截圖服務" alt="地圖截圖服務">地圖截圖服務</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/taiwan_dem_height" title="全臺地形高 20M DEM 查詢" alt="全臺地形高 20M DEM 查詢">全臺地形高 20M DEM 查詢</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/map/routing_path/" title="路線規劃" alt="路線規劃">路線規劃</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">3D相關</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/htm/step_threejs/" title="step stp 線上瀏覽機" alt="step stp 線上瀏覽機">step stp 線上瀏覽機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/map/3D/glbs/" title="glb gltf bin obj 模型測試平台" alt="glb gltf bin obj 模型測試平台">glb gltf bin obj 模型測試平台</a></li>
+                                                  <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">Cesium作品</a>
+                          <ul class="dropdown-menu">
+                                              
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/terrain_demo/" title="地形範例" alt="地形範例">地形範例</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/building_demo" title="建物範例" alt="建物範例">建物範例</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/rainfall/rain_demo.htm" title="下雨效果" alt="下雨效果">下雨效果</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/easymap7116_maplibre_fluid-sph-cesium-v9/" title="台中市烏雲下雨淹水效果" alt="台中市烏雲下雨淹水效果">台中市烏雲下雨淹水效果</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/waterfloor/" title="淹水測試" alt="淹水測試">淹水測試</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/forest_fire/" title="森林大火測試" alt="森林大火測試">森林大火測試</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/easymap7116_maplibre_fluid-sph-cesium-v7/" title="馬太鞍溪堰塞湖土石流模擬" alt="馬太鞍溪堰塞湖土石流模擬">馬太鞍溪堰塞湖土石流模擬</a></li>
+                                                  
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/easymap7116_maplibre_fluid-sph-cesium-v8/" title="GPU大自然的水龍頭-自然流水" alt="GPU大自然的水龍頭-自然流水">GPU大自然的水龍頭-自然流水</a></li>
+                                                      </ul>
+                        </li>
+                                                <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">threejs 作品</a>
+                          <ul class="dropdown-menu">
+                                              
+                            <li><a href="https://3wa.tw/demo/htm/map/3D/fluid-sandbox/" title="流體沙盤-By Rickz" alt="流體沙盤-By Rickz">流體沙盤-By Rickz</a></li>
+                                                      </ul>
+                        </li>
+                                              </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">小遊戲</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/htm/game/1010" title="1010" alt="1010">1010</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/random75/random75" title="亂數75" alt="亂數75">亂數75</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/ox/ox.php" title="OX" alt="OX">OX</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/minesweeper" title="踩地雷" alt="踩地雷">踩地雷</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/japan_game" title="日文５０音練習" alt="日文５０音練習">日文５０音練習</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/guess_different_color" title="按顏色" alt="按顏色">按顏色</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/map/3D/earth_satellite/" title="衛星繞地球展示" alt="衛星繞地球展示">衛星繞地球展示</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/game/tt/" title="英打練習機" alt="英打練習機">英打練習機</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">大數據練習</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/php/word/same_words.php?id=1" title="文字分詞" alt="文字分詞">文字分詞</a></li>
+                                                </ul>
+                    </li>
+                                        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">翻譯功能</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/myspeaker" title="轉檔碎碎念" alt="轉檔碎碎念">轉檔碎碎念</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/google_translate" title="翻譯機" alt="翻譯機">翻譯機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/my_recon_voice" title="神奇的語音輸入" alt="神奇的語音輸入">神奇的語音輸入</a></li>
+                                                </ul>
+                    </li>
+                                      
+                        <li><a href="https://3wa.tw/talk_board" style=""  title="留言板" alt="留言板">留言板</a></li>
+                                          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">車輛查詢</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/php/npa/jrsskm.php" title="排氣檢測" alt="排氣檢測">排氣檢測</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/php/bike/qehokmgp.php" title="車輛里程" alt="車輛里程">車輛里程</a></li>
+                                                </ul>
+                    </li>
+                                      
+                        <li><a href="https://3wa.tw/url" style=""  title="縮址" alt="縮址">縮址</a></li>
+                                          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">網頁相關</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/demo/htm/test_javascript.php" title="測試 javascript" alt="測試 javascript">測試 javascript</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/web_demo/" title="網頁樣版機" alt="網頁樣版機">網頁樣版機</a></li>
+                                                
+                          <li><a href="https://3wa.tw/demo/htm/beautiful_json" title="JSON 縮排、反縮排工具" alt="JSON 縮排、反縮排工具">JSON 縮排、反縮排工具</a></li>
+                                                </ul>
+                    </li>
+                                </ul>
+          </li>
+                    <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">相簿與影片</a>
+            <ul class="dropdown-menu">
+                                
+                        <li><a href="https://3wa.tw/photo" style=""  title="相簿" alt="相簿">相簿</a></li>
+                                        
+                        <li><a href="https://3wa.tw/video" style=""  title="影片" alt="影片">影片</a></li>
+                                  </ul>
+          </li>
+                    <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">我的賣場</a>
+            <ul class="dropdown-menu">
+                                
+                        <li><a href="https://3wa.tw/bid" style=""  title="羽山的小賣部" alt="羽山的小賣部">羽山的小賣部</a></li>
+                                  </ul>
+          </li>
+                    <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">紀錄資料</a>
+            <ul class="dropdown-menu">
+                                  <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">筆記</a>
+                      <ul class="dropdown-menu">
+                                          
+                          <li><a href="https://3wa.tw/mypaper" title="快寫筆記" alt="快寫筆記">快寫筆記</a></li>
+                                                
+                          <li><a href="https://3wa.tw/myimage" title="新版快寫筆記" alt="新版快寫筆記">新版快寫筆記</a></li>
+                                                </ul>
+                    </li>
+                                </ul>
+          </li>
+                    <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">網站語言</a>
+            <ul class="dropdown-menu">
+                                
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('zh_TW');"  title="正體中文" alt="正體中文">正體中文</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('zh_CN');"  title="简体中文" alt="简体中文">简体中文</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('en');"  title="English" alt="English">English</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('ja');"  title="日本語" alt="日本語">日本語</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('ko');"  title="한국어" alt="한국어">한국어</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('es');"  title="Spanish" alt="Spanish">Spanish</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('vi');"  title="Việt" alt="Việt">Việt</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('th');"  title="ภาษาไทย" alt="ภาษาไทย">ภาษาไทย</a></li>
+                                        
+                        <li><a href="javascript:;" style=""  onClick="setLanguage('it');"  title="Italiano" alt="Italiano">Italiano</a></li>
+                                  </ul>
+          </li>
+                      <li><a href="https://3wa.tw/login.php" title="登入" alt="登入">登入</a></li>
+                    <!--
+        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">首頁</a>
+          <ul class="dropdown-menu">
+            <li><a href="https://3wa.tw">首頁</a></li>
+            <li><a href="https://3wa.tw/profile/">自我介紹</a></li>
+          </ul>
+        </li>
+        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">網站服務項目</a>
+          <ul class="dropdown-menu">
+          <li><a href="https://3wa.tw/blog/">BLOG</a></li>
+          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">開放源始碼</a>
+            <ul class="dropdown-menu">
+              <li><a href="https://3wa.tw/demo/htm/db_dumper/">db_dumper 資料結構匯出機</a></li>
+              <li><a href="https://3wa.tw/demo/htm/mybox/">mybox 哥的光箱</a></li>
+              <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">次次選單3</a>
+              <ul class="dropdown-menu">
+                <li><a href="#">次次次選單1</a></li>
+                <li><a href="#">次次次選單2</a></li>
+              </ul>
+              </li>
+            </ul>
+          </li>
+          <li><a href="#">次選單3</a></li>
+          </ul>
+        </li>
+        -->
+        <!--
+        <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">網站服務項目</a>
+          <ul class="dropdown-menu">
+          <li><a href="https://3wa.tw/blog/">BLOG</a></li>
+          <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">開放源始碼</a>
+            <ul class="dropdown-menu">
+              <li><a href="#">次次選單1</a></li>
+              <li><a href="#">次次選單2</a></li>
+              <li class="dropdown-submenu"><a href="#" data-toggle="dropdown">次次選單3</a>
+              <ul class="dropdown-menu">
+                <li><a href="#">次次次選單1</a></li>
+                <li><a href="#">次次次選單2</a></li>
+              </ul>
+              </li>
+            </ul>
+          </li>
+          <li><a href="#">次選單3</a></li>
+          </ul>
+        </li>
+        
+        <li><a href="#">選單3</a></li>
+        <li><a href="#">選單4</a></li>
+        -->
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+<script language="javascript">
+  function setLanguage(value)
+  {
+    $.cookie('USER_LANG', value, {expires: 7,path: '/'});
+    location.reload();
+  } 
+</script> 
+
+
+<script src="inc/function.js"></script>
+<script src="/inc/javascript/three.js/r155/RGBELoader.js"></script>
+<script src="/inc/javascript/three.js/r155/TrackballControls.js"></script>
+
+<main id="step-workbench" class="step-workbench">
+  <header class="wb-header">
+    <div class="wb-brand">
+      <div class="wb-brand-title">STEP 3D Workbench</div>
+      <div class="wb-brand-sub">STEP / STP / IGES Viewer</div>
+    </div>
+    <div class="wb-file-state">
+      <span class="wb-state-pill" id="wb-status-state">已完成</span>
+      <span class="wb-file-name" id="wb-current-file">00_vr_outlook_20260715.stp</span>
+    </div>
+    <div class="wb-actions">
+          </div>
+  </header>
+
+  <aside class="wb-left" id="workbench-left">
+    <section class="wb-panel">
+      <div class="wb-panel-head">
+        <span>匯入模型</span>
+        <span class="text-muted">Private</span>
+      </div>
+      <div class="wb-panel-body">
+        <input type="password" id="form_del_pwd" name="del_pwd" reqc="form_del_pwd" autocomplete="new-password" required minlength="1" maxlength="10" placeholder="輸入密碼，以便刪除" class="delete-pwd-input">
+        <div class="drop-zone" id="dropZone">
+          <span class="dz-icon">📂</span>
+          <span class="dz-label">拖曳 <strong>.step</strong> / <strong>.stp</strong> / <strong>.igs</strong> 到此，或<strong>點此選擇</strong></span>
+          <span class="dz-selected" id="dzSelected" style="display:none;"></span>
+          <input type="file" id="upfileInput" name="upfile" reqc="upfile" accept="application/STEP,.step,.stp,.igs,.iges" style="display:none;">
+        </div>
+
+        <div id="convert-panel" style="display:none;">
+          <div style="font-size:.86rem; font-weight:700; color:#e2e8f0; margin-bottom:10px;">轉檔進行中</div>
+          <div id="cp-url-hint" style="display:none; margin-bottom:10px; padding:8px 10px; background:rgba(56,189,248,0.07); border:1px solid rgba(56,189,248,0.25); border-radius:8px; font-size:.76rem; color:#94a3b8;">
+            <strong style="color:#e2e8f0;">大檔轉換需時較長</strong><br>
+            <span style="color:#38bdf8; word-break:break-all;" id="cp-current-url"></span>
+          </div>
+          <div style="background:rgba(8,17,31,0.7); border-radius:8px; overflow:hidden; margin-bottom:10px; height:8px;">
+            <div id="cp-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#0284c7,#38bdf8); transition:width .4s;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span id="cp-msg" style="color:#94a3b8; font-size:.78rem;">等待中...</span>
+            <span id="cp-pct" style="color:#38bdf8; font-size:.8rem; font-weight:700;">0%</span>
+          </div>
+          <div id="cp-eta" style="color:#64748b; font-size:.74rem; margin-bottom:8px;"></div>
+          <div id="cp-steps" style="display:flex; flex-wrap:wrap; gap:5px;">
+                        <div class="cp-step" data-step="1" style="padding:3px 8px; border-radius:20px; font-size:.68rem; background:rgba(30,41,59,0.8); border:1px solid rgba(148,163,184,0.15); color:#64748b;">解析 STEP</div>
+                        <div class="cp-step" data-step="2" style="padding:3px 8px; border-radius:20px; font-size:.68rem; background:rgba(30,41,59,0.8); border:1px solid rgba(148,163,184,0.15); color:#64748b;">轉換網格</div>
+                        <div class="cp-step" data-step="3" style="padding:3px 8px; border-radius:20px; font-size:.68rem; background:rgba(30,41,59,0.8); border:1px solid rgba(148,163,184,0.15); color:#64748b;">載入資料</div>
+                        <div class="cp-step" data-step="4" style="padding:3px 8px; border-radius:20px; font-size:.68rem; background:rgba(30,41,59,0.8); border:1px solid rgba(148,163,184,0.15); color:#64748b;">匯出 GLB</div>
+                        <div class="cp-step" data-step="5" style="padding:3px 8px; border-radius:20px; font-size:.68rem; background:rgba(30,41,59,0.8); border:1px solid rgba(148,163,184,0.15); color:#64748b;">DRACO 壓縮</div>
+                      </div>
+          <div id="cp-typewriter" style="margin-top:10px; padding:8px 10px; background:rgba(2,6,23,0.55); border-left:2px solid rgba(56,189,248,0.35); border-radius:0 6px 6px 0; font-family:monospace; font-size:.72rem; color:#7dd3fc; min-height:3em; line-height:1.6;"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wb-panel">
+      <div class="wb-panel-head">
+        <span>模型結構</span>
+        <button type="button" class="btn btn-xs btn-default" id="btn-restore-focus">還原</button>
+      </div>
+      <div class="wb-panel-body-scroll">
+        <div class="part-structure-tools">
+          <input type="search" id="part-search" aria-label="搜尋零件或 layer">
+        </div>
+        <div class="ghost-controls" aria-label="隔離透明度">
+          <button type="button" class="btn btn-xs btn-default js-ghost-opacity" data-opacity="0">0%</button>
+          <button type="button" class="btn btn-xs btn-info js-ghost-opacity" data-opacity="0.15">15%</button>
+          <button type="button" class="btn btn-xs btn-default js-ghost-opacity" data-opacity="0.35">35%</button>
+        </div>
+        <div id="part-structure-empty" class="small text-muted" style="margin-top:10px;">載入模型後會顯示零件結構。</div>
+        <div id="part-structure-list" class="part-structure-list" style="margin-top:10px;"></div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="wb-viewer">
+    <div id="viewer-wrap">
+      <div id="wb-empty-state" class="wb-empty-state">
+        <div>
+          <strong>拖曳 STEP / STP / IGES 開始檢視</strong>
+          <span>模型會在這裡以滿版 CAD workspace 顯示</span>
+        </div>
+      </div>
+      <div id="glb-dl-overlay" style="display:none; position:absolute; inset:0; background:rgba(10,15,30,0.90); z-index:20; flex-direction:column; align-items:center; justify-content:center; gap:18px; backdrop-filter:blur(5px);">
+        <div style="color:#e2e8f0; font-size:.93rem; font-weight:600; letter-spacing:.03em;">正在下載 3D 模型…</div>
+        <div style="width:300px; background:rgba(30,41,59,0.85); border-radius:4px; overflow:hidden; height:6px; border:1px solid rgba(56,189,248,0.18);">
+          <div id="glb-dl-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#0284c7,#38bdf8); transition:width .35s ease;"></div>
+        </div>
+        <div style="display:flex; gap:14px; align-items:center; font-size:.8rem;">
+          <span id="glb-dl-loaded" style="color:#7dd3fc; font-family:monospace;">0 B</span>
+          <span style="color:#334155;">/</span>
+          <span id="glb-dl-total" style="color:#64748b; font-family:monospace;">計算中…</span>
+          <span id="glb-dl-pct" style="color:#38bdf8; font-weight:700; min-width:46px; text-align:right; font-family:monospace;">0%</span>
+        </div>
+      </div>
+      <div id="ctrl-hint">左鍵旋轉 ｜ 右鍵平移 ｜ WASD 前後左右 ｜ Q/E 上下 ｜ 滾輪縮放</div>
+      <div class="delete-fail-overlay" id="delete-fail-overlay">
+        <div class="delete-fail-card">
+          <strong>密碼錯誤</strong>
+          <span id="delete-fail-meta">IP — / 失敗次數 —</span>
+        </div>
+      </div>
+      <div class="delete-ritual" id="delete-ritual" aria-hidden="true">
+        <div class="delete-comms">
+          <span id="delete-comms-speaker">SECURE DELETE</span>
+          <strong id="delete-comms-text">大型目標確認，鏡頭拉遠。</strong>
+        </div>
+        <div class="delete-ships" id="delete-ships"></div>
+        <div class="delete-bullets" id="delete-bullets"></div>
+        <div class="delete-missiles" id="delete-missiles"></div>
+        <div class="delete-lightning" id="delete-lightning"></div>
+        <div class="delete-nuke" id="delete-nuke"></div>
+        <div class="delete-countdown" id="delete-countdown">5</div>
+      </div>
+      <div id="viewer-toolbar">
+        <button id="btn-delete-model" class="btn btn-danger btn-sm" title="刪除本筆資料">刪除</button>        <button id="btn-reset" class="btn btn-default btn-sm" title="重設視角">⟳ 重設視角</button>
+        <button id="btn-move-part" class="btn btn-default btn-sm" title="開啟後可拖移選取零件" aria-pressed="false">↔ 移動零件</button>
+        <button id="btn-wire" class="btn btn-info btn-sm" title="切換線框模式">▦ 線框</button>
+        <div id="exposure-wrap" title="亮度調整">
+          <span id="exposure-icon">☀</span>
+          <input type="range" id="exposure-slider" min="10" max="300" value="50" step="5">
+          <span id="exposure-val">0.5</span>
+        </div>
+        <div id="explode-wrap" title="爆炸視圖" style="display:none;">
+          <span id="explode-icon">💥</span>
+          <input type="range" id="explode-slider" min="0" max="300" value="0" step="5">
+          <span id="explode-val">0</span>
+        </div>
+        <button id="btn-fullscreen" class="btn btn-primary btn-sm" title="全螢幕切換">⛶ 全螢幕</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="wb-right" id="workbench-right">
+    <div class="wb-panel-head">
+      <span>屬性 Inspector</span>
+      <button type="button" class="btn btn-xs btn-default" id="btn-clear-selection">清除選取</button>
+    </div>
+    <div id="part-info-panel">
+      <div class="pi-kicker" id="pi-mode">模型總覽</div>
+      <div class="pi-title" id="pi-title"></div>
+      <div class="pi-sub" id="pi-path"></div>
+      <div class="inspector-actions" id="pi-actions" style="display:none;">
+        <button type="button" class="btn btn-xs btn-info" data-part-action="locate">定位</button>
+        <button type="button" class="btn btn-xs btn-warning" data-part-action="isolate">隔離</button>
+        <button type="button" class="btn btn-xs btn-default" data-part-action="pull">拉出</button>
+        <button type="button" class="btn btn-xs btn-default" data-part-action="restore">還原</button>
+      </div>
+      <div id="pi-fields"></div>
+    </div>
+  </aside>
+
+  <footer class="wb-statusbar" id="workbench-statusbar">
+    <span>尺寸 <strong id="wb-status-size">—</strong></span>
+    <span>Mesh <strong id="wb-status-mesh">—</strong></span>
+    <span>檔案 <strong id="wb-status-file-size">—</strong></span>
+    <span>選取 <strong id="wb-status-part">—</strong></span>
+    <span>模式 <strong id="wb-status-mode">Normal</strong></span>
+  </footer>
+</main>
+<div id="model-info" style="display:none; position:absolute; width:0; height:0; overflow:hidden; padding:0; border:0; background:transparent; pointer-events:none; opacity:0;">
+  <span id="mi-name">—</span>
+  <span id="mi-fmt">—</span>
+  <span id="mi-size">—</span>
+</div>
+    <script>
+        var GETS = getGET();
+        var loadfile = "1699";
+        var loadfileToken = "REDACTED";
+        window.stepThreejsDeleteConfig = {
+            canDelete: true,
+            fileNotFound: false,
+            fileToken: loadfileToken,
+            passwordKey: "step_threejs_del_pwd_v1",
+            deleteText: {"failedAttempts":"失敗次數","tacticalBattle":"鏡頭拉遠，確認目標外型與攻擊機相對位置。","tacticalFallback":"安全刪除程序執行中，請稍候。","weaponsBattle":"連發子彈、雷射、散彈、追蹤彈全部開火。","weaponsFallback":"刪除程序仍在背景完成。","missileLock":"追蹤彈鎖定，雷電武器充能。","dataPurge":"資料碎片化中，燃燒與煙霧覆蓋。","complete":"刪除完成，殘骸歸零。","responseError":"刪除回應格式錯誤，請稍後再試","deleted":"資料已刪除，請您放心。","passwordError":"密碼錯誤","close":"關閉","dialogTitle":"刪除本筆資料","passwordPlaceholder":"刪除用密碼","confirm":"確認刪除","notFound":"查無此資料，已回首頁"}        };
+        var previewInfo = {"format":"glb","path":"\/var\/www\/html\/demo\/htm\/step_threejs\/uploads\/1699\/1699.glb","url":"uploads\/1699\/1699.glb","size":14675044,"glb_exists":true,"glb_url":"uploads\/1699\/1699.glb","glb_size":14675044,"metadata_url":"uploads\/1699\/1699_metadata.json?v=1784481336-1784035294","gltf_exists":true,"gltf_url":"uploads\/1699\/1699.gltf","gltf_size":1363281,"stl_exists":false,"stl_url":"","stl_size":0};
+        var orinFilename = "00_vr_outlook_20260715.stp";
+        var viewDbStatus = 2;
+        var cpHistoEta   = 0;  // 歷史平均秒數，0 表示無資料
+        var currentGlbUrl = previewInfo.glb_url || '';
+
+        function wbSetText(id, value) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = (value === null || value === undefined || value === '') ? '—' : String(value);
+        }
+
+        function wbSetMode(mode) {
+            wbSetText('wb-status-mode', mode || 'Normal');
+        }
+
+        function wbSetCurrentFile(name) {
+            wbSetText('wb-current-file', name || "\u5c1a\u672a\u8f09\u5165\u6a94\u6848");
+        }
+
+        var workbenchStateOverride = '';
+
+        function wbSetState(state) {
+            wbSetText('wb-status-state', state || "\u5f85\u4e0a\u50b3");
+        }
+
+        function setWorkbenchFlowState(state) {
+            workbenchStateOverride = state || '';
+            wbSetState(state);
+        }
+
+        function updateWorkbenchStats(name, fmt, obj) {
+            wbSetCurrentFile(name || orinFilename || previewInfo.url || "\u5c1a\u672a\u8f09\u5165\u6a94\u6848");
+            var fallbackState = viewDbStatus === 1 ? "\u8655\u7406\u4e2d" : (obj ? "\u5df2\u5b8c\u6210" : "\u5f85\u4e0a\u50b3");
+            wbSetState(workbenchStateOverride || fallbackState);
+            wbSetText('wb-status-file-size', activeModelSizeLabel || '—');
+            if (obj) {
+                var box = new THREE.Box3().setFromObject(obj);
+                var s = box.getSize(new THREE.Vector3());
+                wbSetText('wb-status-size', s.x.toFixed(2) + ' × ' + s.y.toFixed(2) + ' × ' + s.z.toFixed(2));
+                var meshCount = 0;
+                obj.traverse(function(o) { if (o.isMesh) meshCount++; });
+                wbSetText('wb-status-mesh', meshCount || '—');
+            } else {
+                wbSetText('wb-status-size', '—');
+                wbSetText('wb-status-mesh', '—');
+            }
+        }
+
+        // ── 轉檔進度輪詢 ──────────────────────────────────────────
+        var cpPollTimer = null;
+        var cpStepNames = ["\u89e3\u6790 STEP","\u8f49\u63db\u7db2\u683c","\u8f09\u5165\u8cc7\u6599","\u532f\u51fa GLB","DRACO \u58d3\u7e2e"];
+        var cpLastStep = -1;
+        var cpStartTime = null;
+        var cpFailCount = 0;
+
+        function cpFormatEta(sec) {
+            sec = Math.round(sec);
+            if (sec <= 0) return "\u5373\u5c07\u5b8c\u6210...";
+            if (sec < 60) return "\u7d04" + ' ' + sec + ' ' + "\u79d2";
+            return "\u7d04" + ' ' + Math.floor(sec / 60) + ' ' + "\u5206" + ' ' + (sec % 60) + ' ' + "\u79d2";
+        }
+        var cpStepHints = {
+            0: ["> \u7b49\u5f85 Python \u555f\u52d5\u4e2d...", "> \u7cfb\u7d71\u6b63\u5728\u521d\u59cb\u5316\u8f49\u63db\u74b0\u5883\uff0c\u8acb\u7a0d\u5019\u3002"],
+            1: ["> \u89e3\u6790 STEP\/STP \u5e7e\u4f55\u7d50\u69cb...", "> \u8b80\u53d6 BRep \u908a\u754c\u8868\u793a\u3001\u66f2\u9762\u5b9a\u7fa9\u8207\u5be6\u9ad4\u95dc\u4fc2\u3002", "> \u6a94\u6848\u8d8a\u8907\u96dc\u3001\u5be6\u9ad4\u8d8a\u591a\uff0c\u9019\u6b65\u8d8a\u8017\u6642\uff0c\u8acb\u6709\u8010\u5fc3 :)"],
+            2: ["> \u5206\u96e2\u5404\u500b Solid \u96f6\u4ef6\u4e26\u8f38\u51fa\u4e09\u89d2\u7db2\u683c...", "> \u6bcf\u500b Solid \u7368\u7acb\u8f38\u51fa STL\uff0c\u4fdd\u7559\u7206\u70b8\u8996\u5716\u6240\u9700\u7684\u96f6\u4ef6\u7d50\u69cb\u3002", "> \u591a\u96f6\u4ef6\u7d44\u88dd\u6a94\u5728\u6b64\u6b65\u9a5f\u9700\u8981\u8f03\u9577\u6642\u9593\uff0c\u8acb\u7a0d\u7b49\u3002"],
+            3: ["> Trimesh \u8f09\u5165\u7db2\u683c\u8cc7\u6599...", "> \u7d71\u8a08\u9802\u9ede\u6578\u3001\u9762\u6578\uff0c\u78ba\u8a8d\u5e7e\u4f55\u5b8c\u6574\u6027\u3002"],
+            4: ["> \u532f\u51fa\u591a\u96f6\u4ef6 GLB...", "> \u5404\u96f6\u4ef6\u4fdd\u7559\u70ba\u7368\u7acb Mesh \u7bc0\u9ede\uff0c\u8f09\u5165\u5f8c\u53ef\u4f7f\u7528\u7206\u70b8\u8996\u5716\u3002"],
+            5: ["> \u57f7\u884c gltfpack DRACO \u58d3\u7e2e...", "> \u901a\u5e38\u53ef\u7e2e\u5c0f 70\uff5e90%\uff0c\u5b8c\u6210\u5f8c\u5373\u53ef\u5728\u700f\u89bd\u5668\u6d41\u66a2\u6e32\u67d3\u3002", "> \u99ac\u4e0a\u5c31\u597d\u4e86\uff01"],
+        };
+
+        function updateConvertPanel(progress) {
+            document.getElementById('cp-bar').style.width = (progress.percent || 0) + '%';
+            document.getElementById('cp-msg').textContent = progress.message || "\u8655\u7406\u4e2d...";
+            document.getElementById('cp-pct').textContent = (progress.percent || 0) + '%';
+            document.querySelectorAll('.cp-step').forEach(function(el) {
+                var s = parseInt(el.dataset.step);
+                if (s < progress.step) {
+                    el.style.background = 'rgba(2,132,199,0.3)';
+                    el.style.borderColor = 'rgba(56,189,248,0.5)';
+                    el.style.color = '#7dd3fc';
+                } else if (s === progress.step) {
+                    el.style.background = 'rgba(56,189,248,0.18)';
+                    el.style.borderColor = '#38bdf8';
+                    el.style.color = '#ffffff';
+                } else {
+                    el.style.background = 'rgba(30,41,59,0.8)';
+                    el.style.borderColor = 'rgba(148,163,184,0.15)';
+                    el.style.color = '#64748b';
+                }
+            });
+            var pct = progress.percent || 0;
+            var etaEl = document.getElementById('cp-eta');
+            if (cpStartTime && pct >= 5 && pct < 99) {
+                var elapsed = (Date.now() - cpStartTime) / 1000;
+                var elapsedRemain = elapsed / (pct / 100) - elapsed;
+                var remaining;
+                if (cpHistoEta > 0) {
+                    var histoRemain = Math.max(0, cpHistoEta - elapsed);
+                    // 0-30%: 全用歷史估算；30-60%: 線性混合；60%+: 全用已耗時外推
+                    if (pct <= 30) {
+                        remaining = histoRemain;
+                    } else if (pct >= 60) {
+                        remaining = elapsedRemain;
+                    } else {
+                        var w = (pct - 30) / 30;  // 0→1
+                        remaining = histoRemain * (1 - w) + elapsedRemain * w;
+                    }
+                } else {
+                    remaining = elapsedRemain;
+                }
+                etaEl.textContent = "\u9810\u4f30\u5269\u9918" + ' ' + cpFormatEta(remaining);
+            } else if (pct >= 99) {
+                etaEl.textContent = "\u5373\u5c07\u5b8c\u6210...";
+            } else {
+                etaEl.textContent = '';
+            }
+            var step = progress.step || 0;
+            if (step !== cpLastStep) {
+                cpLastStep = step;
+                var hints = cpStepHints[step] || cpStepHints[0];
+                typewriter_run($("#cp-typewriter"), hints, 22);
+            }
+        }
+
+        function startProgressPolling() {
+            cpStartTime = Date.now();
+            cpFailCount = 0;
+            document.getElementById('convert-panel').style.display = 'block';
+            setWorkbenchFlowState("\u8655\u7406\u4e2d");
+            document.getElementById('wb-empty-state').style.display = '';
+            var urlHint = document.getElementById('cp-url-hint');
+            if (loadfile) {
+                document.getElementById('cp-current-url').textContent = window.location.href;
+                urlHint.style.display = 'block';
+            }
+            typewriter_run($("#cp-typewriter"), cpStepHints[0], 22);
+            cpPollTimer = setInterval(function() {
+                $.getJSON('?mode=checkProgress&file=' + encodeURIComponent(loadfileToken), function(data) {
+                    if (!data || data.error) {
+                        cpFailCount++;
+                        if (cpFailCount >= 3) {
+                            clearInterval(cpPollTimer);
+                            setWorkbenchFlowState("\u5931\u6557");
+                            document.getElementById('cp-msg').textContent = "\u9032\u5ea6\u67e5\u8a62\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u91cd\u65b0\u6574\u7406\u9801\u9762";
+                            document.getElementById('cp-bar').style.background = 'rgba(239,68,68,0.7)';
+                        }
+                        return;
+                    }
+                    cpFailCount = 0;
+                    updateConvertPanel(data.progress || {});
+                    if (data.db_status === 2) {
+                        clearInterval(cpPollTimer);
+                        location.reload();
+                    } else if (data.db_status === 3) {
+                        clearInterval(cpPollTimer);
+                        setWorkbenchFlowState("\u5931\u6557");
+                        document.getElementById('cp-msg').textContent = "\u8f49\u6a94\u5931\u6557\uff1a" + (data.progress && data.progress.message || "\u672a\u77e5\u932f\u8aa4");
+                        document.getElementById('cp-bar').style.background = 'rgba(239,68,68,0.7)';
+                    }
+                }).fail(function() {
+                    cpFailCount++;
+                    if (cpFailCount >= 3) {
+                        clearInterval(cpPollTimer);
+                        setWorkbenchFlowState("\u5931\u6557");
+                        document.getElementById('cp-msg').textContent = "\u9032\u5ea6\u67e5\u8a62\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u91cd\u65b0\u6574\u7406\u9801\u9762";
+                        document.getElementById('cp-bar').style.background = 'rgba(239,68,68,0.7)';
+                    }
+                });
+            }, 1500);
+        }
+
+        if (viewDbStatus === 1) {
+            startProgressPolling();
+        }
+
+        var deletePwdHintTimer = null;
+        var deletePwdHintArrow = null;
+        var deletePwdHintCircle = null;
+
+        function clearDeletePasswordHints() {
+            if (deletePwdHintTimer) {
+                clearTimeout(deletePwdHintTimer);
+                deletePwdHintTimer = null;
+            }
+            if (deletePwdHintArrow) {
+                if (typeof deletePwdHintArrow.destroy === 'function') deletePwdHintArrow.destroy();
+                else if (typeof deletePwdHintArrow.remove === 'function') deletePwdHintArrow.remove();
+                deletePwdHintArrow = null;
+            }
+            if (deletePwdHintCircle) {
+                if (typeof deletePwdHintCircle.destroy === 'function') deletePwdHintCircle.destroy();
+                else if (typeof deletePwdHintCircle.remove === 'function') deletePwdHintCircle.remove();
+                deletePwdHintCircle = null;
+            }
+        }
+
+        function showDeletePasswordRequired() {
+            var delPwdInput = document.getElementById('form_del_pwd');
+            smallComment("\u8acb\u8f38\u5165\u522a\u9664\u7528\u5bc6\u78bc", 2500, false, {});
+            if (!delPwdInput) return;
+            delPwdInput.focus();
+            clearDeletePasswordHints();
+            var $target = $('#form_del_pwd');
+            if (typeof drawArrowTojQDom === 'function') deletePwdHintArrow = drawArrowTojQDom($target);
+            if (typeof drawCircleTojQDom === 'function') deletePwdHintCircle = drawCircleTojQDom($target);
+            deletePwdHintTimer = setTimeout(function() {
+                clearDeletePasswordHints();
+            }, 3000);
+        }
+
+        function getDeletePasswordForUpload() {
+            var delPwdInput = document.getElementById('form_del_pwd');
+            return delPwdInput ? delPwdInput.value.trim() : '';
+        }
+
+        function clearUploadInputSelection() {
+            var upfileInput = document.getElementById('upfileInput');
+            if (upfileInput) upfileInput.value = '';
+        }
+
+        // 上傳處理共用函式
+        function handleUploadFile(file) {
+            if (!file) return;
+            var ext = file.name.split('.').pop().toLowerCase();
+            if (!['stp','step','igs','iges'].includes(ext)) {
+                smallComment("\u8acb\u9078\u64c7 .stp \/ .step \/ .igs \u6a94\u6848", 2000, false, {});
+                return;
+            }
+            var delPwdInput = document.getElementById('form_del_pwd');
+            var delPwd = getDeletePasswordForUpload();
+            if (!delPwd) {
+                showDeletePasswordRequired();
+                clearUploadInputSelection();
+                return;
+            }
+            var sel = document.getElementById('dzSelected');
+            var sizeLabel = size_hum_read(file.size);
+            var largeFile = file.size > 50 * 1024 * 1024;
+            sel.textContent = "\u5df2\u9078\uff1a" + file.name + ' (' + sizeLabel + ')' + (largeFile ? ' ' + "\u5927\u6a94\uff0c\u8f49\u63db\u9700\u6642\u8f03\u9577\uff0c\u8acb\u4fdd\u6301\u6b64\u9801\u9762\u958b\u555f\u6216\u7a0d\u5f8c\u56de\u4f86" : '');
+            sel.style.display = 'block';
+            wbSetCurrentFile(file.name);
+            setWorkbenchFlowState("\u4e0a\u50b3\u4e2d");
+            var uploadWatchdog = setTimeout(function() {
+                if (workbenchStateOverride === "\u4e0a\u50b3\u4e2d") {
+                    smallComment("\u4e0a\u50b3\u4ecd\u5728\u9032\u884c\u4e2d\uff0c\u8acb\u4fdd\u6301\u9801\u9762\u958b\u555f", 5000, false, {});
+                }
+            }, 120000);
+            activeModelName = file.name;
+            activeModelFormat = "STEP\uff08\u89e3\u6790\u4e2d\uff09";
+            activeModelAssetLabel = 'STEP';
+            activeModelSizeLabel = file.size ? size_hum_read(file.size) : '—';
+            activeModelHasMetadata = false;
+            updateModelInfo(file.name, "STEP\uff08\u89e3\u6790\u4e2d\uff09", null);
+            parseWithOcct(file);
+            const formData = new FormData();
+            formData.append('upfile', file);
+            var deleteConfig = window.stepThreejsDeleteConfig || {};
+            formData.append('del_pwd', delPwd ? enPWD_string(delPwd, deleteConfig.passwordKey || '') : '');
+            if (delPwdInput) delPwdInput.value = '';
+            myAjax_async_form("?mode=upfile_action", formData, function(data){
+                clearTimeout(uploadWatchdog);
+                var jd = null;
+                try { jd = json_decode(data, true); } catch (err) { jd = null; }
+                if (!jd || typeof jd !== 'object') {
+                    setWorkbenchFlowState("\u5931\u6557");
+                    smallComment("\u4e0a\u50b3\u56de\u61c9\u683c\u5f0f\u932f\u8aa4\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66", 3000, false, {});
+                    return;
+                }
+                if (jd['status'] == 'OK' && jd['file']) {
+                    location.href = "?file=" + encodeURIComponent(jd['file']);
+                } else {
+                    setWorkbenchFlowState("\u5931\u6557");
+                    smallComment(jd['reason'] || "\u4e0a\u50b3\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66", 2000, false, {});
+                }
+            });
+        }
+
+        // 拖放上傳
+        (function(){
+            var initialDelPwdInput = document.getElementById('form_del_pwd');
+            if (initialDelPwdInput) initialDelPwdInput.value = '';
+            var zone = document.getElementById('dropZone');
+            var inp  = document.getElementById('upfileInput');
+            zone.addEventListener('click', function(){
+                if (!getDeletePasswordForUpload()) {
+                    showDeletePasswordRequired();
+                    clearUploadInputSelection();
+                    return;
+                }
+                inp.click();
+            });
+            inp.addEventListener('change', function(){ handleUploadFile(inp.files[0]); });
+            zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
+            zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
+            zone.addEventListener('drop', function(e){
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                handleUploadFile(e.dataTransfer.files[0]);
+            });
+        })();
+
+        // 設置場景
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(15, 1, 10, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+        renderer.setSize(1, 1);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.5;
+        renderer.useLegacyLights = false;
+        renderer.setClearColor(0x1a1a2e, 1);
+        // 插入 canvas 到 viewer-wrap，放在 overlay 之前
+        var viewerWrap = document.getElementById('viewer-wrap');
+        viewerWrap.insertBefore(renderer.domElement, document.getElementById('ctrl-hint'));
+        $(renderer.domElement).addClass('thecanvasClass');
+
+        // --- 共用工具函式 ---
+        var lastFitObject = null;
+        var partMetadata = null;
+        var raycaster = new THREE.Raycaster();
+        var pointer = new THREE.Vector2();
+        var hoverMesh = null;
+        var hoverOutline = null;
+        var loadedModel = null;
+        var metadataLoadToken = 0;
+        var activeModelName = orinFilename || previewInfo.url || "\u5c1a\u672a\u8f09\u5165\u6a21\u578b";
+        var activeModelFormat = previewInfo.format ? previewInfo.format.toUpperCase() : '';
+        var activeModelHasMetadata = !!previewInfo.metadata_url;
+        var activeModelAssetLabel = previewInfo.format ? previewInfo.format.toUpperCase() : "\u6a21\u578b";
+        var activeModelSizeLabel = previewInfo.size ? size_hum_read(previewInfo.size) : '—';
+        var partMeshes = {};
+        var meshToPartId = new WeakMap();
+        var selectedPartId = '';
+        var selectedMesh = null;
+        var selectedOutline = null;
+        var pointerDown = null;
+        var ghostOpacity = 0.15;
+        var movePartMode = false;
+        var movePartDrag = null;
+        var movePartPlane = new THREE.Plane();
+        var movePartPoint = new THREE.Vector3();
+        var controls = null;
+
+        function setText(el, value) {
+            if (!el) return;
+            el.textContent = (value === null || value === undefined || value === '') ? '—' : String(value);
+        }
+
+        function appendPartField(container, label, value) {
+            var div = document.createElement('div');
+            var key = document.createElement('span');
+            var val = document.createElement('span');
+            div.className = 'pi-row';
+            key.className = 'pi-key';
+            val.className = 'pi-val';
+            setText(key, label);
+            setText(val, value);
+            div.append(key, val);
+            container.appendChild(div);
+        }
+
+        function renderInspector(part, mode) {
+            var panel = document.getElementById('part-info-panel');
+            var fields = document.getElementById('pi-fields');
+            var actions = document.getElementById('pi-actions');
+            if (!panel || !fields) return;
+            fields.replaceChildren();
+
+            if (!part) {
+                renderInspectorForModel();
+                return;
+            }
+
+            wbSetText('pi-mode', mode === 'hover' ? 'Hover ' + "\u9810\u89bd" : "\u9078\u53d6\u96f6\u4ef6");
+            wbSetText('pi-title', part.display_name || part.part_id);
+            wbSetText('pi-path', (part.assembly_path || []).join(' > '));
+            if (actions) actions.style.display = mode === 'selected' ? 'flex' : 'none';
+
+            appendPartField(fields, 'ID', part.part_id);
+            appendPartField(fields, "\u985e\u578b", part.entity_type);
+            appendPartField(fields, "\u984f\u8272", part.color);
+            if (part.geometry) {
+                appendPartField(fields, "\u9762\u6578", part.geometry.faces);
+                if (part.geometry.bbox) appendPartField(fields, 'BBox', part.geometry.bbox.join(' × '));
+            }
+            (part.properties || []).slice(0, 20).forEach(function(prop) {
+                appendPartField(fields, prop.name, prop.value);
+            });
+        }
+
+        function partIndexCount() {
+            return Object.keys(partMeshes || {}).length;
+        }
+
+        function renderInspectorForModel() {
+            var fields = document.getElementById('pi-fields');
+            var actions = document.getElementById('pi-actions');
+            if (!fields) return;
+            fields.replaceChildren();
+            wbSetText('pi-mode', "\u6a21\u578b\u7e3d\u89bd");
+            wbSetText('pi-title', activeModelName || "\u5c1a\u672a\u8f09\u5165\u6a21\u578b");
+            wbSetText('pi-path', activeModelHasMetadata ? 'Metadata ready' : (partIndexCount() ? 'Geometry structure ready' : 'Metadata unavailable'));
+            if (actions) actions.style.display = 'none';
+            appendPartField(fields, "\u683c\u5f0f", activeModelFormat || '—');
+            appendPartField(fields, activeModelAssetLabel || "\u6a21\u578b", activeModelSizeLabel || '—');
+            appendPartField(fields, 'Metadata', activeModelHasMetadata ? "\u53ef\u7528" : '—');
+            appendPartField(fields, "\u7d50\u69cb", partIndexCount() ? partIndexCount() + ' parts' : '—');
+            appendPartField(fields, "\u72c0\u614b", document.getElementById('wb-status-state') ? document.getElementById('wb-status-state').textContent : '—');
+        }
+
+        function updateActiveStructureRow() {
+            document.querySelectorAll('.part-row').forEach(function(row) {
+                row.classList.toggle('is-active', row.dataset.partId === selectedPartId);
+            });
+            wbSetText('wb-status-part', selectedPartId || '—');
+        }
+
+        function selectPartById(partId, options) {
+            options = options || {};
+            selectedPartId = partId || '';
+            var meshes = selectedPartId ? getPartMeshes(selectedPartId) : [];
+            selectedMesh = meshes.length ? meshes[0] : null;
+            setSelectedOutline(selectedMesh);
+            updateActiveStructureRow();
+            if (selectedPartId) {
+                renderInspector(partById(selectedPartId), 'selected');
+                if (options.locate && typeof locatePart === 'function') locatePart(selectedPartId);
+            } else {
+                renderInspectorForModel();
+            }
+        }
+
+        function clearSelection() {
+            selectedPartId = '';
+            selectedMesh = null;
+            setSelectedOutline(null);
+            updateActiveStructureRow();
+            renderInspectorForModel();
+        }
+
+        function ensureMeshFocusState(mesh) {
+            if (!mesh) return;
+            if (!mesh.userData.stepWorkbenchFocusState) {
+                var materialWasArray = Array.isArray(mesh.material);
+                mesh.userData.stepWorkbenchFocusState = {
+                    position: mesh.position.clone(),
+                    visible: mesh.visible,
+                    materialWasArray: materialWasArray,
+                    materials: []
+                };
+                var mats = mesh.material ? (materialWasArray ? mesh.material : [mesh.material]) : [];
+                mesh.userData.stepWorkbenchFocusState.materials = mats.map(function(mat) {
+                    if (!mat) {
+                        return {
+                            material: mat,
+                            transparent: false,
+                            opacity: 1,
+                            depthWrite: true
+                        };
+                    }
+                    return {
+                        material: mat,
+                        transparent: mat.transparent,
+                        opacity: mat.opacity,
+                        depthWrite: mat.depthWrite
+                    };
+                });
+            }
+        }
+
+        function setMeshOpacity(mesh, opacity) {
+            if (!mesh || !mesh.material) return;
+            ensureMeshFocusState(mesh);
+            var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach(function(mat, idx) {
+                if (!mat) return;
+                if (!mat.userData.stepWorkbenchCloned) {
+                    var cloned = mat.clone();
+                    cloned.userData.stepWorkbenchCloned = true;
+                    if (Array.isArray(mesh.material)) {
+                        mesh.material[idx] = cloned;
+                    } else {
+                        mesh.material = cloned;
+                    }
+                    mat = cloned;
+                }
+                mat.transparent = opacity < 1;
+                mat.opacity = opacity;
+                mat.depthWrite = opacity >= 1;
+                mat.needsUpdate = true;
+            });
+        }
+
+        function forEachMaterial(mesh, fn) {
+            if (!mesh || !mesh.material) return;
+            var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach(function(mat, idx) {
+                if (mat) fn(mat, idx);
+            });
+        }
+
+        var textureSlots = [
+            'map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap',
+            'emissiveMap', 'bumpMap', 'displacementMap', 'alphaMap', 'envMap',
+            'lightMap', 'specularMap', 'clearcoatMap', 'clearcoatNormalMap',
+            'clearcoatRoughnessMap', 'sheenColorMap', 'sheenRoughnessMap',
+            'transmissionMap', 'thicknessMap'
+        ];
+
+        function disposeMaterialTextures(material, seenTextures) {
+            if (!material) return;
+            seenTextures = seenTextures || new Set();
+
+            function disposeTexture(texture) {
+                if (!texture || !texture.isTexture || seenTextures.has(texture)) return;
+                seenTextures.add(texture);
+                if (typeof texture.dispose === 'function') texture.dispose();
+            }
+
+            textureSlots.forEach(function(slot) {
+                disposeTexture(material[slot]);
+            });
+            Object.keys(material).forEach(function(key) {
+                disposeTexture(material[key]);
+            });
+        }
+
+        function eachModelMesh(fn) {
+            if (!loadedModel) return;
+            loadedModel.traverse(function(o) {
+                if (o.isMesh) fn(o, resolvePartId(o));
+            });
+        }
+
+        function boxForPart(partId) {
+            var meshes = getPartMeshes(partId);
+            var box = new THREE.Box3();
+            meshes.forEach(function(mesh) {
+                box.union(new THREE.Box3().setFromObject(mesh));
+            });
+            return box.isEmpty() ? null : box;
+        }
+
+        function fitCameraToBox(box) {
+            if (!box) return;
+            var center = box.getCenter(new THREE.Vector3());
+            var size = box.getSize(new THREE.Vector3());
+            var maxDim = Math.max(size.x, size.y, size.z) || 1;
+            var distance = maxDim * 2.4;
+            camera.position.copy(center).add(new THREE.Vector3(maxDim * 0.45, maxDim * 0.7, distance));
+            controls.target.copy(center);
+            controls.update();
+        }
+
+        function locatePart(partId) {
+            fitCameraToBox(boxForPart(partId));
+        }
+
+        function rowForPart(partId) {
+            var found = null;
+            document.querySelectorAll('.part-row').forEach(function(row) {
+                if (row.dataset.partId === partId) found = row;
+            });
+            return found;
+        }
+
+        function setPartVisible(partId, visible) {
+            getPartMeshes(partId).forEach(function(mesh) {
+                ensureMeshFocusState(mesh);
+                mesh.visible = !!visible;
+            });
+            var row = rowForPart(partId);
+            if (row) row.classList.toggle('is-hidden', !visible);
+        }
+
+        function isolatePart(partId) {
+            if (!partId) return;
+            eachModelMesh(function(mesh, meshPartId) {
+                ensureMeshFocusState(mesh);
+                if (meshPartId === partId) {
+                    mesh.visible = true;
+                    setMeshOpacity(mesh, 1);
+                } else {
+                    mesh.visible = ghostOpacity > 0;
+                    if (ghostOpacity > 0) setMeshOpacity(mesh, ghostOpacity);
+                }
+            });
+            document.querySelectorAll('.part-row').forEach(function(row) {
+                var isSelectedRow = row.dataset.partId === partId;
+                row.classList.toggle('is-hidden', !isSelectedRow && ghostOpacity === 0);
+            });
+            wbSetMode('Isolate');
+        }
+
+        function pullOutPart(partId) {
+            if (!partId || !loadedModel) return;
+            var modelBox = new THREE.Box3().setFromObject(loadedModel);
+            var partBox = boxForPart(partId);
+            if (!partBox) return;
+            var modelCenter = modelBox.getCenter(new THREE.Vector3());
+            var partCenter = partBox.getCenter(new THREE.Vector3());
+            var dir = partCenter.clone().sub(modelCenter);
+            if (dir.lengthSq() < 0.000001) dir.set(1, 0, 0);
+            dir.normalize();
+            var modelSize = modelBox.getSize(new THREE.Vector3());
+            var offset = Math.max(modelSize.x, modelSize.y, modelSize.z, 1) * 0.18;
+            getPartMeshes(partId).forEach(function(mesh) {
+                ensureMeshFocusState(mesh);
+                mesh.position.copy(mesh.userData.stepWorkbenchFocusState.position).addScaledVector(dir, offset);
+            });
+            wbSetMode('Pull-out');
+        }
+
+        function stopMovePartDrag(e) {
+            if (!movePartDrag) return;
+            if (e && typeof renderer.domElement.releasePointerCapture === 'function') {
+                try { renderer.domElement.releasePointerCapture(movePartDrag.pointerId); } catch (err) {}
+            }
+            movePartDrag = null;
+            viewerWrap.classList.remove('is-moving-part');
+            if (controls) controls.enabled = true;
+            wbSetMode(movePartMode ? 'Move part' : 'Normal');
+        }
+
+        function setMovePartMode(enabled) {
+            movePartMode = !!enabled;
+            if (!movePartMode) stopMovePartDrag();
+            viewerWrap.classList.toggle('is-move-part-mode', movePartMode);
+            var btn = document.getElementById('btn-move-part');
+            if (btn) {
+                btn.classList.toggle('btn-warning', movePartMode);
+                btn.classList.toggle('btn-default', !movePartMode);
+                btn.setAttribute('aria-pressed', movePartMode ? 'true' : 'false');
+            }
+            wbSetMode(movePartMode ? 'Move part' : 'Normal');
+        }
+
+        function pointOnMovePlaneFromEvent(e) {
+            var rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            return raycaster.ray.intersectPlane(movePartPlane, movePartPoint) ? movePartPoint.clone() : null;
+        }
+
+        function startMovePartDrag(partId, hit, e) {
+            if (!movePartMode || !partId || !hit) return false;
+            var meshes = getPartMeshes(partId);
+            if (!meshes.length) return false;
+            selectPartById(partId);
+            meshes.forEach(ensureMeshFocusState);
+
+            var startPoint = hit.point ? hit.point.clone() : null;
+            if (!startPoint) {
+                var partBox = boxForPart(partId);
+                if (!partBox) return false;
+                startPoint = partBox.getCenter(new THREE.Vector3());
+            }
+            var normal = camera.getWorldDirection(new THREE.Vector3()).normalize();
+            movePartPlane.setFromNormalAndCoplanarPoint(normal, startPoint);
+            movePartDrag = {
+                partId: partId,
+                pointerId: e.pointerId,
+                startPoint: startPoint,
+                startPositions: meshes.map(function(mesh) {
+                    return {
+                        mesh: mesh,
+                        position: mesh.position.clone()
+                    };
+                })
+            };
+            if (typeof renderer.domElement.setPointerCapture === 'function') {
+                try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}
+            }
+            if (controls) controls.enabled = false;
+            viewerWrap.classList.add('is-moving-part');
+            wbSetMode('Moving part');
+            return true;
+        }
+
+        function updateMovePartDrag(e) {
+            if (!movePartDrag) return;
+            var nextPoint = pointOnMovePlaneFromEvent(e);
+            if (!nextPoint) return;
+            var delta = nextPoint.sub(movePartDrag.startPoint);
+            movePartDrag.startPositions.forEach(function(item) {
+                item.mesh.position.copy(item.position).add(delta);
+            });
+        }
+
+        function restoreObjectFocusState(rootObj) {
+            if (!rootObj) return;
+            rootObj.traverse(function(mesh) {
+                if (!mesh.isMesh) return;
+                var st = mesh.userData.stepWorkbenchFocusState;
+                if (!st) return;
+                mesh.position.copy(st.position);
+                mesh.visible = st.visible;
+                if (st.materialWasArray) {
+                    var savedMaterials = st.materials.map(function(saved) { return saved.material; });
+                    var currentMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                    currentMaterials.forEach(function(current) {
+                        if (current && savedMaterials.indexOf(current) === -1 && current.userData && current.userData.stepWorkbenchCloned && typeof current.dispose === 'function') {
+                            current.dispose();
+                        }
+                    });
+                    mesh.material = savedMaterials;
+                    st.materials.forEach(function(saved) {
+                        var mat = saved.material;
+                        if (!mat) return;
+                        mat.transparent = saved.transparent;
+                        mat.opacity = saved.opacity;
+                        mat.depthWrite = saved.depthWrite;
+                        mat.needsUpdate = true;
+                    });
+                } else if (st.materials.length) {
+                    var saved = st.materials[0];
+                    var currentMat = mesh.material;
+                    if (currentMat && currentMat !== saved.material && currentMat.userData && currentMat.userData.stepWorkbenchCloned && typeof currentMat.dispose === 'function') {
+                        currentMat.dispose();
+                    }
+                    mesh.material = saved.material;
+                    var mat = saved.material;
+                    if (!mat) return;
+                    mat.transparent = saved.transparent;
+                    mat.opacity = saved.opacity;
+                    mat.depthWrite = saved.depthWrite;
+                    mat.needsUpdate = true;
+                }
+            });
+        }
+
+        function restoreFocusState() {
+            setMovePartMode(false);
+            restoreObjectFocusState(loadedModel);
+            document.querySelectorAll('.part-row').forEach(function(row) {
+                row.classList.remove('is-hidden');
+            });
+            wbSetMode('Normal');
+        }
+
+        var structureList = document.getElementById('part-structure-list');
+        if (structureList) {
+            structureList.addEventListener('click', function(e) {
+                var eventTarget = e.target instanceof Element ? e.target : null;
+                if (!eventTarget) return;
+                var row = eventTarget.closest('.part-row');
+                if (!row) return;
+                var partId = row.dataset.partId || '';
+                var actionEl = eventTarget.closest('[data-part-action]');
+                if (actionEl && !row.contains(actionEl)) actionEl = null;
+                var action = actionEl ? actionEl.dataset.partAction : 'select';
+                if (action === 'toggle') {
+                    var meshes = getPartMeshes(partId);
+                    var nextVisible = !meshes.some(function(mesh) { return mesh.visible; });
+                    setPartVisible(partId, nextVisible);
+                    return;
+                }
+                selectPartById(partId);
+                if (action === 'locate') locatePart(partId);
+                if (action === 'isolate') isolatePart(partId);
+                if (action === 'pull') pullOutPart(partId);
+            });
+        }
+
+        var inspectorActions = document.getElementById('pi-actions');
+        if (inspectorActions) {
+            inspectorActions.addEventListener('click', function(e) {
+                var eventTarget = e.target instanceof Element ? e.target : null;
+                if (!eventTarget) return;
+                var actionEl = eventTarget.closest('[data-part-action]');
+                if (actionEl && !inspectorActions.contains(actionEl)) actionEl = null;
+                var action = actionEl ? actionEl.dataset.partAction : '';
+                if (!action) return;
+                if (action === 'locate') locatePart(selectedPartId);
+                if (action === 'isolate') isolatePart(selectedPartId);
+                if (action === 'pull') pullOutPart(selectedPartId);
+                if (action === 'restore') restoreFocusState();
+            });
+        }
+
+        var restoreFocusBtn = document.getElementById('btn-restore-focus');
+        if (restoreFocusBtn) restoreFocusBtn.addEventListener('click', restoreFocusState);
+
+        document.querySelectorAll('.js-ghost-opacity').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                ghostOpacity = parseFloat(this.dataset.opacity || '0.15');
+                document.querySelectorAll('.js-ghost-opacity').forEach(function(b) {
+                    $(b).toggleClass('btn-info', b === btn).toggleClass('btn-default', b !== btn);
+                });
+                if (selectedPartId) isolatePart(selectedPartId);
+            });
+        });
+
+        function resetInteractionState() {
+            hoverMesh = null;
+            pointerDown = null;
+            setHoverOutline(null);
+            selectedPartId = '';
+            selectedMesh = null;
+            setSelectedOutline(null);
+            if (typeof updateActiveStructureRow === 'function') updateActiveStructureRow();
+            if (typeof renderInspectorForModel === 'function') renderInspectorForModel();
+        }
+
+        function disposeObjectTree(obj) {
+            if (!obj) return;
+            var seenTextures = new Set();
+            obj.traverse(function(node) {
+                if (node.geometry && typeof node.geometry.dispose === 'function') node.geometry.dispose();
+                forEachMaterial(node, function(material) {
+                    disposeMaterialTextures(material, seenTextures);
+                    if (typeof material.dispose === 'function') material.dispose();
+                });
+            });
+        }
+
+        function replaceLoadedModel(nextModel) {
+            resetInteractionState();
+            var oldModel = loadedModel;
+            if (oldModel && oldModel !== nextModel) {
+                restoreObjectFocusState(oldModel);
+                if (oldModel.parent) oldModel.parent.remove(oldModel);
+                disposeObjectTree(oldModel);
+            }
+            loadedModel = nextModel || null;
+        }
+
+        function resolvePartId(obj) {
+            var cur = obj;
+            while (cur) {
+                if (meshToPartId && meshToPartId.has(cur)) return meshToPartId.get(cur);
+                var id = cur.userData && cur.userData.step_threejs_part_id;
+                if (!id && /^(part|surface)_\d{4}$/.test(cur.name || '')) id = cur.name;
+                if (id) return id;
+                cur = cur.parent;
+            }
+            return '';
+        }
+
+        function meshFaceCount(mesh) {
+            if (!mesh || !mesh.geometry) return 0;
+            if (mesh.geometry.index) return Math.round(mesh.geometry.index.count / 3);
+            var position = mesh.geometry.attributes && mesh.geometry.attributes.position;
+            return position && position.count ? Math.round(position.count / 3) : 0;
+        }
+
+        function fallbackPartLabel(partId, meshes) {
+            var mesh = meshes && meshes.length ? meshes[0] : null;
+            var raw = mesh && mesh.name ? mesh.name : '';
+            if (!raw && mesh && mesh.parent && mesh.parent.name) raw = mesh.parent.name;
+            if (!raw || /^(part|surface|mesh)_\d{4}$/.test(raw)) return partId;
+            return raw;
+        }
+
+        function fallbackPartFromId(partId) {
+            if (!partId) return null;
+            var meshes = getPartMeshes(partId);
+            var faces = 0;
+            meshes.forEach(function(mesh) {
+                faces += meshFaceCount(mesh);
+            });
+            var bbox = [];
+            var box = meshes.length ? boxForPart(partId) : null;
+            if (box) {
+                var size = box.getSize(new THREE.Vector3());
+                bbox = [size.x.toFixed(3), size.y.toFixed(3), size.z.toFixed(3)];
+            }
+            return {
+                part_id: partId,
+                display_name: fallbackPartLabel(partId, meshes),
+                assembly_path: activeModelName ? [activeModelName] : [],
+                entity_type: 'mesh',
+                color: null,
+                geometry: { faces: faces, bbox: bbox },
+                properties: []
+            };
+        }
+
+        function partFromMesh(mesh) {
+            if (!mesh) return null;
+            var partId = resolvePartId(mesh);
+            if (partId && partMetadata && partMetadata.parts && partMetadata.parts[partId]) {
+                return partMetadata.parts[partId];
+            }
+            return fallbackPartFromId(partId);
+        }
+
+        function resetPartIndex() {
+            partMeshes = {};
+            meshToPartId = new WeakMap();
+        }
+
+        function indexModelParts(rootObj) {
+            resetPartIndex();
+            if (!rootObj) return;
+            var fallbackIndex = 0;
+            rootObj.traverse(function(o) {
+                if (!o.isMesh) return;
+                var partId = resolvePartId(o);
+                if (!partId) partId = 'mesh_' + String(fallbackIndex++).padStart(4, '0');
+                if (!partMeshes[partId]) partMeshes[partId] = [];
+                partMeshes[partId].push(o);
+                meshToPartId.set(o, partId);
+            });
+        }
+
+        function getPartMeshes(partId) {
+            return partMeshes[partId] || [];
+        }
+
+        function partById(partId) {
+            if (partId && partMetadata && partMetadata.parts && partMetadata.parts[partId]) {
+                return partMetadata.parts[partId];
+            }
+            return fallbackPartFromId(partId);
+        }
+
+        function loadPartMetadata(done) {
+            var token = ++metadataLoadToken;
+            function finish() {
+                if (token !== metadataLoadToken) return;
+                buildStructurePanel();
+                if (selectedPartId && typeof renderInspector === 'function') {
+                    renderInspector(partById(selectedPartId), 'selected');
+                } else if (typeof renderInspectorForModel === 'function') {
+                    renderInspectorForModel();
+                }
+                if (typeof updateActiveStructureRow === 'function') updateActiveStructureRow();
+                if (typeof done === 'function') done();
+            }
+            if (!previewInfo.metadata_url) {
+                activeModelHasMetadata = false;
+                partMetadata = null;
+                finish();
+                return;
+            }
+            $.getJSON(previewInfo.metadata_url, function(data) {
+                if (token !== metadataLoadToken) return;
+                activeModelHasMetadata = !!data;
+                partMetadata = data || null;
+                finish();
+            }).fail(function() {
+                if (token !== metadataLoadToken) return;
+                activeModelHasMetadata = false;
+                partMetadata = null;
+                finish();
+            });
+        }
+
+        function buildStructurePanel() {
+            var list = document.getElementById('part-structure-list');
+            var empty = document.getElementById('part-structure-empty');
+            if (!list || !empty) return;
+            list.replaceChildren();
+            var parts = partMetadata && partMetadata.parts ? partMetadata.parts : {};
+            var ids = Object.keys(parts);
+            var usingGeometryFallback = false;
+            if (!ids.length && partIndexCount()) {
+                ids = Object.keys(partMeshes);
+                usingGeometryFallback = true;
+            }
+            empty.style.display = ids.length ? 'none' : 'block';
+            if (!ids.length) {
+                empty.textContent = loadedModel ? "\u6b64\u6a21\u578b\u6c92\u6709\u53ef\u8fa8\u8b58\u7684\u96f6\u4ef6\/mesh \u7d50\u69cb\u3002" : "\u8f09\u5165\u6a21\u578b\u5f8c\u6703\u986f\u793a\u96f6\u4ef6\u7d50\u69cb\u3002";
+                return;
+            }
+            ids.forEach(function(partId) {
+                var part = parts[partId] || fallbackPartFromId(partId) || {};
+                var row = document.createElement('div');
+                row.className = usingGeometryFallback ? 'part-row is-fallback' : 'part-row';
+                row.dataset.partId = partId;
+
+                var eye = document.createElement('button');
+                eye.type = 'button';
+                eye.dataset.partAction = 'toggle';
+                eye.title = "\u986f\u793a\/\u96b1\u85cf";
+                eye.textContent = '👁';
+
+                var name = document.createElement('div');
+                name.className = 'part-row-name';
+                name.title = part.display_name || partId;
+                name.textContent = part.display_name || partId;
+
+                var locate = document.createElement('button');
+                locate.type = 'button';
+                locate.dataset.partAction = 'locate';
+                locate.title = "\u5b9a\u4f4d";
+                locate.textContent = '⌖';
+
+                var isolate = document.createElement('button');
+                isolate.type = 'button';
+                isolate.dataset.partAction = 'isolate';
+                isolate.title = "\u9694\u96e2";
+                isolate.textContent = '◉';
+
+                var pull = document.createElement('button');
+                pull.type = 'button';
+                pull.dataset.partAction = 'pull';
+                pull.title = "\u62c9\u51fa";
+                pull.textContent = '↗';
+
+                row.append(eye, name, locate, isolate, pull);
+                list.appendChild(row);
+            });
+        }
+
+        function filterStructureList(term) {
+            term = (term || '').toLowerCase();
+            document.querySelectorAll('.part-row').forEach(function(row) {
+                var label = row.querySelector('.part-row-name');
+                var text = label ? label.textContent.toLowerCase() : '';
+                row.style.display = !term || text.indexOf(term) >= 0 || (row.dataset.partId || '').toLowerCase().indexOf(term) >= 0 ? '' : 'none';
+            });
+        }
+
+        var partSearchInput = document.getElementById('part-search');
+        if (partSearchInput) {
+            partSearchInput.addEventListener('input', function() {
+                filterStructureList(this.value);
+            });
+        }
+
+        function fitCameraToScene(obj) {
+            lastFitObject = obj;
+            const box = new THREE.Box3().setFromObject(obj);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            camera.position.set(maxDim * 0.4, maxDim * 0.65, maxDim * 2.2);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            return size;
+        }
+
+        function updateModelInfo(name, fmt, obj) {
+            updateWorkbenchStats(name, fmt, obj);
+            wbSetText('mi-name', name || '—');
+            wbSetText('mi-fmt', fmt || '—');
+            if (obj) {
+                const s = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+                wbSetText('mi-size', s.x.toFixed(2) + ' × ' + s.y.toFixed(2) + ' × ' + s.z.toFixed(2));
+            } else {
+                wbSetText('mi-size', '—');
+            }
+        }
+
+        // 操作提示淡出
+        (function(){
+            var hint = document.getElementById('ctrl-hint');
+            var fadeTimer = setTimeout(function(){ hint.style.opacity = '0'; }, 3000);
+            renderer.domElement.addEventListener('mouseenter', function(){
+                hint.style.opacity = '1';
+                clearTimeout(fadeTimer);
+                fadeTimer = setTimeout(function(){ hint.style.opacity = '0'; }, 2500);
+            });
+        })();
+
+        // 重設視角
+        document.getElementById('btn-reset').addEventListener('click', function(){
+            restoreFocusState();
+            if (lastFitObject) fitCameraToScene(lastFitObject);
+        });
+
+        // 線框切換
+        var wireframeOn = false;
+        document.getElementById('btn-wire').addEventListener('click', function(){
+            wireframeOn = !wireframeOn;
+            $(this).toggleClass('btn-info', !wireframeOn).toggleClass('btn-warning', wireframeOn);
+            this.textContent = wireframeOn ? '▦ ' + "\u5be6\u9ad4" : '▦ ' + "\u7dda\u6846";
+            scene.traverse(function(o){
+                if (!o.isMesh) return;
+                forEachMaterial(o, function(material) {
+                    material.wireframe = wireframeOn;
+                    material.needsUpdate = true;
+                });
+            });
+        });
+
+        // 全螢幕切換
+        document.getElementById('btn-fullscreen').addEventListener('click', function(){
+            if (!document.fullscreenElement) {
+                viewerWrap.requestFullscreen().catch(err => {
+                    smallComment("\u7121\u6cd5\u9032\u5165\u5168\u87a2\u5e55" + ': ' + err.message, 3000, false, {});
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', function() {
+            const isFull = !!document.fullscreenElement;
+            const btn = document.getElementById('btn-fullscreen');
+            btn.textContent = isFull ? '⌞⌝⌜⌟ ' + "\u9000\u51fa\u5168\u87a2\u5e55" : '⛶ ' + "\u5168\u87a2\u5e55";
+            // 觸發 resize 更新 canvas 尺寸
+            window.dispatchEvent(new Event('resize'));
+        });
+
+
+        // 亮度滑桿
+        document.getElementById('exposure-slider').addEventListener('input', function(){
+            const v = this.value / 100;
+            renderer.toneMappingExposure = v;
+            document.getElementById('exposure-val').textContent = v.toFixed(1);
+        });
+
+        // 爆炸視圖
+        var explodeParts = [];
+        function setupExplode(rootObj) {
+            explodeParts = [];
+            document.getElementById('explode-slider').value = 0;
+            document.getElementById('explode-val').textContent = '0';
+            var meshes = [];
+            rootObj.traverse(function(o) { if (o.isMesh) meshes.push(o); });
+            if (meshes.length <= 1) {
+                document.getElementById('explode-wrap').style.display = 'none';
+                return;
+            }
+            meshes.forEach(function(m) {
+                var worldCenter = new THREE.Box3().setFromObject(m).getCenter(new THREE.Vector3());
+                explodeParts.push({
+                    obj: m,
+                    originPos: m.position.clone(),
+                    dir: worldCenter
+                });
+            });
+            document.getElementById('explode-wrap').style.display = '';
+        }
+        function applyExplode(factor) {
+            var f = factor / 100;
+            explodeParts.forEach(function(p) {
+                p.obj.position.copy(p.originPos).addScaledVector(p.dir, f);
+            });
+        }
+        document.getElementById('explode-slider').addEventListener('input', function(){
+            applyExplode(parseInt(this.value));
+            document.getElementById('explode-val').textContent = this.value;
+        });
+
+        function suppressViewerControlEvent(e) {
+            if (!e) return;
+            e.preventDefault();
+            if (typeof e.stopImmediatePropagation === 'function') {
+                e.stopImmediatePropagation();
+            } else {
+                e.stopPropagation();
+            }
+        }
+
+        function clearHoverState() {
+            hoverMesh = null;
+            pointerDown = null;
+            setHoverOutline(null);
+        }
+
+        function isDeleteRitualActive() {
+            var active = viewerWrap && viewerWrap.classList.contains('delete-ritual-active');
+            if (active) clearHoverState();
+            return active;
+        }
+        if (viewerWrap) viewerWrap.addEventListener('delete-ritual-start', clearHoverState);
+
+        function meshHitFromEvent(e) {
+            if (isDeleteRitualActive()) return null;
+            if (!lastFitObject) return null;
+            var rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            var hits = raycaster.intersectObject(lastFitObject, true).filter(function(h) {
+                return h.object && h.object.isMesh;
+            });
+            return hits.length ? hits[0] : null;
+        }
+
+        function setHoverOutline(mesh) {
+            if (hoverOutline) {
+                if (hoverOutline.parent) hoverOutline.parent.remove(hoverOutline);
+                hoverOutline.geometry.dispose();
+                hoverOutline.material.dispose();
+                hoverOutline = null;
+            }
+            if (!mesh || !mesh.geometry) return;
+            var geo = new THREE.EdgesGeometry(mesh.geometry, 30);
+            var mat = new THREE.LineBasicMaterial({
+                color: 0xffc107,
+                linewidth: 2,
+                depthTest: false,
+                transparent: true,
+                opacity: 1
+            });
+            hoverOutline = new THREE.LineSegments(geo, mat);
+            hoverOutline.renderOrder = 999;
+            mesh.add(hoverOutline);
+        }
+
+        function setSelectedOutline(mesh) {
+            if (selectedOutline) {
+                if (selectedOutline.parent) selectedOutline.parent.remove(selectedOutline);
+                selectedOutline.geometry.dispose();
+                selectedOutline.material.dispose();
+                selectedOutline = null;
+            }
+            if (!mesh || !mesh.geometry) return;
+            var geo = new THREE.EdgesGeometry(mesh.geometry, 30);
+            var mat = new THREE.LineBasicMaterial({
+                color: 0xffc107,
+                linewidth: 2,
+                depthTest: false,
+                transparent: true,
+                opacity: 1
+            });
+            selectedOutline = new THREE.LineSegments(geo, mat);
+            selectedOutline.renderOrder = 1000;
+            mesh.add(selectedOutline);
+        }
+
+        renderer.domElement.addEventListener('mousemove', function(e) {
+            if (isDeleteRitualActive()) return;
+            if (!lastFitObject || movePartDrag) return;
+            var hit = meshHitFromEvent(e);
+            var mesh = hit ? hit.object : null;
+            if (mesh === hoverMesh) return;
+            hoverMesh = mesh;
+            setHoverOutline(mesh);
+            if (!selectedPartId) renderInspector(partFromMesh(mesh), 'hover');
+        });
+        renderer.domElement.addEventListener('mouseleave', function() {
+            if (isDeleteRitualActive()) return;
+            if (movePartDrag) return;
+            hoverMesh = null;
+            pointerDown = null;
+            setHoverOutline(null);
+            if (selectedPartId) {
+                renderInspector(partById(selectedPartId), 'selected');
+            } else {
+                renderInspectorForModel();
+            }
+        });
+
+        renderer.domElement.addEventListener('pointerdown', function(e) {
+            if (isDeleteRitualActive()) return;
+            if (movePartMode) {
+                suppressViewerControlEvent(e);
+                var hit = meshHitFromEvent(e);
+                var partId = hit ? resolvePartId(hit.object) : '';
+                pointerDown = null;
+                if (partId) startMovePartDrag(partId, hit, e);
+                return;
+            }
+            pointerDown = { x: e.clientX, y: e.clientY };
+        });
+        renderer.domElement.addEventListener('pointermove', function(e) {
+            if (isDeleteRitualActive()) return;
+            if (!movePartDrag) return;
+            suppressViewerControlEvent(e);
+            updateMovePartDrag(e);
+        });
+        renderer.domElement.addEventListener('pointerup', function(e) {
+            if (isDeleteRitualActive() && movePartDrag) {
+                suppressViewerControlEvent(e);
+                stopMovePartDrag(e);
+            }
+            if (isDeleteRitualActive()) pointerDown = null;
+            if (isDeleteRitualActive()) return;
+            if (movePartDrag) {
+                suppressViewerControlEvent(e);
+                stopMovePartDrag(e);
+            }
+            pointerDown = null;
+        });
+        renderer.domElement.addEventListener('pointercancel', function() {
+            if (isDeleteRitualActive()) {
+                stopMovePartDrag();
+                pointerDown = null;
+            }
+            if (isDeleteRitualActive()) return;
+            stopMovePartDrag();
+            pointerDown = null;
+        });
+
+        renderer.domElement.addEventListener('click', function(e) {
+            if (isDeleteRitualActive()) return;
+            if (!lastFitObject) return;
+            if (movePartMode) {
+                pointerDown = null;
+                return;
+            }
+            if (pointerDown) {
+                var dragDistance = Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y);
+                pointerDown = null;
+                if (dragDistance > 5) return;
+            }
+            var hit = meshHitFromEvent(e);
+            var partId = hit ? resolvePartId(hit.object) : '';
+            selectPartById(partId);
+        });
+
+        var movePartBtn = document.getElementById('btn-move-part');
+        if (movePartBtn) {
+            movePartBtn.addEventListener('click', function() {
+                setMovePartMode(!movePartMode);
+            });
+        }
+
+        var clearSelectionBtn = document.getElementById('btn-clear-selection');
+        if (clearSelectionBtn) clearSelectionBtn.addEventListener('click', clearSelection);
+
+        // 設置 STL 加載器
+        const ktx2Loader = new THREE.KTX2Loader();
+        ktx2Loader.setTranscoderPath('/inc/javascript/three.js/r155/libs/basis/');
+        ktx2Loader.detectSupport(renderer);
+
+        // 單一主光（輔助陰影層次），其餘照明由 HDR 環境貼圖提供
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        keyLight.position.set(5, 10, 7);
+        scene.add(keyLight);
+        
+        // 設置相機位置
+        camera.position.z = -85;
+        camera.position.x = 15;
+        camera.position.y = 25;
+
+        // 解決太近消失的問題：將 near 設小一點 (預設通常是 0.1，可以改成 0.01 或更小)
+        camera.near = 0.01;
+
+        // 解決太遠消失的問題：將 far 設大一點 (預設通常是 1000，可以根據你的場景大小增加，例如 10000)
+        camera.far = 10000000;
+        
+        // ⚠️ 重要：更新相機的投影矩陣，讓剛剛的設定生效
+        camera.updateProjectionMatrix();
+
+        // TrackballControls：四元數旋轉，無極點邊界限制
+        controls = new THREE.TrackballControls(camera, renderer.domElement);
+        controls.rotateSpeed = 3.0;
+        controls.zoomSpeed = 1.2;
+        // 右鍵平移原本太敏感，調低 panSpeed 讓檢視大型 3D 物件時不容易飄移過頭
+        controls.panSpeed = 0.17;
+        controls.staticMoving = false;
+        controls.dynamicDampingFactor = 0.1;
+        controls.mouseButtons = {
+            LEFT:   THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT:  THREE.MOUSE.PAN
+        };
+
+        // WASD/QE 移動：W/S 沿視線前後移動，A/D 左右平移，Q/E 上下平移
+        var viewerKeyboardActive = false;
+        var panKeys = { w:false, a:false, s:false, d:false, q:false, e:false };
+        var panRight = new THREE.Vector3();
+        var panUp = new THREE.Vector3();
+        var panDir = new THREE.Vector3();
+        var panMove = new THREE.Vector3();
+
+        viewerWrap.addEventListener('mouseenter', function(){ viewerKeyboardActive = true; });
+        viewerWrap.addEventListener('mouseleave', function(){
+            viewerKeyboardActive = false;
+            panKeys.w = panKeys.a = panKeys.s = panKeys.d = panKeys.q = panKeys.e = false;
+        });
+
+        function isTypingTarget(el) {
+            if (!el) return false;
+            var tag = (el.tagName || '').toLowerCase();
+            return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+        }
+
+        function setPanKey(e, isDown) {
+            var key = (e.key || '').toLowerCase();
+            if (panKeys.hasOwnProperty(key)) {
+                if (!isDown) {
+                    panKeys[key] = false;
+                    return;
+                }
+                if (!viewerKeyboardActive || isTypingTarget(document.activeElement)) return;
+                panKeys[key] = isDown;
+                e.preventDefault();
+            }
+        }
+
+        window.addEventListener('keydown', function(e){ setPanKey(e, true); });
+        window.addEventListener('keyup', function(e){ setPanKey(e, false); });
+
+        function applyKeyboardPan() {
+            if (!viewerKeyboardActive) return;
+            var x = (panKeys.d ? 1 : 0) - (panKeys.a ? 1 : 0);
+            var z = (panKeys.w ? 1 : 0) - (panKeys.s ? 1 : 0);
+            var y = (panKeys.q ? 1 : 0) - (panKeys.e ? 1 : 0);
+            if (x === 0 && y === 0 && z === 0) return;
+
+            panDir.subVectors(controls.target, camera.position).normalize();
+            panRight.crossVectors(panDir, camera.up).normalize();
+            panUp.copy(camera.up).normalize();
+
+            var distance = Math.max(1, camera.position.distanceTo(controls.target));
+            var step = distance * 0.012 * controls.panSpeed;
+            panMove.set(0, 0, 0).addScaledVector(panRight, x * step).addScaledVector(panUp, y * step).addScaledVector(panDir, z * step);
+            camera.position.add(panMove);
+            controls.target.add(panMove);
+        }
+
+        // HDR 環境貼圖（Image-Based Lighting）
+        if(typeof THREE.RGBELoader !== "undefined") {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+            new THREE.RGBELoader().load('hdr/studio.hdr', function(texture) {
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+                scene.environment = envMap;   // 提供反射/照明
+                texture.dispose();
+                pmremGenerator.dispose();
+            });
+        }
+
+        // 窗口調整大小時更新相機和渲染器
+        if(viewDbStatus !== 1 && (previewInfo.format === "glb" || previewInfo.format === "gltf")){
+            const gltfLoader = new THREE.GLTFLoader();
+            gltfLoader.setKTX2Loader(ktx2Loader);
+            if(typeof THREE.DRACOLoader !== "undefined"){
+                const dracoLoader = new THREE.DRACOLoader();
+                dracoLoader.setDecoderPath('/inc/javascript/three.js/r155/libs/draco/');
+                gltfLoader.setDRACOLoader(dracoLoader);
+            }
+            if(typeof THREE.MeshoptDecoder !== "undefined"){
+                gltfLoader.setMeshoptDecoder(THREE.MeshoptDecoder);
+            }
+
+            // 顯示下載進度 overlay
+            var glbDlOverlay = document.getElementById('glb-dl-overlay');
+            var glbDlBar     = document.getElementById('glb-dl-bar');
+            var glbDlLoaded  = document.getElementById('glb-dl-loaded');
+            var glbDlTotal   = document.getElementById('glb-dl-total');
+            var glbDlPct     = document.getElementById('glb-dl-pct');
+            glbDlOverlay.style.display = 'flex';
+            if (previewInfo.size > 0) {
+                glbDlTotal.textContent = size_hum_read(previewInfo.size);
+            }
+
+            gltfLoader.load(previewInfo.url, function (gltf) {
+                glbDlOverlay.style.display = 'none';
+                const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if(!model){
+                    smallComment("\u8f09\u5165\u6a21\u578b\u5931\u6557\uff0c\u683c\u5f0f\u53ef\u80fd\u4e0d\u53d7\u652f\u63f4",5000,false,{});
+                    return;
+                }
+				// 這裡加入遍歷樣式
+				 model.traverse(function(node) {
+					 if (node.isMesh) {
+						 // 方案 A：材質偏移（讓重疊的面有微小差距）
+						 forEachMaterial(node, function(material) {
+							 material.polygonOffset = true;
+							 material.polygonOffsetFactor = -1.0;
+							 material.polygonOffsetUnits = -4.0;
+						 });
+						 
+						 // 方案 B：如果還是不行，可以試試關閉其中一種深度寫入
+						 //node.material.depthWrite = false; 
+					 }
+				 });
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.sub(center);
+                activeModelName = orinFilename || previewInfo.url || "\u76ee\u524d\u6a21\u578b";
+                activeModelFormat = previewInfo.format ? previewInfo.format.toUpperCase() : 'GLTF';
+                activeModelHasMetadata = !!previewInfo.metadata_url;
+                activeModelAssetLabel = previewInfo.format ? previewInfo.format.toUpperCase() : "\u6a21\u578b";
+                activeModelSizeLabel = previewInfo.size ? size_hum_read(previewInfo.size) : '—';
+                workbenchStateOverride = '';
+                replaceLoadedModel(model);
+                scene.add(model);
+                indexModelParts(model);
+                document.getElementById('wb-empty-state').style.display = 'none';
+                fitCameraToScene(model);
+                updateModelInfo(orinFilename || previewInfo.url, previewInfo.format.toUpperCase(), model);
+                setupExplode(model);
+                loadPartMetadata(function() {
+                    if (typeof updateActiveStructureRow === 'function') updateActiveStructureRow();
+                    resizeWorkbenchRenderer();
+                });
+            }, function (xhr) {
+                const loaded = xhr.loaded || 0;
+                const total  = xhr.total  || previewInfo.size || 0;
+                const pct    = total > 0 ? Math.min(100, loaded / total * 100) : 0;
+                glbDlBar.style.width    = pct + '%';
+                glbDlLoaded.textContent = size_hum_read(loaded);
+                if (total > 0) {
+                    glbDlTotal.textContent = size_hum_read(total);
+                    glbDlPct.textContent   = pct.toFixed(1) + '%';
+                }
+            }, function (error) {
+                glbDlOverlay.style.display = 'none';
+                smallComment("\u8f09\u5165\u6a21\u578b\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u6574\u7406\u9801\u9762",5000,false,{});
+                console.error(error);
+            });
+        }
+        function resizeWorkbenchRenderer() {
+            var rect = viewerWrap.getBoundingClientRect();
+            var canvasWidth = Math.max(1, Math.floor(rect.width || 1));
+            var canvasHeight = Math.max(1, Math.floor(rect.height || 1));
+            if (document.fullscreenElement === viewerWrap) {
+                canvasWidth = window.innerWidth;
+                canvasHeight = window.innerHeight;
+            }
+            renderer.setSize(canvasWidth, canvasHeight, false);
+            camera.aspect = canvasWidth / canvasHeight;
+            camera.updateProjectionMatrix();
+            if (controls.handleResize) controls.handleResize();
+        }
+
+        window.addEventListener('resize', resizeWorkbenchRenderer);
+        window.setTimeout(resizeWorkbenchRenderer, 0);
+
+        // 渲染動畫
+        function animate() {
+            requestAnimationFrame(animate);
+            applyKeyboardPan();
+            controls.update();  // 更新 OrbitControls
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        function parseWithOcct(file) {
+            dialogMyBoxOn("\u89e3\u6790 STEP \u4e2d\uff08\u542b\u6750\u8cea\u8272\u5f69\uff09...", false, function(){});
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const fileBuffer = new Uint8Array(ev.target.result);
+                const worker = new Worker('occt/occt-import-js-worker.js');
+                worker.onmessage = function(e) {
+                    const result = e.data;
+                    dialogMyBoxOff();
+                    if (result && result.success) {
+                        buildSceneFromOcct(result);
+                        $(renderer.domElement).show();
+                    } else {
+                        smallComment("STEP \u6750\u8cea\u89e3\u6790\u5931\u6557\uff0c\u5c07\u4f7f\u7528\u4f3a\u670d\u5668\u8f49\u63db\u7d50\u679c", 3000, false, {});
+                    }
+                };
+                worker.onerror = function(err) {
+                    dialogMyBoxOff();
+                    smallComment("occt worker \u932f\u8aa4\uff1a" + err.message, 3000, false, {});
+                };
+                worker.postMessage({ format: 'step', buffer: fileBuffer, params: null });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function buildSceneFromOcct(result) {
+            const old = scene.getObjectByName('__occt__');
+            const group = new THREE.Group();
+            group.name = '__occt__';
+            var selectedLabel = document.getElementById('dzSelected').textContent.replace("\u5df2\u9078\uff1a",'').split('(')[0] || "\u4e0a\u50b3\u7684 STEP";
+            activeModelName = selectedLabel;
+            activeModelFormat = "STEP\uff08\u542b\u8272\u5f69\uff09";
+            activeModelHasMetadata = true;
+            activeModelAssetLabel = 'Preview';
+            activeModelSizeLabel = "\u672c\u6a5f\u9810\u89bd";
+            replaceLoadedModel(group);
+            if (old && old !== group && old.parent) {
+                old.parent.remove(old);
+                disposeObjectTree(old);
+            }
+            var previewParts = {};
+            var partIndex = 0;
+            for (const mesh of result.meshes) {
+                if (!mesh.attributes || !mesh.attributes.position) continue;
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mesh.attributes.position.array), 3));
+                if (mesh.attributes.normal) {
+                    geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(mesh.attributes.normal.array), 3));
+                }
+                if (mesh.index) {
+                    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(mesh.index.array), 1));
+                }
+                if (!mesh.attributes.normal) geometry.computeVertexNormals();
+                let color = new THREE.Color(0xc8c8c8);
+                if (mesh.color && mesh.color.length >= 3) {
+                    color = new THREE.Color(mesh.color[0], mesh.color[1], mesh.color[2]);
+                }
+                const material = new THREE.MeshStandardMaterial({ 
+                         color: color, 
+                         metalness: 0.1, 
+                         roughness: 0.4,
+                         // 在這裡加入樣式
+                         polygonOffset: true,
+                         polygonOffsetFactor: -1.0,
+                         polygonOffsetUnits: -4.0
+                     });
+                geometry.computeBoundingBox();
+                const previewMesh = new THREE.Mesh(geometry, material);
+                const partId = 'part_' + String(partIndex).padStart(4, '0');
+                const partName = 'Preview part ' + (partIndex + 1);
+                const size = geometry.boundingBox ? geometry.boundingBox.getSize(new THREE.Vector3()) : new THREE.Vector3();
+                const faces = geometry.index ? geometry.index.count / 3 : ((geometry.attributes.position && geometry.attributes.position.count) ? geometry.attributes.position.count / 3 : 0);
+                previewMesh.name = partId;
+                previewMesh.userData.step_threejs_part_id = partId;
+                previewParts[partId] = {
+                    part_id: partId,
+                    display_name: partName,
+                    assembly_path: [],
+                    entity_type: 'mesh',
+                    color: null,
+                    geometry: {
+                        faces: faces,
+                        bbox: [
+                            Number(size.x.toFixed(3)),
+                            Number(size.y.toFixed(3)),
+                            Number(size.z.toFixed(3))
+                        ]
+                    },
+                    properties: []
+                };
+                group.add(previewMesh);
+                partIndex++;
+            }
+            const prebox = new THREE.Box3().setFromObject(group);
+            const precenter = prebox.getCenter(new THREE.Vector3());
+            group.position.sub(precenter);
+            scene.add(group);
+            metadataLoadToken++;
+            partMetadata = {
+                version: 1,
+                source: {
+                    format: 'occt-preview',
+                    file_name: selectedLabel
+                },
+                parts: previewParts
+            };
+            indexModelParts(group);
+            buildStructurePanel();
+            updateActiveStructureRow();
+            document.getElementById('wb-empty-state').style.display = 'none';
+            fitCameraToScene(group);
+            updateModelInfo(
+                selectedLabel,
+                "STEP\uff08\u542b\u8272\u5f69\uff09", group
+            );
+            setupExplode(group);
+            renderInspectorForModel();
+            resizeWorkbenchRenderer();
+        }
+  </script>
+  <script src="js/secure_delete.js?v=1784035168"></script>
+  <!--內容結束-->
+</body>
+</html>

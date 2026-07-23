@@ -1,0 +1,35 @@
+{
+  "sourceFileName": "as1-oc-214.stp",
+  "sourceBytes": 441968,
+  "outputFileName": "test.glb",
+  "outputBytes": 215936,
+  "convertedAt": "2026-07-21T22:01:09.837Z",
+  "converter": "occt-import-js-xcaf",
+  "sourceUpAxis": "y",
+  "upAxis": "y",
+  "linearDeflection": 2.5,
+  "angularDeflection": 0.5,
+  "meshCount": 18,
+  "materialCount": 5,
+  "triangleCount": 4900,
+  "minimum": [
+    -10,
+    0,
+    -4
+  ],
+  "maximum": [
+    190,
+    150,
+    80
+  ],
+  "spans": {
+    "x": 200,
+    "y": 150,
+    "z": 84
+  },
+  "dimensions": {
+    "widthMm": 200,
+    "depthMm": 84,
+    "heightMm": 150
+  }
+}
