@@ -29,6 +29,8 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
   assert.match(plannerSource, /zoomSpeed=\{1\.12\}/);
   assert.match(plannerSource, /zoomToCursor/);
   assert.match(plannerSource, /onStart=\{beginInteraction\}/);
+  assert.match(plannerSource, /const lastAppliedRequestId = useRef<number \| null>\(null\)/);
+  assert.match(plannerSource, /if \(lastAppliedRequestId\.current === requestId\) return;/);
   assert.match(
     plannerSource,
     /const beginInteraction = useCallback\(\(\) => \{[\s\S]*?animating\.current = false;/,
