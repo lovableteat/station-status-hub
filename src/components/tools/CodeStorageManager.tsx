@@ -288,86 +288,103 @@ export function CodeStorageManager() {
             </Button>
           </DialogTrigger>
           <DialogContent
-            className="max-h-[88vh] max-w-5xl overflow-y-auto border-[#2a526f] bg-[#071522]"
+            className="!flex h-[min(920px,calc(100dvh-1.5rem))] w-[calc(100vw-1.5rem)] max-w-5xl flex-col overflow-hidden p-0 border-[#2a526f] bg-[#071522]"
             onPointerDownOutside={(event) => {
               const target = event.target as HTMLElement;
               if (target?.closest(".rich-text-editor") || target?.closest('input[type="file"]')) event.preventDefault();
             }}
           >
-            <DialogHeader>
+            <DialogHeader className="shrink-0 px-6 pt-6">
               <DialogTitle>{editingSnippet ? "編輯程式碼" : "新增程式碼"}</DialogTitle>
               <DialogDescription>程式碼以原始文字儲存，不會壓縮換行或合併縮排。</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="code-title">名稱 *</Label>
-                  <Input id="code-title" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code-language">程式語言</Label>
-                  <Select value={formData.language} onValueChange={(value) => setFormData((current) => ({ ...current, language: value }))}>
-                    <SelectTrigger id="code-language"><SelectValue /></SelectTrigger>
-                    <SelectContent>{LANGUAGE_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code-category">分類</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData((current) => ({ ...current, category: value }))}>
-                    <SelectTrigger id="code-category"><SelectValue /></SelectTrigger>
-                    <SelectContent>{CATEGORY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code-tags">標籤</Label>
-                  <Input id="code-tags" value={formData.tags} onChange={(event) => setFormData((current) => ({ ...current, tags: event.target.value }))} placeholder="以逗號分隔" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>用途說明</Label>
-                <RichTextEditor content={formData.description} onChange={(description) => setFormData((current) => ({ ...current, description }))} placeholder="說明這段程式碼解決什麼問題" className="min-h-[80px]" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="code_content">程式碼內容 *</Label>
-                <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
-                  <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-2 text-xs text-[#9fc8dc]">
-                    <span>原始格式編輯器 · 保留換行與縮排</span>
-                    <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
+            <form
+              onSubmit={handleSubmit}
+              data-testid="code-editor-form"
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div
+                data-testid="code-editor-form-scroll"
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-5 pr-4"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="code-title">名稱 *</Label>
+                    <Input id="code-title" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required />
                   </div>
-                  <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
-                    <pre ref={codeLineNumbersRef} aria-hidden="true" className="m-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none">
-                      {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
-                    </pre>
-                    <textarea
-                      ref={codeEditorRef}
-                      id="code_content"
-                      value={formData.code_content}
-                      onChange={(event) => setFormData((current) => ({ ...current, code_content: event.target.value }))}
-                      onKeyDown={handleCodeEditorKeyDown}
-                      onScroll={(event) => {
-                        if (codeLineNumbersRef.current) codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
-                      }}
-                      rows={14}
-                      wrap="off"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      className="h-[336px] min-w-0 resize-y overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0]"
-                      style={{ tabSize: 4 }}
-                      placeholder="貼上或輸入程式碼"
-                      required
-                    />
+                  <div className="space-y-2">
+                    <Label htmlFor="code-language">程式語言</Label>
+                    <Select value={formData.language} onValueChange={(value) => setFormData((current) => ({ ...current, language: value }))}>
+                      <SelectTrigger id="code-language"><SelectValue /></SelectTrigger>
+                      <SelectContent>{LANGUAGE_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="code-category">分類</Label>
+                    <Select value={formData.category} onValueChange={(value) => setFormData((current) => ({ ...current, category: value }))}>
+                      <SelectTrigger id="code-category"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CATEGORY_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="code-tags">標籤</Label>
+                    <Input id="code-tags" value={formData.tags} onChange={(event) => setFormData((current) => ({ ...current, tags: event.target.value }))} placeholder="以逗號分隔" />
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>SOP 操作說明</Label>
-                <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px]" />
+                <div className="space-y-2">
+                  <Label>用途說明</Label>
+                  <RichTextEditor content={formData.description} onChange={(description) => setFormData((current) => ({ ...current, description }))} placeholder="說明這段程式碼解決什麼問題" className="min-h-[80px]" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="code_content">程式碼內容 *</Label>
+                  <div className="overflow-hidden rounded-xl border border-[#2a526f] bg-[#06111f] focus-within:border-[#42c9e8] focus-within:ring-2 focus-within:ring-[#42c9e8]/20">
+                    <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-2 text-xs text-[#9fc8dc]">
+                      <span>原始格式編輯器 · 保留換行與縮排</span>
+                      <span className="font-mono text-[#d9f6ff]">{codeLineCount} 行</span>
+                    </div>
+                    <div
+                      data-testid="code-editor-viewport"
+                      className="grid h-[clamp(240px,42dvh,360px)] min-h-0 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden"
+                    >
+                      <pre
+                        ref={codeLineNumbersRef}
+                        data-testid="code-editor-line-numbers"
+                        aria-hidden="true"
+                        className="m-0 h-full min-h-0 overflow-hidden border-r border-[#2a526f] bg-[#0b1b2d] px-3 py-3 text-right font-mono text-sm leading-6 text-[#668ba0] select-none"
+                      >
+                        {Array.from({ length: codeLineCount }, (_, index) => index + 1).join("\n")}
+                      </pre>
+                      <textarea
+                        ref={codeEditorRef}
+                        id="code_content"
+                        value={formData.code_content}
+                        onChange={(event) => setFormData((current) => ({ ...current, code_content: event.target.value }))}
+                        onKeyDown={handleCodeEditorKeyDown}
+                        onScroll={(event) => {
+                          if (codeLineNumbersRef.current) codeLineNumbersRef.current.scrollTop = event.currentTarget.scrollTop;
+                        }}
+                        rows={14}
+                        wrap="off"
+                        spellCheck={false}
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        className="h-full min-h-0 min-w-0 resize-none overflow-auto whitespace-pre bg-[#06111f] px-4 py-3 font-mono text-sm leading-6 text-[#e8f6ff] caret-[#42c9e8] outline-none placeholder:text-[#668ba0]"
+                        style={{ tabSize: 4 }}
+                        placeholder="貼上或輸入程式碼"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>SOP 操作說明</Label>
+                  <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px]" />
+                </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 border-t border-[#2a526f] bg-[#091827] px-6 py-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button>
                 <Button type="submit"><Check className="mr-2 h-4 w-4" />{editingSnippet ? "儲存變更" : "建立程式碼"}</Button>
               </DialogFooter>
