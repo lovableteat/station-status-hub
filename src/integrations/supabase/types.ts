@@ -2143,6 +2143,44 @@ export type Database = {
         }
         Relationships: []
       }
+      test_project_address_fields: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          placeholder: string | null
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          placeholder?: string | null
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          placeholder?: string | null
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_address_fields_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_project_code_assignments: {
         Row: {
           code_snippet_id: string
@@ -2358,6 +2396,45 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      test_system_address_values: {
+        Row: {
+          created_at: string
+          field_id: string
+          system_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          field_id: string
+          system_id: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          field_id?: string
+          system_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_system_address_values_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "test_project_address_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_system_address_values_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       test_systems: {
         Row: {
@@ -3071,16 +3148,6 @@ export type Database = {
           p_workspace_access: Json
         }
         Returns: undefined
-      }
-      send_admin_announcement: {
-        Args: {
-          p_message?: string
-          p_metadata?: Json
-          p_recipient_ids?: string[] | null
-          p_sender_id: string
-          p_title?: string
-        }
-        Returns: Json
       }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
