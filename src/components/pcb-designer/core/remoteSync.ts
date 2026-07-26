@@ -3,7 +3,10 @@ import type { PcbSaveState } from "../types.ts";
 export type PcbPersistenceStatus = "local" | "saving" | "synced";
 type RemoteError = { code?: string; message?: string } | null;
 type RemoteTable = {
-  upsert: (rows: unknown[], options: { onConflict: string }) => Promise<{ error: RemoteError }>;
+  upsert: (
+    rows: unknown[],
+    options: { onConflict: string; defaultToNull: boolean },
+  ) => Promise<{ error: RemoteError }>;
   delete: () => {
     in: (column: "id", ids: string[]) => Promise<{ error: RemoteError }>;
   };
@@ -20,7 +23,10 @@ async function reconcileTable(
   deletedIds: string[],
 ): Promise<boolean> {
   const table = client.from(tableName);
-  const upsert = await table.upsert(rows, { onConflict: "id" });
+  const upsert = await table.upsert(rows, {
+    onConflict: "id",
+    defaultToNull: false,
+  });
   if (upsert.error) return false;
   if (!deletedIds.length) return true;
   const removed = await table.delete().in("id", deletedIds);

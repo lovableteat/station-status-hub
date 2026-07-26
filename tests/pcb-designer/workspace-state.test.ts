@@ -320,3 +320,25 @@ test("reload then edit and undo preserves the persisted BOM queue", async () => 
   assert.equal(undone.activeProject.board.width, 100);
   assert.deepEqual(undone.pendingPlacements, [pending]);
 });
+
+test("rejects programmatic BOM imports that exceed the placement budget", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const oversized = {
+    name: "Oversized",
+    type: "IC",
+    manufacturer: "",
+    partNumber: "",
+    width: 2,
+    height: 2,
+    maxHeight: 1,
+    color: "#fff",
+    quantity: 5_001,
+    reference: "U1",
+  };
+
+  assert.equal(
+    reduceWorkspaceState(initial, { type: "bom/import", items: [oversized] }),
+    initial,
+  );
+});

@@ -161,6 +161,7 @@ export function editSelectedObject(
   if (selection.kind === "component") {
     const component = next.components.find((item) => item.instanceId === selection.id);
     if (!component) return project;
+    if (component.locked && action.type !== "toggle-lock") return project;
     if (action.type === "delete") {
       next.components = next.components.filter((item) => item.instanceId !== selection.id);
     } else if (action.type === "rotate") {

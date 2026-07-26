@@ -12,6 +12,10 @@ import {
 } from "./history.ts";
 import { runDrc } from "./drc.ts";
 import {
+  MAX_BOM_QUANTITY_PER_ROW,
+  MAX_BOM_TOTAL_PLACEMENTS,
+} from "./tabular.ts";
+import {
   clone,
   newestProject,
   timestamp,
@@ -491,6 +495,21 @@ export function reduceWorkspaceState(
         },
       });
     case "bom/import": {
+      let importCount = 0;
+      for (const item of action.items) {
+        if (
+          !Number.isInteger(item.quantity)
+          || item.quantity <= 0
+          || item.quantity > MAX_BOM_QUANTITY_PER_ROW
+          || importCount + item.quantity > MAX_BOM_TOTAL_PLACEMENTS
+        ) {
+          return state;
+        }
+        importCount += item.quantity;
+      }
+      const currentPending =
+        state.data.pendingPlacementsByProject?.[state.activeProject.id]?.length ?? 0;
+      if (currentPending + importCount > MAX_BOM_TOTAL_PLACEMENTS) return state;
       const pendingPlacements = action.items.flatMap((item) =>
         Array.from({ length: item.quantity }, () => clone(item)),
       );

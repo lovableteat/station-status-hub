@@ -29,8 +29,12 @@ export interface TabularParseResult<T> {
 }
 
 export interface BomParseResult extends TabularParseResult<ImportedBomItem> {
-  pending: PendingPlacement[];
+  placementCount: number;
 }
+
+export const MAX_TABULAR_ROWS = 10_000;
+export const MAX_BOM_QUANTITY_PER_ROW = 1_000;
+export const MAX_BOM_TOTAL_PLACEMENTS = 5_000;
 
 const aliases: Record<string, readonly string[]> = {
   name: ["name", "名稱", "元件名稱"],
@@ -106,7 +110,14 @@ function parseComponent(row: TabularRow): ImportedComponent | string {
 export function parseComponentRows(rows: readonly TabularRow[]): TabularParseResult<ImportedComponent> {
   const valid: ImportedComponent[] = [];
   const errors: TabularImportError[] = [];
-  rows.forEach((row, index) => {
+  const acceptedRows = rows.slice(0, MAX_TABULAR_ROWS);
+  if (rows.length > MAX_TABULAR_ROWS) {
+    errors.push({
+      row: MAX_TABULAR_ROWS + 2,
+      message: `Row count exceeds limit of ${MAX_TABULAR_ROWS}`,
+    });
+  }
+  acceptedRows.forEach((row, index) => {
     if (isBlank(row)) return;
     const parsed = parseComponent(row);
     if (typeof parsed === "string") errors.push({ row: rowNumber(row, index), message: parsed });
@@ -118,8 +129,15 @@ export function parseComponentRows(rows: readonly TabularRow[]): TabularParseRes
 export function parseBomRows(rows: readonly TabularRow[]): BomParseResult {
   const valid: ImportedBomItem[] = [];
   const errors: TabularImportError[] = [];
-  const pending: PendingPlacement[] = [];
-  rows.forEach((row, index) => {
+  let placementCount = 0;
+  const acceptedRows = rows.slice(0, MAX_TABULAR_ROWS);
+  if (rows.length > MAX_TABULAR_ROWS) {
+    errors.push({
+      row: MAX_TABULAR_ROWS + 2,
+      message: `Row count exceeds limit of ${MAX_TABULAR_ROWS}`,
+    });
+  }
+  acceptedRows.forEach((row, index) => {
     if (isBlank(row)) return;
     const parsed = parseComponent(row);
     if (typeof parsed === "string") {
@@ -131,11 +149,25 @@ export function parseBomRows(rows: readonly TabularRow[]): BomParseResult {
       errors.push({ row: rowNumber(row, index), message: quantity });
       return;
     }
+    if (quantity > MAX_BOM_QUANTITY_PER_ROW) {
+      errors.push({
+        row: rowNumber(row, index),
+        message: `Quantity exceeds limit of ${MAX_BOM_QUANTITY_PER_ROW}`,
+      });
+      return;
+    }
+    if (placementCount + quantity > MAX_BOM_TOTAL_PLACEMENTS) {
+      errors.push({
+        row: rowNumber(row, index),
+        message: `BOM total placement limit of ${MAX_BOM_TOTAL_PLACEMENTS} exceeded`,
+      });
+      return;
+    }
     const item: ImportedBomItem = { ...parsed, quantity, reference: text(cell(row, "reference")) };
     valid.push(item);
-    for (let count = 0; count < quantity; count += 1) pending.push({ ...item });
+    placementCount += quantity;
   });
-  return { valid, errors, pending };
+  return { valid, errors, placementCount };
 }
 
 export function parseCsvRows(csv: string): string[][] {

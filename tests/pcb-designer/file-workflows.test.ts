@@ -44,3 +44,14 @@ test("XLSX is loaded dynamically only from XLSX branches", async () => {
   assert.match(source, /await import\(["']xlsx["']\)/);
   assert.doesNotMatch(source, /^import\s+.*from\s+["']xlsx["']/m);
 });
+
+test("rejects oversized imports before reading their contents", async () => {
+  const { MAX_IMPORT_FILE_BYTES, readTabularFile } = await loadFilesModule();
+  const file = new File(["x"], "parts.csv", { type: "text/csv" });
+  Object.defineProperty(file, "size", { value: MAX_IMPORT_FILE_BYTES + 1 });
+
+  await assert.rejects(
+    readTabularFile(file),
+    /檔案大小超過/,
+  );
+});
