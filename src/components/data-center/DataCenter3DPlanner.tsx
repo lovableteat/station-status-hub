@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
+import { Activity, Network, Power, X } from "lucide-react";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
@@ -27,6 +28,16 @@ import { getUniformModelFit } from "./modelFit.mjs";
 import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
 import { getRackUnitMountLayout } from "./rackMount.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
+import {
+  GB300RackEquipment3D,
+  type Gb300EquipmentSelection,
+} from "./GB300RackEquipment3D";
+import {
+  GB300_RACK_MODEL_ID,
+  getGb300DefaultL10Slots,
+  getGb300LedState,
+  resolveGb300RackEquipment,
+} from "./gb300RackEquipment.mjs";
 
 interface DataCenter3DPlannerProps {
   racks: RackPlan[];
@@ -38,6 +49,12 @@ interface DataCenter3DPlannerProps {
   cameraRequestId: number;
   facility: FacilityPlan;
   onSelectRack: (rackId: string) => void;
+  canEdit?: boolean;
+  onUpdateRackDeviceHealth?: (
+    rackId: string,
+    deviceId: string,
+    health: RackDeviceHealth,
+  ) => void;
 }
 
 function resolveRackDefinition(
@@ -661,16 +678,26 @@ function RackL10Modules({
   lowDetail: boolean;
 }) {
   const layout = useMemo(
-    () =>
-      getRackUnitMountLayout({
+    () => {
+      const rackUnitSlots =
+        Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
+          ? rack.l10Slots
+          : rack.modelId === GB300_RACK_MODEL_ID
+            ? getGb300DefaultL10Slots({
+                moduleCount: rack.l10Count,
+                rackUnits: l10Definition.rackUnits ?? 1,
+              })
+            : undefined;
+      return getRackUnitMountLayout({
         rackDimensions: rackDefinition.dimensions,
         capacityU: rack.capacityU,
         moduleDimensions: l10Definition.dimensions,
         rackUnits: l10Definition.rackUnits ?? 1,
         moduleCount: rack.l10Count,
         startU: rack.l10StartU,
-        rackUnitSlots: rack.l10Slots,
-      }),
+        rackUnitSlots,
+      });
+    },
     [
       l10Definition.dimensions,
       l10Definition.rackUnits,
@@ -678,6 +705,7 @@ function RackL10Modules({
       rack.l10Count,
       rack.l10Slots,
       rack.l10StartU,
+      rack.modelId,
       rackDefinition.dimensions,
     ],
   );
@@ -774,6 +802,8 @@ function RackVisual({
   lowDetail,
   onSelect,
   onHover,
+  selectedEquipmentId,
+  onSelectEquipment,
 }: {
   rack: RackPlan;
   definition: RackModelDefinition;
@@ -785,6 +815,11 @@ function RackVisual({
   lowDetail: boolean;
   onSelect: (rackId: string) => void;
   onHover: (rackId: string | null) => void;
+  selectedEquipmentId: string | null;
+  onSelectEquipment: (
+    rackId: string,
+    equipment: Gb300EquipmentSelection,
+  ) => void;
 }) {
   const color = getLayerColor(rack, activeLayer);
   const width = definition.dimensions.widthMm / 1000;
@@ -838,6 +873,19 @@ function RackVisual({
         detailed={selected}
         lowDetail={lowDetail}
       />
+
+      {definition.id === GB300_RACK_MODEL_ID ? (
+        <GB300RackEquipment3D
+          rack={rack}
+          rackDimensions={definition.dimensions}
+          selectedEquipmentId={selectedEquipmentId}
+          lowDetail={lowDetail}
+          onSelectEquipment={(equipment) => {
+            onSelect(rack.id);
+            onSelectEquipment(rack.id, equipment);
+          }}
+        />
+      ) : null}
 
       <mesh position={[0, 0.018, 0]} receiveShadow>
         <boxGeometry args={[width + 0.2, 0.035, depth + 0.2]} />
@@ -1161,7 +1209,16 @@ function PlannerScene({
   facility,
   onSelectRack,
   lowDetail,
-}: DataCenter3DPlannerProps & { lowDetail: boolean }) {
+  selectedEquipment,
+  onSelectEquipment,
+}: DataCenter3DPlannerProps & {
+  lowDetail: boolean;
+  selectedEquipment: { rackId: string; equipmentId: string } | null;
+  onSelectEquipment: (
+    rackId: string,
+    equipment: Gb300EquipmentSelection,
+  ) => void;
+}) {
   const [hoveredRackId, setHoveredRackId] = useState<string | null>(null);
   const [interactionPreview, setInteractionPreview] = useState(false);
   const renderLowDetail = lowDetail || interactionPreview;
@@ -1218,6 +1275,12 @@ function PlannerScene({
             lowDetail={lowDetail}
             onSelect={onSelectRack}
             onHover={setHoveredRackId}
+            selectedEquipmentId={
+              selectedEquipment?.rackId === rack.id
+                ? selectedEquipment.equipmentId
+                : null
+            }
+            onSelectEquipment={onSelectEquipment}
           />
         );
       })}
@@ -1286,12 +1349,221 @@ function ModelLoadingOverlay() {
   );
 }
 
+const EQUIPMENT_HEALTH_OPTIONS: Array<{
+  id: RackDeviceHealth;
+  label: string;
+  color: string;
+}> = [
+  { id: "healthy", label: "正常", color: "#34d399" },
+  { id: "warning", label: "警告", color: "#f59e0b" },
+  { id: "critical", label: "故障", color: "#ef4444" },
+  { id: "offline", label: "離線", color: "#64748b" },
+];
+
+function EquipmentLedSummary({
+  equipment,
+}: {
+  equipment: Gb300EquipmentSelection;
+}) {
+  const leds = getGb300LedState(equipment.kind, equipment.health);
+  const indicators = [
+    { label: "PWR", colors: [leds.pwr] },
+    ...(equipment.kind === "power-shelf"
+      ? [
+          { label: "PMC", colors: [leds.pmc] },
+          { label: "PSU", colors: leds.psu },
+        ]
+      : equipment.kind === "switch-tray"
+        ? [
+            { label: "NVL", colors: leds.nvl },
+            { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
+          ]
+        : [{ label: "CTRL", colors: [leds.pmc] }]),
+  ];
+
+  return (
+    <div className="mt-3 grid gap-1.5">
+      {indicators.map((indicator) => (
+        <div
+          key={indicator.label}
+          className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-black/20 px-2.5 py-2"
+        >
+          <span className="text-[10px] font-black tracking-[0.12em] text-slate-400">
+            {indicator.label}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {indicator.colors.map((color, index) => (
+              <span
+                key={`${indicator.label}-${index}`}
+                className="h-2 w-2 rounded-full border border-white/10"
+                style={{
+                  backgroundColor: color,
+                  boxShadow:
+                    color === "#111827" || color === "#1f2937"
+                      ? "none"
+                      : `0 0 9px ${color}`,
+                }}
+              />
+            ))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Gb300EquipmentInspector({
+  rack,
+  equipment,
+  canEdit,
+  onClose,
+  onHealthChange,
+}: {
+  rack: RackPlan;
+  equipment: Gb300EquipmentSelection;
+  canEdit: boolean;
+  onClose: () => void;
+  onHealthChange: (health: RackDeviceHealth) => void;
+}) {
+  const Icon =
+    equipment.kind === "power-shelf"
+      ? Power
+      : equipment.kind === "switch-tray"
+        ? Network
+        : Activity;
+  const endU = equipment.rackUnitStart + equipment.rackUnitSpan - 1;
+
+  return (
+    <section
+      data-testid="gb300-equipment-inspector"
+      className="absolute right-3 top-3 z-40 w-[min(330px,calc(100%-24px))] overflow-hidden rounded-2xl border border-cyan-200/25 bg-[#06111d]/95 text-white shadow-[0_24px_70px_-24px_rgba(34,211,238,0.55)] backdrop-blur-xl"
+    >
+      <header className="flex items-start gap-3 border-b border-white/10 p-3.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-100">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-black">{equipment.name}</div>
+          <div className="mt-1 text-[11px] font-semibold text-cyan-100/65">
+            {rack.cabinet} · U{equipment.rackUnitStart}
+            {endU === equipment.rackUnitStart ? "" : `–U${endU}`}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="關閉設備資訊"
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition-colors hover:border-white/25 hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </header>
+
+      <div className="p-3.5">
+        <dl className="grid grid-cols-[70px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[11px]">
+          <dt className="font-bold text-slate-500">MODEL</dt>
+          <dd className="truncate font-semibold text-slate-200">{equipment.model}</dd>
+          <dt className="font-bold text-slate-500">ROLE</dt>
+          <dd className="truncate font-semibold text-slate-200">{equipment.role}</dd>
+          <dt className="font-bold text-slate-500">ASSET</dt>
+          <dd className="truncate font-mono text-cyan-100/80">{equipment.assetTag}</dd>
+        </dl>
+
+        <EquipmentLedSummary equipment={equipment} />
+
+        <div className="mt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-black tracking-[0.12em] text-slate-400">
+              DEVICE STATUS
+            </span>
+            {!canEdit ? (
+              <span className="text-[10px] font-semibold text-slate-500">唯讀</span>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {EQUIPMENT_HEALTH_OPTIONS.map((option) => {
+              const active = equipment.health === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={active}
+                  disabled={!canEdit || !equipment.sourceDeviceId}
+                  onClick={() => onHealthChange(option.id)}
+                  className="flex min-h-10 flex-col items-center justify-center gap-1 rounded-lg border px-1 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{
+                    borderColor: active ? option.color : "rgba(255,255,255,0.1)",
+                    backgroundColor: active ? `${option.color}22` : "rgba(0,0,0,0.2)",
+                    color: active ? option.color : "#94a3b8",
+                  }}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{
+                      backgroundColor: option.color,
+                      boxShadow: active ? `0 0 8px ${option.color}` : "none",
+                    }}
+                  />
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
   const isMobile = useIsMobile();
+  const { onSelectRack } = props;
+  const [selectedEquipment, setSelectedEquipment] = useState<{
+    rackId: string;
+    equipmentId: string;
+  } | null>(null);
+  const selectedRack = props.racks.find(
+    (rack) => rack.id === selectedEquipment?.rackId,
+  );
+  const selectedEquipmentData = selectedRack
+    ? (resolveGb300RackEquipment(selectedRack.devices) as Gb300EquipmentSelection[]).find(
+        (equipment) => equipment.id === selectedEquipment?.equipmentId,
+      )
+    : undefined;
+
+  useEffect(() => {
+    if (selectedEquipment && props.selectedRackId !== selectedEquipment.rackId) {
+      setSelectedEquipment(null);
+    }
+  }, [props.selectedRackId, selectedEquipment]);
+
+  const handleSelectEquipment = useCallback(
+    (rackId: string, equipment: Gb300EquipmentSelection) => {
+      onSelectRack(rackId);
+      setSelectedEquipment({ rackId, equipmentId: equipment.id });
+    },
+    [onSelectRack],
+  );
 
   return (
     <div className="relative h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden bg-[#03070c] sm:min-h-[460px]">
       <ModelLoadingOverlay />
+      {selectedRack && selectedEquipmentData ? (
+        <Gb300EquipmentInspector
+          rack={selectedRack}
+          equipment={selectedEquipmentData}
+          canEdit={Boolean(props.canEdit)}
+          onClose={() => setSelectedEquipment(null)}
+          onHealthChange={(health) => {
+            if (!selectedEquipmentData.sourceDeviceId) return;
+            props.onUpdateRackDeviceHealth?.(
+              selectedRack.id,
+              selectedEquipmentData.sourceDeviceId,
+              health,
+            );
+          }}
+        />
+      ) : null}
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-white/12 bg-black/70 px-4 py-2 text-[11px] font-medium text-slate-300 shadow-xl backdrop-blur-xl sm:block">
         左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選機櫃查看資料
       </div>
@@ -1305,7 +1577,12 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         style={{ touchAction: "none" }}
       >
         <Suspense fallback={null}>
-          <PlannerScene {...props} lowDetail={isMobile} />
+          <PlannerScene
+            {...props}
+            lowDetail={isMobile}
+            selectedEquipment={selectedEquipment}
+            onSelectEquipment={handleSelectEquipment}
+          />
         </Suspense>
       </Canvas>
     </div>
