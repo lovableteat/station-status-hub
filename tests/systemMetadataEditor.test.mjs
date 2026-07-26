@@ -145,9 +145,12 @@ test("system, address, and JSONB value writes use one transactional RPC", async 
   const saveStart = source.indexOf("const handleSave");
   const renderStart = source.indexOf("<MobileDialog open=", saveStart);
   const saveHandler = source.slice(saveStart, renderStart);
+  const dynamicSaveHandler = saveHandler.slice(
+    saveHandler.indexOf('const { error } = await supabase.rpc("save_test_system_metadata"'),
+  );
 
-  assert.match(saveHandler, /\.rpc\("save_test_system_metadata"/);
-  assert.doesNotMatch(saveHandler, /\.from\("test_systems"\)/);
+  assert.match(dynamicSaveHandler, /\.rpc\("save_test_system_metadata"/);
+  assert.doesNotMatch(dynamicSaveHandler, /\.from\("test_systems"\)/);
   assert.match(migration, /create or replace function public\.save_test_system_metadata/i);
   assert.match(migration, /update public\.test_systems/i);
   assert.match(migration, /insert into public\.test_system_address_values/i);
@@ -260,4 +263,30 @@ test("metadata field reorder is validated and committed by one transactional RPC
   assert.match(typesSource, /reorder_test_project_system_fields:/);
   assert.match(typesSource, /p_field_ids: string\[\]/);
   assert.match(typesSource, /p_project_id: string/);
+});
+
+test("system dialog preserves the legacy editor when the dynamic metadata schema or RPC is unavailable", async () => {
+  const source = await readSource(dialogUrl);
+  const loadStart = source.indexOf("const loadSystemDetails");
+  const loadEnd = source.indexOf("if (isOpen)", loadStart);
+  const loadHandler = source.slice(loadStart, loadEnd);
+  const saveStart = source.indexOf("const handleSave");
+  const renderStart = source.indexOf("<MobileDialog open=", saveStart);
+  const saveHandler = source.slice(saveStart, renderStart);
+
+  assert.match(source, /isMetadataUnavailable/);
+  assert.match(loadHandler, /test_project_software_fields/);
+  assert.match(loadHandler, /test_system_software_values/);
+  assert.match(loadHandler, /setCompatibilityMode\(metadataUnavailable\)/);
+  assert.match(loadHandler, /setLoadedSystemId\(systemId\)/);
+  assert.match(source, /相容模式/);
+  assert.match(source, /handleAddLegacySoftwareField/);
+  assert.match(source, /handleRemoveLegacySoftwareField/);
+  assert.match(saveHandler, /compatibilityMode/);
+  assert.match(saveHandler, /\.from\("test_systems"\)[\s\S]*?\.update\(/);
+  assert.match(saveHandler, /test_system_address_values/);
+  assert.match(saveHandler, /test_system_software_values/);
+  assert.match(saveHandler, /dynamicMetadataRpcUnavailable = true/);
+  assert.match(saveHandler, /saveLegacyCompatibilityMode\(fields, values\)/);
+  assert.match(source, /PGRST202|function.*not.*found/i);
 });
