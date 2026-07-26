@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { PCB_LIBRARY_DRAG_TYPE } from "./PcbCanvas.tsx";
 import {
   BOM_FILE_ACCEPT,
   LIBRARY_FILE_ACCEPT,
@@ -132,6 +134,16 @@ export function PcbLeftRail({
     if (file) onFile(file);
   };
 
+  const placeLibraryComponent = (component: PcbLibraryComponent) => {
+    const result = workspace.placeLibraryComponent(component.id);
+    if (result.ok === true) {
+      workspace.selectObject({ kind: "component", id: result.component.instanceId });
+      toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
+    } else {
+      toast({ title: "無法放置元件", description: result.reason, variant: "destructive" });
+    }
+  };
+
   return (
     <aside
       className="pcb-left-rail flex min-h-0 flex-col border-r border-[#2a526f] bg-[#0b1b2d]"
@@ -246,23 +258,42 @@ export function PcbLeftRail({
           </>
         )}
         {activeTab === "bom" && (
-          <label
-            className={cn(
-              "inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-lg border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200",
-              !workspace.canMutate && "pointer-events-none opacity-50",
-            )}
-            title="上傳 CSV 或 XLSX BOM"
-          >
-            <FileUp className="mr-1.5 h-3.5 w-3.5" />
-            匯入 BOM
-            <input
-              type="file"
-              accept={BOM_FILE_ACCEPT}
-              className="sr-only"
-              disabled={!workspace.canMutate}
-              onChange={(event) => chooseFile(event, onBomFile)}
-            />
-          </label>
+          <>
+            <label
+              className={cn(
+                "inline-flex h-8 flex-1 cursor-pointer items-center justify-center rounded-lg border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200",
+                !workspace.canMutate && "pointer-events-none opacity-50",
+              )}
+              title="上傳 CSV 或 XLSX BOM"
+            >
+              <FileUp className="mr-1.5 h-3.5 w-3.5" />
+              匯入 BOM
+              <input
+                type="file"
+                accept={BOM_FILE_ACCEPT}
+                className="sr-only"
+                disabled={!workspace.canMutate}
+                onChange={(event) => chooseFile(event, onBomFile)}
+              />
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg border-[#356985] px-2 text-xs"
+              disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
+              onClick={() => {
+                const result = workspace.autoPlacePending();
+                toast({
+                  title: result.placed ? `已自動放置 ${result.placed} 個元件` : "沒有元件可自動放置",
+                  description: result.failed ? `${result.failed} 個項目找不到合法位置。` : "BOM 佇列已處理完成。",
+                  variant: result.placed ? "default" : "destructive",
+                });
+              }}
+            >
+              自動放置
+            </Button>
+          </>
         )}
       </div>
 
@@ -302,7 +333,15 @@ export function PcbLeftRail({
         ))}
 
         {activeTab === "library" && library.map((component) => (
-          <div key={component.id} className="border-b border-[#23445d] px-2 py-2">
+          <div
+            key={component.id}
+            className="pcb-library-card border-b border-[#23445d] px-2 py-2"
+            draggable={workspace.canMutate}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "copy";
+              event.dataTransfer.setData(PCB_LIBRARY_DRAG_TYPE, component.id);
+            }}
+          >
             <div className="flex items-start gap-2">
               <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: component.color }} aria-hidden="true" />
               <div className="min-w-0 flex-1">
@@ -312,6 +351,7 @@ export function PcbLeftRail({
               </div>
             </div>
             <div className="mt-1 flex justify-end">
+              <RowAction label={`放置 ${component.name}`} icon={Plus} disabled={!workspace.canMutate} onClick={() => placeLibraryComponent(component)} />
               <RowAction label={`編輯 ${component.name}`} icon={Pencil} disabled={!workspace.canMutate || component.source === "built-in"} onClick={() => onEditComponent(component)} />
               <RowAction label={`複製 ${component.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateLibraryComponent(component.id)} />
               <RowAction label={`刪除 ${component.name}`} icon={Trash2} danger disabled={!workspace.canMutate || component.source === "built-in"} onClick={() => onDeleteComponent(component)} />
@@ -326,6 +366,21 @@ export function PcbLeftRail({
                 <p className="truncate text-xs font-semibold text-slate-100">{item.reference || "待編號"} · {item.name}</p>
                 <p className="truncate font-mono text-[10px] text-slate-400">{item.partNumber || "無料號"}</p>
               </div>
+              <RowAction
+                label={`放置 ${item.name}`}
+                icon={Plus}
+                disabled={!workspace.canMutate}
+                onClick={() => {
+                  const result = workspace.placePendingPlacement(index);
+                  toast({
+                    title: result.ok ? "BOM 元件已放置" : "無法放置 BOM 元件",
+                    description: result.ok === true
+                      ? `${result.component.reference} · ${result.component.name}`
+                      : result.reason,
+                    variant: result.ok ? "default" : "destructive",
+                  });
+                }}
+              />
               <RowAction label={`移除 ${item.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => workspace.removePendingPlacement(index)} />
             </div>
           )) : (

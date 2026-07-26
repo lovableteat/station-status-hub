@@ -48,6 +48,8 @@ function materialize(
   const history = state.historyByProject[activeProject.id]
     ?? createHistoryState(activeProject);
   const pendingPlacements = data.pendingPlacementsByProject?.[activeProject.id] ?? [];
+  const pendingHistory = state.pendingHistoryByProject[activeProject.id]
+    ?? createHistoryState(pendingPlacements);
   return {
     ...state,
     data,
@@ -55,6 +57,10 @@ function materialize(
     historyByProject: {
       ...state.historyByProject,
       [activeProject.id]: history,
+    },
+    pendingHistoryByProject: {
+      ...state.pendingHistoryByProject,
+      [activeProject.id]: pendingHistory,
     },
     drcIssues: runDrc(activeProject),
     pendingPlacements: clone(pendingPlacements),
@@ -80,11 +86,21 @@ export function createWorkspaceState(
     historyByProject: {
       [project.id]: createHistoryState(project),
     },
+    pendingHistoryByProject: {
+      [project.id]: createHistoryState(
+        safeData.pendingPlacementsByProject[project.id] ?? [],
+      ),
+    },
     pendingPlacements: [],
     canEdit,
     documentLocked: false,
     tool: "select",
     zoom: 100,
+    viewCenter: {
+      x: project.board.width / 2,
+      y: project.board.height / 2,
+    },
+    selection: null,
     rightTab: "board",
   });
 }
@@ -93,6 +109,7 @@ function replaceProject(
   state: PcbWorkspaceState,
   project: PcbProject,
   push = true,
+  pendingPlacements = state.pendingPlacements,
 ): PcbWorkspaceState {
   const update = { ...clone(project), updatedAt: timestamp() };
   const previousHistory = state.historyByProject[update.id]
@@ -100,6 +117,11 @@ function replaceProject(
   const history = push
     ? pushHistory(previousHistory, update)
     : createHistoryState(update);
+  const previousPendingHistory = state.pendingHistoryByProject[update.id]
+    ?? createHistoryState(state.pendingPlacements);
+  const pendingHistory = push
+    ? pushHistory(previousPendingHistory, pendingPlacements)
+    : createHistoryState(pendingPlacements);
   return materialize({
     ...state,
     data: {
@@ -107,11 +129,19 @@ function replaceProject(
       projects: state.data.projects.map((item) =>
         item.id === update.id ? update : clone(item),
       ),
+      pendingPlacementsByProject: {
+        ...(state.data.pendingPlacementsByProject ?? {}),
+        [update.id]: clone(pendingPlacements),
+      },
       updatedAt: update.updatedAt,
     },
     historyByProject: {
       ...state.historyByProject,
       [update.id]: history,
+    },
+    pendingHistoryByProject: {
+      ...state.pendingHistoryByProject,
+      [update.id]: pendingHistory,
     },
   });
 }
@@ -121,6 +151,9 @@ function isMutation(action: PcbWorkspaceAction): boolean {
     "project/open",
     "tool/set",
     "zoom/set",
+    "view/center",
+    "view/reset",
+    "selection/set",
     "panel/right",
     "permission/set",
     "persistence/touch",
@@ -145,6 +178,9 @@ export function reduceWorkspaceState(
       if (action.input.height !== undefined) project.board.height = action.input.height;
       return materialize({
         ...state,
+        selection: null,
+        zoom: 100,
+        viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
           projects: [...state.data.projects.map(clone), project],
@@ -163,7 +199,13 @@ export function reduceWorkspaceState(
       }
       return materialize({
         ...state,
+        zoom: 100,
         data: { ...state.data, activeProjectId: action.projectId },
+        selection: null,
+        viewCenter: {
+          x: state.data.projects.find((project) => project.id === action.projectId)!.board.width / 2,
+          y: state.data.projects.find((project) => project.id === action.projectId)!.board.height / 2,
+        },
       });
     }
     case "project/rename": {
@@ -192,6 +234,9 @@ export function reduceWorkspaceState(
       const sourcePending = state.data.pendingPlacementsByProject?.[project.id] ?? [];
       return materialize({
         ...state,
+        selection: null,
+        zoom: 100,
+        viewCenter: { x: copy.board.width / 2, y: copy.board.height / 2 },
         data: {
           ...state.data,
           projects: [...state.data.projects.map(clone), copy],
@@ -217,6 +262,8 @@ export function reduceWorkspaceState(
       const activeProjectId = state.data.activeProjectId === action.projectId
         ? newestProject(projects)?.id ?? projects[0].id
         : state.data.activeProjectId;
+      const deletedActiveProject = state.data.activeProjectId === action.projectId;
+      const nextActive = projects.find((project) => project.id === activeProjectId) ?? projects[0];
       const historyByProject = { ...state.historyByProject };
       delete historyByProject[action.projectId];
       const pendingPlacementsByProject = {
@@ -225,6 +272,11 @@ export function reduceWorkspaceState(
       delete pendingPlacementsByProject[action.projectId];
       return materialize({
         ...state,
+        selection: deletedActiveProject ? null : state.selection,
+        zoom: deletedActiveProject ? 100 : state.zoom,
+        viewCenter: deletedActiveProject
+          ? { x: nextActive.board.width / 2, y: nextActive.board.height / 2 }
+          : state.viewCenter,
         data: {
           ...state.data,
           projects,
@@ -247,6 +299,9 @@ export function reduceWorkspaceState(
       const project = withProjectIdentity(action.project);
       return materialize({
         ...state,
+        selection: null,
+        zoom: 100,
+        viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
           projects: [...state.data.projects.map(clone), project],
@@ -262,12 +317,18 @@ export function reduceWorkspaceState(
     case "project/commit":
       if (action.update.id !== state.activeProject.id) return state;
       return replaceProject(state, action.update);
+    case "project/commit-with-bom":
+      if (action.update.id !== state.activeProject.id) return state;
+      return replaceProject(state, action.update, true, action.pendingPlacements);
     case "template/apply": {
       const template = state.data.templates.find((item) => item.id === action.templateId);
       if (!template) return state;
       const project = withProjectIdentity(template.project, `${template.name} 專案`);
       return materialize({
         ...state,
+        selection: null,
+        zoom: 100,
+        viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
           projects: [...state.data.projects.map(clone), project],
@@ -433,6 +494,14 @@ export function reduceWorkspaceState(
       const pendingPlacements = action.items.flatMap((item) =>
         Array.from({ length: item.quantity }, () => clone(item)),
       );
+      const nextPending = [
+        ...(state.data.pendingPlacementsByProject?.[state.activeProject.id] ?? []).map(clone),
+        ...pendingPlacements,
+      ];
+      const pendingHistory = state.pendingHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(state.pendingPlacements);
+      const projectHistory = state.historyByProject[state.activeProject.id]
+        ?? createHistoryState(state.activeProject);
       return materialize({
         ...state,
         data: {
@@ -440,29 +509,56 @@ export function reduceWorkspaceState(
           library: upsertImportedComponents(state.data.library, action.items, "bom"),
           pendingPlacementsByProject: {
             ...(state.data.pendingPlacementsByProject ?? {}),
-            [state.activeProject.id]: [
-              ...(state.data.pendingPlacementsByProject?.[state.activeProject.id] ?? []).map(clone),
-              ...pendingPlacements,
-            ],
+            [state.activeProject.id]: nextPending,
           },
           updatedAt: timestamp(),
         },
+        historyByProject: {
+          ...state.historyByProject,
+          [state.activeProject.id]: { ...projectHistory, redo: [] },
+        },
+        pendingHistoryByProject: {
+          ...state.pendingHistoryByProject,
+          [state.activeProject.id]: {
+            current: clone(nextPending),
+            undo: pendingHistory.undo.map(clone),
+            redo: [],
+          },
+        },
       });
     }
-    case "bom/remove":
+    case "bom/remove": {
+      const nextPending = state.pendingPlacements.filter(
+        (_, index) => index !== action.index,
+      ).map(clone);
+      const pendingHistory = state.pendingHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(state.pendingPlacements);
+      const projectHistory = state.historyByProject[state.activeProject.id]
+        ?? createHistoryState(state.activeProject);
       return materialize({
         ...state,
         data: {
           ...state.data,
           pendingPlacementsByProject: {
             ...(state.data.pendingPlacementsByProject ?? {}),
-            [state.activeProject.id]: state.pendingPlacements.filter(
-              (_, index) => index !== action.index,
-            ).map(clone),
+            [state.activeProject.id]: nextPending,
           },
           updatedAt: timestamp(),
         },
+        historyByProject: {
+          ...state.historyByProject,
+          [state.activeProject.id]: { ...projectHistory, redo: [] },
+        },
+        pendingHistoryByProject: {
+          ...state.pendingHistoryByProject,
+          [state.activeProject.id]: {
+            current: clone(nextPending),
+            undo: pendingHistory.undo.map(clone),
+            redo: [],
+          },
+        },
       });
+    }
     case "history/undo":
     case "history/redo": {
       const history = state.historyByProject[state.activeProject.id];
@@ -470,7 +566,13 @@ export function reduceWorkspaceState(
       const nextHistory = action.type === "history/undo"
         ? undoHistory(history)
         : redoHistory(history);
+      const pendingHistory = state.pendingHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(state.pendingPlacements);
+      const nextPendingHistory = action.type === "history/undo"
+        ? undoHistory(pendingHistory)
+        : redoHistory(pendingHistory);
       const project = clone(nextHistory.current);
+      const pendingPlacements = clone(nextPendingHistory.current);
       return materialize({
         ...state,
         data: {
@@ -478,11 +580,19 @@ export function reduceWorkspaceState(
           projects: state.data.projects.map((item) =>
             item.id === project.id ? project : clone(item),
           ),
+          pendingPlacementsByProject: {
+            ...(state.data.pendingPlacementsByProject ?? {}),
+            [project.id]: pendingPlacements,
+          },
           updatedAt: timestamp(),
         },
         historyByProject: {
           ...state.historyByProject,
           [state.activeProject.id]: nextHistory,
+        },
+        pendingHistoryByProject: {
+          ...state.pendingHistoryByProject,
+          [state.activeProject.id]: nextPendingHistory,
         },
       });
     }
@@ -492,6 +602,23 @@ export function reduceWorkspaceState(
       return { ...state, tool: action.tool };
     case "zoom/set":
       return { ...state, zoom: Math.min(400, Math.max(25, action.zoom)) };
+    case "view/center":
+      return { ...state, viewCenter: clone(action.center) };
+    case "view/reset":
+      return {
+        ...state,
+        zoom: 100,
+        viewCenter: {
+          x: state.activeProject.board.width / 2,
+          y: state.activeProject.board.height / 2,
+        },
+      };
+    case "selection/set":
+      return {
+        ...state,
+        selection: action.selection ? clone(action.selection) : null,
+        rightTab: action.selection ? "selection" : state.rightTab,
+      };
     case "panel/right":
       return { ...state, rightTab: action.tab };
     case "permission/set":

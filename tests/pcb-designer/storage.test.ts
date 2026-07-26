@@ -135,3 +135,43 @@ test("repository project deletion also removes its pending placement queue", () 
 
   assert.equal(deleted.pendingPlacementsByProject?.[projectId], undefined);
 });
+
+test("round-trips no-part-number library, pending, and placed BOM records", () => {
+  const repository = new PcbLocalRepository(new MemoryStorage());
+  const state = repository.load();
+  const projectId = state.activeProjectId!;
+  const library = {
+    ...state.library[0],
+    id: "library-no-part",
+    name: "Generic header",
+    manufacturer: "",
+    partNumber: "",
+    source: "bom" as const,
+  };
+  const pending = {
+    name: library.name, type: library.type, manufacturer: "", partNumber: "",
+    width: library.width, height: library.height, maxHeight: library.maxHeight,
+    color: library.color, quantity: 1, reference: "J1",
+  };
+  const projects = state.projects.map((project) => project.id === projectId
+    ? {
+      ...project,
+      components: [{
+        ...library, instanceId: "placed-no-part", reference: "J1",
+        x: 20, y: 20, rotation: 0, layer: "top" as const, locked: false,
+      }],
+    }
+    : project);
+
+  repository.save({
+    ...state,
+    projects,
+    library: [...state.library, library],
+    pendingPlacementsByProject: { [projectId]: [pending] },
+  });
+  const loaded = repository.load();
+
+  assert.equal(loaded.library.some((item) => item.id === library.id), true);
+  assert.equal(loaded.projects.find((item) => item.id === projectId)?.components[0].partNumber, "");
+  assert.deepEqual(loaded.pendingPlacementsByProject?.[projectId], [pending]);
+});
