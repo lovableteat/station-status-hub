@@ -456,6 +456,16 @@ export function SystemEditDialog({
     placeholder: draft.placeholder.trim(),
   });
 
+  const guardMetadataDefinitionMutation = () => {
+    if (loadedSystemId === systemId) return true;
+    toast({
+      title: "機台資料尚未載入完成",
+      description: "目前機台載入成功前，不會修改任何專案共用欄位。",
+      variant: "destructive",
+    });
+    return false;
+  };
+
   const validateMetadataDraft = (
     draft: MetadataFieldDraft,
     existingFieldId?: string,
@@ -488,6 +498,7 @@ export function SystemEditDialog({
   };
 
   const handleCreateMetadataField = async (draft: MetadataFieldDraft) => {
+    if (!guardMetadataDefinitionMutation()) return false;
     const { normalized, errors } = validateMetadataDraft(draft);
     if (!projectId) errors.project = "缺少專案識別，請重新開啟編輯視窗。";
     if (Object.keys(errors).length) {
@@ -544,6 +555,7 @@ export function SystemEditDialog({
     field: MetadataFieldDefinition,
     draft: MetadataFieldDraft,
   ) => {
+    if (!guardMetadataDefinitionMutation()) return false;
     const { normalized, errors } = validateMetadataDraft(draft, field.id);
     const existingOptions = Array.isArray(field.options)
       ? field.options.filter(
@@ -611,6 +623,7 @@ export function SystemEditDialog({
   };
 
   const handleDeleteMetadataField = async (field: MetadataFieldDefinition) => {
+    if (!guardMetadataDefinitionMutation()) return false;
     if (field.is_system) {
       setMetadataErrors((current) => ({
         ...current,
@@ -656,20 +669,18 @@ export function SystemEditDialog({
   const handleReorderMetadataFields = async (
     nextFields: MetadataFieldDefinition[],
   ) => {
+    if (!guardMetadataDefinitionMutation()) return false;
     const reorderedFields = nextFields.map((field, sort_order) => ({
       ...field,
       sort_order,
     }));
-    const results = await Promise.all(
-      reorderedFields.map((field) =>
-        supabase
-          .from("test_project_system_fields")
-          .update({ sort_order: field.sort_order })
-          .eq("id", field.id)
-          .eq("project_id", projectId),
-      ),
+    const { error: reorderError } = await supabase.rpc(
+      "reorder_test_project_system_fields",
+      {
+        p_field_ids: reorderedFields.map((field) => field.id),
+        p_project_id: projectId,
+      },
     );
-    const reorderError = results.find((result) => result.error)?.error;
     if (reorderError) {
       setMetadataErrors((current) => ({
         ...current,
@@ -1193,6 +1204,7 @@ export function SystemEditDialog({
                 </div>
               </div>
               <SystemMetadataFieldsEditor
+                disabled={loadedSystemId !== systemId}
                 fields={metadataFields}
                 values={metadataValues}
                 errors={metadataErrors}

@@ -14,6 +14,14 @@ const atomicSaveMigrationUrl = new URL(
   "../supabase/migrations/20260726121000_save_system_metadata.sql",
   import.meta.url,
 );
+const atomicReorderMigrationUrl = new URL(
+  "../supabase/migrations/20260726122000_reorder_system_metadata_fields.sql",
+  import.meta.url,
+);
+const typesUrl = new URL(
+  "../src/integrations/supabase/types.ts",
+  import.meta.url,
+);
 
 const readSource = async (url) => readFile(url, "utf8").catch(() => "");
 
@@ -62,7 +70,10 @@ test("metadata definitions can be created, edited, deleted, and reordered safely
   assert.match(source, /onReorderFields\(/);
   assert.match(source, /window\.confirm\(/);
   assert.match(source, /field\.is_system/);
-  assert.match(source, /if \(field\.is_system\) return;[\s\S]*?onDeleteField\(/);
+  assert.match(
+    source,
+    /if \(disabled \|\| field\.is_system\) return;[\s\S]*?onDeleteField\(/,
+  );
   assert.match(source, /errors\[errorKey\]/);
   assert.match(source, /renderErrors\(field\.id\)/);
   assert.match(source, /role="alert"/);
@@ -186,4 +197,67 @@ test("system dialog disables saving until the current system loads successfully"
     source,
     /disabled=\{isSaving \|\| loadedSystemId !== systemId\}/,
   );
+});
+
+test("metadata definition mutations stay disabled and guarded until the current system loads", async () => {
+  const [editorSource, dialogSource] = await Promise.all([
+    readSource(editorUrl),
+    readSource(dialogUrl),
+  ]);
+
+  assert.match(editorSource, /disabled: boolean/);
+  assert.match(editorSource, /資料載入完成後才能修改專案欄位/);
+  assert.match(
+    dialogSource,
+    /disabled=\{loadedSystemId !== systemId\}/,
+  );
+
+  for (const [handler, nextHandler] of [
+    ["handleCreateMetadataField", "handleUpdateMetadataField"],
+    ["handleUpdateMetadataField", "handleDeleteMetadataField"],
+    ["handleDeleteMetadataField", "handleReorderMetadataFields"],
+    ["handleReorderMetadataFields", "handleSave"],
+  ]) {
+    const start = dialogSource.indexOf(`const ${handler}`);
+    const end = dialogSource.indexOf(`const ${nextHandler}`, start);
+    const handlerSource = dialogSource.slice(start, end);
+    const guardIndex = handlerSource.indexOf("guardMetadataDefinitionMutation()");
+    const supabaseIndex = handlerSource.search(/supabase\.(?:from|rpc)\(/);
+    assert.ok(guardIndex >= 0, `${handler} must guard unloaded metadata`);
+    assert.ok(
+      supabaseIndex === -1 || guardIndex < supabaseIndex,
+      `${handler} guard must run before Supabase`,
+    );
+  }
+});
+
+test("metadata field reorder is validated and committed by one transactional RPC", async () => {
+  const [dialogSource, migration, typesSource] = await Promise.all([
+    readSource(dialogUrl),
+    readSource(atomicReorderMigrationUrl),
+    readSource(typesUrl),
+  ]);
+  const start = dialogSource.indexOf("const handleReorderMetadataFields");
+  const end = dialogSource.indexOf("const handleSave", start);
+  const handlerSource = dialogSource.slice(start, end);
+
+  assert.match(
+    handlerSource,
+    /\.rpc\(\s*"reorder_test_project_system_fields"/,
+  );
+  assert.doesNotMatch(handlerSource, /Promise\.all\(/);
+  assert.match(
+    migration,
+    /create or replace function public\.reorder_test_project_system_fields/i,
+  );
+  assert.match(migration, /security invoker/i);
+  assert.match(migration, /set search_path = public/i);
+  assert.match(migration, /cardinality\([\s\S]*?p_field_ids/i);
+  assert.match(migration, /count\(distinct field_id\)/i);
+  assert.match(migration, /test_project_system_fields[\s\S]*project_id = p_project_id/i);
+  assert.match(migration, /with ordinality/i);
+  assert.match(migration, /grant execute on function public\.reorder_test_project_system_fields/i);
+  assert.match(typesSource, /reorder_test_project_system_fields:/);
+  assert.match(typesSource, /p_field_ids: string\[\]/);
+  assert.match(typesSource, /p_project_id: string/);
 });
