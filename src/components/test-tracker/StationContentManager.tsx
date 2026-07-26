@@ -143,13 +143,13 @@ export function StationContentManager({
 
         const { error } = await supabase
           .from("station_contents")
-          .insert({
+          .insert([{
             project_id: activeProjectId,
             station_id: stationId,
             title: formValues.title.trim(),
             content: formValues.content.trim(),
             order_num: maxOrder + 1
-          });
+          }] as never);
 
         if (error) throw error;
 
