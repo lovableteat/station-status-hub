@@ -8,7 +8,6 @@ import {
 import {
   Box,
   Cable,
-  ChevronDown,
   Eye,
   Grid2X2,
   PencilRuler,
@@ -34,18 +33,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+import {
+  getAisleResizeHandles,
+  getFriendlyAislePosition,
+  resizeAisleFromHandle,
+  updateAisleFromFriendlyPosition,
+} from "./facilityAisles.mjs";
 import type {
-  FacilityAisleKind,
-  FacilityAisleOrientation,
   FacilityPlan,
   RackModelDefinition,
   RackPlan,
@@ -60,10 +56,18 @@ interface DragState {
   offsetZ: number;
 }
 
+type AisleResizeHandle = "start" | "end" | "near" | "far";
+
+interface AisleResizeState {
+  id: string;
+  handle: AisleResizeHandle;
+}
+
 interface DataCenter2DPlannerProps {
   racks: RackPlan[];
   models: Record<string, RackModelDefinition>;
   facility: FacilityPlan;
+  overflowKeys: ReadonlySet<string>;
   selectedRackId: string;
   canEdit: boolean;
   onSelectRack: (rackId: string) => void;
@@ -78,7 +82,7 @@ interface DataCenter2DPlannerProps {
   onMovePowerFeed: (feedId: string, x: number, z: number) => void;
   onAddRack: () => void;
   onDeleteRack: (rackId: string) => void;
-  onAddAisle: (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => void;
+  onOpenAisleCreation: () => void;
   onAddPowerFeed: () => void;
   onOpenModels: () => void;
   onOpenFacilitySettings: () => void;
@@ -150,6 +154,7 @@ export function DataCenter2DPlanner({
   racks,
   models,
   facility,
+  overflowKeys,
   selectedRackId,
   canEdit,
   onSelectRack,
@@ -161,7 +166,7 @@ export function DataCenter2DPlanner({
   onMovePowerFeed,
   onAddRack,
   onDeleteRack,
-  onAddAisle,
+  onOpenAisleCreation,
   onAddPowerFeed,
   onOpenModels,
   onOpenFacilitySettings,
@@ -169,6 +174,9 @@ export function DataCenter2DPlanner({
 }: DataCenter2DPlannerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [resizingAisle, setResizingAisle] = useState<AisleResizeState | null>(
+    null
+  );
   const [selectedAisleId, setSelectedAisleId] = useState<string | null>(null);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
 
@@ -265,11 +273,45 @@ export function DataCenter2DPlanner({
     });
   };
 
+  const beginAisleResize = (
+    event: ReactPointerEvent<SVGRectElement>,
+    aisleId: string,
+    handle: AisleResizeHandle,
+  ) => {
+    if (!canEdit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(null);
+    setSelectedAisleId(aisleId);
+    setResizingAisle({ id: aisleId, handle });
+  };
+
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!dragging || !canEdit) return;
+    if ((!dragging && !resizingAisle) || !canEdit) return;
     const point = toWorld(event.clientX, event.clientY);
     if (!point) return;
 
+    if (resizingAisle) {
+      const aisle = facility.aisles.find(
+        (item) => item.id === resizingAisle.id
+      );
+      if (!aisle) return;
+      const resized = resizeAisleFromHandle(
+        aisle,
+        resizingAisle.handle,
+        point
+      );
+      onUpdateAisle(aisle.id, {
+        x: resized.x,
+        z: resized.z,
+        width: resized.width,
+        depth: resized.depth,
+      });
+      return;
+    }
+
+    if (!dragging) return;
     const requestedX = point.x + dragging.offsetX;
     const requestedZ = point.z + dragging.offsetZ;
     if (dragging.kind === "rack") {
@@ -305,6 +347,9 @@ export function DataCenter2DPlanner({
     ? models[selectedRack.modelId] ?? models["generic-42u"]
     : null;
   const selectedAisle = facility.aisles.find((aisle) => aisle.id === selectedAisleId) ?? null;
+  const selectedAislePosition = selectedAisle
+    ? getFriendlyAislePosition(selectedAisle, facility)
+    : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#07111c]">
@@ -321,38 +366,16 @@ export function DataCenter2DPlanner({
         <Button type="button" variant="outline" onClick={onOpenModels} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
           <Box className="mr-2 h-4 w-4" /> 選擇模型
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" disabled={!canEdit} className="h-9 border-sky-300/20 bg-sky-400/8 text-sky-50 hover:bg-sky-400/15">
-              <Snowflake className="mr-2 h-4 w-4" /> 冷通道 <ChevronDown className="ml-2 h-3.5 w-3.5 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="border-sky-300/20 bg-[#081725] text-slate-100">
-            <DropdownMenuLabel className="text-[11px] text-sky-200">選擇冷通道方向</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => onAddAisle("cold", "horizontal")} className="cursor-pointer focus:bg-sky-400/15 focus:text-white">
-              橫向新增
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAddAisle("cold", "vertical")} className="cursor-pointer focus:bg-sky-400/15 focus:text-white">
-              直向新增
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" disabled={!canEdit} className="h-9 border-orange-300/20 bg-orange-400/8 text-orange-50 hover:bg-orange-400/15">
-              <ThermometerSun className="mr-2 h-4 w-4" /> 熱通道 <ChevronDown className="ml-2 h-3.5 w-3.5 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="border-orange-300/20 bg-[#081725] text-slate-100">
-            <DropdownMenuLabel className="text-[11px] text-orange-200">選擇熱通道方向</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => onAddAisle("hot", "horizontal")} className="cursor-pointer focus:bg-orange-400/15 focus:text-white">
-              橫向新增
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAddAisle("hot", "vertical")} className="cursor-pointer focus:bg-orange-400/15 focus:text-white">
-              直向新增
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onOpenAisleCreation}
+          disabled={!canEdit}
+          className="h-9 border-sky-300/25 bg-sky-400/10 text-sky-50 hover:bg-sky-400/18"
+        >
+          <Snowflake className="mr-2 h-4 w-4" />
+          新增通道
+        </Button>
         <Button type="button" variant="outline" onClick={onAddPowerFeed} disabled={!canEdit} className="h-9 border-amber-300/20 bg-amber-400/8 text-amber-50 hover:bg-amber-400/15">
           <Cable className="mr-2 h-4 w-4" /> PDU
         </Button>
@@ -374,9 +397,18 @@ export function DataCenter2DPlanner({
           className={cn("h-full w-full select-none", canEdit ? "cursor-default" : "cursor-not-allowed")}
           style={{ touchAction: "none" }}
           onPointerMove={handlePointerMove}
-          onPointerUp={() => setDragging(null)}
-          onPointerCancel={() => setDragging(null)}
-          onPointerLeave={() => setDragging(null)}
+          onPointerUp={() => {
+            setDragging(null);
+            setResizingAisle(null);
+          }}
+          onPointerCancel={() => {
+            setDragging(null);
+            setResizingAisle(null);
+          }}
+          onPointerLeave={() => {
+            setDragging(null);
+            setResizingAisle(null);
+          }}
         >
           <defs>
             <linearGradient id="dc-floor-lighting" x1="0" y1="0" x2="1" y2="1">
@@ -437,10 +469,13 @@ export function DataCenter2DPlanner({
             const width = aisle.width * geometry.scale;
             const height = aisle.depth * geometry.scale;
             const cold = aisle.kind === "cold";
+            const aisleOverflow = overflowKeys.has(`aisle:${aisle.id}`);
+            const selected = selectedAisleId === aisle.id;
             return (
+              <g key={aisle.id}>
               <g
-                key={aisle.id}
                 data-plan-item={`aisle-${aisle.id}`}
+                data-overflow={aisleOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
                 transform={`rotate(${aisle.rotation} ${center.x} ${center.y})`}
                 onClick={(event) => {
@@ -452,8 +487,81 @@ export function DataCenter2DPlanner({
                   beginDrag(event, "aisle", aisle.id, aisle.x, aisle.z);
                 }}
               >
-                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="10" fill={cold ? "#0ea5e933" : "#f9731630"} stroke={cold ? "#38bdf8" : "#fb923c"} strokeWidth="2" strokeDasharray="8 6" />
+                {aisleOverflow ? <title>{`${aisle.label} 超出廠房範圍`}</title> : null}
+                <rect
+                  x={center.x - width / 2}
+                  y={center.y - height / 2}
+                  width={width}
+                  height={height}
+                  rx="10"
+                  fill={cold ? "#0ea5e933" : "#f9731630"}
+                  stroke={aisleOverflow ? "#fda4af" : cold ? "#38bdf8" : "#fb923c"}
+                  strokeWidth={aisleOverflow ? 4 : 2}
+                  strokeDasharray="8 6"
+                />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill={cold ? "#bae6fd" : "#fed7aa"} fontSize="15" fontWeight="700">{aisle.label}</text>
+                {aisleOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + width / 2}
+                      cy={center.y - height / 2}
+                      r="13"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + width / 2}
+                      y={center.y - height / 2 + 5}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="15"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
+              </g>
+              {selected && canEdit ? (
+                <g data-aisle-handles={aisle.id}>
+                  {getAisleResizeHandles(aisle).map((handle) => {
+                    const handlePoint = toScreen(handle.x, handle.z);
+                    const lengthHandle =
+                      handle.id === "start" || handle.id === "end";
+                    const vertical =
+                      Math.abs(aisle.rotation % 180) === 90;
+                    return (
+                      <rect
+                        key={handle.id}
+                        aria-label={`調整${aisle.label}${
+                          lengthHandle ? "長度" : "寬度"
+                        }`}
+                        x={handlePoint.x - 8}
+                        y={handlePoint.y - 8}
+                        width="16"
+                        height="16"
+                        rx="4"
+                        fill={cold ? "#e0f2fe" : "#ffedd5"}
+                        stroke={cold ? "#0284c7" : "#ea580c"}
+                        strokeWidth="3"
+                        className={cn(
+                          lengthHandle !== vertical
+                            ? "cursor-ew-resize"
+                            : "cursor-ns-resize"
+                        )}
+                        onPointerDown={(event) =>
+                          beginAisleResize(
+                            event,
+                            aisle.id,
+                            handle.id as AisleResizeHandle
+                          )
+                        }
+                      />
+                    );
+                  })}
+                </g>
+              ) : null}
               </g>
             );
           })}
@@ -474,10 +582,12 @@ export function DataCenter2DPlanner({
             const height = footprint.depth * geometry.scale;
             const selected = rack.id === selectedRackId;
             const lighting = getRackPlanLighting(rack);
+            const rackOverflow = overflowKeys.has(`rack:${rack.id}`);
             return (
               <g
                 key={rack.id}
                 data-plan-item={`rack-${rack.id}`}
+                data-overflow={rackOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
                 filter="url(#dc-plan-shadow)"
                 onClick={() => onSelectRack(rack.id)}
@@ -487,6 +597,7 @@ export function DataCenter2DPlanner({
                   beginDrag(event, "rack", rack.id, rack.positionX, rack.positionZ);
                 }}
               >
+                {rackOverflow ? <title>{`${rack.cabinet} 超出廠房範圍`}</title> : null}
                 <rect
                   data-testid={`data-center-rack-glow-${rack.id}`}
                   x={center.x - width / 2 - 3}
@@ -499,26 +610,91 @@ export function DataCenter2DPlanner({
                   filter={`url(#${lighting.filter})`}
                   pointerEvents="none"
                 />
-                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="7" fill={selected ? "#155e75" : lighting.fill} stroke={selected ? "#cffafe" : lighting.stroke} strokeWidth={selected ? 4 : 2} />
+                <rect
+                  x={center.x - width / 2}
+                  y={center.y - height / 2}
+                  width={width}
+                  height={height}
+                  rx="7"
+                  fill={selected ? "#155e75" : lighting.fill}
+                  stroke={rackOverflow ? "#fda4af" : selected ? "#cffafe" : lighting.stroke}
+                  strokeWidth={rackOverflow || selected ? 4 : 2}
+                  strokeDasharray={rackOverflow ? "7 4" : undefined}
+                />
                 <path d={`M ${center.x} ${center.y - height / 2 + 6} l -7 11 h 14 z`} fill={selected ? "#67e8f9" : "#91a9ba"} />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill="#f8fafc" fontSize="14" fontWeight="800">{rack.cabinet}</text>
                 <text x={center.x} y={center.y + 22} textAnchor="middle" fill="#a5c5d8" fontSize="10">{model.name}</text>
+                {rackOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + width / 2}
+                      cy={center.y - height / 2}
+                      r="13"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + width / 2}
+                      y={center.y - height / 2 + 5}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="15"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
 
           {facility.powerFeeds.map((feed) => {
             const center = toScreen(feed.x, feed.z);
+            const powerOverflow = overflowKeys.has(`power:${feed.id}`);
             return (
               <g
                 key={feed.id}
                 data-plan-item={`power-${feed.id}`}
+                data-overflow={powerOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
                 onPointerDown={(event) => beginDrag(event, "power", feed.id, feed.x, feed.z)}
               >
-                <circle cx={center.x} cy={center.y} r="17" fill="#071522" stroke={feed.color} strokeWidth="4" />
+                {powerOverflow ? <title>{`${feed.label} 超出廠房範圍`}</title> : null}
+                <circle
+                  cx={center.x}
+                  cy={center.y}
+                  r="20"
+                  fill="#071522"
+                  stroke={powerOverflow ? "#fda4af" : feed.color}
+                  strokeWidth={powerOverflow ? 5 : 4}
+                  strokeDasharray={powerOverflow ? "7 4" : undefined}
+                />
                 <path d={`M ${center.x - 4} ${center.y - 10} L ${center.x + 5} ${center.y - 10} L ${center.x} ${center.y - 1} L ${center.x + 7} ${center.y - 1} L ${center.x - 5} ${center.y + 12} L ${center.x - 1} ${center.y + 3} L ${center.x - 8} ${center.y + 3} Z`} fill={feed.color} />
                 <text x={center.x} y={center.y + 34} textAnchor="middle" fill="#f8fafc" fontSize="12" fontWeight="700">{feed.label}</text>
+                {powerOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + 18}
+                      cy={center.y - 18}
+                      r="11"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + 18}
+                      y={center.y - 14}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="13"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
@@ -557,7 +733,20 @@ export function DataCenter2DPlanner({
           </button>
         </div>
 
-        {selectedAisle ? (
+        {overflowKeys.size > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenFacilitySettings}
+            className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-rose-300/35 bg-[#2a0b17]/95 px-3 py-2 text-left text-xs font-bold text-rose-50 shadow-lg transition-colors hover:border-rose-200/60 hover:bg-[#3a0f20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-black text-white">
+              !
+            </span>
+            {overflowKeys.size} 個項目超出廠房範圍
+          </button>
+        ) : null}
+
+        {selectedAisle && selectedAislePosition ? (
           <div className="absolute bottom-4 left-4 z-20 w-[min(430px,calc(100%-32px))] rounded-2xl border border-cyan-300/25 bg-[#071522]/96 p-4 shadow-2xl backdrop-blur-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -576,6 +765,37 @@ export function DataCenter2DPlanner({
               </button>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3">
+              {([
+                ["left", "左側距離"],
+                ["top", "上方距離"],
+              ] as const).map(([field, label]) => (
+                <label key={field} className="rounded-xl border border-white/10 bg-[#10263a] p-3">
+                  <span className="block text-[11px] font-bold text-slate-300">{label}</span>
+                  <span className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.25"
+                      disabled={!canEdit}
+                      value={selectedAislePosition[field]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (!Number.isFinite(value)) return;
+                        const nextPosition = updateAisleFromFriendlyPosition(
+                          selectedAisle,
+                          facility,
+                          {
+                            ...selectedAislePosition,
+                            [field]: value,
+                          }
+                        );
+                        onUpdateAisle(selectedAisle.id, nextPosition);
+                      }}
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-cyan-300/25 bg-[#06111f] px-3 text-sm font-black tabular-nums text-white outline-none focus:border-cyan-200"
+                    />
+                    <span className="text-xs font-bold text-cyan-100">m</span>
+                  </span>
+                </label>
+              ))}
               {([
                 ["width", "通道長度", Math.max(facility.width, facility.depth)],
                 ["depth", "通道寬度", Math.min(facility.width, facility.depth)],
@@ -648,6 +868,37 @@ export function DataCenter2DPlanner({
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+            <details className="mt-3 rounded-xl border border-white/10 bg-black/15">
+              <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-slate-300 transition-colors hover:text-white">
+                進階座標
+              </summary>
+              <div className="grid grid-cols-3 gap-2 border-t border-white/10 p-3">
+                {([
+                  ["x", "中心 X"],
+                  ["z", "中心 Z"],
+                  ["rotation", "旋轉角度"],
+                ] as const).map(([field, label]) => (
+                  <label key={field} className="min-w-0">
+                    <span className="block text-[10px] font-bold text-slate-500">
+                      {label}
+                    </span>
+                    <input
+                      type="number"
+                      step={field === "rotation" ? 90 : 0.25}
+                      disabled={!canEdit}
+                      value={selectedAisle[field]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          onUpdateAisle(selectedAisle.id, { [field]: value });
+                        }
+                      }}
+                      className="mt-1.5 h-8 w-full rounded-lg border border-white/12 bg-[#06111f] px-2 text-xs font-bold tabular-nums text-white outline-none focus:border-cyan-200"
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
           </div>
         ) : null}
 

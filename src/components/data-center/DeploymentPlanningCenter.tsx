@@ -82,6 +82,10 @@ import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
 import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
 import {
+  FacilityAisleCreationDialog,
+  type FacilityAisleCreationRequest,
+} from "./FacilityAisleCreationDialog";
+import {
   BUILT_IN_RACK_MODELS,
   INITIAL_SITE_PLANS,
   createRackFromModel,
@@ -100,20 +104,31 @@ import {
 } from "./modelConversionWorker";
 import {
   getFacilityAreaSquareMeters,
+  getFacilityOverflowItems,
   normalizeFacilityDimension,
+  parseFacilityDimension,
 } from "./facilityPlan.mjs";
+import {
+  createAutomaticAisle,
+  createFreeAisle,
+  getFriendlyAislePosition,
+  updateAisleFromFriendlyPosition,
+} from "./facilityAisles.mjs";
 import {
   getAssignedModuleCount,
   getDefaultRackL10Assignment,
   getRackUnitSelection,
   normalizeRackUnitSlots,
 } from "./rackMount.mjs";
+import {
+  GB300_RACK_MODEL_ID,
+  getGb300DefaultL10Slots,
+  normalizeGb300RackDevices,
+} from "./gb300RackEquipment.mjs";
 import type {
   CameraPreset,
   DataCenterAssetKind,
   DataCenterLayer,
-  FacilityAisleKind,
-  FacilityAisleOrientation,
   FacilityPlan,
   ImportedStepDimensions,
   RackDevice,
@@ -243,12 +258,33 @@ function readInitialSites() {
               ? normalizedL10ModelId
               : "l10-placeholder";
         const rackUnits = BUILT_IN_RACK_MODELS[resolvedL10ModelId]?.rackUnits ?? 1;
+        const storedL10Slots =
+          Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
+            ? rack.l10Slots
+            : [];
+        const matchesLegacySequentialSlots =
+          storedL10Slots.length === normalizedL10Count
+          && storedL10Slots.every(
+            (slot, index) =>
+              Number(slot) === l10StartU + index * rackUnits,
+          );
+        const shouldUseGb300ComputeZones =
+          modelId === GB300_RACK_MODEL_ID
+          && (
+            storedL10Slots.length === 0
+            || (l10StartU <= L10_RESERVED_BOTTOM_U + 1 && matchesLegacySequentialSlots)
+          );
         const l10Slots = normalizeRackUnitSlots({
           capacityU,
           rackUnits,
           rackUnitSlots:
-            Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
-              ? rack.l10Slots
+            shouldUseGb300ComputeZones
+              ? getGb300DefaultL10Slots({
+                  moduleCount: normalizedL10Count,
+                  rackUnits,
+                })
+              : storedL10Slots.length > 0
+                ? storedL10Slots
               : Array.from(
                   { length: normalizedL10Count },
                   (_, index) => l10StartU + index * rackUnits,
@@ -267,6 +303,10 @@ function readInitialSites() {
             ? defaultL10Assignment.l10StartU
             : l10Slots[0] ?? l10StartU,
           l10Slots,
+          devices:
+            modelId === GB300_RACK_MODEL_ID
+              ? normalizeGb300RackDevices(rack.id, rack.devices)
+              : rack.devices,
         };
       }),
     }));
@@ -390,16 +430,23 @@ function getL10Capacity(rack: RackPlan, model: RackModelDefinition) {
 
 function getRackL10Slots(rack: RackPlan, model: RackModelDefinition) {
   const rackUnits = getL10RackUnits(model);
+  const legacySlots =
+    rack.modelId === GB300_RACK_MODEL_ID
+      ? getGb300DefaultL10Slots({
+          moduleCount: rack.l10Count,
+          rackUnits,
+        })
+      : Array.from(
+          { length: rack.l10Count },
+          (_, index) => rack.l10StartU + index * rackUnits,
+        );
   return normalizeRackUnitSlots({
     capacityU: rack.capacityU,
     rackUnits,
     rackUnitSlots:
       Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
         ? rack.l10Slots
-        : Array.from(
-            { length: rack.l10Count },
-            (_, index) => rack.l10StartU + index * rackUnits,
-          ),
+        : legacySlots,
     reservedBottomU: L10_RESERVED_BOTTOM_U,
     reservedTopU: L10_RESERVED_TOP_U,
   });
@@ -1749,6 +1796,7 @@ export function DeploymentPlanningCenter() {
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
   const [facilityPlannerOpen, setFacilityPlannerOpen] = useState(false);
+  const [aisleCreationOpen, setAisleCreationOpen] = useState(false);
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
   const [catalogKind, setCatalogKind] = useState<DataCenterAssetKind>("rack");
   const [importKind, setImportKind] = useState<DataCenterAssetKind>("rack");
@@ -1782,6 +1830,30 @@ export function DeploymentPlanningCenter() {
   const selectedL10Placement = getL10Placement(selectedRack, selectedL10Model);
   const selectedL10Capacity = selectedL10Placement.maxVisible;
   const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
+  const [facilitySizeDraft, setFacilitySizeDraft] = useState({
+    width: String(selectedFacility.width),
+    depth: String(selectedFacility.depth),
+  });
+  const [facilitySizeErrors, setFacilitySizeErrors] = useState<
+    Partial<Record<"width" | "depth", string>>
+  >({});
+  const overflowItems = useMemo(
+    () =>
+      getFacilityOverflowItems({
+        facility: selectedFacility,
+        racks: selectedSite.racks,
+        models,
+      }) as Array<{
+        kind: "rack" | "aisle" | "power";
+        id: string;
+        label: string;
+      }>,
+    [models, selectedFacility, selectedSite.racks]
+  );
+  const overflowKeys = useMemo(
+    () => new Set(overflowItems.map((item) => `${item.kind}:${item.id}`)),
+    [overflowItems]
+  );
   const modelUsageById = useMemo(() => {
     const usage: Record<string, number> = {};
     for (const site of sites) {
@@ -1815,6 +1887,14 @@ export function DeploymentPlanningCenter() {
       setFacilityPlans((current) => ({ ...current, [selectedSiteId]: cloneDefaultFacilityPlan() }));
     }
   }, [facilityPlans, selectedSiteId]);
+
+  useEffect(() => {
+    setFacilitySizeDraft({
+      width: String(selectedFacility.width),
+      depth: String(selectedFacility.depth),
+    });
+    setFacilitySizeErrors({});
+  }, [selectedFacility.depth, selectedFacility.width, selectedSiteId]);
 
   useEffect(
     () => () => {
@@ -1941,6 +2021,33 @@ export function DeploymentPlanningCenter() {
     );
   };
 
+  const handleRackDeviceHealthChange = (
+    rackId: string,
+    deviceId: string,
+    health: RackDeviceHealth,
+  ) => {
+    if (!canEdit) return;
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) =>
+                rack.id === rackId
+                  ? {
+                      ...rack,
+                      devices: rack.devices.map((device) =>
+                        device.id === deviceId ? { ...device, health } : device,
+                      ),
+                    }
+                  : rack,
+              ),
+            }
+          : site,
+      ),
+    );
+  };
+
   const updateFacility = (updater: (facility: FacilityPlan) => FacilityPlan) => {
     setFacilityPlans((current) => ({
       ...current,
@@ -1948,36 +2055,71 @@ export function DeploymentPlanningCenter() {
     }));
   };
 
-  const updateFacilityNumber = (field: "width" | "depth", value: string) => {
-    const next = Number(value);
-    if (!Number.isFinite(next)) return;
+  const setFacilityDimension = (field: "width" | "depth", value: number) => {
     updateFacility((facility) => ({
       ...facility,
-      [field]: normalizeFacilityDimension(next, facility[field]),
+      [field]: value,
     }));
+    setFacilitySizeDraft((current) => ({ ...current, [field]: String(value) }));
+    setFacilitySizeErrors((current) => ({ ...current, [field]: "" }));
   };
 
-  const addAisle = (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => {
-    const index = selectedFacility.aisles.filter((aisle) => aisle.kind === kind).length + 1;
+  const commitFacilityDimension = (field: "width" | "depth") => {
+    const parsed = parseFacilityDimension(
+      facilitySizeDraft[field],
+      selectedFacility[field]
+    );
+    if (!parsed.valid) {
+      setFacilitySizeErrors((current) => ({
+        ...current,
+        [field]: parsed.message,
+      }));
+      return false;
+    }
+
+    setFacilityDimension(field, parsed.value);
+    return true;
+  };
+
+  const focusOverflowItem = (item: {
+    kind: "rack" | "aisle" | "power";
+    id: string;
+  }) => {
+    if (item.kind === "rack") {
+      setSelectedRackId(item.id);
+    }
+    setWorkspaceMode("2d");
+    setFacilityPlannerOpen(false);
+  };
+
+  const openAisleCreation = () => {
+    setFacilityPlannerOpen(false);
+    setAisleCreationOpen(true);
+  };
+
+  const createAisle = (request: FacilityAisleCreationRequest) => {
     updateFacility((facility) => ({
       ...facility,
       aisles: [
         ...facility.aisles,
-        {
-          id: `${kind}-${crypto.randomUUID()}`,
-          label: `${kind === "cold" ? "冷通道" : "熱通道"} ${index} · ${orientation === "horizontal" ? "橫向" : "直向"}`,
-          kind,
-          x: 0,
-          z: 0,
-          width: Math.max(
-            4,
-            (orientation === "horizontal" ? facility.width : facility.depth) - 3.8
-          ),
-          depth: kind === "cold" ? 2.1 : 1.15,
-          rotation: orientation === "horizontal" ? 0 : 90,
-        },
+        request.mode === "automatic"
+          ? createAutomaticAisle({
+              kind: request.kind,
+              orientation: request.orientation,
+              racks: selectedSite.racks.filter((rack) =>
+                request.rackIds.includes(rack.id)
+              ),
+              models,
+              facility,
+            })
+          : createFreeAisle({
+              kind: request.kind,
+              orientation: request.orientation,
+              facility,
+            }),
       ],
     }));
+    setWorkspaceMode("2d");
   };
 
   const removeAisle = (aisleId: string) => {
@@ -2640,6 +2782,8 @@ export function DeploymentPlanningCenter() {
                 cameraRequestId={cameraRequestId}
                 facility={selectedFacility}
                 onSelectRack={handleRackSelect}
+                canEdit={canEdit}
+                onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
               />
             ) : (
               <DataCenter2DPlanner
@@ -2647,6 +2791,7 @@ export function DeploymentPlanningCenter() {
                 models={models}
                 selectedRackId={selectedRackId}
                 facility={selectedFacility}
+                overflowKeys={overflowKeys}
                 canEdit={canEdit}
                 onSelectRack={handleRackSelect}
                 onMoveRack={placeRackOnPlan}
@@ -2657,7 +2802,7 @@ export function DeploymentPlanningCenter() {
                 onDeleteAisle={removeAisle}
                 onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
                 onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
-                onAddAisle={addAisle}
+                onOpenAisleCreation={openAisleCreation}
                 onAddPowerFeed={addPowerFeed}
                 onOpenModels={() => openModelLibrary("rack")}
                 onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
@@ -2865,6 +3010,8 @@ export function DeploymentPlanningCenter() {
               cameraRequestId={cameraRequestId}
               facility={selectedFacility}
               onSelectRack={handleRackSelect}
+              canEdit={canEdit}
+              onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
             />
           ) : (
             <DataCenter2DPlanner
@@ -2872,6 +3019,7 @@ export function DeploymentPlanningCenter() {
               models={models}
               selectedRackId={selectedRackId}
               facility={selectedFacility}
+              overflowKeys={overflowKeys}
               canEdit={canEdit}
               onSelectRack={handleRackSelect}
               onMoveRack={placeRackOnPlan}
@@ -2882,7 +3030,7 @@ export function DeploymentPlanningCenter() {
               onDeleteAisle={removeAisle}
               onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
               onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
-              onAddAisle={addAisle}
+              onOpenAisleCreation={openAisleCreation}
               onAddPowerFeed={addPowerFeed}
               onOpenModels={() => openModelLibrary("rack")}
               onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
@@ -3014,9 +3162,15 @@ export function DeploymentPlanningCenter() {
                           <button
                             type="button"
                             aria-label={`減少${label}`}
-                            disabled={!canEdit || selectedFacility[field] <= 8}
+                            disabled={!canEdit || selectedFacility[field] <= 1}
                             onClick={() =>
-                              updateFacilityNumber(field, String(selectedFacility[field] - 1))
+                              setFacilityDimension(
+                                field,
+                                normalizeFacilityDimension(
+                                  selectedFacility[field] - 1,
+                                  selectedFacility[field]
+                                )
+                              )
                             }
                             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-[#10283d] text-slate-100 hover:border-cyan-200/50 disabled:opacity-35"
                           >
@@ -3025,36 +3179,128 @@ export function DeploymentPlanningCenter() {
                           <Input
                             data-testid={testId}
                             type="number"
-                            min={8}
-                            max={80}
-                            step="0.5"
-                            value={selectedFacility[field]}
+                            min={1}
+                            step="0.1"
+                            value={facilitySizeDraft[field]}
                             disabled={!canEdit}
-                            onChange={(event) => updateFacilityNumber(field, event.target.value)}
-                            className="h-10 min-w-0 border-cyan-200/25 bg-[#06111f] px-2 text-center text-sm font-black tabular-nums text-white"
+                            aria-invalid={Boolean(facilitySizeErrors[field])}
+                            aria-describedby={
+                              facilitySizeErrors[field]
+                                ? `${testId}-error`
+                                : `${testId}-hint`
+                            }
+                            onChange={(event) => {
+                              setFacilitySizeDraft((current) => ({
+                                ...current,
+                                [field]: event.target.value,
+                              }));
+                              setFacilitySizeErrors((current) => ({
+                                ...current,
+                                [field]: "",
+                              }));
+                            }}
+                            onBlur={() => commitFacilityDimension(field)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                commitFacilityDimension(field);
+                                event.currentTarget.blur();
+                              }
+                            }}
+                            className={cn(
+                              "h-10 min-w-0 bg-[#06111f] px-2 text-center text-sm font-black tabular-nums text-white",
+                              facilitySizeErrors[field]
+                                ? "border-rose-300/70 focus-visible:ring-rose-300"
+                                : "border-cyan-200/25"
+                            )}
                           />
                           <button
                             type="button"
                             aria-label={`增加${label}`}
-                            disabled={!canEdit || selectedFacility[field] >= 80}
+                            disabled={!canEdit}
                             onClick={() =>
-                              updateFacilityNumber(field, String(selectedFacility[field] + 1))
+                              setFacilityDimension(
+                                field,
+                                normalizeFacilityDimension(
+                                  selectedFacility[field] + 1,
+                                  selectedFacility[field]
+                                )
+                              )
                             }
                             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25 disabled:opacity-35"
                           >
                             <Plus className="h-4 w-4" />
                           </button>
                         </span>
-                        <span className="block text-[10px] text-slate-400">單位：公尺，範圍 8–80 m</span>
+                        {facilitySizeErrors[field] ? (
+                          <span
+                            id={`${testId}-error`}
+                            role="alert"
+                            className="block text-[10px] font-semibold text-rose-200"
+                          >
+                            {facilitySizeErrors[field]}
+                          </span>
+                        ) : (
+                          <span
+                            id={`${testId}-hint`}
+                            className="block text-[10px] text-slate-400"
+                          >
+                            單位：公尺，最小 1 m，沒有固定上限
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-cyan-200/20 bg-cyan-400/[0.08] px-3 py-2.5">
-                    <span className="text-xs font-bold text-slate-300">目前地板面積</span>
-                    <span className="text-base font-black tabular-nums text-cyan-100">
-                      {getFacilityAreaSquareMeters(selectedFacility)} m²
-                    </span>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-200/20 bg-cyan-400/[0.08] px-3 py-2.5">
+                    <div>
+                      <span className="block text-xs font-bold text-slate-300">目前地板面積</span>
+                      <span className="mt-0.5 block text-base font-black tabular-nums text-cyan-100">
+                        {getFacilityAreaSquareMeters(selectedFacility)} m²
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!canEdit}
+                      onClick={() => {
+                        commitFacilityDimension("width");
+                        commitFacilityDimension("depth");
+                      }}
+                      className="h-8 bg-cyan-300 px-3 text-xs font-black text-[#04131f] hover:bg-cyan-200"
+                    >
+                      套用尺寸
+                    </Button>
                   </div>
+                  {overflowItems.length > 0 ? (
+                    <div
+                      role="alert"
+                      className="mt-3 rounded-xl border border-rose-300/30 bg-rose-400/10 p-3"
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-200" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-black text-rose-100">
+                            {overflowItems.length} 個項目超出廠房範圍
+                          </div>
+                          <p className="mt-1 text-[10px] leading-4 text-rose-100/75">
+                            系統不會自動移動原有配置。請放大廠房，或在 2D 規劃中手動調整。
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {overflowItems.map((item) => (
+                              <button
+                                key={`${item.kind}:${item.id}`}
+                                type="button"
+                                onClick={() => focusOverflowItem(item)}
+                                className="rounded-full border border-rose-200/25 bg-rose-950/35 px-2 py-1 text-[10px] font-bold text-rose-50 transition-colors hover:border-rose-100/55 hover:bg-rose-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4">
                     <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">
                       <input
@@ -3073,25 +3319,31 @@ export function DeploymentPlanningCenter() {
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">冷熱通道</h2>
-                      <p className="mt-1 text-[11px] text-slate-400">可調整位置、寬度、深度與方向。</p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        不必換算中心座標；可用距離或直接在 2D 畫布拖曳調整。
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!canEdit}
+                      onClick={openAisleCreation}
+                      className="h-8 border-sky-300/25 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20"
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      新增通道
+                    </Button>
                   </div>
-                  <div className="mb-3 grid grid-cols-2 gap-2">
-                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
-                      <Button key={`cold-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("cold", orientation)} className="h-9 border-sky-300/20 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20">
-                        <Snowflake className="mr-1 h-3.5 w-3.5" />冷通道 · {orientation === "horizontal" ? "橫向" : "直向"}
-                      </Button>
-                    ))}
-                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
-                      <Button key={`hot-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("hot", orientation)} className="h-9 border-orange-300/20 bg-orange-400/10 px-2.5 text-[11px] text-orange-100 hover:bg-orange-400/20">
-                        <Thermometer className="mr-1 h-3.5 w-3.5" />熱通道 · {orientation === "horizontal" ? "橫向" : "直向"}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="space-y-3">
-                    {selectedFacility.aisles.map((aisle) => (
-                      <div key={aisle.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="divide-y divide-white/10 border-y border-white/10">
+                    {selectedFacility.aisles.map((aisle) => {
+                      const friendlyPosition = getFriendlyAislePosition(
+                        aisle,
+                        selectedFacility
+                      );
+                      return (
+                        <div key={aisle.id} className="py-3">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
                             <Input
@@ -3101,33 +3353,113 @@ export function DeploymentPlanningCenter() {
                               className="h-8 w-32 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
                             />
                           </div>
-                          <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
-                            移除
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={!canEdit}
+                              onClick={() =>
+                                updateAisle(aisle.id, (current) => ({
+                                  ...current,
+                                  rotation: (current.rotation + 90) % 360,
+                                }))
+                              }
+                              className="h-8 px-2 text-xs text-slate-300 hover:bg-white/8 hover:text-white"
+                            >
+                              <RotateCw className="mr-1 h-3.5 w-3.5" />
+                              旋轉
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+                              移除
+                            </Button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-5 gap-1.5">
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                           {([
-                            ["x", "X"],
-                            ["z", "Z"],
-                            ["width", "寬"],
-                            ["depth", "深"],
-                            ["rotation", "角度"],
-                          ] as Array<["x" | "z" | "width" | "depth" | "rotation", string]>).map(([field, label]) => (
+                            ["left", "左側距離"],
+                            ["top", "上方距離"],
+                            ["width", "通道長度"],
+                            ["depth", "通道寬度"],
+                          ] as const).map(([field, label]) => (
                             <label key={field} className="space-y-1">
-                              <span className="block text-[10px] font-bold text-slate-500">{label}</span>
+                              <span className="block text-[10px] font-bold text-slate-400">{label}</span>
                               <Input
                                 type="number"
-                                step="0.1"
-                                value={aisle[field]}
+                                min={field === "width" || field === "depth" ? 0.5 : undefined}
+                                step="0.25"
+                                value={
+                                  field === "left" || field === "top"
+                                    ? friendlyPosition[field]
+                                    : aisle[field]
+                                }
                                 disabled={!canEdit}
-                                onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, [field]: Number(event.target.value) }))}
-                                className="h-8 border-white/10 bg-black/20 px-1.5 text-[11px] text-white"
+                                onChange={(event) => {
+                                  const value = Number(event.target.value);
+                                  if (!Number.isFinite(value)) return;
+                                  if (field === "left" || field === "top") {
+                                    const nextPosition =
+                                      updateAisleFromFriendlyPosition(
+                                        aisle,
+                                        selectedFacility,
+                                        {
+                                          ...friendlyPosition,
+                                          [field]: value,
+                                        }
+                                      );
+                                    updateAisle(aisle.id, (current) => ({
+                                      ...current,
+                                      ...nextPosition,
+                                    }));
+                                    return;
+                                  }
+                                  updateAisle(aisle.id, (current) => ({
+                                    ...current,
+                                    [field]: Math.max(0.5, value),
+                                  }));
+                                }}
+                                className="h-8 border-white/10 bg-black/20 px-2 text-[11px] font-bold text-white"
                               />
                             </label>
                           ))}
                         </div>
-                      </div>
-                    ))}
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[10px] font-bold text-slate-500 hover:text-slate-300">
+                            進階座標
+                          </summary>
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {([
+                              ["x", "中心 X"],
+                              ["z", "中心 Z"],
+                              ["rotation", "角度"],
+                            ] as const).map(([field, label]) => (
+                              <label key={field} className="space-y-1">
+                                <span className="block text-[10px] font-bold text-slate-500">
+                                  {label}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step={field === "rotation" ? 90 : 0.25}
+                                  value={aisle[field]}
+                                  disabled={!canEdit}
+                                  onChange={(event) => {
+                                    const value = Number(event.target.value);
+                                    if (Number.isFinite(value)) {
+                                      updateAisle(aisle.id, (current) => ({
+                                        ...current,
+                                        [field]: value,
+                                      }));
+                                    }
+                                  }}
+                                  className="h-8 border-white/10 bg-black/20 px-2 text-[11px] text-white"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -3180,6 +3512,13 @@ export function DeploymentPlanningCenter() {
             </ScrollArea>
           </DialogContent>
         </Dialog>
+
+        <FacilityAisleCreationDialog
+          open={aisleCreationOpen}
+          racks={selectedSite.racks}
+          onOpenChange={setAisleCreationOpen}
+          onCreate={createAisle}
+        />
 
         <ModelLibrary
           open={modelLibraryOpen}
