@@ -100,7 +100,9 @@ import {
 } from "./modelConversionWorker";
 import {
   getFacilityAreaSquareMeters,
+  getFacilityOverflowItems,
   normalizeFacilityDimension,
+  parseFacilityDimension,
 } from "./facilityPlan.mjs";
 import {
   getAssignedModuleCount,
@@ -1782,6 +1784,30 @@ export function DeploymentPlanningCenter() {
   const selectedL10Placement = getL10Placement(selectedRack, selectedL10Model);
   const selectedL10Capacity = selectedL10Placement.maxVisible;
   const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
+  const [facilitySizeDraft, setFacilitySizeDraft] = useState({
+    width: String(selectedFacility.width),
+    depth: String(selectedFacility.depth),
+  });
+  const [facilitySizeErrors, setFacilitySizeErrors] = useState<
+    Partial<Record<"width" | "depth", string>>
+  >({});
+  const overflowItems = useMemo(
+    () =>
+      getFacilityOverflowItems({
+        facility: selectedFacility,
+        racks: selectedSite.racks,
+        models,
+      }) as Array<{
+        kind: "rack" | "aisle" | "power";
+        id: string;
+        label: string;
+      }>,
+    [models, selectedFacility, selectedSite.racks]
+  );
+  const overflowKeys = useMemo(
+    () => new Set(overflowItems.map((item) => `${item.kind}:${item.id}`)),
+    [overflowItems]
+  );
   const modelUsageById = useMemo(() => {
     const usage: Record<string, number> = {};
     for (const site of sites) {
@@ -1815,6 +1841,14 @@ export function DeploymentPlanningCenter() {
       setFacilityPlans((current) => ({ ...current, [selectedSiteId]: cloneDefaultFacilityPlan() }));
     }
   }, [facilityPlans, selectedSiteId]);
+
+  useEffect(() => {
+    setFacilitySizeDraft({
+      width: String(selectedFacility.width),
+      depth: String(selectedFacility.depth),
+    });
+    setFacilitySizeErrors({});
+  }, [selectedFacility.depth, selectedFacility.width, selectedSiteId]);
 
   useEffect(
     () => () => {
@@ -1948,13 +1982,41 @@ export function DeploymentPlanningCenter() {
     }));
   };
 
-  const updateFacilityNumber = (field: "width" | "depth", value: string) => {
-    const next = Number(value);
-    if (!Number.isFinite(next)) return;
+  const setFacilityDimension = (field: "width" | "depth", value: number) => {
     updateFacility((facility) => ({
       ...facility,
-      [field]: normalizeFacilityDimension(next, facility[field]),
+      [field]: value,
     }));
+    setFacilitySizeDraft((current) => ({ ...current, [field]: String(value) }));
+    setFacilitySizeErrors((current) => ({ ...current, [field]: "" }));
+  };
+
+  const commitFacilityDimension = (field: "width" | "depth") => {
+    const parsed = parseFacilityDimension(
+      facilitySizeDraft[field],
+      selectedFacility[field]
+    );
+    if (!parsed.valid) {
+      setFacilitySizeErrors((current) => ({
+        ...current,
+        [field]: parsed.message,
+      }));
+      return false;
+    }
+
+    setFacilityDimension(field, parsed.value);
+    return true;
+  };
+
+  const focusOverflowItem = (item: {
+    kind: "rack" | "aisle" | "power";
+    id: string;
+  }) => {
+    if (item.kind === "rack") {
+      setSelectedRackId(item.id);
+    }
+    setWorkspaceMode("2d");
+    setFacilityPlannerOpen(false);
   };
 
   const addAisle = (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => {
@@ -2647,6 +2709,7 @@ export function DeploymentPlanningCenter() {
                 models={models}
                 selectedRackId={selectedRackId}
                 facility={selectedFacility}
+                overflowKeys={overflowKeys}
                 canEdit={canEdit}
                 onSelectRack={handleRackSelect}
                 onMoveRack={placeRackOnPlan}
@@ -2872,6 +2935,7 @@ export function DeploymentPlanningCenter() {
               models={models}
               selectedRackId={selectedRackId}
               facility={selectedFacility}
+              overflowKeys={overflowKeys}
               canEdit={canEdit}
               onSelectRack={handleRackSelect}
               onMoveRack={placeRackOnPlan}
@@ -3014,9 +3078,15 @@ export function DeploymentPlanningCenter() {
                           <button
                             type="button"
                             aria-label={`減少${label}`}
-                            disabled={!canEdit || selectedFacility[field] <= 8}
+                            disabled={!canEdit || selectedFacility[field] <= 1}
                             onClick={() =>
-                              updateFacilityNumber(field, String(selectedFacility[field] - 1))
+                              setFacilityDimension(
+                                field,
+                                normalizeFacilityDimension(
+                                  selectedFacility[field] - 1,
+                                  selectedFacility[field]
+                                )
+                              )
                             }
                             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-[#10283d] text-slate-100 hover:border-cyan-200/50 disabled:opacity-35"
                           >
@@ -3025,36 +3095,128 @@ export function DeploymentPlanningCenter() {
                           <Input
                             data-testid={testId}
                             type="number"
-                            min={8}
-                            max={80}
-                            step="0.5"
-                            value={selectedFacility[field]}
+                            min={1}
+                            step="0.1"
+                            value={facilitySizeDraft[field]}
                             disabled={!canEdit}
-                            onChange={(event) => updateFacilityNumber(field, event.target.value)}
-                            className="h-10 min-w-0 border-cyan-200/25 bg-[#06111f] px-2 text-center text-sm font-black tabular-nums text-white"
+                            aria-invalid={Boolean(facilitySizeErrors[field])}
+                            aria-describedby={
+                              facilitySizeErrors[field]
+                                ? `${testId}-error`
+                                : `${testId}-hint`
+                            }
+                            onChange={(event) => {
+                              setFacilitySizeDraft((current) => ({
+                                ...current,
+                                [field]: event.target.value,
+                              }));
+                              setFacilitySizeErrors((current) => ({
+                                ...current,
+                                [field]: "",
+                              }));
+                            }}
+                            onBlur={() => commitFacilityDimension(field)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                commitFacilityDimension(field);
+                                event.currentTarget.blur();
+                              }
+                            }}
+                            className={cn(
+                              "h-10 min-w-0 bg-[#06111f] px-2 text-center text-sm font-black tabular-nums text-white",
+                              facilitySizeErrors[field]
+                                ? "border-rose-300/70 focus-visible:ring-rose-300"
+                                : "border-cyan-200/25"
+                            )}
                           />
                           <button
                             type="button"
                             aria-label={`增加${label}`}
-                            disabled={!canEdit || selectedFacility[field] >= 80}
+                            disabled={!canEdit}
                             onClick={() =>
-                              updateFacilityNumber(field, String(selectedFacility[field] + 1))
+                              setFacilityDimension(
+                                field,
+                                normalizeFacilityDimension(
+                                  selectedFacility[field] + 1,
+                                  selectedFacility[field]
+                                )
+                              )
                             }
                             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25 disabled:opacity-35"
                           >
                             <Plus className="h-4 w-4" />
                           </button>
                         </span>
-                        <span className="block text-[10px] text-slate-400">單位：公尺，範圍 8–80 m</span>
+                        {facilitySizeErrors[field] ? (
+                          <span
+                            id={`${testId}-error`}
+                            role="alert"
+                            className="block text-[10px] font-semibold text-rose-200"
+                          >
+                            {facilitySizeErrors[field]}
+                          </span>
+                        ) : (
+                          <span
+                            id={`${testId}-hint`}
+                            className="block text-[10px] text-slate-400"
+                          >
+                            單位：公尺，最小 1 m，沒有固定上限
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-cyan-200/20 bg-cyan-400/[0.08] px-3 py-2.5">
-                    <span className="text-xs font-bold text-slate-300">目前地板面積</span>
-                    <span className="text-base font-black tabular-nums text-cyan-100">
-                      {getFacilityAreaSquareMeters(selectedFacility)} m²
-                    </span>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-200/20 bg-cyan-400/[0.08] px-3 py-2.5">
+                    <div>
+                      <span className="block text-xs font-bold text-slate-300">目前地板面積</span>
+                      <span className="mt-0.5 block text-base font-black tabular-nums text-cyan-100">
+                        {getFacilityAreaSquareMeters(selectedFacility)} m²
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!canEdit}
+                      onClick={() => {
+                        commitFacilityDimension("width");
+                        commitFacilityDimension("depth");
+                      }}
+                      className="h-8 bg-cyan-300 px-3 text-xs font-black text-[#04131f] hover:bg-cyan-200"
+                    >
+                      套用尺寸
+                    </Button>
                   </div>
+                  {overflowItems.length > 0 ? (
+                    <div
+                      role="alert"
+                      className="mt-3 rounded-xl border border-rose-300/30 bg-rose-400/10 p-3"
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-200" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-black text-rose-100">
+                            {overflowItems.length} 個項目超出廠房範圍
+                          </div>
+                          <p className="mt-1 text-[10px] leading-4 text-rose-100/75">
+                            系統不會自動移動原有配置。請放大廠房，或在 2D 規劃中手動調整。
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {overflowItems.map((item) => (
+                              <button
+                                key={`${item.kind}:${item.id}`}
+                                type="button"
+                                onClick={() => focusOverflowItem(item)}
+                                className="rounded-full border border-rose-200/25 bg-rose-950/35 px-2 py-1 text-[10px] font-bold text-rose-50 transition-colors hover:border-rose-100/55 hover:bg-rose-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4">
                     <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs font-bold text-slate-200">
                       <input
