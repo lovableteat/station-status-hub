@@ -4,20 +4,37 @@ export type PcbPersistenceStatus = "local" | "saving" | "synced";
 type RemoteError = { code?: string; message?: string } | null;
 type RemoteTable = {
   upsert: (rows: unknown[], options: { onConflict: string }) => Promise<{ error: RemoteError }>;
+  delete: () => {
+    in: (column: "id", ids: string[]) => Promise<{ error: RemoteError }>;
+  };
 };
 
 export interface PcbRemoteClient {
   from(table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library"): RemoteTable;
 }
 
+async function reconcileTable(
+  client: PcbRemoteClient,
+  tableName: Parameters<PcbRemoteClient["from"]>[0],
+  rows: Array<{ id: string; payload: unknown }>,
+  deletedIds: string[],
+): Promise<boolean> {
+  const table = client.from(tableName);
+  const upsert = await table.upsert(rows, { onConflict: "id" });
+  if (upsert.error) return false;
+  if (!deletedIds.length) return true;
+  const removed = await table.delete().in("id", deletedIds);
+  return !removed.error;
+}
+
 export async function syncPcbRemote(client: PcbRemoteClient, state: PcbSaveState): Promise<boolean> {
   try {
     const results = await Promise.all([
-      client.from("pcb_designer_projects").upsert(state.projects.map((project) => ({ id: project.id, payload: project })), { onConflict: "id" }),
-      client.from("pcb_designer_templates").upsert(state.templates.map((template) => ({ id: template.id, payload: template })), { onConflict: "id" }),
-      client.from("pcb_designer_library").upsert(state.library.map((component) => ({ id: component.id, payload: component })), { onConflict: "id" }),
+      reconcileTable(client, "pcb_designer_projects", state.projects.map((project) => ({ id: project.id, payload: project })), state.remoteDeletions?.projects ?? []),
+      reconcileTable(client, "pcb_designer_templates", state.templates.map((template) => ({ id: template.id, payload: template })), state.remoteDeletions?.templates ?? []),
+      reconcileTable(client, "pcb_designer_library", state.library.map((component) => ({ id: component.id, payload: component })), state.remoteDeletions?.library ?? []),
     ]);
-    return results.every((result) => !result.error);
+    return results.every(Boolean);
   } catch {
     return false;
   }

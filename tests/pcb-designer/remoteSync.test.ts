@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PcbRemoteSyncCoordinator } from "../../src/components/pcb-designer/core/remoteSync.ts";
+import { PcbRemoteSyncCoordinator, syncPcbRemote } from "../../src/components/pcb-designer/core/remoteSync.ts";
 import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
@@ -95,4 +95,46 @@ test("reserving a debounced newer generation suppresses an old in-flight synced 
 
   assert.deepEqual(writes, ["old", "new"]);
   assert.deepEqual(statuses, ["synced"]);
+});
+
+test("remote sync deletes only explicit tombstones and preserves unrelated rows", async () => {
+  const tables = {
+    pcb_designer_projects: new Set(["deleted-project", "unrelated-project"]),
+    pcb_designer_templates: new Set(["deleted-template", "unrelated-template"]),
+    pcb_designer_library: new Set(["deleted-component", "unrelated-component"]),
+  };
+  const client = {
+    from(table: keyof typeof tables) {
+      return {
+        async upsert(rows: Array<{ id: string }>) {
+          rows.forEach((row) => tables[table].add(row.id));
+          return { error: null };
+        },
+        async select() {
+          return { data: [...tables[table]].map((id) => ({ id })), error: null };
+        },
+        delete() {
+          return {
+            async in(_column: string, ids: string[]) {
+              ids.forEach((id) => tables[table].delete(id));
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+  const next: PcbSaveState = {
+    ...state("current"),
+    remoteDeletions: {
+      projects: ["deleted-project"],
+      templates: ["deleted-template"],
+      library: ["deleted-component"],
+    },
+  };
+
+  assert.equal(await syncPcbRemote(client, next), true);
+  assert.deepEqual([...tables.pcb_designer_projects], ["unrelated-project", next.projects[0].id]);
+  assert.deepEqual([...tables.pcb_designer_templates], ["unrelated-template"]);
+  assert.deepEqual([...tables.pcb_designer_library], ["unrelated-component"]);
 });
