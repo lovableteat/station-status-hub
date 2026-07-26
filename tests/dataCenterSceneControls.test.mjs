@@ -16,10 +16,10 @@ const workspaceSource = await readFile(
   "utf8",
 );
 
-test("facility dimensions are bounded and expose a readable floor area", () => {
-  assert.equal(normalizeFacilityDimension(3), 8);
+test("facility dimensions have a safe minimum, no fixed maximum, and expose a readable floor area", () => {
+  assert.equal(normalizeFacilityDimension(0.5), 1);
   assert.equal(normalizeFacilityDimension(24.48), 24.5);
-  assert.equal(normalizeFacilityDimension(500), 80);
+  assert.equal(normalizeFacilityDimension(500), 500);
   assert.equal(normalizeFacilityDimension(Number.NaN, 18), 18);
   assert.equal(getFacilityAreaSquareMeters({ width: 18, depth: 13 }), 234);
 });
@@ -59,6 +59,17 @@ test("floor size control is directly visible in the 3D workspace", () => {
   assert.match(workspaceSource, /"facility-width-control"/);
   assert.match(workspaceSource, /"facility-depth-control"/);
   assert.match(workspaceSource, /data-testid=\{testId\}/);
+});
+
+test("facility size inputs keep editable drafts and expose overflow warnings", () => {
+  assert.match(workspaceSource, /facilitySizeDraft/);
+  assert.match(workspaceSource, /commitFacilityDimension/);
+  assert.match(workspaceSource, /onBlur=\{\(\) => commitFacilityDimension\(field\)\}/);
+  assert.match(workspaceSource, /min=\{1\}/);
+  assert.doesNotMatch(workspaceSource, /max=\{80\}/);
+  assert.match(workspaceSource, /role="alert"/);
+  assert.match(workspaceSource, /overflowItems\.length/);
+  assert.match(workspaceSource, /overflowKeys=\{overflowKeys\}/);
 });
 
 test("the overview applies a stable exposure and balanced fill lighting", () => {
