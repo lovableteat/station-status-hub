@@ -1176,20 +1176,22 @@ function PlannerScene({
   return (
     <>
       <SceneRendererSetup />
-      <color attach="background" args={["#050c13"]} />
-      <fog attach="fog" args={["#07111a", 42, 95]} />
-      <ambientLight intensity={0.82} />
-      <hemisphereLight intensity={1.05} color="#d8f7ff" groundColor="#07111a" />
+      <color attach="background" args={["#0a1622"]} />
+      <fog attach="fog" args={["#0d1e2e", 60, 130]} />
+      <ambientLight intensity={1.55} />
+      <hemisphereLight intensity={1.85} color="#e6faff" groundColor="#0f1f2e" />
       <directionalLight
         castShadow={!renderLowDetail}
-        intensity={1.55}
-        position={[7, 10, 6]}
+        intensity={2.6}
+        position={[7, 12, 6]}
         shadow-mapSize-width={renderLowDetail ? 512 : 1024}
         shadow-mapSize-height={renderLowDetail ? 512 : 1024}
       />
-      <directionalLight intensity={0.72} position={[-8, 6, -4]} color="#9bdcf5" />
-      <pointLight intensity={0.86} position={[-7, 4, -5]} color="#22d3ee" />
-      <pointLight intensity={0.58} position={[7, 3, 5]} color="#60a5fa" />
+      <directionalLight intensity={1.3} position={[-8, 8, -4]} color="#b8e6ff" />
+      <directionalLight intensity={0.9} position={[0, 10, -10]} color="#ffffff" />
+      <pointLight intensity={1.35} position={[-7, 5, -5]} color="#38bdf8" />
+      <pointLight intensity={1.05} position={[7, 4, 5]} color="#60a5fa" />
+      <pointLight intensity={0.9} position={[0, 8, 0]} color="#ffffff" />
 
       <FacilityShell activeLayer={activeLayer} facility={facility} />
       <ThermalAisles aisles={facility.aisles} active={activeLayer === "cooling"} />
@@ -1240,7 +1242,7 @@ function SceneRendererSetup() {
     const previousToneMapping = gl.toneMapping;
     const previousExposure = gl.toneMappingExposure;
     gl.toneMapping = THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = 1.22;
+    gl.toneMappingExposure = 1.85;
     invalidate();
 
     return () => {
