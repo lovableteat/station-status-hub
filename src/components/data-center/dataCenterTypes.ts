@@ -5,6 +5,8 @@ export type RackDeviceType =
   | "switch-tray"
   | "tor-switch"
   | "psu"
+  | "cdu"
+  | "cable-management"
   | "management"
   | "storage-tray";
 
@@ -86,6 +88,8 @@ export interface RackPlan {
   coordinates: string;
   aisle: string;
   devices: RackDevice[];
+  /** Migration marker for independently editable GB300 service equipment. */
+  equipmentLayoutVersion?: number;
   sop: string[];
   deploymentSteps: DeploymentStep[];
   maintenance: MaintenanceRecord[];

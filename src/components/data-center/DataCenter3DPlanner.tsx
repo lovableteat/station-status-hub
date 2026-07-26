@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
-import { Activity, Network, Power, X } from "lucide-react";
+import { Activity, Cable, Network, Power, X } from "lucide-react";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
@@ -1421,6 +1421,13 @@ function EquipmentLedSummary({
             { label: "NVL", colors: leds.nvl },
             { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
           ]
+        : equipment.kind === "tor-switch"
+          ? [
+              { label: "SYSTEM", colors: [leds.pwr, leds.fault] },
+              { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
+            ]
+          : equipment.kind === "cable-management"
+            ? [{ label: "TOR LINK", colors: [leds.pwr] }]
         : [{ label: "CTRL", colors: [leds.pmc] }]),
   ];
 
@@ -1471,8 +1478,10 @@ function Gb300EquipmentInspector({
   const Icon =
     equipment.kind === "power-shelf"
       ? Power
-      : equipment.kind === "switch-tray"
+      : equipment.kind === "switch-tray" || equipment.kind === "tor-switch"
         ? Network
+        : equipment.kind === "cable-management"
+          ? Cable
         : Activity;
   const endU = equipment.rackUnitStart + equipment.rackUnitSpan - 1;
 
