@@ -85,7 +85,7 @@ export function Sidebar({
 
       <aside
         aria-hidden={isMobile && !isOpen ? true : undefined}
-        inert={isMobile && !isOpen ? true : undefined}
+        {...(isMobile && !isOpen ? ({ inert: "" } as Record<string, unknown>) : {})}
         className={cn(
           "maintenance-sidebar flex shrink-0 flex-col overflow-hidden border border-[#2a526f] bg-[#071522] transition-[width,transform] duration-200 ease-out",
           isMobile && [
