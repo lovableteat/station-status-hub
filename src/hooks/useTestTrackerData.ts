@@ -54,7 +54,7 @@ export function useTestTrackerData() {
     items,
     progress,
     isLoading,
-    loadData: (newSystemId?: string) => loadData(newSystemId),
+    loadData: (_newSystemId?: string) => loadData(),
     refreshProgress,
     updateProgress
   };
