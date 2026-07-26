@@ -82,6 +82,10 @@ import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
 import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
 import {
+  FacilityAisleCreationDialog,
+  type FacilityAisleCreationRequest,
+} from "./FacilityAisleCreationDialog";
+import {
   BUILT_IN_RACK_MODELS,
   INITIAL_SITE_PLANS,
   createRackFromModel,
@@ -105,6 +109,12 @@ import {
   parseFacilityDimension,
 } from "./facilityPlan.mjs";
 import {
+  createAutomaticAisle,
+  createFreeAisle,
+  getFriendlyAislePosition,
+  updateAisleFromFriendlyPosition,
+} from "./facilityAisles.mjs";
+import {
   getAssignedModuleCount,
   getDefaultRackL10Assignment,
   getRackUnitSelection,
@@ -119,8 +129,6 @@ import type {
   CameraPreset,
   DataCenterAssetKind,
   DataCenterLayer,
-  FacilityAisleKind,
-  FacilityAisleOrientation,
   FacilityPlan,
   ImportedStepDimensions,
   RackDevice,
@@ -1788,6 +1796,7 @@ export function DeploymentPlanningCenter() {
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);
   const [facilityPlannerOpen, setFacilityPlannerOpen] = useState(false);
+  const [aisleCreationOpen, setAisleCreationOpen] = useState(false);
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
   const [catalogKind, setCatalogKind] = useState<DataCenterAssetKind>("rack");
   const [importKind, setImportKind] = useState<DataCenterAssetKind>("rack");
@@ -2083,27 +2092,34 @@ export function DeploymentPlanningCenter() {
     setFacilityPlannerOpen(false);
   };
 
-  const addAisle = (kind: FacilityAisleKind, orientation: FacilityAisleOrientation) => {
-    const index = selectedFacility.aisles.filter((aisle) => aisle.kind === kind).length + 1;
+  const openAisleCreation = () => {
+    setFacilityPlannerOpen(false);
+    setAisleCreationOpen(true);
+  };
+
+  const createAisle = (request: FacilityAisleCreationRequest) => {
     updateFacility((facility) => ({
       ...facility,
       aisles: [
         ...facility.aisles,
-        {
-          id: `${kind}-${crypto.randomUUID()}`,
-          label: `${kind === "cold" ? "冷通道" : "熱通道"} ${index} · ${orientation === "horizontal" ? "橫向" : "直向"}`,
-          kind,
-          x: 0,
-          z: 0,
-          width: Math.max(
-            4,
-            (orientation === "horizontal" ? facility.width : facility.depth) - 3.8
-          ),
-          depth: kind === "cold" ? 2.1 : 1.15,
-          rotation: orientation === "horizontal" ? 0 : 90,
-        },
+        request.mode === "automatic"
+          ? createAutomaticAisle({
+              kind: request.kind,
+              orientation: request.orientation,
+              racks: selectedSite.racks.filter((rack) =>
+                request.rackIds.includes(rack.id)
+              ),
+              models,
+              facility,
+            })
+          : createFreeAisle({
+              kind: request.kind,
+              orientation: request.orientation,
+              facility,
+            }),
       ],
     }));
+    setWorkspaceMode("2d");
   };
 
   const removeAisle = (aisleId: string) => {
@@ -2786,7 +2802,7 @@ export function DeploymentPlanningCenter() {
                 onDeleteAisle={removeAisle}
                 onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
                 onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
-                onAddAisle={addAisle}
+                onOpenAisleCreation={openAisleCreation}
                 onAddPowerFeed={addPowerFeed}
                 onOpenModels={() => openModelLibrary("rack")}
                 onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
@@ -3014,7 +3030,7 @@ export function DeploymentPlanningCenter() {
               onDeleteAisle={removeAisle}
               onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
               onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
-              onAddAisle={addAisle}
+              onOpenAisleCreation={openAisleCreation}
               onAddPowerFeed={addPowerFeed}
               onOpenModels={() => openModelLibrary("rack")}
               onOpenFacilitySettings={() => setFacilityPlannerOpen(true)}
@@ -3303,25 +3319,31 @@ export function DeploymentPlanningCenter() {
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">冷熱通道</h2>
-                      <p className="mt-1 text-[11px] text-slate-400">可調整位置、寬度、深度與方向。</p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        不必換算中心座標；可用距離或直接在 2D 畫布拖曳調整。
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!canEdit}
+                      onClick={openAisleCreation}
+                      className="h-8 border-sky-300/25 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20"
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      新增通道
+                    </Button>
                   </div>
-                  <div className="mb-3 grid grid-cols-2 gap-2">
-                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
-                      <Button key={`cold-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("cold", orientation)} className="h-9 border-sky-300/20 bg-sky-400/10 px-2.5 text-[11px] text-sky-100 hover:bg-sky-400/20">
-                        <Snowflake className="mr-1 h-3.5 w-3.5" />冷通道 · {orientation === "horizontal" ? "橫向" : "直向"}
-                      </Button>
-                    ))}
-                    {(["horizontal", "vertical"] as FacilityAisleOrientation[]).map((orientation) => (
-                      <Button key={`hot-${orientation}`} type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => addAisle("hot", orientation)} className="h-9 border-orange-300/20 bg-orange-400/10 px-2.5 text-[11px] text-orange-100 hover:bg-orange-400/20">
-                        <Thermometer className="mr-1 h-3.5 w-3.5" />熱通道 · {orientation === "horizontal" ? "橫向" : "直向"}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="space-y-3">
-                    {selectedFacility.aisles.map((aisle) => (
-                      <div key={aisle.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="divide-y divide-white/10 border-y border-white/10">
+                    {selectedFacility.aisles.map((aisle) => {
+                      const friendlyPosition = getFriendlyAislePosition(
+                        aisle,
+                        selectedFacility
+                      );
+                      return (
+                        <div key={aisle.id} className="py-3">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
                             <Input
@@ -3331,33 +3353,113 @@ export function DeploymentPlanningCenter() {
                               className="h-8 w-32 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
                             />
                           </div>
-                          <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
-                            移除
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={!canEdit}
+                              onClick={() =>
+                                updateAisle(aisle.id, (current) => ({
+                                  ...current,
+                                  rotation: (current.rotation + 90) % 360,
+                                }))
+                              }
+                              className="h-8 px-2 text-xs text-slate-300 hover:bg-white/8 hover:text-white"
+                            >
+                              <RotateCw className="mr-1 h-3.5 w-3.5" />
+                              旋轉
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+                              移除
+                            </Button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-5 gap-1.5">
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                           {([
-                            ["x", "X"],
-                            ["z", "Z"],
-                            ["width", "寬"],
-                            ["depth", "深"],
-                            ["rotation", "角度"],
-                          ] as Array<["x" | "z" | "width" | "depth" | "rotation", string]>).map(([field, label]) => (
+                            ["left", "左側距離"],
+                            ["top", "上方距離"],
+                            ["width", "通道長度"],
+                            ["depth", "通道寬度"],
+                          ] as const).map(([field, label]) => (
                             <label key={field} className="space-y-1">
-                              <span className="block text-[10px] font-bold text-slate-500">{label}</span>
+                              <span className="block text-[10px] font-bold text-slate-400">{label}</span>
                               <Input
                                 type="number"
-                                step="0.1"
-                                value={aisle[field]}
+                                min={field === "width" || field === "depth" ? 0.5 : undefined}
+                                step="0.25"
+                                value={
+                                  field === "left" || field === "top"
+                                    ? friendlyPosition[field]
+                                    : aisle[field]
+                                }
                                 disabled={!canEdit}
-                                onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, [field]: Number(event.target.value) }))}
-                                className="h-8 border-white/10 bg-black/20 px-1.5 text-[11px] text-white"
+                                onChange={(event) => {
+                                  const value = Number(event.target.value);
+                                  if (!Number.isFinite(value)) return;
+                                  if (field === "left" || field === "top") {
+                                    const nextPosition =
+                                      updateAisleFromFriendlyPosition(
+                                        aisle,
+                                        selectedFacility,
+                                        {
+                                          ...friendlyPosition,
+                                          [field]: value,
+                                        }
+                                      );
+                                    updateAisle(aisle.id, (current) => ({
+                                      ...current,
+                                      ...nextPosition,
+                                    }));
+                                    return;
+                                  }
+                                  updateAisle(aisle.id, (current) => ({
+                                    ...current,
+                                    [field]: Math.max(0.5, value),
+                                  }));
+                                }}
+                                className="h-8 border-white/10 bg-black/20 px-2 text-[11px] font-bold text-white"
                               />
                             </label>
                           ))}
                         </div>
-                      </div>
-                    ))}
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[10px] font-bold text-slate-500 hover:text-slate-300">
+                            進階座標
+                          </summary>
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {([
+                              ["x", "中心 X"],
+                              ["z", "中心 Z"],
+                              ["rotation", "角度"],
+                            ] as const).map(([field, label]) => (
+                              <label key={field} className="space-y-1">
+                                <span className="block text-[10px] font-bold text-slate-500">
+                                  {label}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step={field === "rotation" ? 90 : 0.25}
+                                  value={aisle[field]}
+                                  disabled={!canEdit}
+                                  onChange={(event) => {
+                                    const value = Number(event.target.value);
+                                    if (Number.isFinite(value)) {
+                                      updateAisle(aisle.id, (current) => ({
+                                        ...current,
+                                        [field]: value,
+                                      }));
+                                    }
+                                  }}
+                                  className="h-8 border-white/10 bg-black/20 px-2 text-[11px] text-white"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -3410,6 +3512,13 @@ export function DeploymentPlanningCenter() {
             </ScrollArea>
           </DialogContent>
         </Dialog>
+
+        <FacilityAisleCreationDialog
+          open={aisleCreationOpen}
+          racks={selectedSite.racks}
+          onOpenChange={setAisleCreationOpen}
+          onCreate={createAisle}
+        />
 
         <ModelLibrary
           open={modelLibraryOpen}
