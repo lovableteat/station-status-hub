@@ -57,8 +57,8 @@ test("DRC reports keepout and board violations in stable object-id order", () =>
   ));
 
   assert.deepEqual(violations.map((item) => [item.code, item.objectIds]), [
-    ["BOARD_BOUNDARY", ["Z1"]],
+    ["OUT_OF_BOUNDS", ["Z1"]],
     ["KEEPOUT_COLLISION", ["A1", "keepout-1"]],
   ]);
-  assert.deepEqual(violations.map((item) => item.id), ["drc-board-boundary-z1", "drc-keepout-collision-a1-keepout-1"]);
+  assert.deepEqual(violations.map((item) => item.id), ["drc-out-of-bounds-z1", "drc-keepout-collision-a1-keepout-1"]);
 });

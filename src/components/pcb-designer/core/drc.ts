@@ -28,7 +28,7 @@ export function runDrc(project: PcbProject): PcbDrcIssue[] {
 
   for (const component of components) {
     if (!isWithinBoard(component, project.board)) {
-      issues.push(issue("BOARD_BOUNDARY", [component.instanceId], `${component.reference} extends beyond the board boundary.`));
+      issues.push(issue("OUT_OF_BOUNDS", [component.instanceId], `${component.reference} extends beyond the board boundary.`));
     }
   }
 
