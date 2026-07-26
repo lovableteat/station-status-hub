@@ -196,7 +196,7 @@ test("legacy L10 placement uses the existing upper and lower compute zones witho
   );
 });
 
-test("Power Shelf and Switch Tray share the exact L10 rail width and front plane", () => {
+test("Power Shelf and Switch Tray align to the L10 visible chassis instead of its handle envelope", () => {
   const rackDimensions = {
     widthMm: 708.8,
     depthMm: 1072.2,
@@ -222,12 +222,26 @@ test("Power Shelf and Switch Tray share the exact L10 rail width and front plane
   });
   const l10FrontFaceZ =
     l10Layout.positions[0].z + l10Layout.fittedDepth / 2;
+  const visibleChassisWidth =
+    l10Layout.fittedWidth * 0.8853068078279753;
+  const visibleChassisDepth =
+    l10Layout.fittedDepth * 0.820951652668341;
+  const visibleChassisFrontFaceZ =
+    l10FrontFaceZ - l10Layout.fittedDepth * 0.09141876962895569;
 
-  assert.equal(layout.width, l10Layout.fittedWidth);
-  assert.equal(layout.depth, l10Layout.fittedDepth);
-  assert.equal(layout.centerZ, l10Layout.positions[0].z);
-  assert.equal(layout.frontFaceZ, l10FrontFaceZ);
-  assert.equal(layout.centerZ + layout.depth / 2, l10FrontFaceZ);
+  assert.equal(layout.width, visibleChassisWidth);
+  assert.equal(layout.depth, visibleChassisDepth);
+  assert.equal(layout.frontFaceZ, visibleChassisFrontFaceZ);
+  assert.equal(
+    layout.centerZ,
+    visibleChassisFrontFaceZ - visibleChassisDepth / 2,
+  );
+  assert.equal(
+    layout.centerZ + layout.depth / 2,
+    visibleChassisFrontFaceZ,
+  );
+  assert.ok(layout.width < l10Layout.fittedWidth);
+  assert.ok(layout.frontFaceZ < l10FrontFaceZ);
   assert.ok(layout.frontFaceZ < rackDimensions.depthMm / 2000);
 });
 

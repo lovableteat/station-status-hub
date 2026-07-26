@@ -57,6 +57,14 @@ const DISPLAY_EQUIPMENT = GB300_RACK_ANATOMY.filter(
 );
 const VALID_HEALTH = new Set(["healthy", "warning", "critical", "offline"]);
 const OFF = "#111827";
+// Measured from the rendered GB300 L10 GLB after the same uniform fit used by
+// DataCenter3DPlanner. The full asset envelope includes articulated pink
+// handles; service equipment must align with the visible metal chassis instead.
+const GB300_L10_VISIBLE_CHASSIS = Object.freeze({
+  widthRatio: 0.8853068078279753,
+  depthRatio: 0.820951652668341,
+  frontInsetRatio: 0.09141876962895569,
+});
 const L10_COMPUTE_ZONES = [
   { startU: 6, endU: 17 },
   { startU: 26, endU: 37 },
@@ -251,14 +259,22 @@ export function getGb300EquipmentMountLayout({
     rackUnits: l10RackUnits,
     moduleCount: 1,
   });
-  const centerZ = l10Layout.positions[0].z;
-  const frontFaceZ = centerZ + l10Layout.fittedDepth / 2;
+  const l10FrontFaceZ =
+    l10Layout.positions[0].z + l10Layout.fittedDepth / 2;
+  const width =
+    l10Layout.fittedWidth * GB300_L10_VISIBLE_CHASSIS.widthRatio;
+  const depth =
+    l10Layout.fittedDepth * GB300_L10_VISIBLE_CHASSIS.depthRatio;
+  const frontFaceZ =
+    l10FrontFaceZ
+    - l10Layout.fittedDepth * GB300_L10_VISIBLE_CHASSIS.frontInsetRatio;
+  const centerZ = frontFaceZ - depth / 2;
 
   return {
     rackHeight,
     railBottom: Math.max(0.08, (rackHeight - railFieldHeight) / 2),
-    width: l10Layout.fittedWidth,
-    depth: l10Layout.fittedDepth,
+    width,
+    depth,
     frontFaceZ,
     centerZ,
   };
