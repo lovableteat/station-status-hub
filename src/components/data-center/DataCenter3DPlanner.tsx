@@ -29,6 +29,10 @@ import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
 import { getRackUnitMountLayout } from "./rackMount.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
 import {
+  getRackOverviewFrame,
+  getSafeOrbitDistance,
+} from "./cameraFraming.mjs";
+import {
   GB300RackEquipment3D,
   type Gb300EquipmentSelection,
 } from "./GB300RackEquipment3D";
@@ -761,7 +765,7 @@ function RackSceneCard({
 
   return (
     <Html
-      position={[0, height + (selected ? 0.48 : 0.28), 0]}
+      position={[0, height + (selected ? 0.16 : 0.24), 0]}
       center
       zIndexRange={[30, 5]}
     >
@@ -878,6 +882,8 @@ function RackVisual({
         <GB300RackEquipment3D
           rack={rack}
           rackDimensions={definition.dimensions}
+          l10Dimensions={l10Definition.dimensions}
+          l10RackUnits={l10Definition.rackUnits ?? 1}
           selectedEquipmentId={selectedEquipmentId}
           lowDetail={lowDetail}
           onSelectEquipment={(equipment) => {
@@ -1064,6 +1070,19 @@ function CameraRig({
   const animating = useRef(false);
   const lastAppliedRequestId = useRef<number | null>(null);
   const interactionRestoreTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const orbitRack =
+    racks.find((rack) => rack.id === selectedRackId)
+    ?? racks[0];
+  const orbitDefinition = orbitRack
+    ? resolveRackDefinition(models, orbitRack.modelId)
+    : null;
+  const minimumOrbitDistance = orbitDefinition
+    ? getSafeOrbitDistance({
+        widthMeters: orbitDefinition.dimensions.widthMm / 1000,
+        heightMeters: orbitDefinition.dimensions.heightMm / 1000,
+        depthMeters: orbitDefinition.dimensions.depthMm / 1000,
+      })
+    : 1.55;
 
   const beginInteraction = useCallback(() => {
     if (interactionRestoreTimer.current !== null) {
@@ -1132,8 +1151,32 @@ function CameraRig({
       );
       desiredTarget.current.set(selected.positionX, targetY, selected.positionZ);
     } else {
-      desiredPosition.current.set(span * 0.72, Math.max(7, span * 0.46), span * 0.82);
-      desiredTarget.current.set(0, 0.8, 0);
+      const overviewFrame = getRackOverviewFrame(
+        racks.map((rack) => {
+          const definition = resolveRackDefinition(models, rack.modelId);
+          return {
+            positionX: rack.positionX,
+            positionZ: rack.positionZ,
+            rotationDegrees: rack.rotation,
+            widthMeters: definition.dimensions.widthMm / 1000,
+            heightMeters: definition.dimensions.heightMm / 1000,
+            depthMeters: definition.dimensions.depthMm / 1000,
+          };
+        }),
+      );
+
+      if (overviewFrame) {
+        desiredPosition.current.set(...overviewFrame.position);
+        desiredTarget.current.set(...overviewFrame.target);
+      } else {
+        const emptySceneSpan = Math.min(span, 24);
+        desiredPosition.current.set(
+          emptySceneSpan * 0.72,
+          Math.max(7, emptySceneSpan * 0.46),
+          emptySceneSpan * 0.82,
+        );
+        desiredTarget.current.set(0, 0.8, 0);
+      }
     }
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1178,7 +1221,7 @@ function CameraRig({
       makeDefault
       enablePan
       enableZoom
-      minDistance={0.12}
+      minDistance={minimumOrbitDistance}
       maxDistance={Math.max(24, Math.max(facility.width, facility.depth) * 2)}
       zoomSpeed={1.12}
       panSpeed={0.72}
