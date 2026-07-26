@@ -67,9 +67,11 @@ function isTemplate(value: unknown): boolean {
 
 function isLibraryComponent(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  return ["id", "name", "type", "manufacturer", "partNumber", "color", "createdAt"].every(
+  return ["id", "name", "type", "color", "createdAt"].every(
     (field) => isNonEmptyString(value[field]),
   )
+    && typeof value.manufacturer === "string"
+    && typeof value.partNumber === "string"
     && isPositiveFiniteNumber(value.width)
     && isPositiveFiniteNumber(value.height)
     && isPositiveFiniteNumber(value.maxHeight)

@@ -1,0 +1,107 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const read = async (path: string) =>
+  readFile(new URL(`../../${path}`, import.meta.url), "utf8").catch(() => "");
+
+const canvasSource = await read("src/components/pcb-designer/PcbCanvas.tsx");
+const workspaceSource = await read("src/components/pcb-designer/PcbDesignerWorkspace.tsx");
+const hookSource = await read("src/components/pcb-designer/hooks/usePcbWorkspace.ts");
+const editorHookSource = await read("src/components/pcb-designer/hooks/usePcbEditorActions.ts");
+const combinedHookSource = `${hookSource}\n${editorHookSource}`;
+const railSource = await read("src/components/pcb-designer/PcbLeftRail.tsx");
+const inspectorSource = await read("src/components/pcb-designer/PcbInspector.tsx");
+const toolbarSource = await read("src/components/pcb-designer/PcbToolbar.tsx");
+const pngExportSource = await read("src/components/pcb-designer/core/pngExport.ts");
+const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
+
+test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts", () => {
+  assert.match(canvasSource, /<svg[\s\S]*data-pcb-canvas/);
+  assert.match(canvasSource, /onPointerDown/);
+  assert.match(canvasSource, /onPointerMove/);
+  assert.match(canvasSource, /onPointerUp/);
+  assert.match(canvasSource, /onWheel/);
+  assert.match(canvasSource, /onDrop/);
+  assert.match(canvasSource, /clientPointToBoard/);
+  assert.match(canvasSource, /setPointerCapture/);
+  assert.match(canvasSource, /workspace\.tool === ["']pan["'] \|\| event\.button === 1/);
+  assert.match(canvasSource, /snapPoint/);
+  assert.match(canvasSource, /workspace\.tool === ["']measure["']\s*\?\s*["']measurement["']/);
+});
+
+test("renders PCB layers in the required stable order", () => {
+  assert.match(
+    canvasSource,
+    /data-layer=["']grid["'][\s\S]*data-layer=["']board["'][\s\S]*data-layer=["']keepouts["'][\s\S]*data-layer=["']measurements["'][\s\S]*data-layer=["']components["'][\s\S]*data-layer=["']selection-handles["'][\s\S]*data-layer=["']tool-draft["'][\s\S]*data-layer=["']drc-overlay["']/,
+  );
+});
+
+test("makes library cards draggable and routes click and drop through one placement action", () => {
+  assert.match(railSource, /draggable=\{workspace\.canMutate\}/);
+  assert.match(railSource, /dataTransfer\.setData/);
+  assert.match(railSource, /workspace\.placeLibraryComponent/);
+  assert.match(canvasSource, /workspace\.placeLibraryComponent/);
+});
+
+test("placement actions reject document-locked mutations before reporting success", () => {
+  assert.match(
+    combinedHookSource,
+    /placeLibraryComponent[\s\S]{0,450}!state\.canEdit \|\| state\.documentLocked/,
+  );
+  assert.match(
+    combinedHookSource,
+    /autoPlacePending[\s\S]{0,300}!state\.canEdit \|\| state\.documentLocked/,
+  );
+});
+
+test("keeps all four tools mutually exclusive and accessible", () => {
+  for (const tool of ["select", "pan", "measure", "keepout"]) {
+    assert.match(toolbarSource, new RegExp(`tool === ["']${tool}["']`));
+  }
+  assert.match(toolbarSource, /aria-label=\{label\}/);
+  assert.match(toolbarSource, /TooltipContent[\s\S]*\{label\}/);
+  assert.match(toolbarSource, /onResetView/);
+});
+
+test("wires keyboard editing while skipping editable controls", () => {
+  assert.match(combinedHookSource, /addEventListener\(["']keydown["']/);
+  assert.match(combinedHookSource, /input,\s*textarea,\s*select/);
+  assert.match(combinedHookSource, /contenteditable/);
+  assert.match(combinedHookSource, /Delete|Backspace/);
+  assert.match(combinedHookSource, /key === ["']l["']/);
+  assert.match(
+    combinedHookSource,
+    /key === ["']l["'][\s\S]{0,180}document\/toggle-lock/,
+  );
+  assert.match(combinedHookSource, /ArrowLeft|ArrowRight|ArrowUp|ArrowDown/);
+  assert.match(combinedHookSource, /history\/undo/);
+  assert.match(combinedHookSource, /history\/redo/);
+  assert.match(combinedHookSource, /event\.ctrlKey \|\| event\.metaKey/);
+  assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}selectObject\(null\)/);
+});
+
+test("provides complete board, selection, DRC, and PNG workflows", () => {
+  assert.match(inspectorSource, /rotateSelected/);
+  assert.match(inspectorSource, /deleteSelected/);
+  assert.match(inspectorSource, /centerDrcIssue/);
+  assert.match(inspectorSource, /runDrc/);
+  assert.match(inspectorSource, /component[\s\S]*keepout[\s\S]*measurement/i);
+  assert.match(editorHookSource, /centerDrcIssue[\s\S]{0,1200}zoom\/set/);
+  assert.match(workspaceSource, /exportPcbSvgAsPng/);
+  assert.match(workspaceSource, /includeGrid/);
+  assert.match(toolbarSource, /exportIncludesGrid/);
+  assert.match(toolbarSource, /onExportIncludesGridChange/);
+  assert.match(pngExportSource, /viewBox[\s\S]{0,220}board\.width[\s\S]{0,120}board\.height/);
+  assert.match(canvasSource, /data-grid-surface[\s\S]{0,180}display=\{project\.board\.showGrid/);
+  assert.match(pngExportSource, /includeGrid[\s\S]{0,380}data-grid-surface[\s\S]{0,120}removeAttribute\(["']display["']\)/);
+  assert.match(canvasSource, /const strokeWidth = Math\.max\(project\.board\.width,\s*project\.board\.height\) \/ 700/);
+  assert.match(canvasSource, /<style>[\s\S]{0,500}\.pcb-svg-label[\s\S]{0,300}font-family/);
+  assert.match(workspaceSource, /<PcbCanvas/);
+  assert.match(canvasSource, /kind:\s*["']keepout-move["']/);
+  assert.match(canvasSource, /cursorPoint[\s\S]*toFixed/);
+  assert.match(canvasSource, /drc-overlay[\s\S]*translate\([\s\S]*rotate\(/);
+  assert.match(editorCssSource, /max-width:\s*1279px[\s\S]*pcb-left-drawer,[\s\S]*visibility:\s*hidden[\s\S]*is-open[\s\S]*visibility:\s*visible/);
+  assert.match(workspaceSource, /自動儲存[\s\S]{0,180}updatedAt/);
+  assert.match(workspaceSource, /onRunDrc=\{\(\) => \{[\s\S]{0,120}runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
+});

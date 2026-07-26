@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -79,17 +80,20 @@ export interface PcbToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   exportPngAvailable: boolean;
+  exportIncludesGrid: boolean;
   onNew: () => void;
   onSave: () => void;
   onExportProject: () => void;
   onExportBomCsv: () => void;
   onExportBomXlsx: () => void;
   onExportPng: () => void;
+  onExportIncludesGridChange: (checked: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
   onToolChange: (tool: PcbTool) => void;
   onToggleLock: () => void;
   onZoomChange: (zoom: number) => void;
+  onResetView: () => void;
   onRunDrc: () => void;
 }
 
@@ -101,17 +105,20 @@ export function PcbToolbar({
   canUndo,
   canRedo,
   exportPngAvailable,
+  exportIncludesGrid,
   onNew,
   onSave,
   onExportProject,
   onExportBomCsv,
   onExportBomXlsx,
   onExportPng,
+  onExportIncludesGridChange,
   onUndo,
   onRedo,
   onToolChange,
   onToggleLock,
   onZoomChange,
+  onResetView,
   onRunDrc,
 }: PcbToolbarProps) {
   return (
@@ -149,6 +156,13 @@ export function PcbToolbar({
             <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
             <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void onExportBomXlsx()}>BOM XLSX</DropdownMenuItem>
+            <DropdownMenuCheckboxItem
+              checked={exportIncludesGrid}
+              onCheckedChange={onExportIncludesGridChange}
+              onSelect={(event) => event.preventDefault()}
+            >
+              PNG 包含網格
+            </DropdownMenuCheckboxItem>
             <DropdownMenuItem
               disabled={!exportPngAvailable}
               onSelect={onExportPng}
@@ -183,7 +197,7 @@ export function PcbToolbar({
         <ToolButton label="縮小" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
         <span className="w-12 text-center font-mono text-[11px] text-slate-300">{zoom}%</span>
         <ToolButton label="放大" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
-        <ToolButton label="重設縮放" icon={Maximize2} onClick={() => onZoomChange(100)} />
+        <ToolButton label="符合板框" icon={Maximize2} onClick={onResetView} />
 
         <div className="ml-auto">
           <Button
