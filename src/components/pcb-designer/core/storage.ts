@@ -30,6 +30,8 @@ function createSeedState(): PcbSaveState {
     templates: clone(BUILT_IN_TEMPLATES),
     library: clone(BUILT_IN_COMPONENTS),
     activeProjectId: project.id,
+    pendingPlacementsByProject: {},
+    remoteDeletions: { projects: [], templates: [], library: [] },
     updatedAt: timestamp(),
   };
 }
@@ -74,6 +76,18 @@ function isLibraryComponent(value: unknown): boolean {
     && (value.source === "built-in" || value.source === "custom" || value.source === "bom");
 }
 
+function isPendingPlacement(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return ["name", "type", "manufacturer", "partNumber", "color", "reference"].every(
+    (field) => typeof value[field] === "string",
+  )
+    && isPositiveFiniteNumber(value.width)
+    && isPositiveFiniteNumber(value.height)
+    && isPositiveFiniteNumber(value.maxHeight)
+    && isPositiveFiniteNumber(value.quantity)
+    && Number.isInteger(value.quantity);
+}
+
 function isState(value: unknown): value is PcbSaveState {
   if (!isRecord(value)) return false;
   const { projects, templates, library, activeProjectId, updatedAt } = value;
@@ -86,9 +100,26 @@ function isState(value: unknown): value is PcbSaveState {
   const projectRecords = projects as Record<string, unknown>[];
   const templateRecords = templates as Record<string, unknown>[];
   const libraryRecords = library as Record<string, unknown>[];
+  const pending = value.pendingPlacementsByProject;
+  const pendingIsValid = pending === undefined || (
+    isRecord(pending)
+    && Object.entries(pending).every(([projectId, placements]) =>
+      projectRecords.some((project) => project.id === projectId)
+      && Array.isArray(placements)
+      && placements.every(isPendingPlacement))
+  );
+  const deletions = value.remoteDeletions;
+  const deletionsAreValid = deletions === undefined || (
+    isRecord(deletions)
+    && ["projects", "templates", "library"].every((key) =>
+      Array.isArray(deletions[key])
+      && (deletions[key] as unknown[]).every(isNonEmptyString))
+  );
   return hasUniqueIds(projectRecords)
     && hasUniqueIds(templateRecords)
     && hasUniqueIds(libraryRecords)
+    && pendingIsValid
+    && deletionsAreValid
     && (activeProjectId === null || (isNonEmptyString(activeProjectId) && projectRecords.some((project) => project.id === activeProjectId)));
 }
 
@@ -104,7 +135,15 @@ export class PcbLocalRepository {
       const raw = this.storage.getItem(PCB_STORAGE_KEY);
       if (!raw) return this.seed();
       const payload = JSON.parse(raw) as Partial<PersistedPayload>;
-      if (payload.version === PAYLOAD_VERSION && isState(payload.state)) return clone(payload.state);
+      if (payload.version === PAYLOAD_VERSION && isState(payload.state)) {
+        return {
+          ...clone(payload.state),
+          pendingPlacementsByProject: clone(payload.state.pendingPlacementsByProject ?? {}),
+          remoteDeletions: clone(payload.state.remoteDeletions ?? {
+            projects: [], templates: [], library: [],
+          }),
+        };
+      }
     } catch {
       // A broken browser draft must never prevent the editor from rendering.
     }
@@ -138,7 +177,20 @@ export class PcbLocalRepository {
     const activeProjectId = state.activeProjectId === projectId
       ? (projects[0]?.id ?? null)
       : state.activeProjectId;
-    return { ...clone(state), projects, activeProjectId, updatedAt: timestamp() };
+    const pendingPlacementsByProject = clone(state.pendingPlacementsByProject ?? {});
+    delete pendingPlacementsByProject[projectId];
+    return {
+      ...clone(state),
+      projects,
+      activeProjectId,
+      pendingPlacementsByProject,
+      remoteDeletions: {
+        projects: [...new Set([...(state.remoteDeletions?.projects ?? []), projectId])],
+        templates: clone(state.remoteDeletions?.templates ?? []),
+        library: clone(state.remoteDeletions?.library ?? []),
+      },
+      updatedAt: timestamp(),
+    };
   }
 
   setActiveProjectId(state: PcbSaveState, projectId: string | null): PcbSaveState {

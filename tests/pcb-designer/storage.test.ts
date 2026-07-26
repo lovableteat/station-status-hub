@@ -93,3 +93,45 @@ test("upsert, delete, and active project updates are immutable and preserve unre
   assert.equal(afterDelete.projects[0].id, initial.projects[0].id);
   assert.equal(afterDelete.activeProjectId, initial.projects[0].id);
 });
+
+test("round-trips project-scoped BOM pending placements", () => {
+  const storage = new MemoryStorage();
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load();
+  const projectId = state.activeProjectId!;
+  const pending = {
+    name: "Resistor", type: "Resistor", manufacturer: "Acme", partNumber: "R-1",
+    width: 1.6, height: 0.8, maxHeight: 0.5, color: "#fff",
+    quantity: 1, reference: "R1",
+  };
+
+  repository.save({
+    ...state,
+    pendingPlacementsByProject: { [projectId]: [pending] },
+  });
+
+  assert.deepEqual(
+    repository.load().pendingPlacementsByProject?.[projectId],
+    [pending],
+  );
+});
+
+test("repository project deletion also removes its pending placement queue", () => {
+  const repository = new PcbLocalRepository(new MemoryStorage());
+  const state = repository.load();
+  const projectId = state.activeProjectId!;
+  const withPending = {
+    ...state,
+    pendingPlacementsByProject: {
+      [projectId]: [{
+        name: "R", type: "Resistor", manufacturer: "", partNumber: "",
+        width: 1, height: 1, maxHeight: 1, color: "#fff",
+        quantity: 1, reference: "R1",
+      }],
+    },
+  };
+
+  const deleted = repository.deleteProject(withPending, projectId);
+
+  assert.equal(deleted.pendingPlacementsByProject?.[projectId], undefined);
+});

@@ -85,6 +85,19 @@ export interface PcbTemplate {
   updatedAt: string;
 }
 
+export interface PcbPendingPlacement {
+  name: string;
+  type: string;
+  manufacturer: string;
+  partNumber: string;
+  width: number;
+  height: number;
+  maxHeight: number;
+  color: string;
+  quantity: number;
+  reference: string;
+}
+
 export type PcbTool = "select" | "pan" | "measure" | "keepout";
 
 export interface PcbSaveState {
@@ -92,5 +105,11 @@ export interface PcbSaveState {
   templates: PcbTemplate[];
   library: PcbLibraryComponent[];
   activeProjectId: string | null;
+  pendingPlacementsByProject?: Record<string, PcbPendingPlacement[]>;
+  remoteDeletions?: {
+    projects: string[];
+    templates: string[];
+    library: string[];
+  };
   updatedAt: string;
 }
