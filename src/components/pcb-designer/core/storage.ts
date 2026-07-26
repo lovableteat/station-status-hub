@@ -1,5 +1,6 @@
 import { BUILT_IN_COMPONENTS, BUILT_IN_TEMPLATES, createBlankProject } from "../defaults.ts";
 import type { PcbProject, PcbSaveState } from "../types.ts";
+import { parseProjectJson } from "./validation.ts";
 
 export const PCB_STORAGE_KEY = "work-platform:pcb-designer:v1";
 const PAYLOAD_VERSION = 1;
@@ -33,14 +34,62 @@ function createSeedState(): PcbSaveState {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function hasUniqueIds(values: Record<string, unknown>[]): boolean {
+  const ids = values.map((value) => value.id);
+  return ids.every(isNonEmptyString) && new Set(ids).size === ids.length;
+}
+
+function isTemplate(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id)
+    && isNonEmptyString(value.name)
+    && isNonEmptyString(value.category)
+    && typeof value.description === "string"
+    && typeof value.isBuiltIn === "boolean"
+    && isNonEmptyString(value.createdAt)
+    && isNonEmptyString(value.updatedAt)
+    && parseProjectJson(value.project).ok;
+}
+
+function isLibraryComponent(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return ["id", "name", "type", "manufacturer", "partNumber", "color", "createdAt"].every(
+    (field) => isNonEmptyString(value[field]),
+  )
+    && isPositiveFiniteNumber(value.width)
+    && isPositiveFiniteNumber(value.height)
+    && isPositiveFiniteNumber(value.maxHeight)
+    && (value.source === "built-in" || value.source === "custom" || value.source === "bom");
+}
+
 function isState(value: unknown): value is PcbSaveState {
-  if (!value || typeof value !== "object") return false;
-  const state = value as Partial<PcbSaveState>;
-  return Array.isArray(state.projects)
-    && Array.isArray(state.templates)
-    && Array.isArray(state.library)
-    && typeof state.updatedAt === "string"
-    && (typeof state.activeProjectId === "string" || state.activeProjectId === null);
+  if (!isRecord(value)) return false;
+  const { projects, templates, library, activeProjectId, updatedAt } = value;
+  if (!Array.isArray(projects) || !Array.isArray(templates) || !Array.isArray(library) || !isNonEmptyString(updatedAt)) {
+    return false;
+  }
+  if (!projects.every((project) => parseProjectJson(project).ok) || !templates.every(isTemplate) || !library.every(isLibraryComponent)) {
+    return false;
+  }
+  const projectRecords = projects as Record<string, unknown>[];
+  const templateRecords = templates as Record<string, unknown>[];
+  const libraryRecords = library as Record<string, unknown>[];
+  return hasUniqueIds(projectRecords)
+    && hasUniqueIds(templateRecords)
+    && hasUniqueIds(libraryRecords)
+    && (activeProjectId === null || (isNonEmptyString(activeProjectId) && projectRecords.some((project) => project.id === activeProjectId)));
 }
 
 export class PcbLocalRepository {
