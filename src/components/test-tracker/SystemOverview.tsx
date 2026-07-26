@@ -22,7 +22,7 @@ export function SystemOverview() {
       // 延遲清除，讓 SystemStatusUpdater 有時間進行增量更新
       setTimeout(() => setLastCreatedSystemId(undefined), 2000);
     }
-    loadData(newSystemId);
+    loadData();
   };
 
   useEffect(() => {
