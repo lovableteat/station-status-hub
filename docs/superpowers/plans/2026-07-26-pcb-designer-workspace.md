@@ -39,7 +39,7 @@ test("blank project and built-in components satisfy domain invariants", () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `node --test tests/pcb-designer/defaults.test.ts`  
+Run: `node --test tests/pcb-designer/defaults.test.ts`
 Expected: FAIL because modules do not exist.
 
 **Step 3: Write minimal implementation**
@@ -54,7 +54,7 @@ Expected: FAIL because modules do not exist.
 
 **Step 4: Run test to verify it passes**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -92,7 +92,7 @@ test("same-layer overlap creates a component collision", () => {
 
 **Step 2: Run tests to verify they fail**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL because geometry functions do not exist.
 
 **Step 3: Write minimal implementation**
@@ -105,7 +105,7 @@ Expected: FAIL because geometry functions do not exist.
 
 **Step 4: Run tests to verify they pass**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -135,7 +135,7 @@ git commit -m "feat(pcb): add placement geometry and DRC"
 
 **Step 2: Run tests to verify they fail**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
@@ -153,7 +153,7 @@ type ParseResult<T> =
 
 **Step 4: Run tests to verify they pass**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -183,7 +183,7 @@ git commit -m "feat(pcb): add document history and validation"
 
 **Step 2: Run tests to verify they fail**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
@@ -194,7 +194,7 @@ Expected: FAIL.
 
 **Step 4: Run tests to verify they pass**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -222,7 +222,7 @@ git commit -m "feat(pcb): add project and BOM file formats"
 
 **Step 2: Run tests to verify they fail**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
@@ -235,7 +235,7 @@ Expected: FAIL.
 
 **Step 4: Run tests to verify they pass**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -266,7 +266,7 @@ git commit -m "feat(pcb): persist planner projects locally and remotely"
 
 **Step 2: Run test to verify it fails**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
@@ -318,7 +318,7 @@ git commit -m "feat(pcb): register the sixth platform workspace"
 
 **Step 2: Run tests to verify they fail**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
@@ -375,7 +375,7 @@ git commit -m "feat(pcb): add project library and file workflows"
 
 **Step 2: Run tests to verify it fails**
 
-Run: `npm.cmd run test:pcb`  
+Run: `npm.cmd run test:pcb`
 Expected: FAIL.
 
 **Step 3: Write minimal implementation**
