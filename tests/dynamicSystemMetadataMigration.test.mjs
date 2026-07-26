@@ -59,8 +59,40 @@ test("dynamic system metadata seeds reserved values and migrates legacy software
   assert.match(source, /md5\(legacy_fields\.id::text\)/i);
   assert.match(source, /from public\.test_system_software_values legacy_values/i);
   assert.match(source, /to_jsonb\(legacy_values\.value\)/i);
-  assert.match(source, /on conflict \(project_id, field_key\) do update/i);
-  assert.match(source, /on conflict \(field_id, system_id\) do update/i);
+  assert.match(source, /on conflict \(project_id, field_key\) do nothing/i);
+  assert.match(source, /on conflict \(field_id, system_id\) do nothing/i);
+});
+
+test("metadata seed migration preserves user edits and the hardening hook seeds future projects", async () => {
+  const [baseSource, hardeningSource] = await Promise.all([
+    migration(),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260726123000_harden_system_metadata.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    baseSource,
+    /on conflict \(project_id, field_key\) do nothing/i,
+  );
+  assert.match(
+    baseSource,
+    /on conflict \(field_id, system_id\) do nothing/i,
+  );
+  assert.doesNotMatch(baseSource, /label = excluded\.label/i);
+  assert.doesNotMatch(baseSource, /sort_order = excluded\.sort_order/i);
+  assert.match(
+    hardeningSource,
+    /create or replace function public\.seed_reserved_system_metadata_fields/i,
+  );
+  assert.match(hardeningSource, /after insert on public\.test_projects/i);
+  assert.match(hardeningSource, /new\.id/i);
+  assert.match(hardeningSource, /on conflict \(project_id, field_key\) do nothing/i);
+  assert.match(hardeningSource, /drop trigger if exists seed_reserved_system_metadata_fields/i);
 });
 
 test("generated database types expose both dynamic metadata tables", async () => {

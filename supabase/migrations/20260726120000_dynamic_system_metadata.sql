@@ -89,13 +89,7 @@ cross join (
     ('software', 'cuda_version', 'CUDA Version', 'text', 2),
     ('statistics', 'include_in_dashboard', 'Include in Dashboard', 'boolean', 3)
 ) as reserved(category, field_key, label, field_type, sort_order)
-on conflict (project_id, field_key) do update set
-  category = excluded.category,
-  label = excluded.label,
-  field_type = excluded.field_type,
-  is_system = true,
-  sort_order = excluded.sort_order,
-  updated_at = now();
+on conflict (project_id, field_key) do nothing;
 
 insert into public.test_system_field_values (
   field_id,
@@ -115,9 +109,7 @@ from public.test_systems systems
 join public.test_project_system_fields fields
   on fields.project_id = systems.project_id
  and fields.field_key in ('bom_90', 'ubuntu_version', 'cuda_version', 'include_in_dashboard')
-on conflict (field_id, system_id) do update set
-  value = excluded.value,
-  updated_at = now();
+on conflict (field_id, system_id) do nothing;
 
 insert into public.test_project_system_fields (
   project_id,
@@ -143,12 +135,7 @@ select
   legacy_fields.created_at,
   legacy_fields.updated_at
 from public.test_project_software_fields legacy_fields
-on conflict (project_id, field_key) do update set
-  label = excluded.label,
-  placeholder = excluded.placeholder,
-  field_type = excluded.field_type,
-  sort_order = excluded.sort_order,
-  updated_at = excluded.updated_at;
+on conflict (project_id, field_key) do nothing;
 
 insert into public.test_system_field_values (
   field_id,
@@ -169,9 +156,7 @@ join public.test_project_software_fields legacy_fields
 join public.test_project_system_fields fields
   on fields.project_id = legacy_fields.project_id
  and fields.field_key = 'legacy_software_' || md5(legacy_fields.id::text)
-on conflict (field_id, system_id) do update set
-  value = excluded.value,
-  updated_at = excluded.updated_at;
+on conflict (field_id, system_id) do nothing;
 
 do $$
 begin
