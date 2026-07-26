@@ -67,6 +67,7 @@ export interface PcbProject {
 
 export interface PcbDrcIssue {
   id: string;
+  code: "BOARD_BOUNDARY" | "COMPONENT_COLLISION" | "KEEPOUT_COLLISION";
   severity: "error" | "warning";
   rule: string;
   message: string;
