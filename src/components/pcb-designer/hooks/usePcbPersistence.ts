@@ -66,17 +66,21 @@ export function usePcbPersistence({ state, storage, remoteClient }: UsePcbPersis
 
   useEffect(() => {
     setStatus("saving");
+    const coordinator = coordinatorRef.current;
+    const generation = coordinator?.reserve();
     const localTimer = window.setTimeout(() => {
       repository.save(state);
       setStatus("local");
     }, 300);
-    const remoteTimer = window.setTimeout(() => coordinatorRef.current?.schedule(state), 900);
+    const remoteTimer = window.setTimeout(() => {
+      if (coordinator && generation !== undefined) coordinator.commit(generation, state);
+    }, 900);
 
     return () => {
       window.clearTimeout(localTimer);
       window.clearTimeout(remoteTimer);
     };
-  }, [repository, state]);
+  }, [client, repository, state]);
 
   return status;
 }
