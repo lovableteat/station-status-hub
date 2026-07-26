@@ -11,6 +11,12 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
+import {
+  createPresenceKey,
+  createPresenceSessionId,
+  isCurrentPresenceSession,
+  selectLatestOnlineUsers,
+} from "./presenceSession.mjs";
 
 export interface OnlineUser {
   userId: string;
@@ -19,6 +25,8 @@ export interface OnlineUser {
   role: string;
   lastSeen: string;
   currentModule?: string;
+  sessionId?: string;
+  timestamp?: number;
   isEditing?: {
     module: string;
     itemId?: string;
@@ -40,35 +48,64 @@ interface UserPresenceContextValue {
 
 const UserPresenceContext = createContext<UserPresenceContextValue | null>(null);
 
+type PresenceChannel = ReturnType<typeof supabase.channel>;
+
+interface ActivePresenceSession {
+  channel: PresenceChannel;
+  generation: number;
+  identity: Pick<
+    OnlineUser,
+    "userId" | "username" | "displayName" | "role" | "sessionId"
+  >;
+}
+
 export function UserPresenceProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
+  const userId = user?.userId ?? null;
+  const username = user?.username ?? "";
+  const displayName = user?.displayName ?? "";
+  const role = user?.role ?? "";
   const [allOnlineUsers, setAllOnlineUsers] = useState<OnlineUser[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<PresenceConnectionStatus>("offline");
   const [currentModule, setCurrentModule] = useState("dashboard");
   const currentEditingRef = useRef<OnlineUser["isEditing"]>();
-  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const currentModuleRef = useRef("dashboard");
+  const sessionIdRef = useRef(createPresenceSessionId());
+  const presenceGenerationRef = useRef(0);
+  const activeUserIdRef = useRef<string | null>(userId);
+  const activePresenceRef = useRef<ActivePresenceSession | null>(null);
+  activeUserIdRef.current = userId;
 
   const trackPresence = useCallback(
     (module: string, editingInfo = currentEditingRef.current) => {
-      if (!presenceChannelRef.current || !user) return;
+      const activeSession = activePresenceRef.current;
+      if (
+        !activeSession ||
+        !isCurrentPresenceSession(
+          presenceGenerationRef.current,
+          activeSession.generation,
+          activeUserIdRef.current,
+          activeSession.identity.userId,
+        )
+      ) {
+        return;
+      }
 
-      void presenceChannelRef.current.track({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        role: user.role,
+      void activeSession.channel.track({
+        ...activeSession.identity,
         lastSeen: new Date().toISOString(),
         currentModule: module,
         isEditing: editingInfo,
         timestamp: Date.now(),
       });
     },
-    [user],
+    [],
   );
 
   const updateCurrentModule = useCallback(
     (module: string) => {
+      currentModuleRef.current = module;
       setCurrentModule(module);
       trackPresence(module);
     },
@@ -84,47 +121,56 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    // Always clear stale presence data when the signed-in user changes so
-    // switching accounts inside the same tab does not keep showing the
-    // previous account's presence roster.
+    const generation = presenceGenerationRef.current + 1;
+    presenceGenerationRef.current = generation;
     setAllOnlineUsers([]);
+    currentEditingRef.current = undefined;
 
-    if (!user) {
+    if (!userId) {
+      activePresenceRef.current = null;
       setConnectionStatus("offline");
       return;
     }
 
     setConnectionStatus("connecting");
-    // Use a per-user channel name so switching accounts forces a brand new
-    // websocket instead of sharing the previous account's presence state.
-    const channel = supabase.channel(`user_presence:${user.userId}`, {
-      config: { presence: { key: user.userId } },
+    const identity: ActivePresenceSession["identity"] = {
+      userId,
+      username,
+      displayName,
+      role,
+      sessionId: sessionIdRef.current,
+    };
+    const channel = supabase.channel("user_presence", {
+      config: {
+        presence: {
+          key: createPresenceKey(userId, sessionIdRef.current),
+        },
+      },
     });
-    presenceChannelRef.current = channel;
+    activePresenceRef.current = { channel, generation, identity };
+
+    const isCurrentChannel = () =>
+      activePresenceRef.current?.channel === channel &&
+      isCurrentPresenceSession(
+        presenceGenerationRef.current,
+        generation,
+        activeUserIdRef.current,
+        userId,
+      );
 
     channel
       .on("presence", { event: "sync" }, () => {
-        const usersById = new Map<string, OnlineUser>();
-        Object.values(channel.presenceState()).forEach((presences) => {
-          presences.forEach((presence) => {
-            const candidate = presence as unknown as OnlineUser;
-            if (!candidate.userId) return;
-            const existing = usersById.get(candidate.userId);
-            if (!existing || candidate.lastSeen > existing.lastSeen) {
-              usersById.set(candidate.userId, candidate);
-            }
-          });
-        });
+        if (!isCurrentChannel()) return;
         setAllOnlineUsers(
-          [...usersById.values()].sort((a, b) =>
-            (a.displayName || a.username).localeCompare(b.displayName || b.username, "zh-TW"),
-          ),
+          selectLatestOnlineUsers(channel.presenceState()) as OnlineUser[],
         );
       })
       .subscribe(async (status) => {
+        if (!isCurrentChannel()) return;
+
         if (status === "SUBSCRIBED") {
           setConnectionStatus("online");
-          trackPresence("dashboard");
+          trackPresence(currentModuleRef.current);
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnectionStatus("error");
         } else if (status === "CLOSED") {
@@ -133,22 +179,29 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
       });
 
     return () => {
-      presenceChannelRef.current = null;
-      setConnectionStatus("offline");
-      setAllOnlineUsers([]);
-      // Broadcast that this identity is leaving before we tear the channel
-      // down so other tabs immediately drop the presence entry.
-      void channel.untrack().finally(() => {
-        void supabase.removeChannel(channel);
-      });
+      if (activePresenceRef.current?.channel === channel) {
+        activePresenceRef.current = null;
+        if (presenceGenerationRef.current === generation) {
+          presenceGenerationRef.current += 1;
+        }
+        setConnectionStatus("offline");
+        setAllOnlineUsers([]);
+      }
+
+      void channel
+        .untrack()
+        .catch(() => undefined)
+        .finally(() => {
+          void supabase.removeChannel(channel);
+        });
     };
-  }, [trackPresence, user?.userId]);
+  }, [displayName, role, trackPresence, userId, username]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     const interval = window.setInterval(() => trackPresence(currentModule), 30_000);
     return () => window.clearInterval(interval);
-  }, [currentModule, trackPresence, user]);
+  }, [currentModule, trackPresence, userId]);
 
   const visibleOnlineUsers = useMemo(() => {
     if (!user || allOnlineUsers.some((onlineUser) => onlineUser.userId === user.userId)) {
