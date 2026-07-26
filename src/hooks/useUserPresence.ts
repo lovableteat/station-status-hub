@@ -84,14 +84,20 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    // Always clear stale presence data when the signed-in user changes so
+    // switching accounts inside the same tab does not keep showing the
+    // previous account's presence roster.
+    setAllOnlineUsers([]);
+
     if (!user) {
-      setAllOnlineUsers([]);
       setConnectionStatus("offline");
       return;
     }
 
     setConnectionStatus("connecting");
-    const channel = supabase.channel("user_presence", {
+    // Use a per-user channel name so switching accounts forces a brand new
+    // websocket instead of sharing the previous account's presence state.
+    const channel = supabase.channel(`user_presence:${user.userId}`, {
       config: { presence: { key: user.userId } },
     });
     presenceChannelRef.current = channel;
@@ -129,9 +135,14 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
     return () => {
       presenceChannelRef.current = null;
       setConnectionStatus("offline");
-      void supabase.removeChannel(channel);
+      setAllOnlineUsers([]);
+      // Broadcast that this identity is leaving before we tear the channel
+      // down so other tabs immediately drop the presence entry.
+      void channel.untrack().finally(() => {
+        void supabase.removeChannel(channel);
+      });
     };
-  }, [trackPresence, user]);
+  }, [trackPresence, user?.userId]);
 
   useEffect(() => {
     if (!user) return;
