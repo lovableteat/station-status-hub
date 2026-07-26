@@ -96,7 +96,7 @@ export function canPlaceComponent(project: PcbProject, candidate: PcbPlacedCompo
   ));
 }
 
-/** Finds the first row-major grid position that can hold the component without changing inputs. */
+/** Finds the legal grid position nearest the board center without changing inputs. */
 export function findPlacement(project: PcbProject, candidate: PcbPlacedComponent): Point | null {
   const gridSize = project.board.gridSize;
   if (gridSize <= 0) return null;
