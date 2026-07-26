@@ -121,9 +121,14 @@ import {
   normalizeRackUnitSlots,
 } from "./rackMount.mjs";
 import {
+  GB300_CAPACITY_U,
   GB300_RACK_MODEL_ID,
+  createGb300RackDevice,
   getGb300DefaultL10Slots,
+  getGb300ServiceDeviceSpec,
   normalizeGb300RackDevices,
+  resolveGb300RackEquipment,
+  validateGb300RackEquipmentLayout,
 } from "./gb300RackEquipment.mjs";
 import type {
   CameraPreset,
@@ -144,6 +149,18 @@ const FACILITY_STORAGE_KEY = "data-center-digital-twin-facility-v1";
 const MODEL_CATALOG_STORAGE_KEY = "data-center-model-catalog-overrides-v1";
 const L10_RESERVED_BOTTOM_U = 2;
 const L10_RESERVED_TOP_U = 2;
+type Gb300EditableDeviceType = "switch-tray" | "psu" | "cdu" | "tor-switch";
+
+const GB300_EDITABLE_DEVICE_OPTIONS: Array<{
+  type: Gb300EditableDeviceType;
+  label: string;
+  detail: string;
+}> = [
+  { type: "switch-tray", label: "Switch Tray", detail: "1U" },
+  { type: "psu", label: "Power Shelf", detail: "1U／四模組" },
+  { type: "cdu", label: "CDU", detail: "4U" },
+  { type: "tor-switch", label: "ToR SN2201", detail: "1U＋下方理線" },
+];
 
 const STATUS_LABELS: Record<RackStatus, string> = {
   allocated: "運行中",
@@ -221,7 +238,12 @@ function readInitialSites() {
         const l10MatchesRack =
           !normalizedL10Model?.compatibleRackModelIds ||
           normalizedL10Model.compatibleRackModelIds.includes(modelId);
-        const capacityU = typeof rack.capacityU === "number" ? Math.max(1, Math.round(rack.capacityU)) : 42;
+        const capacityU =
+          modelId === GB300_RACK_MODEL_ID
+            ? GB300_CAPACITY_U
+            : typeof rack.capacityU === "number"
+              ? Math.max(1, Math.round(rack.capacityU))
+              : 42;
         const firstUsableU = Math.min(capacityU, L10_RESERVED_BOTTOM_U + 1);
         const lastUsableU = Math.max(firstUsableU, capacityU - L10_RESERVED_TOP_U);
         const l10StartU = Math.min(
@@ -305,8 +327,15 @@ function readInitialSites() {
           l10Slots,
           devices:
             modelId === GB300_RACK_MODEL_ID
-              ? normalizeGb300RackDevices(rack.id, rack.devices)
+              ? normalizeGb300RackDevices(rack.id, rack.devices, {
+                  ensureReferenceDefaults:
+                    Number(rack.equipmentLayoutVersion ?? 0) < 2,
+                })
               : rack.devices,
+          equipmentLayoutVersion:
+            modelId === GB300_RACK_MODEL_ID
+              ? 2
+              : rack.equipmentLayoutVersion,
         };
       }),
     }));
@@ -418,6 +447,35 @@ function getL10Placement(rack: RackPlan, model: RackModelDefinition, count = rac
 }
 
 function getL10Capacity(rack: RackPlan, model: RackModelDefinition) {
+  if (rack.modelId === GB300_RACK_MODEL_ID) {
+    const rackUnits = getL10RackUnits(model);
+    const firstUsableU = L10_RESERVED_BOTTOM_U + 1;
+    const lastUsableU = rack.capacityU - L10_RESERVED_TOP_U;
+    let acceptedSlots: number[] = [];
+
+    for (
+      let candidate = firstUsableU;
+      candidate + rackUnits - 1 <= lastUsableU;
+      candidate += 1
+    ) {
+      const candidateSlots = normalizeRackUnitSlots({
+        capacityU: rack.capacityU,
+        rackUnits,
+        rackUnitSlots: [...acceptedSlots, candidate],
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
+      if (candidateSlots.length <= acceptedSlots.length) continue;
+      const validation = validateGb300RackEquipmentLayout({
+        capacityU: rack.capacityU,
+        devices: rack.devices,
+        l10Slots: candidateSlots,
+        l10RackUnits: rackUnits,
+      });
+      if (validation.valid) acceptedSlots = candidateSlots;
+    }
+    return acceptedSlots.length;
+  }
   return getRackUnitSelection({
     capacityU: rack.capacityU,
     rackUnits: getL10RackUnits(model),
@@ -458,6 +516,8 @@ function getDeviceIcon(type: RackDevice["type"]): LucideIcon {
     "switch-tray": Network,
     "tor-switch": Wifi,
     psu: Zap,
+    cdu: Snowflake,
+    "cable-management": Cable,
     management: CircleGauge,
     "storage-tray": HardDrive,
   };
@@ -726,6 +786,9 @@ interface RackInspectorProps {
   onL10StartUChange: (startU: number) => void;
   onL10SlotToggle: (rackUnit: number) => void;
   onL10SlotsChange: (rackUnits: number[]) => void;
+  onRackDeviceAdd: (type: Gb300EditableDeviceType, slotStart: number) => void;
+  onRackDeviceMove: (deviceId: string, slotStart: number) => void;
+  onRackDeviceRemove: (deviceId: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -748,6 +811,9 @@ function RackInspector({
   onL10StartUChange,
   onL10SlotToggle,
   onL10SlotsChange,
+  onRackDeviceAdd,
+  onRackDeviceMove,
+  onRackDeviceRemove,
   collapsed = false,
   onToggleCollapse,
 }: RackInspectorProps) {
@@ -765,6 +831,59 @@ function RackInspector({
     (_, index) => l10LastUsableU - index
   );
   const usableRackUnits = railUnits.length;
+  const isGb300Rack = rack.modelId === GB300_RACK_MODEL_ID;
+  const [newDeviceType, setNewDeviceType] =
+    useState<Gb300EditableDeviceType>("switch-tray");
+  const [newDeviceStartU, setNewDeviceStartU] = useState(1);
+  const gb300ResolvedEquipment = isGb300Rack
+    ? resolveGb300RackEquipment(rack.devices)
+    : [];
+  const serviceOccupiedRackUnits = new Set(
+    gb300ResolvedEquipment.flatMap((equipment) =>
+      Array.from(
+        { length: equipment.rackUnitSpan },
+        (_, index) => equipment.rackUnitStart + index,
+      ),
+    ),
+  );
+  const serviceDevices = sortedDevices.filter((device) =>
+    Boolean(getGb300ServiceDeviceSpec(device.type)),
+  );
+  const availableNewDeviceUnits = useMemo(() => {
+    if (!isGb300Rack) return [];
+    const spec = getGb300ServiceDeviceSpec(newDeviceType);
+    if (!spec) return [];
+    const lastStartU = rack.capacityU - spec.slotSpan + 1;
+    return Array.from({ length: Math.max(0, lastStartU) }, (_, index) => index + 1)
+      .filter((slotStart) => {
+        const draft = createGb300RackDevice({
+          rackId: rack.id,
+          id: `${rack.id}-draft-equipment`,
+          type: newDeviceType,
+          slotStart,
+        });
+        return validateGb300RackEquipmentLayout({
+          capacityU: rack.capacityU,
+          devices: [...rack.devices, draft],
+          l10Slots: selectedL10Slots,
+          l10RackUnits,
+        }).valid;
+      });
+  }, [
+    isGb300Rack,
+    l10RackUnits,
+    newDeviceType,
+    rack.capacityU,
+    rack.devices,
+    rack.id,
+    selectedL10Slots,
+  ]);
+
+  useEffect(() => {
+    if (!availableNewDeviceUnits.includes(newDeviceStartU)) {
+      setNewDeviceStartU(availableNewDeviceUnits[0] ?? 1);
+    }
+  }, [availableNewDeviceUnits, newDeviceStartU]);
 
   if (collapsed) {
     return (
@@ -893,7 +1012,9 @@ function RackInspector({
                     {rack.capacityU}U 機櫃
                   </span>
                   <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-[10px] font-black tabular-nums text-cyan-100">
-                    {usableRackUnits} 個可用 U 位
+                    {isGb300Rack
+                      ? `${l10Capacity} 個 L10 可用層位`
+                      : `${usableRackUnits} 個可用 U 位`}
                   </span>
                 </div>
               </div>
@@ -1009,10 +1130,7 @@ function RackInspector({
                     disabled={!canEdit}
                     onClick={() =>
                       onL10SlotsChange(
-                        Array.from(
-                          { length: l10Capacity },
-                          (_, index) => l10FirstUsableU + index * l10RackUnits,
-                        ),
+                        [...railUnits].sort((left, right) => left - right),
                       )
                     }
                     className="h-9 rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-2 text-[11px] font-bold text-cyan-50 hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1024,10 +1142,7 @@ function RackInspector({
                     disabled={!canEdit}
                     onClick={() =>
                       onL10SlotsChange(
-                        Array.from(
-                          { length: l10Capacity },
-                          (_, index) => l10LastUsableU - l10RackUnits + 1 - index * l10RackUnits,
-                        ).sort((left, right) => left - right),
+                        [...railUnits],
                       )
                     }
                     className="h-9 rounded-lg border border-blue-300/25 bg-blue-400/10 px-2 text-[11px] font-bold text-blue-50 hover:bg-blue-400/18 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1057,7 +1172,20 @@ function RackInspector({
                     const slotEnd = slot + l10RackUnits - 1;
                     return unit <= slotEnd && lastRequiredUnit >= slot;
                   });
-                  const canToggle = canEdit && (selected || (fitsInsideRack && !overlapsAnotherSlot));
+                  const overlapsServiceEquipment = Array.from(
+                    { length: l10RackUnits },
+                    (_, index) => unit + index,
+                  ).some((rackUnit) => serviceOccupiedRackUnits.has(rackUnit));
+                  const canToggle =
+                    canEdit
+                    && (
+                      selected
+                      || (
+                        fitsInsideRack
+                        && !overlapsAnotherSlot
+                        && !overlapsServiceEquipment
+                      )
+                    );
                   return (
                     <button
                       key={unit}
@@ -1067,7 +1195,7 @@ function RackInspector({
                           ? `移除 U${unit} 的 L10`
                           : canToggle
                             ? `在 U${unit} 安裝 L10`
-                            : `U${unit} 無法安裝：空間不足或與其他 L10 重疊`
+                            : `U${unit} 無法安裝：空間不足或與現有設備重疊`
                       }
                       aria-label={`U${unit}${selected ? "，已選取" : ""}`}
                       aria-pressed={selected}
@@ -1079,6 +1207,8 @@ function RackInspector({
                           ? "border-cyan-200/70 bg-cyan-400 text-[#03131f] shadow-[0_0_12px_rgba(34,211,238,0.28)]"
                           : occupiedByAnotherSlot
                             ? "cursor-not-allowed border-cyan-300/20 bg-cyan-400/10 text-cyan-300/45"
+                            : overlapsServiceEquipment
+                              ? "cursor-not-allowed border-amber-300/20 bg-amber-400/10 text-amber-200/55"
                             : canToggle
                               ? "border-[#214669] bg-[#10283d] text-slate-300 hover:border-cyan-300/55 hover:text-cyan-50"
                               : "cursor-not-allowed border-[#163653]/60 bg-[#081c2d] text-slate-600"
@@ -1105,28 +1235,245 @@ function RackInspector({
 
           <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
             <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-slate-200">其他設備</span>
+              <div>
+                <span className="text-xs font-bold text-slate-200">
+                  {isGb300Rack ? "機櫃設備配置" : "其他設備"}
+                </span>
+                {isGb300Rack ? (
+                  <p className="mt-1 text-[10px] text-cyan-100/60">
+                    完整 48U；所有設備與 L10 共用相同軌道、前面板與 U 高度。
+                  </p>
+                ) : null}
+              </div>
               <Badge className="border-0 bg-blue-400/10 text-[10px] text-blue-200 shadow-none">
-                {rack.devices.length} devices
+                {isGb300Rack ? serviceDevices.length : rack.devices.length} devices
               </Badge>
             </div>
-            <div className="space-y-1.5">
-              {sortedDevices.map((device) => {
-                const Icon = getDeviceIcon(device.type);
-                return (
-                  <div key={device.id} className="flex items-center gap-3 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10283d] text-blue-100/75">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-slate-100">{device.name}</div>
-                      <div className="mt-0.5 text-[11px] text-slate-400">U{device.slotStart} · {device.assetTag}</div>
-                    </div>
-                    <span className={cn("h-2 w-2 rounded-full", device.health === "healthy" ? "bg-emerald-400" : device.health === "critical" ? "bg-rose-400" : device.health === "offline" ? "bg-slate-500" : "bg-amber-400")} />
+
+            {isGb300Rack ? (
+              <>
+                <div className="mb-3 rounded-xl border border-cyan-300/20 bg-cyan-400/[0.06] p-3">
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-black text-cyan-50">
+                    <PackagePlus className="h-4 w-4 text-cyan-300" />
+                    新增設備
                   </div>
-                );
-              })}
-            </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_82px_38px] gap-2">
+                    <Select
+                      value={newDeviceType}
+                      onValueChange={(value) =>
+                        setNewDeviceType(value as Gb300EditableDeviceType)
+                      }
+                      disabled={!canEdit}
+                    >
+                      <SelectTrigger
+                        aria-label="設備類型"
+                        className="h-9 border-[#214669] bg-[#081c2d] text-xs font-bold text-slate-100"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GB300_EDITABLE_DEVICE_OPTIONS.map((option) => (
+                          <SelectItem key={option.type} value={option.type}>
+                            {option.label} · {option.detail}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(newDeviceStartU)}
+                      onValueChange={(value) => setNewDeviceStartU(Number(value))}
+                      disabled={!canEdit || availableNewDeviceUnits.length === 0}
+                    >
+                      <SelectTrigger
+                        aria-label="新增設備層位"
+                        className="h-9 border-[#214669] bg-[#081c2d] text-xs font-black text-cyan-100"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableNewDeviceUnits.map((rackUnit) => (
+                          <SelectItem key={rackUnit} value={String(rackUnit)}>
+                            U{rackUnit}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      aria-label="新增機櫃設備"
+                      disabled={!canEdit || availableNewDeviceUnits.length === 0}
+                      onClick={() => onRackDeviceAdd(newDeviceType, newDeviceStartU)}
+                      className="flex h-9 items-center justify-center rounded-lg bg-cyan-300 text-cyan-950 hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {newDeviceType === "tor-switch" ? (
+                    <p className="mt-2 text-[10px] leading-4 text-amber-100/75">
+                      SN2201 佔 1U；連續 ToR 群組最下方會自動保留並顯示 1U Cable Management。
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  {serviceDevices.map((device) => {
+                    const Icon = getDeviceIcon(device.type);
+                    const spec = getGb300ServiceDeviceSpec(device.type);
+                    if (!spec) return null;
+                    const deviceEndU = device.slotStart + spec.slotSpan - 1;
+                    const movableUnits = Array.from(
+                      {
+                        length: Math.max(
+                          0,
+                          rack.capacityU - spec.slotSpan + 1,
+                        ),
+                      },
+                      (_, index) => index + 1,
+                    ).filter((slotStart) => {
+                      const devices = rack.devices.map((candidate) =>
+                        candidate.id === device.id
+                          ? {
+                              ...candidate,
+                              slotStart,
+                              slotSpan: spec.slotSpan,
+                            }
+                          : candidate,
+                      );
+                      return validateGb300RackEquipmentLayout({
+                        capacityU: rack.capacityU,
+                        devices,
+                        l10Slots: selectedL10Slots,
+                        l10RackUnits,
+                      }).valid;
+                    });
+
+                    return (
+                      <div
+                        key={device.id}
+                        className="rounded-xl border border-[#163653] bg-[#081c2d] p-2.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10283d] text-blue-100/75">
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-bold text-slate-100">
+                              {device.name}
+                            </div>
+                            <div className="mt-0.5 text-[10px] text-slate-400">
+                              {spec.label} · {spec.slotSpan}U
+                              {device.type === "psu" ? " · 四模組" : ""}
+                            </div>
+                          </div>
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              device.health === "healthy"
+                                ? "bg-emerald-400"
+                                : device.health === "critical"
+                                  ? "bg-rose-400"
+                                  : device.health === "offline"
+                                    ? "bg-slate-500"
+                                    : "bg-amber-400",
+                            )}
+                          />
+                        </div>
+                        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+                          <Select
+                            value={String(device.slotStart)}
+                            onValueChange={(value) =>
+                              onRackDeviceMove(device.id, Number(value))
+                            }
+                            disabled={!canEdit}
+                          >
+                            <SelectTrigger
+                              aria-label={`${device.name} 層位`}
+                              className="h-8 border-[#214669] bg-[#10283d] text-[11px] font-black text-cyan-100"
+                            >
+                              <SelectValue
+                                aria-label={`U${device.slotStart}${
+                                  deviceEndU === device.slotStart
+                                    ? ""
+                                    : ` 至 U${deviceEndU}`
+                                }`}
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[...new Set([device.slotStart, ...movableUnits])]
+                                .sort((left, right) => left - right)
+                                .map((rackUnit) => (
+                                  <SelectItem
+                                    key={rackUnit}
+                                    value={String(rackUnit)}
+                                  >
+                                    U{rackUnit}
+                                    {spec.slotSpan > 1
+                                      ? `–U${rackUnit + spec.slotSpan - 1}`
+                                      : ""}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            aria-label={`刪除 ${device.name}`}
+                            disabled={!canEdit}
+                            onClick={() => onRackDeviceRemove(device.id)}
+                            className="flex h-8 items-center justify-center rounded-lg border border-rose-300/20 bg-rose-400/[0.07] text-rose-200 hover:bg-rose-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-35"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {gb300ResolvedEquipment
+                    .filter((equipment) => equipment.kind === "cable-management")
+                    .map((equipment) => (
+                      <div
+                        key={equipment.id}
+                        className="flex items-center gap-3 rounded-xl border border-amber-300/20 bg-amber-400/[0.06] px-3 py-2.5"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400/10 text-amber-100">
+                          <Cable className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-bold text-amber-50">
+                            Cable Management
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-amber-100/60">
+                            U{equipment.rackUnitStart} · 隨 ToR 群組自動調整
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-amber-300/25 px-2 py-0.5 text-[9px] font-black text-amber-100">
+                          1U
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                {sortedDevices.map((device) => {
+                  const Icon = getDeviceIcon(device.type);
+                  return (
+                    <div
+                      key={device.id}
+                      className="flex items-center gap-3 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-2.5"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10283d] text-blue-100/75">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-slate-100">{device.name}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-400">U{device.slotStart} · {device.assetTag}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {rack.maintenance.length ? (
@@ -1828,7 +2175,7 @@ export function DeploymentPlanningCenter() {
   const selectedL10Model =
     requestedL10Model?.kind === "l10" ? requestedL10Model : models["l10-placeholder"];
   const selectedL10Placement = getL10Placement(selectedRack, selectedL10Model);
-  const selectedL10Capacity = selectedL10Placement.maxVisible;
+  const selectedL10Capacity = getL10Capacity(selectedRack, selectedL10Model);
   const selectedFacility = facilityPlans[selectedSiteId] ?? cloneDefaultFacilityPlan();
   const [facilitySizeDraft, setFacilitySizeDraft] = useState({
     width: String(selectedFacility.width),
@@ -2046,6 +2393,105 @@ export function DeploymentPlanningCenter() {
           : site,
       ),
     );
+  };
+
+  const getRackEquipmentLayoutError = (
+    rack: RackPlan,
+    devices: RackDevice[],
+    l10Slots = getRackL10Slots(rack, selectedL10Model),
+  ) => {
+    if (rack.modelId !== GB300_RACK_MODEL_ID) return null;
+    const validation = validateGb300RackEquipmentLayout({
+      capacityU: rack.capacityU,
+      devices,
+      l10Slots,
+      l10RackUnits: getL10RackUnits(selectedL10Model),
+    });
+    return validation.valid ? null : validation.errors[0] ?? "設備層位發生衝突。";
+  };
+
+  const handleRackDeviceAdd = (
+    type: Gb300EditableDeviceType,
+    slotStart: number,
+  ) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const device = createGb300RackDevice({
+        rackId: rack.id,
+        type,
+        slotStart,
+        index: rack.devices.filter((item) => item.type === type).length,
+      }) as RackDevice;
+      const devices = [...rack.devices, device];
+      const error = getRackEquipmentLayoutError(rack, devices);
+      if (error) {
+        toast({
+          title: "無法新增設備",
+          description: error,
+          variant: "destructive",
+        });
+        return rack;
+      }
+      toast({
+        title: "設備已新增",
+        description: `${device.name} 已安裝於 U${device.slotStart}${
+          device.slotSpan > 1
+            ? `–U${device.slotStart + device.slotSpan - 1}`
+            : ""
+        }。`,
+      });
+      return { ...rack, devices };
+    });
+  };
+
+  const handleRackDeviceMove = (deviceId: string, slotStart: number) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const current = rack.devices.find((device) => device.id === deviceId);
+      const spec = getGb300ServiceDeviceSpec(current?.type);
+      if (!current || !spec) return rack;
+      const devices = rack.devices.map((device) =>
+        device.id === deviceId
+          ? {
+              ...device,
+              slotStart,
+              slotSpan: spec.slotSpan,
+            }
+          : device,
+      );
+      const error = getRackEquipmentLayoutError(rack, devices);
+      if (error) {
+        toast({
+          title: "無法調整層位",
+          description: error,
+          variant: "destructive",
+        });
+        return rack;
+      }
+      toast({
+        title: "設備層位已更新",
+        description: `${current.name} 已移至 U${slotStart}${
+          spec.slotSpan > 1 ? `–U${slotStart + spec.slotSpan - 1}` : ""
+        }。`,
+      });
+      return { ...rack, devices };
+    });
+  };
+
+  const handleRackDeviceRemove = (deviceId: string) => {
+    if (!canEdit) return;
+    updateSelectedRack((rack) => {
+      const current = rack.devices.find((device) => device.id === deviceId);
+      if (!current || !getGb300ServiceDeviceSpec(current.type)) return rack;
+      toast({
+        title: "設備已移除",
+        description: `${current.name} 已從 ${rack.cabinet} 移除。`,
+      });
+      return {
+        ...rack,
+        devices: rack.devices.filter((device) => device.id !== deviceId),
+      };
+    });
   };
 
   const updateFacility = (updater: (facility: FacilityPlan) => FacilityPlan) => {
@@ -2476,7 +2922,12 @@ export function DeploymentPlanningCenter() {
             reservedBottomU: L10_RESERVED_BOTTOM_U,
             reservedTopU: L10_RESERVED_TOP_U,
           });
-          if (normalized.length > requestedSlots.length) {
+          const layoutError = getRackEquipmentLayoutError(
+            rack,
+            rack.devices,
+            normalized,
+          );
+          if (normalized.length > requestedSlots.length && !layoutError) {
             requestedSlots.splice(0, requestedSlots.length, ...normalized);
           }
         }
@@ -2513,6 +2964,19 @@ export function DeploymentPlanningCenter() {
         reservedBottomU: L10_RESERVED_BOTTOM_U,
         reservedTopU: L10_RESERVED_TOP_U,
       });
+      const layoutError = getRackEquipmentLayoutError(
+        rack,
+        rack.devices,
+        l10Slots,
+      );
+      if (layoutError) {
+        toast({
+          title: "此範圍無法安裝",
+          description: layoutError,
+          variant: "destructive",
+        });
+        return rack;
+      }
       return {
         ...rack,
         l10Slots,
@@ -2545,6 +3009,19 @@ export function DeploymentPlanningCenter() {
         });
         return rack;
       }
+      const layoutError = getRackEquipmentLayoutError(
+        rack,
+        rack.devices,
+        l10Slots,
+      );
+      if (!existingSlots.includes(rackUnit) && layoutError) {
+        toast({
+          title: "此層無法安裝",
+          description: layoutError,
+          variant: "destructive",
+        });
+        return rack;
+      }
 
       return {
         ...rack,
@@ -2558,13 +3035,20 @@ export function DeploymentPlanningCenter() {
   const changeSelectedRackL10Slots = (rackUnitSlots: number[]) => {
     if (!canEdit) return;
     updateSelectedRack((rack) => {
-      const l10Slots = normalizeRackUnitSlots({
-        capacityU: rack.capacityU,
-        rackUnits: getL10RackUnits(selectedL10Model),
-        rackUnitSlots,
-        reservedBottomU: L10_RESERVED_BOTTOM_U,
-        reservedTopU: L10_RESERVED_TOP_U,
-      });
+      const rackUnits = getL10RackUnits(selectedL10Model);
+      const l10Slots = rackUnitSlots.reduce<number[]>((acceptedSlots, rackUnit) => {
+        const candidateSlots = normalizeRackUnitSlots({
+          capacityU: rack.capacityU,
+          rackUnits,
+          rackUnitSlots: [...acceptedSlots, rackUnit],
+          reservedBottomU: L10_RESERVED_BOTTOM_U,
+          reservedTopU: L10_RESERVED_TOP_U,
+        });
+        if (candidateSlots.length <= acceptedSlots.length) return acceptedSlots;
+        return getRackEquipmentLayoutError(rack, rack.devices, candidateSlots)
+          ? acceptedSlots
+          : candidateSlots;
+      }, []);
 
       return {
         ...rack,
@@ -2663,6 +3147,9 @@ export function DeploymentPlanningCenter() {
     onL10StartUChange: changeSelectedRackL10StartU,
     onL10SlotToggle: toggleSelectedRackL10Slot,
     onL10SlotsChange: changeSelectedRackL10Slots,
+    onRackDeviceAdd: handleRackDeviceAdd,
+    onRackDeviceMove: handleRackDeviceMove,
+    onRackDeviceRemove: handleRackDeviceRemove,
   };
 
   const desktopGridClass = leftCollapsed
