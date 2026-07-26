@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Boxes,
+  CircuitBoard,
   ClipboardList,
   Factory,
   FileText,
@@ -55,6 +56,11 @@ const MaterialRequestPage = React.lazy(() =>
     default: module.MaterialRequestPage,
   }))
 );
+const PcbDesignerWorkspace = React.lazy(() =>
+  import("@/components/pcb-designer/PcbDesignerWorkspace").then((module) => ({
+    default: module.PcbDesignerWorkspace,
+  }))
+);
 const ProductionMonitor = React.lazy(() =>
   import("@/components/production/ProductionMonitor").then((module) => ({
     default: module.ProductionMonitor,
@@ -78,6 +84,7 @@ type WorkspaceId =
   | "station-status"
   | "material-requests"
   | "data-center"
+  | "pcb-designer"
   | "user-management"
   | "ai-chat";
 
@@ -117,6 +124,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
+  "pcb-designer": "pcb-designer",
   "ai-chat": "ai-chat",
 };
 
@@ -183,6 +191,7 @@ function getInitialWorkspace(): WorkspaceId | null {
     workspace === "station-status" ||
     workspace === "material-requests" ||
     workspace === "data-center" ||
+    workspace === "pcb-designer" ||
     workspace === "user-management" ||
     workspace === "ai-chat"
   ) {
@@ -272,6 +281,13 @@ const Index = () => {
         description: "在 3D 數位孿生場景配置不同廠牌機櫃與 L10，檢視冷熱通道、電力、溫度、負載與網路資源。",
         icon: ServerCog,
         visible: canViewModule("data"),
+      },
+      {
+        id: "pcb-designer" as const,
+        label: "PCB Designer",
+        description: "建立 PCB 專案、匯入 BOM，並在同一工作區完成板框、元件配置與設計規則檢查。",
+        icon: CircuitBoard,
+        visible: canViewModule("pcb-designer"),
       },
       {
         id: "user-management" as const,
@@ -542,6 +558,12 @@ const Index = () => {
             <DeploymentPlanningCenter />
           </PermissionGuard>
         );
+      case "pcb-designer":
+        return (
+          <PermissionGuard module="pcb-designer">
+            <PcbDesignerWorkspace />
+          </PermissionGuard>
+        );
       case "user-management":
         return (
           <PermissionGuard
@@ -612,6 +634,7 @@ const Index = () => {
       className={cn(
         "app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background",
         activeWorkspace === "data-center" && "h-[100dvh] overflow-hidden",
+        activeWorkspace === "pcb-designer" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden"
       )}
     >
@@ -662,6 +685,8 @@ const Index = () => {
           "flex w-full min-w-0 flex-1 flex-col",
           activeWorkspace === "data-center"
             ? "min-h-0 overflow-hidden"
+            : activeWorkspace === "pcb-designer"
+              ? "min-h-0 overflow-hidden"
             : activeWorkspace === "station-status"
               ? "min-h-0 lg:overflow-hidden"
               : "min-h-0"

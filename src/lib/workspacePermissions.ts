@@ -18,12 +18,15 @@ export type Permission =
   | "comparison_view"
   | "comparison_edit"
   | "api_management_view"
-  | "api_management_edit";
+  | "api_management_edit"
+  | "pcb_designer_view"
+  | "pcb_designer_edit";
 
 export type WorkspaceId =
   | "station-status"
   | "material-requests"
-  | "data-center";
+  | "data-center"
+  | "pcb-designer";
 
 export type WorkspaceAccessLevel = "none" | "view" | "edit";
 
@@ -31,6 +34,7 @@ export interface WorkspaceAccessMap {
   "station-status": WorkspaceAccessLevel;
   "material-requests": WorkspaceAccessLevel;
   "data-center": WorkspaceAccessLevel;
+  "pcb-designer": WorkspaceAccessLevel;
 }
 
 export interface UserPermissionSettings {
@@ -42,13 +46,17 @@ export const DEFAULT_WORKSPACE_ACCESS: WorkspaceAccessMap = {
   "station-status": "none",
   "material-requests": "none",
   "data-center": "none",
+  "pcb-designer": "none",
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   "station-status": "機台維修紀錄中心",
   "material-requests": "料號申請",
   "data-center": "Data-center",
+  "pcb-designer": "PCB Designer",
 };
+
+export const WORKSPACE_IDS = Object.keys(WORKSPACE_LABELS) as WorkspaceId[];
 
 export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   dashboard: "station-status",
@@ -60,6 +68,7 @@ export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
+  "pcb-designer": "pcb-designer",
 };
 
 export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
@@ -75,6 +84,7 @@ export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
   "material-requests": "data_center",
   data: "data_center",
   "data-center": "data_center",
+  "pcb-designer": "pcb_designer",
 };
 
 export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
@@ -126,6 +136,13 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
       { key: "data_center_edit", label: "編輯資料中心 / 料號申請（舊）" },
     ],
   },
+  pcb_designer: {
+    name: "PCB Designer",
+    permissions: [
+      { key: "pcb_designer_view", label: "檢視 PCB Designer" },
+      { key: "pcb_designer_edit", label: "編輯 PCB Designer" },
+    ],
+  },
   api_management: {
     name: "API 管理",
     permissions: [
@@ -169,6 +186,7 @@ export function normalizeWorkspaceAccess(
     "station-status": value?.["station-status"] ?? "none",
     "material-requests": value?.["material-requests"] ?? "none",
     "data-center": value?.["data-center"] ?? "none",
+    "pcb-designer": value?.["pcb-designer"] ?? "none",
   };
 }
 

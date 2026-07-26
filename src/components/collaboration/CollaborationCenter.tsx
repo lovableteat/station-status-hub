@@ -53,6 +53,7 @@ const moduleLabels: Record<string, string> = {
   "api-management": "API 管理",
   "material-requests": "料號申請",
   "data-center": "Data-center",
+  "pcb-designer": "PCB Designer",
   "ai-chat": "資料查詢空間",
 };
 

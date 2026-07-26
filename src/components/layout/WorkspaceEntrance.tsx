@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 
+import { PcbWorkspacePreview } from "@/components/pcb-designer/PcbWorkspacePreview";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceEntranceItem {
@@ -63,6 +64,15 @@ const workspaceToneMap: Record<
       "bg-[linear-gradient(180deg,rgba(28,25,52,0.96),rgba(12,17,34,0.98))] hover:border-violet-300/34",
     description: "以 3D 數位孿生配置不同廠牌機櫃與設備，檢視冷熱通道、電力和負載。",
     features: ["3D 機櫃", "冷熱通道", "電力與散熱"],
+  },
+  "pcb-designer": {
+    badge: "電路設計",
+    iconWrap:
+      "border-emerald-300/22 bg-emerald-400/10 text-emerald-100 shadow-[0_18px_38px_-28px_rgba(52,211,153,0.8)]",
+    panel:
+      "bg-[linear-gradient(180deg,rgba(8,41,34,0.96),rgba(7,20,30,0.98))] hover:border-emerald-300/34",
+    description: "規劃板框、元件與走線，集中管理 PCB 專案和 BOM 資料。",
+    features: ["板框規劃", "元件配置", "設計規則"],
   },
   "user-management": {
     badge: "權限中樞",
@@ -207,6 +217,10 @@ function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
     );
   }
 
+  if (workspaceId === "pcb-designer") {
+    return <PcbWorkspacePreview />;
+  }
+
   if (workspaceId === "user-management") {
     return (
       <div className={cn(shellClass, "workspace-card-preview workspace-card-preview--expanded border-emerald-300/15")} aria-hidden="true">
@@ -271,6 +285,7 @@ export function WorkspaceEntrance({
   onSelect,
 }: WorkspaceEntranceProps) {
   const isFiveItemLayout = items.length === 5;
+  const isSixItemLayout = items.length === 6;
   const gridClass =
     items.length === 1
       ? "mx-auto max-w-xl grid-cols-1"
@@ -280,7 +295,9 @@ export function WorkspaceEntrance({
           ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-4"
           : isFiveItemLayout
             ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-6"
-            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+            : isSixItemLayout
+              ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+              : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
 
   return (
     <section

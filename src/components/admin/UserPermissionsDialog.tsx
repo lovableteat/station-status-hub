@@ -27,6 +27,7 @@ import {
   type WorkspaceAccessLevel,
   type WorkspaceAccessMap,
   type WorkspaceId,
+  WORKSPACE_IDS,
   WORKSPACE_LABELS,
 } from "@/lib/workspacePermissions";
 
@@ -141,11 +142,9 @@ export function UserPermissionsDialog({
   };
 
   const applyGlobalPreset = (level: WorkspaceAccessLevel) => {
-    const nextWorkspaceAccess: WorkspaceAccessMap = {
-      "station-status": level,
-      "material-requests": level,
-      "data-center": level,
-    };
+    const nextWorkspaceAccess = Object.fromEntries(
+      WORKSPACE_IDS.map((workspaceId) => [workspaceId, level]),
+    ) as WorkspaceAccessMap;
 
     setWorkspaceAccess(nextWorkspaceAccess);
 
