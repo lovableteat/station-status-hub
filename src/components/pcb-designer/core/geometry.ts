@@ -14,7 +14,12 @@ export function snapValue(value: number, gridSize: number): number {
   return Math.floor(value / gridSize) * gridSize;
 }
 
-function corners(rectangle: Rectangle): Point[] {
+function stableCoordinate(value: number): number {
+  const integer = Math.round(value);
+  return Math.abs(value - integer) < EPSILON ? integer : value;
+}
+
+export function getRotatedRectangleCorners(rectangle: Rectangle): readonly Readonly<Point>[] {
   const angle = (rectangle.rotation * Math.PI) / 180;
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
@@ -27,12 +32,12 @@ function corners(rectangle: Rectangle): Point[] {
     { x: halfWidth, y: halfHeight },
     { x: -halfWidth, y: halfHeight },
   ].map(({ x, y }) => ({
-    x: rectangle.x + x * cosine - y * sine,
-    y: rectangle.y + x * sine + y * cosine,
+    x: stableCoordinate(rectangle.x + x * cosine - y * sine),
+    y: stableCoordinate(rectangle.y + x * sine + y * cosine),
   }));
 }
 
-function axes(points: Point[]): Point[] {
+function axes(points: readonly Point[]): Point[] {
   return points.slice(0, 2).map((point, index) => {
     const next = points[(index + 1) % points.length];
     const edgeX = next.x - point.x;
@@ -42,15 +47,15 @@ function axes(points: Point[]): Point[] {
   });
 }
 
-function projection(points: Point[], axis: Point): [number, number] {
+function projection(points: readonly Point[], axis: Point): [number, number] {
   const values = points.map((point) => point.x * axis.x + point.y * axis.y);
   return [Math.min(...values), Math.max(...values)];
 }
 
 /** True when two rectangles intersect or touch, using the separating-axis theorem. */
 export function rectanglesOverlap(first: Rectangle, second: Rectangle): boolean {
-  const firstCorners = corners(first);
-  const secondCorners = corners(second);
+  const firstCorners = getRotatedRectangleCorners(first);
+  const secondCorners = getRotatedRectangleCorners(second);
 
   return axes(firstCorners).concat(axes(secondCorners)).every((axis) => {
     const [firstMin, firstMax] = projection(firstCorners, axis);
@@ -70,7 +75,7 @@ function keepoutRectangle(keepout: PcbKeepout): Rectangle {
 }
 
 export function isWithinBoard(component: Rectangle, board: PcbProject["board"]): boolean {
-  return corners(component).every((point) => (
+  return getRotatedRectangleCorners(component).every((point) => (
     point.x >= -EPSILON && point.x <= board.width + EPSILON
       && point.y >= -EPSILON && point.y <= board.height + EPSILON
   ));
@@ -96,12 +101,22 @@ export function findPlacement(project: PcbProject, candidate: PcbPlacedComponent
   const gridSize = project.board.gridSize;
   if (gridSize <= 0) return null;
 
+  const placements: Point[] = [];
+
   for (let y = gridSize; y <= project.board.height; y += gridSize) {
     for (let x = gridSize; x <= project.board.width; x += gridSize) {
       const placement = { ...candidate, x, y };
-      if (canPlaceComponent(project, placement)) return { x, y };
+      if (canPlaceComponent(project, placement)) placements.push({ x, y });
     }
   }
 
-  return null;
+  const centerX = project.board.width / 2;
+  const centerY = project.board.height / 2;
+  placements.sort((first, second) => {
+    const firstDistance = (first.x - centerX) ** 2 + (first.y - centerY) ** 2;
+    const secondDistance = (second.x - centerX) ** 2 + (second.y - centerY) ** 2;
+    return firstDistance - secondDistance || first.y - second.y || first.x - second.x;
+  });
+
+  return placements[0] ?? null;
 }
