@@ -102,7 +102,7 @@ export async function cloneSystemSeries({
 
   const { data: createdSystems, error: createError } = await supabase
     .from("test_systems")
-    .insert(clonedSystems)
+    .insert(clonedSystems as never)
     .select("id, system_name");
 
   if (createError || !createdSystems?.length) {
