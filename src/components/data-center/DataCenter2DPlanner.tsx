@@ -105,6 +105,47 @@ function getRackFootprint(rack: RackPlan, model: RackModelDefinition) {
   };
 }
 
+function getRackPlanLighting(rack: RackPlan) {
+  const hasCriticalDevice = rack.devices.some(
+    (device) => device.health === "critical" || device.health === "offline",
+  );
+  const hasWarningDevice = rack.devices.some((device) => device.health === "warning");
+
+  if (rack.status === "blocked" || hasCriticalDevice || rack.temperatureC >= 32) {
+    return {
+      fill: "#3b1b29",
+      stroke: "#fda4af",
+      glow: "#fb7185",
+      filter: "dc-rack-glow-critical",
+    };
+  }
+
+  if (rack.status === "reserved" || hasWarningDevice || rack.temperatureC >= 28) {
+    return {
+      fill: "#3a2f18",
+      stroke: "#fde68a",
+      glow: "#fbbf24",
+      filter: "dc-rack-glow-warning",
+    };
+  }
+
+  if (rack.status === "available") {
+    return {
+      fill: "#17324b",
+      stroke: "#93c5fd",
+      glow: "#60a5fa",
+      filter: "dc-rack-glow-available",
+    };
+  }
+
+  return {
+    fill: "#12352f",
+    stroke: "#6ee7b7",
+    glow: "#34d399",
+    filter: "dc-rack-glow-healthy",
+  };
+}
+
 export function DataCenter2DPlanner({
   racks,
   models,
@@ -338,17 +379,55 @@ export function DataCenter2DPlanner({
           onPointerLeave={() => setDragging(null)}
         >
           <defs>
+            <linearGradient id="dc-floor-lighting" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#193c56" />
+              <stop offset="48%" stopColor="#102c42" />
+              <stop offset="100%" stopColor="#071725" />
+            </linearGradient>
+            <radialGradient id="dc-overhead-light">
+              <stop offset="0%" stopColor="#dff8ff" stopOpacity="0.38" />
+              <stop offset="38%" stopColor="#67e8f9" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+            </radialGradient>
             <pattern id="dc-plan-grid" width={geometry.scale} height={geometry.scale} patternUnits="userSpaceOnUse">
-              <path d={`M ${geometry.scale} 0 L 0 0 0 ${geometry.scale}`} fill="none" stroke="#24445b" strokeWidth="1" opacity="0.6" />
+              <path d={`M ${geometry.scale} 0 L 0 0 0 ${geometry.scale}`} fill="none" stroke="#5b91ad" strokeWidth="1" opacity="0.54" />
             </pattern>
             <filter id="dc-plan-shadow" x="-30%" y="-30%" width="160%" height="160%">
               <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#02070d" floodOpacity="0.8" />
+            </filter>
+            <filter id="dc-rack-glow-healthy" x="-80%" y="-80%" width="260%" height="260%">
+              <feDropShadow dx="0" dy="0" stdDeviation="9" floodColor="#34d399" floodOpacity="0.92" />
+            </filter>
+            <filter id="dc-rack-glow-warning" x="-80%" y="-80%" width="260%" height="260%">
+              <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#fbbf24" floodOpacity="0.94" />
+            </filter>
+            <filter id="dc-rack-glow-critical" x="-80%" y="-80%" width="260%" height="260%">
+              <feDropShadow dx="0" dy="0" stdDeviation="11" floodColor="#fb7185" floodOpacity="0.96" />
+            </filter>
+            <filter id="dc-rack-glow-available" x="-80%" y="-80%" width="260%" height="260%">
+              <feDropShadow dx="0" dy="0" stdDeviation="9" floodColor="#60a5fa" floodOpacity="0.9" />
             </filter>
           </defs>
 
           <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`}>
 
-          <rect x={geometry.left} y={geometry.top} width={geometry.floorWidth} height={geometry.floorHeight} rx="18" fill="#081725" stroke="#5ea7cf" strokeWidth="3" />
+          <rect x={geometry.left} y={geometry.top} width={geometry.floorWidth} height={geometry.floorHeight} rx="18" fill="url(#dc-floor-lighting)" stroke="#8dd9f7" strokeWidth="3" />
+          <g data-testid="data-center-lighting-layer" pointerEvents="none">
+            <ellipse
+              cx={geometry.left + geometry.floorWidth * 0.28}
+              cy={geometry.top + geometry.floorHeight * 0.32}
+              rx={geometry.floorWidth * 0.33}
+              ry={geometry.floorHeight * 0.42}
+              fill="url(#dc-overhead-light)"
+            />
+            <ellipse
+              cx={geometry.left + geometry.floorWidth * 0.72}
+              cy={geometry.top + geometry.floorHeight * 0.68}
+              rx={geometry.floorWidth * 0.33}
+              ry={geometry.floorHeight * 0.42}
+              fill="url(#dc-overhead-light)"
+            />
+          </g>
           {facility.showGrid ? (
             <rect x={geometry.left} y={geometry.top} width={geometry.floorWidth} height={geometry.floorHeight} rx="18" fill="url(#dc-plan-grid)" />
           ) : null}
@@ -394,6 +473,7 @@ export function DataCenter2DPlanner({
             const width = footprint.width * geometry.scale;
             const height = footprint.depth * geometry.scale;
             const selected = rack.id === selectedRackId;
+            const lighting = getRackPlanLighting(rack);
             return (
               <g
                 key={rack.id}
@@ -407,7 +487,19 @@ export function DataCenter2DPlanner({
                   beginDrag(event, "rack", rack.id, rack.positionX, rack.positionZ);
                 }}
               >
-                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="7" fill={selected ? "#164e63" : "#142838"} stroke={selected ? "#67e8f9" : "#5c7890"} strokeWidth={selected ? 4 : 2} />
+                <rect
+                  data-testid={`data-center-rack-glow-${rack.id}`}
+                  x={center.x - width / 2 - 3}
+                  y={center.y - height / 2 - 3}
+                  width={width + 6}
+                  height={height + 6}
+                  rx="10"
+                  fill={lighting.glow}
+                  opacity={selected ? 0.62 : 0.38}
+                  filter={`url(#${lighting.filter})`}
+                  pointerEvents="none"
+                />
+                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="7" fill={selected ? "#155e75" : lighting.fill} stroke={selected ? "#cffafe" : lighting.stroke} strokeWidth={selected ? 4 : 2} />
                 <path d={`M ${center.x} ${center.y - height / 2 + 6} l -7 11 h 14 z`} fill={selected ? "#67e8f9" : "#91a9ba"} />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill="#f8fafc" fontSize="14" fontWeight="800">{rack.cabinet}</text>
                 <text x={center.x} y={center.y + 22} textAnchor="middle" fill="#a5c5d8" fontSize="10">{model.name}</text>

@@ -62,8 +62,8 @@ test("floor size control is directly visible in the 3D workspace", () => {
 });
 
 test("the overview applies a stable exposure and balanced fill lighting", () => {
-  assert.match(plannerSource, /toneMappingExposure\s*=\s*1\.22/);
-  assert.match(plannerSource, /ambientLight intensity=\{0\.82\}/);
-  assert.match(plannerSource, /hemisphereLight intensity=\{1\.05\}/);
-  assert.match(plannerSource, /directionalLight[\s\S]*?position=\{\[-8, 6, -4\]\}/);
+  assert.match(plannerSource, /toneMappingExposure\s*=\s*1\.85/);
+  assert.match(plannerSource, /ambientLight intensity=\{1\.55\}/);
+  assert.match(plannerSource, /hemisphereLight intensity=\{1\.85\}/);
+  assert.match(plannerSource, /directionalLight[\s\S]*?position=\{\[-8, 8, -4\]\}/);
 });
