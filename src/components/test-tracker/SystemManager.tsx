@@ -72,7 +72,7 @@ export function SystemManager({ onSystemUpdate, showDeleteAll = true, trigger }:
 
         const { data, error } = await supabase
           .from('test_systems')
-          .insert(tempSystemData)
+          .insert([tempSystemData])
           .select('id')
           .single();
 
