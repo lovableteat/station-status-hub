@@ -1,3 +1,8 @@
+import {
+  RACK_UNIT_HEIGHT_METERS,
+  getRackUnitMountLayout,
+} from "./rackMount.mjs";
+
 export const GB300_RACK_MODEL_ID = "nv-mgx-rack-v1-2-rev7";
 
 export const GB300_RACK_ANATOMY = Object.freeze([
@@ -52,7 +57,6 @@ const DISPLAY_EQUIPMENT = GB300_RACK_ANATOMY.filter(
 );
 const VALID_HEALTH = new Set(["healthy", "warning", "critical", "offline"]);
 const OFF = "#111827";
-const RACK_UNIT_HEIGHT_METERS = 0.04445;
 const L10_COMPUTE_ZONES = [
   { startU: 6, endU: 17 },
   { startU: 26, endU: 37 },
@@ -228,21 +232,35 @@ export function getGb300DefaultL10Slots({ moduleCount, rackUnits = 1 }) {
   return slots;
 }
 
-export function getGb300EquipmentMountLayout({ rackDimensions, capacityU = 42 }) {
-  const rackWidth = Math.max(0.1, Number(rackDimensions?.widthMm) / 1000 || 0);
-  const rackDepth = Math.max(0.1, Number(rackDimensions?.depthMm) / 1000 || 0);
+export function getGb300EquipmentMountLayout({
+  rackDimensions,
+  capacityU = 42,
+  l10Dimensions = {
+    widthMm: 482.1,
+    depthMm: 912.3,
+    heightMm: 43.8,
+  },
+  l10RackUnits = 1,
+}) {
   const rackHeight = Math.max(0.1, Number(rackDimensions?.heightMm) / 1000 || 0);
   const railFieldHeight = Math.max(1, Number(capacityU) || 42) * RACK_UNIT_HEIGHT_METERS;
-  const depth = Math.min(0.42, rackDepth * 0.48);
-  const frontFaceZ = rackDepth / 2 + 0.008;
+  const l10Layout = getRackUnitMountLayout({
+    rackDimensions,
+    capacityU,
+    moduleDimensions: l10Dimensions,
+    rackUnits: l10RackUnits,
+    moduleCount: 1,
+  });
+  const centerZ = l10Layout.positions[0].z;
+  const frontFaceZ = centerZ + l10Layout.fittedDepth / 2;
 
   return {
     rackHeight,
     railBottom: Math.max(0.08, (rackHeight - railFieldHeight) / 2),
-    width: Math.min(0.49, rackWidth * 0.72),
-    depth,
+    width: l10Layout.fittedWidth,
+    depth: l10Layout.fittedDepth,
     frontFaceZ,
-    centerZ: frontFaceZ - depth / 2,
+    centerZ,
   };
 }
 

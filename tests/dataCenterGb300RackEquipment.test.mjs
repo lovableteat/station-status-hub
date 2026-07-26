@@ -10,6 +10,7 @@ import {
   normalizeGb300RackDevices,
   resolveGb300RackEquipment,
 } from "../src/components/data-center/gb300RackEquipment.mjs";
+import { getRackUnitMountLayout } from "../src/components/data-center/rackMount.mjs";
 
 const legacyDevices = [
   {
@@ -195,15 +196,39 @@ test("legacy L10 placement uses the existing upper and lower compute zones witho
   );
 });
 
-test("equipment service faces sit in front of the rack selection hit box", () => {
-  const layout = getGb300EquipmentMountLayout({
-    rackDimensions: { widthMm: 708.8, depthMm: 1072.2, heightMm: 2308.315 },
+test("Power Shelf and Switch Tray share the exact L10 rail width and front plane", () => {
+  const rackDimensions = {
+    widthMm: 708.8,
+    depthMm: 1072.2,
+    heightMm: 2308.315,
+  };
+  const l10Dimensions = {
+    widthMm: 482.1,
+    depthMm: 912.3,
+    heightMm: 43.8,
+  };
+  const l10Layout = getRackUnitMountLayout({
+    rackDimensions,
     capacityU: 42,
+    moduleDimensions: l10Dimensions,
+    rackUnits: 1,
+    moduleCount: 1,
   });
+  const layout = getGb300EquipmentMountLayout({
+    rackDimensions,
+    capacityU: 42,
+    l10Dimensions,
+    l10RackUnits: 1,
+  });
+  const l10FrontFaceZ =
+    l10Layout.positions[0].z + l10Layout.fittedDepth / 2;
 
-  assert.ok(layout.frontFaceZ > 1.0722 / 2);
-  assert.equal(Number(layout.frontFaceZ.toFixed(4)), 0.5441);
-  assert.equal(Number((layout.centerZ + layout.depth / 2).toFixed(4)), 0.5441);
+  assert.equal(layout.width, l10Layout.fittedWidth);
+  assert.equal(layout.depth, l10Layout.fittedDepth);
+  assert.equal(layout.centerZ, l10Layout.positions[0].z);
+  assert.equal(layout.frontFaceZ, l10FrontFaceZ);
+  assert.equal(layout.centerZ + layout.depth / 2, l10FrontFaceZ);
+  assert.ok(layout.frontFaceZ < rackDimensions.depthMm / 2000);
 });
 
 test("Power Shelf and Switch Tray LEDs expose healthy, warning, critical, and offline states", () => {
@@ -247,6 +272,11 @@ test("the GB300 equipment overlay stays separate from the existing L10 renderer"
   assert.match(plannerSource, /<RackL10Modules[\s\S]*?\/>/);
   assert.match(plannerSource, /<GB300RackEquipment3D[\s\S]*?\/>/);
   assert.match(plannerSource, /definition\.id === GB300_RACK_MODEL_ID/);
+  assert.match(
+    plannerSource,
+    /<GB300RackEquipment3D[\s\S]*?l10Dimensions=\{l10Definition\.dimensions\}[\s\S]*?l10RackUnits=\{l10Definition\.rackUnits \?\? 1\}/,
+  );
+  assert.match(overlaySource, /getGb300EquipmentMountLayout\(\{[\s\S]*?l10Dimensions,[\s\S]*?l10RackUnits,/);
   assert.doesNotMatch(overlaySource, /RackL10Modules|carlo-next-l10|compute-tray/i);
   assert.match(overlaySource, /PowerShelf3D/);
   assert.match(overlaySource, /SwitchTrayBank3D/);
