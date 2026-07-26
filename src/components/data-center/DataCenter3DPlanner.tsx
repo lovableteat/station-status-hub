@@ -882,6 +882,8 @@ function RackVisual({
         <GB300RackEquipment3D
           rack={rack}
           rackDimensions={definition.dimensions}
+          l10Dimensions={l10Definition.dimensions}
+          l10RackUnits={l10Definition.rackUnits ?? 1}
           selectedEquipmentId={selectedEquipmentId}
           lowDetail={lowDetail}
           onSelectEquipment={(equipment) => {
