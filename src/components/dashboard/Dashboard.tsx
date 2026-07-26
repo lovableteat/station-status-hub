@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   CircleHelp,
   Clock3,
   Download,
@@ -519,8 +520,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               </Badge>
             </div>
           </div>
-          <div className="grid min-h-0 flex-1 gap-2.5 p-3 md:grid-cols-2 2xl:grid-cols-4">
-            {stationRows.map((station, index) => {
+          <div className="min-h-0 flex-1 p-3">
+            <div className="mb-3 flex items-center justify-between gap-3 text-[11px] font-semibold tracking-wide text-[#9eb8ca]">
+              <span className="rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3 py-1 text-cyan-100">
+                起點 · 第 1 站
+              </span>
+              <span className="hidden items-center gap-2 text-[#7897aa] sm:flex">
+                依站別順序向右執行
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+              <span className="rounded-full border border-[#315d78]/75 bg-[#0a1c2e] px-3 py-1">
+                終點 · 第 {stationRows.length} 站
+              </span>
+            </div>
+            <div
+              data-testid="station-capacity-flow"
+              className="overflow-x-auto pb-3 snap-x snap-mandatory"
+              aria-label={`站點產能流程，共 ${stationRows.length} 站，依第一站至最後一站排列`}
+            >
+              <ol className="flex min-w-max items-stretch">
+                {stationRows.map((station, index) => {
               const remainingShare = totalRemainingHours
                 ? Math.round((station.remainingHours / totalRemainingHours) * 100)
                 : 0;
@@ -531,56 +550,78 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 station.id === bottleneckStation?.id && station.remainingHours > 0;
 
               return (
-                <HoverCard key={station.id} openDelay={220} closeDelay={120}>
+                <li
+                  key={station.id}
+                  data-station-order={station.order}
+                  className="relative flex w-80 min-w-80 snap-start items-stretch pr-10 last:pr-0"
+                >
+                <HoverCard openDelay={220} closeDelay={120}>
                   <HoverCardTrigger asChild>
                     <button
                       type="button"
                       data-testid={`station-capacity-card-${index}`}
                       aria-label={`查看 ${station.name}，總共 ${station.totalSystems} 台，整站已完成 ${station.completedSystems} 台，還有 ${station.incompleteSystems} 台處理中，預估剩餘 ${station.remainingHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
                       className={cn(
-                        "h-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] px-3.5 py-3 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        "h-full w-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] p-4 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
                         isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
                       )}
                       onClick={() => onNavigate?.("test-tracker", { station: station.id })}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex min-h-20 flex-col justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold tracking-wide">
                           <span className={cn(
-                            "font-data flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] text-xs text-cyan-100",
-                            isBottleneck && "border-amber-300/35 bg-amber-300/10 text-amber-100"
-                          )}>{index + 1}</span>
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-[#f3f8fc]">{station.name}</div>
-                            <div className="mt-0.5 text-[10px] text-[#8fb0c5]">單站 {station.hours.toFixed(1)}h</div>
+                            "rounded-full border border-cyan-300/30 bg-cyan-300/[0.09] px-2 py-1 text-cyan-100",
+                            isBottleneck && "border-amber-300/40 bg-amber-300/10 text-amber-100"
+                          )}>
+                            第 {index + 1} 站
+                          </span>
+                          {index === 0 && "起點"}
+                          {index === stationRows.length - 1 && "終點"}
+                          {isBottleneck && "瓶頸"}
+                        </div>
+                        <div>
+                          <div className="break-words text-base font-semibold leading-6 text-[#f3f8fc]">
+                            {station.name}
+                          </div>
+                          <div className="mt-1 text-xs text-[#8fb0c5]">
+                            單站 {station.hours.toFixed(1)}h · 共 {station.totalSystems} 台
                           </div>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className={cn("font-data text-xl font-semibold text-cyan-100", isBottleneck && "text-amber-100")}>{station.totalSystems}</div>
-                          <div className="text-[10px] text-[#8fb0c5]">台總數</div>
+                      </div>
+
+                      <div className="mt-4 rounded-lg border border-[#315d78]/60 bg-[#071522] p-3" aria-label={`${station.name} 目前主要工作量`}>
+                        <div className="flex items-end justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-[#9eb8ca]">
+                              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                              預估剩餘
+                            </div>
+                            <strong className={cn(
+                              "font-data mt-1 block text-2xl font-semibold text-cyan-100",
+                              isBottleneck && "text-amber-100"
+                            )}>
+                              {station.remainingHours.toFixed(1)}h
+                            </strong>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[11px] text-[#8fb0c5]">仍在處理</div>
+                            <strong className={cn(
+                              "font-data mt-1 block text-lg text-cyan-100",
+                              isBottleneck && "text-amber-100"
+                            )}>
+                              {station.incompleteSystems} 台
+                            </strong>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2" aria-label={`${station.name} 機台完成摘要`}>
-                        <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-2">
-                          <span className="text-[10px] font-medium text-emerald-100">整站已完成</span>
-                          <strong className="font-data text-base text-emerald-200">{station.completedSystems}</strong>
-                        </div>
-                        <div className={cn(
-                          "flex items-center justify-between gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-2",
-                          isBottleneck && "border-amber-300/35 bg-amber-300/[0.09]"
-                        )}>
-                          <span className={cn("text-[10px] font-medium text-cyan-100", isBottleneck && "text-amber-100")}>仍在處理</span>
-                          <strong className={cn("font-data text-base text-cyan-200", isBottleneck && "text-amber-100")}>{station.incompleteSystems}</strong>
-                        </div>
-                      </div>
-
-                      <div className="mt-2.5 border-t border-[#315d78]/55 pt-2.5">
-                        <div className="flex items-center justify-between text-[10px] text-[#9eb8ca]">
+                      <div className="mt-4 border-t border-[#315d78]/55 pt-3">
+                        <div className="flex items-center justify-between text-[11px] text-[#9eb8ca]">
                           <span>相對負載</span>
                           <span className={cn("font-data text-cyan-100", isBottleneck && "text-amber-100")}>{workloadShare}%</span>
                         </div>
                         <div
-                          className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#06111f] ring-1 ring-inset ring-[#315d78]/65"
+                          className="mt-2 h-2 overflow-hidden rounded-full bg-[#06111f] ring-1 ring-inset ring-[#315d78]/65"
                           role="progressbar"
                           aria-label={`${station.name} 相對負載`}
                           aria-valuemin={0}
@@ -597,18 +638,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         </div>
                       </div>
 
-                      <div className="mt-2.5 grid grid-cols-2 gap-3 text-[10px]">
-                        <div>
-                          <div className="flex items-center gap-1 text-[#8fb0c5]"><Clock3 className="h-3 w-3" aria-hidden="true" />剩餘估時</div>
-                          <div className="font-data mt-0.5 text-xs font-semibold text-[#d9e8f2]">{station.remainingHours.toFixed(1)}h</div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1 text-[#8fb0c5]"><TrendingUp className="h-3 w-3" aria-hidden="true" />測項完成率</div>
-                          <div className="font-data mt-0.5 text-xs font-semibold text-emerald-200">{station.averageProgress}%</div>
-                        </div>
+                      <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]">
+                        <span>整站完成 {station.completedSystems} / {station.totalSystems} 台</span>
+                        <span className="flex items-center gap-1 text-emerald-200">
+                          <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                          測項 {station.averageProgress}%
+                        </span>
                       </div>
 
-                      <div className="mt-2.5 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
+                      <div className="mt-3 flex items-center justify-between border-t border-[#315d78]/45 pt-2 text-[10px] text-[#8fb0c5]">
                         <span>剩餘工時占比 {remainingShare}%</span>
                         <span className={cn(isBottleneck ? "text-amber-100" : "text-cyan-100")}>
                           {isBottleneck ? "優先疏通" : station.remainingItems ? "持續監控" : "工作已清空"}
@@ -705,8 +743,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                   </HoverCardContent>
                 </HoverCard>
+                  {index < stationRows.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-1 top-1/2 flex w-8 -translate-y-1/2 items-center text-cyan-300/70"
+                    >
+                      <span className="h-px flex-1 bg-cyan-300/45" />
+                      <ChevronRight className="h-4 w-4 shrink-0" />
+                    </span>
+                  )}
+                </li>
               );
             })}
+              </ol>
+            </div>
           </div>
         </section>
 
