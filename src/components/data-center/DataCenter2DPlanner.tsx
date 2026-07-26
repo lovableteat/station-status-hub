@@ -64,6 +64,7 @@ interface DataCenter2DPlannerProps {
   racks: RackPlan[];
   models: Record<string, RackModelDefinition>;
   facility: FacilityPlan;
+  overflowKeys: ReadonlySet<string>;
   selectedRackId: string;
   canEdit: boolean;
   onSelectRack: (rackId: string) => void;
@@ -150,6 +151,7 @@ export function DataCenter2DPlanner({
   racks,
   models,
   facility,
+  overflowKeys,
   selectedRackId,
   canEdit,
   onSelectRack,
@@ -437,10 +439,12 @@ export function DataCenter2DPlanner({
             const width = aisle.width * geometry.scale;
             const height = aisle.depth * geometry.scale;
             const cold = aisle.kind === "cold";
+            const aisleOverflow = overflowKeys.has(`aisle:${aisle.id}`);
             return (
               <g
                 key={aisle.id}
                 data-plan-item={`aisle-${aisle.id}`}
+                data-overflow={aisleOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
                 transform={`rotate(${aisle.rotation} ${center.x} ${center.y})`}
                 onClick={(event) => {
@@ -452,8 +456,41 @@ export function DataCenter2DPlanner({
                   beginDrag(event, "aisle", aisle.id, aisle.x, aisle.z);
                 }}
               >
-                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="10" fill={cold ? "#0ea5e933" : "#f9731630"} stroke={cold ? "#38bdf8" : "#fb923c"} strokeWidth="2" strokeDasharray="8 6" />
+                {aisleOverflow ? <title>{`${aisle.label} 超出廠房範圍`}</title> : null}
+                <rect
+                  x={center.x - width / 2}
+                  y={center.y - height / 2}
+                  width={width}
+                  height={height}
+                  rx="10"
+                  fill={cold ? "#0ea5e933" : "#f9731630"}
+                  stroke={aisleOverflow ? "#fda4af" : cold ? "#38bdf8" : "#fb923c"}
+                  strokeWidth={aisleOverflow ? 4 : 2}
+                  strokeDasharray="8 6"
+                />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill={cold ? "#bae6fd" : "#fed7aa"} fontSize="15" fontWeight="700">{aisle.label}</text>
+                {aisleOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + width / 2}
+                      cy={center.y - height / 2}
+                      r="13"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + width / 2}
+                      y={center.y - height / 2 + 5}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="15"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
@@ -474,10 +511,12 @@ export function DataCenter2DPlanner({
             const height = footprint.depth * geometry.scale;
             const selected = rack.id === selectedRackId;
             const lighting = getRackPlanLighting(rack);
+            const rackOverflow = overflowKeys.has(`rack:${rack.id}`);
             return (
               <g
                 key={rack.id}
                 data-plan-item={`rack-${rack.id}`}
+                data-overflow={rackOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
                 filter="url(#dc-plan-shadow)"
                 onClick={() => onSelectRack(rack.id)}
@@ -487,6 +526,7 @@ export function DataCenter2DPlanner({
                   beginDrag(event, "rack", rack.id, rack.positionX, rack.positionZ);
                 }}
               >
+                {rackOverflow ? <title>{`${rack.cabinet} 超出廠房範圍`}</title> : null}
                 <rect
                   data-testid={`data-center-rack-glow-${rack.id}`}
                   x={center.x - width / 2 - 3}
@@ -499,26 +539,91 @@ export function DataCenter2DPlanner({
                   filter={`url(#${lighting.filter})`}
                   pointerEvents="none"
                 />
-                <rect x={center.x - width / 2} y={center.y - height / 2} width={width} height={height} rx="7" fill={selected ? "#155e75" : lighting.fill} stroke={selected ? "#cffafe" : lighting.stroke} strokeWidth={selected ? 4 : 2} />
+                <rect
+                  x={center.x - width / 2}
+                  y={center.y - height / 2}
+                  width={width}
+                  height={height}
+                  rx="7"
+                  fill={selected ? "#155e75" : lighting.fill}
+                  stroke={rackOverflow ? "#fda4af" : selected ? "#cffafe" : lighting.stroke}
+                  strokeWidth={rackOverflow || selected ? 4 : 2}
+                  strokeDasharray={rackOverflow ? "7 4" : undefined}
+                />
                 <path d={`M ${center.x} ${center.y - height / 2 + 6} l -7 11 h 14 z`} fill={selected ? "#67e8f9" : "#91a9ba"} />
                 <text x={center.x} y={center.y + 5} textAnchor="middle" fill="#f8fafc" fontSize="14" fontWeight="800">{rack.cabinet}</text>
                 <text x={center.x} y={center.y + 22} textAnchor="middle" fill="#a5c5d8" fontSize="10">{model.name}</text>
+                {rackOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + width / 2}
+                      cy={center.y - height / 2}
+                      r="13"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + width / 2}
+                      y={center.y - height / 2 + 5}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="15"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
 
           {facility.powerFeeds.map((feed) => {
             const center = toScreen(feed.x, feed.z);
+            const powerOverflow = overflowKeys.has(`power:${feed.id}`);
             return (
               <g
                 key={feed.id}
                 data-plan-item={`power-${feed.id}`}
+                data-overflow={powerOverflow || undefined}
                 className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
                 onPointerDown={(event) => beginDrag(event, "power", feed.id, feed.x, feed.z)}
               >
-                <circle cx={center.x} cy={center.y} r="17" fill="#071522" stroke={feed.color} strokeWidth="4" />
+                {powerOverflow ? <title>{`${feed.label} 超出廠房範圍`}</title> : null}
+                <circle
+                  cx={center.x}
+                  cy={center.y}
+                  r="20"
+                  fill="#071522"
+                  stroke={powerOverflow ? "#fda4af" : feed.color}
+                  strokeWidth={powerOverflow ? 5 : 4}
+                  strokeDasharray={powerOverflow ? "7 4" : undefined}
+                />
                 <path d={`M ${center.x - 4} ${center.y - 10} L ${center.x + 5} ${center.y - 10} L ${center.x} ${center.y - 1} L ${center.x + 7} ${center.y - 1} L ${center.x - 5} ${center.y + 12} L ${center.x - 1} ${center.y + 3} L ${center.x - 8} ${center.y + 3} Z`} fill={feed.color} />
                 <text x={center.x} y={center.y + 34} textAnchor="middle" fill="#f8fafc" fontSize="12" fontWeight="700">{feed.label}</text>
+                {powerOverflow ? (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={center.x + 18}
+                      cy={center.y - 18}
+                      r="11"
+                      fill="#be123c"
+                      stroke="#ffe4e6"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={center.x + 18}
+                      y={center.y - 14}
+                      textAnchor="middle"
+                      fill="#fff1f2"
+                      fontSize="13"
+                      fontWeight="900"
+                    >
+                      !
+                    </text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
@@ -556,6 +661,19 @@ export function DataCenter2DPlanner({
             <Scan className="h-4 w-4" />
           </button>
         </div>
+
+        {overflowKeys.size > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenFacilitySettings}
+            className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-rose-300/35 bg-[#2a0b17]/95 px-3 py-2 text-left text-xs font-bold text-rose-50 shadow-lg transition-colors hover:border-rose-200/60 hover:bg-[#3a0f20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-black text-white">
+              !
+            </span>
+            {overflowKeys.size} 個項目超出廠房範圍
+          </button>
+        ) : null}
 
         {selectedAisle ? (
           <div className="absolute bottom-4 left-4 z-20 w-[min(430px,calc(100%-32px))] rounded-2xl border border-cyan-300/25 bg-[#071522]/96 p-4 shadow-2xl backdrop-blur-xl">
