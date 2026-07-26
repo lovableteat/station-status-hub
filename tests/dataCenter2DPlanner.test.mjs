@@ -84,3 +84,11 @@ test("a selected cold or hot aisle can be deleted from the 2D plan", () => {
   assert.match(plannerSource, /onDeleteAisle\(selectedAisle\.id\)/);
   assert.match(plannerSource, /setSelectedAisleId\(null\)/);
 });
+
+test("overflowing plan items are visibly warned without moving them", () => {
+  assert.match(plannerSource, /overflowKeys/);
+  assert.match(plannerSource, /data-overflow=\{aisleOverflow/);
+  assert.match(plannerSource, /data-overflow=\{rackOverflow/);
+  assert.match(plannerSource, /data-overflow=\{powerOverflow/);
+  assert.match(plannerSource, /超出廠房範圍/);
+});
