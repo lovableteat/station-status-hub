@@ -122,6 +122,33 @@ test("selection actions rotate, lock, delete, and nudge the selected component",
   assert.equal(deleted.components.length, 0);
 });
 
+test("locked components can only be unlocked, not edited, rotated, nudged, or deleted", () => {
+  const project = createBlankProject("Locked actions");
+  const placed = editorModule.placeLibraryComponent(project, BUILT_IN_COMPONENTS[3]);
+  assert.equal(placed.ok, true);
+  const selection = { kind: "component" as const, id: placed.component.instanceId };
+  const locked = editorModule.editSelectedObject(
+    placed.project,
+    selection,
+    { type: "toggle-lock" },
+  );
+
+  for (const action of [
+    { type: "rotate" as const },
+    { type: "delete" as const },
+    { type: "nudge" as const, dx: 1, dy: 1 },
+  ]) {
+    assert.equal(editorModule.editSelectedObject(locked, selection, action), locked);
+  }
+
+  const unlocked = editorModule.editSelectedObject(
+    locked,
+    selection,
+    { type: "toggle-lock" },
+  );
+  assert.equal(unlocked.components[0].locked, false);
+});
+
 test("moveKeepout previews a snapped origin and returns one committed document", () => {
   assert.equal(typeof editorModule.createKeepout, "function");
   assert.equal(typeof editorModule.moveKeepout, "function");

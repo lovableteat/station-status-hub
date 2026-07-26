@@ -15,6 +15,7 @@ export interface UsePcbPersistenceOptions {
   state: PcbSaveState;
   storage?: StorageLike;
   remoteClient?: PcbRemoteClient | null;
+  allowRemoteSync?: boolean;
 }
 
 const localOnlyStorage: StorageLike = {
@@ -32,10 +33,17 @@ function browserStorage(): StorageLike {
 }
 
 /** Persists editor state locally first; unavailable Supabase remains a non-fatal local draft. */
-export function usePcbPersistence({ state, storage, remoteClient }: UsePcbPersistenceOptions): PcbPersistenceStatus {
+export function usePcbPersistence({
+  state,
+  storage,
+  remoteClient,
+  allowRemoteSync = true,
+}: UsePcbPersistenceOptions): PcbPersistenceStatus {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const defaultClient = supabase as unknown as PcbRemoteClient;
-  const client = remoteClient === undefined ? defaultClient : remoteClient;
+  const client = remoteClient === undefined
+    ? (allowRemoteSync ? defaultClient : null)
+    : (allowRemoteSync ? remoteClient : null);
   const stateRef = useRef(state);
   const repositoryRef = useRef(repository);
   const coordinatorRef = useRef<PcbRemoteSyncCoordinator | null>(null);
@@ -72,13 +80,15 @@ export function usePcbPersistence({ state, storage, remoteClient }: UsePcbPersis
       repository.save(state);
       setStatus("local");
     }, 300);
-    const remoteTimer = window.setTimeout(() => {
-      if (coordinator && generation !== undefined) coordinator.commit(generation, state);
-    }, 900);
+    const remoteTimer = client
+      ? window.setTimeout(() => {
+        if (coordinator && generation !== undefined) coordinator.commit(generation, state);
+      }, 900)
+      : null;
 
     return () => {
       window.clearTimeout(localTimer);
-      window.clearTimeout(remoteTimer);
+      if (remoteTimer !== null) window.clearTimeout(remoteTimer);
     };
   }, [client, repository, state]);
 

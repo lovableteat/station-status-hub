@@ -88,3 +88,23 @@ test("findPlacement does not mutate its inputs and returns null when the board i
   assert.equal(findPlacement(full, candidate), null);
   assert.deepEqual({ full, candidate }, before);
 });
+
+test("findPlacement honors a bounded search budget on pathological boards", () => {
+  const result = findPlacement(
+    project({
+      board: {
+        width: 1_000,
+        height: 1_000,
+        gridSize: 0.1,
+        showGrid: true,
+        snapToGrid: true,
+        background: "#000",
+      },
+    }),
+    component(),
+    undefined,
+    { maxChecks: 0 },
+  );
+
+  assert.equal(result, null);
+});

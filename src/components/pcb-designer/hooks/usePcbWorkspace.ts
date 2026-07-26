@@ -47,6 +47,7 @@ export function usePcbWorkspace({
   const persistenceStatus = usePcbPersistence({
     state: state.data,
     storage,
+    allowRemoteSync: canEdit,
   });
   const editor = usePcbEditorActions(state, dispatch);
 
