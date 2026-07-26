@@ -382,6 +382,88 @@ export function SystemEditDialog({
     });
   };
 
+  const closeNewSoftwareForm = () => {
+    setShowNewSoftwareForm(false);
+    setNewSoftwareLabel("");
+    setNewSoftwareValue("");
+  };
+
+  const handleAddSoftwareField = async () => {
+    const label = newSoftwareLabel.trim();
+    if (!projectId || !label) {
+      toast({
+        title: "請輸入欄位名稱",
+        description: "例如 BIOS Version、Firmware、CUDA Toolkit。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingSoftware(true);
+    const { data, error } = await supabase
+      .from("test_project_software_fields")
+      .insert({
+        label,
+        placeholder: `請輸入 ${label}...`,
+        project_id: projectId,
+        sort_order: softwareFields.length,
+      })
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      setIsAddingSoftware(false);
+      toast({
+        title: "新增欄位失敗",
+        description: error?.message || "請稍後再試。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const value = newSoftwareValue.trim();
+    if (value) {
+      await supabase
+        .from("test_system_software_values")
+        .upsert(
+          { field_id: data.id, system_id: systemId, value },
+          { onConflict: "field_id,system_id" }
+        );
+    }
+
+    setSoftwareFields((current) => [...current, data]);
+    setSoftwareValues((current) => ({ ...current, [data.id]: value }));
+    setIsAddingSoftware(false);
+    closeNewSoftwareForm();
+    toast({
+      title: "軟體欄位已新增",
+      description: `${label} 已套用到同專案所有機台。`,
+    });
+  };
+
+  const handleRemoveSoftwareField = async (field: SoftwareField) => {
+    const confirmed = window.confirm(
+      `確定要刪除欄位「${field.label}」嗎？同專案所有機台的此欄位資料也會一併刪除。`
+    );
+    if (!confirmed) return;
+    const { error } = await supabase
+      .from("test_project_software_fields")
+      .delete()
+      .eq("id", field.id)
+      .eq("project_id", projectId);
+    if (error) {
+      toast({ title: "刪除失敗", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSoftwareFields((current) => current.filter((item) => item.id !== field.id));
+    setSoftwareValues((current) => {
+      const next = { ...current };
+      delete next[field.id];
+      return next;
+    });
+    toast({ title: "欄位已刪除", description: `${field.label} 已從專案移除。` });
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -418,6 +500,20 @@ export function SystemEditDialog({
             { onConflict: "field_id,system_id" }
           );
         if (addressError) throw addressError;
+      }
+
+      if (softwareFields.length) {
+        const { error: softwareError } = await supabase
+          .from("test_system_software_values")
+          .upsert(
+            softwareFields.map((field) => ({
+              field_id: field.id,
+              system_id: systemId,
+              value: softwareValues[field.id]?.trim() || "",
+            })),
+            { onConflict: "field_id,system_id" }
+          );
+        if (softwareError) throw softwareError;
       }
 
       toast({
