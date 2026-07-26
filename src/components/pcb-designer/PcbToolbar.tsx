@@ -1,0 +1,203 @@
+import type { ComponentType } from "react";
+import {
+  Download,
+  Hand,
+  Lock,
+  LockOpen,
+  Maximize2,
+  MousePointer2,
+  Plus,
+  Redo2,
+  Ruler,
+  Save,
+  ScanSearch,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { PcbTool } from "./types.ts";
+
+interface ToolButtonProps {
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  disabled?: boolean;
+  active?: boolean;
+  onClick: () => void;
+}
+
+function ToolButton({
+  label,
+  icon: Icon,
+  disabled,
+  active,
+  onClick,
+}: ToolButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8 rounded-lg border border-transparent text-slate-300 hover:border-[#356985] hover:bg-[#10263a] hover:text-white",
+              active && "border-[#39c6e8] bg-[#123149] text-[#8ee8f5]",
+            )}
+            disabled={disabled}
+            onClick={onClick}
+            aria-label={label}
+          >
+            <Icon className="h-4 w-4" />
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="text-xs">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export interface PcbToolbarProps {
+  canMutate: boolean;
+  documentLocked: boolean;
+  tool: PcbTool;
+  zoom: number;
+  canUndo: boolean;
+  canRedo: boolean;
+  exportPngAvailable: boolean;
+  onNew: () => void;
+  onSave: () => void;
+  onExportProject: () => void;
+  onExportBomCsv: () => void;
+  onExportBomXlsx: () => void;
+  onExportPng: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onToolChange: (tool: PcbTool) => void;
+  onToggleLock: () => void;
+  onZoomChange: (zoom: number) => void;
+  onRunDrc: () => void;
+}
+
+export function PcbToolbar({
+  canMutate,
+  documentLocked,
+  tool,
+  zoom,
+  canUndo,
+  canRedo,
+  exportPngAvailable,
+  onNew,
+  onSave,
+  onExportProject,
+  onExportBomCsv,
+  onExportBomXlsx,
+  onExportPng,
+  onUndo,
+  onRedo,
+  onToolChange,
+  onToggleLock,
+  onZoomChange,
+  onRunDrc,
+}: PcbToolbarProps) {
+  return (
+    <TooltipProvider delayDuration={250}>
+      <div
+        className="pcb-toolbar flex min-h-10 items-center gap-1 overflow-x-auto border-b border-[#2a526f] bg-[#0b1b2d] px-2 py-1"
+        data-testid="pcb-toolbar"
+        aria-label="PCB 工具列"
+        role="toolbar"
+      >
+        <ToolButton label="新增專案" icon={Plus} disabled={!canMutate} onClick={onNew} />
+        <ToolButton label="立即儲存" icon={Save} onClick={onSave} />
+
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-slate-300 hover:bg-[#10263a] hover:text-white"
+                  aria-label="匯出檔案"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">匯出檔案</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent
+            align="start"
+            className="rounded-xl border-[#356985] bg-[#0b1b2d] text-slate-100"
+          >
+            <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void onExportBomXlsx()}>BOM XLSX</DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!exportPngAvailable}
+              onSelect={onExportPng}
+              title={exportPngAvailable ? "匯出 PNG" : "畫布尚未連接，暫時無法匯出 PNG"}
+            >
+              PNG
+              {!exportPngAvailable && (
+                <span className="ml-2 text-xs text-slate-400">畫布未連接</span>
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <ToolButton label="復原" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />
+        <ToolButton label="重做" icon={Redo2} disabled={!canMutate || !canRedo} onClick={onRedo} />
+
+        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <ToolButton label="選取工具" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
+        <ToolButton label="拖曳畫布" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
+        <ToolButton label="測量工具" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
+        <ToolButton label="禁制區工具" icon={ScanSearch} disabled={!canMutate} active={tool === "keepout"} onClick={() => onToolChange("keepout")} />
+        <ToolButton
+          label={documentLocked ? "解除文件鎖定" : "鎖定文件"}
+          icon={documentLocked ? Lock : LockOpen}
+          disabled={!canMutate && !documentLocked}
+          active={documentLocked}
+          onClick={onToggleLock}
+        />
+
+        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <ToolButton label="縮小" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
+        <span className="w-12 text-center font-mono text-[11px] text-slate-300">{zoom}%</span>
+        <ToolButton label="放大" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
+        <ToolButton label="重設縮放" icon={Maximize2} onClick={() => onZoomChange(100)} />
+
+        <div className="ml-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-lg border-[#356985] bg-[#10263a] px-2.5 text-xs text-[#b9eef6] hover:bg-[#15344e]"
+            onClick={onRunDrc}
+          >
+            <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
+            DRC
+          </Button>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}

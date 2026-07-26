@@ -128,7 +128,54 @@ test("shows a balanced 3-by-2 home grid with a code-native PCB preview", () => {
   assert.match(previewSource, /PCB|circuit|board|trace/i);
   assert.doesNotMatch(previewSource, /\b(?:DataCenter|3D|Login)\b/i);
   assert.match(workspaceSource, /export function PcbDesignerWorkspace/);
-  assert.doesNotMatch(workspaceSource, /<button|<input|<select|<textarea/i);
+});
+
+test("replaces the loading shell with one native three-area PCB workbench", async () => {
+  const leftRailSource = await read(
+    "src/components/pcb-designer/PcbLeftRail.tsx",
+  );
+  const toolbarSource = await read(
+    "src/components/pcb-designer/PcbToolbar.tsx",
+  );
+  const dialogsSource = await read(
+    "src/components/pcb-designer/PcbDialogs.tsx",
+  );
+  const stylesSource = await read(
+    "src/components/pcb-designer/pcb-designer.css",
+  );
+  const canvasSource = await read(
+    "src/components/pcb-designer/PcbCanvasHost.tsx",
+  );
+  const inspectorSource = await read(
+    "src/components/pcb-designer/PcbInspector.tsx",
+  );
+
+  assert.match(workspaceSource, /data-testid=["']pcb-project-bar["']/);
+  assert.match(leftRailSource, /data-testid=["']pcb-left-rail["']/);
+  assert.match(canvasSource, /data-testid=["']pcb-canvas-host["']/);
+  assert.match(inspectorSource, /data-testid=["']pcb-inspector["']/);
+  assert.match(workspaceSource, /PcbToolbar/);
+  assert.match(workspaceSource, /PcbDialogs/);
+  assert.match(leftRailSource, /projects[\s\S]*templates[\s\S]*library[\s\S]*bom/i);
+  assert.match(leftRailSource, /statusFilter[\s\S]*sourceFilter/);
+  assert.match(toolbarSource, /undo[\s\S]*redo[\s\S]*exportPng/i);
+  assert.match(dialogsSource, /import-preview/i);
+  assert.match(stylesSource, /#06111f/i);
+  assert.match(stylesSource, /@media \(max-width: 1279px\)[\s\S]*pcb-left-drawer[\s\S]*position:\s*absolute/i);
+  assert.match(stylesSource, /@media \(max-width: 767px\)[\s\S]*pcb-mobile-advisory/i);
+  assert.match(workspaceSource, /建議使用桌面進行精細佈局/);
+
+  const combined = [
+    workspaceSource,
+    leftRailSource,
+    toolbarSource,
+    dialogsSource,
+    canvasSource,
+    inspectorSource,
+    stylesSource,
+  ].join("\n");
+  assert.doesNotMatch(combined, /\b(?:DataCenter|source-login|3D)\b/i);
+  assert.doesNotMatch(combined, /gradient|shadow-(?:xl|2xl)/i);
 });
 
 test("persists PCB permissions through the database enum and workspace validator", () => {
