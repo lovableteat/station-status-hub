@@ -64,18 +64,19 @@ type SystemFieldRow =
   Database["public"]["Tables"]["test_project_system_fields"]["Row"];
 type LegacySoftwareField =
   Database["public"]["Tables"]["test_project_software_fields"]["Row"];
+type LegacySystemPatch =
+  Database["public"]["Tables"]["test_systems"]["Update"];
 
 const asMetadataField = (field: SystemFieldRow): MetadataFieldDefinition =>
   field as MetadataFieldDefinition;
 
 function isMetadataUnavailable(error: unknown) {
   if (!error || typeof error !== "object") return false;
-  const details = error as { code?: string; message?: string; status?: number };
+  const details = error as { code?: string; message?: string };
   return (
-    details.status === 404 ||
     details.code === "PGRST202" ||
     details.code === "PGRST205" ||
-    /function.*not.*found|schema cache|could not find.*table/i.test(
+    /could not find (the table|the function).*schema cache|relation .* does not exist|function .* does not exist/i.test(
       details.message || "",
     )
   );
@@ -246,12 +247,17 @@ export function SystemEditDialog({
           throw fieldResult.error || valueResult.error;
         }
 
+        const metadataFieldUnavailable = isMetadataUnavailable(
+          metadataFieldResult.error,
+        );
+        const metadataValueUnavailable = isMetadataUnavailable(
+          metadataValueResult.error,
+        );
         const metadataUnavailable =
           dynamicMetadataRpcUnavailable ||
-          isMetadataUnavailable(metadataFieldResult.error) ||
-          isMetadataUnavailable(metadataValueResult.error);
+          (metadataFieldUnavailable && metadataValueUnavailable);
         if (
-          !metadataUnavailable &&
+          !(metadataFieldUnavailable && metadataValueUnavailable) &&
           (metadataFieldResult.error || metadataValueResult.error)
         ) {
           throw metadataFieldResult.error || metadataValueResult.error;
@@ -364,6 +370,12 @@ export function SystemEditDialog({
 
     if (isOpen) {
       setLoadedSystemId(null);
+      setCompatibilityMode(false);
+      setLegacySoftwareFields([]);
+      setLegacySoftwareValues({});
+      setNewLegacySoftwareLabel("");
+      setNewLegacySoftwareValue("");
+      setShowNewLegacySoftwareForm(false);
       void loadSystemDetails();
     }
     return () => {
@@ -529,7 +541,18 @@ export function SystemEditDialog({
     return false;
   };
 
+  const guardLegacyCompatibilityMutation = () => {
+    if (loadedSystemId === systemId) return true;
+    toast({
+      title: "機台資料尚未載入完成",
+      description: "目前機台載入成功前，不會修改任何舊版軟體欄位。",
+      variant: "destructive",
+    });
+    return false;
+  };
+
   const handleAddLegacySoftwareField = async () => {
+    if (!guardLegacyCompatibilityMutation()) return;
     const label = newLegacySoftwareLabel.trim();
     if (!projectId || !label) {
       toast({
@@ -583,6 +606,7 @@ export function SystemEditDialog({
   };
 
   const handleRemoveLegacySoftwareField = async (field: LegacySoftwareField) => {
+    if (!guardLegacyCompatibilityMutation()) return;
     if (!window.confirm(`確定要刪除欄位「${field.label}」嗎？同專案所有機台的此欄位資料也會一併刪除。`)) {
       return;
     }
@@ -840,24 +864,25 @@ export function SystemEditDialog({
   const saveLegacyCompatibilityMode = async (
     fields = legacySoftwareFields,
     values = legacySoftwareValues,
+    systemPatch: LegacySystemPatch = {
+      system_name: editValues.system_name,
+      assigned_engineer: editValues.assigned_engineer,
+      model: editValues.model,
+      serial_number: editValues.serial_number,
+      cabinet: editValues.cabinet,
+      os_mac_address: editValues.os_mac_address,
+      bmc_address: editValues.bmc_address,
+      old_bmc_address: editValues.old_bmc_address,
+      bom_90: editValues.bom_90,
+      ubuntu_version: editValues.ubuntu_version,
+      cuda_version: editValues.cuda_version,
+      exclude_from_dashboard: editValues.exclude_from_dashboard,
+      team: editValues.team,
+    },
   ) => {
     const { error } = await supabase
       .from("test_systems")
-      .update({
-        system_name: editValues.system_name,
-        assigned_engineer: editValues.assigned_engineer,
-        model: editValues.model,
-        serial_number: editValues.serial_number,
-        cabinet: editValues.cabinet,
-        os_mac_address: editValues.os_mac_address,
-        bmc_address: editValues.bmc_address,
-        old_bmc_address: editValues.old_bmc_address,
-        bom_90: editValues.bom_90,
-        ubuntu_version: editValues.ubuntu_version,
-        cuda_version: editValues.cuda_version,
-        exclude_from_dashboard: editValues.exclude_from_dashboard,
-        team: editValues.team,
-      })
+      .update(systemPatch)
       .eq("id", systemId);
     if (error) throw error;
 
@@ -1008,20 +1033,21 @@ export function SystemEditDialog({
       const emptyMetadataFieldIds = serializedMetadataValues
         .filter((entry) => entry.value === null)
         .map((entry) => entry.field.id);
+      const systemPatch: LegacySystemPatch = {
+        system_name: editValues.system_name,
+        assigned_engineer: editValues.assigned_engineer,
+        model: editValues.model,
+        serial_number: editValues.serial_number,
+        cabinet: editValues.cabinet,
+        os_mac_address: editValues.os_mac_address,
+        bmc_address: editValues.bmc_address,
+        old_bmc_address: editValues.old_bmc_address,
+        ...legacyPatch,
+        team: editValues.team,
+      };
       const { error } = await supabase.rpc("save_test_system_metadata", {
         p_system_id: systemId,
-        p_system_patch: {
-          system_name: editValues.system_name,
-          assigned_engineer: editValues.assigned_engineer,
-          model: editValues.model,
-          serial_number: editValues.serial_number,
-          cabinet: editValues.cabinet,
-          os_mac_address: editValues.os_mac_address,
-          bmc_address: editValues.bmc_address,
-          old_bmc_address: editValues.old_bmc_address,
-          ...legacyPatch,
-          team: editValues.team,
-        },
+        p_system_patch: systemPatch,
         p_address_values: addressFields.map((field) => ({
           field_id: field.id,
           value: addressValues[field.id]?.trim() || "",
@@ -1034,6 +1060,20 @@ export function SystemEditDialog({
       });
       if (error) {
         if (!isMetadataUnavailable(error)) throw error;
+        const unsupportedDynamicFields = serializedMetadataValues.filter(
+          ({ field }) =>
+            ![
+              "bom_90",
+              "ubuntu_version",
+              "cuda_version",
+              "include_in_dashboard",
+            ].includes(field.field_key),
+        );
+        if (unsupportedDynamicFields.length) {
+          throw new Error(
+            "動態欄位儲存函式尚未部署；為避免遺失目前的動態欄位草稿，尚未改用舊版儲存流程。",
+          );
+        }
         dynamicMetadataRpcUnavailable = true;
         const [legacyFieldResult, legacyValueResult] = await Promise.all([
           supabase
@@ -1054,7 +1094,7 @@ export function SystemEditDialog({
         const values = Object.fromEntries(
           (legacyValueResult.data ?? []).map((entry) => [entry.field_id, entry.value]),
         );
-        await saveLegacyCompatibilityMode(fields, values);
+        await saveLegacyCompatibilityMode(fields, values, systemPatch);
         setCompatibilityMode(true);
         setLegacySoftwareFields(fields);
         setLegacySoftwareValues(values);
@@ -1497,6 +1537,7 @@ export function SystemEditDialog({
                       size="sm"
                       variant="outline"
                       className="border-amber-200/45 bg-transparent text-amber-50 hover:bg-amber-200/15"
+                      disabled={loadedSystemId !== systemId}
                       onClick={() => setShowNewLegacySoftwareForm((value) => !value)}
                     >
                       <Plus className="mr-1.5 h-4 w-4" />
@@ -1530,7 +1571,7 @@ export function SystemEditDialog({
                       <div key={field.id} className="group relative">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <Label className={cn(fieldLabelClass, "mb-0")}>{field.label}</Label>
-                          <button type="button" onClick={() => void handleRemoveLegacySoftwareField(field)} className="text-[10px] font-medium text-rose-300/80 hover:text-rose-200" aria-label={`刪除 ${field.label} 欄位`}>刪除</button>
+                          <button type="button" disabled={loadedSystemId !== systemId} onClick={() => void handleRemoveLegacySoftwareField(field)} className="text-[10px] font-medium text-rose-300/80 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`刪除 ${field.label} 欄位`}>刪除</button>
                         </div>
                         <Input value={legacySoftwareValues[field.id] ?? ""} onChange={(event) => setLegacySoftwareValues((current) => ({ ...current, [field.id]: event.target.value }))} placeholder={field.placeholder || `請輸入 ${field.label}...`} className={inputClass} />
                       </div>
@@ -1540,7 +1581,7 @@ export function SystemEditDialog({
                     <div className="grid gap-3 border-t border-[#25465f] pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                       <div><Label className={fieldLabelClass}>欄位名稱</Label><Input value={newLegacySoftwareLabel} onChange={(event) => setNewLegacySoftwareLabel(event.target.value)} className={inputClass} /></div>
                       <div><Label className={fieldLabelClass}>目前機台的值（可留空）</Label><Input value={newLegacySoftwareValue} onChange={(event) => setNewLegacySoftwareValue(event.target.value)} className={inputClass} /></div>
-                      <div className="flex items-end gap-2"><Button type="button" variant="ghost" onClick={() => setShowNewLegacySoftwareForm(false)}>取消</Button><Button type="button" disabled={isAddingLegacySoftware} onClick={() => void handleAddLegacySoftwareField()}><Plus className="mr-1.5 h-4 w-4" />{isAddingLegacySoftware ? "正在新增..." : "新增至專案"}</Button></div>
+                      <div className="flex items-end gap-2"><Button type="button" variant="ghost" onClick={() => setShowNewLegacySoftwareForm(false)}>取消</Button><Button type="button" disabled={isAddingLegacySoftware || loadedSystemId !== systemId} onClick={() => void handleAddLegacySoftwareField()}><Plus className="mr-1.5 h-4 w-4" />{isAddingLegacySoftware ? "正在新增..." : "新增至專案"}</Button></div>
                     </div>
                   )}
                 </div>

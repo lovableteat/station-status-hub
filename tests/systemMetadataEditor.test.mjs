@@ -18,6 +18,10 @@ const atomicReorderMigrationUrl = new URL(
   "../supabase/migrations/20260726122000_reorder_system_metadata_fields.sql",
   import.meta.url,
 );
+const metadataHardeningMigrationUrl = new URL(
+  "../supabase/migrations/20260726123000_harden_system_metadata.sql",
+  import.meta.url,
+);
 const typesUrl = new URL(
   "../src/integrations/supabase/types.ts",
   import.meta.url,
@@ -287,6 +291,64 @@ test("system dialog preserves the legacy editor when the dynamic metadata schema
   assert.match(saveHandler, /test_system_address_values/);
   assert.match(saveHandler, /test_system_software_values/);
   assert.match(saveHandler, /dynamicMetadataRpcUnavailable = true/);
-  assert.match(saveHandler, /saveLegacyCompatibilityMode\(fields, values\)/);
+  assert.match(saveHandler, /saveLegacyCompatibilityMode\(fields, values, systemPatch\)/);
   assert.match(source, /PGRST202|function.*not.*found/i);
+});
+
+test("metadata fallback only handles confirmed schema absence and never drops dynamic drafts", async () => {
+  const source = await readSource(dialogUrl);
+  const unavailableStart = source.indexOf("function isMetadataUnavailable");
+  const unavailableEnd = source.indexOf("let dynamicMetadataRpcUnavailable", unavailableStart);
+  const unavailableHandler = source.slice(unavailableStart, unavailableEnd);
+  const loadStart = source.indexOf("const loadSystemDetails");
+  const loadEnd = source.indexOf("if (isOpen)", loadStart);
+  const loadHandler = source.slice(loadStart, loadEnd);
+  const saveStart = source.indexOf("const handleSave");
+  const renderStart = source.indexOf("<MobileDialog open=", saveStart);
+  const saveHandler = source.slice(saveStart, renderStart);
+
+  assert.doesNotMatch(unavailableHandler, /details\.status === 404/);
+  assert.match(unavailableHandler, /PGRST202/);
+  assert.match(unavailableHandler, /PGRST205/);
+  assert.match(loadHandler, /metadataFieldUnavailable && metadataValueUnavailable/);
+  assert.match(saveHandler, /unsupportedDynamicFields/);
+  assert.match(saveHandler, /throw new Error\(/);
+  assert.match(saveHandler, /saveLegacyCompatibilityMode\(fields, values, systemPatch\)/);
+});
+
+test("metadata save RPC validates project ownership, typed values, required values, and reserved definitions", async () => {
+  const source = await readSource(metadataHardeningMigrationUrl);
+
+  assert.match(source, /create or replace function public\.save_test_system_metadata/i);
+  assert.match(source, /select project_id\s+into v_project_id\s+from public\.test_systems/i);
+  assert.match(source, /test_project_address_fields[\s\S]*?project_id = v_project_id/i);
+  assert.match(source, /test_project_system_fields[\s\S]*?project_id = v_project_id/i);
+  assert.match(source, /jsonb_typeof\(values_to_save\.value\) <> 'string'/i);
+  assert.match(source, /jsonb_typeof\(values_to_save\.value\) <> 'number'/i);
+  assert.match(source, /jsonb_typeof\(values_to_save\.value\) <> 'boolean'/i);
+  assert.match(source, /fields\.options @> jsonb_build_array\(values_to_save\.value\)/i);
+  assert.match(source, /fields\.is_required/i);
+  assert.match(source, /create or replace function public\.protect_system_metadata_definition/i);
+  assert.match(source, /before update or delete on public\.test_project_system_fields/i);
+  assert.match(source, /old\.is_system/i);
+  assert.match(source, /old\.field_key is distinct from new\.field_key/i);
+  assert.match(source, /old\.project_id is distinct from new\.project_id/i);
+  assert.match(source, /drop trigger if exists protect_test_project_system_fields/i);
+  assert.match(source, /set search_path = public/i);
+});
+
+test("legacy compatibility mutations are guarded against a stale system load", async () => {
+  const source = await readSource(dialogUrl);
+  const addStart = source.indexOf("const handleAddLegacySoftwareField");
+  const deleteStart = source.indexOf("const handleRemoveLegacySoftwareField");
+  const addHandler = source.slice(addStart, deleteStart);
+  const deleteHandler = source.slice(deleteStart, source.indexOf("const validateMetadataDraft", deleteStart));
+
+  assert.match(source, /const guardLegacyCompatibilityMutation/);
+  assert.match(source, /setCompatibilityMode\(false\)/);
+  assert.match(source, /setLegacySoftwareFields\(\[\]\)/);
+  assert.match(addHandler, /guardLegacyCompatibilityMutation\(\)/);
+  assert.match(deleteHandler, /guardLegacyCompatibilityMutation\(\)/);
+  assert.match(source, /disabled=\{loadedSystemId !== systemId\}/);
+  assert.match(source, /isAddingLegacySoftware \|\| loadedSystemId !== systemId/);
 });
