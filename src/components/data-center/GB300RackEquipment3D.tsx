@@ -353,12 +353,16 @@ const RackCdu3D = memo(function RackCdu3D({
 export const GB300RackEquipment3D = memo(function GB300RackEquipment3D({
   rack,
   rackDimensions,
+  l10Dimensions,
+  l10RackUnits,
   selectedEquipmentId,
   lowDetail,
   onSelectEquipment,
 }: {
   rack: RackPlan;
   rackDimensions: ImportedStepDimensions;
+  l10Dimensions: ImportedStepDimensions;
+  l10RackUnits: number;
   selectedEquipmentId: string | null;
   lowDetail: boolean;
   onSelectEquipment: (equipment: Gb300EquipmentSelection) => void;
@@ -370,6 +374,8 @@ export const GB300RackEquipment3D = memo(function GB300RackEquipment3D({
   const { railBottom, width, depth, centerZ } = getGb300EquipmentMountLayout({
     rackDimensions,
     capacityU: rack.capacityU,
+    l10Dimensions,
+    l10RackUnits,
   });
 
   return (
