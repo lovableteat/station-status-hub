@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import {
   PcbRemoteSyncCoordinator,
   syncPcbRemote,
@@ -37,13 +36,10 @@ export function usePcbPersistence({
   state,
   storage,
   remoteClient,
-  allowRemoteSync = true,
+  allowRemoteSync = false,
 }: UsePcbPersistenceOptions): PcbPersistenceStatus {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
-  const defaultClient = supabase as unknown as PcbRemoteClient;
-  const client = remoteClient === undefined
-    ? (allowRemoteSync ? defaultClient : null)
-    : (allowRemoteSync ? remoteClient : null);
+  const client = allowRemoteSync ? remoteClient ?? null : null;
   const stateRef = useRef(state);
   const repositoryRef = useRef(repository);
   const coordinatorRef = useRef<PcbRemoteSyncCoordinator | null>(null);

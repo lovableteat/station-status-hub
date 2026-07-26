@@ -37,6 +37,22 @@ test("failed placement is truthful and leaves project identity and component cou
   assert.equal(project.components.length, 0);
 });
 
+test("placement reports a safety-limit result without losing the source project", () => {
+  const project = createBlankProject("Search limit");
+  const result = editorModule.placeLibraryComponent(
+    project,
+    BUILT_IN_COMPONENTS[3],
+    undefined,
+    undefined,
+    { maxChecks: 0 },
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "search-limit");
+  assert.match(result.reason, /項目仍保留/);
+  assert.equal(project.components.length, 0);
+});
+
 test("moveComponent snaps normally, bypasses snap with Alt, and refuses locked objects", () => {
   assert.equal(typeof editorModule.moveComponent, "function");
   const project = createBlankProject("Move");

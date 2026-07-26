@@ -22,11 +22,16 @@ interface ViewBoxRectangle {
 }
 
 const EPSILON = 1e-9;
-export const MAX_PLACEMENT_CHECKS = 50_000;
+export const MAX_PLACEMENT_CHECKS = 10_000;
 
-interface PlacementSearchOptions {
+export interface PlacementSearchOptions {
   maxChecks?: number;
 }
+
+export type PlacementSearchResult =
+  | { status: "placed"; point: Point }
+  | { status: "not-found" }
+  | { status: "limit-reached" };
 
 interface GridNode extends Point {
   gridX: number;
@@ -175,24 +180,24 @@ export function canPlaceComponent(project: PcbProject, candidate: PcbPlacedCompo
   ));
 }
 
-/** Finds the legal grid position nearest the board center without changing inputs. */
-export function findPlacement(
+/** Searches nearest-first while distinguishing an exhausted board from a safety limit. */
+export function searchPlacement(
   project: PcbProject,
   candidate: PcbPlacedComponent,
   preferred = { x: project.board.width / 2, y: project.board.height / 2 },
   options: PlacementSearchOptions = {},
-): Point | null {
+): PlacementSearchResult {
   const gridSize = project.board.gridSize;
-  if (gridSize <= 0) return null;
+  if (gridSize <= 0) return { status: "not-found" };
   const maxChecks = Math.max(
     0,
     Math.floor(options.maxChecks ?? MAX_PLACEMENT_CHECKS),
   );
-  if (maxChecks === 0) return null;
+  if (maxChecks === 0) return { status: "limit-reached" };
 
   const maxGridX = Math.floor((project.board.width + EPSILON) / gridSize);
   const maxGridY = Math.floor((project.board.height + EPSILON) / gridSize);
-  if (maxGridX < 1 || maxGridY < 1) return null;
+  if (maxGridX < 1 || maxGridY < 1) return { status: "not-found" };
 
   const heap: GridNode[] = [];
   const queued = new Set<string>();
@@ -230,7 +235,7 @@ export function findPlacement(
     if (!node) break;
     checks += 1;
     if (canPlaceComponent(project, { ...candidate, x: node.x, y: node.y })) {
-      return { x: node.x, y: node.y };
+      return { status: "placed", point: { x: node.x, y: node.y } };
     }
     enqueue(node.gridX - 1, node.gridY);
     enqueue(node.gridX + 1, node.gridY);
@@ -238,5 +243,18 @@ export function findPlacement(
     enqueue(node.gridX, node.gridY + 1);
   }
 
-  return null;
+  return heap.length > 0
+    ? { status: "limit-reached" }
+    : { status: "not-found" };
+}
+
+/** Compatibility helper for callers that only need the located point. */
+export function findPlacement(
+  project: PcbProject,
+  candidate: PcbPlacedComponent,
+  preferred = { x: project.board.width / 2, y: project.board.height / 2 },
+  options: PlacementSearchOptions = {},
+): Point | null {
+  const result = searchPlacement(project, candidate, preferred, options);
+  return result.status === "placed" ? result.point : null;
 }

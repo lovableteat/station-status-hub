@@ -28,6 +28,9 @@ const persistenceSource = await read(
 const pcbWorkspaceHookSource = await read(
   "src/components/pcb-designer/hooks/usePcbWorkspace.ts",
 );
+const remoteSyncSource = await read(
+  "src/components/pcb-designer/core/remoteSync.ts",
+);
 const supabaseTypesSource = await read("src/integrations/supabase/types.ts");
 const collaborationSource = await read(
   "src/components/collaboration/CollaborationCenter.tsx",
@@ -221,8 +224,9 @@ test("labels PCB Designer presence consistently", () => {
   }
 });
 
-test("owner-scopes remote PCB data and suppresses view-only remote writes", () => {
+test("owner-scopes future remote PCB data without enabling sync for custom-login sessions", () => {
   assert.match(storageMigrationSource, /owner_id\s+uuid\s+not null\s+default auth\.uid\(\)/i);
+  assert.match(storageMigrationSource, /primary key\s*\(owner_id,\s*id\)/i);
   assert.match(storageMigrationSource, /enable row level security/i);
   assert.match(storageMigrationSource, /auth\.uid\(\)\s*=\s*owner_id/i);
   assert.match(storageMigrationSource, /revoke all on[\s\S]*from anon/i);
@@ -231,6 +235,12 @@ test("owner-scopes remote PCB data and suppresses view-only remote writes", () =
     /grant select,\s*insert,\s*update,\s*delete on[\s\S]*to anon/i,
   );
   assert.match(persistenceSource, /allowRemoteSync\?: boolean/);
-  assert.match(persistenceSource, /allowRemoteSync \? defaultClient : null/);
-  assert.match(pcbWorkspaceHookSource, /allowRemoteSync:\s*canEdit/);
+  assert.doesNotMatch(persistenceSource, /integrations\/supabase\/client/);
+  assert.match(persistenceSource, /allowRemoteSync = false/);
+  assert.match(pcbWorkspaceHookSource, /remoteClient\?: PcbRemoteClient \| null/);
+  assert.match(
+    pcbWorkspaceHookSource,
+    /allowRemoteSync:\s*canEdit && Boolean\(remoteClient\)/,
+  );
+  assert.match(remoteSyncSource, /onConflict:\s*["']owner_id,id["']/);
 });

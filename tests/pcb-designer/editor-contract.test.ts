@@ -55,6 +55,16 @@ test("placement actions reject document-locked mutations before reporting succes
   );
 });
 
+test("reports placement search limits truthfully and batches BOM auto-placement", () => {
+  assert.match(editorHookSource, /MAX_AUTO_PLACE_ITEMS/);
+  assert.match(editorHookSource, /MAX_AUTO_PLACE_COLLISION_TESTS/);
+  assert.match(editorHookSource, /pendingPlacements\.slice\(0,\s*MAX_AUTO_PLACE_ITEMS\)/);
+  assert.match(editorHookSource, /batch\.length \* worstCaseObstacles/);
+  assert.match(editorHookSource, /deferred/);
+  assert.match(editorHookSource, /search-limit/);
+  assert.match(railSource, /result\.deferred/);
+});
+
 test("keeps all four tools mutually exclusive and accessible", () => {
   for (const tool of ["select", "pan", "measure", "keepout"]) {
     assert.match(toolbarSource, new RegExp(`tool === ["']${tool}["']`));
