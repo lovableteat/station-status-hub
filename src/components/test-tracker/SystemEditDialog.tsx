@@ -47,6 +47,8 @@ import { cn } from "@/lib/utils";
 
 type AddressField =
   Database["public"]["Tables"]["test_project_address_fields"]["Row"];
+type SoftwareField =
+  Database["public"]["Tables"]["test_project_software_fields"]["Row"];
 
 const PROJECT_SHARED_ADDRESS_EXPLANATION =
   "欄位名稱與類型會套用到同一專案的所有機台，但每台機台會各自保存自己的位址值，不會互相覆蓋。";
@@ -138,6 +140,12 @@ export function SystemEditDialog({
   const [editingAddressLabel, setEditingAddressLabel] = useState("");
   const [editingAddressPlaceholder, setEditingAddressPlaceholder] = useState("");
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false);
+  const [softwareFields, setSoftwareFields] = useState<SoftwareField[]>([]);
+  const [softwareValues, setSoftwareValues] = useState<Record<string, string>>({});
+  const [newSoftwareLabel, setNewSoftwareLabel] = useState("");
+  const [newSoftwareValue, setNewSoftwareValue] = useState("");
+  const [showNewSoftwareForm, setShowNewSoftwareForm] = useState(false);
+  const [isAddingSoftware, setIsAddingSoftware] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
