@@ -58,6 +58,7 @@ export type SystemMetadataFieldErrors = Record<
 >;
 
 interface SystemMetadataFieldsEditorProps {
+  disabled: boolean;
   fields: MetadataFieldDefinition[];
   values: Record<string, unknown>;
   errors: SystemMetadataFieldErrors;
@@ -110,6 +111,7 @@ const selectOptions = (text: string) =>
     .filter(Boolean);
 
 export function SystemMetadataFieldsEditor({
+  disabled,
   fields,
   values,
   errors,
@@ -151,6 +153,7 @@ export function SystemMetadataFieldsEditor({
   };
 
   const handleCreate = async () => {
+    if (disabled) return;
     setPendingAction("create");
     const created = await onCreateField(createDraft);
     setPendingAction("");
@@ -161,7 +164,7 @@ export function SystemMetadataFieldsEditor({
   };
 
   const handleUpdate = async (field: MetadataFieldDefinition) => {
-    if (!editDraft) return;
+    if (disabled || !editDraft) return;
     setPendingAction(`update:${field.id}`);
     const updated = await onUpdateField(field, editDraft);
     setPendingAction("");
@@ -169,7 +172,7 @@ export function SystemMetadataFieldsEditor({
   };
 
   const handleDeleteField = async (field: MetadataFieldDefinition) => {
-    if (field.is_system) return;
+    if (disabled || field.is_system) return;
     const confirmed = window.confirm(
       `確定刪除「${field.label}」嗎？同一專案所有機台的這個欄位值都會一併刪除。`,
     );
@@ -180,6 +183,7 @@ export function SystemMetadataFieldsEditor({
   };
 
   const moveField = async (field: MetadataFieldDefinition, direction: -1 | 1) => {
+    if (disabled) return;
     const categoryFields = fieldsByCategory[field.category];
     const categoryIndex = categoryFields.findIndex((item) => item.id === field.id);
     const sibling = categoryFields[categoryIndex + direction];
@@ -403,12 +407,18 @@ export function SystemMetadataFieldsEditor({
           <p className="text-sm text-[#b4cad8]">
             定義為同一專案共用；目前輸入的值只屬於每台機台。
           </p>
+          {disabled && (
+            <p role="status" className="mt-1 text-xs text-amber-200">
+              資料載入完成後才能修改專案欄位。
+            </p>
+          )}
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="h-8 gap-1.5 border-emerald-300/40 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
+          disabled={disabled}
           onClick={() => setShowCreateForm((visible) => !visible)}
         >
           <Plus className="h-4 w-4" />
@@ -435,7 +445,7 @@ export function SystemMetadataFieldsEditor({
             <Button
               type="button"
               onClick={handleCreate}
-              disabled={pendingAction === "create"}
+              disabled={disabled || pendingAction === "create"}
               className="bg-emerald-400 text-[#06111f] hover:bg-emerald-300"
             >
               <Plus className="mr-1.5 h-4 w-4" />
@@ -480,7 +490,11 @@ export function SystemMetadataFieldsEditor({
                       <button
                         type="button"
                         onClick={() => moveField(field, -1)}
-                        disabled={categoryIndex === 0 || pendingAction.startsWith("reorder:")}
+                        disabled={
+                          disabled ||
+                          categoryIndex === 0 ||
+                          pendingAction.startsWith("reorder:")
+                        }
                         aria-label={`上移 ${field.label}`}
                         className="rounded p-1 text-[#8eaabd] hover:bg-cyan-300/10 hover:text-cyan-100 disabled:opacity-30"
                       >
@@ -490,6 +504,7 @@ export function SystemMetadataFieldsEditor({
                         type="button"
                         onClick={() => moveField(field, 1)}
                         disabled={
+                          disabled ||
                           categoryIndex === categoryFields.length - 1 ||
                           pendingAction.startsWith("reorder:")
                         }
@@ -501,6 +516,7 @@ export function SystemMetadataFieldsEditor({
                       <button
                         type="button"
                         onClick={() => beginEdit(field)}
+                        disabled={disabled}
                         aria-label={`編輯 ${field.label} 欄位`}
                         className="rounded p-1 text-[#8eaabd] hover:bg-cyan-300/10 hover:text-cyan-100"
                       >
@@ -510,7 +526,9 @@ export function SystemMetadataFieldsEditor({
                         <button
                           type="button"
                           onClick={() => handleDeleteField(field).then(() => undefined)}
-                          disabled={pendingAction === `delete:${field.id}`}
+                          disabled={
+                            disabled || pendingAction === `delete:${field.id}`
+                          }
                           aria-label={`刪除 ${field.label} 欄位`}
                           className="rounded p-1 text-rose-300/80 hover:bg-rose-300/10 hover:text-rose-200"
                         >
@@ -540,7 +558,9 @@ export function SystemMetadataFieldsEditor({
                       <Button
                         type="button"
                         onClick={() => handleUpdate(field)}
-                        disabled={pendingAction === `update:${field.id}`}
+                        disabled={
+                          disabled || pendingAction === `update:${field.id}`
+                        }
                         className="bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
                       >
                         <Check className="mr-1.5 h-4 w-4" />
