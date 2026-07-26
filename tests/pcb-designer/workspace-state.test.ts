@@ -39,6 +39,8 @@ test("project CRUD keeps an active project and duplicates with fresh identity", 
 
   assert.ok(createdProject);
   assert.equal(created.data.activeProjectId, createdProject.id);
+  assert.deepEqual(created.viewCenter, { x: 60, y: 45 });
+  assert.equal(created.selection, null);
 
   const renamed = reduceWorkspaceState(created, {
     type: "project/rename",
@@ -211,4 +213,110 @@ test("BOM pending placements persist per project instead of leaking across proje
     projectId: firstProjectId,
   });
   assert.equal(reopened.pendingPlacements.length, 2);
+});
+
+test("selection and canvas view actions remain available while the document is locked", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const locked = reduceWorkspaceState(initial, { type: "document/toggle-lock" });
+  const selected = reduceWorkspaceState(locked, {
+    type: "selection/set",
+    selection: { kind: "keepout", id: "keepout-1" },
+  });
+  const centered = reduceWorkspaceState(selected, {
+    type: "view/center",
+    center: { x: 25, y: 30 },
+  });
+  const zoomed = reduceWorkspaceState(centered, { type: "zoom/set", zoom: 250 });
+  const reset = reduceWorkspaceState(zoomed, { type: "view/reset" });
+
+  assert.deepEqual(selected.selection, { kind: "keepout", id: "keepout-1" });
+  assert.deepEqual(centered.viewCenter, { x: 25, y: 30 });
+  assert.equal(zoomed.zoom, 250);
+  assert.equal(reset.zoom, 100);
+  assert.deepEqual(reset.viewCenter, {
+    x: initial.activeProject.board.width / 2,
+    y: initial.activeProject.board.height / 2,
+  });
+});
+
+test("one BOM placement transaction restores both the component and queue through undo and redo", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const pending = {
+    name: "Header", type: "Connector", manufacturer: "", partNumber: "",
+    width: 10, height: 3, maxHeight: 5, color: "#fff", quantity: 1, reference: "J1",
+  };
+  const imported = reduceWorkspaceState(initial, { type: "bom/import", items: [pending] });
+  const component = {
+    ...imported.data.library.find((item) => item.name === "Header")!,
+    instanceId: "placed-j1", reference: "J1", x: 20, y: 20,
+    rotation: 0, layer: "top" as const, locked: false,
+  };
+  const placed = reduceWorkspaceState(imported, {
+    type: "project/commit-with-bom",
+    update: { ...imported.activeProject, components: [component] },
+    pendingPlacements: [],
+  });
+
+  assert.equal(placed.activeProject.components.length, 1);
+  assert.equal(placed.pendingPlacements.length, 0);
+  const undone = reduceWorkspaceState(placed, { type: "history/undo" });
+  assert.equal(undone.activeProject.components.length, 0);
+  assert.deepEqual(undone.pendingPlacements, [pending]);
+  const redone = reduceWorkspaceState(undone, { type: "history/redo" });
+  assert.equal(redone.activeProject.components.length, 1);
+  assert.equal(redone.pendingPlacements.length, 0);
+});
+
+test("auto-place can remove the whole BOM queue in one undoable transaction", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const items = [
+    { name: "A", type: "IC", manufacturer: "", partNumber: "", width: 2, height: 2, maxHeight: 1, color: "#fff", quantity: 1, reference: "U1" },
+    { name: "B", type: "IC", manufacturer: "", partNumber: "", width: 3, height: 2, maxHeight: 1, color: "#fff", quantity: 1, reference: "U2" },
+  ];
+  const imported = reduceWorkspaceState(initial, { type: "bom/import", items });
+  const placed = reduceWorkspaceState(imported, {
+    type: "project/commit-with-bom",
+    update: {
+      ...imported.activeProject,
+      components: imported.data.library.filter((item) => item.name === "A" || item.name === "B").map((item, index) => ({
+        ...item, instanceId: `placed-${index}`, reference: `U${index + 1}`,
+        x: 20 + index * 10, y: 20, rotation: 0, layer: "top" as const, locked: false,
+      })),
+    },
+    pendingPlacements: [],
+  });
+
+  const undone = reduceWorkspaceState(placed, { type: "history/undo" });
+  assert.equal(undone.activeProject.components.length, 0);
+  assert.deepEqual(undone.pendingPlacements, items);
+  const redone = reduceWorkspaceState(undone, { type: "history/redo" });
+  assert.equal(redone.activeProject.components.length, 2);
+  assert.equal(redone.pendingPlacements.length, 0);
+});
+
+test("reload then edit and undo preserves the persisted BOM queue", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const data = seedState();
+  const projectId = data.activeProjectId!;
+  const pending = {
+    name: "Reloaded", type: "IC", manufacturer: "", partNumber: "",
+    width: 2, height: 2, maxHeight: 1, color: "#fff", quantity: 1, reference: "U1",
+  };
+  data.pendingPlacementsByProject = { [projectId]: [pending] };
+  const reloaded = createWorkspaceState(data, true);
+  const edited = reduceWorkspaceState(reloaded, {
+    type: "project/commit",
+    update: {
+      ...reloaded.activeProject,
+      board: { ...reloaded.activeProject.board, width: 140 },
+    },
+  });
+
+  const undone = reduceWorkspaceState(edited, { type: "history/undo" });
+
+  assert.equal(undone.activeProject.board.width, 100);
+  assert.deepEqual(undone.pendingPlacements, [pending]);
 });

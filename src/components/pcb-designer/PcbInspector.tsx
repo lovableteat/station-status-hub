@@ -1,75 +1,313 @@
+import { useState, type ReactNode } from "react";
+import { Crosshair, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { PcbKeepout, PcbMeasurement, PcbPlacedComponent } from "./types.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
-export function PcbInspector({
-  workspace,
+function InspectorField({
+  label,
+  children,
 }: {
-  workspace: PcbWorkspaceApi;
+  label: string;
+  children: ReactNode;
 }) {
   return (
-    <aside
-      className="pcb-inspector"
-      data-testid="pcb-inspector"
-      aria-label="PCB 屬性與 DRC"
-    >
-      <div className="grid grid-cols-3 border-b border-[#2a526f]">
+    <label className="pcb-inspector-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  disabled,
+  step = "any",
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  disabled: boolean;
+  step?: string;
+  onCommit: (value: number) => void;
+}) {
+  return (
+    <InspectorField label={label}>
+      <input
+        key={value}
+        type="number"
+        step={step}
+        defaultValue={value}
+        disabled={disabled}
+        onBlur={(event) => {
+          const next = Number(event.currentTarget.value);
+          if (Number.isFinite(next) && next !== value) onCommit(next);
+          else event.currentTarget.value = String(value);
+        }}
+      />
+    </InspectorField>
+  );
+}
+
+function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
+  const component = workspace.selection?.kind === "component"
+    ? workspace.selectedObject as PcbPlacedComponent
+    : null;
+  return (
+    <div className="pcb-inspector-actions">
+      {component && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!workspace.canMutate}
+            onClick={workspace.rotateSelected}
+            aria-label="旋轉選取元件 90 度"
+            title="旋轉 90°"
+          >
+            <RotateCw className="mr-1.5 h-3.5 w-3.5" />旋轉
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!workspace.canMutate}
+            onClick={workspace.toggleSelectedLock}
+            aria-label={component.locked ? "解除元件鎖定" : "鎖定元件"}
+            title={component.locked ? "解除鎖定" : "鎖定"}
+          >
+            {component.locked
+              ? <LockOpen className="mr-1.5 h-3.5 w-3.5" />
+              : <Lock className="mr-1.5 h-3.5 w-3.5" />}
+            {component.locked ? "解鎖" : "鎖定"}
+          </Button>
+        </>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="pcb-danger-action"
+        disabled={!workspace.canMutate}
+        onClick={workspace.deleteSelected}
+        aria-label="刪除選取物件"
+        title="刪除"
+      >
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" />刪除
+      </Button>
+    </div>
+  );
+}
+
+function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
+  const board = workspace.activeProject.board;
+  const disabled = !workspace.canMutate;
+  return (
+    <div className="pcb-inspector-form">
+      <h2>板設定</h2>
+      <div className="pcb-inspector-field-grid">
+        <NumberField label="寬度 (mm)" value={board.width} disabled={disabled} onCommit={(width) => workspace.updateBoard({ width })} />
+        <NumberField label="高度 (mm)" value={board.height} disabled={disabled} onCommit={(height) => workspace.updateBoard({ height })} />
+        <NumberField label="網格 (mm)" value={board.gridSize} disabled={disabled} onCommit={(gridSize) => workspace.updateBoard({ gridSize })} />
+        <InspectorField label="板色">
+          <input type="color" value={board.background} disabled={disabled} onChange={(event) => workspace.updateBoard({ background: event.target.value })} />
+        </InspectorField>
+      </div>
+      <label className="pcb-inspector-check">
+        <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />
+        顯示網格
+      </label>
+      <label className="pcb-inspector-check">
+        <input type="checkbox" checked={board.snapToGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ snapToGrid: event.target.checked })} />
+        吸附網格
+      </label>
+      <p className="pcb-inspector-note">座標與所有尺寸皆以毫米為單位。Alt 拖曳可暫時略過吸附。</p>
+    </div>
+  );
+}
+
+function ComponentInspector({
+  workspace,
+  component,
+}: {
+  workspace: PcbWorkspaceApi;
+  component: PcbPlacedComponent;
+}) {
+  const disabled = !workspace.canMutate;
+  const positionDisabled = disabled || component.locked;
+  return (
+    <div className="pcb-inspector-form" data-selection-kind="component">
+      <h2>{component.reference} · {component.name}</h2>
+      <InspectorField label="名稱">
+        <input
+          key={component.name}
+          defaultValue={component.name}
+          disabled={disabled}
+          onBlur={(event) => workspace.updateComponent(component.instanceId, { name: event.currentTarget.value.trim() || component.name })}
+        />
+      </InspectorField>
+      <InspectorField label="位號">
+        <input
+          key={component.reference}
+          defaultValue={component.reference}
+          disabled={disabled}
+          onBlur={(event) => workspace.updateComponent(component.instanceId, { reference: event.currentTarget.value.trim() || component.reference })}
+        />
+      </InspectorField>
+      <div className="pcb-inspector-field-grid">
+        <NumberField label="X (mm)" value={component.x} disabled={positionDisabled} onCommit={(x) => workspace.updateComponent(component.instanceId, { x })} />
+        <NumberField label="Y (mm)" value={component.y} disabled={positionDisabled} onCommit={(y) => workspace.updateComponent(component.instanceId, { y })} />
+        <NumberField label="寬 (mm)" value={component.width} disabled={disabled} onCommit={(width) => workspace.updateComponent(component.instanceId, { width })} />
+        <NumberField label="高 (mm)" value={component.height} disabled={disabled} onCommit={(height) => workspace.updateComponent(component.instanceId, { height })} />
+        <NumberField label="最大高度" value={component.maxHeight} disabled={disabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
+        <NumberField label="旋轉 (°)" value={component.rotation} disabled={disabled} step="90" onCommit={(rotation) => workspace.updateComponent(component.instanceId, { rotation })} />
+      </div>
+      <InspectorField label="層">
+        <select value={component.layer} disabled={disabled} onChange={(event) => workspace.updateComponent(component.instanceId, { layer: event.target.value as "top" | "bottom" })}>
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+        </select>
+      </InspectorField>
+      <SelectionActions workspace={workspace} />
+    </div>
+  );
+}
+
+function KeepoutInspector({
+  workspace,
+  keepout,
+}: {
+  workspace: PcbWorkspaceApi;
+  keepout: PcbKeepout;
+}) {
+  const disabled = !workspace.canMutate;
+  return (
+    <div className="pcb-inspector-form" data-selection-kind="keepout">
+      <h2>{keepout.name}</h2>
+      <InspectorField label="名稱">
+        <input key={keepout.name} defaultValue={keepout.name} disabled={disabled} onBlur={(event) => workspace.updateKeepout(keepout.id, { name: event.currentTarget.value.trim() || keepout.name })} />
+      </InspectorField>
+      <div className="pcb-inspector-field-grid">
+        <NumberField label="X (mm)" value={keepout.x} disabled={disabled} onCommit={(x) => workspace.updateKeepout(keepout.id, { x })} />
+        <NumberField label="Y (mm)" value={keepout.y} disabled={disabled} onCommit={(y) => workspace.updateKeepout(keepout.id, { y })} />
+        <NumberField label="寬 (mm)" value={keepout.width} disabled={disabled} onCommit={(width) => workspace.updateKeepout(keepout.id, { width })} />
+        <NumberField label="高 (mm)" value={keepout.height} disabled={disabled} onCommit={(height) => workspace.updateKeepout(keepout.id, { height })} />
+        <InspectorField label="顏色">
+          <input type="color" value={keepout.color} disabled={disabled} onChange={(event) => workspace.updateKeepout(keepout.id, { color: event.target.value })} />
+        </InspectorField>
+      </div>
+      <SelectionActions workspace={workspace} />
+    </div>
+  );
+}
+
+function MeasurementInspector({
+  workspace,
+  measurement,
+}: {
+  workspace: PcbWorkspaceApi;
+  measurement: PcbMeasurement;
+}) {
+  const disabled = !workspace.canMutate;
+  return (
+    <div className="pcb-inspector-form" data-selection-kind="measurement">
+      <h2>測量</h2>
+      <p className="pcb-measurement-value">
+        {Math.hypot(measurement.x2 - measurement.x1, measurement.y2 - measurement.y1).toFixed(2)} mm
+      </p>
+      <div className="pcb-inspector-field-grid">
+        <NumberField label="X1" value={measurement.x1} disabled={disabled} onCommit={(x1) => workspace.updateMeasurement(measurement.id, { x1 })} />
+        <NumberField label="Y1" value={measurement.y1} disabled={disabled} onCommit={(y1) => workspace.updateMeasurement(measurement.id, { y1 })} />
+        <NumberField label="X2" value={measurement.x2} disabled={disabled} onCommit={(x2) => workspace.updateMeasurement(measurement.id, { x2 })} />
+        <NumberField label="Y2" value={measurement.y2} disabled={disabled} onCommit={(y2) => workspace.updateMeasurement(measurement.id, { y2 })} />
+        <InspectorField label="顏色">
+          <input type="color" value={measurement.color} disabled={disabled} onChange={(event) => workspace.updateMeasurement(measurement.id, { color: event.target.value })} />
+        </InspectorField>
+      </div>
+      <SelectionActions workspace={workspace} />
+    </div>
+  );
+}
+
+export function PcbInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
+  const [severity, setSeverity] = useState<"all" | "error" | "warning">("all");
+  const issues = workspace.drcIssues.filter((issue) => severity === "all" || issue.severity === severity);
+  const selected = workspace.selection && workspace.selectedObject;
+
+  return (
+    <aside className="pcb-inspector" data-testid="pcb-inspector" aria-label="PCB 屬性與 DRC">
+      <div className="grid grid-cols-3 border-b border-[#2a526f]" role="tablist" aria-label="PCB 檢查器分頁">
         {(["board", "selection", "drc"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
+            role="tab"
             className={cn(
               "h-9 border-b-2 border-transparent text-xs text-slate-400",
-              workspace.rightTab === tab
-              && "border-[#39c6e8] bg-[#10263a] text-[#a8edf6]",
+              workspace.rightTab === tab && "border-[#39c6e8] bg-[#10263a] text-[#a8edf6]",
             )}
             onClick={() => workspace.setRightTab(tab)}
-            aria-pressed={workspace.rightTab === tab}
+            aria-selected={workspace.rightTab === tab}
           >
-            {tab === "board"
-              ? "板設定"
-              : tab === "selection"
-                ? "選取物"
-                : `DRC ${workspace.drcIssues.length}`}
+            {tab === "board" ? "板設定" : tab === "selection" ? "選取物" : `DRC ${workspace.drcIssues.length}`}
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {workspace.rightTab === "board" && (
-          <dl className="pcb-property-list">
-            <div>
-              <dt>板尺寸</dt>
-              <dd>{workspace.activeProject.board.width} × {workspace.activeProject.board.height} mm</dd>
-            </div>
-            <div><dt>網格</dt><dd>{workspace.activeProject.board.gridSize} mm</dd></div>
-            <div><dt>顯示網格</dt><dd>{workspace.activeProject.board.showGrid ? "是" : "否"}</dd></div>
-            <div><dt>吸附網格</dt><dd>{workspace.activeProject.board.snapToGrid ? "是" : "否"}</dd></div>
-            <div><dt>板色</dt><dd className="font-mono">{workspace.activeProject.board.background}</dd></div>
-          </dl>
-        )}
+        {workspace.rightTab === "board" && <BoardInspector workspace={workspace} />}
         {workspace.rightTab === "selection" && (
-          <div className="py-8 text-center text-xs leading-5 text-slate-400">
-            尚未選取物件。畫布接入後會在此顯示元件、禁制區或測量屬性。
-          </div>
+          !selected ? (
+            <div className="py-8 text-center text-xs leading-5 text-slate-400">
+              尚未選取物件。可在畫布選取元件、禁制區或測量線。
+            </div>
+          ) : workspace.selection?.kind === "component" ? (
+            <ComponentInspector workspace={workspace} component={workspace.selectedObject as PcbPlacedComponent} />
+          ) : workspace.selection?.kind === "keepout" ? (
+            <KeepoutInspector workspace={workspace} keepout={workspace.selectedObject as PcbKeepout} />
+          ) : (
+            <MeasurementInspector workspace={workspace} measurement={workspace.selectedObject as PcbMeasurement} />
+          )
         )}
         {workspace.rightTab === "drc" && (
-          workspace.drcIssues.length ? (
-            <ul className="space-y-2">
-              {workspace.drcIssues.map((issue) => (
-                <li
-                  key={issue.id}
-                  className="rounded-lg border border-rose-300/20 bg-rose-950/15 p-2"
-                >
-                  <p className="font-mono text-[10px] text-rose-200">{issue.code}</p>
-                  <p className="mt-1 text-xs text-slate-200">{issue.message}</p>
-                  <p className="mt-1 text-[10px] text-slate-400">{issue.objectIds.join(", ")}</p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="py-8 text-center text-xs text-emerald-200">
-              目前沒有 DRC 問題。
+          <div className="pcb-drc-panel">
+            <div className="pcb-drc-controls">
+              <select value={severity} onChange={(event) => setSeverity(event.target.value as typeof severity)} aria-label="篩選 DRC 嚴重度">
+                <option value="all">全部嚴重度</option>
+                <option value="error">錯誤</option>
+                <option value="warning">警告</option>
+              </select>
+              <Button type="button" variant="outline" size="sm" onClick={workspace.runDrc}>
+                <ScanSearch className="mr-1.5 h-3.5 w-3.5" />重新計算
+              </Button>
             </div>
-          )
+            {issues.length ? (
+              <ul className="pcb-drc-list">
+                {issues.map((issue) => (
+                  <li key={issue.id}>
+                    <button
+                      type="button"
+                      onClick={() => workspace.centerDrcIssue(issue.id)}
+                      aria-label={`選取並置中 ${issue.code}`}
+                    >
+                      <span className="pcb-drc-row-heading">
+                        <span>{issue.code}</span>
+                        <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                      <span>{issue.message}</span>
+                      <small>{issue.objectIds.join(", ")}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="py-8 text-center text-xs text-emerald-200">
+                {workspace.drcIssues.length ? "此篩選條件沒有問題。" : "目前沒有 DRC 問題。"}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </aside>

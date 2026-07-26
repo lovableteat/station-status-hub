@@ -32,7 +32,7 @@ export function withProjectIdentity(
   };
 }
 
-function libraryIdentity(component: ImportedComponent): string {
+export function libraryIdentity(component: ImportedComponent): string {
   const manufacturer = component.manufacturer.trim().toLocaleLowerCase();
   const partNumber = component.partNumber.trim().toLocaleLowerCase();
   if (partNumber) return `${manufacturer}\u0000${partNumber}`;
