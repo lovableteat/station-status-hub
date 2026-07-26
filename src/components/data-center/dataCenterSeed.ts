@@ -7,6 +7,11 @@ import type {
   RackStatus,
   SitePlan,
 } from "./dataCenterTypes";
+import {
+  GB300_CAPACITY_U,
+  GB300_RACK_MODEL_ID,
+  getGb300DefaultL10Slots,
+} from "./gb300RackEquipment.mjs";
 
 const companyModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.glb`;
 const companyMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/nv-mgx-rack-v1-2-rev7.mobile.glb`;
@@ -14,7 +19,6 @@ const veraRubinVr1uModelUrl = `${import.meta.env.BASE_URL}models/data-center/ver
 const veraRubinVr1uMobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/vera-rubin-vr-1u-20260715.mobile.glb`;
 const carloNextL10ModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.glb`;
 const carloNextL10MobileModelUrl = `${import.meta.env.BASE_URL}models/data-center/carlo-next-l10-20260715.mobile.glb`;
-const GB300_RACK_MODEL_ID = "nv-mgx-rack-v1-2-rev7";
 const GB300_L10_MODEL_ID = "carlo-next-l10-20260715";
 
 export const BUILT_IN_RACK_MODELS: Record<string, RackModelDefinition> = {
@@ -140,6 +144,8 @@ function createDevice(
     "switch-tray": "Switch Tray",
     "tor-switch": "TOR Switch",
     psu: "Power Shelf",
+    cdu: "In-rack CDU",
+    "cable-management": "Cable Management",
     management: "Management Node",
     "storage-tray": "Storage Tray",
   };
@@ -188,31 +194,40 @@ function createRack(input: {
   const devices: RackDevice[] =
     modelId === GB300_RACK_MODEL_ID
       ? [
-          createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
-          {
-            ...createDevice(input.id, 5, "psu", powerHealth, 38, 3),
-            name: "Upper Power Shelf",
-          },
-          {
+          ...[45, 46].map((slotStart, index) => ({
+            ...createDevice(input.id, index + 1, "tor-switch", "healthy", slotStart, 1),
+            name: `ToR Switch SN2201 ${String(index + 1).padStart(2, "0")}`,
+            model: "SN2201",
+            role: "OOB 1GbE Management Switch",
+            network: "48 × 1GbE / 4 × uplink",
+          })),
+          ...[39, 40, 41].map((slotStart, index) => ({
+            ...createDevice(input.id, index + 3, "psu", powerHealth, slotStart, 1),
+            name: `Upper Power Shelf ${String(index + 1).padStart(2, "0")}`,
+            model: "GB300 4-module Power Shelf",
+          })),
+          ...Array.from({ length: 8 }, (_, index) => ({
             ...createDevice(
               input.id,
-              2,
+              index + 6,
               "switch-tray",
               health === "critical" ? "warning" : health,
-              18,
-              8,
+              19 + index,
+              1,
             ),
-            name: "Switch Tray Bank",
-          },
-          createDevice(input.id, 3, "compute-tray", health, 26, 12),
-          createDevice(input.id, 4, "compute-tray", "healthy", 6, 12),
+            name: `Switch Tray ${String(index + 1).padStart(2, "0")}`,
+            model: "GB300 Switch Tray",
+          })),
+          ...[7, 8, 9].map((slotStart, index) => ({
+            ...createDevice(input.id, index + 14, "psu", powerHealth, slotStart, 1),
+            name: `Lower Power Shelf ${String(index + 1).padStart(2, "0")}`,
+            model: "GB300 4-module Power Shelf",
+          })),
           {
-            ...createDevice(input.id, 6, "psu", powerHealth, 3, 3),
-            name: "Lower Power Shelf",
-          },
-          {
-            ...createDevice(input.id, 7, "management", powerHealth, 1, 2),
+            ...createDevice(input.id, 17, "cdu", powerHealth, 3, 4),
             name: "In-rack CDU",
+            model: "GB300 In-rack CDU",
+            role: "Cooling Distribution Unit",
           },
         ]
       : [
@@ -234,7 +249,16 @@ function createRack(input: {
       input.l10ModelId ??
       (modelId === GB300_RACK_MODEL_ID ? GB300_L10_MODEL_ID : "l10-placeholder"),
     l10Count: input.l10Count ?? (status === "available" ? 0 : 4),
-    l10StartU: input.l10StartU ?? 3,
+    l10StartU:
+      input.l10StartU
+      ?? (modelId === GB300_RACK_MODEL_ID ? 11 : 3),
+    l10Slots:
+      modelId === GB300_RACK_MODEL_ID
+        ? getGb300DefaultL10Slots({
+            moduleCount: input.l10Count ?? (status === "available" ? 0 : 4),
+            rackUnits: 1,
+          })
+        : undefined,
     powerKw: input.powerKw ?? 16.8,
     coolingKw: Math.round((input.powerKw ?? 16.8) * 0.88 * 10) / 10,
     temperatureC: input.temperatureC ?? 24.2,
@@ -244,10 +268,14 @@ function createRack(input: {
     positionX: input.positionX,
     positionZ: input.positionZ,
     rotation: input.row === "A" ? 0 : 180,
-    capacityU: 42,
+    capacityU:
+      modelId === GB300_RACK_MODEL_ID || modelId === "partner-48u"
+        ? GB300_CAPACITY_U
+        : 42,
     coordinates: `Hall 1 / Row ${input.row} / ${input.cabinet}`,
     aisle: input.row === "A" ? "Cold Aisle A" : "Cold Aisle B",
     devices,
+    equipmentLayoutVersion: modelId === GB300_RACK_MODEL_ID ? 2 : undefined,
     sop: ["確認 PDU A/B", "驗證 TOR uplink", "同步 BMC inventory"],
     deploymentSteps: [
       { id: `${input.id}-step-1`, title: "機櫃定位", owner: "Facility", status: "done" },
