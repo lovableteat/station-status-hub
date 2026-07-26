@@ -64,20 +64,50 @@ set search_path = public
 as $$
 begin
   if tg_op = 'DELETE' then
-    if old.is_system then
+    -- ON DELETE CASCADE reaches this child trigger after the parent row is gone.
+    if old.is_system and exists (
+      select 1
+      from public.test_projects
+      where id = old.project_id
+    ) then
       raise exception 'Reserved system metadata field % cannot be deleted', old.field_key;
     end if;
     return old;
   end if;
 
-  if old.is_system and (
-    old.project_id is distinct from new.project_id
-    or old.field_key is distinct from new.field_key
-    or old.category is distinct from new.category
-    or old.field_type is distinct from new.field_type
-    or old.is_system is distinct from new.is_system
-  ) then
-    raise exception 'Reserved system metadata field % has a stable definition', old.field_key;
+  if tg_op = 'INSERT' then
+    if new.is_system and not (
+      (
+        new.field_key in ('bom_90', 'ubuntu_version', 'cuda_version')
+        and new.category = 'software'
+        and new.field_type = 'text'
+      )
+      or (
+        new.field_key = 'include_in_dashboard'
+        and new.category = 'statistics'
+        and new.field_type = 'boolean'
+      )
+    ) then
+      raise exception 'System metadata field % does not match a reserved definition', new.field_key;
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.is_system is distinct from new.is_system then
+      raise exception 'System metadata status cannot be changed for field %', old.field_key;
+    end if;
+
+    if old.is_system and (
+      old.project_id is distinct from new.project_id
+      or old.field_key is distinct from new.field_key
+      or old.category is distinct from new.category
+      or old.field_type is distinct from new.field_type
+    ) then
+      raise exception 'Reserved system metadata field % has a stable definition', old.field_key;
+    end if;
+
+    return new;
   end if;
 
   return new;
@@ -87,7 +117,7 @@ $$;
 drop trigger if exists protect_test_project_system_fields
   on public.test_project_system_fields;
 create trigger protect_test_project_system_fields
-before update or delete on public.test_project_system_fields
+before insert or update or delete on public.test_project_system_fields
 for each row execute function public.protect_system_metadata_definition();
 
 create or replace function public.save_test_system_metadata(
