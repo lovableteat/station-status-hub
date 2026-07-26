@@ -3451,6 +3451,8 @@ export type Database = {
         | "troubleshooting_edit"
         | "flow_info_view"
         | "flow_info_edit"
+        | "pcb_designer_view"
+        | "pcb_designer_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3603,6 +3605,8 @@ export const Constants = {
         "troubleshooting_edit",
         "flow_info_view",
         "flow_info_edit",
+        "pcb_designer_view",
+        "pcb_designer_edit",
       ],
     },
   },
