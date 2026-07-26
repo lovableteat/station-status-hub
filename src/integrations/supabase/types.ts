@@ -3274,6 +3274,16 @@ export type Database = {
           username: string
         }[]
       }
+      save_test_system_metadata: {
+        Args: {
+          p_address_values: Json
+          p_empty_field_ids: string[]
+          p_metadata_values: Json
+          p_system_id: string
+          p_system_patch: Json
+        }
+        Returns: undefined
+      }
       calculate_daily_production_stats: { Args: never; Returns: undefined }
       cleanup_old_notifications: { Args: never; Returns: undefined }
       create_test_flow_draft: {
