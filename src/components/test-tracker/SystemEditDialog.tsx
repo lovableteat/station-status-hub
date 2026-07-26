@@ -192,7 +192,7 @@ export function SystemEditDialog({
         team: data.team || "",
       });
 
-      const [fieldResult, valueResult] = await Promise.all([
+      const [fieldResult, valueResult, softwareFieldResult, softwareValueResult] = await Promise.all([
         supabase
           .from("test_project_address_fields")
           .select("*")
@@ -201,6 +201,16 @@ export function SystemEditDialog({
           .order("created_at"),
         supabase
           .from("test_system_address_values")
+          .select("field_id,value")
+          .eq("system_id", systemId),
+        supabase
+          .from("test_project_software_fields")
+          .select("*")
+          .eq("project_id", data.project_id)
+          .order("sort_order")
+          .order("created_at"),
+        supabase
+          .from("test_system_software_values")
           .select("field_id,value")
           .eq("system_id", systemId),
       ]);
@@ -213,11 +223,20 @@ export function SystemEditDialog({
           (valueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
         )
       );
+      setSoftwareFields(softwareFieldResult.data ?? []);
+      setSoftwareValues(
+        Object.fromEntries(
+          (softwareValueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
+        )
+      );
       setEditingAddressFieldId(null);
       setShowNewAddressForm(false);
       setNewAddressLabel("");
       setNewAddressPlaceholder("");
       setNewAddressValue("");
+      setShowNewSoftwareForm(false);
+      setNewSoftwareLabel("");
+      setNewSoftwareValue("");
     };
 
     if (isOpen) void loadSystemDetails();
