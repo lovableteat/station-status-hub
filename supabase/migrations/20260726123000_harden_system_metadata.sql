@@ -99,7 +99,7 @@ create or replace function public.save_test_system_metadata(
 )
 returns void
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -112,6 +112,22 @@ begin
 
   if not found then
     raise exception 'System % was not found', p_system_id;
+  end if;
+
+  if exists (
+    with requested_field_ids as (
+      select values_to_save.field_id
+      from jsonb_to_recordset(coalesce(p_metadata_values, '[]'::jsonb))
+        as values_to_save(field_id uuid, value jsonb)
+      union all
+      select unnest(coalesce(p_empty_field_ids, array[]::uuid[]))
+    )
+    select 1
+    from requested_field_ids requested
+    group by requested.field_id
+    having count(*) > 1
+  ) then
+    raise exception 'Duplicate metadata field IDs are not allowed';
   end if;
 
   if exists (
@@ -233,9 +249,16 @@ begin
 end;
 $$;
 
+revoke all on function public.save_test_system_metadata(uuid, jsonb, jsonb, jsonb, uuid[])
+  from public;
 grant execute on function public.save_test_system_metadata(uuid, jsonb, jsonb, jsonb, uuid[])
   to anon;
 grant execute on function public.save_test_system_metadata(uuid, jsonb, jsonb, jsonb, uuid[])
   to authenticated;
 grant execute on function public.save_test_system_metadata(uuid, jsonb, jsonb, jsonb, uuid[])
   to service_role;
+
+revoke insert, update, delete on public.test_system_field_values
+  from anon, authenticated;
+grant select on public.test_system_field_values
+  to anon, authenticated;

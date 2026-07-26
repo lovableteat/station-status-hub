@@ -163,6 +163,42 @@ test("system, address, and JSONB value writes use one transactional RPC", async 
   assert.match(migration, /grant execute on function public\.save_test_system_metadata/i);
 });
 
+test("metadata values can only be mutated through the hardened RPC", async () => {
+  const migration = await readSource(metadataHardeningMigrationUrl);
+
+  assert.match(
+    migration,
+    /revoke insert,\s*update,\s*delete\s+on public\.test_system_field_values\s+from anon,\s*authenticated/i,
+  );
+  assert.match(
+    migration,
+    /grant select\s+on public\.test_system_field_values\s+to anon,\s*authenticated/i,
+  );
+  assert.match(
+    migration,
+    /create or replace function public\.save_test_system_metadata[\s\S]*?security definer\s+set search_path = public/i,
+  );
+  assert.match(
+    migration,
+    /revoke all\s+on function public\.save_test_system_metadata\(uuid,\s*jsonb,\s*jsonb,\s*jsonb,\s*uuid\[\]\)\s+from public/i,
+  );
+});
+
+test("metadata save rejects duplicate and conflicting field ids before its upsert", async () => {
+  const migration = await readSource(metadataHardeningMigrationUrl);
+
+  assert.match(
+    migration,
+    /select values_to_save\.field_id[\s\S]*?union all[\s\S]*?select unnest\(coalesce\(p_empty_field_ids,[\s\S]*?group by requested\.field_id[\s\S]*?having count\(\*\) > 1/i,
+  );
+  assert.match(migration, /duplicate metadata field ids/i);
+  assert.ok(
+    migration.indexOf("Duplicate metadata field IDs") <
+      migration.indexOf("insert into public.test_system_field_values"),
+    "duplicate field validation must run before the metadata upsert",
+  );
+});
+
 test("optional whitespace-only text is treated as blank instead of invalid input", async () => {
   const source = await readSource(dialogUrl);
   const saveStart = source.indexOf("const handleSave");
