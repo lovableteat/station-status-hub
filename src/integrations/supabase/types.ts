@@ -200,6 +200,84 @@ export type Database = {
           },
         ]
       }
+      circuit_components: {
+        Row: {
+          category: string
+          color: string
+          created_at: string
+          height: number
+          id: string
+          manufacturer: string | null
+          name: string
+          notes: string | null
+          pin_count: number | null
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          category?: string
+          color?: string
+          created_at?: string
+          height?: number
+          id?: string
+          manufacturer?: string | null
+          name: string
+          notes?: string | null
+          pin_count?: number | null
+          updated_at?: string
+          width?: number
+        }
+        Update: {
+          category?: string
+          color?: string
+          created_at?: string
+          height?: number
+          id?: string
+          manufacturer?: string | null
+          name?: string
+          notes?: string | null
+          pin_count?: number | null
+          updated_at?: string
+          width?: number
+        }
+        Relationships: []
+      }
+      circuit_projects: {
+        Row: {
+          board_height: number
+          board_width: number
+          components: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          board_height?: number
+          board_width?: number
+          components?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          board_height?: number
+          board_width?: number
+          components?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       code_snippets: {
         Row: {
           category: string
@@ -2253,6 +2331,44 @@ export type Database = {
           },
         ]
       }
+      test_project_software_fields: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          placeholder: string | null
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          placeholder?: string | null
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          placeholder?: string | null
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_software_fields_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_project_tool_assignments: {
         Row: {
           created_at: string
@@ -2429,6 +2545,45 @@ export type Database = {
           },
           {
             foreignKeyName: "test_system_address_values_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_system_software_values: {
+        Row: {
+          created_at: string
+          field_id: string
+          system_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          field_id: string
+          system_id: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          field_id?: string
+          system_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_system_software_values_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "test_project_software_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_system_software_values_system_id_fkey"
             columns: ["system_id"]
             isOneToOne: false
             referencedRelation: "test_systems"
