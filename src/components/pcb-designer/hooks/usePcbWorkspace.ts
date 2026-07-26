@@ -16,6 +16,7 @@ import type {
   PcbTemplate,
   PcbTool,
 } from "../types.ts";
+import { usePcbEditorActions } from "./usePcbEditorActions.ts";
 import { usePcbPersistence } from "./usePcbPersistence.ts";
 
 export interface UsePcbWorkspaceOptions {
@@ -47,27 +48,11 @@ export function usePcbWorkspace({
     state: state.data,
     storage,
   });
+  const editor = usePcbEditorActions(state, dispatch);
 
   useEffect(() => {
     dispatch({ type: "permission/set", canEdit });
   }, [canEdit]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
-      if (!(event.ctrlKey || event.metaKey)) return;
-      if (event.key.toLocaleLowerCase() === "z") {
-        event.preventDefault();
-        dispatch({ type: event.shiftKey ? "history/redo" : "history/undo" });
-      } else if (event.key.toLocaleLowerCase() === "y") {
-        event.preventDefault();
-        dispatch({ type: "history/redo" });
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const createProject = useCallback(
     (input: NewProjectInput) => dispatch({ type: "project/create", input }),
@@ -109,9 +94,7 @@ export function usePcbWorkspace({
   const updateProjectSettings = useCallback(
     (project: PcbProject) => {
       if (project.id === state.activeProject.id) commitProject(project);
-      else {
-        dispatch({ type: "project/rename", projectId: project.id, name: project.name });
-      }
+      else dispatch({ type: "project/rename", projectId: project.id, name: project.name });
     },
     [commitProject, state.activeProject.id],
   );
@@ -196,12 +179,10 @@ export function usePcbWorkspace({
     dispatch({ type: "persistence/touch" });
   }, [repository, state.data]);
 
-  const canMutate = state.canEdit && !state.documentLocked;
-
   return {
     ...state,
+    ...editor,
     persistenceStatus,
-    canMutate,
     createProject,
     openProject,
     renameProject,

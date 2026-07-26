@@ -100,6 +100,16 @@ export interface PcbPendingPlacement {
 
 export type PcbTool = "select" | "pan" | "measure" | "keepout";
 
+export type PcbSelection =
+  | { kind: "component"; id: string }
+  | { kind: "keepout"; id: string }
+  | { kind: "measurement"; id: string };
+
+export interface PcbPoint {
+  x: number;
+  y: number;
+}
+
 export interface PcbSaveState {
   projects: PcbProject[];
   templates: PcbTemplate[];

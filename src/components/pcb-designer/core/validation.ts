@@ -35,7 +35,7 @@ function uniqueIds(items: RecordValue[], key: string): boolean {
   return ids.every(isNonEmptyString) && new Set(ids).size === ids.length;
 }
 
-function validateBoard(value: unknown): boolean {
+export function isValidBoard(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
@@ -47,9 +47,13 @@ function validateBoard(value: unknown): boolean {
 
 function validateComponent(value: unknown): value is RecordValue {
   if (!isRecord(value)) return false;
-  return hasStrings(value, ["id", "name", "type", "manufacturer", "partNumber", "color", "createdAt", "instanceId", "reference"])
-    && hasFiniteNumbers(value, ["width", "height", "maxHeight", "x", "y", "rotation"])
+  return hasStrings(value, ["id", "name", "type", "color", "createdAt", "instanceId", "reference"])
+    && typeof value.manufacturer === "string"
+    && typeof value.partNumber === "string"
+    && hasFiniteNumbers(value, ["width", "height", "maxHeight", "x", "y"])
+    && isFiniteNumber(value.rotation)
     && isPositiveFiniteNumber(value.width) && isPositiveFiniteNumber(value.height) && isPositiveFiniteNumber(value.maxHeight)
+    && value.rotation >= 0 && value.rotation < 360
     && (value.source === "built-in" || value.source === "custom" || value.source === "bom")
     && (value.layer === "top" || value.layer === "bottom")
     && typeof value.locked === "boolean";
@@ -88,7 +92,7 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
   }
   if (value.createdBy !== undefined && !isNonEmptyString(value.createdBy)) return { ok: false, error: "createdBy must be a string." };
   if (value.status !== "draft" && value.status !== "review" && value.status !== "approved") return { ok: false, error: "Project status is invalid." };
-  if (!validateBoard(value.board)) return { ok: false, error: "Board is invalid." };
+  if (!isValidBoard(value.board)) return { ok: false, error: "Board is invalid." };
   if (!Array.isArray(value.components) || !Array.isArray(value.keepouts) || !Array.isArray(value.measurements)) {
     return { ok: false, error: "Project collections must be arrays." };
   }

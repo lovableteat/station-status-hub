@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
+import { isValidBoard, parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
 import type { PcbProject } from "../../src/components/pcb-designer/types.ts";
 
 function validProject(): PcbProject {
@@ -41,6 +41,15 @@ test("rejects unsupported schema versions and invalid board ranges", () => {
   assert.equal(parseProjectJson(invalidBoard).ok, false);
 });
 
+test("uses the same strict board ranges for inspector edits and imported projects", () => {
+  assert.equal(typeof isValidBoard, "function");
+  assert.equal(isValidBoard({ width: 20, height: 1000, gridSize: 0.1, showGrid: true, snapToGrid: true, background: "#000" }), true);
+  assert.equal(isValidBoard({ width: 19.99, height: 80, gridSize: 1, showGrid: true, snapToGrid: true, background: "#000" }), false);
+  assert.equal(isValidBoard({ width: 100, height: 1001, gridSize: 1, showGrid: true, snapToGrid: true, background: "#000" }), false);
+  assert.equal(isValidBoard({ width: 100, height: 80, gridSize: 0.09, showGrid: true, snapToGrid: true, background: "#000" }), false);
+  assert.equal(isValidBoard({ width: 100, height: 80, gridSize: 50.01, showGrid: true, snapToGrid: true, background: "#000" }), false);
+});
+
 test("rejects non-finite dimensions and positions", () => {
   const project = validProject();
   project.components[0].width = Number.NaN;
@@ -66,4 +75,24 @@ test("rejects missing required strings and non-array collections", () => {
   const invalid = { ...project, id: "", components: {} };
 
   assert.equal(parseProjectJson(invalid).ok, false);
+});
+
+test("round-trips a placed BOM component without manufacturer or part number", () => {
+  const project = validProject();
+  project.components[0].manufacturer = "";
+  project.components[0].partNumber = "";
+
+  const result = parseProjectJson(JSON.stringify(project));
+
+  assert.equal(result.ok, true);
+});
+
+test("rejects component rotations outside the normalized 0–359 degree range", () => {
+  const negative = validProject();
+  negative.components[0].rotation = -1;
+  const fullTurn = validProject();
+  fullTurn.components[0].rotation = 360;
+
+  assert.equal(parseProjectJson(negative).ok, false);
+  assert.equal(parseProjectJson(fullTurn).ok, false);
 });

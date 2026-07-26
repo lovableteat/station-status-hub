@@ -21,8 +21,9 @@ import { parseProjectJson } from "./core/validation.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
 import { PcbLeftRail } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
-import { PcbCanvasHost } from "./PcbCanvasHost.tsx";
+import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
+import { exportPcbSvgAsPng } from "./core/pngExport.ts";
 import {
   usePcbWorkspace,
   type ImportedComponent,
@@ -65,6 +66,7 @@ export function PcbDesignerWorkspace({
     canEdit: canEditModule("pcb-designer"),
   });
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
+  const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState(
     workspace.data.templates[0]?.id ?? "",
   );
@@ -94,7 +96,7 @@ export function PcbDesignerWorkspace({
     }
     try {
       const parsed = parseProjectJson(await file.text());
-      if (!parsed.ok) {
+      if (parsed.ok === false) {
         previewImport("匯入專案預覽", 0, [{ row: 1, message: parsed.error }], () => undefined);
         return;
       }
@@ -289,7 +291,8 @@ export function PcbDesignerWorkspace({
         zoom={workspace.zoom}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
-        exportPngAvailable={Boolean(onExportPng)}
+        exportPngAvailable
+        exportIncludesGrid={exportIncludesGrid}
         onNew={() => setDialog({ kind: "new-project" })}
         onSave={() => {
           workspace.saveNow();
@@ -302,19 +305,36 @@ export function PcbDesignerWorkspace({
             notifyError("無法匯出 BOM XLSX", error));
         }}
         onExportPng={() => {
-          if (!onExportPng) return;
-          void Promise.resolve(onExportPng({
+          const options = {
             project: workspace.activeProject,
             filename: projectExportFilename(workspace.activeProject.name).replace(".pcb-project.json", ".png"),
-            includeGrid: workspace.activeProject.board.showGrid,
-          })).catch((error) => notifyError("無法匯出 PNG", error));
+            includeGrid: exportIncludesGrid,
+          };
+          const operation = onExportPng
+            ? Promise.resolve(onExportPng(options))
+            : (() => {
+              const svg = document.querySelector<SVGSVGElement>("[data-pcb-canvas]");
+              if (!svg) return Promise.reject(new Error("找不到 PCB SVG 畫布。"));
+              return exportPcbSvgAsPng(
+                svg,
+                options.filename,
+                options.includeGrid,
+                workspace.activeProject.board,
+              );
+            })();
+          void operation.catch((error) => notifyError("無法匯出 PNG", error));
         }}
+        onExportIncludesGridChange={setExportIncludesGrid}
         onUndo={workspace.undo}
         onRedo={workspace.redo}
         onToolChange={workspace.setTool}
         onToggleLock={workspace.toggleDocumentLock}
         onZoomChange={workspace.setZoom}
-        onRunDrc={workspace.runDrc}
+        onResetView={workspace.resetView}
+        onRunDrc={() => {
+          workspace.runDrc();
+          setOpenDrawer("right");
+        }}
       />
       <p className="pcb-mobile-advisory">
         建議使用桌面進行精細佈局；手機仍可檢視、匯入匯出與查看 DRC。
@@ -348,7 +368,7 @@ export function PcbDesignerWorkspace({
           />
         </div>
 
-        <PcbCanvasHost project={workspace.activeProject} zoom={workspace.zoom} />
+        <PcbCanvas workspace={workspace} />
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
           <PcbInspector workspace={workspace} />
         </div>
@@ -361,7 +381,10 @@ export function PcbDesignerWorkspace({
         <span className="font-mono">{workspace.zoom}%</span>
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
         <span>DRC {workspace.drcIssues.length}</span>
-        <span className="ml-auto">{persistenceLabel(workspace.persistenceStatus)}</span>
+        <span className="ml-auto">
+          {persistenceLabel(workspace.persistenceStatus)} · 自動儲存{" "}
+          {new Date(workspace.data.updatedAt).toLocaleTimeString("zh-TW", { hour12: false })}
+        </span>
       </footer>
 
       <PcbDialogs
