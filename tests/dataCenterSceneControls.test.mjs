@@ -6,6 +6,10 @@ import {
   getFacilityAreaSquareMeters,
   normalizeFacilityDimension,
 } from "../src/components/data-center/facilityPlan.mjs";
+import {
+  getRackOverviewFrame,
+  getSafeOrbitDistance,
+} from "../src/components/data-center/cameraFraming.mjs";
 
 const plannerSource = await readFile(
   new URL("../src/components/data-center/DataCenter3DPlanner.tsx", import.meta.url),
@@ -24,8 +28,18 @@ test("facility dimensions have a safe minimum, no fixed maximum, and expose a re
   assert.equal(getFacilityAreaSquareMeters({ width: 18, depth: 13 }), 234);
 });
 
-test("the 3D camera supports close inspection and an explicit detail view", () => {
-  assert.match(plannerSource, /minDistance=\{0\.12\}/);
+test("the 3D camera supports close inspection without entering the selected rack", () => {
+  const minimumDistance = getSafeOrbitDistance({
+    widthMeters: 0.7,
+    heightMeters: 2.3,
+    depthMeters: 1.1,
+  });
+  const rackRadius = Math.hypot(0.7, 2.3, 1.1) / 2;
+
+  assert.ok(minimumDistance > rackRadius);
+  assert.ok(minimumDistance < 2);
+  assert.match(plannerSource, /minDistance=\{minimumOrbitDistance\}/);
+  assert.doesNotMatch(plannerSource, /minDistance=\{0\.12\}/);
   assert.match(plannerSource, /zoomSpeed=\{1\.12\}/);
   assert.match(plannerSource, /zoomToCursor/);
   assert.match(plannerSource, /onStart=\{beginInteraction\}/);
@@ -38,6 +52,59 @@ test("the 3D camera supports close inspection and an explicit detail view", () =
   assert.match(plannerSource, /const rackRadius = Math\.hypot\(rackWidth, rackHeight, rackDepth\) \/ 2;/);
   assert.match(plannerSource, /Math\.max\(5, fitDistance \* 1\.32\)/);
   assert.match(workspaceSource, /onClick=\{\(\) => requestCamera\("focus"\)\}/);
+});
+
+test("the overview frames rack content instead of the full facility floor", () => {
+  const frame = getRackOverviewFrame([
+    {
+      positionX: 0,
+      positionZ: 0,
+      rotationDegrees: 0,
+      widthMeters: 0.7,
+      heightMeters: 2.3,
+      depthMeters: 1.1,
+    },
+  ]);
+
+  assert.ok(frame);
+  assert.deepEqual(frame.target, [0, 1.15, 0]);
+  assert.ok(frame.distance >= 5.5);
+  assert.ok(frame.distance < 8);
+
+  const spreadFrame = getRackOverviewFrame([
+    {
+      positionX: -8,
+      positionZ: -2,
+      rotationDegrees: 0,
+      widthMeters: 0.7,
+      heightMeters: 2.3,
+      depthMeters: 1.1,
+    },
+    {
+      positionX: 10,
+      positionZ: 4,
+      rotationDegrees: 90,
+      widthMeters: 0.7,
+      heightMeters: 2.3,
+      depthMeters: 1.1,
+    },
+  ]);
+
+  assert.ok(spreadFrame);
+  assert.ok(spreadFrame.distance > frame.distance);
+  assert.ok(spreadFrame.target[0] > 0);
+  assert.match(plannerSource, /getRackOverviewFrame/);
+  assert.doesNotMatch(
+    plannerSource,
+    /desiredPosition\.current\.set\(span \* 0\.72, Math\.max\(7, span \* 0\.46\), span \* 0\.82\)/,
+  );
+});
+
+test("rack status cards stay close enough to the model to remain visible at maximum zoom", () => {
+  assert.match(
+    plannerSource,
+    /position=\{\[0, height \+ \(selected \? 0\.16 : 0\.24\), 0\]\}/,
+  );
 });
 
 test("the overview renders the assigned GLB instead of replacing it with a generic rack", () => {
