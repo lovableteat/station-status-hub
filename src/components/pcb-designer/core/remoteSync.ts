@@ -39,13 +39,21 @@ export class PcbRemoteSyncCoordinator {
     this.onStatus = onStatus;
   }
 
-  schedule(state: PcbSaveState): void {
-    const generation = ++this.generation;
+  reserve(): number {
+    this.generation += 1;
+    return this.generation;
+  }
+
+  commit(generation: number, state: PcbSaveState): void {
     this.queue = this.queue.then(async () => {
       if (!this.active || generation !== this.generation) return;
       const saved = await this.sync(state);
       if (this.active && generation === this.generation) this.onStatus(saved ? "synced" : "local");
     });
+  }
+
+  schedule(state: PcbSaveState): void {
+    this.commit(this.reserve(), state);
   }
 
   dispose(): void {

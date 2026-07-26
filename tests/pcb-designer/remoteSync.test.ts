@@ -67,3 +67,32 @@ test("does not publish a remote completion after disposal", async () => {
 
   assert.deepEqual(statuses, []);
 });
+
+test("reserving a debounced newer generation suppresses an old in-flight synced status", async () => {
+  const oldCompletion = deferred<boolean>();
+  const newCompletion = deferred<boolean>();
+  const writes: string[] = [];
+  const statuses: string[] = [];
+  const coordinator = new PcbRemoteSyncCoordinator(async (next) => {
+    writes.push(next.projects[0].name);
+    return next.projects[0].name === "old" ? oldCompletion.promise : newCompletion.promise;
+  }, (status) => statuses.push(status));
+
+  const oldGeneration = coordinator.reserve();
+  coordinator.commit(oldGeneration, state("old"));
+  await Promise.resolve();
+  const newGeneration = coordinator.reserve();
+  oldCompletion.resolve(true);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(writes, ["old"]);
+  assert.deepEqual(statuses, []);
+
+  coordinator.commit(newGeneration, state("new"));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  newCompletion.resolve(true);
+  await coordinator.flush();
+
+  assert.deepEqual(writes, ["old", "new"]);
+  assert.deepEqual(statuses, ["synced"]);
+});
