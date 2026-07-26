@@ -7,6 +7,7 @@ export const LIBRARY_FILE_ACCEPT =
   ".json,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 export const BOM_FILE_ACCEPT =
   ".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 
 export type ImportFileKind = "json" | "csv" | "xlsx";
 
@@ -48,6 +49,9 @@ async function workbookRows(data: ArrayBuffer): Promise<TabularRow[]> {
 }
 
 export async function readTabularFile(file: File): Promise<TabularRow[]> {
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    throw new Error("檔案大小超過 5 MB 上限。");
+  }
   const kind = classifyImportFile(file.name);
   if (!kind) throw new Error("不支援此檔案格式。");
   if (kind === "csv") return rowsFromCsv(await file.text());

@@ -22,6 +22,51 @@ interface ViewBoxRectangle {
 }
 
 const EPSILON = 1e-9;
+export const MAX_PLACEMENT_CHECKS = 50_000;
+
+interface PlacementSearchOptions {
+  maxChecks?: number;
+}
+
+interface GridNode extends Point {
+  gridX: number;
+  gridY: number;
+  distance: number;
+}
+
+function compareGridNodes(first: GridNode, second: GridNode): number {
+  return first.distance - second.distance || first.y - second.y || first.x - second.x;
+}
+
+function pushHeap(heap: GridNode[], node: GridNode): void {
+  heap.push(node);
+  let index = heap.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (compareGridNodes(heap[parent], heap[index]) <= 0) break;
+    [heap[parent], heap[index]] = [heap[index], heap[parent]];
+    index = parent;
+  }
+}
+
+function popHeap(heap: GridNode[]): GridNode | undefined {
+  const first = heap[0];
+  const last = heap.pop();
+  if (!first || !last || heap.length === 0) return first;
+  heap[0] = last;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    const right = left + 1;
+    let smallest = index;
+    if (left < heap.length && compareGridNodes(heap[left], heap[smallest]) < 0) smallest = left;
+    if (right < heap.length && compareGridNodes(heap[right], heap[smallest]) < 0) smallest = right;
+    if (smallest === index) break;
+    [heap[index], heap[smallest]] = [heap[smallest], heap[index]];
+    index = smallest;
+  }
+  return first;
+}
 
 export function snapValue(value: number, gridSize: number): number {
   if (gridSize <= 0) return value;
@@ -135,24 +180,63 @@ export function findPlacement(
   project: PcbProject,
   candidate: PcbPlacedComponent,
   preferred = { x: project.board.width / 2, y: project.board.height / 2 },
+  options: PlacementSearchOptions = {},
 ): Point | null {
   const gridSize = project.board.gridSize;
   if (gridSize <= 0) return null;
+  const maxChecks = Math.max(
+    0,
+    Math.floor(options.maxChecks ?? MAX_PLACEMENT_CHECKS),
+  );
+  if (maxChecks === 0) return null;
 
-  const placements: Point[] = [];
+  const maxGridX = Math.floor((project.board.width + EPSILON) / gridSize);
+  const maxGridY = Math.floor((project.board.height + EPSILON) / gridSize);
+  if (maxGridX < 1 || maxGridY < 1) return null;
 
-  for (let y = gridSize; y <= project.board.height; y += gridSize) {
-    for (let x = gridSize; x <= project.board.width; x += gridSize) {
-      const placement = { ...candidate, x, y };
-      if (canPlaceComponent(project, placement)) placements.push({ x, y });
-    }
+  const heap: GridNode[] = [];
+  const queued = new Set<string>();
+  const enqueue = (gridX: number, gridY: number) => {
+    if (gridX < 1 || gridX > maxGridX || gridY < 1 || gridY > maxGridY) return;
+    const key = `${gridX}:${gridY}`;
+    if (queued.has(key)) return;
+    queued.add(key);
+    const x = stableCoordinate(gridX * gridSize);
+    const y = stableCoordinate(gridY * gridSize);
+    pushHeap(heap, {
+      gridX,
+      gridY,
+      x,
+      y,
+      distance: (x - preferred.x) ** 2 + (y - preferred.y) ** 2,
+    });
+  };
+
+  const preferredGridX = preferred.x / gridSize;
+  const preferredGridY = preferred.y / gridSize;
+  const seedXs = [Math.floor(preferredGridX), Math.ceil(preferredGridX)];
+  const seedYs = [Math.floor(preferredGridY), Math.ceil(preferredGridY)];
+  seedYs.forEach((gridY) => seedXs.forEach((gridX) => enqueue(gridX, gridY)));
+  if (heap.length === 0) {
+    enqueue(
+      Math.min(maxGridX, Math.max(1, Math.round(preferredGridX))),
+      Math.min(maxGridY, Math.max(1, Math.round(preferredGridY))),
+    );
   }
 
-  placements.sort((first, second) => {
-    const firstDistance = (first.x - preferred.x) ** 2 + (first.y - preferred.y) ** 2;
-    const secondDistance = (second.x - preferred.x) ** 2 + (second.y - preferred.y) ** 2;
-    return firstDistance - secondDistance || first.y - second.y || first.x - second.x;
-  });
+  let checks = 0;
+  while (heap.length > 0 && checks < maxChecks) {
+    const node = popHeap(heap);
+    if (!node) break;
+    checks += 1;
+    if (canPlaceComponent(project, { ...candidate, x: node.x, y: node.y })) {
+      return { x: node.x, y: node.y };
+    }
+    enqueue(node.gridX - 1, node.gridY);
+    enqueue(node.gridX + 1, node.gridY);
+    enqueue(node.gridX, node.gridY - 1);
+    enqueue(node.gridX, node.gridY + 1);
+  }
 
-  return placements[0] ?? null;
+  return null;
 }

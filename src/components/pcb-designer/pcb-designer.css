@@ -112,6 +112,11 @@
   cursor: grabbing;
 }
 
+.pcb-canvas [role="button"]:focus-visible {
+  outline: none;
+  filter: drop-shadow(0 0 3px rgb(126 232 245 / 95%));
+}
+
 .pcb-svg-label {
   fill: #f8fafc;
   paint-order: stroke;

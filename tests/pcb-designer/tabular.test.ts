@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  MAX_BOM_QUANTITY_PER_ROW,
+  MAX_BOM_TOTAL_PLACEMENTS,
   parseBomRows,
   parseComponentRows,
   parseCsvRows,
@@ -38,15 +40,14 @@ test("retains CSV source row numbers after blank source rows", () => {
   assert.deepEqual(result.errors, [{ row: 3, message: "Width must be a finite positive number" }]);
 });
 
-test("expands valid BOM quantities into pending placements and rejects invalid quantities", () => {
+test("counts valid BOM quantities without eagerly expanding pending placements", () => {
   const result = parseBomRows([
     { Name: "Resistor", Manufacturer: "Yageo", MPN: "RC1", Width: 1.6, Height: 0.8, "Max Height": 0.5, Qty: "3", RefDes: "R1" },
     { Name: "Capacitor", Width: 1, Height: 1, "Max Height": 1, Quantity: 0 },
   ]);
 
   assert.equal(result.valid.length, 1);
-  assert.equal(result.pending.length, 3);
-  assert.deepEqual(result.pending.map((item) => item.reference), ["R1", "R1", "R1"]);
+  assert.equal(result.placementCount, 3);
   assert.deepEqual(result.errors, [{ row: 3, message: "Quantity must be a finite positive number" }]);
 });
 
@@ -55,6 +56,35 @@ test("rejects fractional BOM quantities without creating pending placements", ()
     { Name: "Resistor", Width: 1.6, Height: 0.8, "Max Height": 0.5, Quantity: 1.5 },
   ]);
 
-  assert.equal(result.pending.length, 0);
+  assert.equal(result.placementCount, 0);
   assert.deepEqual(result.errors, [{ row: 2, message: "Quantity must be a positive integer" }]);
+});
+
+test("rejects oversized BOM quantities and cumulative placement counts", () => {
+  const perRow = parseBomRows([
+    {
+      Name: "Resistor",
+      Width: 1,
+      Height: 1,
+      "Max Height": 1,
+      Quantity: MAX_BOM_QUANTITY_PER_ROW + 1,
+    },
+  ]);
+  assert.equal(perRow.valid.length, 0);
+  assert.equal(perRow.placementCount, 0);
+  assert.match(perRow.errors[0]?.message ?? "", /Quantity exceeds limit/);
+
+  const rows = Array.from(
+    { length: Math.ceil(MAX_BOM_TOTAL_PLACEMENTS / MAX_BOM_QUANTITY_PER_ROW) + 1 },
+    (_, index) => ({
+      Name: `Part ${index}`,
+      Width: 1,
+      Height: 1,
+      "Max Height": 1,
+      Quantity: MAX_BOM_QUANTITY_PER_ROW,
+    }),
+  );
+  const cumulative = parseBomRows(rows);
+  assert.ok(cumulative.placementCount <= MAX_BOM_TOTAL_PLACEMENTS);
+  assert.match(cumulative.errors.at(-1)?.message ?? "", /total placement limit/);
 });

@@ -19,6 +19,15 @@ const workspaceSource = await read(
 const permissionMigrationSource = await read(
   "supabase/migrations/20260726200000_add_pcb_designer_permissions.sql",
 );
+const storageMigrationSource = await read(
+  "supabase/migrations/20260726193000_create_pcb_designer_tables.sql",
+);
+const persistenceSource = await read(
+  "src/components/pcb-designer/hooks/usePcbPersistence.ts",
+);
+const pcbWorkspaceHookSource = await read(
+  "src/components/pcb-designer/hooks/usePcbWorkspace.ts",
+);
 const supabaseTypesSource = await read("src/integrations/supabase/types.ts");
 const collaborationSource = await read(
   "src/components/collaboration/CollaborationCenter.tsx",
@@ -210,4 +219,18 @@ test("labels PCB Designer presence consistently", () => {
       /["']pcb-designer["']\s*:\s*["']PCB Designer["']/,
     );
   }
+});
+
+test("owner-scopes remote PCB data and suppresses view-only remote writes", () => {
+  assert.match(storageMigrationSource, /owner_id\s+uuid\s+not null\s+default auth\.uid\(\)/i);
+  assert.match(storageMigrationSource, /enable row level security/i);
+  assert.match(storageMigrationSource, /auth\.uid\(\)\s*=\s*owner_id/i);
+  assert.match(storageMigrationSource, /revoke all on[\s\S]*from anon/i);
+  assert.doesNotMatch(
+    storageMigrationSource,
+    /grant select,\s*insert,\s*update,\s*delete on[\s\S]*to anon/i,
+  );
+  assert.match(persistenceSource, /allowRemoteSync\?: boolean/);
+  assert.match(persistenceSource, /allowRemoteSync \? defaultClient : null/);
+  assert.match(pcbWorkspaceHookSource, /allowRemoteSync:\s*canEdit/);
 });

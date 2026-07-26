@@ -132,7 +132,7 @@ export function PcbDesignerWorkspace({
       const result = parseBomRows(await readTabularFile(file));
       previewImport("BOM 匯入預覽", result.valid.length, result.errors, () => {
         workspace.importBom(result.valid);
-        toast({ title: "BOM 已匯入", description: `建立 ${result.pending.length} 筆待放置項目。` });
+        toast({ title: "BOM 已匯入", description: `建立 ${result.placementCount} 筆待放置項目。` });
       });
     } catch (error) {
       previewImport("BOM 匯入預覽", 0, [{

@@ -31,7 +31,7 @@ function NumberField({
   value: number;
   disabled: boolean;
   step?: string;
-  onCommit: (value: number) => void;
+  onCommit: (value: number) => boolean;
 }) {
   return (
     <InspectorField label={label}>
@@ -43,8 +43,12 @@ function NumberField({
         disabled={disabled}
         onBlur={(event) => {
           const next = Number(event.currentTarget.value);
-          if (Number.isFinite(next) && next !== value) onCommit(next);
-          else event.currentTarget.value = String(value);
+          if (
+            !Number.isFinite(next)
+            || (next !== value && !onCommit(next))
+          ) {
+            event.currentTarget.value = String(value);
+          }
         }}
       />
     </InspectorField>
@@ -63,7 +67,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
             type="button"
             variant="outline"
             size="sm"
-            disabled={!workspace.canMutate}
+            disabled={!workspace.canMutate || component.locked}
             onClick={workspace.rotateSelected}
             aria-label="旋轉選取元件 90 度"
             title="旋轉 90°"
@@ -91,7 +95,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
         variant="outline"
         size="sm"
         className="pcb-danger-action"
-        disabled={!workspace.canMutate}
+        disabled={!workspace.canMutate || Boolean(component?.locked)}
         onClick={workspace.deleteSelected}
         aria-label="刪除選取物件"
         title="刪除"
@@ -137,7 +141,7 @@ function ComponentInspector({
   component: PcbPlacedComponent;
 }) {
   const disabled = !workspace.canMutate;
-  const positionDisabled = disabled || component.locked;
+  const componentDisabled = disabled || component.locked;
   return (
     <div className="pcb-inspector-form" data-selection-kind="component">
       <h2>{component.reference} · {component.name}</h2>
@@ -145,7 +149,7 @@ function ComponentInspector({
         <input
           key={component.name}
           defaultValue={component.name}
-          disabled={disabled}
+          disabled={componentDisabled}
           onBlur={(event) => workspace.updateComponent(component.instanceId, { name: event.currentTarget.value.trim() || component.name })}
         />
       </InspectorField>
@@ -153,20 +157,20 @@ function ComponentInspector({
         <input
           key={component.reference}
           defaultValue={component.reference}
-          disabled={disabled}
+          disabled={componentDisabled}
           onBlur={(event) => workspace.updateComponent(component.instanceId, { reference: event.currentTarget.value.trim() || component.reference })}
         />
       </InspectorField>
       <div className="pcb-inspector-field-grid">
-        <NumberField label="X (mm)" value={component.x} disabled={positionDisabled} onCommit={(x) => workspace.updateComponent(component.instanceId, { x })} />
-        <NumberField label="Y (mm)" value={component.y} disabled={positionDisabled} onCommit={(y) => workspace.updateComponent(component.instanceId, { y })} />
-        <NumberField label="寬 (mm)" value={component.width} disabled={disabled} onCommit={(width) => workspace.updateComponent(component.instanceId, { width })} />
-        <NumberField label="高 (mm)" value={component.height} disabled={disabled} onCommit={(height) => workspace.updateComponent(component.instanceId, { height })} />
-        <NumberField label="最大高度" value={component.maxHeight} disabled={disabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
-        <NumberField label="旋轉 (°)" value={component.rotation} disabled={disabled} step="90" onCommit={(rotation) => workspace.updateComponent(component.instanceId, { rotation })} />
+        <NumberField label="X (mm)" value={component.x} disabled={componentDisabled} onCommit={(x) => workspace.updateComponent(component.instanceId, { x })} />
+        <NumberField label="Y (mm)" value={component.y} disabled={componentDisabled} onCommit={(y) => workspace.updateComponent(component.instanceId, { y })} />
+        <NumberField label="寬 (mm)" value={component.width} disabled={componentDisabled} onCommit={(width) => workspace.updateComponent(component.instanceId, { width })} />
+        <NumberField label="高 (mm)" value={component.height} disabled={componentDisabled} onCommit={(height) => workspace.updateComponent(component.instanceId, { height })} />
+        <NumberField label="最大高度" value={component.maxHeight} disabled={componentDisabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
+        <NumberField label="旋轉 (°)" value={component.rotation} disabled={componentDisabled} step="90" onCommit={(rotation) => workspace.updateComponent(component.instanceId, { rotation })} />
       </div>
       <InspectorField label="層">
-        <select value={component.layer} disabled={disabled} onChange={(event) => workspace.updateComponent(component.instanceId, { layer: event.target.value as "top" | "bottom" })}>
+        <select value={component.layer} disabled={componentDisabled} onChange={(event) => workspace.updateComponent(component.instanceId, { layer: event.target.value as "top" | "bottom" })}>
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
         </select>
