@@ -284,9 +284,14 @@ export function PcbLeftRail({
               disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
               onClick={() => {
                 const result = workspace.autoPlacePending();
+                const details = [
+                  result.failed ? `${result.failed} 個項目本次未找到合法位置。` : "",
+                  result.deferred ? `${result.deferred} 個項目保留在佇列，可再次分批執行。` : "",
+                  result.limited ? "已達安全搜尋上限，未放置項目不會遺失。" : "",
+                ].filter(Boolean).join(" ");
                 toast({
                   title: result.placed ? `已自動放置 ${result.placed} 個元件` : "沒有元件可自動放置",
-                  description: result.failed ? `${result.failed} 個項目找不到合法位置。` : "BOM 佇列已處理完成。",
+                  description: details || "BOM 佇列已處理完成。",
                   variant: result.placed ? "default" : "destructive",
                 });
               }}

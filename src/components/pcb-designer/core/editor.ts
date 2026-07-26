@@ -8,11 +8,19 @@ import type {
   PcbProject,
   PcbSelection,
 } from "../types.ts";
-import { canPlaceComponent, findPlacement, snapValue } from "./geometry.ts";
+import {
+  canPlaceComponent,
+  MAX_PLACEMENT_CHECKS,
+  searchPlacement,
+  snapValue,
+  type PlacementSearchOptions,
+} from "./geometry.ts";
+
+export const MAX_PLACEMENT_COLLISION_TESTS = 250_000;
 
 export type PlacementResult =
   | { ok: true; project: PcbProject; component: PcbPlacedComponent }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; code?: "search-limit" };
 
 export type MoveResult =
   | { ok: true; project: PcbProject; component: PcbPlacedComponent; changed: boolean }
@@ -58,6 +66,7 @@ export function placeLibraryComponent(
   libraryComponent: PcbLibraryComponent,
   preferred?: PcbPoint,
   reference?: string,
+  placementOptions?: PlacementSearchOptions,
 ): PlacementResult {
   const base = clone(project);
   const candidate: PcbPlacedComponent = {
@@ -86,11 +95,40 @@ export function placeLibraryComponent(
       y: project.board.height / 2,
     }
     : null;
-  const position = exactPreferred && canPlaceComponent(base, exactPreferred)
-    ? preferred
-    : exactCenter && canPlaceComponent(base, exactCenter)
-      ? { x: exactCenter.x, y: exactCenter.y }
-      : findPlacement(base, candidate, preferred);
+  let position: PcbPoint | undefined;
+  if (exactPreferred && canPlaceComponent(base, exactPreferred)) {
+    position = preferred;
+  } else if (exactCenter && canPlaceComponent(base, exactCenter)) {
+    position = { x: exactCenter.x, y: exactCenter.y };
+  } else {
+    const obstacleCount = Math.max(
+      1,
+      base.components.length + base.keepouts.length,
+    );
+    const safePlacementOptions = placementOptions ?? {
+      maxChecks: Math.max(
+        1,
+        Math.min(
+          MAX_PLACEMENT_CHECKS,
+          Math.floor(MAX_PLACEMENT_COLLISION_TESTS / obstacleCount),
+        ),
+      ),
+    };
+    const search = searchPlacement(
+      base,
+      candidate,
+      preferred,
+      safePlacementOptions,
+    );
+    if (search.status === "limit-reached") {
+      return {
+        ok: false,
+        code: "search-limit",
+        reason: "自動放置已達安全搜尋上限；項目仍保留，請縮小網格、調整禁制區或手動放置。",
+      };
+    }
+    if (search.status === "placed") position = search.point;
+  }
   if (!position) {
     return { ok: false, reason: "找不到可合法放置此元件的位置。" };
   }

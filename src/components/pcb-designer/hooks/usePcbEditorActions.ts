@@ -27,6 +27,9 @@ import type {
 import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
 
+export const MAX_AUTO_PLACE_ITEMS = 50;
+export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
+
 export function usePcbEditorActions(
   state: PcbWorkspaceState,
   dispatch: Dispatch<PcbWorkspaceAction>,
@@ -82,31 +85,79 @@ export function usePcbEditorActions(
 
   const autoPlacePending = useCallback(() => {
     if (!state.canEdit || state.documentLocked) {
-      return { placed: 0, failed: state.pendingPlacements.length };
+      return {
+        placed: 0,
+        failed: state.pendingPlacements.length,
+        deferred: 0,
+        limited: false,
+      };
     }
     let project = state.activeProject;
     const placedIndexes: number[] = [];
-    state.pendingPlacements.forEach((pending, index) => {
+    const batch = state.pendingPlacements.slice(0, MAX_AUTO_PLACE_ITEMS);
+    const worstCaseObstacles = Math.max(
+      1,
+      project.components.length + project.keepouts.length + batch.length,
+    );
+    const checksPerItem = Math.max(
+      1,
+      Math.floor(
+        MAX_AUTO_PLACE_COLLISION_TESTS
+        / Math.max(1, batch.length * worstCaseObstacles),
+      ),
+    );
+    let attempted = 0;
+    let limited = false;
+    for (let index = 0; index < batch.length; index += 1) {
+      const pending = batch[index];
+      attempted += 1;
       const component = state.data.library.find((item) =>
         libraryIdentity(item) === libraryIdentity(pending));
-      if (!component) return;
-      const result = placeComponentRecord(project, component, undefined, pending.reference);
+      if (!component) continue;
+      const result = placeComponentRecord(
+        project,
+        component,
+        undefined,
+        pending.reference,
+        { maxChecks: checksPerItem },
+      );
       if (result.ok) {
         project = result.project;
         placedIndexes.push(index);
+      } else if (result.code === "search-limit") {
+        limited = true;
+        break;
       }
-    });
+    }
     if (placedIndexes.length) {
       const placed = new Set(placedIndexes);
+      const deferredPlacements = state.pendingPlacements.slice(attempted);
+      const attemptedFailures = batch
+        .slice(0, attempted)
+        .filter((_, index) => !placed.has(index));
       dispatch({
         type: "project/commit-with-bom",
         update: project,
-        pendingPlacements: state.pendingPlacements.filter((_, index) => !placed.has(index)),
+        pendingPlacements: [
+          ...deferredPlacements,
+          ...attemptedFailures,
+        ],
+      });
+    } else if (attempted < state.pendingPlacements.length) {
+      dispatch({
+        type: "project/commit-with-bom",
+        update: project,
+        pendingPlacements: [
+          ...state.pendingPlacements.slice(attempted),
+          ...batch.slice(0, attempted),
+        ],
       });
     }
     return {
       placed: placedIndexes.length,
-      failed: state.pendingPlacements.length - placedIndexes.length,
+      failed: attempted - placedIndexes.length,
+      deferred: state.pendingPlacements.length - attempted,
+      limited,
     };
   }, [
     dispatch,

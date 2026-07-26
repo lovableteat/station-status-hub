@@ -1,25 +1,28 @@
 create table if not exists public.pcb_designer_projects (
   owner_id uuid not null default auth.uid(),
-  id text primary key,
+  id text not null,
   payload jsonb not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, id)
 );
 
 create table if not exists public.pcb_designer_templates (
   owner_id uuid not null default auth.uid(),
-  id text primary key,
+  id text not null,
   payload jsonb not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, id)
 );
 
 create table if not exists public.pcb_designer_library (
   owner_id uuid not null default auth.uid(),
-  id text primary key,
+  id text not null,
   payload jsonb not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, id)
 );
 
 create index if not exists pcb_designer_projects_updated_at_idx
