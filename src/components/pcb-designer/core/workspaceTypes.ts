@@ -1,8 +1,10 @@
 import type {
   PcbDrcIssue,
   PcbLibraryComponent,
+  PcbPoint,
   PcbProject,
   PcbSaveState,
+  PcbSelection,
   PcbTool,
 } from "../types.ts";
 import type { HistoryState } from "./history.ts";
@@ -29,12 +31,15 @@ export interface PcbWorkspaceState {
   data: PcbSaveState;
   activeProject: PcbProject;
   historyByProject: Record<string, HistoryState<PcbProject>>;
+  pendingHistoryByProject: Record<string, HistoryState<PendingPlacement[]>>;
   drcIssues: PcbDrcIssue[];
   pendingPlacements: PendingPlacement[];
   canEdit: boolean;
   documentLocked: boolean;
   tool: PcbTool;
   zoom: number;
+  viewCenter: PcbPoint;
+  selection: PcbSelection | null;
   rightTab: "board" | "selection" | "drc";
   canUndo: boolean;
   canRedo: boolean;
@@ -48,6 +53,7 @@ export type PcbWorkspaceAction =
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }
+  | { type: "project/commit-with-bom"; update: PcbProject; pendingPlacements: PendingPlacement[] }
   | { type: "template/apply"; templateId: string }
   | { type: "template/save"; input: TemplateInput }
   | { type: "template/rename"; templateId: string; name: string }
@@ -65,6 +71,9 @@ export type PcbWorkspaceAction =
   | { type: "document/toggle-lock" }
   | { type: "tool/set"; tool: PcbTool }
   | { type: "zoom/set"; zoom: number }
+  | { type: "view/center"; center: PcbPoint }
+  | { type: "view/reset" }
+  | { type: "selection/set"; selection: PcbSelection | null }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
   | { type: "persistence/touch" }

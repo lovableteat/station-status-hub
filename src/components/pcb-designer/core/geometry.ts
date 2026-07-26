@@ -7,11 +7,45 @@ interface Point {
   y: number;
 }
 
+interface ViewportRectangle {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface ViewBoxRectangle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const EPSILON = 1e-9;
 
 export function snapValue(value: number, gridSize: number): number {
   if (gridSize <= 0) return value;
-  return Math.floor(value / gridSize) * gridSize;
+  return Math.round(value / gridSize) * gridSize;
+}
+
+export function snapPoint(point: Point, gridSize: number, bypass: boolean): Point {
+  if (bypass) return { ...point };
+  return {
+    x: snapValue(point.x, gridSize),
+    y: snapValue(point.y, gridSize),
+  };
+}
+
+export function clientPointToBoard(
+  point: Point,
+  viewport: ViewportRectangle,
+  viewBox: ViewBoxRectangle,
+): Point {
+  if (viewport.width <= 0 || viewport.height <= 0) return { x: viewBox.x, y: viewBox.y };
+  return {
+    x: viewBox.x + ((point.x - viewport.left) / viewport.width) * viewBox.width,
+    y: viewBox.y + ((point.y - viewport.top) / viewport.height) * viewBox.height,
+  };
 }
 
 function stableCoordinate(value: number): number {
@@ -97,7 +131,11 @@ export function canPlaceComponent(project: PcbProject, candidate: PcbPlacedCompo
 }
 
 /** Finds the legal grid position nearest the board center without changing inputs. */
-export function findPlacement(project: PcbProject, candidate: PcbPlacedComponent): Point | null {
+export function findPlacement(
+  project: PcbProject,
+  candidate: PcbPlacedComponent,
+  preferred = { x: project.board.width / 2, y: project.board.height / 2 },
+): Point | null {
   const gridSize = project.board.gridSize;
   if (gridSize <= 0) return null;
 
@@ -110,11 +148,9 @@ export function findPlacement(project: PcbProject, candidate: PcbPlacedComponent
     }
   }
 
-  const centerX = project.board.width / 2;
-  const centerY = project.board.height / 2;
   placements.sort((first, second) => {
-    const firstDistance = (first.x - centerX) ** 2 + (first.y - centerY) ** 2;
-    const secondDistance = (second.x - centerX) ** 2 + (second.y - centerY) ** 2;
+    const firstDistance = (first.x - preferred.x) ** 2 + (first.y - preferred.y) ** 2;
+    const secondDistance = (second.x - preferred.x) ** 2 + (second.y - preferred.y) ** 2;
     return firstDistance - secondDistance || first.y - second.y || first.x - second.x;
   });
 

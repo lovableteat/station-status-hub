@@ -144,7 +144,7 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
     "src/components/pcb-designer/pcb-designer.css",
   );
   const canvasSource = await read(
-    "src/components/pcb-designer/PcbCanvasHost.tsx",
+    "src/components/pcb-designer/PcbCanvas.tsx",
   );
   const inspectorSource = await read(
     "src/components/pcb-designer/PcbInspector.tsx",
