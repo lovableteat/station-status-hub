@@ -17,7 +17,7 @@ export function createHistoryState<T>(initial: T): HistoryState<T> {
 export function pushHistory<T>(state: HistoryState<T>, next: T): HistoryState<T> {
   return {
     current: snapshot(next),
-    undo: [...state.undo, snapshot(state.current)].slice(-MAX_TRANSACTIONS),
+    undo: [...state.undo.map(snapshot), snapshot(state.current)].slice(-MAX_TRANSACTIONS),
     redo: [],
   };
 }
