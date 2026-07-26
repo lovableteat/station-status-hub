@@ -365,12 +365,57 @@ test("metadata save RPC validates project ownership, typed values, required valu
   assert.match(source, /fields\.options @> jsonb_build_array\(values_to_save\.value\)/i);
   assert.match(source, /fields\.is_required/i);
   assert.match(source, /create or replace function public\.protect_system_metadata_definition/i);
-  assert.match(source, /before update or delete on public\.test_project_system_fields/i);
+  assert.match(source, /before insert or update or delete on public\.test_project_system_fields/i);
   assert.match(source, /old\.is_system/i);
   assert.match(source, /old\.field_key is distinct from new\.field_key/i);
   assert.match(source, /old\.project_id is distinct from new\.project_id/i);
   assert.match(source, /drop trigger if exists protect_test_project_system_fields/i);
   assert.match(source, /set search_path = public/i);
+});
+
+test("reserved metadata deletion allows its parent project cascade", async () => {
+  const source = await readSource(metadataHardeningMigrationUrl);
+
+  assert.match(
+    source,
+    /if old\.is_system\s+and exists\s*\(\s*select 1\s+from public\.test_projects\s+where id = old\.project_id\s*\)\s+then/i,
+  );
+  assert.match(
+    source,
+    /if tg_op = 'DELETE'[\s\S]*?return old;[\s\S]*?end if;/i,
+  );
+});
+
+test("metadata definition trigger rejects forged system fields and status transitions", async () => {
+  const source = await readSource(metadataHardeningMigrationUrl);
+  const functionStart = source.indexOf(
+    "create or replace function public.protect_system_metadata_definition",
+  );
+  const functionEnd = source.indexOf("$$;", functionStart);
+  const triggerFunction = source.slice(functionStart, functionEnd);
+  const insertStart = triggerFunction.indexOf("if tg_op = 'INSERT'");
+  const updateStart = triggerFunction.indexOf("if tg_op = 'UPDATE'");
+  const insertBranch = triggerFunction.slice(insertStart, updateStart);
+
+  assert.ok(insertStart >= 0, "system definition guard must handle inserts");
+  assert.ok(updateStart > insertStart, "system definition guard must handle updates");
+  assert.match(insertBranch, /new\.is_system\s+and not/i);
+  for (const reservedKey of [
+    "bom_90",
+    "ubuntu_version",
+    "cuda_version",
+    "include_in_dashboard",
+  ]) {
+    assert.match(insertBranch, new RegExp(`'${reservedKey}'`));
+  }
+  assert.match(insertBranch, /new\.category = 'software'/i);
+  assert.match(insertBranch, /new\.category = 'statistics'/i);
+  assert.match(insertBranch, /new\.field_type = 'text'/i);
+  assert.match(insertBranch, /new\.field_type = 'boolean'/i);
+  assert.match(
+    triggerFunction,
+    /old\.is_system is distinct from new\.is_system/i,
+  );
 });
 
 test("legacy compatibility mutations are guarded against a stale system load", async () => {
