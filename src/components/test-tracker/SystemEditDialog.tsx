@@ -924,13 +924,25 @@ export function SystemEditDialog({
             </section>
 
             <section data-testid="system-editor-software-row" className={sectionClass}>
-              <div className="flex items-center gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
+              <div className="flex flex-wrap items-center gap-3 border-b border-[#25465f] bg-[#0c2032] px-4 py-3.5">
                 <span className="font-mono text-xs font-semibold text-emerald-300">03</span>
                 <Settings2 className="h-4 w-4 text-emerald-200" />
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-slate-50">軟體版本與統計</h3>
-                  <p className="text-xs text-[#8eaabd]">部署版本及儀表板納入設定</p>
+                  <p className="text-xs text-[#8eaabd]">
+                    部署版本、儀表板納入設定；可依專案自由新增軟體/版本欄位（同專案共用）
+                  </p>
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 border-emerald-300/40 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
+                  onClick={() => setShowNewSoftwareForm((value) => !value)}
+                >
+                  <Plus className="h-4 w-4" />
+                  新增軟體欄位
+                </Button>
               </div>
               <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
                 <div>
@@ -986,7 +998,81 @@ export function SystemEditDialog({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {softwareFields.map((field) => (
+                  <div key={field.id} className="group relative">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <Label className={cn(fieldLabelClass, "mb-0")}>{field.label}</Label>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSoftwareField(field)}
+                        className="text-[10px] font-medium text-rose-300/80 opacity-0 transition hover:text-rose-200 group-hover:opacity-100"
+                        aria-label={`刪除 ${field.label} 欄位`}
+                      >
+                        刪除
+                      </button>
+                    </div>
+                    <Input
+                      value={softwareValues[field.id] ?? ""}
+                      onChange={(event) =>
+                        setSoftwareValues((current) => ({
+                          ...current,
+                          [field.id]: event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder || `請輸入 ${field.label}...`}
+                      className={inputClass}
+                    />
+                  </div>
+                ))}
               </div>
+
+              {showNewSoftwareForm && (
+                <div className="border-t border-[#25465f] bg-[#0a1c2e] p-4 sm:p-5">
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <div>
+                      <Label className={fieldLabelClass}>欄位名稱</Label>
+                      <Input
+                        value={newSoftwareLabel}
+                        onChange={(event) => setNewSoftwareLabel(event.target.value)}
+                        placeholder="例如 BIOS Version"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label className={fieldLabelClass}>目前機台的值（可留空）</Label>
+                      <Input
+                        value={newSoftwareValue}
+                        onChange={(event) => setNewSoftwareValue(event.target.value)}
+                        placeholder="例如 2.15.0"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-11 text-[#a9c0d1]"
+                        onClick={closeNewSoftwareForm}
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        type="button"
+                        className="h-11 bg-emerald-400 px-4 text-[#06111f] hover:bg-emerald-300"
+                        disabled={isAddingSoftware}
+                        onClick={handleAddSoftwareField}
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        {isAddingSoftware ? "正在新增..." : "新增至專案"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-[#8eaabd]">
+                    新增後，同一專案的所有機台都會看到這個欄位；每台機台會各自保存自己的值。
+                  </p>
+                </div>
+              )}
             </section>
           </div>
         </div>
