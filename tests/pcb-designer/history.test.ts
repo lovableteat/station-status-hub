@@ -31,6 +31,18 @@ test("pushing after undo clears redo history", () => {
   assert.equal(redoHistory(next).current, "D");
 });
 
+test("pushing isolates existing undo snapshots from the predecessor state", () => {
+  const predecessor = pushHistory(
+    createHistoryState({ name: "initial", nested: { count: 0 } }),
+    { name: "first edit", nested: { count: 1 } },
+  );
+  const successor = pushHistory(predecessor, { name: "second edit", nested: { count: 2 } });
+
+  predecessor.undo[0].nested.count = 99;
+
+  assert.equal(successor.undo[0].nested.count, 0);
+});
+
 test("history retains at most 100 undo transactions", () => {
   let state = createHistoryState(0);
   for (let value = 1; value <= 101; value += 1) state = pushHistory(state, value);
