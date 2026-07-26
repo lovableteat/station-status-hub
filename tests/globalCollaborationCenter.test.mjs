@@ -46,12 +46,15 @@ test("the collaboration icon visibly pulses while notifications remain unread", 
 });
 
 test("presence exposes all users, other users and connection state", async () => {
-  const source = await readSource("src/hooks/useUserPresence.ts");
+  const [source, sessionSource] = await Promise.all([
+    readSource("src/hooks/useUserPresence.ts"),
+    readSource("src/hooks/presenceSession.mjs"),
+  ]);
 
   assert.match(source, /allOnlineUsers/);
   assert.match(source, /otherOnlineUsersCount/);
   assert.match(source, /connectionStatus/);
-  assert.match(source, /new Map/);
+  assert.match(sessionSource, /new Map/);
 });
 
 test("admin can send announcements and inspect live users from one panel", async () => {
