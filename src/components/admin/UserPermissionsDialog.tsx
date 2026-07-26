@@ -227,7 +227,7 @@ export function UserPermissionsDialog({
       const { error } = await supabase.rpc("set_user_access_permissions", {
         p_user_id: userId,
         p_permissions: permissions,
-        p_workspace_access: workspaceAccess,
+        p_workspace_access: workspaceAccess as unknown as Record<string, string>,
         p_granted_by: user?.username ?? "admin",
       });
       if (error) throw error;
