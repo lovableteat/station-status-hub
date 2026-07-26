@@ -72,14 +72,14 @@ export function TestItemManager({ stations, items, onDataChange }: TestItemManag
         // Create new item
         await supabase
           .from('test_flow_items')
-          .insert({
+          .insert([{
             project_id: activeProjectId,
             item_name: formData.item_name,
             station_id: formData.station_id,
             description: formData.description,
             estimated_minutes: formData.estimated_minutes,
             item_order: formData.item_order
-          });
+          }] as never);
         
         toast({ title: "新增成功", description: "測試項目已新增" });
       }
