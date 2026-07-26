@@ -110,6 +110,11 @@ import {
   getRackUnitSelection,
   normalizeRackUnitSlots,
 } from "./rackMount.mjs";
+import {
+  GB300_RACK_MODEL_ID,
+  getGb300DefaultL10Slots,
+  normalizeGb300RackDevices,
+} from "./gb300RackEquipment.mjs";
 import type {
   CameraPreset,
   DataCenterAssetKind,
@@ -245,12 +250,33 @@ function readInitialSites() {
               ? normalizedL10ModelId
               : "l10-placeholder";
         const rackUnits = BUILT_IN_RACK_MODELS[resolvedL10ModelId]?.rackUnits ?? 1;
+        const storedL10Slots =
+          Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
+            ? rack.l10Slots
+            : [];
+        const matchesLegacySequentialSlots =
+          storedL10Slots.length === normalizedL10Count
+          && storedL10Slots.every(
+            (slot, index) =>
+              Number(slot) === l10StartU + index * rackUnits,
+          );
+        const shouldUseGb300ComputeZones =
+          modelId === GB300_RACK_MODEL_ID
+          && (
+            storedL10Slots.length === 0
+            || (l10StartU <= L10_RESERVED_BOTTOM_U + 1 && matchesLegacySequentialSlots)
+          );
         const l10Slots = normalizeRackUnitSlots({
           capacityU,
           rackUnits,
           rackUnitSlots:
-            Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
-              ? rack.l10Slots
+            shouldUseGb300ComputeZones
+              ? getGb300DefaultL10Slots({
+                  moduleCount: normalizedL10Count,
+                  rackUnits,
+                })
+              : storedL10Slots.length > 0
+                ? storedL10Slots
               : Array.from(
                   { length: normalizedL10Count },
                   (_, index) => l10StartU + index * rackUnits,
@@ -269,6 +295,10 @@ function readInitialSites() {
             ? defaultL10Assignment.l10StartU
             : l10Slots[0] ?? l10StartU,
           l10Slots,
+          devices:
+            modelId === GB300_RACK_MODEL_ID
+              ? normalizeGb300RackDevices(rack.id, rack.devices)
+              : rack.devices,
         };
       }),
     }));
@@ -392,16 +422,23 @@ function getL10Capacity(rack: RackPlan, model: RackModelDefinition) {
 
 function getRackL10Slots(rack: RackPlan, model: RackModelDefinition) {
   const rackUnits = getL10RackUnits(model);
+  const legacySlots =
+    rack.modelId === GB300_RACK_MODEL_ID
+      ? getGb300DefaultL10Slots({
+          moduleCount: rack.l10Count,
+          rackUnits,
+        })
+      : Array.from(
+          { length: rack.l10Count },
+          (_, index) => rack.l10StartU + index * rackUnits,
+        );
   return normalizeRackUnitSlots({
     capacityU: rack.capacityU,
     rackUnits,
     rackUnitSlots:
       Array.isArray(rack.l10Slots) && rack.l10Slots.length > 0
         ? rack.l10Slots
-        : Array.from(
-            { length: rack.l10Count },
-            (_, index) => rack.l10StartU + index * rackUnits,
-          ),
+        : legacySlots,
     reservedBottomU: L10_RESERVED_BOTTOM_U,
     reservedTopU: L10_RESERVED_TOP_U,
   });
@@ -1975,6 +2012,33 @@ export function DeploymentPlanningCenter() {
     );
   };
 
+  const handleRackDeviceHealthChange = (
+    rackId: string,
+    deviceId: string,
+    health: RackDeviceHealth,
+  ) => {
+    if (!canEdit) return;
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) =>
+                rack.id === rackId
+                  ? {
+                      ...rack,
+                      devices: rack.devices.map((device) =>
+                        device.id === deviceId ? { ...device, health } : device,
+                      ),
+                    }
+                  : rack,
+              ),
+            }
+          : site,
+      ),
+    );
+  };
+
   const updateFacility = (updater: (facility: FacilityPlan) => FacilityPlan) => {
     setFacilityPlans((current) => ({
       ...current,
@@ -2702,6 +2766,8 @@ export function DeploymentPlanningCenter() {
                 cameraRequestId={cameraRequestId}
                 facility={selectedFacility}
                 onSelectRack={handleRackSelect}
+                canEdit={canEdit}
+                onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
               />
             ) : (
               <DataCenter2DPlanner
@@ -2928,6 +2994,8 @@ export function DeploymentPlanningCenter() {
               cameraRequestId={cameraRequestId}
               facility={selectedFacility}
               onSelectRack={handleRackSelect}
+              canEdit={canEdit}
+              onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
             />
           ) : (
             <DataCenter2DPlanner

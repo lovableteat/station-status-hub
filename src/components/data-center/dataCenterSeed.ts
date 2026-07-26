@@ -184,13 +184,44 @@ function createRack(input: {
   const health = input.health ?? "healthy";
   const status = input.status ?? "allocated";
   const modelId = input.modelId ?? GB300_RACK_MODEL_ID;
-  const devices: RackDevice[] = [
-    createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
-    createDevice(input.id, 2, "switch-tray", health === "critical" ? "warning" : "healthy", 38, 2),
-    createDevice(input.id, 3, "compute-tray", health, 27, 8),
-    createDevice(input.id, 4, "compute-tray", "healthy", 17, 8),
-    createDevice(input.id, 5, "psu", health === "offline" ? "offline" : "healthy", 2, 4),
-  ];
+  const powerHealth = health === "offline" ? "offline" : "healthy";
+  const devices: RackDevice[] =
+    modelId === GB300_RACK_MODEL_ID
+      ? [
+          createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
+          {
+            ...createDevice(input.id, 5, "psu", powerHealth, 38, 3),
+            name: "Upper Power Shelf",
+          },
+          {
+            ...createDevice(
+              input.id,
+              2,
+              "switch-tray",
+              health === "critical" ? "warning" : health,
+              18,
+              8,
+            ),
+            name: "Switch Tray Bank",
+          },
+          createDevice(input.id, 3, "compute-tray", health, 26, 12),
+          createDevice(input.id, 4, "compute-tray", "healthy", 6, 12),
+          {
+            ...createDevice(input.id, 6, "psu", powerHealth, 3, 3),
+            name: "Lower Power Shelf",
+          },
+          {
+            ...createDevice(input.id, 7, "management", powerHealth, 1, 2),
+            name: "In-rack CDU",
+          },
+        ]
+      : [
+          createDevice(input.id, 1, "tor-switch", "healthy", 41, 2),
+          createDevice(input.id, 2, "switch-tray", health === "critical" ? "warning" : "healthy", 38, 2),
+          createDevice(input.id, 3, "compute-tray", health, 27, 8),
+          createDevice(input.id, 4, "compute-tray", "healthy", 17, 8),
+          createDevice(input.id, 5, "psu", powerHealth, 2, 4),
+        ];
 
   return {
     id: input.id,
