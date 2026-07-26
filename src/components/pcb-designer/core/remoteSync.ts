@@ -24,7 +24,7 @@ async function reconcileTable(
 ): Promise<boolean> {
   const table = client.from(tableName);
   const upsert = await table.upsert(rows, {
-    onConflict: "id",
+    onConflict: "owner_id,id",
     defaultToNull: false,
   });
   if (upsert.error) return false;

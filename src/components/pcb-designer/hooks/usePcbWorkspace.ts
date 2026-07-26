@@ -17,11 +17,15 @@ import type {
   PcbTool,
 } from "../types.ts";
 import { usePcbEditorActions } from "./usePcbEditorActions.ts";
-import { usePcbPersistence } from "./usePcbPersistence.ts";
+import {
+  usePcbPersistence,
+  type PcbRemoteClient,
+} from "./usePcbPersistence.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
   storage?: StorageLike;
+  remoteClient?: PcbRemoteClient | null;
 }
 
 function browserStorage(): StorageLike {
@@ -34,6 +38,7 @@ function browserStorage(): StorageLike {
 export function usePcbWorkspace({
   canEdit,
   storage,
+  remoteClient,
 }: UsePcbWorkspaceOptions) {
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
@@ -47,7 +52,8 @@ export function usePcbWorkspace({
   const persistenceStatus = usePcbPersistence({
     state: state.data,
     storage,
-    allowRemoteSync: canEdit,
+    remoteClient,
+    allowRemoteSync: canEdit && Boolean(remoteClient),
   });
   const editor = usePcbEditorActions(state, dispatch);
 

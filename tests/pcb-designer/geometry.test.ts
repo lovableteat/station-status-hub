@@ -4,6 +4,7 @@ import {
   findPlacement,
   getRotatedRectangleCorners,
   rectanglesOverlap,
+  searchPlacement,
   snapValue,
 } from "../../src/components/pcb-designer/core/geometry.ts";
 import type { PcbPlacedComponent, PcbProject } from "../../src/components/pcb-designer/types.ts";
@@ -107,4 +108,8 @@ test("findPlacement honors a bounded search budget on pathological boards", () =
   );
 
   assert.equal(result, null);
+  assert.deepEqual(
+    searchPlacement(project(), component(), undefined, { maxChecks: 0 }),
+    { status: "limit-reached" },
+  );
 });
