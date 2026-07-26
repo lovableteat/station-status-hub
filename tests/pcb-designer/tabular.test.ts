@@ -32,6 +32,12 @@ test("normalizes Chinese and English component aliases and reports invalid row n
   assert.deepEqual(result.errors, [{ row: 3, message: "Width must be a finite positive number" }]);
 });
 
+test("retains CSV source row numbers after blank source rows", () => {
+  const result = parseComponentRows(rowsFromCsv("Name,Width,Height,Max Height\n\nBroken,0,2,1"));
+
+  assert.deepEqual(result.errors, [{ row: 3, message: "Width must be a finite positive number" }]);
+});
+
 test("expands valid BOM quantities into pending placements and rejects invalid quantities", () => {
   const result = parseBomRows([
     { Name: "Resistor", Manufacturer: "Yageo", MPN: "RC1", Width: 1.6, Height: 0.8, "Max Height": 0.5, Qty: "3", RefDes: "R1" },
@@ -42,4 +48,13 @@ test("expands valid BOM quantities into pending placements and rejects invalid q
   assert.equal(result.pending.length, 3);
   assert.deepEqual(result.pending.map((item) => item.reference), ["R1", "R1", "R1"]);
   assert.deepEqual(result.errors, [{ row: 3, message: "Quantity must be a finite positive number" }]);
+});
+
+test("rejects fractional BOM quantities without creating pending placements", () => {
+  const result = parseBomRows([
+    { Name: "Resistor", Width: 1.6, Height: 0.8, "Max Height": 0.5, Quantity: 1.5 },
+  ]);
+
+  assert.equal(result.pending.length, 0);
+  assert.deepEqual(result.errors, [{ row: 2, message: "Quantity must be a positive integer" }]);
 });

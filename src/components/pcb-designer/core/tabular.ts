@@ -16,7 +16,7 @@ export interface ImportedBomItem extends ImportedComponent {
   reference: string;
 }
 
-export interface PendingPlacement extends ImportedBomItem {}
+export type PendingPlacement = ImportedBomItem;
 
 export interface TabularImportError {
   row: number;
@@ -45,6 +45,8 @@ const aliases: Record<string, readonly string[]> = {
   reference: ["reference", "refdes", "位號"],
 };
 
+const sourceRow = Symbol("sourceRow");
+
 function normalizedKey(value: string): string {
   return value.replace(/^\uFEFF/, "").trim().toLocaleLowerCase();
 }
@@ -62,6 +64,16 @@ function text(value: unknown, fallback = ""): string {
 function positiveNumber(value: unknown, label: string): number | string {
   const number = typeof value === "number" ? value : Number(text(value));
   return Number.isFinite(number) && number > 0 ? number : `${label} must be a finite positive number`;
+}
+
+function positiveInteger(value: unknown, label: string): number | string {
+  const number = positiveNumber(value, label);
+  return typeof number === "number" && Number.isInteger(number) ? number : typeof number === "string" ? number : `${label} must be a positive integer`;
+}
+
+function rowNumber(row: TabularRow, index: number): number {
+  const recorded = (row as TabularRow & { [sourceRow]?: unknown })[sourceRow];
+  return typeof recorded === "number" ? recorded : index + 2;
 }
 
 function isBlank(row: TabularRow): boolean {
@@ -97,7 +109,7 @@ export function parseComponentRows(rows: readonly TabularRow[]): TabularParseRes
   rows.forEach((row, index) => {
     if (isBlank(row)) return;
     const parsed = parseComponent(row);
-    if (typeof parsed === "string") errors.push({ row: index + 2, message: parsed });
+    if (typeof parsed === "string") errors.push({ row: rowNumber(row, index), message: parsed });
     else valid.push(parsed);
   });
   return { valid, errors };
@@ -111,12 +123,12 @@ export function parseBomRows(rows: readonly TabularRow[]): BomParseResult {
     if (isBlank(row)) return;
     const parsed = parseComponent(row);
     if (typeof parsed === "string") {
-      errors.push({ row: index + 2, message: parsed });
+      errors.push({ row: rowNumber(row, index), message: parsed });
       return;
     }
-    const quantity = positiveNumber(cell(row, "quantity"), "Quantity");
+    const quantity = positiveInteger(cell(row, "quantity"), "Quantity");
     if (typeof quantity === "string") {
-      errors.push({ row: index + 2, message: quantity });
+      errors.push({ row: rowNumber(row, index), message: quantity });
       return;
     }
     const item: ImportedBomItem = { ...parsed, quantity, reference: text(cell(row, "reference")) };
@@ -158,7 +170,10 @@ export function parseCsvRows(csv: string): string[][] {
 export function rowsFromCsv(csv: string): TabularRow[] {
   const [header = [], ...data] = parseCsvRows(csv);
   const normalizedHeader = header.map((value) => value.replace(/^\uFEFF/, ""));
-  return data
-    .filter((row) => row.some((value) => value.trim() !== ""))
-    .map((row) => Object.fromEntries(normalizedHeader.map((key, index) => [key, row[index] ?? ""])));
+  return data.flatMap((row, index) => {
+    if (!row.some((value) => value.trim() !== "")) return [];
+    const record = Object.fromEntries(normalizedHeader.map((key, cellIndex) => [key, row[cellIndex] ?? ""]));
+    Object.defineProperty(record, sourceRow, { value: index + 2 });
+    return [record];
+  });
 }
