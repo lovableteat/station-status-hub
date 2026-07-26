@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [plannerSource, workspaceSource] = await Promise.all([
+const [plannerSource, workspaceSource, creationDialogSource] = await Promise.all([
   readFile(
     new URL("../src/components/data-center/DataCenter2DPlanner.tsx", import.meta.url),
     "utf8",
   ),
   readFile(
     new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../src/components/data-center/FacilityAisleCreationDialog.tsx", import.meta.url),
     "utf8",
   ),
 ]);
@@ -33,10 +37,8 @@ test("2D planning exposes working entry points for every planning task", () => {
   assert.match(plannerSource, /新增機櫃/);
   assert.match(plannerSource, /刪除機櫃/);
   assert.match(plannerSource, /onClick=\{onOpenModels\}/);
-  assert.match(plannerSource, /onAddAisle\("cold", "horizontal"\)/);
-  assert.match(plannerSource, /onAddAisle\("cold", "vertical"\)/);
-  assert.match(plannerSource, /onAddAisle\("hot", "horizontal"\)/);
-  assert.match(plannerSource, /onAddAisle\("hot", "vertical"\)/);
+  assert.match(plannerSource, /onClick=\{onOpenAisleCreation\}/);
+  assert.match(plannerSource, /新增通道/);
   assert.match(plannerSource, /onClick=\{onAddPowerFeed\}/);
   assert.match(plannerSource, /onClick=\{onOpenFacilitySettings\}/);
   assert.match(plannerSource, /onClick=\{onView3D\}/);
@@ -45,11 +47,16 @@ test("2D planning exposes working entry points for every planning task", () => {
   assert.match(workspaceSource, /setWorkspaceMode\("3d"\)/);
 });
 
-test("cold and hot aisles can be added horizontally or vertically", () => {
-  assert.match(workspaceSource, /orientation === "horizontal" \? 0 : 90/);
-  assert.match(workspaceSource, /orientation === "horizontal" \? facility\.width : facility\.depth/);
-  assert.match(workspaceSource, /冷通道 · \{orientation === "horizontal" \? "橫向" : "直向"\}/);
-  assert.match(workspaceSource, /熱通道 · \{orientation === "horizontal" \? "橫向" : "直向"\}/);
+test("cold and hot aisles support automatic or free horizontal and vertical creation", () => {
+  assert.match(creationDialogSource, /自動畫通道/);
+  assert.match(creationDialogSource, /自由配置/);
+  assert.match(creationDialogSource, /id: "cold"/);
+  assert.match(creationDialogSource, /id: "hot"/);
+  assert.match(creationDialogSource, /id: "horizontal"/);
+  assert.match(creationDialogSource, /id: "vertical"/);
+  assert.match(creationDialogSource, /draft\.rackIds\.length/);
+  assert.match(creationDialogSource, /自動配置至少需要選擇一座機櫃/);
+  assert.match(workspaceSource, /request\.mode === "automatic"/);
 });
 
 test("rack instance deletion keeps the shared scene valid", () => {
@@ -83,4 +90,25 @@ test("a selected cold or hot aisle can be deleted from the 2D plan", () => {
   assert.match(plannerSource, /刪除通道/);
   assert.match(plannerSource, /onDeleteAisle\(selectedAisle\.id\)/);
   assert.match(plannerSource, /setSelectedAisleId\(null\)/);
+});
+
+test("overflowing plan items are visibly warned without moving them", () => {
+  assert.match(plannerSource, /overflowKeys/);
+  assert.match(plannerSource, /data-overflow=\{aisleOverflow/);
+  assert.match(plannerSource, /data-overflow=\{rackOverflow/);
+  assert.match(plannerSource, /data-overflow=\{powerOverflow/);
+  assert.match(plannerSource, /超出廠房範圍/);
+});
+
+test("aisles are created visually and resized directly on the plan", () => {
+  assert.match(workspaceSource, /FacilityAisleCreationDialog/);
+  assert.match(workspaceSource, /createAutomaticAisle/);
+  assert.match(workspaceSource, /createFreeAisle/);
+  assert.match(plannerSource, /getAisleResizeHandles/);
+  assert.match(plannerSource, /resizeAisleFromHandle/);
+  assert.match(plannerSource, /data-aisle-handles=\{aisle\.id\}/);
+  assert.match(plannerSource, /beginAisleResize/);
+  assert.match(plannerSource, /左側距離/);
+  assert.match(plannerSource, /上方距離/);
+  assert.match(plannerSource, /進階座標/);
 });
