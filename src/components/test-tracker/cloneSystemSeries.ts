@@ -57,15 +57,16 @@ export async function cloneSystemSeries({
     throw new Error("新機台名稱不可重複");
   }
 
-  const { data: sourceSystem, error: sourceError } = await supabase
+  const { data: sourceSystemRaw, error: sourceError } = await supabase
     .from("test_systems")
     .select(SOURCE_SYSTEM_COLUMNS)
     .eq("id", sourceSystemId)
     .single();
 
-  if (sourceError || !sourceSystem) {
+  if (sourceError || !sourceSystemRaw) {
     throw sourceError || new Error("來源機台不存在");
   }
+  const sourceSystem = sourceSystemRaw as unknown as Record<string, unknown> & { project_id: string };
 
   const [progressResult, exclusionResult] = await Promise.all([
     supabase
@@ -101,7 +102,7 @@ export async function cloneSystemSeries({
 
   const { data: createdSystems, error: createError } = await supabase
     .from("test_systems")
-    .insert(clonedSystems)
+    .insert(clonedSystems as never)
     .select("id, system_name");
 
   if (createError || !createdSystems?.length) {
