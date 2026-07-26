@@ -11,7 +11,8 @@
     "model:convert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-freecad.ps1",
     "model:convert:xcaf": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-occt.ps1",
     "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-large-step-to-glb.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:pcb": "node --test tests/pcb-designer/*.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.2",
