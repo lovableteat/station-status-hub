@@ -45,10 +45,26 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
+import {
+  SystemMetadataFieldsEditor,
+  type MetadataFieldDefinition,
+  type MetadataFieldDraft,
+  type SystemMetadataFieldErrors,
+} from "./SystemMetadataFieldsEditor";
+import {
+  parseSystemFieldValue,
+  serializeSystemFieldValue,
+  toLegacySystemPatch,
+  validateSystemFieldDefinition,
+} from "./systemMetadata";
+
 type AddressField =
   Database["public"]["Tables"]["test_project_address_fields"]["Row"];
-type SoftwareField =
-  Database["public"]["Tables"]["test_project_software_fields"]["Row"];
+type SystemFieldRow =
+  Database["public"]["Tables"]["test_project_system_fields"]["Row"];
+
+const asMetadataField = (field: SystemFieldRow): MetadataFieldDefinition =>
+  field as MetadataFieldDefinition;
 
 const PROJECT_SHARED_ADDRESS_EXPLANATION =
   "欄位名稱與類型會套用到同一專案的所有機台，但每台機台會各自保存自己的位址值，不會互相覆蓋。";
@@ -140,12 +156,11 @@ export function SystemEditDialog({
   const [editingAddressLabel, setEditingAddressLabel] = useState("");
   const [editingAddressPlaceholder, setEditingAddressPlaceholder] = useState("");
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false);
-  const [softwareFields, setSoftwareFields] = useState<SoftwareField[]>([]);
-  const [softwareValues, setSoftwareValues] = useState<Record<string, string>>({});
-  const [newSoftwareLabel, setNewSoftwareLabel] = useState("");
-  const [newSoftwareValue, setNewSoftwareValue] = useState("");
-  const [showNewSoftwareForm, setShowNewSoftwareForm] = useState(false);
-  const [isAddingSoftware, setIsAddingSoftware] = useState(false);
+  const [metadataFields, setMetadataFields] = useState<MetadataFieldDefinition[]>([]);
+  const [metadataValues, setMetadataValues] = useState<Record<string, unknown>>({});
+  const [metadataErrors, setMetadataErrors] =
+    useState<SystemMetadataFieldErrors>({});
+  const [loadedSystemId, setLoadedSystemId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -166,81 +181,132 @@ export function SystemEditDialog({
   );
 
   useEffect(() => {
+    let isActive = true;
+
     const loadSystemDetails = async () => {
-      const { data, error } = await supabase
-        .from("test_systems")
-        .select("*")
-        .eq("id", systemId)
-        .maybeSingle();
-
-      if (error || !data) return;
-
-      setProjectId(data.project_id);
-      setEditValues({
-        system_name: data.system_name,
-        assigned_engineer: data.assigned_engineer || "",
-        model: data.model || "GB300",
-        serial_number: data.serial_number || "",
-        cabinet: data.cabinet || "",
-        os_mac_address: data.os_mac_address || "",
-        bmc_address: data.bmc_address || "",
-        old_bmc_address: data.old_bmc_address || "",
-        bom_90: data.bom_90 || "",
-        ubuntu_version: data.ubuntu_version || "",
-        cuda_version: data.cuda_version || "",
-        exclude_from_dashboard: data.exclude_from_dashboard || false,
-        team: data.team || "",
-      });
-
-      const [fieldResult, valueResult, softwareFieldResult, softwareValueResult] = await Promise.all([
-        supabase
-          .from("test_project_address_fields")
+      try {
+        const { data, error } = await supabase
+          .from("test_systems")
           .select("*")
-          .eq("project_id", data.project_id)
-          .order("sort_order")
-          .order("created_at"),
-        supabase
-          .from("test_system_address_values")
-          .select("field_id,value")
-          .eq("system_id", systemId),
-        supabase
-          .from("test_project_software_fields")
-          .select("*")
-          .eq("project_id", data.project_id)
-          .order("sort_order")
-          .order("created_at"),
-        supabase
-          .from("test_system_software_values")
-          .select("field_id,value")
-          .eq("system_id", systemId),
-      ]);
+          .eq("id", systemId)
+          .maybeSingle();
 
-      const addressError = fieldResult.error || valueResult.error;
-      setAddressLoadError(addressError?.message || "");
-      setAddressFields(fieldResult.data ?? []);
-      setAddressValues(
-        Object.fromEntries(
-          (valueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
-        )
-      );
-      setSoftwareFields(softwareFieldResult.data ?? []);
-      setSoftwareValues(
-        Object.fromEntries(
-          (softwareValueResult.data ?? []).map((entry) => [entry.field_id, entry.value])
-        )
-      );
-      setEditingAddressFieldId(null);
-      setShowNewAddressForm(false);
-      setNewAddressLabel("");
-      setNewAddressPlaceholder("");
-      setNewAddressValue("");
-      setShowNewSoftwareForm(false);
-      setNewSoftwareLabel("");
-      setNewSoftwareValue("");
+        if (error) throw error;
+        if (!data) throw new Error("找不到這台機台，可能已被刪除。");
+
+        const [fieldResult, valueResult, metadataFieldResult, metadataValueResult] =
+          await Promise.all([
+            supabase
+              .from("test_project_address_fields")
+              .select("*")
+              .eq("project_id", data.project_id)
+              .order("sort_order")
+              .order("created_at"),
+            supabase
+              .from("test_system_address_values")
+              .select("field_id,value")
+              .eq("system_id", systemId),
+            supabase
+              .from("test_project_system_fields")
+              .select("*")
+              .eq("project_id", data.project_id)
+              .order("sort_order")
+              .order("created_at"),
+            supabase
+              .from("test_system_field_values")
+              .select("field_id,value")
+              .eq("system_id", systemId),
+          ]);
+
+        const queryError =
+          fieldResult.error ||
+          valueResult.error ||
+          metadataFieldResult.error ||
+          metadataValueResult.error;
+        if (queryError) throw queryError;
+
+        const nextMetadataFields = (metadataFieldResult.data ?? []).map(
+          asMetadataField,
+        );
+        const storedMetadataValues = Object.fromEntries(
+          (metadataValueResult.data ?? []).map((entry) => [
+            entry.field_id,
+            entry.value,
+          ]),
+        );
+        const legacyFallbacks: Record<string, unknown> = {
+          bom_90: data.bom_90,
+          ubuntu_version: data.ubuntu_version,
+          cuda_version: data.cuda_version,
+          include_in_dashboard: !data.exclude_from_dashboard,
+        };
+        const nextMetadataValues = Object.fromEntries(
+          nextMetadataFields.map((field) => {
+            const rawValue = Object.prototype.hasOwnProperty.call(
+              storedMetadataValues,
+              field.id,
+            )
+              ? storedMetadataValues[field.id]
+              : legacyFallbacks[field.field_key];
+            return [field.id, parseSystemFieldValue(field, rawValue)];
+          }),
+        );
+
+        if (!isActive) return;
+        setProjectId(data.project_id);
+        setEditValues({
+          system_name: data.system_name,
+          assigned_engineer: data.assigned_engineer || "",
+          model: data.model || "GB300",
+          serial_number: data.serial_number || "",
+          cabinet: data.cabinet || "",
+          os_mac_address: data.os_mac_address || "",
+          bmc_address: data.bmc_address || "",
+          old_bmc_address: data.old_bmc_address || "",
+          bom_90: data.bom_90 || "",
+          ubuntu_version: data.ubuntu_version || "",
+          cuda_version: data.cuda_version || "",
+          exclude_from_dashboard: data.exclude_from_dashboard || false,
+          team: data.team || "",
+        });
+        setAddressLoadError("");
+        setAddressFields(fieldResult.data ?? []);
+        setAddressValues(
+          Object.fromEntries(
+            (valueResult.data ?? []).map((entry) => [entry.field_id, entry.value]),
+          ),
+        );
+        setMetadataFields(nextMetadataFields);
+        setMetadataValues(nextMetadataValues);
+        setMetadataErrors({});
+        setEditingAddressFieldId(null);
+        setShowNewAddressForm(false);
+        setNewAddressLabel("");
+        setNewAddressPlaceholder("");
+        setNewAddressValue("");
+        setLoadedSystemId(systemId);
+      } catch (error) {
+        if (!isActive) return;
+        const message =
+          typeof error === "object" && error && "message" in error
+            ? String(error.message)
+            : "無法載入機台資料，請稍後再試。";
+        toast({
+          title: "載入機台資料失敗",
+          description: message,
+          variant: "destructive",
+        });
+      }
     };
 
-    if (isOpen) void loadSystemDetails();
-  }, [isOpen, systemId]);
+    if (isOpen) {
+      setLoadedSystemId(null);
+      void loadSystemDetails();
+    }
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, systemId, toast]);
 
   const closeNewAddressForm = () => {
     setShowNewAddressForm(false);
@@ -382,94 +448,309 @@ export function SystemEditDialog({
     });
   };
 
-  const closeNewSoftwareForm = () => {
-    setShowNewSoftwareForm(false);
-    setNewSoftwareLabel("");
-    setNewSoftwareValue("");
+  const normalizedMetadataDraft = (draft: MetadataFieldDraft) => ({
+    ...draft,
+    field_key: draft.field_key.trim().toLowerCase(),
+    label: draft.label.trim(),
+    options: draft.options.map((option) => option.trim()),
+    placeholder: draft.placeholder.trim(),
+  });
+
+  const validateMetadataDraft = (
+    draft: MetadataFieldDraft,
+    existingFieldId?: string,
+  ) => {
+    const normalized = normalizedMetadataDraft(draft);
+    const errors: Record<string, string> = {};
+    if (!normalized.label) errors.label = "欄位名稱不可空白。";
+    if (!/^[a-z][a-z0-9_]*$/.test(normalized.field_key)) {
+      errors.field_key =
+        "欄位代碼須以小寫英文字母開頭，且只能包含小寫字母、數字與底線。";
+    }
+    if (
+      metadataFields.some(
+        (field) =>
+          field.id !== existingFieldId && field.field_key === normalized.field_key,
+      )
+    ) {
+      errors.field_key = "同一專案已有相同欄位代碼。";
+    }
+    Object.assign(errors, validateSystemFieldDefinition(normalized));
+    return { normalized, errors };
   };
 
-  const handleAddSoftwareField = async () => {
-    const label = newSoftwareLabel.trim();
-    if (!projectId || !label) {
-      toast({
-        title: "請輸入欄位名稱",
-        description: "例如 BIOS Version、Firmware、CUDA Toolkit。",
-        variant: "destructive",
-      });
-      return;
+  const clearMetadataError = (errorKey: string) => {
+    setMetadataErrors((current) => {
+      const next = { ...current };
+      delete next[errorKey];
+      return next;
+    });
+  };
+
+  const handleCreateMetadataField = async (draft: MetadataFieldDraft) => {
+    const { normalized, errors } = validateMetadataDraft(draft);
+    if (!projectId) errors.project = "缺少專案識別，請重新開啟編輯視窗。";
+    if (Object.keys(errors).length) {
+      setMetadataErrors((current) => ({ ...current, __new__: errors }));
+      return false;
     }
 
-    setIsAddingSoftware(true);
     const { data, error } = await supabase
-      .from("test_project_software_fields")
+      .from("test_project_system_fields")
       .insert({
-        label,
-        placeholder: `請輸入 ${label}...`,
+        category: normalized.category,
+        field_key: normalized.field_key,
+        field_type: normalized.field_type,
+        is_required: normalized.is_required,
+        is_system: false,
+        label: normalized.label,
+        options: normalized.field_type === "select" ? normalized.options : [],
+        placeholder: normalized.placeholder || null,
         project_id: projectId,
-        sort_order: softwareFields.length,
+        sort_order: metadataFields.length,
       })
       .select("*")
       .single();
 
     if (error || !data) {
-      setIsAddingSoftware(false);
+      const message = error?.message || "Supabase 未回傳新增後的欄位。";
+      setMetadataErrors((current) => ({
+        ...current,
+        __new__: { server: message },
+      }));
       toast({
         title: "新增欄位失敗",
-        description: error?.message || "請稍後再試。",
+        description: message,
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
-    const value = newSoftwareValue.trim();
-    if (value) {
-      await supabase
-        .from("test_system_software_values")
-        .upsert(
-          { field_id: data.id, system_id: systemId, value },
-          { onConflict: "field_id,system_id" }
-        );
-    }
-
-    setSoftwareFields((current) => [...current, data]);
-    setSoftwareValues((current) => ({ ...current, [data.id]: value }));
-    setIsAddingSoftware(false);
-    closeNewSoftwareForm();
+    const createdField = asMetadataField(data);
+    setMetadataFields((current) => [...current, createdField]);
+    setMetadataValues((current) => ({
+      ...current,
+      [createdField.id]: parseSystemFieldValue(createdField, undefined),
+    }));
+    clearMetadataError("__new__");
     toast({
-      title: "軟體欄位已新增",
-      description: `${label} 已套用到同專案所有機台。`,
+      title: "欄位已新增",
+      description: `${createdField.label} 已提供給同一專案的所有機台。`,
     });
+    return true;
   };
 
-  const handleRemoveSoftwareField = async (field: SoftwareField) => {
-    const confirmed = window.confirm(
-      `確定要刪除欄位「${field.label}」嗎？同專案所有機台的此欄位資料也會一併刪除。`
+  const handleUpdateMetadataField = async (
+    field: MetadataFieldDefinition,
+    draft: MetadataFieldDraft,
+  ) => {
+    const { normalized, errors } = validateMetadataDraft(draft, field.id);
+    const existingOptions = Array.isArray(field.options)
+      ? field.options.filter(
+          (option): option is string => typeof option === "string",
+        )
+      : [];
+    const removedOptions = existingOptions.filter(
+      (option) => !normalized.options.includes(option),
     );
-    if (!confirmed) return;
+    if (removedOptions.length) {
+      errors.options =
+        `既有選項不可移除（${removedOptions.join("、")}），以免其他機台的值失效。`;
+    }
+    if (Object.keys(errors).length) {
+      setMetadataErrors((current) => ({ ...current, [field.id]: errors }));
+      return false;
+    }
+
+    const { data, error } = await supabase
+      .from("test_project_system_fields")
+      .update({
+        category: normalized.category,
+        field_type: normalized.field_type,
+        is_required: normalized.is_required,
+        label: normalized.label,
+        options: normalized.field_type === "select" ? normalized.options : [],
+        placeholder: normalized.placeholder || null,
+      })
+      .eq("id", field.id)
+      .eq("project_id", projectId)
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      const message = error?.message || "Supabase 未回傳更新後的欄位。";
+      setMetadataErrors((current) => ({
+        ...current,
+        [field.id]: { server: message },
+      }));
+      toast({
+        title: "更新欄位失敗",
+        description: message,
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const updatedField = asMetadataField(data);
+    setMetadataFields((current) =>
+      current.map((item) => (item.id === updatedField.id ? updatedField : item)),
+    );
+    setMetadataValues((current) => ({
+      ...current,
+      [updatedField.id]: parseSystemFieldValue(
+        updatedField,
+        current[updatedField.id],
+      ),
+    }));
+    clearMetadataError(field.id);
+    toast({
+      title: "欄位設定已更新",
+      description: `${updatedField.label} 的定義已同步至同一專案。`,
+    });
+    return true;
+  };
+
+  const handleDeleteMetadataField = async (field: MetadataFieldDefinition) => {
+    if (field.is_system) {
+      setMetadataErrors((current) => ({
+        ...current,
+        [field.id]: { delete: "系統保留欄位不可刪除。" },
+      }));
+      return false;
+    }
+
     const { error } = await supabase
-      .from("test_project_software_fields")
+      .from("test_project_system_fields")
       .delete()
       .eq("id", field.id)
       .eq("project_id", projectId);
     if (error) {
-      toast({ title: "刪除失敗", description: error.message, variant: "destructive" });
-      return;
+      setMetadataErrors((current) => ({
+        ...current,
+        [field.id]: { server: error.message },
+      }));
+      toast({
+        title: "刪除欄位失敗",
+        description: error.message,
+        variant: "destructive",
+      });
+      return false;
     }
-    setSoftwareFields((current) => current.filter((item) => item.id !== field.id));
-    setSoftwareValues((current) => {
+
+    setMetadataFields((current) =>
+      current.filter((item) => item.id !== field.id),
+    );
+    setMetadataValues((current) => {
       const next = { ...current };
       delete next[field.id];
       return next;
     });
-    toast({ title: "欄位已刪除", description: `${field.label} 已從專案移除。` });
+    clearMetadataError(field.id);
+    toast({
+      title: "欄位已刪除",
+      description: `${field.label} 與同專案各機台的欄位值已移除。`,
+    });
+    return true;
+  };
+
+  const handleReorderMetadataFields = async (
+    nextFields: MetadataFieldDefinition[],
+  ) => {
+    const reorderedFields = nextFields.map((field, sort_order) => ({
+      ...field,
+      sort_order,
+    }));
+    const results = await Promise.all(
+      reorderedFields.map((field) =>
+        supabase
+          .from("test_project_system_fields")
+          .update({ sort_order: field.sort_order })
+          .eq("id", field.id)
+          .eq("project_id", projectId),
+      ),
+    );
+    const reorderError = results.find((result) => result.error)?.error;
+    if (reorderError) {
+      setMetadataErrors((current) => ({
+        ...current,
+        __reorder__: { server: reorderError.message },
+      }));
+      toast({
+        title: "調整欄位順序失敗",
+        description: reorderError.message,
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    setMetadataFields(reorderedFields);
+    clearMetadataError("__reorder__");
+    return true;
   };
 
   const handleSave = async () => {
+    if (loadedSystemId !== systemId) {
+      toast({
+        title: "機台資料尚未載入完成",
+        description: "請等待目前機台載入成功後再儲存。",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from("test_systems")
-        .update({
+      const serializedMetadataValues = metadataFields.map((field) => ({
+        field,
+        value: serializeSystemFieldValue(field, metadataValues[field.id]),
+      }));
+      const valueErrors = Object.fromEntries(
+        serializedMetadataValues
+          .filter(({ field, value }) => {
+            const rawValue = metadataValues[field.id];
+            const isBlankValue =
+              rawValue === null ||
+              rawValue === undefined ||
+              (typeof rawValue === "string" && !rawValue.trim());
+            const hasInvalidTypedValue =
+              value === null &&
+              !isBlankValue &&
+              (field.field_type === "number" || field.field_type === "select");
+            return (field.is_required && value === null) || hasInvalidTypedValue;
+          })
+          .map(({ field }) => [
+            field.id,
+            { value: `${field.label} 的值不符合 ${field.field_type} 欄位格式。` },
+          ]),
+      );
+      if (Object.keys(valueErrors).length) {
+        setMetadataErrors((current) => ({ ...current, ...valueErrors }));
+        toast({
+          title: "欄位值尚未完成",
+          description: "請修正標示的動態欄位後再儲存。",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const legacyPatch = {
+        bom_90: editValues.bom_90 || null,
+        ubuntu_version: editValues.ubuntu_version || null,
+        cuda_version: editValues.cuda_version || null,
+        exclude_from_dashboard: editValues.exclude_from_dashboard,
+      };
+      for (const { field, value } of serializedMetadataValues) {
+        Object.assign(legacyPatch, toLegacySystemPatch(field.field_key, value));
+      }
+
+      const populatedMetadataValues = serializedMetadataValues.filter(
+        (entry) => entry.value !== null,
+      );
+      const emptyMetadataFieldIds = serializedMetadataValues
+        .filter((entry) => entry.value === null)
+        .map((entry) => entry.field.id);
+      const { error } = await supabase.rpc("save_test_system_metadata", {
+        p_system_id: systemId,
+        p_system_patch: {
           system_name: editValues.system_name,
           assigned_engineer: editValues.assigned_engineer,
           model: editValues.model,
@@ -478,47 +759,24 @@ export function SystemEditDialog({
           os_mac_address: editValues.os_mac_address,
           bmc_address: editValues.bmc_address,
           old_bmc_address: editValues.old_bmc_address,
-          bom_90: editValues.bom_90,
-          ubuntu_version: editValues.ubuntu_version,
-          cuda_version: editValues.cuda_version,
-          exclude_from_dashboard: editValues.exclude_from_dashboard,
+          ...legacyPatch,
           team: editValues.team,
-        })
-        .eq("id", systemId);
-
+        },
+        p_address_values: addressFields.map((field) => ({
+          field_id: field.id,
+          value: addressValues[field.id]?.trim() || "",
+        })),
+        p_metadata_values: populatedMetadataValues.map(({ field, value }) => ({
+          field_id: field.id,
+          value,
+        })),
+        p_empty_field_ids: emptyMetadataFieldIds,
+      });
       if (error) throw error;
-
-      if (addressFields.length) {
-        const { error: addressError } = await supabase
-          .from("test_system_address_values")
-          .upsert(
-            addressFields.map((field) => ({
-              field_id: field.id,
-              system_id: systemId,
-              value: addressValues[field.id]?.trim() || "",
-            })),
-            { onConflict: "field_id,system_id" }
-          );
-        if (addressError) throw addressError;
-      }
-
-      if (softwareFields.length) {
-        const { error: softwareError } = await supabase
-          .from("test_system_software_values")
-          .upsert(
-            softwareFields.map((field) => ({
-              field_id: field.id,
-              system_id: systemId,
-              value: softwareValues[field.id]?.trim() || "",
-            })),
-            { onConflict: "field_id,system_id" }
-          );
-        if (softwareError) throw softwareError;
-      }
 
       toast({
         title: "更新成功",
-        description: "機台識別、網路位址與軟體版本已完成更新。",
+        description: "機台識別、網路位址與動態欄位已完成更新。",
       });
       setIsOpen(false);
       onUpdate();
@@ -928,151 +1186,33 @@ export function SystemEditDialog({
                 <span className="font-mono text-xs font-semibold text-emerald-300">03</span>
                 <Settings2 className="h-4 w-4 text-emerald-200" />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-slate-50">軟體版本與統計</h3>
+                  <h3 className="font-semibold text-slate-50">專案動態欄位</h3>
                   <p className="text-xs text-[#8eaabd]">
-                    部署版本、儀表板納入設定；可依專案自由新增軟體/版本欄位（同專案共用）
+                    軟體與統計欄位由專案共用定義，每台機台各自保存欄位值
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 border-emerald-300/40 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
-                  onClick={() => setShowNewSoftwareForm((value) => !value)}
-                >
-                  <Plus className="h-4 w-4" />
-                  新增軟體欄位
-                </Button>
               </div>
-              <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
-                <div>
-                  <Label className={fieldLabelClass}>90BOM</Label>
-                  <Input
-                    value={editValues.bom_90}
-                    onChange={(event) =>
-                      setEditValues({ ...editValues, bom_90: event.target.value })
-                    }
-                    placeholder="請輸入 90BOM"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <Label className={fieldLabelClass}>Ubuntu 版本</Label>
-                  <Input
-                    value={editValues.ubuntu_version}
-                    onChange={(event) =>
-                      setEditValues({ ...editValues, ubuntu_version: event.target.value })
-                    }
-                    placeholder="例如 22.04"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <Label className={fieldLabelClass}>CUDA 版本</Label>
-                  <Input
-                    value={editValues.cuda_version}
-                    onChange={(event) =>
-                      setEditValues({ ...editValues, cuda_version: event.target.value })
-                    }
-                    placeholder="例如 12.2"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <Label className={fieldLabelClass}>系統儀表板統計</Label>
-                  <Select
-                    value={editValues.exclude_from_dashboard ? "false" : "true"}
-                    onValueChange={(value) =>
-                      setEditValues({
-                        ...editValues,
-                        exclude_from_dashboard: value === "false",
-                      })
-                    }
-                  >
-                    <SelectTrigger className={selectTriggerClass}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">列入統計</SelectItem>
-                      <SelectItem value="false">不列入統計</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {softwareFields.map((field) => (
-                  <div key={field.id} className="group relative">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <Label className={cn(fieldLabelClass, "mb-0")}>{field.label}</Label>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSoftwareField(field)}
-                        className="text-[10px] font-medium text-rose-300/80 opacity-0 transition hover:text-rose-200 group-hover:opacity-100"
-                        aria-label={`刪除 ${field.label} 欄位`}
-                      >
-                        刪除
-                      </button>
-                    </div>
-                    <Input
-                      value={softwareValues[field.id] ?? ""}
-                      onChange={(event) =>
-                        setSoftwareValues((current) => ({
-                          ...current,
-                          [field.id]: event.target.value,
-                        }))
-                      }
-                      placeholder={field.placeholder || `請輸入 ${field.label}...`}
-                      className={inputClass}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {showNewSoftwareForm && (
-                <div className="border-t border-[#25465f] bg-[#0a1c2e] p-4 sm:p-5">
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                    <div>
-                      <Label className={fieldLabelClass}>欄位名稱</Label>
-                      <Input
-                        value={newSoftwareLabel}
-                        onChange={(event) => setNewSoftwareLabel(event.target.value)}
-                        placeholder="例如 BIOS Version"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <Label className={fieldLabelClass}>目前機台的值（可留空）</Label>
-                      <Input
-                        value={newSoftwareValue}
-                        onChange={(event) => setNewSoftwareValue(event.target.value)}
-                        placeholder="例如 2.15.0"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-11 text-[#a9c0d1]"
-                        onClick={closeNewSoftwareForm}
-                      >
-                        取消
-                      </Button>
-                      <Button
-                        type="button"
-                        className="h-11 bg-emerald-400 px-4 text-[#06111f] hover:bg-emerald-300"
-                        disabled={isAddingSoftware}
-                        onClick={handleAddSoftwareField}
-                      >
-                        <Plus className="mr-1.5 h-4 w-4" />
-                        {isAddingSoftware ? "正在新增..." : "新增至專案"}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-[#8eaabd]">
-                    新增後，同一專案的所有機台都會看到這個欄位；每台機台會各自保存自己的值。
-                  </p>
-                </div>
-              )}
+              <SystemMetadataFieldsEditor
+                fields={metadataFields}
+                values={metadataValues}
+                errors={metadataErrors}
+                onCreateField={handleCreateMetadataField}
+                onUpdateField={handleUpdateMetadataField}
+                onDeleteField={handleDeleteMetadataField}
+                onReorderFields={handleReorderMetadataFields}
+                onValueChange={(fieldId, value) => {
+                  setMetadataValues((current) => ({
+                    ...current,
+                    [fieldId]: value,
+                  }));
+                  setMetadataErrors((current) => {
+                    if (!current[fieldId]?.value) return current;
+                    const next = { ...current };
+                    delete next[fieldId];
+                    return next;
+                  });
+                }}
+              />
             </section>
           </div>
         </div>
@@ -1095,7 +1235,7 @@ export function SystemEditDialog({
           </Button>
           <Button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || loadedSystemId !== systemId}
             className={cn(
               "rounded-lg border border-cyan-200/40 bg-cyan-300 text-[#06111f] shadow-none hover:bg-cyan-200",
               isMobile ? "h-12 text-base font-medium" : "h-11 px-5"
