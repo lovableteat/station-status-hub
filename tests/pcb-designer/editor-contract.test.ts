@@ -81,6 +81,23 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}selectObject\(null\)/);
 });
 
+test("makes existing canvas objects keyboard-selectable", () => {
+  assert.match(canvasSource, /type KeyboardEvent as ReactKeyboardEvent/);
+  assert.match(canvasSource, /event\.key === ["']Enter["'] \|\| event\.key === ["'] ["']/);
+  assert.match(canvasSource, /role=["']button["']/);
+  assert.match(canvasSource, /tabIndex=\{0\}/);
+  assert.match(canvasSource, /selectObject\(\{ kind: ["']component["']/);
+  assert.match(canvasSource, /selectObject\(\{ kind: ["']keepout["']/);
+  assert.match(canvasSource, /selectObject\(\{ kind: ["']measurement["']/);
+  assert.match(editorCssSource, /\[role=["']button["']\]:focus-visible/);
+});
+
+test("disables inspector mutation controls while a component is locked", () => {
+  assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
+  assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| component\.locked\}/);
+  assert.match(editorHookSource, /if \(!source \|\| source\.locked\) return false/);
+});
+
 test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.match(inspectorSource, /rotateSelected/);
   assert.match(inspectorSource, /deleteSelected/);

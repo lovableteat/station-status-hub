@@ -154,7 +154,7 @@ export function usePcbEditorActions(
   const updateComponent = useCallback(
     (instanceId: string, patch: Partial<PcbPlacedComponent>) => {
       const source = state.activeProject.components.find((item) => item.instanceId === instanceId);
-      if (!source) return false;
+      if (!source || source.locked) return false;
       const candidate = {
         ...source,
         ...patch,
