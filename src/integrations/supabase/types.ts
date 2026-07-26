@@ -3284,6 +3284,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      reorder_test_project_system_fields: {
+        Args: {
+          p_field_ids: string[]
+          p_project_id: string
+        }
+        Returns: undefined
+      }
       calculate_daily_production_stats: { Args: never; Returns: undefined }
       cleanup_old_notifications: { Args: never; Returns: undefined }
       create_test_flow_draft: {
