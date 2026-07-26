@@ -2369,6 +2369,62 @@ export type Database = {
           },
         ]
       }
+      test_project_system_fields: {
+        Row: {
+          category: string
+          created_at: string
+          field_key: string
+          field_type: string
+          id: string
+          is_required: boolean
+          is_system: boolean
+          label: string
+          options: Json
+          placeholder: string | null
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          field_key: string
+          field_type: string
+          id?: string
+          is_required?: boolean
+          is_system?: boolean
+          label: string
+          options?: Json
+          placeholder?: string | null
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          field_key?: string
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          is_system?: boolean
+          label?: string
+          options?: Json
+          placeholder?: string | null
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_project_system_fields_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_project_tool_assignments: {
         Row: {
           created_at: string
@@ -2584,6 +2640,45 @@ export type Database = {
           },
           {
             foreignKeyName: "test_system_software_values_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "test_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_system_field_values: {
+        Row: {
+          created_at: string
+          field_id: string
+          system_id: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          field_id: string
+          system_id: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          created_at?: string
+          field_id?: string
+          system_id?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_system_field_values_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "test_project_system_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_system_field_values_system_id_fkey"
             columns: ["system_id"]
             isOneToOne: false
             referencedRelation: "test_systems"
