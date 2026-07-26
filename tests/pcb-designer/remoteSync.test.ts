@@ -143,7 +143,7 @@ test("remote sync deletes only explicit tombstones and preserves unrelated rows"
   assert.deepEqual([...tables.pcb_designer_templates], ["unrelated-template"]);
   assert.deepEqual([...tables.pcb_designer_library], ["unrelated-component"]);
   assert.deepEqual(upsertOptions, Array.from({ length: 3 }, () => ({
-    onConflict: "id",
+    onConflict: "owner_id,id",
     defaultToNull: false,
   })));
 });
