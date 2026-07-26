@@ -49,6 +49,32 @@ test("quarantines corrupted JSON and returns a safe seeded fallback", () => {
   assert.equal(JSON.parse(storage.getItem(PCB_STORAGE_KEY) ?? "{}").version, 1);
 });
 
+test("quarantines versioned payloads containing malformed records or an unknown active project", () => {
+  const malformedStates = [
+    { projects: [null] },
+    { projects: [{ id: "broken" }] },
+    { activeProjectId: "missing-project" },
+    { templates: [{ id: "broken-template" }] },
+    { library: [{ id: "broken-library", width: Infinity, height: 1 }] },
+  ];
+
+  for (const patch of malformedStates) {
+    const storage = new MemoryStorage();
+    const valid = new PcbLocalRepository(storage).load();
+    storage.setItem(PCB_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      state: { ...valid, ...patch },
+    }));
+
+    const recovered = new PcbLocalRepository(storage).load();
+    assert.equal(recovered.projects.length, 1);
+    assert.equal(recovered.projects[0].components.length, 0);
+    assert.equal(recovered.templates.length, 4);
+    assert.equal(recovered.library.length, BUILT_IN_COMPONENTS.length);
+    assert.equal(recovered.activeProjectId, recovered.projects[0].id);
+  }
+});
+
 test("upsert, delete, and active project updates are immutable and preserve unrelated records", () => {
   const repository = new PcbLocalRepository(new MemoryStorage());
   const initial = repository.load();
