@@ -25,6 +25,25 @@ export function isCurrentPresenceSession(
   );
 }
 
+export function createPresenceTransitionQueue() {
+  let pendingTransition = Promise.resolve();
+
+  return {
+    enqueue(transition) {
+      const nextTransition = pendingTransition
+        .catch(() => undefined)
+        .then(transition);
+
+      pendingTransition = nextTransition.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      return nextTransition;
+    },
+  };
+}
+
 function getPresenceRecency(user) {
   if (Number.isFinite(user?.timestamp)) return user.timestamp;
   const parsedLastSeen = Date.parse(user?.lastSeen ?? "");
