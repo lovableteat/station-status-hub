@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import {
+import * as presenceSession from "../src/hooks/presenceSession.mjs";
+
+const {
   createPresenceKey,
   isCurrentPresenceSession,
   selectLatestOnlineUsers,
-} from "../src/hooks/presenceSession.mjs";
+} = presenceSession;
 
 const providerSource = await readFile(
   new URL("../src/hooks/useUserPresence.ts", import.meta.url),
@@ -68,10 +70,45 @@ test("stale account callbacks are rejected after an account switch", () => {
   assert.equal(isCurrentPresenceSession(4, 4, "user-b", "user-a"), false);
 });
 
+test("shared-topic account switches finish removing the old channel before creating the replacement", async () => {
+  assert.equal(
+    typeof presenceSession.createPresenceTransitionQueue,
+    "function",
+    "presence transitions need one serialized queue",
+  );
+
+  const transitions = presenceSession.createPresenceTransitionQueue();
+  const oldChannel = { id: "old", topic: "user_presence" };
+  const newChannel = { id: "new", topic: "user_presence" };
+  let channels = [oldChannel];
+  let finishOldRemoval;
+  const oldRemovalGate = new Promise((resolve) => {
+    finishOldRemoval = resolve;
+  });
+
+  const removeOld = transitions.enqueue(async () => {
+    await oldRemovalGate;
+    // Supabase Realtime removes every channel with the same topic.
+    channels = channels.filter((channel) => channel.topic !== oldChannel.topic);
+  });
+  const createReplacement = transitions.enqueue(async () => {
+    channels.push(newChannel);
+  });
+
+  await Promise.resolve();
+  assert.deepEqual(channels, [oldChannel]);
+
+  finishOldRemoval();
+  await Promise.all([removeOld, createReplacement]);
+  assert.deepEqual(channels, [newChannel]);
+});
+
 test("the provider shares one topic while guarding per-tab identities", () => {
   assert.match(providerSource, /supabase\.channel\("user_presence"/);
   assert.match(providerSource, /createPresenceKey/);
   assert.match(providerSource, /presenceGenerationRef/);
+  assert.match(providerSource, /createPresenceTransitionQueue/);
+  assert.match(providerSource, /presenceTransitions(?:Ref\.current)?\.enqueue/);
   assert.match(providerSource, /channel\s*\.untrack\(\)/);
   assert.match(providerSource, /supabase\.removeChannel\(channel\)/);
   assert.doesNotMatch(providerSource, /user_presence:\$\{user\.userId\}/);
