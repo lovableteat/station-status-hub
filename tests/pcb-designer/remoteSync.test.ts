@@ -98,6 +98,7 @@ test("reserving a debounced newer generation suppresses an old in-flight synced 
 });
 
 test("remote sync deletes only explicit tombstones and preserves unrelated rows", async () => {
+  const upsertOptions: Array<{ onConflict: string; defaultToNull: boolean }> = [];
   const tables = {
     pcb_designer_projects: new Set(["deleted-project", "unrelated-project"]),
     pcb_designer_templates: new Set(["deleted-template", "unrelated-template"]),
@@ -106,7 +107,11 @@ test("remote sync deletes only explicit tombstones and preserves unrelated rows"
   const client = {
     from(table: keyof typeof tables) {
       return {
-        async upsert(rows: Array<{ id: string }>) {
+        async upsert(
+          rows: Array<{ id: string }>,
+          options: { onConflict: string; defaultToNull: boolean },
+        ) {
+          upsertOptions.push(options);
           rows.forEach((row) => tables[table].add(row.id));
           return { error: null };
         },
@@ -137,4 +142,8 @@ test("remote sync deletes only explicit tombstones and preserves unrelated rows"
   assert.deepEqual([...tables.pcb_designer_projects], ["unrelated-project", next.projects[0].id]);
   assert.deepEqual([...tables.pcb_designer_templates], ["unrelated-template"]);
   assert.deepEqual([...tables.pcb_designer_library], ["unrelated-component"]);
+  assert.deepEqual(upsertOptions, Array.from({ length: 3 }, () => ({
+    onConflict: "id",
+    defaultToNull: false,
+  })));
 });

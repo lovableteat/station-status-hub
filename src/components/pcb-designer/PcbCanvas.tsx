@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent,
 } from "react";
@@ -167,6 +168,16 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
   );
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
+  const selectWithKeyboard = (
+    event: ReactKeyboardEvent<SVGElement>,
+    selection: Parameters<typeof workspace.selectObject>[0],
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      workspace.selectObject(selection);
+    }
+  };
 
   const beginPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -413,6 +424,8 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
               stroke={keepout.color}
               strokeWidth={strokeWidth}
               strokeDasharray={`${strokeWidth * 4} ${strokeWidth * 2}`}
+              role="button"
+              tabIndex={0}
               onPointerDown={(event) => {
                 if (workspace.tool === "pan" || event.button === 1) return;
                 event.stopPropagation();
@@ -431,6 +444,8 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
                   bypassSnap: event.altKey,
                 });
               }}
+              onKeyDown={(event) =>
+                selectWithKeyboard(event, { kind: "keepout", id: keepout.id })}
               aria-label={`禁制區 ${keepout.name}`}
             />
             );
@@ -441,12 +456,16 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
           {project.measurements.map((measurement) => (
             <g
               key={measurement.id}
+              role="button"
+              tabIndex={0}
               onPointerDown={(event) => {
                 if (workspace.tool === "pan" || event.button === 1) return;
                 event.stopPropagation();
                 if (event.button !== 0) return;
                 workspace.selectObject({ kind: "measurement", id: measurement.id });
               }}
+              onKeyDown={(event) =>
+                selectWithKeyboard(event, { kind: "measurement", id: measurement.id })}
               aria-label="測量線"
             >
               <line
@@ -482,6 +501,11 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
                 key={component.instanceId}
                 transform={`translate(${preview.x} ${preview.y}) rotate(${component.rotation})`}
                 className={component.locked ? "is-locked" : undefined}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) =>
+                  selectWithKeyboard(event, { kind: "component", id: component.instanceId })}
+                aria-label={`元件 ${component.reference} ${component.name}`}
               >
                 <rect
                   x={-component.width / 2}
@@ -496,7 +520,6 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
                     : "#07111d"}
                   strokeWidth={strokeWidth}
                   onPointerDown={(event) => beginComponentDrag(event, component)}
-                  aria-label={`元件 ${component.reference} ${component.name}`}
                 />
                 <text
                   className="pcb-svg-label pcb-component-reference"
