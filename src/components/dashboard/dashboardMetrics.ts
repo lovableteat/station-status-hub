@@ -51,6 +51,7 @@ export interface DashboardStationMetric {
   incompleteSystems: number;
   itemCount: number;
   name: string;
+  order: number;
   possibleRecords: number;
   remainingHours: number;
   remainingItems: number;
@@ -146,7 +147,9 @@ export function calculateDashboardMetrics<
   const includedSystems = systems.filter((system) => !system.exclude_from_dashboard);
   const includedSystemIds = new Set(includedSystems.map((system) => system.id));
   const sortedStations = [...stations].sort(
-    (left, right) => left.station_order - right.station_order
+    (left, right) =>
+      left.station_order - right.station_order ||
+      left.station_name.localeCompare(right.station_name, "zh-Hant")
   );
   const stationIds = new Set(sortedStations.map((station) => station.id));
   const activeItems = testItems.filter((item) => stationIds.has(item.station_id));
@@ -270,6 +273,7 @@ export function calculateDashboardMetrics<
       incompleteSystems,
       itemCount: stationItems.length,
       name: station.station_name,
+      order: station.station_order,
       possibleRecords,
       remainingHours: remainingMinutes / 60,
       remainingItems,

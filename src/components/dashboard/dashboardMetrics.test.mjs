@@ -62,3 +62,29 @@ test("station summary separates total, fully completed, and still processing mac
     },
   );
 });
+
+test("station rows follow station order with a stable name tie breaker", () => {
+  assert.equal(typeof metrics.calculateDashboardMetrics, "function");
+
+  const result = metrics.calculateDashboardMetrics({
+    systems: [],
+    stations: [
+      { id: "station-30", station_name: "第三站", station_order: 30 },
+      { id: "station-20-b", station_name: "B 站", station_order: 20 },
+      { id: "station-10", station_name: "第一站", station_order: 10 },
+      { id: "station-20-a", station_name: "A 站", station_order: 20 },
+    ],
+    testItems: [],
+    progress: [],
+  });
+
+  assert.deepEqual(
+    result.stationRows.map(({ id, name, order }) => ({ id, name, order })),
+    [
+      { id: "station-10", name: "第一站", order: 10 },
+      { id: "station-20-a", name: "A 站", order: 20 },
+      { id: "station-20-b", name: "B 站", order: 20 },
+      { id: "station-30", name: "第三站", order: 30 },
+    ],
+  );
+});
