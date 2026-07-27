@@ -363,7 +363,7 @@ test("the equipment overlay contains independent 3D renderers for every required
   assert.match(overlaySource, /equipment\.rackUnitSpan \* RACK_UNIT_HEIGHT_METERS/);
 });
 
-test("rack inspector exposes add, move, and delete callbacks for service equipment", async () => {
+test("rack inspector exposes add, move, and delete callbacks for all catalog equipment", async () => {
   const workspaceSource = await readFile(
     new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
     "utf8",
@@ -373,5 +373,6 @@ test("rack inspector exposes add, move, and delete callbacks for service equipme
   assert.match(workspaceSource, /onRackDeviceMove/);
   assert.match(workspaceSource, /onRackDeviceRemove/);
   assert.match(workspaceSource, /validateGb300RackEquipmentLayout/);
-  assert.match(workspaceSource, /48U/);
+  assert.match(workspaceSource, /從設備目錄新增/);
+  assert.match(workspaceSource, /catalogModelId/);
 });

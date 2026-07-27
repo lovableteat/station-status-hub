@@ -99,6 +99,13 @@ import {
   serializeModelCatalogOverrides,
 } from "./modelCatalog.mjs";
 import {
+  EQUIPMENT_CATEGORY_OPTIONS,
+  getAvailableCatalogEquipmentUnits,
+  getEquipmentCategory,
+  getEquipmentCategoryLabel,
+  getEquipmentDeviceType,
+} from "./rackEquipmentCatalog.mjs";
+import {
   convertStepToGlb,
   type ModelConversionProgress,
 } from "./modelConversionWorker";
@@ -138,6 +145,7 @@ import type {
   ImportedStepDimensions,
   RackDevice,
   RackDeviceHealth,
+  RackEquipmentCategory,
   RackModelDefinition,
   RackPlan,
   RackStatus,
@@ -149,6 +157,16 @@ const FACILITY_STORAGE_KEY = "data-center-digital-twin-facility-v1";
 const MODEL_CATALOG_STORAGE_KEY = "data-center-model-catalog-overrides-v1";
 const L10_RESERVED_BOTTOM_U = 2;
 const L10_RESERVED_TOP_U = 2;
+
+const EQUIPMENT_CATEGORY_ICONS: Record<RackEquipmentCategory, LucideIcon> = {
+  compute: Cpu,
+  network: Network,
+  storage: HardDrive,
+  power: Zap,
+  cooling: Snowflake,
+  management: Wrench,
+  other: Box,
+};
 type Gb300EditableDeviceType = "switch-tray" | "psu" | "cdu" | "tor-switch";
 
 const GB300_EDITABLE_DEVICE_OPTIONS: Array<{
@@ -770,6 +788,7 @@ function SceneNavigator({
 
 interface RackInspectorProps {
   rack: RackPlan;
+  models: Record<string, RackModelDefinition>;
   model: RackModelDefinition;
   l10Model: RackModelDefinition;
   l10Capacity: number;
@@ -795,6 +814,7 @@ interface RackInspectorProps {
 
 function RackInspector({
   rack,
+  models,
   model,
   l10Model,
   l10Capacity,
@@ -847,7 +867,10 @@ function RackInspector({
     ),
   );
   const serviceDevices = sortedDevices.filter((device) =>
-    Boolean(getGb300ServiceDeviceSpec(device.type)),
+    !device.catalogModelId && Boolean(getGb300ServiceDeviceSpec(device.type)),
+  );
+  const catalogDevices = sortedDevices.filter((device) =>
+    Boolean(device.catalogModelId && models[device.catalogModelId]),
   );
   const availableNewDeviceUnits = useMemo(() => {
     if (!isGb300Rack) return [];
@@ -894,7 +917,7 @@ function RackInspector({
         <div className="my-1 h-px w-8 bg-[#214669]" />
         <IconTooltipButton label="聚焦機櫃" icon={Focus} onClick={onFocus} />
         <IconTooltipButton label="模型與尺寸" icon={Box} onClick={onOpenModels} />
-        <IconTooltipButton label="櫃內 L10 1U 機台" icon={Cpu} onClick={onOpenL10Models} />
+        <IconTooltipButton label="櫃內設備目錄" icon={Cpu} onClick={onOpenL10Models} />
         <div className="mt-auto mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-[#214669] bg-[#10283d]">
           <span className={cn("h-2.5 w-2.5 rounded-full", health === "healthy" ? "bg-emerald-400" : health === "critical" ? "bg-rose-400" : "bg-amber-400")} />
         </div>
@@ -999,7 +1022,7 @@ function RackInspector({
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
                   <Cpu className="h-4 w-4 text-blue-300" />
-                  櫃內 L10 1U 機台
+                  主運算設備
                 </div>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   {l10Model.name} · 19 吋軌道 · 每台佔 {l10RackUnits}U
@@ -1036,7 +1059,7 @@ function RackInspector({
                       : "border-[#214669] bg-[#10283d] text-blue-100 hover:border-blue-300/40 hover:bg-[#16324b] focus-visible:ring-blue-300/70"
                   )}
                 >
-                  {rack.l10Count === 0 ? "選擇並安裝 L10" : "更換 L10 模型"}
+                  {rack.l10Count === 0 ? "選擇主運算設備" : "更換主設備模型"}
                 </button>
               </div>
             </div>
@@ -1237,18 +1260,87 @@ function RackInspector({
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
                 <span className="text-xs font-bold text-slate-200">
-                  {isGb300Rack ? "機櫃設備配置" : "其他設備"}
+                  機櫃設備配置
                 </span>
-                {isGb300Rack ? (
-                  <p className="mt-1 text-[10px] text-cyan-100/60">
-                    完整 48U；所有設備與 L10 共用相同軌道、前面板與 U 高度。
-                  </p>
-                ) : null}
+                <p className="mt-1 text-[10px] text-blue-100/60">
+                  運算、網路、儲存、電力與冷卻設備共用相同 U 位配置。
+                </p>
               </div>
               <Badge className="border-0 bg-blue-400/10 text-[10px] text-blue-200 shadow-none">
-                {isGb300Rack ? serviceDevices.length : rack.devices.length} devices
+                {catalogDevices.length + (isGb300Rack ? serviceDevices.length : rack.devices.filter((device) => !device.catalogModelId).length)} devices
               </Badge>
             </div>
+
+            <button
+              type="button"
+              onClick={onOpenL10Models}
+              className="mb-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-300/25 bg-blue-400/10 text-xs font-black text-blue-50 transition-colors hover:border-blue-300/45 hover:bg-blue-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+            >
+              <Boxes className="h-4 w-4" /> 從設備目錄新增
+            </button>
+
+            {catalogDevices.length > 0 ? (
+              <div className="mb-3 space-y-2">
+                {catalogDevices.map((device) => {
+                  const definition = models[device.catalogModelId!];
+                  const category = getEquipmentCategory(definition) as RackEquipmentCategory;
+                  const Icon = EQUIPMENT_CATEGORY_ICONS[category];
+                  const span = Math.max(1, definition.rackUnits ?? device.slotSpan ?? 1);
+                  const movableUnits = getAvailableCatalogEquipmentUnits({
+                    rack,
+                    model: definition,
+                    primarySlots: selectedL10Slots,
+                    primaryRackUnits: l10RackUnits,
+                    ignoredDeviceId: device.id,
+                    reservedBottomU: L10_RESERVED_BOTTOM_U,
+                    reservedTopU: L10_RESERVED_TOP_U,
+                  });
+                  return (
+                    <div key={device.id} className="rounded-xl border border-blue-300/15 bg-[#081c2d] p-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-400/10 text-blue-200">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-black text-white">{definition.name}</div>
+                          <div className="mt-0.5 text-[10px] text-slate-400">
+                            {getEquipmentCategoryLabel(category)} · {span}U · {definition.manufacturer}
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-black text-emerald-200">已安裝</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+                        <Select
+                          value={String(device.slotStart)}
+                          onValueChange={(value) => onRackDeviceMove(device.id, Number(value))}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger aria-label={`${definition.name} 層位`} className="h-8 border-[#214669] bg-[#10283d] text-[11px] font-black text-blue-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...new Set([device.slotStart, ...movableUnits])].sort((left, right) => left - right).map((rackUnit) => (
+                              <SelectItem key={rackUnit} value={String(rackUnit)}>
+                                U{rackUnit}{span > 1 ? `–U${rackUnit + span - 1}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <button
+                          type="button"
+                          aria-label={`移除 ${definition.name}`}
+                          disabled={!canEdit}
+                          onClick={() => onRackDeviceRemove(device.id)}
+                          className="flex h-8 items-center justify-center rounded-lg border border-rose-300/20 bg-rose-400/[0.07] text-rose-200 hover:bg-rose-400/15 disabled:opacity-35"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {isGb300Rack ? (
               <>
@@ -1455,7 +1547,7 @@ function RackInspector({
               </>
             ) : (
               <div className="space-y-1.5">
-                {sortedDevices.map((device) => {
+                {sortedDevices.filter((device) => !device.catalogModelId).map((device) => {
                   const Icon = getDeviceIcon(device.type);
                   return (
                     <div
@@ -1516,6 +1608,7 @@ interface ModelLibraryProps {
   dimensions: ImportedStepDimensions;
   catalogKind: DataCenterAssetKind;
   importKind: DataCenterAssetKind;
+  importEquipmentCategory: RackEquipmentCategory;
   selectedModelId: string;
   onManufacturerChange: (value: string) => void;
   onModelNameChange: (value: string) => void;
@@ -1523,16 +1616,18 @@ interface ModelLibraryProps {
   onDimensionsChange: (dimensions: ImportedStepDimensions) => void;
   onCatalogKindChange: (kind: DataCenterAssetKind) => void;
   onImportKindChange: (kind: DataCenterAssetKind) => void;
+  onImportEquipmentCategoryChange: (category: RackEquipmentCategory) => void;
   onSelectedModelChange: (modelId: string) => void;
   onChooseFile: () => void;
   onCancelImport: () => void;
   onAssignModel: () => void;
   onAssignL10Model: () => void;
+  onInstallCatalogEquipment: (modelId: string, rackUnit: number) => void;
   onAddRack: () => void;
   modelUsageById: Record<string, number>;
   onUpdateModel: (
     modelId: string,
-    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions">
+    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions" | "equipmentCategory" | "rackUnits">
   ) => void;
   onDeleteModel: (modelId: string) => void;
   onPreviewModel: (modelId: string) => void;
@@ -1553,6 +1648,7 @@ function ModelLibrary({
   dimensions,
   catalogKind,
   importKind,
+  importEquipmentCategory,
   selectedModelId,
   onManufacturerChange,
   onModelNameChange,
@@ -1560,11 +1656,13 @@ function ModelLibrary({
   onDimensionsChange,
   onCatalogKindChange,
   onImportKindChange,
+  onImportEquipmentCategoryChange,
   onSelectedModelChange,
   onChooseFile,
   onCancelImport,
   onAssignModel,
   onAssignL10Model,
+  onInstallCatalogEquipment,
   onAddRack,
   modelUsageById,
   onUpdateModel,
@@ -1572,17 +1670,57 @@ function ModelLibrary({
   onPreviewModel,
 }: ModelLibraryProps) {
   const [view, setView] = useState<"browse" | "import" | "edit">("browse");
+  const [modelSearch, setModelSearch] = useState("");
+  const [equipmentCategory, setEquipmentCategory] = useState<"all" | RackEquipmentCategory>("all");
+  const [installRackUnit, setInstallRackUnit] = useState(1);
   const [editDraft, setEditDraft] = useState<{
     name: string;
     manufacturer: string;
     revision: string;
     dimensions: ImportedStepDimensions;
+    equipmentCategory?: RackEquipmentCategory;
+    rackUnits?: number;
   } | null>(null);
-  const catalogModels = Object.values(models).filter((model) => model.kind === catalogKind);
+  const allCatalogModels = Object.values(models).filter((model) => model.kind === catalogKind);
+  const normalizedSearch = modelSearch.trim().toLocaleLowerCase("zh-Hant");
+  const catalogModels = allCatalogModels.filter((model) => {
+    const matchesCategory =
+      catalogKind === "rack" ||
+      equipmentCategory === "all" ||
+      getEquipmentCategory(model) === equipmentCategory;
+    const matchesSearch =
+      !normalizedSearch ||
+      [model.name, model.manufacturer, model.revision, getEquipmentCategoryLabel(getEquipmentCategory(model))]
+        .join(" ")
+        .toLocaleLowerCase("zh-Hant")
+        .includes(normalizedSearch);
+    return matchesCategory && matchesSearch;
+  });
   const selectedModel =
     catalogModels.find((model) => model.id === selectedModelId) ?? catalogModels[0];
   const rackModelCount = Object.values(models).filter((model) => model.kind === "rack").length;
   const l10ModelCount = Object.values(models).filter((model) => model.kind === "l10").length;
+  const primaryModel = models[selectedRack.l10ModelId];
+  const availableInstallUnits = useMemo(
+    () =>
+      selectedModel?.kind === "l10"
+        ? getAvailableCatalogEquipmentUnits({
+            rack: selectedRack,
+            model: selectedModel,
+            primarySlots: selectedRack.l10Slots ?? [],
+            primaryRackUnits: primaryModel?.rackUnits ?? 1,
+            reservedBottomU: L10_RESERVED_BOTTOM_U,
+            reservedTopU: L10_RESERVED_TOP_U,
+          })
+        : [],
+    [primaryModel?.rackUnits, selectedModel, selectedRack],
+  );
+
+  useEffect(() => {
+    if (availableInstallUnits.length > 0 && !availableInstallUnits.includes(installRackUnit)) {
+      setInstallRackUnit(availableInstallUnits[0]);
+    }
+  }, [availableInstallUnits, installRackUnit]);
 
   const selectCatalogKind = (kind: DataCenterAssetKind) => {
     onCatalogKindChange(kind);
@@ -1599,6 +1737,9 @@ function ModelLibrary({
       ? selectedRack.modelId === selectedModel.id
       : selectedRack.l10ModelId === selectedModel.id && selectedRack.l10Count > 0
     : false;
+  const selectedInstalledCount = selectedModel
+    ? selectedRack.devices.filter((device) => device.catalogModelId === selectedModel.id).length
+    : 0;
   const selectedIsCompatible = selectedModel
     ? selectedModel.kind === "rack" || isL10CompatibleWithRack(selectedModel, selectedRack.modelId)
     : false;
@@ -1612,6 +1753,8 @@ function ModelLibrary({
       manufacturer: selectedModel.manufacturer,
       revision: selectedModel.revision,
       dimensions: { ...selectedModel.dimensions },
+      equipmentCategory: selectedModel.equipmentCategory,
+      rackUnits: selectedModel.rackUnits,
     });
     setView("edit");
   };
@@ -1635,22 +1778,22 @@ function ModelLibrary({
         if (!nextOpen) setView("browse");
       }}
     >
-      <DialogContent className="flex h-[min(90dvh,880px)] w-[min(96vw,960px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/18 bg-[linear-gradient(180deg,#081725,#040a11)] p-0 text-slate-100 sm:max-w-[960px]">
-        <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
+      <DialogContent className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[26px] border border-[#263b59] bg-[#0b1524] p-0 text-slate-100 shadow-[0_34px_100px_-45px_rgba(15,23,42,0.95)] sm:max-w-[1120px]">
+        <DialogHeader className="shrink-0 border-b border-[#20334e] bg-[linear-gradient(135deg,#122238,#0c1728)] px-6 py-5 pr-14 text-left">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-400/12 text-cyan-200">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-blue-300/25 bg-blue-400/12 text-blue-100">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-2xl font-black tracking-[-0.025em] text-white">模型型錄</DialogTitle>
+              <DialogTitle className="text-xl font-black tracking-[-0.025em] text-white">模型目錄</DialogTitle>
               <DialogDescription className="mt-1 text-sm leading-5 text-slate-300">
-                為 {selectedRack.cabinet} 選擇 L11 機櫃外型或櫃內 L10 1U 機台。
+                管理機櫃外框與櫃內設備，並安裝到 {selectedRack.cabinet} 的指定 U 位。
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="flex shrink-0 gap-2 border-b border-white/10 px-6 py-3" role="tablist" aria-label="模型型錄工作模式">
+        <div className="flex shrink-0 gap-1 border-b border-[#20334e] bg-[#0d192a] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
           {([
             ["browse", "瀏覽與套用"],
             ["import", "匯入新模型"],
@@ -1662,10 +1805,10 @@ function ModelLibrary({
               aria-selected={view === id}
               onClick={() => setView(id)}
               className={cn(
-                "h-10 cursor-pointer rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                "h-9 cursor-pointer rounded-lg px-4 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                 view === id
-                  ? "bg-cyan-300 text-cyan-950"
-                  : "bg-white/[0.045] text-slate-200 hover:bg-white/[0.08]"
+                  ? "bg-blue-500 text-white shadow-[0_8px_24px_-14px_rgba(59,130,246,0.9)]"
+                  : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
               )}
             >
               {label}
@@ -1674,13 +1817,13 @@ function ModelLibrary({
         </div>
 
         <ScrollArea className="min-h-0 flex-1">
-          <div className="p-6">
+          <div className="p-5 sm:p-6">
             {view === "browse" ? (
             <section>
-              <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1.5" role="tablist" aria-label="模型種類">
+              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-[#20334e] bg-[#0f1d30] p-1.5" role="tablist" aria-label="模型種類">
                 {([
-                  ["rack", `L11 機櫃 ${rackModelCount}`],
-                  ["l10", `L10 1U 機台 ${l10ModelCount}`],
+                  ["rack", `機櫃外框 ${rackModelCount}`],
+                  ["l10", `櫃內設備 ${l10ModelCount}`],
                 ] as const).map(([kind, label]) => (
                   <button
                     key={kind}
@@ -1689,9 +1832,9 @@ function ModelLibrary({
                     aria-selected={catalogKind === kind}
                     onClick={() => selectCatalogKind(kind)}
                     className={cn(
-                      "h-11 cursor-pointer rounded-lg text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                      "h-10 cursor-pointer rounded-lg text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       catalogKind === kind
-                        ? "bg-[#173347] text-cyan-50"
+                        ? "border border-blue-300/25 bg-blue-500/18 text-blue-50"
                         : "text-slate-300 hover:bg-white/[0.05] hover:text-white"
                     )}
                   >
@@ -1699,23 +1842,39 @@ function ModelLibrary({
                   </button>
                 ))}
               </div>
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    {catalogKind === "rack" ? "選擇 L11 機櫃外型" : "選擇 L10 1U 機台"}
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-slate-300">
-                    {catalogKind === "rack"
-                      ? "選取後可套用至目前機櫃，或放入一座新的 L11 機櫃。"
-                      : "L10 只會安裝在相容的 L11 機櫃軌道內；空機櫃會先安裝 1 台，之後可調整數量與起始 U 位。"}
-                  </p>
+              <div className="mb-4 rounded-2xl border border-[#20334e] bg-[#0f1d30] p-3.5">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Input
+                    value={modelSearch}
+                    onChange={(event) => setModelSearch(event.target.value)}
+                    placeholder={catalogKind === "rack" ? "搜尋機櫃名稱、廠牌或版本" : "搜尋設備名稱、廠牌、類型或版本"}
+                    className="h-10 border-[#2b405e] bg-[#111f33] pl-9 text-sm text-white placeholder:text-slate-500"
+                  />
                 </div>
-                <Badge className="border-cyan-300/18 bg-cyan-400/8 text-[11px] text-cyan-50 shadow-none">
-                  {catalogModels.length} 個模型
-                </Badge>
+                {catalogKind === "l10" ? (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="設備類別">
+                    {EQUIPMENT_CATEGORY_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={equipmentCategory === option.id}
+                        onClick={() => setEquipmentCategory(option.id as "all" | RackEquipmentCategory)}
+                        className={cn(
+                          "h-8 shrink-0 rounded-full border px-3 text-[11px] font-black transition-colors",
+                          equipmentCategory === option.id
+                            ? "border-blue-300/40 bg-blue-500/20 text-blue-50"
+                            : "border-[#2a3d58] bg-[#0b1727] text-slate-400 hover:border-slate-500 hover:text-slate-200",
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-white/10">
+              <div className="grid gap-3 md:grid-cols-2">
                 {catalogModels.map((model) => {
                   const selected = model.id === selectedModel?.id;
                   const compatible =
@@ -1730,16 +1889,16 @@ function ModelLibrary({
                       type="button"
                       onClick={() => onSelectedModelChange(model.id)}
                       className={cn(
-                        "w-full cursor-pointer border-b border-white/8 px-4 py-4 text-left transition-colors duration-200 last:border-b-0",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        "w-full cursor-pointer rounded-2xl border px-4 py-4 text-left transition-all duration-200",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                         selected
-                          ? "bg-[#123249]"
-                          : "bg-white/[0.02] hover:bg-white/[0.055]"
+                          ? "border-blue-300/45 bg-blue-500/14 shadow-[0_18px_42px_-30px_rgba(59,130,246,0.95)]"
+                          : "border-[#20334e] bg-[#0f1d30] hover:border-[#385373] hover:bg-[#13243a]"
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-cyan-300/30 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-black/20 text-cyan-100/45")}>
-                          {model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
+                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-blue-300/30 bg-blue-400/15 text-blue-100" : "border-[#2a3d58] bg-[#0b1727] text-slate-400")}>
+                          {model.kind === "l10" ? (() => { const Icon = EQUIPMENT_CATEGORY_ICONS[getEquipmentCategory(model) as RackEquipmentCategory]; return <Icon className="h-5 w-5" />; })() : model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1770,15 +1929,25 @@ function ModelLibrary({
                             ) : null}
                           </div>
                           <div className="mt-1 text-xs text-slate-300">{model.manufacturer} · {model.revision}</div>
-                          <div className="mt-2 text-xs tabular-nums text-cyan-100/85">{formatDimensions(model.dimensions)}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                            {model.kind === "l10" ? <span className="rounded-full bg-blue-400/10 px-2 py-1 text-blue-100">{getEquipmentCategoryLabel(getEquipmentCategory(model))} · {model.rackUnits ?? 1}U</span> : null}
+                            <span className="rounded-full bg-slate-400/10 px-2 py-1 tabular-nums text-slate-300">{formatDimensions(model.dimensions)}</span>
+                          </div>
                         </div>
-                        <span className={cn("mt-1 flex h-5 w-5 items-center justify-center rounded-full border", selected ? "border-cyan-300 bg-cyan-400 text-cyan-950" : "border-white/20 text-transparent")}>
+                        <span className={cn("mt-1 flex h-5 w-5 items-center justify-center rounded-full border", selected ? "border-blue-300 bg-blue-400 text-white" : "border-white/20 text-transparent")}>
                           <Check className="h-3 w-3" />
                         </span>
                       </div>
                     </button>
                   );
                 })}
+                {catalogModels.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border border-dashed border-[#304866] bg-[#0f1d30] px-6 py-12 text-center">
+                    <Search className="mx-auto h-6 w-6 text-slate-500" />
+                    <div className="mt-3 text-sm font-black text-slate-200">找不到符合條件的模型</div>
+                    <p className="mt-1 text-xs text-slate-500">清除搜尋或改選其他設備類別。</p>
+                  </div>
+                ) : null}
               </div>
 
               {selectedModel ? (
@@ -1786,7 +1955,9 @@ function ModelLibrary({
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="font-semibold text-white">已選擇 {selectedModel.name}</span>
                     <span className="text-xs text-slate-300">
-                      {selectedIsAssigned
+                      {selectedInstalledCount > 0
+                        ? `${selectedRack.cabinet} 已安裝 ${selectedInstalledCount} 台`
+                        : selectedIsAssigned
                         ? `目前已套用至 ${selectedRack.cabinet}`
                         : selectedIsCompatible
                           ? `準備套用至 ${selectedRack.cabinet}`
@@ -1868,9 +2039,50 @@ function ModelLibrary({
                       </Button>
                     </div>
                   ) : (
-                    <Button type="button" disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible} onClick={onAssignL10Model} className="h-12 w-full rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
-                      <Cpu className="mr-2 h-4 w-4" /> {selectedRack.l10Count > 0 ? "替換櫃內 L10 外型" : `安裝 1 台至 U${selectedRack.l10StartU}`}
-                    </Button>
+                    <div className="space-y-2 rounded-2xl border border-[#20334e] bg-[#0f1d30] p-3">
+                      <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
+                        <Select
+                          value={String(installRackUnit)}
+                          onValueChange={(value) => setInstallRackUnit(Number(value))}
+                          disabled={!canEdit || availableInstallUnits.length === 0}
+                        >
+                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-[#2b405e] bg-[#111f33] font-black text-blue-100">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableInstallUnits.map((rackUnit) => (
+                              <SelectItem key={rackUnit} value={String(rackUnit)}>
+                                U{rackUnit}{(selectedModel.rackUnits ?? 1) > 1 ? `–U${rackUnit + (selectedModel.rackUnits ?? 1) - 1}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          disabled={!canEdit || !selectedIsCompatible || availableInstallUnits.length === 0}
+                          onClick={() => onInstallCatalogEquipment(selectedModel.id, installRackUnit)}
+                          className="h-11 rounded-xl bg-blue-500 text-sm font-black text-white hover:bg-blue-400 disabled:bg-blue-950 disabled:text-blue-100/40"
+                        >
+                          <PackagePlus className="mr-2 h-4 w-4" /> 安裝到 {selectedRack.cabinet}
+                        </Button>
+                      </div>
+                      {availableInstallUnits.length === 0 ? (
+                        <p className="text-[11px] font-semibold text-amber-200">目前沒有足夠且不重疊的 U 位可安裝此設備。</p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">此設備佔 {selectedModel.rackUnits ?? 1}U，可安裝位置已排除主設備與其他櫃內設備。</p>
+                      )}
+                      {getEquipmentCategory(selectedModel) === "compute" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible}
+                          onClick={onAssignL10Model}
+                          className="h-10 w-full rounded-xl border-[#2b405e] bg-[#111f33] text-xs font-black text-blue-100 hover:bg-[#182a43]"
+                        >
+                          <Cpu className="mr-2 h-4 w-4" /> 設為整櫃主運算設備
+                        </Button>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -1884,8 +2096,8 @@ function ModelLibrary({
                     編輯顯示名稱、廠牌、版本與校正尺寸；模型 ID 與 3D 資產不會被更動。
                   </p>
                 </div>
-                <Badge className="border-cyan-300/20 bg-cyan-400/10 text-cyan-50 shadow-none">
-                  {selectedModel.kind === "rack" ? "L11 機櫃" : "L10 1U"}
+                <Badge className="border-blue-300/20 bg-blue-400/10 text-blue-50 shadow-none">
+                  {selectedModel.kind === "rack" ? "機櫃外框" : getEquipmentCategoryLabel(getEquipmentCategory(selectedModel))}
                 </Badge>
               </div>
 
@@ -1907,6 +2119,35 @@ function ModelLibrary({
                       className="h-11 border-[#2a526f] bg-[#10263a] text-white"
                     />
                   </label>
+                  {selectedModel.kind === "l10" ? (
+                    <>
+                      <label className="space-y-1.5">
+                        <span className="text-sm font-bold text-slate-100">設備類別</span>
+                        <Select
+                          value={editDraft.equipmentCategory ?? "compute"}
+                          onValueChange={(value) => setEditDraft({ ...editDraft, equipmentCategory: value as RackEquipmentCategory })}
+                        >
+                          <SelectTrigger className="h-11 border-[#2a526f] bg-[#10263a] text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {EQUIPMENT_CATEGORY_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+                              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <label className="space-y-1.5">
+                        <span className="text-sm font-bold text-slate-100">占用高度</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={48}
+                          value={editDraft.rackUnits ?? 1}
+                          onChange={(event) => setEditDraft({ ...editDraft, rackUnits: Math.max(1, Math.min(48, Number(event.target.value) || 1)) })}
+                          className="h-11 border-[#2a526f] bg-[#10263a] text-white"
+                        />
+                      </label>
+                    </>
+                  ) : null}
                   <label className="space-y-1.5">
                     <span className="text-sm font-bold text-slate-100">版本</span>
                     <Input
@@ -1950,7 +2191,7 @@ function ModelLibrary({
                 <Button type="button" variant="outline" onClick={() => setView("browse")} className="h-11 border-[#2a526f] bg-[#10263a] text-slate-100 hover:bg-[#17364f]">
                   取消
                 </Button>
-                <Button type="button" disabled={!editDraft.name.trim()} onClick={saveSelectedModel} className="h-11 bg-cyan-300 px-5 font-bold text-cyan-950 hover:bg-cyan-200">
+                <Button type="button" disabled={!editDraft.name.trim()} onClick={saveSelectedModel} className="h-11 bg-blue-500 px-5 font-bold text-white hover:bg-blue-400">
                   儲存模型資料
                 </Button>
               </div>
@@ -1969,8 +2210,8 @@ function ModelLibrary({
                 <legend className="mb-2 text-sm font-semibold text-slate-200">這是什麼模型？</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {([
-                    ["rack", "L11 機櫃外型", Server],
-                    ["l10", "L10 1U 機台", Cpu],
+                    ["rack", "機櫃外框", Server],
+                    ["l10", "櫃內設備", Cpu],
                   ] as const).map(([kind, label, Icon]) => (
                     <button
                       key={kind}
@@ -1978,9 +2219,9 @@ function ModelLibrary({
                       aria-pressed={importKind === kind}
                       onClick={() => onImportKindChange(kind)}
                       className={cn(
-                        "flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        "flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                         importKind === kind
-                          ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50"
+                          ? "border-blue-300/45 bg-blue-500/18 text-blue-50"
                           : "border-white/10 bg-white/[0.025] text-slate-300 hover:bg-white/[0.06]"
                       )}
                     >
@@ -1989,6 +2230,25 @@ function ModelLibrary({
                   ))}
                 </div>
               </fieldset>
+
+              {importKind === "l10" ? (
+                <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-sm font-semibold text-slate-200">設備類別</span>
+                    <Select value={importEquipmentCategory} onValueChange={(value) => onImportEquipmentCategoryChange(value as RackEquipmentCategory)} disabled={!canEdit}>
+                      <SelectTrigger className="h-11 border-[#2a526f] bg-[#10263a] text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {EQUIPMENT_CATEGORY_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+                          <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <div className="rounded-xl border border-blue-300/15 bg-blue-400/[0.07] px-4 py-3 text-xs leading-5 text-blue-100/80">
+                    U 高度會依模型實際高度自動換算，匯入後仍可在模型資料中調整。
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1.5">
@@ -2088,7 +2348,7 @@ function ModelLibrary({
 
         <div className="shrink-0 border-t border-white/10 bg-black/20 px-6 py-3">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
-            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : view === "edit" && selectedModel ? `正在編輯：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "L11 機櫃外型" : "L10 1U 機台"}`}</span>
+            <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : view === "edit" && selectedModel ? `正在編輯：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "機櫃外框" : `${getEquipmentCategoryLabel(importEquipmentCategory)}設備`}`}</span>
             {view === "browse" && selectedModel ? <span className="hidden tabular-nums sm:inline">{formatDimensions(selectedModel.dimensions)}</span> : null}
           </div>
         </div>
@@ -2147,6 +2407,7 @@ export function DeploymentPlanningCenter() {
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
   const [catalogKind, setCatalogKind] = useState<DataCenterAssetKind>("rack");
   const [importKind, setImportKind] = useState<DataCenterAssetKind>("rack");
+  const [importEquipmentCategory, setImportEquipmentCategory] = useState<RackEquipmentCategory>("compute");
   const [selectedModelId, setSelectedModelId] = useState("nv-mgx-rack-v1-2-rev7");
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
@@ -2208,6 +2469,11 @@ export function DeploymentPlanningCenter() {
         usage[rack.modelId] = (usage[rack.modelId] ?? 0) + 1;
         if (rack.l10Count > 0) {
           usage[rack.l10ModelId] = (usage[rack.l10ModelId] ?? 0) + 1;
+        }
+        for (const device of rack.devices) {
+          if (device.catalogModelId) {
+            usage[device.catalogModelId] = (usage[device.catalogModelId] ?? 0) + 1;
+          }
         }
       }
     }
@@ -2293,7 +2559,7 @@ export function DeploymentPlanningCenter() {
 
   const updateCatalogModel = (
     modelId: string,
-    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions">
+    updates: Pick<RackModelDefinition, "name" | "manufacturer" | "revision" | "dimensions" | "equipmentCategory" | "rackUnits">
   ) => {
     if (!canEdit) return;
     setModels((current) => {
@@ -2448,6 +2714,39 @@ export function DeploymentPlanningCenter() {
     if (!canEdit) return;
     updateSelectedRack((rack) => {
       const current = rack.devices.find((device) => device.id === deviceId);
+      if (current?.catalogModelId) {
+        const definition = models[current.catalogModelId];
+        if (!definition) return rack;
+        const primaryDefinition = models[rack.l10ModelId] ?? selectedL10Model;
+        const availableUnits = getAvailableCatalogEquipmentUnits({
+          rack,
+          model: definition,
+          primarySlots: getRackL10Slots(rack, primaryDefinition),
+          primaryRackUnits: getL10RackUnits(primaryDefinition),
+          ignoredDeviceId: current.id,
+          reservedBottomU: L10_RESERVED_BOTTOM_U,
+          reservedTopU: L10_RESERVED_TOP_U,
+        });
+        if (!availableUnits.includes(slotStart)) {
+          toast({
+            title: "無法調整層位",
+            description: `U${slotStart} 空間不足或會與現有設備重疊。`,
+            variant: "destructive",
+          });
+          return rack;
+        }
+        const span = Math.max(1, definition.rackUnits ?? 1);
+        toast({
+          title: "設備層位已更新",
+          description: `${current.name} 已移至 U${slotStart}${span > 1 ? `–U${slotStart + span - 1}` : ""}。`,
+        });
+        return {
+          ...rack,
+          devices: rack.devices.map((device) =>
+            device.id === current.id ? { ...device, slotStart, slotSpan: span } : device,
+          ),
+        };
+      }
       const spec = getGb300ServiceDeviceSpec(current?.type);
       if (!current || !spec) return rack;
       const devices = rack.devices.map((device) =>
@@ -2482,7 +2781,7 @@ export function DeploymentPlanningCenter() {
     if (!canEdit) return;
     updateSelectedRack((rack) => {
       const current = rack.devices.find((device) => device.id === deviceId);
-      if (!current || !getGb300ServiceDeviceSpec(current.type)) return rack;
+      if (!current || (!current.catalogModelId && !getGb300ServiceDeviceSpec(current.type))) return rack;
       toast({
         title: "設備已移除",
         description: `${current.name} 已從 ${rack.cabinet} 移除。`,
@@ -2775,6 +3074,7 @@ export function DeploymentPlanningCenter() {
           upAxis: "y",
           rackUnits:
             importKind === "l10" ? Math.max(1, Math.ceil(importDimensions.heightMm / 44.45)) : undefined,
+          equipmentCategory: importKind === "l10" ? importEquipmentCategory : undefined,
           isCalibrated: true,
         };
       } else {
@@ -2796,6 +3096,7 @@ export function DeploymentPlanningCenter() {
           upAxis: converted.upAxis,
           rackUnits:
             importKind === "l10" ? Math.max(1, Math.ceil(converted.dimensions.heightMm / 44.45)) : undefined,
+          equipmentCategory: importKind === "l10" ? importEquipmentCategory : undefined,
           isCalibrated: true,
         };
         setImportDimensions(converted.dimensions);
@@ -2839,6 +3140,66 @@ export function DeploymentPlanningCenter() {
     toast({
       title: "L11 機櫃外型已更新",
       description: `${selectedRack.cabinet} 已套用 ${models[selectedModelId].name}。`,
+    });
+  };
+
+  const installCatalogEquipment = (modelId: string, slotStart: number) => {
+    const definition = models[modelId];
+    if (!canEdit || definition?.kind !== "l10") return;
+    if (!isL10CompatibleWithRack(definition, selectedRack.modelId)) {
+      toast({
+        title: "此設備無法安裝",
+        description: definition.compatibilityNote || "此設備與目前機櫃不相容。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateSelectedRack((rack) => {
+      const primaryDefinition = models[rack.l10ModelId] ?? selectedL10Model;
+      const availableUnits = getAvailableCatalogEquipmentUnits({
+        rack,
+        model: definition,
+        primarySlots: getRackL10Slots(rack, primaryDefinition),
+        primaryRackUnits: getL10RackUnits(primaryDefinition),
+        reservedBottomU: L10_RESERVED_BOTTOM_U,
+        reservedTopU: L10_RESERVED_TOP_U,
+      });
+      if (!availableUnits.includes(slotStart)) {
+        toast({
+          title: "此 U 位無法安裝",
+          description: `U${slotStart} 空間不足或會與現有設備重疊。`,
+          variant: "destructive",
+        });
+        return rack;
+      }
+
+      const category = getEquipmentCategory(definition) as RackEquipmentCategory;
+      const span = Math.max(1, definition.rackUnits ?? 1);
+      const sameModelCount = rack.devices.filter((device) => device.catalogModelId === modelId).length;
+      const device: RackDevice = {
+        id: `${rack.id}-catalog-${crypto.randomUUID()}`,
+        name: `${definition.name}${sameModelCount > 0 ? ` ${sameModelCount + 1}` : ""}`,
+        type: getEquipmentDeviceType(category),
+        health: "healthy",
+        slotStart,
+        slotSpan: span,
+        serial: `CAT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        assetTag: `DC-${category.toUpperCase().slice(0, 3)}-${String(rack.devices.length + 1).padStart(4, "0")}`,
+        model: definition.name,
+        role: getEquipmentCategoryLabel(category),
+        network: category === "network" ? "待配置" : "N/A",
+        powerFeed: "待配置",
+        bmc: "待配置",
+        redfish: "待配置",
+        note: `由模型目錄安裝，使用 ${span}U。`,
+        catalogModelId: modelId,
+      };
+      toast({
+        title: "設備已安裝",
+        description: `${definition.name} 已安裝至 ${rack.cabinet} 的 U${slotStart}${span > 1 ? `–U${slotStart + span - 1}` : ""}。`,
+      });
+      return { ...rack, devices: [...rack.devices, device] };
     });
   };
 
@@ -3131,6 +3492,7 @@ export function DeploymentPlanningCenter() {
 
   const inspectorProps: RackInspectorProps = {
     rack: selectedRack,
+    models,
     model: selectedModel,
     l10Model: selectedL10Model,
     l10Capacity: selectedL10Capacity,
@@ -3200,8 +3562,8 @@ export function DeploymentPlanningCenter() {
 
           <div className="ml-auto hidden items-center gap-2 xl:flex">
             {[
-              { label: "L11 機櫃", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
-              { label: "櫃內 L10", value: totalL10, icon: Cpu, color: "text-cyan-200" },
+              { label: "機櫃", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
+              { label: "主運算設備", value: totalL10, icon: Cpu, color: "text-cyan-200" },
               { label: "ALERTS", value: alertCount, icon: AlertTriangle, color: alertCount ? "text-amber-200" : "text-emerald-200" },
               { label: "POWER", value: `${totalPower.toFixed(1)} kW`, icon: Zap, color: "text-amber-200" },
             ].map((metric) => {
@@ -3228,7 +3590,7 @@ export function DeploymentPlanningCenter() {
               className="h-11 rounded-xl border-cyan-300/22 bg-cyan-400/8 px-4 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15"
             >
               <Box className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">模型型錄</span>
+              <span className="hidden sm:inline">模型目錄</span>
               <span className="sm:hidden">模型</span>
             </Button>
             {canEdit ? (
@@ -4022,6 +4384,7 @@ export function DeploymentPlanningCenter() {
           dimensions={importDimensions}
           catalogKind={catalogKind}
           importKind={importKind}
+          importEquipmentCategory={importEquipmentCategory}
           selectedModelId={selectedModelId}
           onManufacturerChange={setManufacturer}
           onModelNameChange={setModelName}
@@ -4029,11 +4392,13 @@ export function DeploymentPlanningCenter() {
           onDimensionsChange={setImportDimensions}
           onCatalogKindChange={setCatalogKind}
           onImportKindChange={handleImportKindChange}
+          onImportEquipmentCategoryChange={setImportEquipmentCategory}
           onSelectedModelChange={setSelectedModelId}
           onChooseFile={() => fileInputRef.current?.click()}
           onCancelImport={cancelModelImport}
           onAssignModel={assignSelectedModel}
           onAssignL10Model={assignSelectedL10Model}
+          onInstallCatalogEquipment={installCatalogEquipment}
           onAddRack={addRackFromSelectedModel}
           modelUsageById={modelUsageById}
           onUpdateModel={updateCatalogModel}
