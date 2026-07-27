@@ -1,8 +1,21 @@
-const MIN_AISLE_SIZE_METERS = 0.5;
+const MIN_AISLE_SIZE_METERS = 0.25;
+const AISLE_RESIZE_STEP_METERS = 0.05;
 
 function snapQuarter(value) {
   const snapped = Math.round(Number(value) * 4) / 4;
   return Object.is(snapped, -0) ? 0 : snapped;
+}
+
+function roundCoordinate(value) {
+  const rounded = Math.round(Number(value) * 1000) / 1000;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function snapResize(value) {
+  return roundCoordinate(
+    Math.round(Number(value) / AISLE_RESIZE_STEP_METERS)
+      * AISLE_RESIZE_STEP_METERS,
+  );
 }
 
 function clamp(value, min, max) {
@@ -135,8 +148,8 @@ function getAisleAxes(aisle) {
 function makeHandle(id, x, z) {
   return {
     id,
-    x: snapQuarter(x),
-    z: snapQuarter(z),
+    x: roundCoordinate(x),
+    z: roundCoordinate(z),
   };
 }
 
@@ -189,13 +202,13 @@ export function resizeAisleFromHandle(aisle, handle, point) {
         },
         axis,
       ) * direction;
-    const width = snapQuarter(
+    const width = snapResize(
       Math.max(MIN_AISLE_SIZE_METERS, signedDistance),
     );
     return {
       ...aisle,
-      x: snapQuarter(opposite.x + axis.x * direction * width / 2),
-      z: snapQuarter(opposite.z + axis.z * direction * width / 2),
+      x: roundCoordinate(opposite.x + axis.x * direction * width / 2),
+      z: roundCoordinate(opposite.z + axis.z * direction * width / 2),
       width,
     };
   }
@@ -210,13 +223,13 @@ export function resizeAisleFromHandle(aisle, handle, point) {
       },
       cross,
     ) * direction;
-  const depth = snapQuarter(
+  const depth = snapResize(
     Math.max(MIN_AISLE_SIZE_METERS, signedDistance),
   );
   return {
     ...aisle,
-    x: snapQuarter(opposite.x + cross.x * direction * depth / 2),
-    z: snapQuarter(opposite.z + cross.z * direction * depth / 2),
+    x: roundCoordinate(opposite.x + cross.x * direction * depth / 2),
+    z: roundCoordinate(opposite.z + cross.z * direction * depth / 2),
     depth,
   };
 }
