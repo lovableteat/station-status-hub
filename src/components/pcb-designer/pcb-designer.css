@@ -645,6 +645,46 @@
   background: var(--pcb-border);
 }
 
+.pcb-layer-switch {
+  display: inline-flex;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgb(43 63 96 / 86%);
+  border-radius: 10px;
+  background: #0c1728;
+  padding: 3px 4px 3px 8px;
+  color: #7f95b1;
+}
+
+.pcb-layer-switch button {
+  height: 26px;
+  min-width: 48px;
+  border-radius: 7px;
+  padding: 0 8px;
+  color: #91a5bd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  transition: background 130ms ease, color 130ms ease;
+}
+
+.pcb-layer-switch button:hover:not(:disabled) {
+  background: #1b2b42;
+  color: #eaf5ff;
+}
+
+.pcb-layer-switch button.is-active {
+  background: #29466c;
+  color: #bdefff;
+}
+
+.pcb-layer-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .pcb-zoom-readout {
   min-width: 48px;
   border: 1px solid rgb(43 63 96 / 72%);

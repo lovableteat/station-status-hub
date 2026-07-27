@@ -24,3 +24,24 @@ test("blank project and built-in components satisfy domain invariants", () => {
     BUILT_IN_TEMPLATES.length,
   );
 });
+
+test("built-in starter templates provide distinct, usable layouts", () => {
+  const [blank, microcontroller, sensor, power] = BUILT_IN_TEMPLATES;
+
+  assert.equal(blank.project.components.length, 0);
+  assert.ok(microcontroller.project.components.length >= 6);
+  assert.ok(sensor.project.components.length >= 5);
+  assert.ok(power.project.components.length >= 6);
+  assert.notDeepEqual(
+    [microcontroller.project.board.width, microcontroller.project.board.height],
+    [sensor.project.board.width, sensor.project.board.height],
+  );
+  for (const template of BUILT_IN_TEMPLATES) {
+    assert.equal(
+      new Set(
+        template.project.components.map((component) => component.instanceId),
+      ).size,
+      template.project.components.length,
+    );
+  }
+});

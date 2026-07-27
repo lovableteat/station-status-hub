@@ -240,6 +240,25 @@ test("selection and canvas view actions remain available while the document is l
   });
 });
 
+test("active placement layer and remote hydration are real workspace state", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const bottom = reduceWorkspaceState(initial, {
+    type: "layer/set",
+    layer: "bottom",
+  });
+  const remote = seedState();
+  remote.projects[0].name = "Remote project";
+  const hydrated = reduceWorkspaceState(bottom, {
+    type: "persistence/hydrate",
+    data: remote,
+  });
+
+  assert.equal(bottom.activeLayer, "bottom");
+  assert.equal(hydrated.activeProject.name, "Remote project");
+  assert.equal(hydrated.canEdit, true);
+});
+
 test("one BOM placement transaction restores both the component and queue through undo and redo", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);

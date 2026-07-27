@@ -175,3 +175,42 @@ test("round-trips no-part-number library, pending, and placed BOM records", () =
   assert.equal(loaded.projects.find((item) => item.id === projectId)?.components[0].partNumber, "");
   assert.deepEqual(loaded.pendingPlacementsByProject?.[projectId], [pending]);
 });
+
+test("refreshes stale built-in templates while preserving custom catalog records", () => {
+  const storage = new MemoryStorage();
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load();
+  const customTemplate = {
+    ...structuredClone(BUILT_IN_TEMPLATES[0]),
+    id: "custom-template",
+    name: "My template",
+    isBuiltIn: false,
+  };
+  const customLibrary = {
+    ...structuredClone(BUILT_IN_COMPONENTS[0]),
+    id: "custom-component",
+    name: "My component",
+    source: "custom" as const,
+  };
+
+  repository.save({
+    ...state,
+    templates: BUILT_IN_TEMPLATES.map((template) => ({
+      ...structuredClone(template),
+      project: { ...structuredClone(template.project), components: [] },
+    })).concat(customTemplate),
+    library: [customLibrary],
+  });
+  const refreshed = repository.load();
+
+  assert.ok(
+    refreshed.templates.find((item) => item.id === "template-microcontroller")
+      ?.project.components.length,
+  );
+  assert.equal(refreshed.templates.some((item) => item.id === customTemplate.id), true);
+  assert.equal(refreshed.library.some((item) => item.id === customLibrary.id), true);
+  assert.equal(
+    refreshed.library.filter((item) => item.source === "built-in").length,
+    BUILT_IN_COMPONENTS.length,
+  );
+});

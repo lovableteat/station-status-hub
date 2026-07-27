@@ -23,6 +23,21 @@ test("placeLibraryComponent adds one legal center-nearest instance without mutat
   assert.deepEqual({ project, library }, before);
 });
 
+test("placement records the selected board layer", () => {
+  const project = createBlankProject("Bottom placement");
+  const result = editorModule.placeLibraryComponent(
+    project,
+    BUILT_IN_COMPONENTS[3],
+    undefined,
+    undefined,
+    { layer: "bottom" },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.component.layer, "bottom");
+  assert.equal(result.project.components[0].layer, "bottom");
+});
+
 test("failed placement is truthful and leaves project identity and component count untouched", () => {
   assert.equal(typeof editorModule.placeLibraryComponent, "function");
   const project = createBlankProject("Too small");
