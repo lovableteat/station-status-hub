@@ -148,6 +148,23 @@ test("resize handles and dragging preserve the opposite aisle edge", () => {
       depth: 3,
     },
   );
+
+  assert.deepEqual(
+    resizeAisleFromHandle(aisle, "end", { x: -1.62, z: 0 }),
+    {
+      ...aisle,
+      x: -1.8,
+      width: 0.4,
+    },
+  );
+  assert.deepEqual(
+    resizeAisleFromHandle(aisle, "near", { x: 0, z: 0.82 }),
+    {
+      ...aisle,
+      z: 0.875,
+      depth: 0.25,
+    },
+  );
 });
 
 test("resize handles rotate with vertical aisles", () => {

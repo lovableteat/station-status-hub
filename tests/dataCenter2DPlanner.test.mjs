@@ -90,6 +90,8 @@ test("a selected cold or hot aisle can be deleted from the 2D plan", () => {
   assert.match(plannerSource, /刪除通道/);
   assert.match(plannerSource, /onDeleteAisle\(selectedAisle\.id\)/);
   assert.match(plannerSource, /setSelectedAisleId\(null\)/);
+  assert.match(plannerSource, /data-testid="selected-aisle-toolbar"/);
+  assert.match(plannerSource, /aria-label=\{`刪除\$\{selectedAisle\.label\}`\}/);
 });
 
 test("overflowing plan items are visibly warned without moving them", () => {
@@ -107,6 +109,8 @@ test("aisles are created visually and resized directly on the plan", () => {
   assert.match(plannerSource, /getAisleResizeHandles/);
   assert.match(plannerSource, /resizeAisleFromHandle/);
   assert.match(plannerSource, /data-aisle-handles=\{aisle\.id\}/);
+  assert.match(plannerSource, /data-aisle-resize-handle=/);
+  assert.doesNotMatch(plannerSource, /onPointerLeave=/);
   assert.match(plannerSource, /beginAisleResize/);
   assert.match(plannerSource, /左側距離/);
   assert.match(plannerSource, /上方距離/);
