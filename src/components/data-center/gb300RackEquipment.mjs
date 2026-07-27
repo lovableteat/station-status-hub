@@ -143,6 +143,7 @@ function isLegacyCdu(device) {
 }
 
 function getServiceType(device) {
+  if (device?.catalogModelId) return null;
   if (isLegacyCdu(device)) return "cdu";
   return SERVICE_DEVICE_SPECS[device?.type]?.type ?? null;
 }
