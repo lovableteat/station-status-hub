@@ -405,10 +405,6 @@ export function DataCenter2DPlanner({
             setDragging(null);
             setResizingAisle(null);
           }}
-          onPointerLeave={() => {
-            setDragging(null);
-            setResizingAisle(null);
-          }}
         >
           <defs>
             <linearGradient id="dc-floor-lighting" x1="0" y1="0" x2="1" y2="1">
@@ -531,33 +527,42 @@ export function DataCenter2DPlanner({
                       handle.id === "start" || handle.id === "end";
                     const vertical =
                       Math.abs(aisle.rotation % 180) === 90;
+                    const resizeCursor =
+                      lengthHandle !== vertical
+                        ? "cursor-ew-resize"
+                        : "cursor-ns-resize";
                     return (
-                      <rect
-                        key={handle.id}
-                        aria-label={`調整${aisle.label}${
-                          lengthHandle ? "長度" : "寬度"
-                        }`}
-                        x={handlePoint.x - 8}
-                        y={handlePoint.y - 8}
-                        width="16"
-                        height="16"
-                        rx="4"
-                        fill={cold ? "#e0f2fe" : "#ffedd5"}
-                        stroke={cold ? "#0284c7" : "#ea580c"}
-                        strokeWidth="3"
-                        className={cn(
-                          lengthHandle !== vertical
-                            ? "cursor-ew-resize"
-                            : "cursor-ns-resize"
-                        )}
-                        onPointerDown={(event) =>
-                          beginAisleResize(
-                            event,
-                            aisle.id,
-                            handle.id as AisleResizeHandle
-                          )
-                        }
-                      />
+                      <g key={handle.id}>
+                        <rect
+                          data-aisle-resize-handle={`${aisle.id}-${handle.id}`}
+                          aria-label={`調整${aisle.label}${lengthHandle ? "長度" : "寬度"}`}
+                          x={handlePoint.x - 20}
+                          y={handlePoint.y - 20}
+                          width="40"
+                          height="40"
+                          rx="10"
+                          fill="transparent"
+                          className={resizeCursor}
+                          onPointerDown={(event) =>
+                            beginAisleResize(
+                              event,
+                              aisle.id,
+                              handle.id as AisleResizeHandle
+                            )
+                          }
+                        />
+                        <rect
+                          x={handlePoint.x - 9}
+                          y={handlePoint.y - 9}
+                          width="18"
+                          height="18"
+                          rx="5"
+                          fill={cold ? "#e0f2fe" : "#ffedd5"}
+                          stroke={cold ? "#0284c7" : "#ea580c"}
+                          strokeWidth="3"
+                          pointerEvents="none"
+                        />
+                      </g>
                     );
                   })}
                 </g>
@@ -746,6 +751,50 @@ export function DataCenter2DPlanner({
           </button>
         ) : null}
 
+        {selectedAisle ? (
+          <div
+            data-testid="selected-aisle-toolbar"
+            className="absolute left-1/2 top-4 z-30 flex max-w-[calc(100%-220px)] -translate-x-1/2 items-center gap-2 rounded-2xl border border-cyan-300/25 bg-[#071522]/96 p-2 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="min-w-0 px-2">
+              <div className="truncate text-xs font-black text-white">
+                {selectedAisle.label}
+              </div>
+              <div className="whitespace-nowrap text-[10px] font-bold tabular-nums text-slate-400">
+                {selectedAisle.width.toFixed(2)} × {selectedAisle.depth.toFixed(2)} m
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canEdit}
+              onClick={() =>
+                onUpdateAisle(selectedAisle.id, {
+                  rotation: (selectedAisle.rotation + 90) % 360,
+                })
+              }
+              className="h-9 border-cyan-300/20 bg-cyan-400/8 px-3 text-cyan-50 hover:bg-cyan-400/15"
+            >
+              <RotateCw className="mr-1.5 h-3.5 w-3.5" /> 旋轉
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canEdit}
+              aria-label={`刪除${selectedAisle.label}`}
+              onClick={() => {
+                onDeleteAisle(selectedAisle.id);
+                setSelectedAisleId(null);
+              }}
+              className="h-9 border-rose-300/30 bg-rose-400/10 px-3 text-rose-100 hover:bg-rose-400/20 hover:text-white"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> 刪除
+            </Button>
+          </div>
+        ) : null}
+
         {selectedAisle && selectedAislePosition ? (
           <div className="absolute bottom-4 left-4 z-20 w-[min(430px,calc(100%-32px))] rounded-2xl border border-cyan-300/25 bg-[#071522]/96 p-4 shadow-2xl backdrop-blur-xl">
             <div className="flex items-start justify-between gap-3">
@@ -805,15 +854,15 @@ export function DataCenter2DPlanner({
                   <span className="mt-2 flex items-center gap-2">
                     <input
                       type="number"
-                      min="0.5"
+                      min="0.25"
                       max={max}
-                      step="0.25"
+                      step="0.05"
                       disabled={!canEdit}
                       value={selectedAisle[field]}
                       onChange={(event) => {
                         const value = Number(event.target.value);
                         if (Number.isFinite(value)) {
-                          onUpdateAisle(selectedAisle.id, { [field]: clamp(value, 0.5, max) });
+                          onUpdateAisle(selectedAisle.id, { [field]: clamp(value, 0.25, max) });
                         }
                       }}
                       className="h-9 min-w-0 flex-1 rounded-lg border border-cyan-300/25 bg-[#06111f] px-3 text-sm font-black tabular-nums text-white outline-none focus:border-cyan-200"
