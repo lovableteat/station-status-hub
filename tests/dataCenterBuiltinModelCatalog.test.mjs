@@ -104,11 +104,10 @@ test("rack and L10 geometry stay visually stable when selection or camera distan
   assert.match(plannerSource, /lowDetail && l10Definition\.mobileAssetUrl/);
 });
 
-test("an empty rack exposes an explicit L10 installation action", () => {
-  assert.match(
-    workspaceSource,
-    /rack\.l10Count === 0 \? "選擇並安裝 L10" : "更換 L10 模型"/,
-  );
+test("an empty rack exposes a clear primary equipment installation action", () => {
+  assert.match(workspaceSource, /rack\.l10Count === 0/);
+  assert.match(workspaceSource, /選擇主運算設備/);
+  assert.match(workspaceSource, /更換主設備模型/);
 });
 
 test("mounted L10 machines keep one uniform scale inside the L11 cabinet", () => {

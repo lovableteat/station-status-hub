@@ -28,6 +28,15 @@ export type ModelUpAxis = "x" | "y" | "z";
 
 export type DataCenterAssetKind = "rack" | "l10";
 
+export type RackEquipmentCategory =
+  | "compute"
+  | "network"
+  | "storage"
+  | "power"
+  | "cooling"
+  | "management"
+  | "other";
+
 export interface RackDevice {
   id: string;
   name: string;
@@ -44,6 +53,8 @@ export interface RackDevice {
   bmc: string;
   redfish: string;
   note: string;
+  /** Optional model-catalog asset mounted at this device's U position. */
+  catalogModelId?: string;
 }
 
 export interface DeploymentStep {
@@ -209,6 +220,8 @@ export interface RackModelDefinition {
   sourceFileName?: string;
   stepModel?: ImportedStepModel;
   rackUnits?: number;
+  /** Rack-mounted equipment classification. Legacy `l10` models default to compute. */
+  equipmentCategory?: RackEquipmentCategory;
   /** Omit for universal planning assets; an empty list means the matching L11 is not available yet. */
   compatibleRackModelIds?: string[];
   compatibilityNote?: string;

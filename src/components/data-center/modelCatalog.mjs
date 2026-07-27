@@ -1,4 +1,10 @@
-const EDITABLE_FIELDS = ["name", "manufacturer", "revision"];
+const EDITABLE_FIELDS = [
+  "name",
+  "manufacturer",
+  "revision",
+  "equipmentCategory",
+  "rackUnits",
+];
 const PROTECTED_MODEL_IDS = new Set([
   "generic-42u",
   "l10-placeholder",
@@ -62,7 +68,14 @@ export function mergeModelCatalogOverrides(baseModels, overrides) {
     const metadata = {};
     for (const field of EDITABLE_FIELDS) {
       const value = override[field];
-      if (typeof value === "string" && value.trim()) metadata[field] = value.trim();
+      if (field === "rackUnits") {
+        if (base.kind === "l10" && value !== undefined) {
+          const rackUnits = Math.max(1, Math.min(48, Math.round(Number(value) || 1)));
+          metadata[field] = rackUnits;
+        }
+      } else if (typeof value === "string" && value.trim()) {
+        metadata[field] = value.trim();
+      }
     }
 
     next[modelId] = {
@@ -96,12 +109,17 @@ export function serializeModelCatalogOverrides(models, baseModels) {
       model.dimensions.heightMm !== base.dimensions.heightMm;
 
     if (changed) {
-      overrides[modelId] = {
+      const override = {
         name: model.name,
         manufacturer: model.manufacturer,
         revision: model.revision,
         dimensions: { ...model.dimensions },
       };
+      if (model.kind === "l10") {
+        override.equipmentCategory = model.equipmentCategory;
+        override.rackUnits = model.rackUnits;
+      }
+      overrides[modelId] = override;
     }
   }
 
@@ -131,6 +149,9 @@ export function removeCatalogModel({ models, sites, modelId }) {
   const nextSites = (sites ?? []).map((site) => ({
     ...site,
     racks: (site.racks ?? []).map((rack) => {
+      const mountedCatalogDevices = (rack.devices ?? []).filter(
+        (device) => device.catalogModelId === modelId,
+      );
       if (model.kind === "rack" && rack.modelId === modelId) {
         affectedRackCount += 1;
         const assignedL10 = models[rack.l10ModelId];
@@ -147,6 +168,16 @@ export function removeCatalogModel({ models, sites, modelId }) {
         return {
           ...rack,
           l10ModelId: fallbackModel.id,
+          devices: (rack.devices ?? []).filter(
+            (device) => device.catalogModelId !== modelId,
+          ),
+        };
+      }
+      if (model.kind === "l10" && mountedCatalogDevices.length > 0) {
+        affectedRackCount += 1;
+        return {
+          ...rack,
+          devices: rack.devices.filter((device) => device.catalogModelId !== modelId),
         };
       }
       return rack;
