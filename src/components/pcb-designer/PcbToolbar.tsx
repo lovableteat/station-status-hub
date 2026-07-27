@@ -56,8 +56,8 @@ function ToolButton({
             variant="ghost"
             size="icon"
             className={cn(
-              "h-8 w-8 rounded-lg border border-transparent text-slate-300 hover:border-[#356985] hover:bg-[#10263a] hover:text-white",
-              active && "border-[#39c6e8] bg-[#123149] text-[#8ee8f5]",
+              "pcb-tool-button",
+              active && "is-active",
             )}
             disabled={disabled}
             onClick={onClick}
@@ -124,7 +124,7 @@ export function PcbToolbar({
   return (
     <TooltipProvider delayDuration={250}>
       <div
-        className="pcb-toolbar flex min-h-10 items-center gap-1 overflow-x-auto border-b border-[#2a526f] bg-[#0b1b2d] px-2 py-1"
+        className="pcb-toolbar"
         data-testid="pcb-toolbar"
         aria-label="PCB 工具列"
         role="toolbar"
@@ -140,7 +140,7 @@ export function PcbToolbar({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 rounded-lg text-slate-300 hover:bg-[#10263a] hover:text-white"
+                  className="pcb-tool-button"
                   aria-label="匯出檔案"
                 >
                   <Download className="h-4 w-4" />
@@ -151,7 +151,7 @@ export function PcbToolbar({
           </Tooltip>
           <DropdownMenuContent
             align="start"
-            className="rounded-xl border-[#356985] bg-[#0b1b2d] text-slate-100"
+            className="pcb-dropdown-menu"
           >
             <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
             <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
@@ -176,11 +176,11 @@ export function PcbToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="復原" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />
         <ToolButton label="重做" icon={Redo2} disabled={!canMutate || !canRedo} onClick={onRedo} />
 
-        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="選取工具" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
         <ToolButton label="拖曳畫布" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
         <ToolButton label="測量工具" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
@@ -193,9 +193,9 @@ export function PcbToolbar({
           onClick={onToggleLock}
         />
 
-        <span className="mx-1 h-5 w-px bg-[#2a526f]" aria-hidden="true" />
+        <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="縮小" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
-        <span className="w-12 text-center font-mono text-[11px] text-slate-300">{zoom}%</span>
+        <span className="pcb-zoom-readout">{zoom}%</span>
         <ToolButton label="放大" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
         <ToolButton label="符合板框" icon={Maximize2} onClick={onResetView} />
 
@@ -204,7 +204,7 @@ export function PcbToolbar({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 rounded-lg border-[#356985] bg-[#10263a] px-2.5 text-xs text-[#b9eef6] hover:bg-[#15344e]"
+            className="pcb-drc-button"
             onClick={onRunDrc}
           >
             <ScanSearch className="mr-1.5 h-3.5 w-3.5" />

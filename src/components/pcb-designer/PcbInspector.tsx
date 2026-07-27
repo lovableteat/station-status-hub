@@ -243,15 +243,15 @@ export function PcbInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
 
   return (
     <aside className="pcb-inspector" data-testid="pcb-inspector" aria-label="PCB 屬性與 DRC">
-      <div className="grid grid-cols-3 border-b border-[#2a526f]" role="tablist" aria-label="PCB 檢查器分頁">
+      <div className="pcb-inspector-tabs" role="tablist" aria-label="PCB 檢查器分頁">
         {(["board", "selection", "drc"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
             role="tab"
             className={cn(
-              "h-9 border-b-2 border-transparent text-xs text-slate-400",
-              workspace.rightTab === tab && "border-[#39c6e8] bg-[#10263a] text-[#a8edf6]",
+              "pcb-inspector-tab",
+              workspace.rightTab === tab && "is-active",
             )}
             onClick={() => workspace.setRightTab(tab)}
             aria-selected={workspace.rightTab === tab}
@@ -260,7 +260,7 @@ export function PcbInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="pcb-inspector-body">
         {workspace.rightTab === "board" && <BoardInspector workspace={workspace} />}
         {workspace.rightTab === "selection" && (
           !selected ? (
