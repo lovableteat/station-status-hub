@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 import type { RackModelDefinition } from "./dataCenterTypes";
+import { getEquipmentCategory, getEquipmentCategoryLabel } from "./rackEquipmentCatalog.mjs";
 import { getUniformModelFit } from "./modelFit.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
 import {
@@ -410,7 +411,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
             <div className="min-w-0">
               <DialogTitle className="truncate text-lg font-black text-white sm:text-xl">{model.name}</DialogTitle>
               <DialogDescription className="mt-1 truncate text-xs text-cyan-100/70 sm:text-sm">
-                {model.kind === "rack" ? "L11 機櫃細節" : "L10 1U 機台細節"} · {model.manufacturer} · {model.revision}
+                {model.kind === "rack" ? "機櫃外框細節" : `${getEquipmentCategoryLabel(getEquipmentCategory(model))}設備細節 · ${model.rackUnits ?? 1}U`} · {model.manufacturer} · {model.revision}
               </DialogDescription>
             </div>
           </div>
