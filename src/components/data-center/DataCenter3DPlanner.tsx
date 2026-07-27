@@ -1300,8 +1300,8 @@ function CameraRig({
       rotateSpeed={0.68}
       zoomToCursor
       screenSpacePanning
-      maxPolarAngle={Math.PI / 2.02}
-      target={[0, 0.8, 0]}
+      minPolarAngle={0.02}
+      maxPolarAngle={Math.PI - 0.02}
       onStart={beginInteraction}
       onEnd={restoreDetailAfterInteraction}
       onChange={invalidate}

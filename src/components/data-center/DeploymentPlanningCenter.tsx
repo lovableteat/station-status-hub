@@ -2554,7 +2554,6 @@ export function DeploymentPlanningCenter() {
     setSelectedRackId(rackId);
     setMobileLeftOpen(false);
     setMobileRightOpen(false);
-    if (workspaceMode === "3d") requestCamera("focus");
   };
 
   const updateCatalogModel = (
@@ -3463,7 +3462,6 @@ export function DeploymentPlanningCenter() {
     );
     setSelectedRackId(nextRack.id);
     if (closeModelLibrary) setModelLibraryOpen(false);
-    if (workspaceMode === "3d") requestCamera("focus");
     toast({
       title: "新機櫃已放入場景",
       description:
