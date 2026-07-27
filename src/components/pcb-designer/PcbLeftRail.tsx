@@ -67,8 +67,8 @@ function RowAction({
       variant="ghost"
       size="icon"
       className={cn(
-        "h-7 w-7 rounded-md text-slate-400 hover:bg-[#17344b] hover:text-white",
-        danger && "hover:bg-rose-400/10 hover:text-rose-200",
+        "pcb-row-action",
+        danger && "is-danger",
       )}
       aria-label={label}
       title={label}
@@ -146,18 +146,18 @@ export function PcbLeftRail({
 
   return (
     <aside
-      className="pcb-left-rail flex min-h-0 flex-col border-r border-[#2a526f] bg-[#0b1b2d]"
+      className="pcb-left-rail"
       data-testid="pcb-left-rail"
       aria-label="PCB 專案與資源"
     >
-      <div className="grid grid-cols-4 border-b border-[#2a526f]" role="tablist" aria-label="PCB 資源分頁">
+      <div className="pcb-rail-tabs" role="tablist" aria-label="PCB 資源分頁">
         {(Object.keys(tabLabels) as LeftTab[]).map((tab) => (
           <button
             key={tab}
             type="button"
             className={cn(
-              "h-9 border-b-2 border-transparent px-1 text-[11px] text-slate-400 hover:bg-[#10263a] hover:text-slate-100",
-              activeTab === tab && "border-[#39c6e8] bg-[#10263a] text-[#a8edf6]",
+              "pcb-rail-tab",
+              activeTab === tab && "is-active",
             )}
             aria-pressed={activeTab === tab}
             role="tab"
@@ -172,7 +172,7 @@ export function PcbLeftRail({
         ))}
       </div>
 
-      <div className="border-b border-[#2a526f] p-2">
+      <div className="pcb-rail-filter">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <Input
@@ -180,7 +180,7 @@ export function PcbLeftRail({
             onChange={(event) => setQuery(event.target.value)}
             placeholder={`搜尋${tabLabels[activeTab]}`}
             aria-label={`搜尋${tabLabels[activeTab]}`}
-            className="h-8 border-[#356985] bg-[#10263a] pl-8 text-xs placeholder:text-slate-400"
+            className="pcb-control pcb-search-input"
           />
         </label>
         {activeTab === "projects" && (
@@ -188,7 +188,7 @@ export function PcbLeftRail({
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             aria-label="篩選專案狀態"
-            className="mt-2 h-8 w-full rounded-md border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200"
+            className="pcb-control mt-2 w-full"
           >
             <option value="all">全部狀態</option>
             <option value="draft">草稿</option>
@@ -202,7 +202,7 @@ export function PcbLeftRail({
               value={typeFilter}
               onChange={(event) => setTypeFilter(event.target.value)}
               aria-label="篩選元件類型"
-              className="h-8 min-w-0 rounded-md border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200"
+              className="pcb-control min-w-0"
             >
               <option value="all">全部類型</option>
               {componentTypes.map((type) => <option key={type}>{type}</option>)}
@@ -211,7 +211,7 @@ export function PcbLeftRail({
               value={sourceFilter}
               onChange={(event) => setSourceFilter(event.target.value)}
               aria-label="篩選元件來源"
-              className="h-8 min-w-0 rounded-md border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200"
+              className="pcb-control min-w-0"
             >
               <option value="all">全部來源</option>
               <option value="built-in">內建</option>
@@ -222,25 +222,25 @@ export function PcbLeftRail({
         )}
       </div>
 
-      <div className="flex items-center gap-1 border-b border-[#2a526f] p-2">
+      <div className="pcb-rail-actions">
         {activeTab === "projects" && (
-          <Button type="button" size="sm" className="h-8 flex-1 rounded-lg text-xs" disabled={!workspace.canMutate} onClick={onNewProject}>
+          <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onNewProject}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />新增專案
           </Button>
         )}
         {activeTab === "templates" && (
-          <Button type="button" size="sm" className="h-8 flex-1 rounded-lg text-xs" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
+          <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />儲存目前專案
           </Button>
         )}
         {activeTab === "library" && (
           <>
-            <Button type="button" size="sm" className="h-8 flex-1 rounded-lg text-xs" disabled={!workspace.canMutate} onClick={() => onEditComponent()}>
+            <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={() => onEditComponent()}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />新增元件
             </Button>
             <label
               className={cn(
-                "inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200",
+                "pcb-upload-action",
                 !workspace.canMutate && "pointer-events-none opacity-50",
               )}
               title="上傳 JSON、CSV 或 XLSX 元件庫"
@@ -261,7 +261,7 @@ export function PcbLeftRail({
           <>
             <label
               className={cn(
-                "inline-flex h-8 flex-1 cursor-pointer items-center justify-center rounded-lg border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200",
+                "pcb-upload-action flex-1 justify-center",
                 !workspace.canMutate && "pointer-events-none opacity-50",
               )}
               title="上傳 CSV 或 XLSX BOM"
@@ -280,7 +280,7 @@ export function PcbLeftRail({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 rounded-lg border-[#356985] px-2 text-xs"
+              className="pcb-secondary-action"
               disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
               onClick={() => {
                 const result = workspace.autoPlacePending();
@@ -302,9 +302,9 @@ export function PcbLeftRail({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="pcb-rail-list">
         {activeTab === "projects" && projects.map((project) => (
-          <div key={project.id} className={cn("border-b border-[#23445d] px-2 py-2", project.id === workspace.activeProject.id && "bg-[#102d43]")}>
+          <div key={project.id} className={cn("pcb-rail-item", project.id === workspace.activeProject.id && "is-active")}>
             <button type="button" className="w-full text-left" onClick={() => workspace.openProject(project.id)}>
               <span className="block truncate text-xs font-semibold text-slate-100">{project.name}</span>
               <span className="mt-0.5 block font-mono text-[10px] text-slate-400">{project.status} · {project.board.width}×{project.board.height} mm</span>
@@ -319,7 +319,7 @@ export function PcbLeftRail({
         ))}
 
         {activeTab === "templates" && templates.map((template) => (
-          <div key={template.id} className="border-b border-[#23445d] px-2 py-2">
+          <div key={template.id} className="pcb-rail-item">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-slate-100">{template.name}</p>
@@ -340,7 +340,7 @@ export function PcbLeftRail({
         {activeTab === "library" && library.map((component) => (
           <div
             key={component.id}
-            className="pcb-library-card border-b border-[#23445d] px-2 py-2"
+            className="pcb-library-card pcb-rail-item"
             draggable={workspace.canMutate}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "copy";
@@ -366,7 +366,7 @@ export function PcbLeftRail({
 
         {activeTab === "bom" && (
           workspace.pendingPlacements.length ? workspace.pendingPlacements.map((item, index) => (
-            <div key={`${item.reference}-${item.partNumber}-${index}`} className="flex items-center gap-2 border-b border-[#23445d] px-2 py-2">
+            <div key={`${item.reference}-${item.partNumber}-${index}`} className="pcb-rail-item pcb-bom-row">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-slate-100">{item.reference || "待編號"} · {item.name}</p>
                 <p className="truncate font-mono text-[10px] text-slate-400">{item.partNumber || "無料號"}</p>
@@ -389,7 +389,7 @@ export function PcbLeftRail({
               <RowAction label={`移除 ${item.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => workspace.removePendingPlacement(index)} />
             </div>
           )) : (
-            <div className="px-4 py-8 text-center text-xs leading-5 text-slate-400">
+            <div className="pcb-empty-state">
               尚無待放置元件。匯入 BOM 後，項目會保留在這裡等待畫布放置。
             </div>
           )
@@ -398,7 +398,7 @@ export function PcbLeftRail({
         {((activeTab === "projects" && projects.length === 0)
           || (activeTab === "templates" && templates.length === 0)
           || (activeTab === "library" && library.length === 0)) && (
-          <div className="px-4 py-8 text-center text-xs text-slate-400">找不到符合條件的項目。</div>
+          <div className="pcb-empty-state">找不到符合條件的項目。</div>
         )}
       </div>
     </aside>
