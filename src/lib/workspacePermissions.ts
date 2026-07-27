@@ -182,11 +182,15 @@ export const ALL_PAGE_PERMISSIONS: Permission[] = Object.values(
 export function normalizeWorkspaceAccess(
   value?: Partial<WorkspaceAccessMap> | null
 ): WorkspaceAccessMap {
+  // PCB Designer was added after Data-center. Existing accounts that predate
+  // the new key keep their previous workspace level until an administrator
+  // explicitly configures PCB Designer.
+  const pcbAccess = value?.["pcb-designer"] ?? value?.["data-center"] ?? "none";
   return {
     "station-status": value?.["station-status"] ?? "none",
     "material-requests": value?.["material-requests"] ?? "none",
     "data-center": value?.["data-center"] ?? "none",
-    "pcb-designer": value?.["pcb-designer"] ?? "none",
+    "pcb-designer": pcbAccess,
   };
 }
 
@@ -213,9 +217,15 @@ function hasConfiguredWorkspace(
   workspace: WorkspaceId
 ) {
   const workspaceAccess = settings?.workspaceAccess;
-  return Boolean(
+  const configured = Boolean(
     workspaceAccess &&
       Object.prototype.hasOwnProperty.call(workspaceAccess, workspace)
+  );
+  if (configured || workspace !== "pcb-designer") return configured;
+
+  return Boolean(
+    workspaceAccess &&
+      Object.prototype.hasOwnProperty.call(workspaceAccess, "data-center")
   );
 }
 

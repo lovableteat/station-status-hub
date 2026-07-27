@@ -3274,6 +3274,14 @@ export type Database = {
           username: string
         }[]
       }
+      load_pcb_designer_workspace: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      save_pcb_designer_workspace: {
+        Args: { p_payload: Json; p_user_id: string }
+        Returns: undefined
+      }
       save_test_system_metadata: {
         Args: {
           p_address_values: Json

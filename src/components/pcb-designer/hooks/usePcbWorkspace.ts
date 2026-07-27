@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { PcbLocalRepository, type StorageLike } from "../core/storage.ts";
 import {
   createWorkspaceState,
@@ -13,6 +13,7 @@ import type {
 import type {
   PcbLibraryComponent,
   PcbProject,
+  PcbSaveState,
   PcbTemplate,
   PcbTool,
 } from "../types.ts";
@@ -21,6 +22,7 @@ import {
   usePcbPersistence,
   type PcbRemoteClient,
 } from "./usePcbPersistence.ts";
+import { loadPcbRemote } from "../core/remoteSync.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
@@ -33,6 +35,20 @@ function browserStorage(): StorageLike {
     return { getItem: () => null, setItem: () => undefined };
   }
   return window.localStorage;
+}
+
+function isBlankSeedWorkspace(state: PcbSaveState): boolean {
+  const project = state.projects[0];
+  const pendingCount = Object.values(state.pendingPlacementsByProject ?? {})
+    .reduce((total, items) => total + items.length, 0);
+  return state.projects.length === 1
+    && project?.name === "未命名 PCB 專案"
+    && project.components.length === 0
+    && project.keepouts.length === 0
+    && project.measurements.length === 0
+    && state.templates.every((template) => template.isBuiltIn)
+    && state.library.every((component) => component.source === "built-in")
+    && pendingCount === 0;
 }
 
 export function usePcbWorkspace({
@@ -49,11 +65,42 @@ export function usePcbWorkspace({
     undefined,
     () => createWorkspaceState(repository.load(), canEdit),
   );
+  const stateRef = useRef(state.data);
+  const [remoteReady, setRemoteReady] = useState(!remoteClient);
+  stateRef.current = state.data;
+
+  useEffect(() => {
+    let active = true;
+    if (!remoteClient) {
+      setRemoteReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setRemoteReady(false);
+    void loadPcbRemote(remoteClient).then((remoteState) => {
+      if (!active) return;
+      const localState = stateRef.current;
+      const remoteIsNewer = remoteState
+        && Date.parse(remoteState.updatedAt) > Date.parse(localState.updatedAt);
+      if (remoteState && (remoteIsNewer || isBlankSeedWorkspace(localState))) {
+        repository.save(remoteState);
+        dispatch({ type: "persistence/hydrate", data: remoteState });
+      }
+      setRemoteReady(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [remoteClient, repository]);
+
   const persistenceStatus = usePcbPersistence({
     state: state.data,
     storage,
     remoteClient,
-    allowRemoteSync: canEdit && Boolean(remoteClient),
+    allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
   });
   const editor = usePcbEditorActions(state, dispatch);
 
@@ -171,6 +218,10 @@ export function usePcbWorkspace({
     (tool: PcbTool) => dispatch({ type: "tool/set", tool }),
     [],
   );
+  const setActiveLayer = useCallback(
+    (layer: "top" | "bottom") => dispatch({ type: "layer/set", layer }),
+    [],
+  );
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
     [],
@@ -214,6 +265,7 @@ export function usePcbWorkspace({
     redo,
     toggleDocumentLock,
     setTool,
+    setActiveLayer,
     setZoom,
     setRightTab,
     runDrc,

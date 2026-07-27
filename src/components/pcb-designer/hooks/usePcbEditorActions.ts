@@ -41,11 +41,17 @@ export function usePcbEditorActions(
       }
       const component = state.data.library.find((item) => item.id === componentId);
       if (!component) return { ok: false, reason: "找不到元件庫項目。" };
-      const result = placeComponentRecord(state.activeProject, component, preferred);
+      const result = placeComponentRecord(
+        state.activeProject,
+        component,
+        preferred,
+        undefined,
+        { layer: state.activeLayer },
+      );
       if (result.ok) dispatch({ type: "project/commit", update: result.project });
       return result;
     },
-    [dispatch, state.activeProject, state.canEdit, state.data.library, state.documentLocked],
+    [dispatch, state.activeLayer, state.activeProject, state.canEdit, state.data.library, state.documentLocked],
   );
 
   const placePendingPlacement = useCallback(
@@ -63,6 +69,7 @@ export function usePcbEditorActions(
         component,
         preferred,
         pending.reference,
+        { layer: state.activeLayer },
       );
       if (result.ok) {
         dispatch({
@@ -76,6 +83,7 @@ export function usePcbEditorActions(
     [
       dispatch,
       state.activeProject,
+      state.activeLayer,
       state.canEdit,
       state.data.library,
       state.documentLocked,
@@ -119,12 +127,12 @@ export function usePcbEditorActions(
         component,
         undefined,
         pending.reference,
-        { maxChecks: checksPerItem },
+        { maxChecks: checksPerItem, layer: state.activeLayer },
       );
       if (result.ok) {
         project = result.project;
         placedIndexes.push(index);
-      } else if (result.code === "search-limit") {
+      } else if ("code" in result && result.code === "search-limit") {
         limited = true;
         break;
       }
@@ -162,6 +170,7 @@ export function usePcbEditorActions(
   }, [
     dispatch,
     state.activeProject,
+    state.activeLayer,
     state.canEdit,
     state.data.library,
     state.documentLocked,
@@ -179,31 +188,39 @@ export function usePcbEditorActions(
   const resetView = useCallback(() => dispatch({ type: "view/reset" }), [dispatch]);
   const moveComponent = useCallback(
     (instanceId: string, point: PcbPoint, bypassSnap = false): MoveResult => {
+      if (!state.canEdit || state.documentLocked) {
+        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動元件。" };
+      }
       const result = moveComponentRecord(state.activeProject, instanceId, point, bypassSnap);
       if (result.ok && result.changed) dispatch({ type: "project/commit", update: result.project });
       return result;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const moveKeepout = useCallback(
     (id: string, point: PcbPoint, bypassSnap = false): KeepoutMoveResult => {
+      if (!state.canEdit || state.documentLocked) {
+        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動禁制區。" };
+      }
       const result = moveKeepoutRecord(state.activeProject, id, point, bypassSnap);
       if (result.ok && result.changed) dispatch({ type: "project/commit", update: result.project });
       return result;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const updateBoard = useCallback(
     (patch: Partial<PcbProject["board"]>) => {
+      if (!state.canEdit || state.documentLocked) return false;
       const board = { ...state.activeProject.board, ...patch };
       if (!isValidBoard(board)) return false;
       dispatch({ type: "project/commit", update: { ...state.activeProject, board } });
       return true;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const updateComponent = useCallback(
     (instanceId: string, patch: Partial<PcbPlacedComponent>) => {
+      if (!state.canEdit || state.documentLocked) return false;
       const source = state.activeProject.components.find((item) => item.instanceId === instanceId);
       if (!source || source.locked) return false;
       const candidate = {
@@ -224,10 +241,11 @@ export function usePcbEditorActions(
       });
       return true;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const updateKeepout = useCallback(
     (id: string, patch: Partial<PcbKeepout>) => {
+      if (!state.canEdit || state.documentLocked) return false;
       const source = state.activeProject.keepouts.find((item) => item.id === id);
       if (!source) return false;
       const keepout = { ...source, ...patch };
@@ -242,10 +260,11 @@ export function usePcbEditorActions(
       });
       return true;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const updateMeasurement = useCallback(
     (id: string, patch: Partial<PcbMeasurement>) => {
+      if (!state.canEdit || state.documentLocked) return false;
       const source = state.activeProject.measurements.find((item) => item.id === id);
       if (!source) return false;
       const measurement = { ...source, ...patch };
@@ -260,32 +279,35 @@ export function usePcbEditorActions(
       });
       return true;
     },
-    [dispatch, state.activeProject],
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const createKeepout = useCallback((start: PcbPoint, end: PcbPoint) => {
+    if (!state.canEdit || state.documentLocked) return null;
     const result = createKeepoutRecord(state.activeProject, start, end);
     if (result) {
       dispatch({ type: "project/commit", update: result.project });
       dispatch({ type: "selection/set", selection: { kind: "keepout", id: result.keepout.id } });
     }
     return result;
-  }, [dispatch, state.activeProject]);
+  }, [dispatch, state.activeProject, state.canEdit, state.documentLocked]);
   const createMeasurement = useCallback((start: PcbPoint, end: PcbPoint) => {
+    if (!state.canEdit || state.documentLocked) return null;
     const result = createMeasurementRecord(state.activeProject, start, end);
     if (result) {
       dispatch({ type: "project/commit", update: result.project });
       dispatch({ type: "selection/set", selection: { kind: "measurement", id: result.measurement.id } });
     }
     return result;
-  }, [dispatch, state.activeProject]);
+  }, [dispatch, state.activeProject, state.canEdit, state.documentLocked]);
 
   const applySelectionEdit = useCallback((action: Parameters<typeof editSelectedObject>[2]) => {
+    if (!state.canEdit || state.documentLocked) return false;
     const project = editSelectedObject(state.activeProject, state.selection, action);
     if (JSON.stringify(project) === JSON.stringify(state.activeProject)) return false;
     dispatch({ type: "project/commit", update: project });
     if (action.type === "delete") dispatch({ type: "selection/set", selection: null });
     return true;
-  }, [dispatch, state.activeProject, state.selection]);
+  }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selection]);
   const deleteSelected = useCallback(() => applySelectionEdit({ type: "delete" }), [applySelectionEdit]);
   const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
   const toggleSelectedLock = useCallback(() => applySelectionEdit({ type: "toggle-lock" }), [applySelectionEdit]);
