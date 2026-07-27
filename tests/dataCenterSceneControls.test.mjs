@@ -54,6 +54,26 @@ test("the 3D camera supports close inspection without entering the selected rack
   assert.match(workspaceSource, /onClick=\{\(\) => requestCamera\("focus"\)\}/);
 });
 
+test("manual orbit keeps every viewing angle until the user requests a camera preset", () => {
+  assert.match(plannerSource, /minPolarAngle=\{0\.02\}/);
+  assert.match(plannerSource, /maxPolarAngle=\{Math\.PI - 0\.02\}/);
+  assert.doesNotMatch(plannerSource, /target=\{\[0, 0\.8, 0\]\}/);
+
+  const rackSelectionHandler = workspaceSource.match(
+    /const handleRackSelect = \(rackId: string\) => \{([\s\S]*?)\n  \};/,
+  );
+  assert.ok(rackSelectionHandler);
+  assert.doesNotMatch(rackSelectionHandler[1], /requestCamera/);
+
+  const addRackHandlerStart = workspaceSource.indexOf("const addRackUsingModel");
+  const addRackHandlerEnd = workspaceSource.indexOf("const addRackFromSelectedModel");
+  assert.ok(addRackHandlerStart >= 0 && addRackHandlerEnd > addRackHandlerStart);
+  assert.doesNotMatch(
+    workspaceSource.slice(addRackHandlerStart, addRackHandlerEnd),
+    /requestCamera\("focus"\)/,
+  );
+});
+
 test("the overview frames rack content instead of the full facility floor", () => {
   const frame = getRackOverviewFrame([
     {
