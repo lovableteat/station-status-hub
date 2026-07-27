@@ -130,6 +130,39 @@ test("admins retain full access", () => {
   );
 });
 
+test("legacy accounts inherit PCB access from their Data-center workspace", () => {
+  const settings = configured({ "data-center": "edit" });
+
+  assert.equal(
+    canAccessModule({
+      module: "pcb-designer",
+      action: "edit",
+      role: "engineer",
+      permissions: [],
+      permissionSettings: settings,
+    }),
+    true,
+  );
+});
+
+test("explicit PCB access overrides the legacy Data-center fallback", () => {
+  const settings = configured({
+    "data-center": "edit",
+    "pcb-designer": "none",
+  });
+
+  assert.equal(
+    canAccessModule({
+      module: "pcb-designer",
+      action: "view",
+      role: "engineer",
+      permissions: ["pcb_designer_edit"],
+      permissionSettings: settings,
+    }),
+    false,
+  );
+});
+
 test("workspace preset synchronizes station page permissions", () => {
   const existing = ["admin_view", "test_tracker_edit"];
 

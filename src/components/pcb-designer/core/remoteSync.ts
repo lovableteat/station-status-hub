@@ -13,7 +13,9 @@ type RemoteTable = {
 };
 
 export interface PcbRemoteClient {
-  from(table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library"): RemoteTable;
+  load?: () => Promise<PcbSaveState | null>;
+  save?: (state: PcbSaveState) => Promise<boolean>;
+  from?: (table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library") => RemoteTable;
 }
 
 async function reconcileTable(
@@ -22,6 +24,7 @@ async function reconcileTable(
   rows: Array<{ id: string; payload: unknown }>,
   deletedIds: string[],
 ): Promise<boolean> {
+  if (!client.from) return false;
   const table = client.from(tableName);
   const upsert = await table.upsert(rows, {
     onConflict: "owner_id,id",
@@ -35,6 +38,7 @@ async function reconcileTable(
 
 export async function syncPcbRemote(client: PcbRemoteClient, state: PcbSaveState): Promise<boolean> {
   try {
+    if (client.save) return client.save(state);
     const results = await Promise.all([
       reconcileTable(client, "pcb_designer_projects", state.projects.map((project) => ({ id: project.id, payload: project })), state.remoteDeletions?.projects ?? []),
       reconcileTable(client, "pcb_designer_templates", state.templates.map((template) => ({ id: template.id, payload: template })), state.remoteDeletions?.templates ?? []),
@@ -43,6 +47,14 @@ export async function syncPcbRemote(client: PcbRemoteClient, state: PcbSaveState
     return results.every(Boolean);
   } catch {
     return false;
+  }
+}
+
+export async function loadPcbRemote(client: PcbRemoteClient): Promise<PcbSaveState | null> {
+  try {
+    return client.load ? await client.load() : null;
+  } catch {
+    return null;
   }
 }
 

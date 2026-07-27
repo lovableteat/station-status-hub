@@ -37,6 +37,7 @@ export interface PcbWorkspaceState {
   canEdit: boolean;
   documentLocked: boolean;
   tool: PcbTool;
+  activeLayer: "top" | "bottom";
   zoom: number;
   viewCenter: PcbPoint;
   selection: PcbSelection | null;
@@ -70,12 +71,14 @@ export type PcbWorkspaceAction =
   | { type: "history/redo" }
   | { type: "document/toggle-lock" }
   | { type: "tool/set"; tool: PcbTool }
+  | { type: "layer/set"; layer: "top" | "bottom" }
   | { type: "zoom/set"; zoom: number }
   | { type: "view/center"; center: PcbPoint }
   | { type: "view/reset" }
   | { type: "selection/set"; selection: PcbSelection | null }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
+  | { type: "persistence/hydrate"; data: PcbSaveState }
   | { type: "persistence/touch" }
   | { type: "drc/run" };
 

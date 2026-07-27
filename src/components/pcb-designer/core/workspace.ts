@@ -99,6 +99,7 @@ export function createWorkspaceState(
     canEdit,
     documentLocked: false,
     tool: "select",
+    activeLayer: "top",
     zoom: 100,
     viewCenter: {
       x: project.board.width / 2,
@@ -154,12 +155,14 @@ function isMutation(action: PcbWorkspaceAction): boolean {
   return ![
     "project/open",
     "tool/set",
+    "layer/set",
     "zoom/set",
     "view/center",
     "view/reset",
     "selection/set",
     "panel/right",
     "permission/set",
+    "persistence/hydrate",
     "persistence/touch",
     "drc/run",
   ].includes(action.type);
@@ -619,6 +622,8 @@ export function reduceWorkspaceState(
       return state.canEdit ? { ...state, documentLocked: !state.documentLocked } : state;
     case "tool/set":
       return { ...state, tool: action.tool };
+    case "layer/set":
+      return { ...state, activeLayer: action.layer };
     case "zoom/set":
       return { ...state, zoom: Math.min(400, Math.max(25, action.zoom)) };
     case "view/center":
@@ -642,6 +647,8 @@ export function reduceWorkspaceState(
       return { ...state, rightTab: action.tab };
     case "permission/set":
       return { ...state, canEdit: action.canEdit };
+    case "persistence/hydrate":
+      return createWorkspaceState(action.data, state.canEdit);
     case "persistence/touch":
       return materialize({
         ...state,

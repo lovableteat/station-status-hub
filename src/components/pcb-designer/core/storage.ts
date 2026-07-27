@@ -90,7 +90,7 @@ function isPendingPlacement(value: unknown): boolean {
     && Number.isInteger(value.quantity);
 }
 
-function isState(value: unknown): value is PcbSaveState {
+export function isPcbSaveState(value: unknown): value is PcbSaveState {
   if (!isRecord(value)) return false;
   const { projects, templates, library, activeProjectId, updatedAt } = value;
   if (!Array.isArray(projects) || !Array.isArray(templates) || !Array.isArray(library) || !isNonEmptyString(updatedAt)) {
@@ -125,6 +125,26 @@ function isState(value: unknown): value is PcbSaveState {
     && (activeProjectId === null || (isNonEmptyString(activeProjectId) && projectRecords.some((project) => project.id === activeProjectId)));
 }
 
+export function refreshBuiltInCatalog(state: PcbSaveState): PcbSaveState {
+  const builtInTemplateIds = new Set(BUILT_IN_TEMPLATES.map((item) => item.id));
+  const builtInComponentIds = new Set(BUILT_IN_COMPONENTS.map((item) => item.id));
+  return {
+    ...clone(state),
+    templates: [
+      ...clone(BUILT_IN_TEMPLATES),
+      ...state.templates
+        .filter((item) => !item.isBuiltIn && !builtInTemplateIds.has(item.id))
+        .map(clone),
+    ],
+    library: [
+      ...clone(BUILT_IN_COMPONENTS),
+      ...state.library
+        .filter((item) => item.source !== "built-in" && !builtInComponentIds.has(item.id))
+        .map(clone),
+    ],
+  };
+}
+
 export class PcbLocalRepository {
   private readonly storage: StorageLike;
 
@@ -137,14 +157,14 @@ export class PcbLocalRepository {
       const raw = this.storage.getItem(PCB_STORAGE_KEY);
       if (!raw) return this.seed();
       const payload = JSON.parse(raw) as Partial<PersistedPayload>;
-      if (payload.version === PAYLOAD_VERSION && isState(payload.state)) {
-        return {
+      if (payload.version === PAYLOAD_VERSION && isPcbSaveState(payload.state)) {
+        return refreshBuiltInCatalog({
           ...clone(payload.state),
           pendingPlacementsByProject: clone(payload.state.pendingPlacementsByProject ?? {}),
           remoteDeletions: clone(payload.state.remoteDeletions ?? {
             projects: [], templates: [], library: [],
           }),
-        };
+        });
       }
     } catch {
       // A broken browser draft must never prevent the editor from rendering.

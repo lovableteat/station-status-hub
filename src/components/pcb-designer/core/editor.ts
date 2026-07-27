@@ -18,6 +18,10 @@ import {
 
 export const MAX_PLACEMENT_COLLISION_TESTS = 250_000;
 
+export interface PcbPlacementOptions extends PlacementSearchOptions {
+  layer?: PcbPlacedComponent["layer"];
+}
+
 export type PlacementResult =
   | { ok: true; project: PcbProject; component: PcbPlacedComponent }
   | { ok: false; reason: string; code?: "search-limit" };
@@ -66,7 +70,7 @@ export function placeLibraryComponent(
   libraryComponent: PcbLibraryComponent,
   preferred?: PcbPoint,
   reference?: string,
-  placementOptions?: PlacementSearchOptions,
+  placementOptions?: PcbPlacementOptions,
 ): PlacementResult {
   const base = clone(project);
   const candidate: PcbPlacedComponent = {
@@ -82,7 +86,7 @@ export function placeLibraryComponent(
     x: 0,
     y: 0,
     rotation: 0,
-    layer: "top",
+    layer: placementOptions?.layer ?? "top",
     locked: false,
   };
   const exactPreferred = preferred && !project.board.snapToGrid

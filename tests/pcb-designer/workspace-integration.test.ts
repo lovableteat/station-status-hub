@@ -31,6 +31,12 @@ const pcbWorkspaceHookSource = await read(
 const remoteSyncSource = await read(
   "src/components/pcb-designer/core/remoteSync.ts",
 );
+const accountRemoteSource = await read(
+  "src/components/pcb-designer/core/accountRemoteSync.ts",
+);
+const completeStorageMigrationSource = await read(
+  "supabase/migrations/20260727123000_complete_pcb_designer_workspace.sql",
+);
 const supabaseTypesSource = await read("src/integrations/supabase/types.ts");
 const collaborationSource = await read(
   "src/components/collaboration/CollaborationCenter.tsx",
@@ -224,7 +230,7 @@ test("labels PCB Designer presence consistently", () => {
   }
 });
 
-test("owner-scopes future remote PCB data without enabling sync for custom-login sessions", () => {
+test("keeps legacy row storage owner-scoped while enabling account workspace sync", () => {
   assert.match(storageMigrationSource, /owner_id\s+uuid\s+not null\s+default auth\.uid\(\)/i);
   assert.match(storageMigrationSource, /primary key\s*\(owner_id,\s*id\)/i);
   assert.match(storageMigrationSource, /enable row level security/i);
@@ -243,4 +249,29 @@ test("owner-scopes future remote PCB data without enabling sync for custom-login
     /allowRemoteSync:\s*canEdit && Boolean\(remoteClient\)/,
   );
   assert.match(remoteSyncSource, /onConflict:\s*["']owner_id,id["']/);
+  assert.match(workspaceSource, /createPcbAccountRemoteClient/);
+  assert.match(workspaceSource, /isDatabaseUserId\(user\?\.userId\)/);
+  assert.match(accountRemoteSource, /load_pcb_designer_workspace/);
+  assert.match(accountRemoteSource, /save_pcb_designer_workspace/);
+  assert.match(accountRemoteSource, /PCB_REMOTE_FALLBACK_KEY\s*=\s*["']pcbDesignerWorkspace["']/);
+  assert.match(accountRemoteSource, /from\(["']system_users["']\)/);
+});
+
+test("ships a complete custom-login PCB workspace migration and legacy permission fallback", () => {
+  assert.match(
+    completeStorageMigrationSource,
+    /CREATE TABLE IF NOT EXISTS public\.pcb_designer_workspaces/i,
+  );
+  assert.match(
+    completeStorageMigrationSource,
+    /owner_id uuid PRIMARY KEY REFERENCES public\.system_users\(id\)/i,
+  );
+  assert.match(completeStorageMigrationSource, /SECURITY DEFINER/i);
+  assert.match(completeStorageMigrationSource, /octet_length\(p_payload::text\) > 5 \* 1024 \* 1024/i);
+  assert.match(completeStorageMigrationSource, /permissions -> 'pcbDesignerWorkspace'/i);
+  assert.match(completeStorageMigrationSource, /NOTIFY pgrst, 'reload schema'/i);
+  assert.match(dialogSource, /legacyPermissions/);
+  assert.match(dialogSource, /permission\.startsWith\(["']pcb_designer_["']\)/);
+  assert.match(dialogSource, /workspaceId !== ["']pcb-designer["']/);
+  assert.match(dialogSource, /\.update\(\{[\s\S]*workspaceAccess/);
 });

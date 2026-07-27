@@ -1,9 +1,11 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { CircuitBoard, FileJson, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/components/auth/UserContext";
+import { supabase } from "@/integrations/supabase/client";
 import {
   PROJECT_FILE_ACCEPT,
   downloadBomCsv,
@@ -24,6 +26,11 @@ import { PcbToolbar } from "./PcbToolbar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
+import {
+  createPcbAccountRemoteClient,
+  isDatabaseUserId,
+  type PcbAccountDatabase,
+} from "./core/accountRemoteSync.ts";
 import {
   usePcbWorkspace,
   type ImportedComponent,
@@ -62,8 +69,19 @@ export function PcbDesignerWorkspace({
   onExportPng,
 }: PcbDesignerWorkspaceProps) {
   const { canEditModule } = usePermissions();
+  const { user } = useUser();
+  const remoteClient = useMemo(
+    () => isDatabaseUserId(user?.userId)
+      ? createPcbAccountRemoteClient(
+        supabase as unknown as PcbAccountDatabase,
+        user.userId,
+      )
+      : null,
+    [user?.userId],
+  );
   const workspace = usePcbWorkspace({
     canEdit: canEditModule("pcb-designer"),
+    remoteClient,
   });
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
   const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
@@ -293,6 +311,7 @@ export function PcbDesignerWorkspace({
         canMutate={workspace.canMutate}
         documentLocked={workspace.documentLocked}
         tool={workspace.tool}
+        activeLayer={workspace.activeLayer}
         zoom={workspace.zoom}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
@@ -301,7 +320,12 @@ export function PcbDesignerWorkspace({
         onNew={() => setDialog({ kind: "new-project" })}
         onSave={() => {
           workspace.saveNow();
-          toast({ title: "已儲存本機草稿", description: "同步會在連線可用時自動嘗試。" });
+          toast({
+            title: remoteClient ? "草稿已儲存，正在同步" : "已儲存本機草稿",
+            description: remoteClient
+              ? "同步完成後，其他電腦使用同一帳號即可開啟。"
+              : "目前為本機測試帳號，資料已安全保存在此瀏覽器。",
+          });
         }}
         onExportProject={() => downloadProject(workspace.activeProject)}
         onExportBomCsv={() => downloadBomCsv(workspace.activeProject)}
@@ -333,6 +357,7 @@ export function PcbDesignerWorkspace({
         onUndo={workspace.undo}
         onRedo={workspace.redo}
         onToolChange={workspace.setTool}
+        onActiveLayerChange={workspace.setActiveLayer}
         onToggleLock={workspace.toggleDocumentLock}
         onZoomChange={workspace.setZoom}
         onResetView={workspace.resetView}
@@ -382,7 +407,7 @@ export function PcbDesignerWorkspace({
       <footer className="pcb-status-bar">
         <span>元件 {workspace.activeProject.components.length}</span>
         <span className="font-mono">{workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm</span>
-        <span>Top / Bottom</span>
+        <span>放置層 {workspace.activeLayer === "top" ? "Top" : "Bottom"}</span>
         <span className="font-mono">{workspace.zoom}%</span>
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
         <span>DRC {workspace.drcIssues.length}</span>
