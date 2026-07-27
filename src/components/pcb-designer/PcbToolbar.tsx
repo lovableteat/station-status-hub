@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Download,
   Hand,
+  Layers3,
   Lock,
   LockOpen,
   Maximize2,
@@ -76,6 +77,7 @@ export interface PcbToolbarProps {
   canMutate: boolean;
   documentLocked: boolean;
   tool: PcbTool;
+  activeLayer: "top" | "bottom";
   zoom: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -91,6 +93,7 @@ export interface PcbToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onToolChange: (tool: PcbTool) => void;
+  onActiveLayerChange: (layer: "top" | "bottom") => void;
   onToggleLock: () => void;
   onZoomChange: (zoom: number) => void;
   onResetView: () => void;
@@ -101,6 +104,7 @@ export function PcbToolbar({
   canMutate,
   documentLocked,
   tool,
+  activeLayer,
   zoom,
   canUndo,
   canRedo,
@@ -116,6 +120,7 @@ export function PcbToolbar({
   onUndo,
   onRedo,
   onToolChange,
+  onActiveLayerChange,
   onToggleLock,
   onZoomChange,
   onResetView,
@@ -192,6 +197,22 @@ export function PcbToolbar({
           active={documentLocked}
           onClick={onToggleLock}
         />
+
+        <div className="pcb-layer-switch" role="group" aria-label="新元件放置層">
+          <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+          {(["top", "bottom"] as const).map((layer) => (
+            <button
+              key={layer}
+              type="button"
+              className={cn(activeLayer === layer && "is-active")}
+              disabled={!canMutate}
+              aria-pressed={activeLayer === layer}
+              onClick={() => onActiveLayerChange(layer)}
+            >
+              {layer === "top" ? "Top" : "Bottom"}
+            </button>
+          ))}
+        </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="縮小" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />

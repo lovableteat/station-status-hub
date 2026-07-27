@@ -223,13 +223,62 @@ export function UserPermissionsDialog({
     try {
       setIsLoading(true);
 
-      const { error } = await supabase.rpc("set_user_access_permissions", {
+      const currentRequest = {
         p_user_id: userId,
         p_permissions: permissions,
         p_workspace_access: workspaceAccess as unknown as Record<string, string>,
         p_granted_by: user?.username ?? "admin",
-      });
-      if (error) throw error;
+      };
+      const { error } = await supabase.rpc(
+        "set_user_access_permissions",
+        currentRequest,
+      );
+
+      if (error) {
+        // Older deployments do not yet know the PCB enum/workspace key. Save
+        // the legacy permissions first, then merge the PCB workspace level
+        // without replacing account-scoped PCB drafts or other settings.
+        const legacyPermissions = permissions.filter(
+          (permission) => !permission.startsWith("pcb_designer_"),
+        );
+        const legacyWorkspaceAccess = Object.fromEntries(
+          Object.entries(workspaceAccess).filter(
+            ([workspaceId]) => workspaceId !== "pcb-designer",
+          ),
+        );
+        const { error: legacyError } = await supabase.rpc(
+          "set_user_access_permissions",
+          {
+            ...currentRequest,
+            p_permissions: legacyPermissions,
+            p_workspace_access: legacyWorkspaceAccess,
+          },
+        );
+        if (legacyError) throw error;
+
+        const { data: account, error: accountError } = await supabase
+          .from("system_users")
+          .select("permissions")
+          .eq("id", userId)
+          .maybeSingle();
+        if (accountError) throw accountError;
+
+        const currentSettings = account?.permissions
+          && typeof account.permissions === "object"
+          && !Array.isArray(account.permissions)
+          ? account.permissions as Record<string, unknown>
+          : {};
+        const { error: mergeError } = await supabase
+          .from("system_users")
+          .update({
+            permissions: {
+              ...currentSettings,
+              workspaceAccess,
+            },
+          })
+          .eq("id", userId);
+        if (mergeError) throw mergeError;
+      }
 
       window.dispatchEvent(
         new CustomEvent("station-permissions-updated", {
