@@ -208,7 +208,7 @@ export function PcbDialogs({
 
   return (
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[88vh] max-w-xl gap-4 overflow-y-auto rounded-xl border-[#356985] bg-[#0b1b2d] p-5 text-slate-100">
+      <DialogContent className="pcb-dialog max-h-[88vh] max-w-xl gap-4 overflow-y-auto p-5 text-slate-100">
         {dialog?.kind === "confirm" && (
           <>
             <DialogHeader>

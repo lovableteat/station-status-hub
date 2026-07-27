@@ -187,7 +187,7 @@ export function PcbDesignerWorkspace({
         className="pcb-project-bar"
         data-testid="pcb-project-bar"
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="pcb-project-identity">
           <Button
             type="button"
             variant="ghost"
@@ -199,10 +199,15 @@ export function PcbDesignerWorkspace({
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
-          <CircuitBoard className="h-4 w-4 shrink-0 text-[#39c6e8]" aria-hidden="true" />
-          <h1 id="pcb-designer-title" className="shrink-0 text-sm font-bold">PCB Designer</h1>
+          <span className="pcb-project-symbol" aria-hidden="true">
+            <CircuitBoard className="h-4 w-4" />
+          </span>
+          <div className="pcb-project-heading">
+            <h1 id="pcb-designer-title">PCB Designer</h1>
+            <span>Layout workspace</span>
+          </div>
           <select
-            className="h-8 min-w-0 max-w-64 rounded-md border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-100"
+            className="pcb-project-select"
             value={workspace.activeProject.id}
             onChange={(event) => workspace.openProject(event.target.value)}
             aria-label="目前 PCB 專案"
@@ -216,7 +221,7 @@ export function PcbDesignerWorkspace({
           {!workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="pcb-project-actions">
           <Button
             type="button"
             variant="ghost"
@@ -231,7 +236,7 @@ export function PcbDesignerWorkspace({
           <select
             value={selectedTemplateId}
             onChange={(event) => setSelectedTemplateId(event.target.value)}
-            className="h-8 max-w-36 rounded-md border border-[#356985] bg-[#10263a] px-2 text-xs text-slate-200"
+            className="pcb-template-select"
             aria-label="選擇 PCB 模板"
             disabled={!workspace.canMutate}
           >
@@ -243,7 +248,7 @@ export function PcbDesignerWorkspace({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 rounded-lg border-[#356985] bg-[#10263a] px-2 text-xs"
+            className="pcb-template-apply"
             disabled={!workspace.canMutate || !selectedTemplateId}
             onClick={() => workspace.applyTemplate(selectedTemplateId)}
           >
@@ -253,7 +258,7 @@ export function PcbDesignerWorkspace({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg"
+            className="pcb-header-icon-button"
             disabled={!workspace.canMutate}
             onClick={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}
             aria-label="專案設定"
@@ -265,7 +270,7 @@ export function PcbDesignerWorkspace({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg"
+            className="pcb-header-icon-button"
             disabled={!workspace.canMutate}
             onClick={() => projectInputRef.current?.click()}
             aria-label="匯入專案 JSON"
