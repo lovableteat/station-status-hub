@@ -750,6 +750,65 @@ function RackL10Modules({
   );
 }
 
+function RackCatalogEquipmentModels({
+  rack,
+  rackDefinition,
+  models,
+  detailed,
+  lowDetail,
+}: {
+  rack: RackPlan;
+  rackDefinition: RackModelDefinition;
+  models: Record<string, RackModelDefinition>;
+  detailed: boolean;
+  lowDetail: boolean;
+}) {
+  const mountedDevices = rack.devices.filter(
+    (device) => device.catalogModelId && models[device.catalogModelId]?.kind === "l10",
+  );
+  if (mountedDevices.length === 0) return null;
+
+  return (
+    <group name={`${rack.id}-catalog-equipment`}>
+      {mountedDevices.map((device) => {
+        const definition = models[device.catalogModelId!];
+        const layout = getRackUnitMountLayout({
+          rackDimensions: rackDefinition.dimensions,
+          capacityU: rack.capacityU,
+          moduleDimensions: definition.dimensions,
+          rackUnits: definition.rackUnits ?? device.slotSpan ?? 1,
+          moduleCount: 1,
+          startU: device.slotStart,
+          rackUnitSlots: [device.slotStart],
+          reservedBottomU: 0,
+          reservedTopU: 0,
+        });
+        const assetUrl = lowDetail && definition.mobileAssetUrl
+          ? definition.mobileAssetUrl
+          : definition.assetUrl;
+        return assetUrl ? (
+          <Suspense key={device.id} fallback={null}>
+            <InstancedDetailedL10Model
+              definition={definition}
+              assetUrl={assetUrl}
+              layout={layout}
+              name={`${device.id}-catalog-model`}
+              detailed={detailed}
+            />
+          </Suspense>
+        ) : (
+          <ProceduralL10Instances
+            key={device.id}
+            layout={layout}
+            name={`${device.id}-catalog-preview`}
+            detailed={detailed}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
 function RackSceneCard({
   rack,
   definition,
@@ -799,6 +858,7 @@ function RackVisual({
   rack,
   definition,
   l10Definition,
+  models,
   activeLayer,
   selected,
   hovered,
@@ -812,6 +872,7 @@ function RackVisual({
   rack: RackPlan;
   definition: RackModelDefinition;
   l10Definition: RackModelDefinition;
+  models: Record<string, RackModelDefinition>;
   activeLayer: DataCenterLayer;
   selected: boolean;
   hovered: boolean;
@@ -878,9 +939,20 @@ function RackVisual({
         lowDetail={lowDetail}
       />
 
+      <RackCatalogEquipmentModels
+        rack={rack}
+        rackDefinition={definition}
+        models={models}
+        detailed={selected}
+        lowDetail={lowDetail}
+      />
+
       {definition.id === GB300_RACK_MODEL_ID ? (
         <GB300RackEquipment3D
-          rack={rack}
+          rack={{
+            ...rack,
+            devices: rack.devices.filter((device) => !device.catalogModelId),
+          }}
           rackDimensions={definition.dimensions}
           l10Dimensions={l10Definition.dimensions}
           l10RackUnits={l10Definition.rackUnits ?? 1}
@@ -1306,11 +1378,12 @@ function PlannerScene({
         const showLabel = showLabels && (selected || hovered || health !== "healthy");
 
         return (
-          <RackVisual
+            <RackVisual
             key={rack.id}
             rack={rack}
             definition={definition}
-            l10Definition={l10Definition}
+              l10Definition={l10Definition}
+              models={models}
             activeLayer={activeLayer}
             selected={selected}
             hovered={hovered}
