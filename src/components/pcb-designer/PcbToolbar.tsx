@@ -35,6 +35,7 @@ import type { PcbTool } from "./types.ts";
 
 interface ToolButtonProps {
   label: string;
+  shortcut?: string;
   icon: ComponentType<{ className?: string }>;
   disabled?: boolean;
   active?: boolean;
@@ -43,6 +44,7 @@ interface ToolButtonProps {
 
 function ToolButton({
   label,
+  shortcut,
   icon: Icon,
   disabled,
   active,
@@ -63,12 +65,16 @@ function ToolButton({
             disabled={disabled}
             onClick={onClick}
             aria-label={label}
+            aria-keyshortcuts={shortcut}
           >
             <Icon className="h-4 w-4" />
           </Button>
         </span>
       </TooltipTrigger>
-      <TooltipContent className="text-xs">{label}</TooltipContent>
+      <TooltipContent className="pcb-tool-tooltip text-xs">
+        <span>{label}</span>
+        {shortcut && <kbd>{shortcut}</kbd>}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -135,7 +141,7 @@ export function PcbToolbar({
         role="toolbar"
       >
         <ToolButton label="新增專案" icon={Plus} disabled={!canMutate} onClick={onNew} />
-        <ToolButton label="立即儲存" icon={Save} onClick={onSave} />
+        <ToolButton label="立即儲存" shortcut="Ctrl+S" icon={Save} onClick={onSave} />
 
         <DropdownMenu>
           <Tooltip>
@@ -182,19 +188,20 @@ export function PcbToolbar({
         </DropdownMenu>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
-        <ToolButton label="復原" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />
-        <ToolButton label="重做" icon={Redo2} disabled={!canMutate || !canRedo} onClick={onRedo} />
+        <ToolButton label="復原" shortcut="Ctrl+Z" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />
+        <ToolButton label="重做" shortcut="Ctrl+Shift+Z" icon={Redo2} disabled={!canMutate || !canRedo} onClick={onRedo} />
 
         <span className="pcb-tool-separator" aria-hidden="true" />
-        <ToolButton label="選取工具" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
-        <ToolButton label="拖曳畫布" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
-        <ToolButton label="測量工具" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
-        <ToolButton label="禁制區工具" icon={ScanSearch} disabled={!canMutate} active={tool === "keepout"} onClick={() => onToolChange("keepout")} />
+        <ToolButton label="選取工具" shortcut="V" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
+        <ToolButton label="拖曳畫布" shortcut="H / Space" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
+        <ToolButton label="測量工具" shortcut="M" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
+        <ToolButton label="禁制區工具" shortcut="K" icon={ScanSearch} disabled={!canMutate} active={tool === "keepout"} onClick={() => onToolChange("keepout")} />
         <ToolButton
           label={documentLocked ? "解除文件鎖定" : "鎖定文件"}
           icon={documentLocked ? Lock : LockOpen}
           disabled={!canMutate && !documentLocked}
           active={documentLocked}
+          shortcut="L"
           onClick={onToggleLock}
         />
 
@@ -215,10 +222,10 @@ export function PcbToolbar({
         </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
-        <ToolButton label="縮小" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
+        <ToolButton label="縮小" shortcut="-" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
         <span className="pcb-zoom-readout">{zoom}%</span>
-        <ToolButton label="放大" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
-        <ToolButton label="符合板框" icon={Maximize2} onClick={onResetView} />
+        <ToolButton label="放大" shortcut="+" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
+        <ToolButton label="符合板框" shortcut="F" icon={Maximize2} onClick={onResetView} />
 
         <div className="ml-auto">
           <Button

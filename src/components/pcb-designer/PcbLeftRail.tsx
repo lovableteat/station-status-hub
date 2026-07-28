@@ -29,6 +29,8 @@ type LeftTab = "projects" | "templates" | "library" | "bom";
 
 interface PcbLeftRailProps {
   workspace: PcbWorkspaceApi;
+  placementComponentId: string | null;
+  onStartPlacement: (componentId: string) => void;
   onNewProject: () => void;
   onEditProject: (project: PcbProject) => void;
   onSaveTemplate: () => void;
@@ -82,6 +84,8 @@ function RowAction({
 
 export function PcbLeftRail({
   workspace,
+  placementComponentId,
+  onStartPlacement,
   onNewProject,
   onEditProject,
   onSaveTemplate,
@@ -132,16 +136,6 @@ export function PcbLeftRail({
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (file) onFile(file);
-  };
-
-  const placeLibraryComponent = (component: PcbLibraryComponent) => {
-    const result = workspace.placeLibraryComponent(component.id);
-    if (result.ok === true) {
-      workspace.selectObject({ kind: "component", id: result.component.instanceId });
-      toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
-    } else {
-      toast({ title: "無法放置元件", description: result.reason, variant: "destructive" });
-    }
   };
 
   return (
@@ -340,23 +334,33 @@ export function PcbLeftRail({
         {activeTab === "library" && library.map((component) => (
           <div
             key={component.id}
-            className="pcb-library-card pcb-rail-item"
+            className={cn(
+              "pcb-library-card pcb-rail-item",
+              placementComponentId === component.id && "is-placing",
+            )}
             draggable={workspace.canMutate}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "copy";
               event.dataTransfer.setData(PCB_LIBRARY_DRAG_TYPE, component.id);
+              onStartPlacement(component.id);
             }}
           >
-            <div className="flex items-start gap-2">
+            <button
+              type="button"
+              className="pcb-library-card-main"
+              disabled={!workspace.canMutate}
+              aria-pressed={placementComponentId === component.id}
+              onClick={() => onStartPlacement(component.id)}
+            >
               <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: component.color }} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-slate-100">{component.name}</p>
                 <p className="truncate font-mono text-[10px] text-slate-400">{component.manufacturer || "—"} · {component.partNumber || "無料號"}</p>
                 <p className="font-mono text-[10px] text-slate-500">{component.width}×{component.height}×{component.maxHeight} mm</p>
               </div>
-            </div>
+            </button>
             <div className="mt-1 flex justify-end">
-              <RowAction label={`放置 ${component.name}`} icon={Plus} disabled={!workspace.canMutate} onClick={() => placeLibraryComponent(component)} />
+              <RowAction label={`放置 ${component.name}`} icon={Plus} disabled={!workspace.canMutate} onClick={() => onStartPlacement(component.id)} />
               <RowAction label={`編輯 ${component.name}`} icon={Pencil} disabled={!workspace.canMutate || component.source === "built-in"} onClick={() => onEditComponent(component)} />
               <RowAction label={`複製 ${component.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateLibraryComponent(component.id)} />
               <RowAction label={`刪除 ${component.name}`} icon={Trash2} danger disabled={!workspace.canMutate || component.source === "built-in"} onClick={() => onDeleteComponent(component)} />
