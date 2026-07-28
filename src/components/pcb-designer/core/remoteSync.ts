@@ -1,6 +1,6 @@
 import type { PcbSaveState } from "../types.ts";
 
-export type PcbPersistenceStatus = "local" | "saving" | "synced";
+export type PcbPersistenceStatus = "local" | "saving" | "synced" | "unsaved";
 type RemoteError = { code?: string; message?: string } | null;
 type RemoteTable = {
   upsert: (

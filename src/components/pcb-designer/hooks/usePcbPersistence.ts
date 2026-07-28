@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  PcbRemoteSyncCoordinator,
   syncPcbRemote,
   type PcbPersistenceStatus,
   type PcbRemoteClient,
@@ -17,8 +16,12 @@ export interface UsePcbPersistenceOptions {
   allowRemoteSync?: boolean;
 }
 
-export const PCB_LOCAL_SAVE_DELAY_MS = 900;
-export const PCB_REMOTE_SAVE_DELAY_MS = 2400;
+export interface PcbPersistenceControl {
+  hasUnsavedChanges: boolean;
+  markClean: (revision?: string) => void;
+  saveNow: () => Promise<boolean>;
+  status: PcbPersistenceStatus;
+}
 
 const localOnlyStorage: StorageLike = {
   getItem: () => null,
@@ -34,64 +37,83 @@ function browserStorage(): StorageLike {
   }
 }
 
-/** Persists editor state locally first; unavailable Supabase remains a non-fatal local draft. */
+/** Saves only on explicit user action; remote writes are serialized in click order. */
 export function usePcbPersistence({
   state,
   storage,
   remoteClient,
   allowRemoteSync = false,
-}: UsePcbPersistenceOptions): PcbPersistenceStatus {
+}: UsePcbPersistenceOptions): PcbPersistenceControl {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
   const stateRef = useRef(state);
   const repositoryRef = useRef(repository);
-  const coordinatorRef = useRef<PcbRemoteSyncCoordinator | null>(null);
-  const [status, setStatus] = useState<PcbPersistenceStatus>("local");
+  const activeRef = useRef(true);
+  const requestRef = useRef(0);
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const [savedRevision, setSavedRevision] = useState(state.updatedAt);
+  const [status, setStatus] = useState<PcbPersistenceStatus>(client ? "synced" : "local");
 
   stateRef.current = state;
   repositoryRef.current = repository;
+  const hasUnsavedChanges = state.updatedAt !== savedRevision;
 
   useEffect(() => {
-    const persistBeforeUnload = () => {
-      repositoryRef.current.save(stateRef.current);
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      requestRef.current += 1;
     };
-    window.addEventListener("beforeunload", persistBeforeUnload);
-    return () => window.removeEventListener("beforeunload", persistBeforeUnload);
   }, []);
 
   useEffect(() => {
-    const coordinator = new PcbRemoteSyncCoordinator(
-      (next) => client ? syncPcbRemote(client, next) : Promise.resolve(false),
-      setStatus,
-    );
-    coordinatorRef.current = coordinator;
-    return () => {
-      coordinator.dispose();
-      if (coordinatorRef.current === coordinator) coordinatorRef.current = null;
-    };
+    requestRef.current += 1;
+    setStatus(client ? "synced" : "local");
   }, [client]);
 
   useEffect(() => {
-    const coordinator = coordinatorRef.current;
-    const generation = coordinator?.reserve();
-    const localTimer = window.setTimeout(() => {
-      repository.save(state);
-      if (!client) setStatus("local");
-    }, PCB_LOCAL_SAVE_DELAY_MS);
-    const remoteTimer = client
-      ? window.setTimeout(() => {
-        if (coordinator && generation !== undefined) {
-          setStatus("saving");
-          coordinator.commit(generation, state);
-        }
-      }, PCB_REMOTE_SAVE_DELAY_MS)
-      : null;
-
-    return () => {
-      window.clearTimeout(localTimer);
-      if (remoteTimer !== null) window.clearTimeout(remoteTimer);
+    if (!hasUnsavedChanges) return undefined;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
     };
-  }, [client, repository, state]);
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
 
-  return status;
+  const markClean = useCallback((revision?: string) => {
+    setSavedRevision(revision ?? stateRef.current.updatedAt);
+  }, []);
+
+  const saveNow = useCallback(async () => {
+    const snapshot = structuredClone(stateRef.current);
+    repositoryRef.current.save(snapshot);
+    setSavedRevision(snapshot.updatedAt);
+
+    if (!client) {
+      setStatus("local");
+      return true;
+    }
+
+    const request = requestRef.current + 1;
+    requestRef.current = request;
+    setStatus("saving");
+    const remoteSave = saveQueueRef.current.then(
+      () => syncPcbRemote(client, snapshot),
+      () => syncPcbRemote(client, snapshot),
+    );
+    saveQueueRef.current = remoteSave;
+    const saved = await remoteSave;
+    if (activeRef.current && request === requestRef.current) {
+      setStatus(saved ? "synced" : "local");
+    }
+    return saved;
+  }, [client]);
+
+  return {
+    hasUnsavedChanges,
+    markClean,
+    saveNow,
+    status: hasUnsavedChanges ? "unsaved" : status,
+  };
 }

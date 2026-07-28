@@ -167,6 +167,9 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   const inspectorSource = await read(
     "src/components/pcb-designer/PcbInspector.tsx",
   );
+  const canvas3dSource = await read(
+    "src/components/pcb-designer/Pcb3DCanvas.tsx",
+  );
 
   assert.match(workspaceSource, /data-testid=["']pcb-project-bar["']/);
   assert.match(leftRailSource, /data-testid=["']pcb-left-rail["']/);
@@ -174,6 +177,8 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.match(inspectorSource, /data-testid=["']pcb-inspector["']/);
   assert.match(workspaceSource, /PcbToolbar/);
   assert.match(workspaceSource, /PcbDialogs/);
+  assert.match(workspaceSource, /Pcb3DCanvas/);
+  assert.match(canvas3dSource, /OrbitControls/);
   assert.match(leftRailSource, /projects[\s\S]*templates[\s\S]*library[\s\S]*bom/i);
   assert.match(leftRailSource, /statusFilter[\s\S]*sourceFilter/);
   assert.match(toolbarSource, /undo[\s\S]*redo[\s\S]*exportPng/i);
@@ -189,10 +194,11 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
     toolbarSource,
     dialogsSource,
     canvasSource,
+    canvas3dSource,
     inspectorSource,
     stylesSource,
   ].join("\n");
-  assert.doesNotMatch(combined, /\b(?:DataCenter|source-login|3D)\b/i);
+  assert.doesNotMatch(combined, /\b(?:DataCenter|source-login)\b/i);
   assert.doesNotMatch(combined, /gradient|shadow-(?:xl|2xl)/i);
 });
 
