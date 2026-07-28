@@ -16,6 +16,9 @@ const toolbarSource = await read("src/components/pcb-designer/PcbToolbar.tsx");
 const pngExportSource = await read("src/components/pcb-designer/core/pngExport.ts");
 const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
 const persistenceSource = await read("src/components/pcb-designer/hooks/usePcbPersistence.ts");
+const presenceSource = await read("src/components/pcb-designer/hooks/usePcbProjectPresence.ts");
+const collaboratorsSource = await read("src/components/pcb-designer/PcbCollaborators.tsx");
+const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
 
 test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts", () => {
   assert.match(canvasSource, /<svg[\s\S]*data-pcb-canvas/);
@@ -99,12 +102,38 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(workspaceSource, /key\.toLocaleLowerCase\(\) !== ["']s["']/);
 });
 
-test("debounces quiet autosave and avoids flashing a volatile timestamp", () => {
-  assert.match(persistenceSource, /PCB_LOCAL_SAVE_DELAY_MS = 900/);
-  assert.match(persistenceSource, /PCB_REMOTE_SAVE_DELAY_MS = 2400/);
-  assert.doesNotMatch(persistenceSource, /setStatus\(["']saving["']\);[\s\S]{0,160}reserve\(\)/);
-  assert.match(workspaceSource, /停止操作後自動儲存/);
+test("saves only on explicit action and warns before abandoning dirty work", () => {
+  assert.doesNotMatch(persistenceSource, /PCB_(?:LOCAL|REMOTE)_SAVE_DELAY_MS/);
+  assert.doesNotMatch(persistenceSource, /setTimeout/);
+  assert.match(persistenceSource, /saveNow[\s\S]{0,500}repositoryRef\.current\.save/);
+  assert.match(persistenceSource, /beforeunload/);
+  assert.match(persistenceSource, /hasUnsavedChanges/);
+  assert.match(workspaceSource, /手動儲存模式（Ctrl\+S）/);
+  assert.match(workspaceSource, /尚未儲存/);
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
+});
+
+test("shows same-project editors and tracks their editing context", () => {
+  assert.match(presenceSource, /pcb_project_presence:\$\{projectId\}/);
+  assert.match(presenceSource, /presenceState/);
+  assert.match(presenceSource, /dirty/);
+  assert.match(presenceSource, /viewMode/);
+  assert.match(collaboratorsSource, /同案編輯者/);
+  assert.match(collaboratorsSource, /編輯中，尚未儲存/);
+  assert.match(workspaceSource, /usePcbProjectPresence/);
+  assert.match(workspaceSource, /<PcbCollaborators/);
+});
+
+test("provides a lazy interactive 3D PCB view without replacing the 2D editor", () => {
+  assert.match(workspaceSource, /lazy\(\(\) => import\(["']\.\/Pcb3DCanvas\.tsx["']\)/);
+  assert.match(workspaceSource, /viewMode === ["']2d["'][\s\S]{0,500}<PcbCanvas/);
+  assert.match(workspaceSource, /<Pcb3DCanvas/);
+  assert.match(canvas3dSource, /<Canvas/);
+  assert.match(canvas3dSource, /OrbitControls/);
+  assert.match(canvas3dSource, /project\.components\.map/);
+  assert.match(canvas3dSource, /project\.keepouts\.map/);
+  assert.match(canvas3dSource, /workspace\.selectObject/);
+  assert.match(canvas3dSource, /重設視角/);
 });
 
 test("makes existing canvas objects keyboard-selectable", () => {
@@ -145,7 +174,7 @@ test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.match(canvasSource, /cursorPoint[\s\S]*toFixed/);
   assert.match(canvasSource, /drc-overlay[\s\S]*translate\([\s\S]*rotate\(/);
   assert.match(editorCssSource, /max-width:\s*1279px[\s\S]*pcb-left-drawer,[\s\S]*visibility:\s*hidden[\s\S]*is-open[\s\S]*visibility:\s*visible/);
-  assert.match(workspaceSource, /停止操作後自動儲存/);
+  assert.match(workspaceSource, /手動儲存模式（Ctrl\+S）/);
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
   assert.match(workspaceSource, /onRunDrc=\{\(\) => \{[\s\S]{0,120}runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
 });
