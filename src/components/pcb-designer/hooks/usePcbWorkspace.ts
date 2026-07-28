@@ -67,7 +67,16 @@ export function usePcbWorkspace({
   );
   const stateRef = useRef(state.data);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
+  const hydratedCleanRevisionRef = useRef<string | null>(null);
   stateRef.current = state.data;
+
+  const persistence = usePcbPersistence({
+    state: state.data,
+    storage,
+    remoteClient,
+    allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
+  });
+  const { markClean } = persistence;
 
   useEffect(() => {
     let active = true;
@@ -86,7 +95,10 @@ export function usePcbWorkspace({
         && Date.parse(remoteState.updatedAt) > Date.parse(localState.updatedAt);
       if (remoteState && (remoteIsNewer || isBlankSeedWorkspace(localState))) {
         repository.save(remoteState);
+        hydratedCleanRevisionRef.current = remoteState.updatedAt;
         dispatch({ type: "persistence/hydrate", data: remoteState });
+      } else {
+        markClean(localState.updatedAt);
       }
       setRemoteReady(true);
     });
@@ -94,14 +106,14 @@ export function usePcbWorkspace({
     return () => {
       active = false;
     };
-  }, [remoteClient, repository]);
+  }, [markClean, remoteClient, repository]);
 
-  const persistenceStatus = usePcbPersistence({
-    state: state.data,
-    storage,
-    remoteClient,
-    allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
-  });
+  useEffect(() => {
+    if (hydratedCleanRevisionRef.current !== state.data.updatedAt) return;
+    markClean(state.data.updatedAt);
+    hydratedCleanRevisionRef.current = null;
+  }, [markClean, state.data.updatedAt]);
+
   const editor = usePcbEditorActions(state, dispatch);
 
   useEffect(() => {
@@ -114,10 +126,9 @@ export function usePcbWorkspace({
   );
   const openProject = useCallback(
     (projectId: string) => {
-      repository.save(stateRef.current);
       dispatch({ type: "project/open", projectId });
     },
-    [repository],
+    [],
   );
   const renameProject = useCallback(
     (projectId: string, name: string) =>
@@ -232,15 +243,13 @@ export function usePcbWorkspace({
     [],
   );
   const runDrc = useCallback(() => dispatch({ type: "drc/run" }), []);
-  const saveNow = useCallback(() => {
-    repository.save(stateRef.current);
-    dispatch({ type: "persistence/touch" });
-  }, [repository]);
+  const saveNow = persistence.saveNow;
 
   return {
     ...state,
     ...editor,
-    persistenceStatus,
+    persistenceStatus: persistence.status,
+    hasUnsavedChanges: persistence.hasUnsavedChanges,
     createProject,
     openProject,
     renameProject,
