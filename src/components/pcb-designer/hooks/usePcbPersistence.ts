@@ -17,6 +17,9 @@ export interface UsePcbPersistenceOptions {
   allowRemoteSync?: boolean;
 }
 
+export const PCB_LOCAL_SAVE_DELAY_MS = 900;
+export const PCB_REMOTE_SAVE_DELAY_MS = 2400;
+
 const localOnlyStorage: StorageLike = {
   getItem: () => null,
   setItem: () => undefined,
@@ -69,17 +72,19 @@ export function usePcbPersistence({
   }, [client]);
 
   useEffect(() => {
-    setStatus("saving");
     const coordinator = coordinatorRef.current;
     const generation = coordinator?.reserve();
     const localTimer = window.setTimeout(() => {
       repository.save(state);
-      setStatus("local");
-    }, 300);
+      if (!client) setStatus("local");
+    }, PCB_LOCAL_SAVE_DELAY_MS);
     const remoteTimer = client
       ? window.setTimeout(() => {
-        if (coordinator && generation !== undefined) coordinator.commit(generation, state);
-      }, 900)
+        if (coordinator && generation !== undefined) {
+          setStatus("saving");
+          coordinator.commit(generation, state);
+        }
+      }, PCB_REMOTE_SAVE_DELAY_MS)
       : null;
 
     return () => {

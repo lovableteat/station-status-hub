@@ -20,6 +20,8 @@ export const MAX_PLACEMENT_COLLISION_TESTS = 250_000;
 
 export interface PcbPlacementOptions extends PlacementSearchOptions {
   layer?: PcbPlacedComponent["layer"];
+  exact?: boolean;
+  bypassSnap?: boolean;
 }
 
 export type PlacementResult =
@@ -89,6 +91,20 @@ export function placeLibraryComponent(
     layer: placementOptions?.layer ?? "top",
     locked: false,
   };
+  if (preferred && placementOptions?.exact) {
+    const point = project.board.snapToGrid && !placementOptions.bypassSnap
+      ? {
+        x: snapValue(preferred.x, project.board.gridSize),
+        y: snapValue(preferred.y, project.board.gridSize),
+      }
+      : preferred;
+    const exactCandidate = { ...candidate, ...point };
+    if (!canPlaceComponent(base, exactCandidate)) {
+      return { ok: false, reason: "此位置超出板框，或與現有元件及禁制區重疊。" };
+    }
+    base.components.push(exactCandidate);
+    return { ok: true, project: base, component: exactCandidate };
+  }
   const exactPreferred = preferred && !project.board.snapToGrid
     ? { ...candidate, ...preferred }
     : null;
