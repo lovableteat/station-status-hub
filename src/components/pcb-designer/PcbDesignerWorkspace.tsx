@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { CircuitBoard, FileJson, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -24,6 +24,7 @@ import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
 import { PcbLeftRail } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
+import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
 import {
@@ -38,7 +39,12 @@ import {
   type PcbProject,
   type PcbTemplate,
 } from "./hooks/usePcbWorkspace.ts";
+import { usePcbProjectPresence, type PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 import "./pcb-designer.css";
+
+const Pcb3DCanvas = lazy(() => import("./Pcb3DCanvas.tsx").then((module) => ({
+  default: module.Pcb3DCanvas,
+})));
 
 export interface PcbPngExportOptions {
   project: PcbProject;
@@ -61,7 +67,7 @@ function statusLabel(status: PcbProject["status"]): string {
 function persistenceLabel(status: string): string {
   if (status === "saving") return "儲存中";
   if (status === "synced") return "已同步";
-  if (status === "error") return "本機草稿";
+  if (status === "unsaved") return "尚未儲存";
   return "本機草稿";
 }
 
@@ -90,8 +96,41 @@ export function PcbDesignerWorkspace({
     workspace.data.templates[0]?.id ?? "",
   );
   const [openDrawer, setOpenDrawer] = useState<"left" | "right" | null>(null);
+  const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
+  const presence = usePcbProjectPresence({
+    dirty: workspace.hasUnsavedChanges,
+    projectId: workspace.activeProject.id,
+    projectName: workspace.activeProject.name,
+    user,
+    viewMode,
+  });
+
+  const handleSave = useCallback(async () => {
+    const remoteSaved = await saveNow();
+    if (remoteClient && !remoteSaved) {
+      toast({
+        title: "已儲存在本機，但雲端同步失敗",
+        description: "內容仍保留在此瀏覽器，請確認網路後再按一次儲存。",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: remoteClient ? "儲存與同步完成" : "本機草稿已儲存",
+      description: remoteClient
+        ? "同一帳號在其他電腦重新開啟後可讀取這次版本。"
+        : "目前為本機帳號，內容已保存在此瀏覽器。",
+    });
+  }, [remoteClient, saveNow]);
+
+  const changeViewMode = useCallback((mode: PcbViewMode) => {
+    setViewMode(mode);
+    if (mode === "3d") {
+      setPlacementComponentId(null);
+    }
+  }, []);
 
   const startPlacement = useCallback((componentId: string) => {
     setPlacementComponentId(componentId);
@@ -119,11 +158,11 @@ export function PcbDesignerWorkspace({
     const saveWithKeyboard = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLocaleLowerCase() !== "s") return;
       event.preventDefault();
-      saveNow();
+      void handleSave();
     };
     window.addEventListener("keydown", saveWithKeyboard);
     return () => window.removeEventListener("keydown", saveWithKeyboard);
-  }, [saveNow]);
+  }, [handleSave]);
 
   const previewImport = (
     title: string,
@@ -269,11 +308,20 @@ export function PcbDesignerWorkspace({
             ))}
           </select>
           <span className="pcb-status-chip">{statusLabel(workspace.activeProject.status)}</span>
-          <span className="pcb-save-state">{persistenceLabel(workspace.persistenceStatus)}</span>
+          <span className="pcb-save-state" data-status={workspace.persistenceStatus}>
+            {persistenceLabel(workspace.persistenceStatus)}
+          </span>
           {!workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
         </div>
 
         <div className="pcb-project-actions">
+          <PcbCollaborators
+            connected={presence.connected}
+            currentUser={user}
+            dirty={workspace.hasUnsavedChanges}
+            peers={presence.peers}
+            viewMode={viewMode}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -343,24 +391,20 @@ export function PcbDesignerWorkspace({
 
       <PcbToolbar
         canMutate={workspace.canMutate}
+        canSave={workspace.canEdit}
         documentLocked={workspace.documentLocked}
         tool={workspace.tool}
         activeLayer={workspace.activeLayer}
         zoom={workspace.zoom}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
-        exportPngAvailable
+        isSaving={workspace.persistenceStatus === "saving"}
+        viewMode={viewMode}
+        exportPngAvailable={viewMode === "2d"}
         exportIncludesGrid={exportIncludesGrid}
         onNew={() => setDialog({ kind: "new-project" })}
-        onSave={() => {
-          workspace.saveNow();
-          toast({
-            title: remoteClient ? "草稿已儲存，正在同步" : "已儲存本機草稿",
-            description: remoteClient
-              ? "同步完成後，其他電腦使用同一帳號即可開啟。"
-              : "目前為本機測試帳號，資料已安全保存在此瀏覽器。",
-          });
-        }}
+        onSave={handleSave}
+        onViewModeChange={changeViewMode}
         onExportProject={() => downloadProject(workspace.activeProject)}
         onExportBomCsv={() => downloadBomCsv(workspace.activeProject)}
         onExportBomXlsx={() => {
@@ -434,12 +478,18 @@ export function PcbDesignerWorkspace({
           />
         </div>
 
-        <PcbCanvas
-          workspace={workspace}
-          placementComponentId={placementComponentId}
-          onPlacementComplete={completePlacement}
-          onPlacementCancel={cancelPlacement}
-        />
+        {viewMode === "2d" ? (
+          <PcbCanvas
+            workspace={workspace}
+            placementComponentId={placementComponentId}
+            onPlacementComplete={completePlacement}
+            onPlacementCancel={cancelPlacement}
+          />
+        ) : (
+          <Suspense fallback={<div className="pcb-3d-loading">正在建立 3D 板件與元件...</div>}>
+            <Pcb3DCanvas workspace={workspace} />
+          </Suspense>
+        )}
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
           <PcbInspector workspace={workspace} />
         </div>
@@ -448,12 +498,13 @@ export function PcbDesignerWorkspace({
       <footer className="pcb-status-bar">
         <span>元件 {workspace.activeProject.components.length}</span>
         <span className="font-mono">{workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm</span>
+        <span>檢視 {viewMode.toUpperCase()}</span>
         <span>放置層 {workspace.activeLayer === "top" ? "Top" : "Bottom"}</span>
-        <span className="font-mono">{workspace.zoom}%</span>
+        {viewMode === "2d" && <span className="font-mono">{workspace.zoom}%</span>}
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
         <span>DRC {workspace.drcIssues.length}</span>
         <span className="ml-auto">
-          {persistenceLabel(workspace.persistenceStatus)} · 停止操作後自動儲存
+          {persistenceLabel(workspace.persistenceStatus)} · 手動儲存模式（Ctrl+S）
         </span>
       </footer>
 

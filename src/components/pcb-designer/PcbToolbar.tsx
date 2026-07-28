@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  Box,
   Download,
   Hand,
   Layers3,
@@ -12,6 +13,7 @@ import {
   Ruler,
   Save,
   ScanSearch,
+  Square,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -32,6 +34,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { PcbTool } from "./types.ts";
+import type { PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 
 interface ToolButtonProps {
   label: string;
@@ -81,16 +84,20 @@ function ToolButton({
 
 export interface PcbToolbarProps {
   canMutate: boolean;
+  canSave: boolean;
   documentLocked: boolean;
   tool: PcbTool;
   activeLayer: "top" | "bottom";
   zoom: number;
   canUndo: boolean;
   canRedo: boolean;
+  isSaving: boolean;
+  viewMode: PcbViewMode;
   exportPngAvailable: boolean;
   exportIncludesGrid: boolean;
   onNew: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
+  onViewModeChange: (mode: PcbViewMode) => void;
   onExportProject: () => void;
   onExportBomCsv: () => void;
   onExportBomXlsx: () => void;
@@ -108,16 +115,20 @@ export interface PcbToolbarProps {
 
 export function PcbToolbar({
   canMutate,
+  canSave,
   documentLocked,
   tool,
   activeLayer,
   zoom,
   canUndo,
   canRedo,
+  isSaving,
+  viewMode,
   exportPngAvailable,
   exportIncludesGrid,
   onNew,
   onSave,
+  onViewModeChange,
   onExportProject,
   onExportBomCsv,
   onExportBomXlsx,
@@ -141,7 +152,34 @@ export function PcbToolbar({
         role="toolbar"
       >
         <ToolButton label="新增專案" icon={Plus} disabled={!canMutate} onClick={onNew} />
-        <ToolButton label="立即儲存" shortcut="Ctrl+S" icon={Save} onClick={onSave} />
+        <ToolButton
+          label={isSaving ? "正在同步" : "儲存並同步"}
+          shortcut="Ctrl+S"
+          icon={Save}
+          disabled={!canSave || isSaving}
+          onClick={() => void onSave()}
+        />
+
+        <div className="pcb-view-switch" role="group" aria-label="畫布檢視模式">
+          <button
+            type="button"
+            className={cn(viewMode === "2d" && "is-active")}
+            aria-pressed={viewMode === "2d"}
+            onClick={() => onViewModeChange("2d")}
+          >
+            <Square aria-hidden="true" />
+            2D
+          </button>
+          <button
+            type="button"
+            className={cn(viewMode === "3d" && "is-active")}
+            aria-pressed={viewMode === "3d"}
+            onClick={() => onViewModeChange("3d")}
+          >
+            <Box aria-hidden="true" />
+            3D
+          </button>
+        </div>
 
         <DropdownMenu>
           <Tooltip>
@@ -222,10 +260,10 @@ export function PcbToolbar({
         </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
-        <ToolButton label="縮小" shortcut="-" icon={ZoomOut} disabled={zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
+        <ToolButton label="縮小" shortcut="-" icon={ZoomOut} disabled={viewMode === "3d" || zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
         <span className="pcb-zoom-readout">{zoom}%</span>
-        <ToolButton label="放大" shortcut="+" icon={ZoomIn} disabled={zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
-        <ToolButton label="符合板框" shortcut="F" icon={Maximize2} onClick={onResetView} />
+        <ToolButton label="放大" shortcut="+" icon={ZoomIn} disabled={viewMode === "3d" || zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
+        <ToolButton label="符合板框" shortcut="F" icon={Maximize2} disabled={viewMode === "3d"} onClick={onResetView} />
 
         <div className="ml-auto">
           <Button
