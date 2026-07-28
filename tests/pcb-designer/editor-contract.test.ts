@@ -15,6 +15,7 @@ const inspectorSource = await read("src/components/pcb-designer/PcbInspector.tsx
 const toolbarSource = await read("src/components/pcb-designer/PcbToolbar.tsx");
 const pngExportSource = await read("src/components/pcb-designer/core/pngExport.ts");
 const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
+const persistenceSource = await read("src/components/pcb-designer/hooks/usePcbPersistence.ts");
 
 test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts", () => {
   assert.match(canvasSource, /<svg[\s\S]*data-pcb-canvas/);
@@ -25,7 +26,7 @@ test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts"
   assert.match(canvasSource, /onDrop/);
   assert.match(canvasSource, /clientPointToBoard/);
   assert.match(canvasSource, /setPointerCapture/);
-  assert.match(canvasSource, /workspace\.tool === ["']pan["'] \|\| event\.button === 1/);
+  assert.match(canvasSource, /event\.button === 1[\s\S]{0,180}beginPan/);
   assert.match(canvasSource, /snapPoint/);
   assert.match(canvasSource, /workspace\.tool === ["']measure["']\s*\?\s*["']measurement["']/);
 });
@@ -40,8 +41,10 @@ test("renders PCB layers in the required stable order", () => {
 test("makes library cards draggable and routes click and drop through one placement action", () => {
   assert.match(railSource, /draggable=\{workspace\.canMutate\}/);
   assert.match(railSource, /dataTransfer\.setData/);
-  assert.match(railSource, /workspace\.placeLibraryComponent/);
+  assert.match(railSource, /onStartPlacement\(component\.id\)/);
   assert.match(canvasSource, /workspace\.placeLibraryComponent/);
+  assert.match(canvasSource, /data-placement-valid/);
+  assert.match(canvasSource, /exact:\s*true/);
 });
 
 test("placement actions reject document-locked mutations before reporting success", () => {
@@ -88,7 +91,20 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(combinedHookSource, /history\/undo/);
   assert.match(combinedHookSource, /history\/redo/);
   assert.match(combinedHookSource, /event\.ctrlKey \|\| event\.metaKey/);
-  assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}selectObject\(null\)/);
+  assert.match(editorHookSource, /key === ["']v["'] \|\| key === ["']h["']/);
+  assert.match(editorHookSource, /key === ["']m["'] \|\| key === ["']k["']/);
+  assert.match(editorHookSource, /key === ["']r["'][\s\S]{0,120}rotateSelected/);
+  assert.match(editorHookSource, /addEventListener\(["']keyup["']/);
+  assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}onPlacementCancel/);
+  assert.match(workspaceSource, /key\.toLocaleLowerCase\(\) !== ["']s["']/);
+});
+
+test("debounces quiet autosave and avoids flashing a volatile timestamp", () => {
+  assert.match(persistenceSource, /PCB_LOCAL_SAVE_DELAY_MS = 900/);
+  assert.match(persistenceSource, /PCB_REMOTE_SAVE_DELAY_MS = 2400/);
+  assert.doesNotMatch(persistenceSource, /setStatus\(["']saving["']\);[\s\S]{0,160}reserve\(\)/);
+  assert.match(workspaceSource, /停止操作後自動儲存/);
+  assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
 });
 
 test("makes existing canvas objects keyboard-selectable", () => {
@@ -129,6 +145,7 @@ test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.match(canvasSource, /cursorPoint[\s\S]*toFixed/);
   assert.match(canvasSource, /drc-overlay[\s\S]*translate\([\s\S]*rotate\(/);
   assert.match(editorCssSource, /max-width:\s*1279px[\s\S]*pcb-left-drawer,[\s\S]*visibility:\s*hidden[\s\S]*is-open[\s\S]*visibility:\s*visible/);
-  assert.match(workspaceSource, /自動儲存[\s\S]{0,180}updatedAt/);
+  assert.match(workspaceSource, /停止操作後自動儲存/);
+  assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
   assert.match(workspaceSource, /onRunDrc=\{\(\) => \{[\s\S]{0,120}runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
 });
