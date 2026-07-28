@@ -38,6 +38,41 @@ test("placement records the selected board layer", () => {
   assert.equal(result.project.components[0].layer, "bottom");
 });
 
+test("exact placement keeps the requested location and rejects invalid clicks instead of relocating", () => {
+  const project = createBlankProject("Exact placement");
+  const first = editorModule.placeLibraryComponent(
+    project,
+    BUILT_IN_COMPONENTS[3],
+    { x: 20.2, y: 20.2 },
+    undefined,
+    { exact: true },
+  );
+
+  assert.equal(first.ok, true);
+  assert.deepEqual({ x: first.component.x, y: first.component.y }, { x: 20, y: 20 });
+
+  const collision = editorModule.placeLibraryComponent(
+    first.project,
+    BUILT_IN_COMPONENTS[3],
+    { x: 20, y: 20 },
+    undefined,
+    { exact: true },
+  );
+  assert.equal(collision.ok, false);
+  assert.match(collision.reason, /重疊/);
+  assert.equal(first.project.components.length, 1);
+
+  const bypassed = editorModule.placeLibraryComponent(
+    project,
+    BUILT_IN_COMPONENTS[3],
+    { x: 20.2, y: 20.2 },
+    undefined,
+    { exact: true, bypassSnap: true },
+  );
+  assert.equal(bypassed.ok, true);
+  assert.deepEqual({ x: bypassed.component.x, y: bypassed.component.y }, { x: 20.2, y: 20.2 });
+});
+
 test("failed placement is truthful and leaves project identity and component count untouched", () => {
   assert.equal(typeof editorModule.placeLibraryComponent, "function");
   const project = createBlankProject("Too small");

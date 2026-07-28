@@ -9,7 +9,12 @@ import {
   type WheelEvent,
 } from "react";
 import { toast } from "@/hooks/use-toast";
-import { clientPointToBoard, getRotatedRectangleCorners, snapPoint } from "./core/geometry.ts";
+import {
+  canPlaceComponent,
+  clientPointToBoard,
+  getRotatedRectangleCorners,
+  snapPoint,
+} from "./core/geometry.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type { PcbPlacedComponent, PcbPoint } from "./types.ts";
 
@@ -18,6 +23,13 @@ export const PCB_LIBRARY_DRAG_TYPE = "application/x-pcb-library-component";
 interface CanvasSize {
   width: number;
   height: number;
+}
+
+interface PcbCanvasProps {
+  workspace: PcbWorkspaceApi;
+  placementComponentId?: string | null;
+  onPlacementComplete?: () => void;
+  onPlacementCancel?: () => void;
 }
 
 type PointerInteraction =
@@ -93,13 +105,22 @@ function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
   };
 }
 
-export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
+export function PcbCanvas({
+  workspace,
+  placementComponentId = null,
+  onPlacementComplete,
+  onPlacementCancel,
+}: PcbCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const hostRef = useRef<HTMLElement>(null);
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 640 });
   const [interaction, setInteraction] = useState<PointerInteraction | null>(null);
   const [cursorPoint, setCursorPoint] = useState<PcbPoint | null>(null);
+  const [placementPoint, setPlacementPoint] = useState<PcbPoint | null>(null);
   const project = workspace.activeProject;
+  const placementLibraryComponent = placementComponentId
+    ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
+    : null;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -117,13 +138,16 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
   useEffect(() => {
     const cancelDraft = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (!interaction) workspace.selectObject(null);
         setInteraction(null);
+        setPlacementPoint(null);
+        if (placementComponentId) onPlacementCancel?.();
       }
     };
     window.addEventListener("keydown", cancelDraft);
     return () => window.removeEventListener("keydown", cancelDraft);
-  }, [interaction, workspace]);
+  }, [onPlacementCancel, placementComponentId]);
+
+  useEffect(() => setPlacementPoint(null), [placementComponentId]);
 
   const viewBox = useMemo(() => {
     const viewportAspect = size.width / Math.max(1, size.height);
@@ -168,6 +192,23 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
   );
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
+  const placementPreview = useMemo(() => {
+    if (!placementLibraryComponent || !placementPoint) return null;
+    const component: PcbPlacedComponent = {
+      ...placementLibraryComponent,
+      instanceId: "placement-preview",
+      reference: "預覽",
+      x: placementPoint.x,
+      y: placementPoint.y,
+      rotation: 0,
+      layer: workspace.activeLayer,
+      locked: false,
+    };
+    return {
+      component,
+      valid: workspace.canMutate && canPlaceComponent(project, component),
+    };
+  }, [placementLibraryComponent, placementPoint, project, workspace.activeLayer, workspace.canMutate]);
   const selectWithKeyboard = (
     event: ReactKeyboardEvent<SVGElement>,
     selection: Parameters<typeof workspace.selectObject>[0],
@@ -190,12 +231,38 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
   };
 
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (event.button === 1 || workspace.tool === "pan") {
+    if (event.button === 1) {
       event.preventDefault();
       beginPan(event);
       return;
     }
     if (event.button !== 0) return;
+    if (placementLibraryComponent && workspace.canMutate && workspace.tool !== "pan") {
+      event.preventDefault();
+      const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
+      const point = project.board.snapToGrid
+        ? snapPoint(rawPoint, gridSize, event.altKey)
+        : rawPoint;
+      const result = workspace.placeLibraryComponent(
+        placementLibraryComponent.id,
+        point,
+        { exact: true, bypassSnap: event.altKey },
+      );
+      if (result.ok === true) {
+        workspace.selectObject({ kind: "component", id: result.component.instanceId });
+        onPlacementComplete?.();
+        setPlacementPoint(null);
+        toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
+      } else {
+        toast({ title: "此處無法放置", description: result.reason, variant: "destructive" });
+      }
+      return;
+    }
+    if (workspace.tool === "pan") {
+      event.preventDefault();
+      beginPan(event);
+      return;
+    }
     if (workspace.tool === "select") {
       workspace.selectObject(null);
       return;
@@ -239,6 +306,11 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const point = pointForEvent(event.currentTarget, event.clientX, event.clientY);
     setCursorPoint(point);
+    if (placementLibraryComponent) {
+      setPlacementPoint(project.board.snapToGrid
+        ? snapPoint(point, gridSize, event.altKey)
+        : point);
+    }
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     if (interaction.kind === "pan") {
       const x = interaction.center.x
@@ -315,10 +387,18 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
     if (!workspace.canMutate) return;
     const componentId = event.dataTransfer.getData(PCB_LIBRARY_DRAG_TYPE);
     if (!componentId) return;
-    const point = pointForEvent(event.currentTarget, event.clientX, event.clientY);
-    const result = workspace.placeLibraryComponent(componentId, point);
+    const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
+    const point = project.board.snapToGrid
+      ? snapPoint(rawPoint, gridSize, event.altKey)
+      : rawPoint;
+    const result = workspace.placeLibraryComponent(componentId, point, {
+      exact: true,
+      bypassSnap: event.altKey,
+    });
     if (result.ok === true) {
       workspace.selectObject({ kind: "component", id: result.component.instanceId });
+      onPlacementComplete?.();
+      setPlacementPoint(null);
       toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
     } else {
       toast({ title: "無法放置元件", description: result.reason, variant: "destructive" });
@@ -337,6 +417,7 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
         className="pcb-canvas"
         data-pcb-canvas
         data-tool={workspace.tool}
+        data-placement-active={placementLibraryComponent ? "true" : "false"}
         role="application"
         aria-label="PCB 毫米座標 SVG 編輯器"
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
@@ -346,10 +427,19 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
         onPointerUp={handlePointerUp}
         onPointerCancel={() => setInteraction(null)}
         onPointerLeave={() => {
-          if (!interaction) setCursorPoint(null);
+          if (!interaction) {
+            setCursorPoint(null);
+            setPlacementPoint(null);
+          }
         }}
         onWheel={handleWheel}
-        onDragOver={(event) => event.preventDefault()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
+          setPlacementPoint(project.board.snapToGrid
+            ? snapPoint(rawPoint, gridSize, event.altKey)
+            : rawPoint);
+        }}
         onDrop={handleDrop}
       >
         <defs>
@@ -562,6 +652,34 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
         </g>
 
         <g data-layer="tool-draft" data-export-hidden pointerEvents="none">
+          {placementPreview && (
+            <g
+              className="pcb-placement-preview"
+              data-placement-valid={placementPreview.valid ? "true" : "false"}
+              transform={`translate(${placementPreview.component.x} ${placementPreview.component.y})`}
+            >
+              <rect
+                x={-placementPreview.component.width / 2}
+                y={-placementPreview.component.height / 2}
+                width={placementPreview.component.width}
+                height={placementPreview.component.height}
+                rx={Math.min(0.8, placementPreview.component.width / 6, placementPreview.component.height / 6)}
+                fill={placementPreview.valid ? placementPreview.component.color : "#fb7185"}
+                fillOpacity="0.58"
+                stroke={placementPreview.valid ? "#8df3e2" : "#fecdd3"}
+                strokeWidth={strokeWidth * 1.5}
+                strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 1.5}`}
+              />
+              <text
+                className="pcb-svg-label pcb-component-reference"
+                fontSize={Math.max(1.5, Math.min(placementPreview.component.width, placementPreview.component.height) * 0.3)}
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {placementLibraryComponent?.name}
+              </text>
+            </g>
+          )}
           {interaction?.kind === "keepout" && (
             <rect
               x={Math.min(interaction.start.x, interaction.end.x)}
@@ -625,8 +743,17 @@ export function PcbCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
           }))}
         </g>
       </svg>
+      {placementLibraryComponent && (
+        <div className="pcb-placement-banner" data-export-hidden>
+          <span className="pcb-placement-banner-dot" style={{ backgroundColor: placementLibraryComponent.color }} />
+          <strong>{placementLibraryComponent.name}</strong>
+          <span>移動游標預覽，點一下放置</span>
+          <kbd>Esc</kbd>
+          <span>取消</span>
+        </div>
+      )}
       <div className="pcb-canvas-hud" data-export-hidden>
-        <span>{workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
+        <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
         <span>Alt 暫停吸附</span>
         <span className="font-mono">
           X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
