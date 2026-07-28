@@ -114,10 +114,10 @@ export function usePcbWorkspace({
   );
   const openProject = useCallback(
     (projectId: string) => {
-      repository.save(state.data);
+      repository.save(stateRef.current);
       dispatch({ type: "project/open", projectId });
     },
-    [repository, state.data],
+    [repository],
   );
   const renameProject = useCallback(
     (projectId: string, name: string) =>
@@ -233,9 +233,9 @@ export function usePcbWorkspace({
   );
   const runDrc = useCallback(() => dispatch({ type: "drc/run" }), []);
   const saveNow = useCallback(() => {
-    repository.save(state.data);
+    repository.save(stateRef.current);
     dispatch({ type: "persistence/touch" });
-  }, [repository, state.data]);
+  }, [repository]);
 
   return {
     ...state,

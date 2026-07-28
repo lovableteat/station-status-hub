@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type Dispatch } from "react";
+import { useCallback, useEffect, useRef, type Dispatch } from "react";
 import {
   createKeepout as createKeepoutRecord,
   createMeasurement as createMeasurementRecord,
@@ -19,6 +19,7 @@ import type {
   PcbPoint,
   PcbProject,
   PcbSelection,
+  PcbTool,
 } from "../types.ts";
 import type {
   PcbWorkspaceAction,
@@ -34,8 +35,13 @@ export function usePcbEditorActions(
   state: PcbWorkspaceState,
   dispatch: Dispatch<PcbWorkspaceAction>,
 ) {
+  const toolBeforeSpaceRef = useRef<PcbTool | null>(null);
   const placeLibraryComponent = useCallback(
-    (componentId: string, preferred?: PcbPoint): PlacementResult => {
+    (
+      componentId: string,
+      preferred?: PcbPoint,
+      options?: { exact?: boolean; bypassSnap?: boolean },
+    ): PlacementResult => {
       if (!state.canEdit || state.documentLocked) {
         return { ok: false, reason: "文件已鎖定或目前為唯讀，無法放置元件。" };
       }
@@ -46,7 +52,7 @@ export function usePcbEditorActions(
         component,
         preferred,
         undefined,
-        { layer: state.activeLayer },
+        { layer: state.activeLayer, ...options },
       );
       if (result.ok) dispatch({ type: "project/commit", update: result.project });
       return result;
@@ -345,13 +351,16 @@ export function usePcbEditorActions(
         if (key === "z") {
           event.preventDefault();
           dispatch({ type: event.shiftKey ? "history/redo" : "history/undo" });
+          return;
         } else if (key === "y") {
           event.preventDefault();
           dispatch({ type: "history/redo" });
+          return;
         }
-        if (key === "z" || key === "y") return;
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
       }
       if (event.key === "Escape") {
+        event.preventDefault();
         dispatch({ type: "selection/set", selection: null });
         dispatch({ type: "tool/set", tool: "select" });
         return;
@@ -359,6 +368,45 @@ export function usePcbEditorActions(
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         deleteSelected();
+        return;
+      }
+      if (event.key === " " && !event.repeat) {
+        event.preventDefault();
+        toolBeforeSpaceRef.current = state.tool;
+        dispatch({ type: "tool/set", tool: "pan" });
+        return;
+      }
+      if (key === "v" || key === "h") {
+        event.preventDefault();
+        dispatch({ type: "tool/set", tool: key === "v" ? "select" : "pan" });
+        return;
+      }
+      if ((key === "m" || key === "k") && state.canEdit && !state.documentLocked) {
+        event.preventDefault();
+        dispatch({ type: "tool/set", tool: key === "m" ? "measure" : "keepout" });
+        return;
+      }
+      if (key === "r") {
+        event.preventDefault();
+        rotateSelected();
+        return;
+      }
+      if (key === "f" || key === "0") {
+        event.preventDefault();
+        dispatch({ type: "view/reset" });
+        return;
+      }
+      if (key === "+" || key === "=" || key === "-") {
+        event.preventDefault();
+        dispatch({
+          type: "zoom/set",
+          zoom: state.zoom + (key === "-" ? -25 : 25),
+        });
+        return;
+      }
+      if ((key === "t" || key === "b") && state.canEdit && !state.documentLocked) {
+        event.preventDefault();
+        dispatch({ type: "layer/set", layer: key === "t" ? "top" : "bottom" });
         return;
       }
       if (key === "l") {
@@ -382,13 +430,37 @@ export function usePcbEditorActions(
           : state.activeProject.board.gridSize;
       nudgeSelected(direction.x * step, direction.y * step);
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== " " || toolBeforeSpaceRef.current === null) return;
+      event.preventDefault();
+      const previousTool = toolBeforeSpaceRef.current;
+      toolBeforeSpaceRef.current = null;
+      dispatch({ type: "tool/set", tool: previousTool });
+    };
+    const restoreToolAfterBlur = () => {
+      if (toolBeforeSpaceRef.current === null) return;
+      const previousTool = toolBeforeSpaceRef.current;
+      toolBeforeSpaceRef.current = null;
+      dispatch({ type: "tool/set", tool: previousTool });
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", restoreToolAfterBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", restoreToolAfterBlur);
+    };
   }, [
     deleteSelected,
     dispatch,
     nudgeSelected,
+    rotateSelected,
     state.activeProject.board.gridSize,
+    state.canEdit,
+    state.documentLocked,
+    state.tool,
+    state.zoom,
   ]);
 
   const selectedObject = state.selection?.kind === "component"

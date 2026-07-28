@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { CircuitBoard, FileJson, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -83,13 +83,47 @@ export function PcbDesignerWorkspace({
     canEdit: canEditModule("pcb-designer"),
     remoteClient,
   });
+  const { saveNow, setTool } = workspace;
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
   const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState(
     workspace.data.templates[0]?.id ?? "",
   );
   const [openDrawer, setOpenDrawer] = useState<"left" | "right" | null>(null);
+  const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
+
+  const startPlacement = useCallback((componentId: string) => {
+    setPlacementComponentId(componentId);
+    setTool("select");
+  }, [setTool]);
+  const cancelPlacement = useCallback(() => setPlacementComponentId(null), []);
+  const completePlacement = useCallback(() => setPlacementComponentId(null), []);
+
+  useEffect(() => {
+    if (
+      placementComponentId
+      && !workspace.data.library.some((component) => component.id === placementComponentId)
+    ) {
+      setPlacementComponentId(null);
+    }
+  }, [placementComponentId, workspace.data.library]);
+
+  useEffect(() => {
+    if (placementComponentId && (workspace.tool === "measure" || workspace.tool === "keepout")) {
+      setPlacementComponentId(null);
+    }
+  }, [placementComponentId, workspace.tool]);
+
+  useEffect(() => {
+    const saveWithKeyboard = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLocaleLowerCase() !== "s") return;
+      event.preventDefault();
+      saveNow();
+    };
+    window.addEventListener("keydown", saveWithKeyboard);
+    return () => window.removeEventListener("keydown", saveWithKeyboard);
+  }, [saveNow]);
 
   const previewImport = (
     title: string,
@@ -382,6 +416,8 @@ export function PcbDesignerWorkspace({
         <div className={cn("pcb-left-drawer", openDrawer === "left" && "is-open")}>
           <PcbLeftRail
             workspace={workspace}
+            placementComponentId={placementComponentId}
+            onStartPlacement={startPlacement}
             onNewProject={() => setDialog({ kind: "new-project" })}
             onEditProject={(project) => {
               workspace.openProject(project.id);
@@ -398,7 +434,12 @@ export function PcbDesignerWorkspace({
           />
         </div>
 
-        <PcbCanvas workspace={workspace} />
+        <PcbCanvas
+          workspace={workspace}
+          placementComponentId={placementComponentId}
+          onPlacementComplete={completePlacement}
+          onPlacementCancel={cancelPlacement}
+        />
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
           <PcbInspector workspace={workspace} />
         </div>
@@ -412,8 +453,7 @@ export function PcbDesignerWorkspace({
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
         <span>DRC {workspace.drcIssues.length}</span>
         <span className="ml-auto">
-          {persistenceLabel(workspace.persistenceStatus)} · 自動儲存{" "}
-          {new Date(workspace.data.updatedAt).toLocaleTimeString("zh-TW", { hour12: false })}
+          {persistenceLabel(workspace.persistenceStatus)} · 停止操作後自動儲存
         </span>
       </footer>
 
