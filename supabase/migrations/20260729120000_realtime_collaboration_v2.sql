@@ -235,7 +235,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, auth, pg_temp
 AS $$
-  WITH current_user AS (
+  WITH viewer AS (
     SELECT public.current_system_user_id() AS id
   )
   SELECT
@@ -252,19 +252,19 @@ AS $$
       FROM public.chat_messages AS unread
       WHERE unread.thread_id = threads.id
         AND unread.deleted_at IS NULL
-        AND unread.sender_id <> current_user.id
+        AND unread.sender_id <> viewer.id
         AND unread.created_at > coalesce(receipt.last_read_at, '-infinity'::timestamptz)
     ) AS unread_count
-  FROM current_user
-  JOIN public.chat_members AS own_member ON own_member.user_id = current_user.id
+  FROM viewer
+  JOIN public.chat_members AS own_member ON own_member.user_id = viewer.id
   JOIN public.chat_threads AS threads ON threads.id = own_member.thread_id
   LEFT JOIN public.chat_members AS other_member
     ON other_member.thread_id = threads.id
-   AND other_member.user_id <> current_user.id
+   AND other_member.user_id <> viewer.id
   LEFT JOIN public.system_users AS other_user ON other_user.id = other_member.user_id
   LEFT JOIN public.chat_read_receipts AS receipt
     ON receipt.thread_id = threads.id
-   AND receipt.user_id = current_user.id
+   AND receipt.user_id = viewer.id
   LEFT JOIN LATERAL (
     SELECT messages.id, messages.body, messages.sender_id, messages.created_at
     FROM public.chat_messages AS messages
