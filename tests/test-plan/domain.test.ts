@@ -7,6 +7,25 @@ const filesModule = await import(
 const treeModule = await import(
   new URL("../../src/components/test-plan/core/tree.ts", import.meta.url).href,
 ).catch(() => ({}));
+const previewModule = await import(
+  new URL("../../src/components/test-plan/core/preview.ts", import.meta.url).href,
+).catch(() => ({}));
+
+test("classifies browser-previewable engineering files without pretending CAD and Office are native previews", () => {
+  const createFile = (originalName: string, mimeType: string | null = null) => ({
+    originalName,
+    mimeType,
+    extension: originalName.split(".").pop() ?? "",
+  });
+
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("board-photo.PNG", "image/png")), "image");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("report.pdf", "application/pdf")), "pdf");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("notes.md", "text/markdown")), "text");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("matrix.csv", "text/csv")), "text");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("layout.brd")), "unsupported");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("enclosure.step")), "unsupported");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("plan.xlsx")), "unsupported");
+});
 
 test("classifies Office, 3D, PCB, document, image, archive, and unknown files", () => {
   assert.equal(filesModule.classifyTestPlanFile("plan.pptx"), "presentation");

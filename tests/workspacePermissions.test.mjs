@@ -174,6 +174,7 @@ test("workspace preset synchronizes station page permissions", () => {
       "flow_info_view",
       "issues_view",
       "production_view",
+      "test_plan_view",
       "test_tracker_view",
       "tools_view",
     ].sort()
