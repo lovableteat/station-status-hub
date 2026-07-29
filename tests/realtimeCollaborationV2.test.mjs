@@ -32,11 +32,12 @@ test("authenticated account migration preserves legacy IDs and fallback login", 
   assert.doesNotMatch(loginFunction, /station-status\.local/);
 });
 
-test("stale cached sessions are upgraded before private providers mount", async () => {
-  const [context, app, upgradePage] = await Promise.all([
+test("stale cached sessions use the same login page before private providers mount", async () => {
+  const [context, app, index, loginPage] = await Promise.all([
     readSource("src/components/auth/UserContext.tsx"),
     readSource("src/App.tsx"),
-    readSource("src/components/auth/RealtimeSessionUpgradePage.tsx"),
+    readSource("src/pages/Index.tsx"),
+    readSource("src/components/auth/LoginPage.tsx"),
   ]);
 
   assert.match(context, /requiresRealtimeUpgrade: boolean/);
@@ -88,17 +89,27 @@ test("stale cached sessions are upgraded before private providers mount", async 
 
   assert.match(app, /function ApplicationSessionGate/);
   assert.match(app, /requiresRealtimeUpgrade/);
-  assert.match(app, /<RealtimeSessionUpgradePage \/>/);
+  assert.doesNotMatch(app, /RealtimeSessionUpgradePage/);
+  assert.match(
+    app,
+    /if \(requiresRealtimeUpgrade \|\| !isLoggedIn\) \{\s*return <LoginPage \/>;\s*\}/,
+    "signed-out and legacy-session states must render one shared login page",
+  );
   assert.match(
     app,
     /<ApplicationSessionGate>[\s\S]*<UserPresenceProvider>[\s\S]*<\/UserPresenceProvider>[\s\S]*<\/ApplicationSessionGate>/,
   );
+  assert.doesNotMatch(
+    index,
+    /LoginPage|if \(!isLoggedIn\)|if \(isInitializing\)/,
+    "the application session gate must be the only owner of the login screen",
+  );
 
-  assert.match(upgradePage, /autoComplete="current-password"/);
-  assert.match(upgradePage, /await authenticate\(user\.username, password\)/);
-  assert.match(upgradePage, /setPassword\(""\)/);
-  assert.match(upgradePage, /logout\(\)/);
-  assert.doesNotMatch(upgradePage, /localStorage|sessionStorage/);
+  assert.match(loginPage, /useState\(\(\) => user\?\.username \?\? ""\)/);
+  assert.match(loginPage, /requiresRealtimeUpgrade/);
+  assert.match(loginPage, /重新驗證後即可恢復完整功能/);
+  assert.match(loginPage, /autoComplete="current-password"/);
+  assert.doesNotMatch(loginPage, /localStorage|sessionStorage/);
 });
 
 test("presence reports real sync state without fake users or page refreshes", async () => {
