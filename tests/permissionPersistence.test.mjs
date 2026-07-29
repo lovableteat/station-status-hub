@@ -21,7 +21,7 @@ test("permission updates are atomic and publish real-time changes", async () => 
 
 test("admin dialog never reports a database failure as a local success", async () => {
   const source = await read("../src/components/admin/UserPermissionsDialog.tsx");
-  assert.match(source, /\.rpc\("set_user_access_permissions"/);
+  assert.match(source, /\.rpc\(\s*"set_user_access_permissions"/);
   assert.doesNotMatch(source, /已以本機方式儲存/);
   assert.doesNotMatch(source, /user_workspace_permissions:/);
 });

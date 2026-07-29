@@ -37,6 +37,7 @@ interface UserContextType {
   isInitializing: boolean;
   sessionMode: SessionMode;
   isRealtimeAuthenticated: boolean;
+  requiresRealtimeUpgrade: boolean;
 }
 
 interface AccountLoginPayload {
@@ -164,9 +165,22 @@ async function userFromSession(session: Session): Promise<User | null> {
 
 function normalizeThrownError(error: unknown, fallbackMessage: string) {
   if (error instanceof Error) return error;
+  if (typeof error === "string" && error.trim()) return new Error(error);
   const normalized = new Error(fallbackMessage) as Error & Record<string, unknown>;
   if (error && typeof error === "object") Object.assign(normalized, error);
   return normalized;
+}
+
+function isCredentialRejection(error: unknown, payload?: AccountLoginPayload | null) {
+  if (/invalid credentials|account is unavailable/i.test(payload?.error ?? "")) return true;
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as {
+    status?: number;
+    context?: { status?: number };
+  };
+  const status = Number(candidate.context?.status ?? candidate.status ?? 0);
+  return status === 401 || status === 403;
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -176,7 +190,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [sessionMode, setSessionMode] = useState<SessionMode>(
     demoUser ? "demo" : cachedUser ? "legacy" : "signed-out",
   );
-  const [isInitializing, setIsInitializing] = useState(!demoUser && !cachedUser);
+  // A cached application user may still have a valid Supabase session waiting
+  // to be restored. Keep the global session gate closed until that check ends.
+  const [isInitializing, setIsInitializing] = useState(!demoUser);
   const authenticatedSessionSeen = useRef(false);
 
   const applyUser = useCallback((nextUser: User, mode: Exclude<SessionMode, "signed-out">) => {
@@ -240,7 +256,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(
     async (username: string, password: string): Promise<AuthenticationResult | null> => {
       const normalizedUsername = username.trim();
-      let edgeFailure: unknown;
 
       if (REALTIME_COLLABORATION_V2_ENABLED) {
         const edgeResult = await runLoginWithTransientRetry(() =>
@@ -267,16 +282,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
               applyUser(authenticatedUser, "authenticated");
               return { user: authenticatedUser, mode: "authenticated" };
             }
+            throw new Error("Authenticated account profile is incomplete");
           } else {
-            edgeFailure = sessionError;
+            throw normalizeThrownError(sessionError, "Unable to establish authenticated session");
           }
-        } else {
-          edgeFailure = edgeResult.data?.error || edgeResult.error;
         }
+
+        if (isCredentialRejection(edgeResult.error, edgeResult.data)) return null;
+        throw normalizeThrownError(
+          edgeResult.data?.error || edgeResult.error,
+          "Authenticated login service is unavailable",
+        );
       }
 
-      // Compatibility path: the whole existing site remains usable before the
-      // new Edge Function and migration are deployed. Realtime stays disabled.
+      // Legacy deployment path: this remains available only when realtime v2 is
+      // disabled. A v2 deployment must never create a half-authenticated login.
       const legacyResult = await runLoginWithTransientRetry(() =>
         supabase.rpc("authenticate_user", {
           username_input: normalizedUsername,
@@ -284,7 +304,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }),
       );
       if (legacyResult.error) {
-        throw normalizeThrownError(legacyResult.error ?? edgeFailure, "Authentication failed");
+        throw normalizeThrownError(legacyResult.error, "Authentication failed");
       }
 
       const legacyUser = Array.isArray(legacyResult.data) ? legacyResult.data[0] : null;
@@ -333,16 +353,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [logout, sessionMode, user?.userId]);
 
   const value = useMemo<UserContextType>(
-    () => ({
-      user,
-      login,
-      authenticate,
-      logout,
-      isLoggedIn: user !== null,
-      isInitializing,
-      sessionMode,
-      isRealtimeAuthenticated: sessionMode === "authenticated",
-    }),
+    () => {
+      const isRealtimeAuthenticated = sessionMode === "authenticated";
+      const requiresRealtimeUpgrade =
+        REALTIME_COLLABORATION_V2_ENABLED && user !== null && sessionMode === "legacy";
+
+      return {
+        user,
+        login,
+        authenticate,
+        logout,
+        isLoggedIn: user !== null,
+        isInitializing,
+        sessionMode,
+        isRealtimeAuthenticated,
+        requiresRealtimeUpgrade,
+      };
+    },
     [authenticate, isInitializing, login, logout, sessionMode, user],
   );
 
