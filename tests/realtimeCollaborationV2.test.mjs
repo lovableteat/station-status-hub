@@ -13,6 +13,7 @@ test("authenticated account migration preserves legacy IDs and fallback login", 
 
   assert.match(migration, /ADD COLUMN IF NOT EXISTS auth_user_id uuid/i);
   assert.match(migration, /current_system_user_id\(\)/i);
+  assert.doesNotMatch(migration, /WITH\s+current_user\s+AS/i);
   assert.doesNotMatch(migration, /DROP TABLE public\.system_users/i);
   assert.doesNotMatch(migration, /DROP FUNCTION.*authenticate_user/i);
   assert.match(migration, /created_by uuid REFERENCES public\.system_users\(id\) ON DELETE SET NULL/i);
