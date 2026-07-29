@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 
 const MESSAGE_PAGE_SIZE = 40;
 const TYPING_THROTTLE_MS = 500;
@@ -129,27 +130,39 @@ export function useDirectMessageThreads() {
 
   useEffect(() => {
     if (!isRealtimeAuthenticated || !user?.userId) return;
-    const inbox = supabase
-      .channel(`chat-inbox:${user.userId}`, { config: { private: true } })
-      .on("broadcast", { event: "INSERT" }, scheduleReload)
-      .on("broadcast", { event: "UPDATE" }, scheduleReload)
-      .subscribe();
+    let active = true;
+    let inbox: ReturnType<typeof supabase.channel> | null = null;
+    void authorizePrivateRealtime().then((authorized) => {
+      if (!active || !authorized) return;
+      inbox = supabase
+        .channel(`chat-inbox:${user.userId}`, { config: { private: true } })
+        .on("broadcast", { event: "INSERT" }, scheduleReload)
+        .on("broadcast", { event: "UPDATE" }, scheduleReload)
+        .subscribe();
+    });
     return () => {
-      void supabase.removeChannel(inbox);
+      active = false;
+      if (inbox) void supabase.removeChannel(inbox);
     };
   }, [isRealtimeAuthenticated, scheduleReload, user?.userId]);
 
   const threadSignature = threads.map((thread) => thread.threadId).sort().join(":");
   useEffect(() => {
     if (!isRealtimeAuthenticated || !threadSignature) return;
-    const channels = threads.map((thread) =>
-      supabase
-        .channel(`chat:${thread.threadId}`, { config: { private: true } })
-        .on("broadcast", { event: "INSERT" }, scheduleReload)
-        .on("broadcast", { event: "UPDATE" }, scheduleReload)
-        .subscribe(),
-    );
+    let active = true;
+    let channels: Array<ReturnType<typeof supabase.channel>> = [];
+    void authorizePrivateRealtime().then((authorized) => {
+      if (!active || !authorized) return;
+      channels = threads.map((thread) =>
+        supabase
+          .channel(`chat:${thread.threadId}`, { config: { private: true } })
+          .on("broadcast", { event: "INSERT" }, scheduleReload)
+          .on("broadcast", { event: "UPDATE" }, scheduleReload)
+          .subscribe(),
+      );
+    });
     return () => {
+      active = false;
       channels.forEach((channel) => void supabase.removeChannel(channel));
     };
   }, [isRealtimeAuthenticated, scheduleReload, threadSignature]);
@@ -370,57 +383,60 @@ export function useDirectMessages(threadId: string | null) {
     if (!threadId || !user?.userId || !isRealtimeAuthenticated) return;
     let active = true;
     void loadLatest();
-
-    const channel = supabase.channel(`chat:${threadId}`, { config: { private: true } });
-    channelRef.current = channel;
-    channel
-      .on("broadcast", { event: "INSERT" }, (payload) => {
-        if (!active) return;
-        const { table, record } = extractBroadcastRecord(payload);
-        if (table === "chat_read_receipts") {
-          void loadReadReceipts();
-        } else if (record?.thread_id === threadId && record?.id) {
-          const message = mapMessage(record);
-          setMessages((current) => mergeMessages(current, [message]));
-          if (message.senderId !== user.userId) void markRead(message.id);
-        }
-      })
-      .on("broadcast", { event: "UPDATE" }, (payload) => {
-        const { table, record } = extractBroadcastRecord(payload);
-        if (table === "chat_read_receipts") void loadReadReceipts();
-        else if (record?.thread_id === threadId && record?.id) {
-          setMessages((current) => mergeMessages(current, [mapMessage(record)]));
-        }
-      })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const typingUserId = payload?.userId;
-        if (!active || !typingUserId || typingUserId === user.userId) return;
-        const existingTimer = typingTimersRef.current.get(typingUserId);
-        if (existingTimer) window.clearTimeout(existingTimer);
-        if (!payload.isTyping) {
-          typingTimersRef.current.delete(typingUserId);
-          setTypingUsers((current) => current.filter((id) => id !== typingUserId));
-          return;
-        }
-        setTypingUsers((current) =>
-          current.includes(typingUserId) ? current : [...current, typingUserId],
-        );
-        const timer = window.setTimeout(() => {
-          typingTimersRef.current.delete(typingUserId);
-          setTypingUsers((current) => current.filter((id) => id !== typingUserId));
-        }, TYPING_EXPIRY_MS);
-        typingTimersRef.current.set(typingUserId, timer);
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") void loadLatest();
-      });
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    void authorizePrivateRealtime().then((authorized) => {
+      if (!active || !authorized) return;
+      channel = supabase.channel(`chat:${threadId}`, { config: { private: true } });
+      channelRef.current = channel;
+      channel
+        .on("broadcast", { event: "INSERT" }, (payload) => {
+          if (!active) return;
+          const { table, record } = extractBroadcastRecord(payload);
+          if (table === "chat_read_receipts") {
+            void loadReadReceipts();
+          } else if (record?.thread_id === threadId && record?.id) {
+            const message = mapMessage(record);
+            setMessages((current) => mergeMessages(current, [message]));
+            if (message.senderId !== user.userId) void markRead(message.id);
+          }
+        })
+        .on("broadcast", { event: "UPDATE" }, (payload) => {
+          const { table, record } = extractBroadcastRecord(payload);
+          if (table === "chat_read_receipts") void loadReadReceipts();
+          else if (record?.thread_id === threadId && record?.id) {
+            setMessages((current) => mergeMessages(current, [mapMessage(record)]));
+          }
+        })
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          const typingUserId = payload?.userId;
+          if (!active || !typingUserId || typingUserId === user.userId) return;
+          const existingTimer = typingTimersRef.current.get(typingUserId);
+          if (existingTimer) window.clearTimeout(existingTimer);
+          if (!payload.isTyping) {
+            typingTimersRef.current.delete(typingUserId);
+            setTypingUsers((current) => current.filter((id) => id !== typingUserId));
+            return;
+          }
+          setTypingUsers((current) =>
+            current.includes(typingUserId) ? current : [...current, typingUserId],
+          );
+          const timer = window.setTimeout(() => {
+            typingTimersRef.current.delete(typingUserId);
+            setTypingUsers((current) => current.filter((id) => id !== typingUserId));
+          }, TYPING_EXPIRY_MS);
+          typingTimersRef.current.set(typingUserId, timer);
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") void loadLatest();
+        });
+    });
 
     return () => {
       active = false;
       channelRef.current = null;
       typingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       typingTimersRef.current.clear();
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [
     isRealtimeAuthenticated,

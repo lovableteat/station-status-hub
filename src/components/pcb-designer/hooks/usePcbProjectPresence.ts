@@ -3,6 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 
 export type PcbViewMode = "2d" | "3d";
 
@@ -81,20 +82,13 @@ export function usePcbProjectPresence({
       return undefined;
     }
 
+    let disposed = false;
+    let channel: RealtimeChannel | null = null;
     subscribedRef.current = false;
     trackConfirmedRef.current = false;
-    const topic = isRealtimeAuthenticated
-      ? `presence:workspace:pcb:${projectId}`
-      : `pcb_project_presence:${projectId}`;
-    const channel = supabase.channel(topic, {
-      config: {
-        private: isRealtimeAuthenticated,
-        presence: { key: `${presenceUserId}:${tabIdRef.current}` },
-      },
-    });
-    channelRef.current = channel;
 
     const syncPresence = () => {
+      if (!channel) return;
       const presenceState = channel.presenceState() as Record<string, unknown[]>;
       const nextPeers = flattenPresenceState(presenceState);
       setPeers(nextPeers.filter((peer) => peer.tabId !== tabIdRef.current));
@@ -104,7 +98,7 @@ export function usePcbProjectPresence({
 
     const trackCurrentPayload = async () => {
       const currentPayload = payloadRef.current;
-      if (!subscribedRef.current || !currentPayload) return;
+      if (!channel || !subscribedRef.current || !currentPayload) return;
       const result = await channel.track(currentPayload);
       if (channelRef.current !== channel) return;
       trackConfirmedRef.current = result === "ok";
@@ -112,23 +106,45 @@ export function usePcbProjectPresence({
       syncPresence();
     };
 
-    channel
-      .on("presence", { event: "sync" }, syncPresence)
-      .on("presence", { event: "join" }, syncPresence)
-      .on("presence", { event: "leave" }, syncPresence)
-      .subscribe((status) => {
-        subscribedRef.current = status === "SUBSCRIBED";
-        if (subscribedRef.current) void trackCurrentPayload();
-        else setConnected(false);
+    const connect = async () => {
+      if (isRealtimeAuthenticated && !(await authorizePrivateRealtime())) {
+        if (!disposed) setConnected(false);
+        return;
+      }
+      if (disposed) return;
+
+      const topic = isRealtimeAuthenticated
+        ? `presence:workspace:pcb:${projectId}`
+        : `pcb_project_presence:${projectId}`;
+      channel = supabase.channel(topic, {
+        config: {
+          private: isRealtimeAuthenticated,
+          presence: { key: `${presenceUserId}:${tabIdRef.current}` },
+        },
       });
+      channelRef.current = channel;
+      channel
+        .on("presence", { event: "sync" }, syncPresence)
+        .on("presence", { event: "join" }, syncPresence)
+        .on("presence", { event: "leave" }, syncPresence)
+        .subscribe((status) => {
+          subscribedRef.current = status === "SUBSCRIBED";
+          if (subscribedRef.current) void trackCurrentPayload();
+          else setConnected(false);
+        });
+    };
+    void connect();
 
     return () => {
+      disposed = true;
       channelRef.current = null;
       subscribedRef.current = false;
       trackConfirmedRef.current = false;
       setConnected(false);
-      void channel.untrack().catch(() => undefined);
-      void supabase.removeChannel(channel);
+      if (channel) {
+        void channel.untrack().catch(() => undefined);
+        void supabase.removeChannel(channel);
+      }
     };
   }, [isRealtimeAuthenticated, presenceUserId, projectId]);
 

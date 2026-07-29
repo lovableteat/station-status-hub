@@ -41,6 +41,8 @@ interface UserContextType {
 
 interface AccountLoginPayload {
   success?: boolean;
+  code?: string;
+  error?: string;
   session?: Session;
   system_user?: {
     user_id?: string;
@@ -48,6 +50,17 @@ interface AccountLoginPayload {
     role?: string;
     display_name?: string;
   };
+}
+
+async function authorizeRealtime(session: Session) {
+  // Private Realtime channels must receive the current JWT before subscribe().
+  try {
+    await supabase.realtime.setAuth(session.access_token);
+    return true;
+  } catch (error) {
+    console.warn("Realtime authorization will retry in the collaboration provider", error);
+    return false;
+  }
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -191,6 +204,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       authenticatedSessionSeen.current = true;
+      await authorizeRealtime(session);
+      if (!active) return;
       const authenticatedUser = await userFromSession(session);
       if (!active) return;
       if (authenticatedUser) {
@@ -240,6 +255,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             refresh_token: edgeResult.data.session.refresh_token,
           });
           if (!sessionError) {
+            await authorizeRealtime(edgeResult.data.session);
             const profile = edgeResult.data.system_user;
             if (profile?.user_id && profile.username && profile.role) {
               const authenticatedUser: User = {
@@ -255,7 +271,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             edgeFailure = sessionError;
           }
         } else {
-          edgeFailure = edgeResult.error;
+          edgeFailure = edgeResult.data?.error || edgeResult.error;
         }
       }
 
