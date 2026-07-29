@@ -27,8 +27,9 @@ import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { DirectMessagesPanel } from "./DirectMessagesPanel";
 
-type CollaborationTab = "notifications" | "online";
+type CollaborationTab = "notifications" | "online" | "messages";
 type NotificationRow = {
   id: string;
   title: string;
@@ -75,7 +76,15 @@ function formatTime(value: string) {
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function PresenceCard({ onlineUser, currentUserId }: { onlineUser: OnlineUser; currentUserId?: string }) {
+function PresenceCard({
+  onlineUser,
+  currentUserId,
+  onMessage,
+}: {
+  onlineUser: OnlineUser;
+  currentUserId?: string;
+  onMessage?: () => void;
+}) {
   const isCurrentUser = onlineUser.userId === currentUserId;
   return (
     <div className="rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
@@ -97,6 +106,17 @@ function PresenceCard({ onlineUser, currentUserId }: { onlineUser: OnlineUser; c
             <span aria-hidden="true">•</span>
             <span>{moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule}</span>
           </div>
+          {!isCurrentUser && onMessage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onMessage}
+              className="mt-2 h-8 rounded-lg px-2.5 text-cyan-200 hover:bg-cyan-300/10 hover:text-cyan-100"
+            >
+              <MessageSquareText className="mr-1.5 h-3.5 w-3.5" />私訊
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -104,8 +124,14 @@ function PresenceCard({ onlineUser, currentUserId }: { onlineUser: OnlineUser; c
 }
 
 export function CollaborationCenter() {
-  const { user } = useUser();
-  const { allOnlineUsers, totalOnlineUsers, connectionStatus } = useUserPresence();
+  const { user, isRealtimeAuthenticated } = useUser();
+  const {
+    allOnlineUsers,
+    totalOnlineUsers,
+    connectionState,
+    connectionStatus,
+    retryPresence,
+  } = useUserPresence();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<CollaborationTab>("notifications");
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
@@ -113,6 +139,7 @@ export function CollaborationCenter() {
   const [error, setError] = useState<string | null>(null);
   const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const autoAnnouncementShownRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
@@ -321,7 +348,7 @@ export function CollaborationCenter() {
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CollaborationTab)} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-4 grid h-11 grid-cols-2 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
+          <TabsList className="mx-4 mt-4 grid h-11 grid-cols-3 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
             <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Bell className="h-4 w-4" />通知
               {unreadCount > 0 && <Badge className="h-5 min-w-5 bg-rose-500 px-1.5 text-white">{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
@@ -329,6 +356,9 @@ export function CollaborationCenter() {
             <TabsTrigger value="online" className="gap-2 rounded-lg data-[state=active]:bg-emerald-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Users className="h-4 w-4" />在線成員
               <span className="font-mono text-xs">{totalOnlineUsers}</span>
+            </TabsTrigger>
+            <TabsTrigger value="messages" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
+              <MessageSquareText className="h-4 w-4" />訊息
             </TabsTrigger>
           </TabsList>
 
@@ -376,15 +406,31 @@ export function CollaborationCenter() {
           <TabsContent value="online" className="mt-0 flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between border-b border-cyan-200/10 px-4 py-3">
               <div><div className="font-semibold text-slate-100">全站目前 {totalOnlineUsers} 人在線</div><div className="mt-0.5 text-xs text-slate-500">包含您自己，跨頁面同步顯示。</div></div>
-              <Badge className={cn("gap-1.5", connectionStatus === "online" ? "bg-emerald-300/15 text-emerald-200" : "bg-amber-300/15 text-amber-200")}><Radio className="h-3 w-3" />{connectionStatus === "online" ? "即時連線" : "連線中"}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge className={cn("gap-1.5", connectionStatus === "online" ? "bg-emerald-300/15 text-emerald-200" : connectionState === "error" ? "bg-rose-300/15 text-rose-200" : "bg-amber-300/15 text-amber-200")}>
+                  <Radio className="h-3 w-3" />
+                  {connectionStatus === "online" ? "即時連線" : connectionState === "error" ? "即時功能不可用" : "重新連線中"}
+                </Badge>
+                {connectionState === "error" && user ? (
+                  <Button variant="ghost" size="sm" onClick={retryPresence} className="h-7 px-2 text-xs text-cyan-200">重試</Button>
+                ) : null}
+              </div>
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
               {allOnlineUsers.length === 0 ? (
-                <div className="flex h-56 flex-col items-center justify-center text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">目前只有您在線上</p><p className="mt-1 text-sm">連線完成後會在此顯示您的位置。</p></div>
+                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">{connectionState === "error" ? "尚未取得在線名單" : "正在同步在線成員"}</p><p className="mt-1 text-sm">{isRealtimeAuthenticated ? "畫面會維持原頁，不會因重新連線而刷新。" : "請重新登入以啟用安全的即時協作。"}</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{allOnlineUsers.map((onlineUser) => <PresenceCard key={onlineUser.userId} onlineUser={onlineUser} currentUserId={user?.userId} />)}</div>
+                <div className="space-y-2.5 pb-3">{allOnlineUsers.map((onlineUser) => <PresenceCard key={onlineUser.userId} onlineUser={onlineUser} currentUserId={user?.userId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
               )}
             </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="messages" className="mt-0 flex min-h-0 flex-1 flex-col">
+            <DirectMessagesPanel
+              onlineUsers={allOnlineUsers}
+              requestedUserId={messageRecipientId}
+              onRequestHandled={() => setMessageRecipientId(null)}
+            />
           </TabsContent>
         </Tabs>
           </aside>
