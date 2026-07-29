@@ -14,7 +14,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { LoginPage } from "@/components/auth/LoginPage";
 import { useUser } from "@/components/auth/UserContext";
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
@@ -258,7 +257,7 @@ const Index = () => {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
-  const { isLoggedIn, isInitializing, logout, user } = useUser();
+  const { logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { activeProjectId, isSwitchingProject } = useTestProject();
   const { isUpdating } = useUnifiedData();
@@ -461,14 +460,6 @@ const Index = () => {
     stationMainRef.current?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0 });
   }, [activeProjectId, activeStationModule]);
-
-  if (isInitializing) {
-    return <div className="min-h-screen bg-background" aria-label="正在還原登入狀態" />;
-  }
-
-  if (!isLoggedIn) {
-    return <LoginPage />;
-  }
 
   const handleWorkspaceChange = (workspace: string) => {
     if (workspace === "workspace-home") {

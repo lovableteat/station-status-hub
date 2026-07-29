@@ -12,11 +12,11 @@ import {
 } from "@/integrations/supabase/serviceErrors";
 
 export function LoginPage() {
-  const [username, setUsername] = useState("");
+  const { authenticate, requiresRealtimeUpgrade, user } = useUser();
+  const [username, setUsername] = useState(() => user?.username ?? "");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isServiceRestricted, setIsServiceRestricted] = useState(false);
-  const { authenticate } = useUser();
   const { toast } = useToast();
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -77,7 +77,14 @@ export function LoginPage() {
 
         <CardContent className="space-y-6">
           <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
-            帳號、權限與現有工作資料都會保留，不需要重新註冊或重設密碼。
+            {requiresRealtimeUpgrade && user ? (
+              <>
+                已偵測到 <span className="font-semibold text-foreground">{user.displayName}</span>{" "}
+                的既有帳號，重新驗證後即可恢復完整功能。也可以直接修改帳號欄位，改用其他帳號登入。
+              </>
+            ) : (
+              "帳號、權限與現有工作資料都會保留，不需要重新註冊或重設密碼。"
+            )}
           </div>
 
           {isServiceRestricted ? (
