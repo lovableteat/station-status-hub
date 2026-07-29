@@ -38,6 +38,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
+import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,11 +87,17 @@ import {
   isFolderDescendant,
 } from "./core/tree";
 import { useTestPlanWorkspace } from "./hooks/useTestPlanWorkspace";
+import { TestPlanInspector } from "./TestPlanInspector";
+import {
+  TestPlanSpaceDialog,
+  type TestPlanSpaceInput,
+} from "./TestPlanSpaceDialog";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
   TestPlanFileRecord,
   TestPlanFolder,
+  TestPlanSpace,
   TestPlanSort,
 } from "./types";
 import "./test-plan.css";
@@ -97,12 +105,14 @@ import "./test-plan.css";
 type ViewMode = "grid" | "list";
 
 type TextAction =
-  | { kind: "create-space" }
-  | { kind: "edit-space"; id: string; value: string }
   | { kind: "create-folder"; parentId: string | null }
   | { kind: "rename-folder"; id: string; value: string }
   | { kind: "rename-file"; id: string; value: string }
   | { kind: "describe-file"; id: string; value: string };
+
+type SpaceDialogState =
+  | { mode: "create"; space: null }
+  | { mode: "edit"; space: TestPlanSpace };
 
 type MoveAction =
   | { kind: "folder"; id: string; name: string }
@@ -217,17 +227,13 @@ function TextActionDialog({
 
   const title = !action
     ? ""
-    : action.kind === "create-space"
-      ? "建立資料空間"
-      : action.kind === "edit-space"
-        ? "重新命名空間"
-        : action.kind === "create-folder"
-          ? "建立資料夾"
-          : action.kind === "rename-folder"
-            ? "重新命名資料夾"
-            : action.kind === "rename-file"
-              ? "重新命名檔案"
-              : "檔案說明";
+    : action.kind === "create-folder"
+      ? "建立資料夾"
+      : action.kind === "rename-folder"
+        ? "重新命名資料夾"
+        : action.kind === "rename-file"
+          ? "重新命名檔案"
+          : "檔案說明";
   const isDescription = action?.kind === "describe-file";
 
   const handleSubmit = async (event: FormEvent) => {
@@ -448,13 +454,16 @@ export function TestPlanWorkspace() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [isDragging, setIsDragging] = useState(false);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
+  const [spaceDialog, setSpaceDialog] = useState<SpaceDialogState | null>(null);
   const [textAction, setTextAction] = useState<TextAction | null>(null);
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
+  const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setActiveFolderId(null);
+    setSelectedEntryKey(null);
   }, [activeSpaceId]);
 
   const breadcrumbs = useMemo(
@@ -479,6 +488,20 @@ export function TestPlanWorkspace() {
     () => files.reduce((total, file) => total + file.fileSize, 0),
     [files],
   );
+  const selectedEntry = useMemo<TestPlanEntry | null>(() => {
+    if (!selectedEntryKey) return null;
+    const [kind, id] = selectedEntryKey.split(":");
+    if (kind === "folder") {
+      const folder = folders.find((candidate) => candidate.id === id);
+      return folder ? { ...folder, kind: "folder" } : null;
+    }
+    const file = files.find((candidate) => candidate.id === id);
+    return file ? { ...file, kind: "file" } : null;
+  }, [files, folders, selectedEntryKey]);
+
+  useEffect(() => {
+    if (selectedEntryKey && !selectedEntry) setSelectedEntryKey(null);
+  }, [selectedEntry, selectedEntryKey]);
 
   const handleUpload = async (incoming: readonly File[]) => {
     if (!canEdit || incoming.length === 0) return;
@@ -509,14 +532,26 @@ export function TestPlanWorkspace() {
     void handleUpload(Array.from(event.dataTransfer.files));
   };
 
+  const handleSpaceSubmit = async (input: TestPlanSpaceInput) => {
+    if (!spaceDialog) return;
+    try {
+      if (spaceDialog.mode === "create") {
+        await createSpace(input);
+        toast.success("資料空間已建立");
+      } else {
+        await updateSpace(spaceDialog.space.id, input);
+        toast.success("資料空間已更新");
+      }
+      setSpaceDialog(null);
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "空間儲存失敗");
+    }
+  };
+
   const handleTextSubmit = async (value: string) => {
     if (!textAction) return;
     try {
-      if (textAction.kind === "create-space") {
-        await createSpace({ name: value });
-      } else if (textAction.kind === "edit-space") {
-        await updateSpace(textAction.id, { name: value });
-      } else if (textAction.kind === "create-folder") {
+      if (textAction.kind === "create-folder") {
         await createFolder(textAction.parentId, value);
       } else if (textAction.kind === "rename-folder") {
         await renameFolder(textAction.id, value);
@@ -558,6 +593,15 @@ export function TestPlanWorkspace() {
       } else {
         await deleteFile(deleteAction.file);
       }
+      if (
+        deleteAction.kind === "file"
+          ? selectedEntryKey === `file:${deleteAction.file.id}`
+          : deleteAction.kind === "folder"
+            ? selectedEntryKey === `folder:${deleteAction.id}`
+            : false
+      ) {
+        setSelectedEntryKey(null);
+      }
       toast.success("項目已刪除");
       setDeleteAction(null);
     } catch (caught) {
@@ -584,9 +628,14 @@ export function TestPlanWorkspace() {
   const openEntry = (entry: TestPlanEntry) => {
     if (entry.kind === "folder") {
       setActiveFolderId(entry.id);
+      setSelectedEntryKey(null);
     } else {
-      void handleDownload(entry);
+      setSelectedEntryKey(`file:${entry.id}`);
     }
+  };
+
+  const selectEntry = (entry: TestPlanEntry) => {
+    setSelectedEntryKey(`${entry.kind}:${entry.id}`);
   };
 
   const renderEntryActions = (entry: TestPlanEntry) => (
@@ -631,34 +680,58 @@ export function TestPlanWorkspace() {
   return (
     <section className="test-plan-workspace">
       <header className="test-plan-header">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="test-plan-title-icon">
-            <FolderKanban className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1>Test_Plan</h1>
-              <Badge className="border-cyan-300/25 bg-cyan-400/10 text-cyan-100">
-                工程檔案庫
-              </Badge>
+        <MaintenancePageHeader
+          title="Test_Plan"
+            description="集中管理電路板與工程資料，涵蓋測試計畫、Office、3D 與 PCB 檔案"
+          icon={FolderKanban}
+          actions={(
+            <>
               {!canEdit && (
-                <Badge variant="outline" className="text-amber-200">
-                  唯讀
+                <Badge variant="outline" className="border-amber-300/30 text-amber-100">
+                  唯讀模式
                 </Badge>
               )}
-            </div>
-            <p>集中管理電路板與工程資料，依空間及資料夾整理所有交付檔案。</p>
-          </div>
-        </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canEdit || busy}
+                onClick={() => setSpaceDialog({ mode: "create", space: null })}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                新增空間
+              </Button>
+              {activeSpace && (
+                <Button
+                  type="button"
+                  disabled={!canEdit || busy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  上傳工程檔案
+                </Button>
+              )}
+            </>
+          )}
+        />
+        <MaintenanceMetricStrip
+          metrics={[
+            { label: "資料空間", value: spaces.length, icon: FolderKanban, accent: "blue" },
+            { label: "資料夾", value: folders.length, icon: FolderOpen, accent: "cyan" },
+            { label: "工程檔案", value: files.length, icon: File, accent: "emerald" },
+            {
+              label: "本空間容量",
+              value: formatTestPlanFileSize(activeStorageBytes),
+              icon: Archive,
+              accent: "amber",
+            },
+          ]}
+        />
         <div className="test-plan-format-strip" aria-label="支援格式">
-          <span>PPT</span>
-          <span>Excel</span>
-          <span>STEP／STL</span>
+          <span>PPT／PPTX</span>
+          <span>Excel／CSV</span>
+          <span>STEP／STL／OBJ</span>
           <span>BRD／Gerber</span>
-          <span>PDF／圖片</span>
-          <span>
-            本空間 {files.length} 檔 · {formatTestPlanFileSize(activeStorageBytes)}
-          </span>
+          <span>PDF／圖片／文字</span>
         </div>
       </header>
 
@@ -702,7 +775,7 @@ export function TestPlanWorkspace() {
               size="icon"
               className="h-9 w-9"
               disabled={!canEdit || busy}
-              onClick={() => setTextAction({ kind: "create-space" })}
+              onClick={() => setSpaceDialog({ mode: "create", space: null })}
             >
               <Plus className="h-4 w-4" />
               <span className="sr-only">建立空間</span>
@@ -761,15 +834,10 @@ export function TestPlanWorkspace() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
                       disabled={!canEdit}
-                      onSelect={() =>
-                        setTextAction({
-                          kind: "edit-space",
-                          id: space.id,
-                          value: space.name,
-                        })}
+                      onSelect={() => setSpaceDialog({ mode: "edit", space })}
                     >
                       <Pencil className="mr-2 h-4 w-4" />
-                      重新命名
+                      編輯空間
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={!canEdit}
@@ -800,6 +868,7 @@ export function TestPlanWorkspace() {
                 )}
                 onClick={() => {
                   setActiveFolderId(null);
+                  setSelectedEntryKey(null);
                   setIsSpaceDrawerOpen(false);
                 }}
               >
@@ -812,6 +881,7 @@ export function TestPlanWorkspace() {
                 activeFolderId={activeFolderId}
                 onOpen={(folderId) => {
                   setActiveFolderId(folderId);
+                  setSelectedEntryKey(null);
                   setIsSpaceDrawerOpen(false);
                 }}
               />
@@ -819,7 +889,7 @@ export function TestPlanWorkspace() {
           )}
         </aside>
 
-        <main className="test-plan-main">
+        <main className={cn("test-plan-main", !activeSpace && "is-empty")}>
           {!isAuthenticated && error ? (
             <div className="test-plan-empty" role="alert">
               <span className="test-plan-empty-icon">
@@ -834,10 +904,27 @@ export function TestPlanWorkspace() {
                 <FolderKanban className="h-8 w-8" />
               </span>
               <h2>尚未建立空間</h2>
-              <p>先建立一個專案或板版空間，再放入 PPT、Excel、3D 與 BRD 檔案。</p>
+              <p>用三個步驟建立板版與測試資料的單一可信來源。</p>
+              <div className="test-plan-quick-start">
+                <div>
+                  <span>1</span>
+                  <strong>建立空間</strong>
+                  <small>依專案、板版或測試階段建立獨立空間。</small>
+                </div>
+                <div>
+                  <span>2</span>
+                  <strong>建立資料夾</strong>
+                  <small>整理規格、測試、韌體、Gerber 與交付版本。</small>
+                </div>
+                <div>
+                  <span>3</span>
+                  <strong>上傳工程檔案</strong>
+                  <small>支援拖放 PPT、Excel、3D、BRD、PDF 與圖片。</small>
+                </div>
+              </div>
               <Button
                 disabled={!canEdit || busy}
-                onClick={() => setTextAction({ kind: "create-space" })}
+                onClick={() => setSpaceDialog({ mode: "create", space: null })}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 建立第一個空間
@@ -847,7 +934,13 @@ export function TestPlanWorkspace() {
             <>
               <div className="test-plan-toolbar">
                 <div className="test-plan-location">
-                  <button type="button" onClick={() => setActiveFolderId(null)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveFolderId(null);
+                      setSelectedEntryKey(null);
+                    }}
+                  >
                     {activeSpace?.name}
                   </button>
                   {breadcrumbs.map((folder) => (
@@ -855,7 +948,10 @@ export function TestPlanWorkspace() {
                       <ChevronRight className="h-3.5 w-3.5" />
                       <button
                         type="button"
-                        onClick={() => setActiveFolderId(folder.id)}
+                        onClick={() => {
+                          setActiveFolderId(folder.id);
+                          setSelectedEntryKey(null);
+                        }}
                       >
                         {folder.name}
                       </button>
@@ -1025,11 +1121,13 @@ export function TestPlanWorkspace() {
                     {visibleEntries.map((entry) => (
                       <article
                         key={`${entry.kind}:${entry.id}`}
-                        className="test-plan-entry-card"
+                        className={cn(
+                          "test-plan-entry-card",
+                          selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
+                        )}
                         tabIndex={0}
-                        onClick={() => {
-                          if (entry.kind === "folder") openEntry(entry);
-                        }}
+                        aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
+                        onClick={() => selectEntry(entry)}
                         onDoubleClick={() => openEntry(entry)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") openEntry(entry);
@@ -1083,11 +1181,13 @@ export function TestPlanWorkspace() {
                     {visibleEntries.map((entry) => (
                       <article
                         key={`${entry.kind}:${entry.id}`}
-                        className="test-plan-list-row"
+                        className={cn(
+                          "test-plan-list-row",
+                          selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
+                        )}
                         tabIndex={0}
-                        onClick={() => {
-                          if (entry.kind === "folder") openEntry(entry);
-                        }}
+                        aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
+                        onClick={() => selectEntry(entry)}
                         onDoubleClick={() => openEntry(entry)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") openEntry(entry);
@@ -1139,6 +1239,39 @@ export function TestPlanWorkspace() {
             </>
           )}
         </main>
+        {activeSpace && (
+          <TestPlanInspector
+            entry={selectedEntry}
+            canEdit={canEdit}
+            busy={busy}
+            downloadFile={downloadFile}
+            onDownload={(file) => void handleDownload(file)}
+            onRename={(entry) =>
+              setTextAction(
+                entry.kind === "folder"
+                  ? { kind: "rename-folder", id: entry.id, value: entry.name }
+                  : { kind: "rename-file", id: entry.id, value: entry.originalName },
+              )}
+            onMove={(entry) =>
+              setMoveAction(
+                entry.kind === "folder"
+                  ? { kind: "folder", id: entry.id, name: entry.name }
+                  : { kind: "file", id: entry.id, name: entry.originalName },
+              )}
+            onDescribe={(file) =>
+              setTextAction({
+                kind: "describe-file",
+                id: file.id,
+                value: file.description ?? "",
+              })}
+            onDelete={(entry) =>
+              setDeleteAction(
+                entry.kind === "folder"
+                  ? { kind: "folder", id: entry.id, name: entry.name }
+                  : { kind: "file", file: entry },
+              )}
+          />
+        )}
       </div>
 
       {uploadProgress && (
@@ -1170,6 +1303,14 @@ export function TestPlanWorkspace() {
         </div>
       )}
 
+      <TestPlanSpaceDialog
+        open={Boolean(spaceDialog)}
+        mode={spaceDialog?.mode ?? "create"}
+        space={spaceDialog?.space}
+        busy={busy}
+        onOpenChange={(open) => !open && setSpaceDialog(null)}
+        onSubmit={handleSpaceSubmit}
+      />
       <TextActionDialog
         action={textAction}
         busy={busy}
