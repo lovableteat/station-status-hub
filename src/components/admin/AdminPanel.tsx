@@ -9,13 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Network, Clock3, Lock, UserCog, CircleHelp, RadioTower } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollaborationPanel";
+import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
+import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
+import { AdminSidebar } from "./AdminSidebar";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -25,6 +28,7 @@ import {
   readWorkspaceAccess,
   WORKSPACE_LABELS,
 } from "@/lib/workspacePermissions";
+import "./admin-panel.css";
 
 interface Engineer {
   id: string;
@@ -70,6 +74,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
+  const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
   const { toast } = useToast();
   const { isRealtimeAuthenticated, logout, user } = useUser();
   const { canEditModule, canViewModule, loading: permissionsLoading } = usePermissions();
@@ -469,89 +474,54 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   return (
     <div
       data-admin-surface="control-room"
-      className="maintenance-workspace min-h-full w-full min-w-0 bg-[radial-gradient(circle_at_12%_0%,rgba(34,211,238,0.13),transparent_28%),radial-gradient(circle_at_86%_8%,rgba(59,130,246,0.12),transparent_24%),linear-gradient(180deg,#071827_0%,#06111f_42%,#081522_100%)] px-3 pb-3 pt-3 sm:px-4 lg:px-5"
+      className="maintenance-workspace admin-workspace"
     >
-      <div className="flex min-h-full w-full min-w-0 flex-col gap-4">
-        {/* Header */}
+      <div className="admin-shell">
+        <AdminSidebar
+          activeTab={activeTab}
+          canViewApiManagement={canViewApiManagement}
+          mobileOpen={isAdminSidebarOpen}
+          onMobileOpenChange={setIsAdminSidebarOpen}
+          onTabChange={setActiveTab}
+        />
+
+        <div className="admin-content">
         <header
           data-admin-zone="command"
-          className="relative overflow-hidden rounded-[14px] border border-cyan-200/40 bg-[linear-gradient(135deg,#173f5b_0%,#123149_52%,#153750_100%)] p-5 shadow-[0_22px_70px_-42px_rgba(56,189,248,0.85)] sm:p-6"
+          className="admin-command"
         >
-          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-0 left-1/3 h-px w-1/2 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
-
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-cyan-200/20 bg-[linear-gradient(145deg,rgba(56,189,248,0.22),rgba(59,130,246,0.10))] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_40px_-24px_rgba(56,189,248,0.9)]">
-                <UserCog className="h-6 w-6 text-cyan-100" />
-              </div>
-              <div>
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200/70">
-                    Administration
-                  </span>
-                  <span className="h-1 w-1 rounded-full bg-cyan-300/60" />
-                  <span className="text-xs text-slate-400">系統設定中心</span>
-                </div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-[30px]">後台管理</h1>
-                <p className="mt-1 text-sm text-slate-400">
-                  歡迎回來，<span className="font-semibold text-slate-200">{user?.displayName || user?.username}</span>
-                  <span className="mx-2 text-slate-600">/</span>超級管理員
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {canViewApiManagement ? (
+          <MaintenancePageHeader
+            title="後台管理"
+            description={`系統帳號、協作狀態與 API 控制 · ${user?.displayName || user?.username || "管理員"}`}
+            icon={Shield}
+            actions={(
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="admin-mobile-menu"
+                  onClick={() => setIsAdminSidebarOpen(true)}
+                >
+                  <Menu className="mr-2 h-4 w-4" />
+                  管理選單
+                </Button>
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl border-cyan-200/30 bg-[#0a2033]/80 text-slate-100 shadow-sm hover:border-cyan-100/55 hover:bg-cyan-300/15 hover:text-white"
-                  onClick={() => setActiveTab("api-management")}
+                  className="border-[#2a526f] bg-[#0a2033] text-slate-200 hover:bg-[#10263a] hover:text-white"
+                  onClick={logout}
                 >
-                  <Network className="mr-2 h-4 w-4 text-cyan-200" />
-                  API 管理
+                  <LogOut className="mr-2 h-4 w-4" />
+                  登出
                 </Button>
-              ) : null}
-              <Button
-                variant="outline"
-                className="h-10 rounded-xl border-slate-200/20 bg-[#0a2033]/80 text-slate-200 shadow-sm hover:border-rose-300/35 hover:bg-rose-400/12 hover:text-rose-100"
-                onClick={logout}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                登出
-              </Button>
-            </div>
-          </div>
+              </>
+            )}
+          />
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-4">
-          <TabsList
-            data-admin-zone="navigation"
-            className={`grid h-auto w-full gap-1 rounded-xl border border-sky-200/30 bg-[#0d2437] p-1.5 shadow-[0_16px_36px_-28px_rgba(56,189,248,0.9)] ${canViewApiManagement ? "grid-cols-3 sm:w-[660px]" : "grid-cols-2 sm:w-[440px]"}`}
-          >
-            <TabsTrigger value="users" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-300 data-[state=active]:to-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
-            <Users className="h-4 w-4 mr-2" />
-            用戶管理
-          </TabsTrigger>
-          <TabsTrigger value="collaboration" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-300 data-[state=active]:to-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
-            <RadioTower className="h-4 w-4 mr-2" />
-            通知與在線
-          </TabsTrigger>
-          {SHOW_ENGINEER_ADMIN ? <TabsTrigger value="engineers">
-            <UserPlus className="h-4 w-4 mr-2" />
-            工程師管理
-          </TabsTrigger> : null}
-          {canViewApiManagement ? (
-            <TabsTrigger value="api-management" className="h-10 rounded-lg text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-300 data-[state=active]:to-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#062033]">
-              <Network className="h-4 w-4 mr-2" />
-              API 管理
-            </TabsTrigger>
-          ) : null}
-        </TabsList>
-
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-3">
         {/* User Management Tab */}
         <TabsContent value="users" className="mt-0 flex flex-1 flex-col gap-3">
-          <section className="flex flex-col gap-4 rounded-[14px] border border-sky-200/30 bg-[linear-gradient(120deg,#143852,#102b42)] px-5 py-4 shadow-[0_18px_48px_-38px_rgba(56,189,248,0.9)] sm:flex-row sm:items-center sm:justify-between">
+          <section className="admin-user-section flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
                 <Users className="h-4.5 w-4.5 text-sky-200" />
@@ -572,7 +542,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               <DialogTrigger asChild>
                 <Button
                   disabled={!canEditUsers}
-                  className="h-10 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-4 font-bold text-slate-950 shadow-[0_12px_30px_-16px_rgba(56,189,248,0.95)] hover:from-cyan-200 hover:to-sky-300 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="h-10 rounded-lg bg-[#4c8dff] px-4 font-bold text-[#06111f] hover:bg-[#6ba2ff] disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   新增用戶
@@ -658,65 +628,23 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </Dialog>
           </section>
 
-          <div data-admin-zone="status-overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Card className="group relative overflow-hidden rounded-[14px] border-sky-300/35 bg-[linear-gradient(145deg,#173f5e,#102c45)] shadow-[0_18px_42px_-34px_rgba(56,189,248,0.9)]">
-              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/60 to-transparent" />
-              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-sky-200/65">全部帳號</div>
-                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{totalUsers}</div>
-                  <p className="mt-2 text-xs text-slate-400">後台可管理帳號總數</p>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
-                  <Users className="h-5 w-5 text-sky-200" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="group relative overflow-hidden rounded-[14px] border-emerald-300/35 bg-[linear-gradient(145deg,#12413f,#0d3035)] shadow-[0_18px_42px_-34px_rgba(52,211,153,0.8)]">
-              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent" />
-              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200/65">正常啟用</div>
-                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{activeUsers}</div>
-                  <p className="mt-2 text-xs text-slate-400">可以登入並操作</p>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300/15 bg-emerald-400/10">
-                  <Shield className="h-5 w-5 text-emerald-200" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="group relative overflow-hidden rounded-[14px] border-amber-300/35 bg-[linear-gradient(145deg,#443b20,#27302e)] shadow-[0_18px_42px_-34px_rgba(251,191,36,0.75)]">
-              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
-              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200/65">管理權限</div>
-                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{privilegedUsers}</div>
-                  <p className="mt-2 text-xs text-slate-400">具管理級權限帳號</p>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-300/15 bg-amber-400/10">
-                  <UserCog className="h-5 w-5 text-amber-200" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="group relative overflow-hidden rounded-[14px] border-cyan-300/35 bg-[linear-gradient(145deg,#164255,#103047)] shadow-[0_18px_42px_-34px_rgba(34,211,238,0.8)]">
-              <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
-              <CardContent className="flex items-center justify-between gap-4 p-4 sm:p-5">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200/70">工作區權限</div>
-                  <div className="mt-1.5 text-[28px] font-bold leading-none text-slate-50">{workspaceConfiguredUsers}</div>
-                  <p className="mt-2 text-xs text-slate-400">已配置存取權限</p>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10">
-                  <Lock className="h-5 w-5 text-cyan-200" />
-                </div>
-              </CardContent>
-            </Card>
+          <div data-admin-zone="status-overview">
+            <MaintenanceMetricStrip
+              metrics={[
+                { label: "全部帳號", value: totalUsers, icon: Users, accent: "blue" },
+                { label: "正常啟用", value: activeUsers, icon: Shield, accent: "emerald" },
+                { label: "管理權限", value: privilegedUsers, icon: Lock, accent: "amber" },
+                {
+                  label: "已配置工作區",
+                  value: workspaceConfiguredUsers,
+                  icon: Lock,
+                  accent: "cyan",
+                },
+              ]}
+            />
           </div>
 
-          <Card data-admin-zone="filters" className="rounded-[14px] border-sky-200/30 bg-[#102b40] shadow-[0_18px_46px_-38px_rgba(56,189,248,0.85)]">
+          <Card data-admin-zone="filters" className="admin-user-section shadow-none">
             <CardContent className="space-y-3 p-4 sm:p-5">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
                 <div className="relative">
@@ -766,7 +694,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             </CardContent>
           </Card>
 
-          <Card data-admin-zone="accounts" className="flex min-h-[280px] flex-1 flex-col rounded-[14px] border-sky-200/30 bg-[#0c2235] shadow-[0_22px_60px_-48px_rgba(56,189,248,0.9)]">
+          <Card data-admin-zone="accounts" className="admin-user-section flex min-h-[280px] flex-1 flex-col shadow-none">
             <CardContent className="flex flex-1 flex-col p-3 sm:p-4">
               <div className="flex-1 space-y-3">
                 {filteredSystemUsers.map((systemUser) => {
@@ -776,11 +704,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group relative overflow-hidden rounded-[14px] border border-sky-200/25 bg-[linear-gradient(135deg,#14354e,#102a40)] p-4 shadow-[0_16px_38px_-34px_rgba(56,189,248,0.75)] transition-all duration-200 hover:border-cyan-200/55 hover:bg-[linear-gradient(135deg,#173c57,#123149)] sm:p-5"
+                      className="group relative overflow-hidden rounded-xl border border-[#2a526f] bg-[#0c2539] p-4 transition-colors duration-200 hover:border-[#4c8dff]/70 hover:bg-[#102c43] sm:p-5"
                     >
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-300/15 bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(37,99,235,0.08))]">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-300/15 bg-sky-400/10">
                             <Shield className="h-4.5 w-4.5 text-sky-200" />
                           </div>
                           <div className="min-w-0">
@@ -930,7 +858,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 })}
 
                 {filteredSystemUsers.length === 0 ? (
-                  <div className="rounded-[22px] border border-dashed border-sky-300/15 bg-slate-950/20 px-6 py-16 text-center">
+                  <div className="rounded-xl border border-dashed border-sky-300/15 bg-slate-950/20 px-6 py-16 text-center">
                     <div className="text-lg font-semibold text-slate-200">找不到符合條件的用戶</div>
                     <p className="mt-2 text-sm text-slate-500">
                       請調整搜尋關鍵字、角色或狀態篩選，再重新檢查。
@@ -1097,6 +1025,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         username={selectedUsername}
       />
       </div>
+    </div>
     </div>
   );
 }
