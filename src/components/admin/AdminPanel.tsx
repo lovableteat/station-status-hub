@@ -19,7 +19,7 @@ import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollabo
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
-import { syncAuthAccount } from "./authAccountSync";
+import { mutateAuthAccount } from "./authAccountSync";
 import {
   getWorkspaceLevelLabel,
   readWorkspaceAccess,
@@ -45,6 +45,8 @@ interface SystemUser {
   created_at: string;
   display_name?: string;
   password_hash?: string;
+  auth_user_id?: string | null;
+  auth_migrated_at?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -169,30 +171,37 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
 
     try {
-      // Use the database function to hash the password
-      const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
-        password: newUser.password
-      });
-      
-      if (hashError) {
-        console.error('Hash password error:', hashError);
-        throw new Error('密碼加密失敗');
-      }
+      if (REALTIME_COLLABORATION_V2_ENABLED) {
+        const result = await mutateAuthAccount("", {
+          action: "create",
+          password: newUser.password,
+          profile: {
+            username: newUser.username,
+            role: newUser.role,
+            status: "active",
+            displayName: newUser.displayName,
+            permissions: newUser.permissions,
+          },
+        });
+        if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
+      } else {
+        // Legacy deployment path remains available until the rollout flag is enabled.
+        const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
+          password: newUser.password
+        });
+        if (hashError) throw new Error('密碼加密失敗');
 
-      const { error } = await supabase
-        .from('system_users')
-        .insert([{
-          username: newUser.username,
-          password_hash: hashedPassword,
-          role: newUser.role,
-          permissions: newUser.permissions,
-          display_name: newUser.displayName,
-          created_by: user?.username || 'admin'
-        }]);
-
-      if (error) {
-        console.error('Database error:', error);
-        throw error;
+        const { error } = await supabase
+          .from('system_users')
+          .insert([{
+            username: newUser.username,
+            password_hash: hashedPassword,
+            role: newUser.role,
+            permissions: newUser.permissions,
+            display_name: newUser.displayName,
+            created_by: user?.username || 'admin'
+          }]);
+        if (error) throw error;
       }
 
       toast({
@@ -243,14 +252,19 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      const { error } = await supabase
-        .from('system_users')
-        .update({ status: newStatus })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      await syncAuthAccount(id);
+      if (REALTIME_COLLABORATION_V2_ENABLED) {
+        const result = await mutateAuthAccount(id, {
+          action: "update",
+          profile: { status: newStatus },
+        });
+        if (!result.success) throw new Error(result.error || "帳號狀態同步失敗");
+      } else {
+        const { error } = await supabase
+          .from('system_users')
+          .update({ status: newStatus })
+          .eq('id', id);
+        if (error) throw error;
+      }
 
       toast({
         title: "狀態更新成功",
@@ -271,25 +285,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     if (rejectUserMutation()) return;
 
     try {
-      let authUserId = "";
       if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const { data: authAccount } = await (supabase.from('system_users') as any)
-          .select('auth_user_id')
-          .eq('id', userId)
-          .maybeSingle();
-        authUserId = typeof authAccount?.auth_user_id === "string" ? authAccount.auth_user_id : "";
+        const result = await mutateAuthAccount(userId, { action: "delete" });
+        if (!result.success) throw new Error(result.error || "帳號刪除同步失敗");
+      } else {
+        const { error } = await supabase
+          .from('system_users')
+          .delete()
+          .eq('id', userId);
+        if (error) throw error;
       }
-      const { error } = await supabase
-        .from('system_users')
-        .delete()
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      await syncAuthAccount(userId, {
-        action: "delete",
-        authUserId,
-      });
 
       toast({
         title: "刪除成功",
@@ -782,6 +787,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               </HoverCard>
                               <Badge className={getRoleColor(systemUser.role)}>{getRoleLabel(systemUser.role)}</Badge>
                               <Badge className={getStatusTone(systemUser.status)}>{getStatusLabel(systemUser.status)}</Badge>
+                              {REALTIME_COLLABORATION_V2_ENABLED ? (
+                                <Badge
+                                  variant="outline"
+                                  className={systemUser.auth_user_id
+                                    ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+                                    : "border-amber-300/25 bg-amber-300/10 text-amber-100"}
+                                >
+                                  {systemUser.auth_user_id ? "即時身分已連結" : "首次登入後連結"}
+                                </Badge>
+                              ) : null}
                               {isProtected ? (
                                 <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-slate-400">
                                   保留帳號

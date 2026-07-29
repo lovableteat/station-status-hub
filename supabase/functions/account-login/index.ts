@@ -13,6 +13,9 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const accountEmail = (systemUserId: string) =>
+  `account-${systemUserId}@auth.station-status.example.com`;
+
 serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -59,7 +62,7 @@ serve(async (request) => {
       return jsonResponse({ success: false, error: "Account is unavailable" }, 403);
     }
 
-    const email = `account-${systemUser.id}@station-status.local`;
+    const email = accountEmail(systemUser.id);
     const appMetadata = {
       system_user_id: systemUser.id,
       username: systemUser.username,
@@ -77,18 +80,26 @@ serve(async (request) => {
       });
       if (createError || !created.user) {
         console.error("Unable to migrate account", createError);
-        return jsonResponse({ success: false, error: "Account migration failed" }, 503);
+        return jsonResponse(
+          { success: false, code: "ACCOUNT_CREATE_FAILED", error: "Account migration failed" },
+          503,
+        );
       }
       authUserId = created.user.id;
-      const { error: linkError } = await admin
+      const { data: linkedAccount, error: linkError } = await admin
         .from("system_users")
         .update({ auth_user_id: authUserId, auth_migrated_at: new Date().toISOString() })
         .eq("id", systemUser.id)
-        .is("auth_user_id", null);
-      if (linkError) {
+        .is("auth_user_id", null)
+        .select("auth_user_id")
+        .maybeSingle();
+      if (linkError || linkedAccount?.auth_user_id !== authUserId) {
         await admin.auth.admin.deleteUser(authUserId).catch(() => undefined);
         console.error("Unable to link migrated account", linkError);
-        return jsonResponse({ success: false, error: "Account migration failed" }, 503);
+        return jsonResponse(
+          { success: false, code: "ACCOUNT_LINK_FAILED", error: "Account migration failed" },
+          503,
+        );
       }
     } else {
       const { error: updateError } = await admin.auth.admin.updateUserById(authUserId, {
@@ -98,7 +109,10 @@ serve(async (request) => {
       });
       if (updateError) {
         console.error("Unable to synchronize account", updateError);
-        return jsonResponse({ success: false, error: "Account synchronization failed" }, 503);
+        return jsonResponse(
+          { success: false, code: "ACCOUNT_SYNC_FAILED", error: "Account synchronization failed" },
+          503,
+        );
       }
     }
 
@@ -111,7 +125,10 @@ serve(async (request) => {
     });
     if (signInError || !sessionData.session) {
       console.error("Unable to establish account session", signInError);
-      return jsonResponse({ success: false, error: "Unable to establish session" }, 503);
+      return jsonResponse(
+        { success: false, code: "SESSION_FAILED", error: "Unable to establish session" },
+        503,
+      );
     }
 
     await admin
