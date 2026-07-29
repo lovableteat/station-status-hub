@@ -5,7 +5,7 @@ import test from "node:test";
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("the workspace uses one collaboration center for notifications and presence", async () => {
+test("the workspace uses one collaboration center for notifications, presence, and messages", async () => {
   const [indexSource, headerSource, centerSource, indicatorSource] = await Promise.all([
     readSource("src/pages/Index.tsx"),
     readSource("src/components/layout/MainWorkspaceHeader.tsx"),
@@ -20,9 +20,12 @@ test("the workspace uses one collaboration center for notifications and presence
   assert.doesNotMatch(indicatorSource, /<Popover/);
   assert.match(centerSource, /value="notifications"/);
   assert.match(centerSource, /value="online"/);
+  assert.match(centerSource, /value="messages"/);
+  assert.match(centerSource, /<DirectMessagesPanel/);
   assert.match(centerSource, /open-global-collaboration/);
   assert.match(centerSource, /全部標為已讀/);
-  assert.match(centerSource, /目前只有您在線上/);
+  assert.match(centerSource, /尚未取得在線名單/);
+  assert.doesNotMatch(centerSource, /目前只有您在線上/);
 });
 
 test("unread admin announcements open once and require explicit acknowledgement", async () => {
@@ -54,6 +57,9 @@ test("presence exposes all users, other users and connection state", async () =>
   assert.match(source, /allOnlineUsers/);
   assert.match(source, /otherOnlineUsersCount/);
   assert.match(source, /connectionStatus/);
+  assert.match(source, /connectionState/);
+  assert.match(source, /firstRosterSynced/);
+  assert.doesNotMatch(source, /setInterval/);
   assert.match(sessionSource, /new Map/);
 });
 

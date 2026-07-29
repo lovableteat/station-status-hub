@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollabo
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
+import { syncAuthAccount } from "./authAccountSync";
 import {
   getWorkspaceLevelLabel,
   readWorkspaceAccess,
@@ -248,6 +250,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       if (error) throw error;
 
+      await syncAuthAccount(id);
+
       toast({
         title: "狀態更新成功",
         description: `用戶狀態已更新為${newStatus === 'active' ? '啟用' : '停用'}`
@@ -267,12 +271,25 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     if (rejectUserMutation()) return;
 
     try {
+      let authUserId = "";
+      if (REALTIME_COLLABORATION_V2_ENABLED) {
+        const { data: authAccount } = await (supabase.from('system_users') as any)
+          .select('auth_user_id')
+          .eq('id', userId)
+          .maybeSingle();
+        authUserId = typeof authAccount?.auth_user_id === "string" ? authAccount.auth_user_id : "";
+      }
       const { error } = await supabase
         .from('system_users')
         .delete()
         .eq('id', userId);
 
       if (error) throw error;
+
+      await syncAuthAccount(userId, {
+        action: "delete",
+        authUserId,
+      });
 
       toast({
         title: "刪除成功",

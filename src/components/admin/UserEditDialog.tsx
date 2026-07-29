@@ -8,6 +8,7 @@ import { Edit, Save, X, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
+import { syncAuthAccount } from "./authAccountSync";
 
 interface UserEditDialogProps {
   userId: string;
@@ -58,9 +59,13 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
       if (error) throw error;
 
+      const authSynced = await syncAuthAccount(userId, { password: editValues.password });
+
       toast({
         title: "更新成功",
-        description: "用戶資料已成功更新"
+        description: authSynced
+          ? "用戶資料與登入身分已同步更新"
+          : "用戶資料已更新；登入身分會在下次登入時自動同步"
       });
 
       setIsOpen(false);
