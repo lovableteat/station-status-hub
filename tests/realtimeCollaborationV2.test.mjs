@@ -23,13 +23,44 @@ test("authenticated account migration preserves legacy IDs and fallback login", 
   assert.match(migration, /sender_id uuid REFERENCES public\.system_users\(id\) ON DELETE SET NULL/i);
   assert.match(context, /supabase\.functions\.invoke<AccountLoginPayload>\("account-login"/);
   assert.match(context, /await supabase\.realtime\.setAuth\(session\.access_token\)/);
-  assert.match(context, /Compatibility path/);
+  assert.match(context, /Legacy deployment path/);
   assert.match(context, /REALTIME_COLLABORATION_V2_ENABLED/);
   assert.match(context, /supabase\.rpc\("authenticate_user"/);
   assert.match(loginFunction, /admin\.auth\.admin\.createUser/);
   assert.match(loginFunction, /auth\.signInWithPassword/);
   assert.match(loginFunction, /auth\.station-status\.example\.com/);
   assert.doesNotMatch(loginFunction, /station-status\.local/);
+});
+
+test("stale cached sessions are upgraded before private providers mount", async () => {
+  const [context, app, upgradePage] = await Promise.all([
+    readSource("src/components/auth/UserContext.tsx"),
+    readSource("src/App.tsx"),
+    readSource("src/components/auth/RealtimeSessionUpgradePage.tsx"),
+  ]);
+
+  assert.match(context, /requiresRealtimeUpgrade: boolean/);
+  assert.match(context, /useState\(!demoUser\)/);
+  assert.match(
+    context,
+    /REALTIME_COLLABORATION_V2_ENABLED\s*&&\s*user !== null\s*&&\s*sessionMode === "legacy"/,
+  );
+  assert.match(context, /if \(REALTIME_COLLABORATION_V2_ENABLED\) \{[\s\S]*throw normalizeThrownError/);
+  assert.match(context, /Legacy deployment path/);
+
+  assert.match(app, /function ApplicationSessionGate/);
+  assert.match(app, /requiresRealtimeUpgrade/);
+  assert.match(app, /<RealtimeSessionUpgradePage \/>/);
+  assert.match(
+    app,
+    /<ApplicationSessionGate>[\s\S]*<UserPresenceProvider>[\s\S]*<\/UserPresenceProvider>[\s\S]*<\/ApplicationSessionGate>/,
+  );
+
+  assert.match(upgradePage, /autoComplete="current-password"/);
+  assert.match(upgradePage, /await authenticate\(user\.username, password\)/);
+  assert.match(upgradePage, /setPassword\(""\)/);
+  assert.match(upgradePage, /logout\(\)/);
+  assert.doesNotMatch(upgradePage, /localStorage|sessionStorage/);
 });
 
 test("presence reports real sync state without fake users or page refreshes", async () => {
@@ -58,10 +89,11 @@ test("presence reports real sync state without fake users or page refreshes", as
 });
 
 test("admin account lifecycle updates system and Auth identities as one operation", async () => {
-  const [adminFunction, adminPanel, userEditor] = await Promise.all([
+  const [adminFunction, adminPanel, userEditor, accountSync] = await Promise.all([
     readSource("supabase/functions/account-admin-sync/index.ts"),
     readSource("src/components/admin/AdminPanel.tsx"),
     readSource("src/components/admin/UserEditDialog.tsx"),
+    readSource("src/components/admin/authAccountSync.ts"),
   ]);
 
   assert.match(adminFunction, /"create" \| "update" \| "sync" \| "delete"/);
@@ -72,9 +104,15 @@ test("admin account lifecycle updates system and Auth identities as one operatio
   assert.match(adminPanel, /action: "create"/);
   assert.match(adminPanel, /action: "update"/);
   assert.match(adminPanel, /action: "delete"/);
+  assert.match(adminPanel, /isRealtimeAuthenticated/);
+  assert.match(adminPanel, /rejectUnauthenticatedAccountMutation/);
+  assert.match(adminPanel, /newUser\.password\.length < 6/);
+  assert.match(adminPanel, /minLength=\{6\}/);
   assert.match(adminPanel, /即時身分已連結/);
   assert.match(userEditor, /mutateAuthAccount\(userId/);
   assert.doesNotMatch(adminPanel, /await syncAuthAccount/);
+  assert.match(accountSync, /supabase\.auth\.getSession\(\)/);
+  assert.match(accountSync, /readFunctionError/);
 });
 
 test("direct messages are member-only, incremental, retryable, and idempotent", async () => {

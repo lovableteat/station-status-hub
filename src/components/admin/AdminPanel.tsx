@@ -71,7 +71,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
   const { toast } = useToast();
-  const { logout, user } = useUser();
+  const { isRealtimeAuthenticated, logout, user } = useUser();
   const { canEditModule, canViewModule, loading: permissionsLoading } = usePermissions();
   const canEditUsers = canEditModule("users");
   const canViewApiManagement = canViewModule("api-management");
@@ -88,6 +88,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     toast({
       title: "僅限檢視",
       description: "你的帳號沒有後台管理編輯權限。",
+      variant: "destructive",
+    });
+    return true;
+  };
+
+  const rejectUnauthenticatedAccountMutation = () => {
+    if (!REALTIME_COLLABORATION_V2_ENABLED || isRealtimeAuthenticated) return false;
+    toast({
+      title: "需要重新驗證登入身分",
+      description: "即時工作階段已過期，請重新登入後再進行帳戶管理。",
       variant: "destructive",
     });
     return true;
@@ -159,13 +169,22 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleAddUser = async () => {
-    if (rejectUserMutation()) return;
+    if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
     if (!newUser.username || !newUser.password || !newUser.displayName) {
       toast({
         title: "新增失敗",
         description: "請填寫完整的用戶名、密碼和顯示名稱",
         variant: "destructive"
+      });
+      return;
+    }
+
+    if (newUser.password.length < 6) {
+      toast({
+        title: "初始密碼太短",
+        description: "初始密碼至少需要 6 個字元，請重新輸入。",
+        variant: "destructive",
       });
       return;
     }
@@ -248,7 +267,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleToggleUserStatus = async (id: string, currentStatus: string) => {
-    if (rejectUserMutation()) return;
+    if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
@@ -282,7 +301,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (rejectUserMutation()) return;
+    if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
     try {
       if (REALTIME_COLLABORATION_V2_ENABLED) {
@@ -615,10 +634,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                       <Input
                         className="border-cyan-200/22 bg-white/[0.03] text-slate-50 placeholder:text-slate-400"
                         type="password"
+                        autoComplete="new-password"
+                        minLength={6}
+                        maxLength={200}
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                        placeholder="建立後不會再顯示"
+                        placeholder="至少 6 個字元，建立後不會再顯示"
                       />
+                      <p className="text-xs leading-5 text-slate-500">
+                        為符合安全登入規則，初始密碼至少需要 6 個字元。
+                      </p>
                     </div>
                   </div>
 
