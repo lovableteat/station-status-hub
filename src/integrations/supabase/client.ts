@@ -19,6 +19,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // Supabase 2.111 forwards this option as `undefined` when a custom lock
+    // is supplied, which makes the lock deadline NaN and blocks login.
+    lockAcquireTimeout: 5_000,
     // Supabase otherwise waits forever for the browser Auth Web Lock. A stale
     // lock in another tab must reject so the application can recover safely.
     lock: createBoundedAuthLock(),
