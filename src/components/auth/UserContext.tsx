@@ -12,7 +12,10 @@ import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
 import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
-import { runLoginWithTransientRetry } from "./loginRetryPolicy.mjs";
+import {
+  runLoginWithTransientRetry,
+  runSessionBootstrapWithDeadline,
+} from "./loginRetryPolicy.mjs";
 
 export interface User {
   userId: string;
@@ -52,6 +55,8 @@ interface AccountLoginPayload {
     display_name?: string;
   };
 }
+
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;
 
 async function authorizeRealtime(session: Session) {
   // Private Realtime channels must receive the current JWT before subscribe().
@@ -118,8 +123,7 @@ function getDevDemoUser(): User | null {
   };
 }
 
-function userFromMetadata(session: Session): User | null {
-  const metadata = session.user.app_metadata ?? {};
+function userFromMetadata(metadata: Session["user"]["app_metadata"]): User | null {
   const userId = metadata.system_user_id;
   const username = metadata.username;
   const role = metadata.role;
@@ -158,9 +162,13 @@ async function userFromSession(session: Session): Promise<User | null> {
 
   if (!error) return null;
 
-  // Trusted app metadata keeps the rollout compatible while the migration
-  // propagates. Unlike user metadata, clients cannot modify these claims.
-  return userFromMetadata(session);
+  // Keep migration compatibility, but only after Auth has fetched the user
+  // from the server. The user object inside getSession() comes from browser
+  // storage and must never be trusted for identity or role decisions.
+  const { data: verifiedUserData, error: verifiedUserError } =
+    await supabase.auth.getUser(session.access_token);
+  if (verifiedUserError || !verifiedUserData.user) return null;
+  return userFromMetadata(verifiedUserData.user.app_metadata ?? {});
 }
 
 function normalizeThrownError(error: unknown, fallbackMessage: string) {
@@ -214,28 +222,80 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const restoreSession = async (session: Session | null) => {
       if (!active) return;
-      if (!session) {
-        setIsInitializing(false);
-        return;
-      }
 
-      authenticatedSessionSeen.current = true;
-      await authorizeRealtime(session);
-      if (!active) return;
-      const authenticatedUser = await userFromSession(session);
-      if (!active) return;
-      if (authenticatedUser) {
-        applyUser(authenticatedUser, "authenticated");
-      } else {
+      try {
+        if (!session) return;
+
+        authenticatedSessionSeen.current = true;
+        void authorizeRealtime(session);
+
+        const profileResult = await runSessionBootstrapWithDeadline(
+          () => userFromSession(session),
+          { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
+        );
+        if (!active) return;
+
+        let authenticatedUser: User | null = null;
+        if (profileResult.status === "fulfilled") {
+          authenticatedUser = profileResult.value;
+        } else {
+          console.warn(
+            profileResult.status === "timed-out"
+              ? "Session profile restore timed out"
+              : "Session profile restore failed",
+            profileResult.status === "rejected" ? profileResult.error : undefined,
+          );
+        }
+
+        if (!active) return;
+        if (authenticatedUser) {
+          applyUser(authenticatedUser, "authenticated");
+          return;
+        }
+
         setUser(null);
         setSessionMode("signed-out");
         storeUser(null);
         void supabase.auth.signOut({ scope: "local" });
+      } finally {
+        if (active) setIsInitializing(false);
       }
-      setIsInitializing(false);
     };
 
-    void supabase.auth.getSession().then(({ data }) => restoreSession(data.session));
+    const initializeSession = async () => {
+      const sessionResult = await runSessionBootstrapWithDeadline(
+        () => supabase.auth.getSession(),
+        { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
+      );
+      if (!active) return;
+
+      if (sessionResult.status !== "fulfilled") {
+        console.warn(
+          sessionResult.status === "timed-out"
+            ? "Session bootstrap timed out"
+            : "Session bootstrap failed",
+          sessionResult.status === "rejected" ? sessionResult.error : undefined,
+        );
+        setUser(null);
+        setSessionMode("signed-out");
+        storeUser(null);
+        setIsInitializing(false);
+        return;
+      }
+
+      if (sessionResult.value.error) {
+        console.warn("Session bootstrap returned an auth error", sessionResult.value.error);
+        setUser(null);
+        setSessionMode("signed-out");
+        storeUser(null);
+        setIsInitializing(false);
+        return;
+      }
+
+      await restoreSession(sessionResult.value.data.session);
+    };
+
+    void initializeSession();
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" && authenticatedSessionSeen.current) {
         setUser(null);
@@ -270,7 +330,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             refresh_token: edgeResult.data.session.refresh_token,
           });
           if (!sessionError) {
-            await authorizeRealtime(edgeResult.data.session);
+            void authorizeRealtime(edgeResult.data.session);
             const profile = edgeResult.data.system_user;
             if (profile?.user_id && profile.username && profile.role) {
               const authenticatedUser: User = {
