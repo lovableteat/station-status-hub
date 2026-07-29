@@ -78,8 +78,8 @@ test("shared-topic account switches finish removing the old channel before creat
   );
 
   const transitions = presenceSession.createPresenceTransitionQueue();
-  const oldChannel = { id: "old", topic: "user_presence" };
-  const newChannel = { id: "new", topic: "user_presence" };
+  const oldChannel = { id: "old", topic: "presence:global" };
+  const newChannel = { id: "new", topic: "presence:global" };
   let channels = [oldChannel];
   let finishOldRemoval;
   const oldRemovalGate = new Promise((resolve) => {
@@ -104,12 +104,15 @@ test("shared-topic account switches finish removing the old channel before creat
 });
 
 test("the provider shares one topic while guarding per-tab identities", () => {
-  assert.match(providerSource, /supabase\.channel\("user_presence"/);
+  assert.match(providerSource, /GLOBAL_PRESENCE_TOPIC = "presence:global"/);
+  assert.match(providerSource, /LEGACY_PRESENCE_TOPIC = "user_presence"/);
+  assert.match(providerSource, /private: isRealtimeAuthenticated/);
   assert.match(providerSource, /createPresenceKey/);
   assert.match(providerSource, /presenceGenerationRef/);
   assert.match(providerSource, /createPresenceTransitionQueue/);
-  assert.match(providerSource, /presenceTransitions(?:Ref\.current)?\.enqueue/);
+  assert.match(providerSource, /(?:presenceTransitionsRef\.current|transitions)\.enqueue/);
   assert.match(providerSource, /channel\s*\.untrack\(\)/);
-  assert.match(providerSource, /supabase\.removeChannel\(channel\)/);
-  assert.doesNotMatch(providerSource, /user_presence:\$\{user\.userId\}/);
+  assert.match(providerSource, /supabase\.removeChannel\([^)]*channel\)/i);
+  assert.doesNotMatch(providerSource, /setInterval/);
+  assert.doesNotMatch(providerSource, /Keep the signed-in\s+user visible immediately/);
 });

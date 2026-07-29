@@ -2,3 +2,9 @@ project_id = "rfppeuzuoxtqkpbwehbq"
 
 [functions.api]
 verify_jwt = false
+
+[functions.account-login]
+verify_jwt = false
+
+[functions.account-admin-sync]
+verify_jwt = true

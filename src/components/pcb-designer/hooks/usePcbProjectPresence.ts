@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 
 export type PcbViewMode = "2d" | "3d";
@@ -51,9 +52,12 @@ export function usePcbProjectPresence({
   user: CurrentUser | null;
   viewMode: PcbViewMode;
 }) {
+  const { isRealtimeAuthenticated } = useUser();
   const [peers, setPeers] = useState<PcbProjectPeer[]>([]);
   const [connected, setConnected] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const subscribedRef = useRef(false);
+  const trackConfirmedRef = useRef(false);
   const tabIdRef = useRef(`pcb-tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
 
   const payload = useMemo<PcbProjectPeer | null>(() => user ? {
@@ -77,39 +81,65 @@ export function usePcbProjectPresence({
       return undefined;
     }
 
-    const channel = supabase.channel(`pcb_project_presence:${projectId}`, {
-      config: { presence: { key: `${presenceUserId}:${tabIdRef.current}` } },
+    subscribedRef.current = false;
+    trackConfirmedRef.current = false;
+    const topic = isRealtimeAuthenticated
+      ? `presence:workspace:pcb:${projectId}`
+      : `pcb_project_presence:${projectId}`;
+    const channel = supabase.channel(topic, {
+      config: {
+        private: isRealtimeAuthenticated,
+        presence: { key: `${presenceUserId}:${tabIdRef.current}` },
+      },
     });
     channelRef.current = channel;
 
     const syncPresence = () => {
-      const nextPeers = flattenPresenceState(
-        channel.presenceState() as Record<string, unknown[]>,
-      );
+      const presenceState = channel.presenceState() as Record<string, unknown[]>;
+      const nextPeers = flattenPresenceState(presenceState);
       setPeers(nextPeers.filter((peer) => peer.tabId !== tabIdRef.current));
+      const ownSessionVisible = nextPeers.some((peer) => peer.tabId === tabIdRef.current);
+      setConnected(subscribedRef.current && trackConfirmedRef.current && ownSessionVisible);
+    };
+
+    const trackCurrentPayload = async () => {
+      const currentPayload = payloadRef.current;
+      if (!subscribedRef.current || !currentPayload) return;
+      const result = await channel.track(currentPayload);
+      if (channelRef.current !== channel) return;
+      trackConfirmedRef.current = result === "ok";
+      if (result !== "ok") setConnected(false);
+      syncPresence();
     };
 
     channel
       .on("presence", { event: "sync" }, syncPresence)
       .on("presence", { event: "join" }, syncPresence)
       .on("presence", { event: "leave" }, syncPresence)
-      .subscribe(async (status) => {
-        const isConnected = status === "SUBSCRIBED";
-        setConnected(isConnected);
-        const currentPayload = payloadRef.current;
-        if (isConnected && currentPayload) await channel.track(currentPayload);
+      .subscribe((status) => {
+        subscribedRef.current = status === "SUBSCRIBED";
+        if (subscribedRef.current) void trackCurrentPayload();
+        else setConnected(false);
       });
 
     return () => {
       channelRef.current = null;
+      subscribedRef.current = false;
+      trackConfirmedRef.current = false;
       setConnected(false);
+      void channel.untrack().catch(() => undefined);
       void supabase.removeChannel(channel);
     };
-  }, [presenceUserId, projectId]);
+  }, [isRealtimeAuthenticated, presenceUserId, projectId]);
 
   useEffect(() => {
-    if (!payload || !channelRef.current) return;
-    void channelRef.current.track(payload);
+    if (!payload || !channelRef.current || !subscribedRef.current) return;
+    const channel = channelRef.current;
+    void channel.track(payload).then((result) => {
+      if (channelRef.current !== channel) return;
+      trackConfirmedRef.current = result === "ok";
+      if (result !== "ok") setConnected(false);
+    });
   }, [payload]);
 
   return { connected, peers, tabId: tabIdRef.current };
