@@ -41,6 +41,44 @@ test("stale cached sessions are upgraded before private providers mount", async 
 
   assert.match(context, /requiresRealtimeUpgrade: boolean/);
   assert.match(context, /useState\(!demoUser\)/);
+  assert.match(context, /runSessionBootstrapWithDeadline/);
+  assert.match(
+    context,
+    /runSessionBootstrapWithDeadline\(\s*\(\) => supabase\.auth\.getSession\(\)/,
+  );
+  assert.match(
+    context,
+    /await supabase\.auth\.setSession\(/,
+  );
+  assert.doesNotMatch(
+    context,
+    /runSessionBootstrapWithDeadline\(\s*\(\) =>\s*supabase\.auth\.setSession\(/,
+    "setSession must not continue as an untracked late operation after an application timeout",
+  );
+  assert.match(
+    context,
+    /runSessionBootstrapWithDeadline\(\s*\(\) => userFromSession\(session\)/,
+  );
+  assert.match(
+    context,
+    /supabase\.auth\.getUser\(session\.access_token\)/,
+    "metadata fallback must be re-fetched from the Auth server",
+  );
+  assert.doesNotMatch(
+    context,
+    /let authenticatedUser = userFromMetadata\(session\)/,
+    "browser-stored session metadata must not bypass server profile verification",
+  );
+  assert.match(context, /sessionResult\.status !== "fulfilled"/);
+  const bootstrapFailureBlock = context.match(
+    /if \(sessionResult\.status !== "fulfilled"\) \{([\s\S]*?)\n\s*\}\n\n\s*if \(sessionResult\.value\.error\)/,
+  )?.[1];
+  assert.match(
+    bootstrapFailureBlock ?? "",
+    /setUser\(null\)[\s\S]*?setSessionMode\("signed-out"\)[\s\S]*?storeUser\(null\)/,
+    "an unverified cached identity must be cleared when session bootstrap fails",
+  );
+  assert.doesNotMatch(context, /await authorizeRealtime\(/);
   assert.match(
     context,
     /REALTIME_COLLABORATION_V2_ENABLED\s*&&\s*user !== null\s*&&\s*sessionMode === "legacy"/,
