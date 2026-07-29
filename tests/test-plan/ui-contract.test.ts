@@ -89,3 +89,36 @@ test("makes loading, empty, error, view-only, and destructive states explicit", 
   assert.match(workspace, /AlertDialog/);
   assert.match(workspace, /disabled=\{!canEdit/);
 });
+
+test("finishes the daily Test_Plan workflow with a full space form, guided start, selection, and private-file inspector", async () => {
+  const [workspace, spaceDialog, inspector, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/TestPlanSpaceDialog.tsx"),
+    source("src/components/test-plan/TestPlanInspector.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
+
+  assert.match(spaceDialog, /空間名稱/);
+  assert.match(spaceDialog, /空間說明/);
+  assert.match(spaceDialog, /識別色/);
+  assert.match(spaceDialog, /description/);
+  assert.match(spaceDialog, /color/);
+
+  assert.match(workspace, /建立空間/);
+  assert.match(workspace, /建立資料夾/);
+  assert.match(workspace, /上傳工程檔案/);
+  assert.match(workspace, /selectedEntry/);
+  assert.match(workspace, /TestPlanInspector/);
+  assert.match(workspace, /MaintenanceMetricStrip/);
+
+  assert.match(inspector, /getTestPlanPreviewKind/);
+  assert.match(inspector, /downloadFile/);
+  assert.match(inspector, /URL\.createObjectURL/);
+  assert.match(inspector, /URL\.revokeObjectURL/);
+  assert.match(inspector, /<img/);
+  assert.match(inspector, /<iframe/);
+  assert.match(inspector, /await blob\.text\(\)/);
+
+  assert.match(styles, /\.test-plan-inspector/);
+  assert.match(styles, /grid-template-columns:[^;]*minmax\(0,\s*1fr\)[^;]*minmax\(/);
+});

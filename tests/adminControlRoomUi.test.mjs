@@ -5,11 +5,14 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("admin workspace exposes clear visual zones without changing user actions", async () => {
-  const source = await read("../src/components/admin/AdminPanel.tsx");
+  const [source, sidebar] = await Promise.all([
+    read("../src/components/admin/AdminPanel.tsx"),
+    read("../src/components/admin/AdminSidebar.tsx"),
+  ]);
 
   assert.match(source, /data-admin-surface="control-room"/);
   assert.match(source, /data-admin-zone="command"/);
-  assert.match(source, /data-admin-zone="navigation"/);
+  assert.match(sidebar, /data-admin-zone="navigation"/);
   assert.match(source, /data-admin-zone="status-overview"/);
   assert.match(source, /data-admin-zone="filters"/);
   assert.match(source, /data-admin-zone="accounts"/);
@@ -37,4 +40,33 @@ test("admin dialogs and API console share the brighter control-room treatment", 
   assert.match(apiKeys, /openCreateDialog/);
   assert.match(apiKeys, /toggleKeyStatus/);
   assert.match(apiKeys, /deleteKey/);
+});
+
+test("admin workspace uses the maintenance visual system and a responsive sidebar instead of a decorative tab strip", async () => {
+  const [panel, sidebar, styles, header, metrics] = await Promise.all([
+    read("../src/components/admin/AdminPanel.tsx"),
+    read("../src/components/admin/AdminSidebar.tsx"),
+    read("../src/components/admin/admin-panel.css"),
+    read("../src/components/maintenance/MaintenancePageHeader.tsx"),
+    read("../src/components/maintenance/MaintenanceMetricStrip.tsx"),
+  ]);
+
+  assert.match(panel, /<AdminSidebar/);
+  assert.match(panel, /<MaintenancePageHeader/);
+  assert.match(panel, /<MaintenanceMetricStrip/);
+  assert.doesNotMatch(panel, /radial-gradient|blur-3xl|bg-gradient-to-r/);
+
+  assert.match(sidebar, /用戶管理/);
+  assert.match(sidebar, /通知與在線/);
+  assert.match(sidebar, /API 管理/);
+  assert.match(sidebar, /收合側欄/);
+  assert.match(sidebar, /aria-current/);
+
+  assert.match(styles, /#06111f/i);
+  assert.match(styles, /#071522/i);
+  assert.match(styles, /#2a526f/i);
+  assert.match(styles, /#4c8dff/i);
+  assert.match(styles, /@media \(max-width: 900px\)/);
+  assert.match(header, /MaintenancePageHeader/);
+  assert.match(metrics, /MaintenanceMetricStrip/);
 });
