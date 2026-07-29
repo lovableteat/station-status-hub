@@ -1,0 +1,2 @@
+export const REALTIME_COLLABORATION_V2_ENABLED =
+  import.meta.env.VITE_REALTIME_COLLABORATION_V2 === "true";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,56 +10,36 @@ import {
   SUPABASE_EGRESS_RESTRICTION_MESSAGE,
   isSupabaseServiceRestrictedError,
 } from "@/integrations/supabase/serviceErrors";
-import { runLoginWithTransientRetry } from "./loginRetryPolicy.mjs";
 
-interface LoginPageProps {
-  onLogin: (userId: string, username: string, role: string, displayName: string) => void;
-}
-
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isServiceRestricted, setIsServiceRestricted] = useState(false);
+  const { authenticate } = useUser();
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsLoading(true);
 
     try {
-      const { data, error } = await runLoginWithTransientRetry(() =>
-        supabase.rpc("authenticate_user", {
-          username_input: username.trim(),
-          password_input: password,
-        })
-      );
-
-      if (error) {
-        console.error("Authentication error:", error);
-        const serviceRestricted = isSupabaseServiceRestrictedError(error);
-        setIsServiceRestricted(serviceRestricted);
-        toast({
-          title: serviceRestricted ? "系統服務暫時中斷" : "登入失敗",
-          description: serviceRestricted
-            ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
-            : "系統驗證時發生錯誤，請稍後再試。",
-          variant: "destructive",
-        });
-      } else if (!data || data.length === 0 || !data[0].success) {
+      const result = await authenticate(username, password);
+      if (!result) {
         setIsServiceRestricted(false);
         toast({
           title: "登入失敗",
-          description: "帳號或密碼不正確。",
+          description: "帳號或密碼錯誤，請重新確認。",
           variant: "destructive",
         });
       } else {
         setIsServiceRestricted(false);
-        const userInfo = data[0];
-        onLogin(userInfo.user_id, userInfo.username, userInfo.role, userInfo.display_name);
         toast({
           title: "登入成功",
-          description: `歡迎回來，${userInfo.display_name || userInfo.username}`,
+          description:
+            result.mode === "authenticated"
+              ? `歡迎回來，${result.user.displayName}`
+              : `歡迎回來，${result.user.displayName}。即時協作將在服務升級完成後啟用。`,
         });
       }
     } catch (error) {
@@ -70,12 +50,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         title: serviceRestricted ? "系統服務暫時中斷" : "登入失敗",
         description: serviceRestricted
           ? SUPABASE_EGRESS_RESTRICTION_MESSAGE
-          : "系統驗證時發生錯誤，請稍後再試。",
+          : "登入服務目前無法回應，請稍後再試。",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -88,16 +68,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <span className="text-2xl font-black tracking-[0.08em]">S</span>
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-2xl font-bold sm:text-3xl">機台管理系統登入</CardTitle>
+            <CardTitle className="text-2xl font-bold sm:text-3xl">工作整合平台登入</CardTitle>
             <CardDescription className="text-sm leading-6">
-              請輸入您的帳號與密碼以進入工作整合平台。
+              使用原有帳號與密碼登入，系統會安全升級即時協作身分。
             </CardDescription>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <div className="rounded-2xl border border-primary/10 bg-primary/6 px-4 py-3 text-sm leading-6 text-muted-foreground">
-            保留原本登入流程與權限驗證，只優化畫面層級、閱讀舒適度與按鈕操作手感。
+          <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
+            帳號、權限與現有工作資料都會保留，不需要重新註冊或重設密碼。
           </div>
 
           {isServiceRestricted ? (
@@ -105,7 +85,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               role="alert"
               className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm leading-6 text-rose-100"
             >
-              <p className="font-bold">資料服務目前暫停</p>
+              <p className="font-bold">系統服務暫時中斷</p>
               <p className="mt-1 text-rose-100/80">{SUPABASE_EGRESS_RESTRICTION_MESSAGE}</p>
             </div>
           ) : null}
@@ -116,9 +96,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               <Input
                 id="username"
                 type="text"
+                autoComplete="username"
                 placeholder="請輸入帳號"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(event) => setUsername(event.target.value)}
                 required
               />
             </div>
@@ -128,9 +109,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 placeholder="請輸入密碼"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 required
               />
             </div>
