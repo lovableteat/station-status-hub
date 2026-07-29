@@ -20,7 +20,9 @@ export type Permission =
   | "api_management_view"
   | "api_management_edit"
   | "pcb_designer_view"
-  | "pcb_designer_edit";
+  | "pcb_designer_edit"
+  | "test_plan_view"
+  | "test_plan_edit";
 
 export type WorkspaceId =
   | "station-status"
@@ -65,6 +67,7 @@ export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   monitor: "station-status",
   issues: "station-status",
   tools: "station-status",
+  "test-plan": "station-status",
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
@@ -85,6 +88,7 @@ export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
   data: "data_center",
   "data-center": "data_center",
   "pcb-designer": "pcb_designer",
+  "test-plan": "test_plan",
 };
 
 export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
@@ -141,6 +145,13 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
     permissions: [
       { key: "pcb_designer_view", label: "檢視 PCB Designer" },
       { key: "pcb_designer_edit", label: "編輯 PCB Designer" },
+    ],
+  },
+  test_plan: {
+    name: "Test_Plan",
+    permissions: [
+      { key: "test_plan_view", label: "檢視 Test_Plan" },
+      { key: "test_plan_edit", label: "管理 Test_Plan" },
     ],
   },
   api_management: {
