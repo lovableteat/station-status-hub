@@ -1880,6 +1880,211 @@ export type Database = {
           },
         ]
       }
+      test_plan_storage_cleanup_queue: {
+        Row: {
+          last_error: string | null
+          owner_id: string
+          queued_at: string
+          storage_path: string
+        }
+        Insert: {
+          last_error?: string | null
+          owner_id: string
+          queued_at?: string
+          storage_path: string
+        }
+        Update: {
+          last_error?: string | null
+          owner_id?: string
+          queued_at?: string
+          storage_path?: string
+        }
+        Relationships: []
+      }
+      test_plan_account_cleanup_queue: {
+        Row: {
+          auth_user_id: string | null
+          last_error: string | null
+          owner_id: string
+          queued_at: string
+          storage_paths: string[]
+        }
+        Insert: {
+          auth_user_id?: string | null
+          last_error?: string | null
+          owner_id: string
+          queued_at?: string
+          storage_paths?: string[]
+        }
+        Update: {
+          auth_user_id?: string | null
+          last_error?: string | null
+          owner_id?: string
+          queued_at?: string
+          storage_paths?: string[]
+        }
+        Relationships: []
+      }
+      test_plan_spaces: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_plan_spaces_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_plan_folders: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          parent_id: string | null
+          space_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          space_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          space_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_plan_folders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "test_plan_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_folders_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "test_plan_spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_plan_files: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          extension: string
+          file_size: number
+          folder_id: string | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          space_id: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description?: string | null
+          extension: string
+          file_size: number
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          space_id: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          extension?: string
+          file_size?: number
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          space_id?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_plan_files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "test_plan_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_files_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "test_plan_spaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_export_logs: {
         Row: {
           created_at: string | null
@@ -3461,6 +3666,8 @@ export type Database = {
         | "flow_info_edit"
         | "pcb_designer_view"
         | "pcb_designer_edit"
+        | "test_plan_view"
+        | "test_plan_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3615,6 +3822,8 @@ export const Constants = {
         "flow_info_edit",
         "pcb_designer_view",
         "pcb_designer_edit",
+        "test_plan_view",
+        "test_plan_edit",
       ],
     },
   },

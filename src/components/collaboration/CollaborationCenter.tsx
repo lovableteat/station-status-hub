@@ -50,6 +50,7 @@ const moduleLabels: Record<string, string> = {
   monitor: "生產監控牆",
   issues: "問題追蹤",
   tools: "工具與資產",
+  "test-plan": "Test_Plan",
   users: "後台管理",
   "api-management": "API 管理",
   "material-requests": "料號申請",
