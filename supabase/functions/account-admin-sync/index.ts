@@ -21,6 +21,8 @@ const allowedStatuses = new Set(["active", "inactive"]);
 
 type AdminClient = ReturnType<typeof createClient>;
 type AccountAction = "create" | "update" | "sync" | "delete";
+const TEST_PLAN_STORAGE_BUCKET = "test-plan-files";
+const STORAGE_REMOVE_BATCH_SIZE = 100;
 
 interface SystemUserRecord {
   id: string;
@@ -39,6 +41,109 @@ interface ProfileInput {
   status?: string;
   displayName?: string;
   permissions?: unknown;
+}
+
+interface AccountCleanupRecord {
+  owner_id: string;
+  auth_user_id: string | null;
+  storage_paths: string[] | null;
+}
+
+function isMissingAuthUserError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { message?: unknown; status?: unknown };
+  return candidate.status === 404
+    || (
+      typeof candidate.message === "string"
+      && /not found|does not exist/i.test(candidate.message)
+    );
+}
+
+async function recordCleanupError(
+  admin: AdminClient,
+  ownerId: string,
+  error: unknown,
+) {
+  const message = error instanceof Error ? error.message : String(error);
+  await admin
+    .from("test_plan_account_cleanup_queue")
+    .update({ last_error: message.slice(0, 1000) })
+    .eq("owner_id", ownerId);
+}
+
+async function cleanupQueuedAccount(
+  admin: AdminClient,
+  ownerId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("test_plan_account_cleanup_queue")
+    .select("owner_id,auth_user_id,storage_paths")
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  if (error) throw new Error("Unable to load queued account cleanup");
+  if (!data) return false;
+
+  const cleanup = data as AccountCleanupRecord;
+  try {
+    const paths = Array.isArray(cleanup.storage_paths)
+      ? cleanup.storage_paths.filter((path): path is string => typeof path === "string")
+      : [];
+    for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
+      const { error: storageError } = await admin.storage
+        .from(TEST_PLAN_STORAGE_BUCKET)
+        .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
+      if (storageError) throw new Error(`Storage cleanup failed: ${storageError.message}`);
+    }
+
+    if (cleanup.auth_user_id) {
+      const { error: authError } = await admin.auth.admin.deleteUser(cleanup.auth_user_id);
+      if (authError && !isMissingAuthUserError(authError)) {
+        throw new Error(`Auth cleanup failed: ${authError.message}`);
+      }
+    }
+
+    const { error: storageQueueDeleteError } = await admin
+      .from("test_plan_storage_cleanup_queue")
+      .delete()
+      .eq("owner_id", ownerId);
+    if (storageQueueDeleteError) {
+      throw new Error("Unable to clear Test_Plan storage cleanup queue");
+    }
+
+    const { error: queueDeleteError } = await admin
+      .from("test_plan_account_cleanup_queue")
+      .delete()
+      .eq("owner_id", ownerId);
+    if (queueDeleteError) throw new Error("Unable to complete queued account cleanup");
+    return true;
+  } catch (error) {
+    await recordCleanupError(admin, ownerId, error);
+    throw error;
+  }
+}
+
+async function drainQueuedAccountCleanups(
+  admin: AdminClient,
+  excludedOwnerId = "",
+) {
+  const { data, error } = await admin
+    .from("test_plan_account_cleanup_queue")
+    .select("owner_id")
+    .order("queued_at", { ascending: true })
+    .limit(10);
+  if (error) {
+    console.warn("Unable to inspect pending Test_Plan cleanup", error);
+    return;
+  }
+
+  for (const row of data ?? []) {
+    if (row.owner_id === excludedOwnerId) continue;
+    try {
+      await cleanupQueuedAccount(admin, row.owner_id);
+    } catch (cleanupError) {
+      console.error("Deferred Test_Plan cleanup remains queued", cleanupError);
+    }
+  }
 }
 
 function readProfile(value: unknown): ProfileInput {
@@ -180,6 +285,10 @@ serve(async (request) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    await drainQueuedAccountCleanups(
+      admin,
+      action === "delete" ? targetUserId : "",
+    );
 
     if (action === "create") {
       if (!password) return respond({ success: false, error: "Password is required" }, 400);
@@ -221,16 +330,24 @@ serve(async (request) => {
       .from("system_users")
       .select("id,username,role,display_name,status,auth_user_id,password_hash,permissions")
       .eq("id", targetUserId)
-      .single();
-    if (targetError || !target) return respond({ success: false, error: "Account not found" }, 404);
+      .maybeSingle();
+    if (targetError) {
+      return respond({ success: false, error: "Account lookup failed" }, 503);
+    }
 
     if (action === "delete") {
-      if (target.auth_user_id) {
-        const { error: deleteAuthError } = await admin.auth.admin.deleteUser(target.auth_user_id);
-        if (deleteAuthError) {
-          return respond({ success: false, error: "Auth account delete failed" }, 503);
+      if (!target) {
+        try {
+          const cleaned = await cleanupQueuedAccount(admin, targetUserId);
+          return cleaned
+            ? respond({ success: true, recoveredCleanup: true })
+            : respond({ success: false, error: "Account not found" }, 404);
+        } catch (error) {
+          console.error("Queued account cleanup retry failed", error);
+          return respond({ success: false, error: "Account cleanup is still queued" }, 503);
         }
       }
+
       const { error: deleteSystemError } = await admin
         .from("system_users")
         .delete()
@@ -238,8 +355,22 @@ serve(async (request) => {
       if (deleteSystemError) {
         return respond({ success: false, error: "System account delete failed" }, 503);
       }
-      return respond({ success: true });
+      try {
+        await cleanupQueuedAccount(admin, targetUserId);
+        return respond({ success: true });
+      } catch (error) {
+        console.error("Account removed with deferred Test_Plan cleanup", error);
+        return respond(
+          {
+            success: false,
+            error: "Account removed; file cleanup is queued for retry",
+          },
+          503,
+        );
+      }
     }
+
+    if (!target) return respond({ success: false, error: "Account not found" }, 404);
 
     if (action === "update") {
       const updateData: Record<string, unknown> = {};

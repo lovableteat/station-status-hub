@@ -40,7 +40,7 @@
 ### Task 2: Database, storage, and permission contracts
 
 **Files:**
-- Create: `supabase/migrations/20260729090000_create_test_plan_workspace.sql`
+- Create: `supabase/migrations/20260729160000_create_test_plan_workspace.sql`
 - Modify: `src/integrations/supabase/types.ts`
 - Modify: `src/lib/workspacePermissions.ts`
 - Modify: `src/pages/Index.tsx`
