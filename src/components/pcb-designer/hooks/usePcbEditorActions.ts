@@ -342,76 +342,101 @@ export function usePcbEditorActions(
     }
   }, [dispatch, state.activeProject, state.drcIssues]);
 
+  const shortcutRef = useRef({
+    activeProject: state.activeProject,
+    canEdit: state.canEdit,
+    deleteSelected,
+    dispatch,
+    documentLocked: state.documentLocked,
+    nudgeSelected,
+    rotateSelected,
+    tool: state.tool,
+    zoom: state.zoom,
+  });
+  shortcutRef.current = {
+    activeProject: state.activeProject,
+    canEdit: state.canEdit,
+    deleteSelected,
+    dispatch,
+    documentLocked: state.documentLocked,
+    nudgeSelected,
+    rotateSelected,
+    tool: state.tool,
+    zoom: state.zoom,
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      const shortcuts = shortcutRef.current;
       const key = event.key.toLocaleLowerCase();
       if (event.ctrlKey || event.metaKey) {
         if (key === "z") {
           event.preventDefault();
-          dispatch({ type: event.shiftKey ? "history/redo" : "history/undo" });
+          shortcuts.dispatch({ type: event.shiftKey ? "history/redo" : "history/undo" });
           return;
         } else if (key === "y") {
           event.preventDefault();
-          dispatch({ type: "history/redo" });
+          shortcuts.dispatch({ type: "history/redo" });
           return;
         }
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
-        dispatch({ type: "selection/set", selection: null });
-        dispatch({ type: "tool/set", tool: "select" });
+        shortcuts.dispatch({ type: "selection/set", selection: null });
+        shortcuts.dispatch({ type: "tool/set", tool: "select" });
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
-        deleteSelected();
+        shortcuts.deleteSelected();
         return;
       }
       if (event.key === " " && !event.repeat) {
+        if (target?.closest("button, a, [role='button'], [role='menu'], [role='dialog']")) return;
         event.preventDefault();
-        toolBeforeSpaceRef.current = state.tool;
-        dispatch({ type: "tool/set", tool: "pan" });
+        toolBeforeSpaceRef.current = shortcuts.tool;
+        shortcuts.dispatch({ type: "tool/set", tool: "pan" });
         return;
       }
       if (key === "v" || key === "h") {
         event.preventDefault();
-        dispatch({ type: "tool/set", tool: key === "v" ? "select" : "pan" });
+        shortcuts.dispatch({ type: "tool/set", tool: key === "v" ? "select" : "pan" });
         return;
       }
-      if ((key === "m" || key === "k") && state.canEdit && !state.documentLocked) {
+      if ((key === "m" || key === "k") && shortcuts.canEdit && !shortcuts.documentLocked) {
         event.preventDefault();
-        dispatch({ type: "tool/set", tool: key === "m" ? "measure" : "keepout" });
+        shortcuts.dispatch({ type: "tool/set", tool: key === "m" ? "measure" : "keepout" });
         return;
       }
       if (key === "r") {
         event.preventDefault();
-        rotateSelected();
+        shortcuts.rotateSelected();
         return;
       }
       if (key === "f" || key === "0") {
         event.preventDefault();
-        dispatch({ type: "view/reset" });
+        shortcuts.dispatch({ type: "view/reset" });
         return;
       }
       if (key === "+" || key === "=" || key === "-") {
         event.preventDefault();
-        dispatch({
+        shortcuts.dispatch({
           type: "zoom/set",
-          zoom: state.zoom + (key === "-" ? -25 : 25),
+          zoom: shortcuts.zoom + (key === "-" ? -25 : 25),
         });
         return;
       }
-      if ((key === "t" || key === "b") && state.canEdit && !state.documentLocked) {
+      if ((key === "t" || key === "b") && shortcuts.canEdit && !shortcuts.documentLocked) {
         event.preventDefault();
-        dispatch({ type: "layer/set", layer: key === "t" ? "top" : "bottom" });
+        shortcuts.dispatch({ type: "layer/set", layer: key === "t" ? "top" : "bottom" });
         return;
       }
       if (key === "l") {
         event.preventDefault();
-        dispatch({ type: "document/toggle-lock" });
+        shortcuts.dispatch({ type: "document/toggle-lock" });
         return;
       }
       const directions: Record<string, PcbPoint> = {
@@ -427,21 +452,21 @@ export function usePcbEditorActions(
         ? 0.1
         : (event.ctrlKey || event.metaKey)
           ? 10
-          : state.activeProject.board.gridSize;
-      nudgeSelected(direction.x * step, direction.y * step);
+          : shortcuts.activeProject.board.gridSize;
+      shortcuts.nudgeSelected(direction.x * step, direction.y * step);
     };
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key !== " " || toolBeforeSpaceRef.current === null) return;
       event.preventDefault();
       const previousTool = toolBeforeSpaceRef.current;
       toolBeforeSpaceRef.current = null;
-      dispatch({ type: "tool/set", tool: previousTool });
+      shortcutRef.current.dispatch({ type: "tool/set", tool: previousTool });
     };
     const restoreToolAfterBlur = () => {
       if (toolBeforeSpaceRef.current === null) return;
       const previousTool = toolBeforeSpaceRef.current;
       toolBeforeSpaceRef.current = null;
-      dispatch({ type: "tool/set", tool: previousTool });
+      shortcutRef.current.dispatch({ type: "tool/set", tool: previousTool });
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -451,17 +476,7 @@ export function usePcbEditorActions(
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", restoreToolAfterBlur);
     };
-  }, [
-    deleteSelected,
-    dispatch,
-    nudgeSelected,
-    rotateSelected,
-    state.activeProject.board.gridSize,
-    state.canEdit,
-    state.documentLocked,
-    state.tool,
-    state.zoom,
-  ]);
+  }, []);
 
   const selectedObject = state.selection?.kind === "component"
     ? state.activeProject.components.find((item) => item.instanceId === state.selection?.id) ?? null

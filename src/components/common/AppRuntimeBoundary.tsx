@@ -44,10 +44,7 @@ export class AppRuntimeBoundary extends Component<
 
     try {
       const fingerprint = error.message || error.name;
-      if (window.sessionStorage.getItem(CHUNK_RETRY_KEY) === fingerprint) return;
       window.sessionStorage.setItem(CHUNK_RETRY_KEY, fingerprint);
-      this.setState({ retrying: true });
-      window.setTimeout(replaceWithCacheBuster, 80);
     } catch {
       // The recovery screen remains available when storage is unavailable.
     }
