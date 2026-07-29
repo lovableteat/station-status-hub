@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Factory,
   FileText,
+  FolderKanban,
   LayoutDashboard,
   MessageSquareText,
   ServerCog,
@@ -74,6 +75,11 @@ const TestTracker = React.lazy(() =>
     default: module.TestTracker,
   }))
 );
+const TestPlanWorkspace = React.lazy(() =>
+  import("@/components/test-plan/TestPlanWorkspace").then((module) => ({
+    default: module.TestPlanWorkspace,
+  }))
+);
 const ToolsManagement = React.lazy(() =>
   import("@/components/tools/ToolsManagement").then((module) => ({
     default: module.ToolsManagement,
@@ -94,7 +100,8 @@ type StationModuleId =
   | "flow-info"
   | "monitor"
   | "issues"
-  | "tools";
+  | "tools"
+  | "test-plan";
 
 type AdminModuleId = "users" | "collaboration" | "api-management";
 
@@ -109,6 +116,7 @@ const stationModuleItems: Array<{
   { id: "monitor", label: "生產監控牆", icon: Factory },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具管理", icon: Wrench },
+  { id: "test-plan", label: "Test_Plan", icon: FolderKanban },
 ];
 
 const moduleWorkspaceMap: Record<string, WorkspaceId> = {
@@ -118,6 +126,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   monitor: "station-status",
   issues: "station-status",
   tools: "station-status",
+  "test-plan": "station-status",
   users: "user-management",
   collaboration: "user-management",
   "api-management": "user-management",
@@ -213,7 +222,8 @@ function getInitialStationModule(): StationModuleId {
     value === "flow-info" ||
     value === "monitor" ||
     value === "issues" ||
-    value === "tools"
+    value === "tools" ||
+    value === "test-plan"
   ) {
     return value;
   }
@@ -537,6 +547,12 @@ const Index = () => {
         return (
           <PermissionGuard module="tools">
             <ToolsManagement />
+          </PermissionGuard>
+        );
+      case "test-plan":
+        return (
+          <PermissionGuard module="test-plan">
+            <TestPlanWorkspace />
           </PermissionGuard>
         );
       default:
