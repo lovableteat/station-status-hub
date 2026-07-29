@@ -19,6 +19,7 @@ const persistenceSource = await read("src/components/pcb-designer/hooks/usePcbPe
 const presenceSource = await read("src/components/pcb-designer/hooks/usePcbProjectPresence.ts");
 const collaboratorsSource = await read("src/components/pcb-designer/PcbCollaborators.tsx");
 const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
+const runtimeBoundarySource = await read("src/components/common/AppRuntimeBoundary.tsx");
 
 test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts", () => {
   assert.match(canvasSource, /<svg[\s\S]*data-pcb-canvas/);
@@ -100,6 +101,21 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(editorHookSource, /addEventListener\(["']keyup["']/);
   assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}onPlacementCancel/);
   assert.match(workspaceSource, /key\.toLocaleLowerCase\(\) !== ["']s["']/);
+  assert.match(editorHookSource, /shortcutRef\.current/);
+  assert.match(editorHookSource, /window\.addEventListener\(["']keydown["'], onKeyDown\)[\s\S]{0,500}\}, \[\]\);/);
+});
+
+test("keeps recovery and high-frequency canvas input under user control", () => {
+  assert.doesNotMatch(
+    runtimeBoundarySource,
+    /componentDidCatch[\s\S]{0,700}setTimeout\([\s\S]{0,120}replaceWithCacheBuster/,
+  );
+  assert.match(canvasSource, /requestAnimationFrame/);
+  assert.match(canvasSource, /queuePointerPreview/);
+  assert.match(canvasSource, /queuedZoomRef/);
+  assert.match(canvasSource, /placementRotation/);
+  assert.match(canvasSource, /rotation:\s*placementRotation/);
+  assert.match(canvasSource, /event\.stopImmediatePropagation\(\)/);
 });
 
 test("saves only on explicit action and warns before abandoning dirty work", () => {
