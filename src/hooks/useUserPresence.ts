@@ -12,6 +12,7 @@ import {
 
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import {
   createPresenceKey,
   createPresenceSessionId,
@@ -247,6 +248,27 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (REALTIME_COLLABORATION_V2_ENABLED && !isRealtimeAuthenticated) {
+        setConnectionState("error");
+        return;
+      }
+
+      if (isRealtimeAuthenticated) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (disposed || sessionError || !accessToken) {
+          setConnectionState("error");
+          return;
+        }
+        try {
+          await supabase.realtime.setAuth(accessToken);
+        } catch (error) {
+          console.warn("Unable to authorize private presence channel", error);
+          if (!disposed) setConnectionState("error");
+          return;
+        }
+      }
+
       const session: ActivePresenceSession = {
         generation,
         identity: {
@@ -259,10 +281,10 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
         channel: supabase.channel(
           isRealtimeAuthenticated ? GLOBAL_PRESENCE_TOPIC : LEGACY_PRESENCE_TOPIC,
           {
-          config: {
-            private: isRealtimeAuthenticated,
-            presence: { key: createPresenceKey(userId, sessionIdRef.current) },
-          },
+            config: {
+              private: isRealtimeAuthenticated,
+              presence: { key: createPresenceKey(userId, sessionIdRef.current) },
+            },
           },
         ),
         trackConfirmed: false,
