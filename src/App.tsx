@@ -5,7 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLoadingScreen } from "@/components/common/AppRuntimeBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route } from "react-router-dom";
-import { UserProvider } from "@/components/auth/UserContext";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { RealtimeSessionUpgradePage } from "@/components/auth/RealtimeSessionUpgradePage";
+import { UserProvider, useUser } from "@/components/auth/UserContext";
 import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { PermissionsProvider } from "@/hooks/usePermissions";
@@ -30,6 +32,24 @@ const queryClient = new QueryClient({
   },
 });
 
+function ApplicationSessionGate({ children }: { children: React.ReactNode }) {
+  const { isInitializing, isLoggedIn, requiresRealtimeUpgrade } = useUser();
+
+  if (isInitializing) {
+    return <AppLoadingScreen label="正在驗證安全工作階段" />;
+  }
+
+  if (requiresRealtimeUpgrade) {
+    return <RealtimeSessionUpgradePage />;
+  }
+
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
+
+  return <>{children}</>;
+}
+
 const App = () => {
   useEffect(() => {
     // Force dark mode
@@ -42,43 +62,45 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <UserProvider>
-        <UserPresenceProvider>
-          <PermissionsProvider>
-            <TestProjectProvider>
-              <UnifiedDataProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <HashRouter>
-                    <Suspense fallback={<AppLoadingScreen />}>
-                      <Routes>
-                        <Route path="/" element={<Index />} />
-                        <Route
-                          path="/test-tracker"
-                          element={
-                            <PermissionGuard module="test-tracker">
-                              <TestTrackerPage />
-                            </PermissionGuard>
-                          }
-                        />
-                        <Route
-                          path="/api-management"
-                          element={
-                            <PermissionGuard module="api-management">
-                              <ApiManagementPage />
-                            </PermissionGuard>
-                          }
-                        />
-                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Suspense>
-                  </HashRouter>
-                </TooltipProvider>
-              </UnifiedDataProvider>
-            </TestProjectProvider>
-          </PermissionsProvider>
-        </UserPresenceProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <ApplicationSessionGate>
+            <UserPresenceProvider>
+              <PermissionsProvider>
+                <TestProjectProvider>
+                  <UnifiedDataProvider>
+                    <HashRouter>
+                      <Suspense fallback={<AppLoadingScreen />}>
+                        <Routes>
+                          <Route path="/" element={<Index />} />
+                          <Route
+                            path="/test-tracker"
+                            element={
+                              <PermissionGuard module="test-tracker">
+                                <TestTrackerPage />
+                              </PermissionGuard>
+                            }
+                          />
+                          <Route
+                            path="/api-management"
+                            element={
+                              <PermissionGuard module="api-management">
+                                <ApiManagementPage />
+                              </PermissionGuard>
+                            }
+                          />
+                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                      </Suspense>
+                    </HashRouter>
+                  </UnifiedDataProvider>
+                </TestProjectProvider>
+              </PermissionsProvider>
+            </UserPresenceProvider>
+          </ApplicationSessionGate>
+        </TooltipProvider>
       </UserProvider>
     </QueryClientProvider>
   );
