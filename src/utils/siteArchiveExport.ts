@@ -1,9 +1,9 @@
 interface SiteArchiveExportInput {
-  systems: any[];
-  stations: any[];
-  testItems: any[];
-  progress: any[];
-  stationContents: any[];
+  systems: unknown[];
+  stations: unknown[];
+  testItems: unknown[];
+  progress: unknown[];
+  stationContents: unknown[];
   exportedBy?: string | null;
 }
 
@@ -45,6 +45,7 @@ interface CapturedSnapshotState {
 }
 
 const SNAPSHOT_MODULES: SnapshotModule[] = [
+  { id: "test-plan", label: "Test_Plan" },
   { id: "dashboard", label: "系統儀表板" },
   { id: "test-tracker", label: "L10 測試追蹤" },
   { id: "flow-info", label: "L10 測試流程設定" },

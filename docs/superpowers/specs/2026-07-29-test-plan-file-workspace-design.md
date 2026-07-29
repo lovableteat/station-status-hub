@@ -61,7 +61,7 @@ On narrow screens, the left rail becomes a drawer and the file toolbar wraps int
 
 - `id uuid primary key`
 - `space_id uuid not null references test_plan_spaces(id) on delete cascade`
-- `folder_id uuid references test_plan_folders(id) on delete set null`
+- `folder_id uuid references test_plan_folders(id) on delete cascade`
 - `original_name text not null`
 - `storage_path text not null unique`
 - `mime_type text`
@@ -73,6 +73,12 @@ On narrow screens, the left rail becomes a drawer and the file toolbar wraps int
 - `created_at`, `updated_at`
 
 Metadata and storage-object deletion are coordinated by the client. If metadata insertion fails after upload, the uploaded object is removed immediately.
+
+All metadata and storage policies require an authenticated Supabase session, an
+active matching `system_users.auth_user_id`, the matching `test_plan_view` or
+`test_plan_edit` permission, and an owner-scoped space/path. Anonymous access is
+revoked. Folder deletion cascades its file metadata after the client has removed
+the corresponding private storage objects.
 
 ## Storage and supported files
 
