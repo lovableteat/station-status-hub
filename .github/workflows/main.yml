@@ -23,7 +23,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_REALTIME_COLLABORATION_V2: ${{ vars.VITE_REALTIME_COLLABORATION_V2 || 'false' }}
+          VITE_REALTIME_COLLABORATION_V2: ${{ vars.VITE_REALTIME_COLLABORATION_V2 || 'true' }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
