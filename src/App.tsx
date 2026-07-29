@@ -6,7 +6,6 @@ import { AppLoadingScreen } from "@/components/common/AppRuntimeBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { LoginPage } from "@/components/auth/LoginPage";
-import { RealtimeSessionUpgradePage } from "@/components/auth/RealtimeSessionUpgradePage";
 import { UserProvider, useUser } from "@/components/auth/UserContext";
 import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
@@ -39,11 +38,7 @@ function ApplicationSessionGate({ children }: { children: React.ReactNode }) {
     return <AppLoadingScreen label="正在驗證安全工作階段" />;
   }
 
-  if (requiresRealtimeUpgrade) {
-    return <RealtimeSessionUpgradePage />;
-  }
-
-  if (!isLoggedIn) {
+  if (requiresRealtimeUpgrade || !isLoggedIn) {
     return <LoginPage />;
   }
 
