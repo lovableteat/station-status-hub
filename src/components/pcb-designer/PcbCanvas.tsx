@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -72,6 +73,10 @@ function pointForEvent(svg: SVGSVGElement, clientX: number, clientY: number): Pc
   );
 }
 
+function samePoint(left: PcbPoint | null, right: PcbPoint | null): boolean {
+  return left?.x === right?.x && left?.y === right?.y;
+}
+
 function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
   if (!workspace.selection || !workspace.selectedObject) return null;
   if (workspace.selection.kind === "component") {
@@ -117,17 +122,36 @@ export function PcbCanvas({
   const [interaction, setInteraction] = useState<PointerInteraction | null>(null);
   const [cursorPoint, setCursorPoint] = useState<PcbPoint | null>(null);
   const [placementPoint, setPlacementPoint] = useState<PcbPoint | null>(null);
+  const [placementRotation, setPlacementRotation] = useState(0);
+  const previewFrameRef = useRef<number | null>(null);
+  const queuedPreviewRef = useRef<{ cursor: PcbPoint; placement: PcbPoint | null } | null>(null);
+  const zoomFrameRef = useRef<number | null>(null);
+  const queuedZoomRef = useRef(workspace.zoom);
   const project = workspace.activeProject;
   const placementLibraryComponent = placementComponentId
     ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
     : null;
+
+  const clearQueuedPreview = useCallback(() => {
+    if (previewFrameRef.current !== null) {
+      cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = null;
+    }
+    queuedPreviewRef.current = null;
+    setCursorPoint(null);
+    setPlacementPoint(null);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const update = () => {
       const bounds = host.getBoundingClientRect();
-      if (bounds.width && bounds.height) setSize({ width: bounds.width, height: bounds.height });
+      if (bounds.width && bounds.height) {
+        setSize((current) => current.width === bounds.width && current.height === bounds.height
+          ? current
+          : { width: bounds.width, height: bounds.height });
+      }
     };
     update();
     const observer = new ResizeObserver(update);
@@ -137,17 +161,52 @@ export function PcbCanvas({
 
   useEffect(() => {
     const cancelDraft = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (placementComponentId && event.key.toLocaleLowerCase() === "r") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setPlacementRotation((current) => (current + 90) % 360);
+        return;
+      }
       if (event.key === "Escape") {
         setInteraction(null);
-        setPlacementPoint(null);
+        clearQueuedPreview();
         if (placementComponentId) onPlacementCancel?.();
       }
     };
-    window.addEventListener("keydown", cancelDraft);
-    return () => window.removeEventListener("keydown", cancelDraft);
-  }, [onPlacementCancel, placementComponentId]);
+    window.addEventListener("keydown", cancelDraft, true);
+    return () => window.removeEventListener("keydown", cancelDraft, true);
+  }, [clearQueuedPreview, onPlacementCancel, placementComponentId]);
 
-  useEffect(() => setPlacementPoint(null), [placementComponentId]);
+  useEffect(() => {
+    clearQueuedPreview();
+    setPlacementRotation(0);
+  }, [clearQueuedPreview, placementComponentId]);
+
+  useEffect(() => () => {
+    if (previewFrameRef.current !== null) cancelAnimationFrame(previewFrameRef.current);
+    if (zoomFrameRef.current !== null) cancelAnimationFrame(zoomFrameRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (zoomFrameRef.current === null) {
+      queuedZoomRef.current = workspace.zoom;
+    }
+  }, [workspace.zoom]);
+
+  const queuePointerPreview = (cursor: PcbPoint, placement: PcbPoint | null) => {
+    queuedPreviewRef.current = { cursor, placement };
+    if (previewFrameRef.current !== null) return;
+    previewFrameRef.current = requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      const queued = queuedPreviewRef.current;
+      queuedPreviewRef.current = null;
+      if (!queued) return;
+      setCursorPoint((current) => samePoint(current, queued.cursor) ? current : queued.cursor);
+      setPlacementPoint((current) => samePoint(current, queued.placement) ? current : queued.placement);
+    });
+  };
 
   const viewBox = useMemo(() => {
     const viewportAspect = size.width / Math.max(1, size.height);
@@ -200,7 +259,7 @@ export function PcbCanvas({
       reference: "預覽",
       x: placementPoint.x,
       y: placementPoint.y,
-      rotation: 0,
+      rotation: placementRotation,
       layer: workspace.activeLayer,
       locked: false,
     };
@@ -208,7 +267,7 @@ export function PcbCanvas({
       component,
       valid: workspace.canMutate && canPlaceComponent(project, component),
     };
-  }, [placementLibraryComponent, placementPoint, project, workspace.activeLayer, workspace.canMutate]);
+  }, [placementLibraryComponent, placementPoint, placementRotation, project, workspace.activeLayer, workspace.canMutate]);
   const selectWithKeyboard = (
     event: ReactKeyboardEvent<SVGElement>,
     selection: Parameters<typeof workspace.selectObject>[0],
@@ -246,11 +305,10 @@ export function PcbCanvas({
       const result = workspace.placeLibraryComponent(
         placementLibraryComponent.id,
         point,
-        { exact: true, bypassSnap: event.altKey },
+        { exact: true, bypassSnap: event.altKey, rotation: placementRotation },
       );
       if (result.ok === true) {
         workspace.selectObject({ kind: "component", id: result.component.instanceId });
-        onPlacementComplete?.();
         setPlacementPoint(null);
         toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
       } else {
@@ -305,12 +363,10 @@ export function PcbCanvas({
 
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const point = pointForEvent(event.currentTarget, event.clientX, event.clientY);
-    setCursorPoint(point);
-    if (placementLibraryComponent) {
-      setPlacementPoint(project.board.snapToGrid
-        ? snapPoint(point, gridSize, event.altKey)
-        : point);
-    }
+    const nextPlacementPoint = placementLibraryComponent
+      ? (project.board.snapToGrid ? snapPoint(point, gridSize, event.altKey) : point)
+      : null;
+    queuePointerPreview(point, nextPlacementPoint);
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     if (interaction.kind === "pan") {
       const x = interaction.center.x
@@ -379,7 +435,15 @@ export function PcbCanvas({
 
   const handleWheel = (event: WheelEvent<SVGSVGElement>) => {
     event.preventDefault();
-    workspace.setZoom(workspace.zoom + (event.deltaY < 0 ? 25 : -25));
+    queuedZoomRef.current = Math.min(400, Math.max(
+      25,
+      queuedZoomRef.current + (event.deltaY < 0 ? 10 : -10),
+    ));
+    if (zoomFrameRef.current !== null) return;
+    zoomFrameRef.current = requestAnimationFrame(() => {
+      zoomFrameRef.current = null;
+      workspace.setZoom(queuedZoomRef.current);
+    });
   };
 
   const handleDrop = (event: DragEvent<SVGSVGElement>) => {
@@ -428,15 +492,14 @@ export function PcbCanvas({
         onPointerCancel={() => setInteraction(null)}
         onPointerLeave={() => {
           if (!interaction) {
-            setCursorPoint(null);
-            setPlacementPoint(null);
+            clearQueuedPreview();
           }
         }}
         onWheel={handleWheel}
         onDragOver={(event) => {
           event.preventDefault();
           const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
-          setPlacementPoint(project.board.snapToGrid
+          queuePointerPreview(rawPoint, project.board.snapToGrid
             ? snapPoint(rawPoint, gridSize, event.altKey)
             : rawPoint);
         }}
@@ -656,7 +719,7 @@ export function PcbCanvas({
             <g
               className="pcb-placement-preview"
               data-placement-valid={placementPreview.valid ? "true" : "false"}
-              transform={`translate(${placementPreview.component.x} ${placementPreview.component.y})`}
+              transform={`translate(${placementPreview.component.x} ${placementPreview.component.y}) rotate(${placementPreview.component.rotation})`}
             >
               <rect
                 x={-placementPreview.component.width / 2}
@@ -747,7 +810,9 @@ export function PcbCanvas({
         <div className="pcb-placement-banner" data-export-hidden>
           <span className="pcb-placement-banner-dot" style={{ backgroundColor: placementLibraryComponent.color }} />
           <strong>{placementLibraryComponent.name}</strong>
-          <span>移動游標預覽，點一下放置</span>
+          <span>移動游標預覽，點擊可連續放置</span>
+          <kbd>R</kbd>
+          <span>旋轉 {placementRotation}°</span>
           <kbd>Esc</kbd>
           <span>取消</span>
         </div>

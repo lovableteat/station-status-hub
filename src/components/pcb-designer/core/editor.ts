@@ -22,6 +22,7 @@ export interface PcbPlacementOptions extends PlacementSearchOptions {
   layer?: PcbPlacedComponent["layer"];
   exact?: boolean;
   bypassSnap?: boolean;
+  rotation?: number;
 }
 
 export type PlacementResult =
@@ -87,7 +88,7 @@ export function placeLibraryComponent(
     })(),
     x: 0,
     y: 0,
-    rotation: 0,
+    rotation: normalizeRotation(placementOptions?.rotation ?? 0),
     layer: placementOptions?.layer ?? "top",
     locked: false,
   };

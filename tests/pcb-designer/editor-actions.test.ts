@@ -38,6 +38,21 @@ test("placement records the selected board layer", () => {
   assert.equal(result.project.components[0].layer, "bottom");
 });
 
+test("placement keeps a normalized preview rotation", () => {
+  const project = createBlankProject("Rotated placement");
+  const result = editorModule.placeLibraryComponent(
+    project,
+    BUILT_IN_COMPONENTS[3],
+    undefined,
+    undefined,
+    { rotation: 450 },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.component.rotation, 90);
+  assert.equal(result.project.components[0].rotation, 90);
+});
+
 test("exact placement keeps the requested location and rejects invalid clicks instead of relocating", () => {
   const project = createBlankProject("Exact placement");
   const first = editorModule.placeLibraryComponent(
