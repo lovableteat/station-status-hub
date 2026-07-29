@@ -163,6 +163,14 @@ test("makes existing canvas objects keyboard-selectable", () => {
   assert.match(editorCssSource, /\[role=["']button["']\]:focus-visible/);
 });
 
+test("keeps measurement selection compact without a native SVG focus ring", () => {
+  assert.match(canvasSource, /className=["']pcb-measurement-object["']/);
+  assert.match(canvasSource, /className=["']pcb-measurement-hit-target["'][\s\S]{0,350}pointerEvents=["']stroke["']/);
+  assert.match(canvasSource, /event\.preventDefault\(\)[\s\S]{0,160}selectObject\(\{ kind: ["']measurement["']/);
+  assert.match(canvasSource, /selectedMeasurement[\s\S]{0,800}strokeDasharray/);
+  assert.match(editorCssSource, /pcb-measurement-object:focus[\s\S]{0,180}outline:\s*none\s*!important/);
+});
+
 test("disables inspector mutation controls while a component is locked", () => {
   assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
   assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| component\.locked\}/);
