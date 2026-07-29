@@ -15,6 +15,32 @@ function wait(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
+export async function runSessionBootstrapWithDeadline(
+  operation,
+  { timeoutMs = 8_000 } = {},
+) {
+  let timeoutId;
+
+  try {
+    return await Promise.race([
+      Promise.resolve()
+        .then(operation)
+        .then(
+          (value) => ({ status: "fulfilled", value }),
+          (error) => ({ status: "rejected", error }),
+        ),
+      new Promise((resolve) => {
+        timeoutId = setTimeout(
+          () => resolve({ status: "timed-out" }),
+          Math.max(0, timeoutMs),
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 export async function runLoginWithTransientRetry(
   operation,
   { attempts = 3, delayMs = 250 } = {},
