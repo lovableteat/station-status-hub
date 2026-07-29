@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Edit, Save, X, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import { useUser } from "@/components/auth/UserContext";
-import { syncAuthAccount } from "./authAccountSync";
+import { mutateAuthAccount } from "./authAccountSync";
 
 interface UserEditDialogProps {
   userId: string;
@@ -34,6 +35,30 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
   const handleSave = async () => {
     try {
+      if (REALTIME_COLLABORATION_V2_ENABLED) {
+        const result = await mutateAuthAccount(userId, {
+          action: "update",
+          password: editValues.password,
+          profile: {
+            username: editValues.username,
+            role: editValues.role,
+            status: editValues.status,
+            displayName: editValues.displayName,
+          },
+        });
+        if (!result.success) throw new Error(result.error || "帳號與登入身分同步失敗");
+
+        toast({
+          title: "更新成功",
+          description: result.deferred
+            ? "帳號資料已更新；首次正式登入時會安全建立即時身分"
+            : "用戶資料與登入身分已同步更新",
+        });
+        setIsOpen(false);
+        onUpdate();
+        return;
+      }
+
       const updateData: Record<string, string> = {
         username: editValues.username,
         role: editValues.role,
@@ -59,13 +84,9 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
       if (error) throw error;
 
-      const authSynced = await syncAuthAccount(userId, { password: editValues.password });
-
       toast({
         title: "更新成功",
-        description: authSynced
-          ? "用戶資料與登入身分已同步更新"
-          : "用戶資料已更新；登入身分會在下次登入時自動同步"
+        description: "用戶資料已更新",
       });
 
       setIsOpen(false);
@@ -73,7 +94,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
     } catch (error) {
       toast({
         title: "更新失敗",
-        description: "無法更新用戶資料",
+        description: error instanceof Error ? error.message : "無法更新用戶資料",
         variant: "destructive"
       });
     }
