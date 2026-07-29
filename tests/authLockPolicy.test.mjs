@@ -110,6 +110,11 @@ test("Supabase client installs the bounded auth lock", async () => {
 
   assert.match(clientSource, /createBoundedAuthLock/);
   assert.match(clientSource, /lock:\s*createBoundedAuthLock\(/);
+  assert.match(
+    clientSource,
+    /lockAcquireTimeout:\s*\d[\d_]*/,
+    "current Supabase clients require an explicit timeout when a custom lock is supplied",
+  );
   assert.match(clientSource, /createBoundedAuthFetch/);
   assert.match(clientSource, /fetch:\s*createBoundedAuthFetch\(/);
 });

@@ -32,6 +32,34 @@ test("authenticated account migration preserves legacy IDs and fallback login", 
   assert.doesNotMatch(loginFunction, /station-status\.local/);
 });
 
+test("session profile restore keeps the Supabase RPC method bound to its client", async () => {
+  const context = await readSource("src/components/auth/UserContext.tsx");
+
+  assert.doesNotMatch(
+    context,
+    /const\s+rpc\s*=\s*supabase\.rpc\s+as\b/,
+    "extracting rpc loses the Supabase client `this.rest` binding",
+  );
+  assert.match(
+    context,
+    /supabase\.rpc\.bind\(supabase\)/,
+    "profile restore must call a bound Supabase RPC method",
+  );
+});
+
+test("realtime presence uses a current Supabase protocol client", async () => {
+  const packageJson = JSON.parse(await readSource("package.json"));
+  const declaredVersion = packageJson.dependencies?.["@supabase/supabase-js"] ?? "";
+  const match = declaredVersion.match(/(\d+)\.(\d+)\.(\d+)/);
+
+  assert.ok(match, "Supabase client dependency must declare a semantic version");
+  const [, major, minor] = match.map(Number);
+  assert.ok(
+    major > 2 || (major === 2 && minor >= 100),
+    `Supabase ${declaredVersion} is too old for the deployed Realtime v2 protocol`,
+  );
+});
+
 test("stale cached sessions use the same login page before private providers mount", async () => {
   const [context, app, index, loginPage] = await Promise.all([
     readSource("src/components/auth/UserContext.tsx"),

@@ -140,7 +140,7 @@ function userFromMetadata(metadata: Session["user"]["app_metadata"]): User | nul
 }
 
 async function userFromSession(session: Session): Promise<User | null> {
-  const rpc = supabase.rpc as unknown as (
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     name: string,
   ) => Promise<{ data: Array<Record<string, unknown>> | null; error: unknown }>;
   const { data, error } = await rpc("get_current_system_user");
