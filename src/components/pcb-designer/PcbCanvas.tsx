@@ -17,7 +17,7 @@ import {
   snapPoint,
 } from "./core/geometry.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
-import type { PcbPlacedComponent, PcbPoint } from "./types.ts";
+import type { PcbMeasurement, PcbPlacedComponent, PcbPoint } from "./types.ts";
 
 export const PCB_LIBRARY_DRAG_TYPE = "application/x-pcb-library-component";
 
@@ -101,13 +101,7 @@ function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
       height: keepout.height,
     };
   }
-  const measurement = workspace.selectedObject as { x1: number; y1: number; x2: number; y2: number };
-  return {
-    x: Math.min(measurement.x1, measurement.x2),
-    y: Math.min(measurement.y1, measurement.y2),
-    width: Math.abs(measurement.x2 - measurement.x1),
-    height: Math.abs(measurement.y2 - measurement.y1),
-  };
+  return null;
 }
 
 export function PcbCanvas({
@@ -249,6 +243,9 @@ export function PcbCanvas({
       ? previewSelection.point
       : undefined,
   );
+  const selectedMeasurement = workspace.selection?.kind === "measurement"
+    ? workspace.selectedObject as PcbMeasurement
+    : null;
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
   const placementPreview = useMemo(() => {
@@ -609,18 +606,30 @@ export function PcbCanvas({
           {project.measurements.map((measurement) => (
             <g
               key={measurement.id}
+              className="pcb-measurement-object"
               role="button"
               tabIndex={0}
               onPointerDown={(event) => {
                 if (workspace.tool === "pan" || event.button === 1) return;
-                event.stopPropagation();
                 if (event.button !== 0) return;
+                event.preventDefault();
+                event.stopPropagation();
                 workspace.selectObject({ kind: "measurement", id: measurement.id });
               }}
               onKeyDown={(event) =>
                 selectWithKeyboard(event, { kind: "measurement", id: measurement.id })}
               aria-label="測量線"
             >
+              <line
+                className="pcb-measurement-hit-target"
+                x1={measurement.x1}
+                y1={measurement.y1}
+                x2={measurement.x2}
+                y2={measurement.y2}
+                stroke="transparent"
+                strokeWidth={Math.max(strokeWidth * 10, 1)}
+                pointerEvents="stroke"
+              />
               <line
                 x1={measurement.x1}
                 y1={measurement.y1}
@@ -709,6 +718,35 @@ export function PcbCanvas({
                 [selectedBounds.x + selectedBounds.width, selectedBounds.y + selectedBounds.height],
               ].map(([x, y]) => (
                 <circle key={`${x}-${y}`} cx={x} cy={y} r={strokeWidth * 2.1} fill="#f8fafc" pointerEvents="none" />
+              ))}
+            </>
+          )}
+          {selectedMeasurement && (
+            <>
+              <line
+                x1={selectedMeasurement.x1}
+                y1={selectedMeasurement.y1}
+                x2={selectedMeasurement.x2}
+                y2={selectedMeasurement.y2}
+                stroke="#f8fafc"
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
+                pointerEvents="none"
+              />
+              {[
+                [selectedMeasurement.x1, selectedMeasurement.y1],
+                [selectedMeasurement.x2, selectedMeasurement.y2],
+              ].map(([x, y], index) => (
+                <circle
+                  key={`${index}-${x}-${y}`}
+                  cx={x}
+                  cy={y}
+                  r={strokeWidth * 2.2}
+                  fill="#081827"
+                  stroke="#f8fafc"
+                  strokeWidth={strokeWidth}
+                  pointerEvents="none"
+                />
               ))}
             </>
           )}
