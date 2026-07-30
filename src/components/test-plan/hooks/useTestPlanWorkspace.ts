@@ -19,6 +19,10 @@ import type {
   TestPlanFolder,
   TestPlanSpace,
 } from "../types";
+import {
+  getTestPlanErrorMessage,
+  toTestPlanError,
+} from "../core/errors";
 
 interface UploadProgress {
   completed: number;
@@ -110,9 +114,7 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) applyWorkspace(workspace);
       } catch (caught) {
         if (requestId === requestIdRef.current) {
-          setError(
-            caught instanceof Error ? caught.message : "Test_Plan 載入失敗。",
-          );
+          setError(getTestPlanErrorMessage(caught, "Test_Plan 載入失敗。"));
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -142,9 +144,7 @@ export function useTestPlanWorkspace(
         setFiles(space.files);
       } catch (caught) {
         if (requestId === requestIdRef.current) {
-          setError(
-            caught instanceof Error ? caught.message : "空間載入失敗。",
-          );
+          setError(getTestPlanErrorMessage(caught, "空間載入失敗。"));
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -165,10 +165,12 @@ export function useTestPlanWorkspace(
       try {
         return await operation();
       } catch (caught) {
-        const message =
-          caught instanceof Error ? caught.message : "操作失敗，請稍後重試。";
-        setError(message);
-        throw caught;
+        const normalizedError = toTestPlanError(
+          caught,
+          "操作失敗，請稍後重試。",
+        );
+        setError(normalizedError.message);
+        throw normalizedError;
       } finally {
         mutationInFlightRef.current = false;
         setBusy(false);

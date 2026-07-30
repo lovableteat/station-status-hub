@@ -10,6 +10,7 @@ import type {
   TestPlanFolder,
   TestPlanSpace,
 } from "../types";
+import { toTestPlanError } from "./errors";
 import type { TestPlanDataAdapter } from "./repository";
 
 export const TEST_PLAN_STORAGE_BUCKET = "test-plan-files";
@@ -62,8 +63,8 @@ function mapFile(row: FileRow): TestPlanFileRecord {
   };
 }
 
-function throwIfError(error: { message: string } | null): void {
-  if (error) throw new Error(error.message);
+function throwIfError(error: unknown): void {
+  if (error) throw toTestPlanError(error);
 }
 
 function assertDeleted(

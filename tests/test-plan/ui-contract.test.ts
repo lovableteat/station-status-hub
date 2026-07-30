@@ -103,8 +103,12 @@ test("finishes the daily Test_Plan workflow with a full space form, guided start
   assert.match(spaceDialog, /識別色/);
   assert.match(spaceDialog, /description/);
   assert.match(spaceDialog, /color/);
+  assert.match(spaceDialog, /role="alert"/);
+  assert.match(spaceDialog, /資料空間未儲存/);
 
   assert.match(workspace, /建立空間/);
+  assert.match(workspace, /資料空間建立失敗/);
+  assert.match(workspace, /description: message/);
   assert.match(workspace, /建立資料夾/);
   assert.match(workspace, /上傳工程檔案/);
   assert.match(workspace, /selectedEntry/);
