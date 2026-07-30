@@ -36,3 +36,14 @@ test("explains missing schema, permissions, duplicates, and expired sessions", (
     /重新登入/,
   );
 });
+
+test("turns Supabase Storage InvalidKey failures into a filename-safe upload instruction", () => {
+  const message = getTestPlanErrorMessage({
+    statusCode: "400",
+    error: "InvalidKey",
+    message: "Invalid key: owner/space/uuid-測試✅.pdf",
+  });
+
+  assert.match(message, /檔名|儲存|重新/);
+  assert.doesNotMatch(message, /Invalid key/i);
+});

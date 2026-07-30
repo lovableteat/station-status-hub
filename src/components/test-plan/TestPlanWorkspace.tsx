@@ -696,7 +696,7 @@ export function TestPlanWorkspace() {
       <header className="test-plan-header">
         <MaintenancePageHeader
           title="Test_Plan"
-            description="集中管理電路板與工程資料，涵蓋測試計畫、Office、3D 與 PCB 檔案"
+          description="集中管理電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案"
           icon={FolderKanban}
           actions={(
             <>
@@ -741,11 +741,12 @@ export function TestPlanWorkspace() {
           ]}
         />
         <div className="test-plan-format-strip" aria-label="支援格式">
-          <span>PPT／PPTX</span>
-          <span>Excel／CSV</span>
-          <span>STEP／STL／OBJ</span>
-          <span>BRD／Gerber</span>
-          <span>PDF／圖片／文字</span>
+          <span>PPT／Excel／OpenDocument</span>
+          <span>STEP／STL／DWG／DXF</span>
+          <span>KiCad／BRD／Gerber</span>
+          <span>程式碼／設定／Log</span>
+          <span>韌體／FPGA／壓縮檔</span>
+          <span>其他安全工程檔</span>
         </div>
       </header>
 
@@ -933,7 +934,7 @@ export function TestPlanWorkspace() {
                 <div>
                   <span>3</span>
                   <strong>上傳工程檔案</strong>
-                  <small>支援拖放 PPT、Excel、3D、BRD、PDF 與圖片。</small>
+                  <small>支援拖放 Office、CAD、PCB、Gerber、程式碼、韌體與量測紀錄。</small>
                 </div>
               </div>
               <Button
