@@ -81,6 +81,7 @@ import { cn } from "@/lib/utils";
 import {
   formatTestPlanFileSize,
 } from "./core/files";
+import { getTestPlanErrorMessage } from "./core/errors";
 import {
   buildFolderBreadcrumbs,
   filterAndSortEntries,
@@ -455,6 +456,7 @@ export function TestPlanWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
   const [spaceDialog, setSpaceDialog] = useState<SpaceDialogState | null>(null);
+  const [spaceDialogError, setSpaceDialogError] = useState<string | null>(null);
   const [textAction, setTextAction] = useState<TextAction | null>(null);
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
@@ -465,6 +467,10 @@ export function TestPlanWorkspace() {
     setActiveFolderId(null);
     setSelectedEntryKey(null);
   }, [activeSpaceId]);
+
+  useEffect(() => {
+    if (spaceDialog) setSpaceDialogError(null);
+  }, [spaceDialog]);
 
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
@@ -534,6 +540,7 @@ export function TestPlanWorkspace() {
 
   const handleSpaceSubmit = async (input: TestPlanSpaceInput) => {
     if (!spaceDialog) return;
+    setSpaceDialogError(null);
     try {
       if (spaceDialog.mode === "create") {
         await createSpace(input);
@@ -544,7 +551,14 @@ export function TestPlanWorkspace() {
       }
       setSpaceDialog(null);
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "空間儲存失敗");
+      const message = getTestPlanErrorMessage(caught, "空間儲存失敗，請稍後再試。");
+      setSpaceDialogError(message);
+      toast.error(
+        spaceDialog.mode === "create"
+          ? "資料空間建立失敗"
+          : "資料空間更新失敗",
+        { description: message },
+      );
     }
   };
 
@@ -1308,7 +1322,13 @@ export function TestPlanWorkspace() {
         mode={spaceDialog?.mode ?? "create"}
         space={spaceDialog?.space}
         busy={busy}
-        onOpenChange={(open) => !open && setSpaceDialog(null)}
+        error={spaceDialogError}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSpaceDialog(null);
+            setSpaceDialogError(null);
+          }
+        }}
         onSubmit={handleSpaceSubmit}
       />
       <TextActionDialog
