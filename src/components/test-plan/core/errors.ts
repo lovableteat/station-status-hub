@@ -1,9 +1,11 @@
 interface TestPlanErrorLike {
   code?: unknown;
   details?: unknown;
+  error?: unknown;
   hint?: unknown;
   message?: unknown;
   status?: unknown;
+  statusCode?: unknown;
 }
 
 const DEFAULT_ERROR_MESSAGE = "操作失敗，請稍後再試。";
@@ -18,9 +20,10 @@ function errorParts(error: unknown) {
     return {
       code: readableText(withCause.code),
       details: readableText(withCause.details),
+      error: readableText(withCause.error),
       hint: readableText(withCause.hint),
       message: readableText(error.message),
-      status: Number(withCause.status) || 0,
+      status: Number(withCause.status ?? withCause.statusCode) || 0,
     };
   }
 
@@ -29,15 +32,17 @@ function errorParts(error: unknown) {
     return {
       code: readableText(candidate.code),
       details: readableText(candidate.details),
+      error: readableText(candidate.error),
       hint: readableText(candidate.hint),
       message: readableText(candidate.message),
-      status: Number(candidate.status) || 0,
+      status: Number(candidate.status ?? candidate.statusCode) || 0,
     };
   }
 
   return {
     code: "",
     details: "",
+    error: "",
     hint: "",
     message: readableText(error),
     status: 0,
@@ -49,9 +54,22 @@ export function getTestPlanErrorMessage(
   fallback = DEFAULT_ERROR_MESSAGE,
 ): string {
   const parts = errorParts(error);
-  const searchable = [parts.code, parts.message, parts.details, parts.hint]
+  const searchable = [
+    parts.code,
+    parts.error,
+    parts.message,
+    parts.details,
+    parts.hint,
+  ]
     .join(" ")
     .toLowerCase();
+
+  if (
+    searchable.includes("invalidkey")
+    || searchable.includes("invalid key")
+  ) {
+    return "儲存服務拒絕了檔名路徑；系統已改用安全識別碼，請重新選取檔案後再上傳。";
+  }
 
   if (
     parts.code === "PGRST205"

@@ -272,6 +272,48 @@ test("durably queues an uploaded object when immediate rollback cleanup fails", 
   );
 });
 
+test("keeps an empty browser MIME type as null metadata", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+
+  const result = await repository.uploadFiles({
+    ownerId: "owner-1",
+    spaceId: "space-1",
+    folderId: null,
+    files: [new File(["firmware"], "controller.hex", { type: "" })],
+  });
+
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(fake.records.files.at(-1)?.mimeType, null);
+});
+
+test("gives same-name Unicode uploads distinct opaque ASCII storage keys", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+
+  const result = await repository.uploadFiles({
+    ownerId: "owner-1",
+    spaceId: "space-1",
+    folderId: null,
+    files: [
+      new File(["first"], "測試✅.final.PDF", { type: "application/pdf" }),
+      new File(["second"], "測試✅.final.PDF", { type: "application/pdf" }),
+    ],
+  });
+
+  const paths = result.uploaded.map((file: { storagePath: string }) => file.storagePath);
+  assert.equal(result.uploaded.length, 2);
+  assert.equal(new Set(paths).size, 2);
+  assert.deepEqual(
+    result.uploaded.map((file: { originalName: string }) => file.originalName),
+    ["測試✅.final.PDF", "測試✅.final.PDF"],
+  );
+  for (const path of paths) {
+    assert.match(path, /^[a-zA-Z0-9._/-]+$/);
+    assert.match(path, /\.pdf$/);
+  }
+});
+
 test("rejects executable file renames before updating metadata", async () => {
   const fake = createAdapter();
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);

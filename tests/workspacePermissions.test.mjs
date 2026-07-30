@@ -55,6 +55,42 @@ test("station workspace edit and detailed edit permission grant editing", () => 
   assert.equal(allowed, true);
 });
 
+test("configured station view grants Test_Plan viewing without an explicit Test_Plan row", () => {
+  const base = {
+    module: "test-plan",
+    role: "engineer",
+    permissions: [],
+    permissionSettings: configured({ "station-status": "view" }),
+  };
+
+  assert.equal(canAccessModule({ ...base, action: "view" }), true);
+  assert.equal(canAccessModule({ ...base, action: "edit" }), false);
+});
+
+test("configured station edit grants Test_Plan viewing and editing without explicit Test_Plan rows", () => {
+  const base = {
+    module: "test-plan",
+    role: "engineer",
+    permissions: [],
+    permissionSettings: configured({ "station-status": "edit" }),
+  };
+
+  assert.equal(canAccessModule({ ...base, action: "view" }), true);
+  assert.equal(canAccessModule({ ...base, action: "edit" }), true);
+});
+
+test("configured station denial defeats stale Test_Plan page permissions", () => {
+  const base = {
+    module: "test-plan",
+    role: "engineer",
+    permissions: ["test_plan_edit"],
+    permissionSettings: configured({ "station-status": "none" }),
+  };
+
+  assert.equal(canAccessModule({ ...base, action: "view" }), false);
+  assert.equal(canAccessModule({ ...base, action: "edit" }), false);
+});
+
 test("explicit material workspace denial cannot be bypassed by legacy permission", () => {
   const allowed = canAccessModule({
     module: "material-requests",
@@ -115,6 +151,18 @@ test("legacy users without workspace settings keep their page permissions", () =
     }),
     true
   );
+});
+
+test("legacy accounts without station workspace configuration fall back to explicit Test_Plan permissions", () => {
+  const base = {
+    module: "test-plan",
+    role: "engineer",
+    permissions: ["test_plan_edit"],
+    permissionSettings: {},
+  };
+
+  assert.equal(canAccessModule({ ...base, action: "view" }), true);
+  assert.equal(canAccessModule({ ...base, action: "edit" }), true);
 });
 
 test("admins retain full access", () => {

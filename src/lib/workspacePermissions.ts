@@ -285,9 +285,14 @@ export function canAccessModule({
   if (level === "none") return false;
   if (action === "edit" && level !== "edit") return false;
 
-  // Material requests and Data-center each contain one page, so the workspace
-  // level is their complete permission. Station status still requires the
-  // matching page permission to prevent one broad setting from unlocking all modules.
+  // Test_Plan is an inherited child of the maintenance workspace rather than
+  // an independently assigned page. Configured maintenance access is therefore
+  // its complete permission contract.
+  if (module === "test-plan") return true;
+
+  // Material requests, Data-center, and PCB Designer each contain one page, so
+  // the workspace level is their complete permission. Other maintenance pages
+  // retain their existing fine-grained permission checks.
   if (workspace !== "station-status") return true;
   return hasPagePermission(module, action, permissions);
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../../", import.meta.url);
@@ -78,6 +78,64 @@ test("enforces authenticated owner and Test_Plan permissions in metadata and sto
     /folder_id uuid references public\.test_plan_folders \(id\) on delete cascade/i,
   );
   assert.match(migration, /storage\.foldername\(name\)/);
+});
+
+test("latest Test_Plan access migration derives configured station access before legacy page-permission fallback", async () => {
+  const migrationName =
+    "20260730220000_inherit_test_plan_maintenance_access.sql";
+  const migrationDirectory = new URL("supabase/migrations/", root);
+  const migrationNames = await readdir(migrationDirectory);
+
+  assert.ok(
+    migrationNames.includes(migrationName),
+    "the inherited Test_Plan maintenance-access migration must exist",
+  );
+  if (!migrationNames.includes(migrationName)) return;
+
+  const migration = await source(`supabase/migrations/${migrationName}`);
+
+  assert.match(
+    migration,
+    /create or replace function public\.test_plan_current_user_can\(action text\)/i,
+  );
+  assert.match(
+    migration,
+    /users\.permissions\s*#>>\s*'\{workspaceAccess,station-status\}'\s*in\s*\('view',\s*'edit'\)/i,
+  );
+  assert.match(
+    migration,
+    /users\.permissions\s*#>>\s*'\{workspaceAccess,station-status\}'\s*=\s*'edit'/i,
+  );
+  assert.match(
+    migration,
+    /not\s*\(\s*coalesce\(\s*users\.permissions\s*#>\s*'\{workspaceAccess\}'[\s\S]{0,80}\?\s*'station-status'\s*\)[\s\S]{0,320}test_plan_(?:view|edit)/i,
+  );
+  assert.match(migration, /grant execute on function public\.test_plan_current_user_can\(text\)/i);
+});
+
+test("admin permission editor explains inherited Test_Plan access instead of exposing an independent toggle", async () => {
+  const dialog = await source(
+    "src/components/admin/UserPermissionsDialog.tsx",
+  );
+
+  assert.match(dialog, /Test_Plan 隨機台維修紀錄中心啟用/);
+  assert.match(dialog, /\.filter\(\(\[groupKey\]\)\s*=>\s*groupKey\s*!==\s*"test_plan"\)/);
+});
+
+test("admin permission saves synchronize Test_Plan rows from maintenance access for compatibility", async () => {
+  const dialog = await source(
+    "src/components/admin/UserPermissionsDialog.tsx",
+  );
+
+  assert.match(
+    dialog,
+    /const synchronizedPermissions = synchronizeWorkspacePermissions\(\s*permissions,\s*"station-status",\s*workspaceAccess\["station-status"\],\s*\)/,
+  );
+  assert.match(dialog, /p_permissions:\s*synchronizedPermissions/);
+  assert.match(
+    dialog,
+    /const legacyPermissions = synchronizedPermissions\.filter\(/,
+  );
 });
 
 test("publishes Test_Plan labels to collaboration and offline export catalogs", async () => {
