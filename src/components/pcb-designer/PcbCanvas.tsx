@@ -17,7 +17,7 @@ import {
   snapPoint,
 } from "./core/geometry.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
-import type { PcbMeasurement, PcbPlacedComponent, PcbPoint } from "./types.ts";
+import type { PcbKeepout, PcbMeasurement, PcbPlacedComponent, PcbPoint } from "./types.ts";
 
 export const PCB_LIBRARY_DRAG_TYPE = "application/x-pcb-library-component";
 
@@ -25,6 +25,13 @@ interface CanvasSize {
   width: number;
   height: number;
 }
+
+interface PcbRect extends PcbPoint {
+  width: number;
+  height: number;
+}
+
+type KeepoutResizeHandle = "nw" | "ne" | "sw" | "se";
 
 interface PcbCanvasProps {
   workspace: PcbWorkspaceApi;
@@ -57,6 +64,15 @@ type PointerInteraction =
     bypassSnap: boolean;
   }
   | {
+    kind: "keepout-resize";
+    pointerId: number;
+    id: string;
+    handle: KeepoutResizeHandle;
+    anchor: PcbPoint;
+    preview: PcbRect;
+    bypassSnap: boolean;
+  }
+  | {
     kind: "keepout" | "measurement";
     pointerId: number;
     start: PcbPoint;
@@ -75,6 +91,42 @@ function pointForEvent(svg: SVGSVGElement, clientX: number, clientY: number): Pc
 
 function samePoint(left: PcbPoint | null, right: PcbPoint | null): boolean {
   return left?.x === right?.x && left?.y === right?.y;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function keepoutResizeAnchor(bounds: PcbRect, handle: KeepoutResizeHandle): PcbPoint {
+  return {
+    x: handle.endsWith("w") ? bounds.x + bounds.width : bounds.x,
+    y: handle.startsWith("n") ? bounds.y + bounds.height : bounds.y,
+  };
+}
+
+function resizeKeepout(
+  anchor: PcbPoint,
+  handle: KeepoutResizeHandle,
+  target: PcbPoint,
+  minimumSize: number,
+  board: { width: number; height: number },
+): PcbRect {
+  const boundedTarget = {
+    x: clamp(target.x, 0, board.width),
+    y: clamp(target.y, 0, board.height),
+  };
+  const edgeX = handle.endsWith("w")
+    ? Math.min(anchor.x - minimumSize, boundedTarget.x)
+    : Math.max(anchor.x + minimumSize, boundedTarget.x);
+  const edgeY = handle.startsWith("n")
+    ? Math.min(anchor.y - minimumSize, boundedTarget.y)
+    : Math.max(anchor.y + minimumSize, boundedTarget.y);
+  return {
+    x: Math.min(anchor.x, edgeX),
+    y: Math.min(anchor.y, edgeY),
+    width: Math.abs(edgeX - anchor.x),
+    height: Math.abs(edgeY - anchor.y),
+  };
 }
 
 function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
@@ -237,12 +289,18 @@ export function PcbCanvas({
     : interaction?.kind === "keepout-move"
       ? { id: interaction.id, point: interaction.preview }
       : null;
-  const selectedBounds = selectionBounds(
-    workspace,
-    previewSelection && workspace.selection?.id === previewSelection.id
-      ? previewSelection.point
-      : undefined,
-  );
+  const selectedBounds = interaction?.kind === "keepout-resize"
+    && workspace.selection?.id === interaction.id
+    ? interaction.preview
+    : selectionBounds(
+      workspace,
+      previewSelection && workspace.selection?.id === previewSelection.id
+        ? previewSelection.point
+        : undefined,
+    );
+  const selectedKeepout = workspace.selection?.kind === "keepout"
+    ? workspace.selectedObject as PcbKeepout
+    : null;
   const selectedMeasurement = workspace.selection?.kind === "measurement"
     ? workspace.selectedObject as PcbMeasurement
     : null;
@@ -341,6 +399,7 @@ export function PcbCanvas({
     component: PcbPlacedComponent,
   ) => {
     if (workspace.tool === "pan" || event.button === 1) return;
+    event.preventDefault();
     event.stopPropagation();
     if (event.button !== 0) return;
     workspace.selectObject({ kind: "component", id: component.instanceId });
@@ -354,6 +413,33 @@ export function PcbCanvas({
       instanceId: component.instanceId,
       offset: { x: point.x - component.x, y: point.y - component.y },
       preview: { x: component.x, y: component.y },
+      bypassSnap: event.altKey,
+    });
+  };
+
+  const beginKeepoutResize = (
+    event: ReactPointerEvent<SVGCircleElement>,
+    handle: KeepoutResizeHandle,
+  ) => {
+    if (
+      event.button !== 0
+      || workspace.tool !== "select"
+      || !workspace.canMutate
+      || !selectedKeepout
+      || !selectedBounds
+    ) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const svg = svgRef.current;
+    if (!svg) return;
+    svg.setPointerCapture(event.pointerId);
+    setInteraction({
+      kind: "keepout-resize",
+      pointerId: event.pointerId,
+      id: selectedKeepout.id,
+      handle,
+      anchor: keepoutResizeAnchor(selectedBounds, handle),
+      preview: selectedBounds,
       bypassSnap: event.altKey,
     });
   };
@@ -388,12 +474,34 @@ export function PcbCanvas({
       const bypassSnap = event.altKey;
       const x = point.x - interaction.offset.x;
       const y = point.y - interaction.offset.y;
+      const keepout = project.keepouts.find((item) => item.id === interaction.id);
+      if (!keepout) return;
+      const snappedPoint = project.board.snapToGrid
+        ? snapPoint({ x, y }, gridSize, bypassSnap)
+        : { x, y };
       setInteraction({
         ...interaction,
         bypassSnap,
-        preview: project.board.snapToGrid
-          ? snapPoint({ x, y }, gridSize, bypassSnap)
-          : { x, y },
+        preview: {
+          x: clamp(snappedPoint.x, 0, Math.max(0, project.board.width - keepout.width)),
+          y: clamp(snappedPoint.y, 0, Math.max(0, project.board.height - keepout.height)),
+        },
+      });
+    } else if (interaction.kind === "keepout-resize") {
+      const bypassSnap = event.altKey;
+      const snappedPoint = project.board.snapToGrid
+        ? snapPoint(point, gridSize, bypassSnap)
+        : point;
+      setInteraction({
+        ...interaction,
+        bypassSnap,
+        preview: resizeKeepout(
+          interaction.anchor,
+          interaction.handle,
+          snappedPoint,
+          project.board.snapToGrid && !bypassSnap ? gridSize : 0.1,
+          project.board,
+        ),
       });
     } else {
       setInteraction({
@@ -407,7 +515,9 @@ export function PcbCanvas({
 
   const handlePointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!interaction || interaction.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (interaction.kind === "component") {
       const result = workspace.moveComponent(
         interaction.instanceId,
@@ -422,6 +532,17 @@ export function PcbCanvas({
         interaction.bypassSnap,
       );
       if (result.ok === false) toast({ title: "無法移動禁制區", description: result.reason, variant: "destructive" });
+    } else if (interaction.kind === "keepout-resize") {
+      const source = project.keepouts.find((item) => item.id === interaction.id);
+      const changed = source && (
+        source.x !== interaction.preview.x
+        || source.y !== interaction.preview.y
+        || source.width !== interaction.preview.width
+        || source.height !== interaction.preview.height
+      );
+      if (changed && !workspace.updateKeepout(interaction.id, interaction.preview)) {
+        toast({ title: "無法調整禁制區", description: "請確認禁制區仍位於板框內，且寬高大於 0。", variant: "destructive" });
+      }
     } else if (interaction.kind === "keepout") {
       workspace.createKeepout(interaction.start, interaction.end);
     } else if (interaction.kind === "measurement") {
@@ -560,44 +681,48 @@ export function PcbCanvas({
         <g data-layer="keepouts">
           {project.keepouts.map((keepout) => {
             const preview = interaction?.kind === "keepout-move" && interaction.id === keepout.id
-              ? interaction.preview
-              : keepout;
+              ? { ...keepout, ...interaction.preview }
+              : interaction?.kind === "keepout-resize" && interaction.id === keepout.id
+                ? { ...keepout, ...interaction.preview }
+                : keepout;
             return (
               <rect
-              key={keepout.id}
-              x={preview.x}
-              y={preview.y}
-              width={keepout.width}
-              height={keepout.height}
-              fill={keepout.color}
-              fillOpacity="0.18"
-              stroke={keepout.color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${strokeWidth * 4} ${strokeWidth * 2}`}
-              role="button"
-              tabIndex={0}
-              onPointerDown={(event) => {
-                if (workspace.tool === "pan" || event.button === 1) return;
-                event.stopPropagation();
-                if (event.button !== 0) return;
-                workspace.selectObject({ kind: "keepout", id: keepout.id });
-                const svg = svgRef.current;
-                if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
-                const point = pointForEvent(svg, event.clientX, event.clientY);
-                svg.setPointerCapture(event.pointerId);
-                setInteraction({
-                  kind: "keepout-move",
-                  pointerId: event.pointerId,
-                  id: keepout.id,
-                  offset: { x: point.x - keepout.x, y: point.y - keepout.y },
-                  preview: { x: keepout.x, y: keepout.y },
-                  bypassSnap: event.altKey,
-                });
-              }}
-              onKeyDown={(event) =>
-                selectWithKeyboard(event, { kind: "keepout", id: keepout.id })}
-              aria-label={`禁制區 ${keepout.name}`}
-            />
+                key={keepout.id}
+                className="pcb-keepout-object"
+                x={preview.x}
+                y={preview.y}
+                width={preview.width}
+                height={preview.height}
+                fill={keepout.color}
+                fillOpacity="0.18"
+                stroke={keepout.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${strokeWidth * 4} ${strokeWidth * 2}`}
+                role="button"
+                tabIndex={0}
+                onPointerDown={(event) => {
+                  if (workspace.tool === "pan" || event.button === 1) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (event.button !== 0) return;
+                  workspace.selectObject({ kind: "keepout", id: keepout.id });
+                  const svg = svgRef.current;
+                  if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
+                  const point = pointForEvent(svg, event.clientX, event.clientY);
+                  svg.setPointerCapture(event.pointerId);
+                  setInteraction({
+                    kind: "keepout-move",
+                    pointerId: event.pointerId,
+                    id: keepout.id,
+                    offset: { x: point.x - keepout.x, y: point.y - keepout.y },
+                    preview: { x: keepout.x, y: keepout.y },
+                    bypassSnap: event.altKey,
+                  });
+                }}
+                onKeyDown={(event) =>
+                  selectWithKeyboard(event, { kind: "keepout", id: keepout.id })}
+                aria-label={`禁制區 ${keepout.name}`}
+              />
             );
           })}
         </g>
@@ -662,7 +787,7 @@ export function PcbCanvas({
               <g
                 key={component.instanceId}
                 transform={`translate(${preview.x} ${preview.y}) rotate(${component.rotation})`}
-                className={component.locked ? "is-locked" : undefined}
+                className={`pcb-component-object${component.locked ? " is-locked" : ""}`}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) =>
@@ -711,14 +836,35 @@ export function PcbCanvas({
                 strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
                 pointerEvents="none"
               />
-              {[
-                [selectedBounds.x, selectedBounds.y],
-                [selectedBounds.x + selectedBounds.width, selectedBounds.y],
-                [selectedBounds.x, selectedBounds.y + selectedBounds.height],
-                [selectedBounds.x + selectedBounds.width, selectedBounds.y + selectedBounds.height],
-              ].map(([x, y]) => (
-                <circle key={`${x}-${y}`} cx={x} cy={y} r={strokeWidth * 2.1} fill="#f8fafc" pointerEvents="none" />
-              ))}
+              {workspace.selection?.kind === "keepout"
+                ? ([
+                  { handle: "nw", x: selectedBounds.x, y: selectedBounds.y, cursor: "nwse-resize" },
+                  { handle: "ne", x: selectedBounds.x + selectedBounds.width, y: selectedBounds.y, cursor: "nesw-resize" },
+                  { handle: "sw", x: selectedBounds.x, y: selectedBounds.y + selectedBounds.height, cursor: "nesw-resize" },
+                  { handle: "se", x: selectedBounds.x + selectedBounds.width, y: selectedBounds.y + selectedBounds.height, cursor: "nwse-resize" },
+                ] as const).map(({ handle, x, y, cursor }) => (
+                  <circle
+                    key={handle}
+                    className="pcb-keepout-resize-handle"
+                    cx={x}
+                    cy={y}
+                    r={strokeWidth * 3.2}
+                    fill="#081827"
+                    stroke="#f8fafc"
+                    strokeWidth={strokeWidth}
+                    style={{ cursor }}
+                    onPointerDown={(event) => beginKeepoutResize(event, handle)}
+                    aria-label={`調整禁制區${handle}角`}
+                  />
+                ))
+                : [
+                  [selectedBounds.x, selectedBounds.y],
+                  [selectedBounds.x + selectedBounds.width, selectedBounds.y],
+                  [selectedBounds.x, selectedBounds.y + selectedBounds.height],
+                  [selectedBounds.x + selectedBounds.width, selectedBounds.y + selectedBounds.height],
+                ].map(([x, y]) => (
+                  <circle key={`${x}-${y}`} cx={x} cy={y} r={strokeWidth * 2.1} fill="#f8fafc" pointerEvents="none" />
+                ))}
             </>
           )}
           {selectedMeasurement && (
@@ -855,8 +1001,20 @@ export function PcbCanvas({
           <span>取消</span>
         </div>
       )}
+      {!placementLibraryComponent && workspace.tool === "keepout" && (
+        <div className="pcb-placement-banner pcb-keepout-banner" data-export-hidden>
+          <span className="pcb-placement-banner-dot" />
+          <strong>建立禁制區</strong>
+          <span>在板框內按住並拖曳</span>
+          <kbd>K</kbd>
+          <span>切換工具</span>
+          <kbd>Esc</kbd>
+          <span>取消</span>
+        </div>
+      )}
       <div className="pcb-canvas-hud" data-export-hidden>
         <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
+        {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
         <span>Alt 暫停吸附</span>
         <span className="font-mono">
           X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}

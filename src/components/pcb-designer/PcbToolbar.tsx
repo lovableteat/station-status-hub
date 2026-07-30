@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  Ban,
   Box,
   Download,
   Hand,
@@ -39,6 +40,7 @@ import type { PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 interface ToolButtonProps {
   label: string;
   shortcut?: string;
+  showLabel?: boolean;
   icon: ComponentType<{ className?: string }>;
   disabled?: boolean;
   active?: boolean;
@@ -48,6 +50,7 @@ interface ToolButtonProps {
 function ToolButton({
   label,
   shortcut,
+  showLabel,
   icon: Icon,
   disabled,
   active,
@@ -63,6 +66,7 @@ function ToolButton({
             size="icon"
             className={cn(
               "pcb-tool-button",
+              showLabel && "is-labeled",
               active && "is-active",
             )}
             disabled={disabled}
@@ -71,6 +75,8 @@ function ToolButton({
             aria-keyshortcuts={shortcut}
           >
             <Icon className="h-4 w-4" />
+            {showLabel && <span>{label}</span>}
+            {showLabel && shortcut && <kbd>{shortcut}</kbd>}
           </Button>
         </span>
       </TooltipTrigger>
@@ -233,7 +239,15 @@ export function PcbToolbar({
         <ToolButton label="選取工具" shortcut="V" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
         <ToolButton label="拖曳畫布" shortcut="H / Space" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
         <ToolButton label="測量工具" shortcut="M" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
-        <ToolButton label="禁制區工具" shortcut="K" icon={ScanSearch} disabled={!canMutate} active={tool === "keepout"} onClick={() => onToolChange("keepout")} />
+        <ToolButton
+          label="禁制區"
+          shortcut="K"
+          showLabel
+          icon={Ban}
+          disabled={!canMutate}
+          active={tool === "keepout"}
+          onClick={() => onToolChange("keepout")}
+        />
         <ToolButton
           label={documentLocked ? "解除文件鎖定" : "鎖定文件"}
           icon={documentLocked ? Lock : LockOpen}

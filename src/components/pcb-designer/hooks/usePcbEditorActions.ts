@@ -255,7 +255,14 @@ export function usePcbEditorActions(
       const source = state.activeProject.keepouts.find((item) => item.id === id);
       if (!source) return false;
       const keepout = { ...source, ...patch };
+      if (![keepout.x, keepout.y, keepout.width, keepout.height].every(Number.isFinite)) return false;
       if (keepout.width <= 0 || keepout.height <= 0) return false;
+      if (
+        keepout.x < 0
+        || keepout.y < 0
+        || keepout.x + keepout.width > state.activeProject.board.width
+        || keepout.y + keepout.height > state.activeProject.board.height
+      ) return false;
       if (JSON.stringify(keepout) === JSON.stringify(source)) return false;
       dispatch({
         type: "project/commit",
