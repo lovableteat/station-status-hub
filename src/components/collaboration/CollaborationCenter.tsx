@@ -80,13 +80,19 @@ function formatTime(value: string) {
 function PresenceCard({
   onlineUser,
   currentUserId,
+  currentSessionId,
   onMessage,
 }: {
   onlineUser: OnlineUser;
   currentUserId?: string;
+  currentSessionId: string;
   onMessage?: () => void;
 }) {
-  const isCurrentUser = onlineUser.userId === currentUserId;
+  const isCurrentSession =
+    onlineUser.userId === currentUserId &&
+    onlineUser.sessionId === currentSessionId;
+  const isSameAccountOtherDevice =
+    onlineUser.userId === currentUserId && !isCurrentSession;
   return (
     <div className="rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-start gap-3">
@@ -99,7 +105,10 @@ function PresenceCard({
             <span className="truncate font-semibold text-slate-50">
               {onlineUser.displayName || onlineUser.username}
             </span>
-            {isCurrentUser && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
+            {isCurrentSession && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
+            {isSameAccountOtherDevice && (
+              <Badge className="bg-violet-300/15 text-violet-100">其他裝置</Badge>
+            )}
             {onlineUser.isEditing && <Badge className="bg-amber-300/15 text-amber-100">編輯中</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
@@ -107,7 +116,7 @@ function PresenceCard({
             <span aria-hidden="true">•</span>
             <span>{moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule}</span>
           </div>
-          {!isCurrentUser && onMessage ? (
+          {onMessage ? (
             <Button
               type="button"
               variant="ghost"
@@ -128,7 +137,9 @@ export function CollaborationCenter() {
   const { user, isRealtimeAuthenticated } = useUser();
   const {
     allOnlineUsers,
+    onlineUsers,
     totalOnlineUsers,
+    currentSessionId,
     connectionState,
     connectionStatus,
     retryPresence,
@@ -421,14 +432,14 @@ export function CollaborationCenter() {
               {allOnlineUsers.length === 0 ? (
                 <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">{connectionState === "error" ? "尚未取得在線名單" : "正在同步在線成員"}</p><p className="mt-1 text-sm">{isRealtimeAuthenticated ? "畫面會維持原頁，不會因重新連線而刷新。" : "請重新登入以啟用安全的即時協作。"}</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{allOnlineUsers.map((onlineUser) => <PresenceCard key={onlineUser.userId} onlineUser={onlineUser} currentUserId={user?.userId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{allOnlineUsers.map((onlineUser) => <PresenceCard key={`${onlineUser.userId}:${onlineUser.sessionId || "unknown"}`} onlineUser={onlineUser} currentUserId={user?.userId} currentSessionId={currentSessionId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>
 
           <TabsContent value="messages" className="mt-0 flex min-h-0 flex-1 flex-col">
             <DirectMessagesPanel
-              onlineUsers={allOnlineUsers}
+              onlineUsers={onlineUsers}
               requestedUserId={messageRecipientId}
               onRequestHandled={() => setMessageRecipientId(null)}
             />
