@@ -31,10 +31,13 @@
 .pcb-status-chip,
 .pcb-save-state,
 .pcb-read-only {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
   white-space: nowrap;
   border-radius: 6px;
   padding: 3px 7px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -81,7 +84,7 @@
   border-radius: 6px;
   padding: 0 9px;
   color: #8fa8be;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 760;
   transition: background 140ms ease, color 140ms ease;
 }
@@ -377,6 +380,10 @@
   outline: none !important;
 }
 
+.pcb-component-object {
+  transition: none;
+}
+
 .pcb-canvas .pcb-keepout-object:focus-visible {
   filter: drop-shadow(0 0 3px rgb(126 232 245 / 70%));
 }
@@ -415,7 +422,7 @@
   border-radius: 8px;
   background: rgb(11 27 45 / 92%);
   padding: 6px 9px;
-  font-size: 10px;
+  font-size: 11px;
   color: #b8c8d9;
   pointer-events: none;
 }
@@ -477,7 +484,7 @@
   flex-direction: column;
   gap: 4px;
   color: #a8b7c9;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pcb-inspector-field input,
@@ -491,7 +498,7 @@
   background: var(--pcb-panel-raised);
   padding: 0 8px;
   color: #eef6fb;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .pcb-inspector-field input[type="color"] {
@@ -552,7 +559,7 @@
   border-color: var(--pcb-border-strong);
   background: var(--pcb-panel-raised);
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pcb-danger-action {
@@ -731,7 +738,7 @@
   background: var(--pcb-panel);
   padding: 4px 10px;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: 11px;
   color: #9fb0c3;
 }
 
@@ -883,16 +890,16 @@
 
 .pcb-project-heading h1 {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 750;
   letter-spacing: -0.01em;
 }
 
 .pcb-project-heading span {
   color: var(--pcb-muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -1005,12 +1012,19 @@
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 3%);
 }
 
+.pcb-toolbar .pcb-tool-button:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: #74869d;
+  opacity: 1;
+}
+
 .pcb-tool-button.is-labeled {
   width: auto;
   min-width: 92px;
   gap: 7px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1021,7 +1035,7 @@
   padding: 1px 4px;
   color: #a8bdd1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .pcb-keepout-resize-handle {
@@ -1052,13 +1066,14 @@
 
 .pcb-layer-switch button {
   height: 26px;
-  min-width: 48px;
+  min-width: 58px;
   border-radius: 7px;
   padding: 0 8px;
   color: #91a5bd;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 800;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
   transition: background 130ms ease, color 130ms ease;
 }
 
@@ -1074,7 +1089,8 @@
 
 .pcb-layer-switch button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  background: #101c2e;
+  color: #74869d;
 }
 
 .pcb-zoom-readout {
@@ -1086,7 +1102,7 @@
   text-align: center;
   color: #b8c8db;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pcb-drc-button {
@@ -1100,7 +1116,7 @@
   background: rgb(104 206 233 / 9%);
   padding: 0 12px;
   color: #ace6f4;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1175,7 +1191,7 @@
   background: transparent;
   padding: 0 8px;
   color: #91a5bf;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1352,7 +1368,7 @@
 
 .pcb-inspector-body label {
   color: #9fb1c8;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
 }
 
