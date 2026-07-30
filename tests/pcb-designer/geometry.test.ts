@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   findPlacement,
+  getComponentCanvasGeometry,
   getRotatedRectangleCorners,
   rectanglesOverlap,
   searchPlacement,
@@ -63,6 +64,27 @@ test("90-degree rotation returns corners around the component center", () => {
     { x: 11, y: 22 },
     { x: 9, y: 22 },
     { x: 9, y: 18 },
+  ]);
+});
+
+test("component canvas geometry keeps the dragged body and selection frame on one transform", () => {
+  const geometry = getComponentCanvasGeometry(
+    component({ x: 26, y: 51, width: 14, height: 10, rotation: 90 }),
+    { x: 40, y: 46 },
+  );
+
+  assert.equal(geometry.transform, "translate(40 46) rotate(90)");
+  assert.deepEqual(geometry.localBounds, {
+    x: -7,
+    y: -5,
+    width: 14,
+    height: 10,
+  });
+  assert.deepEqual(geometry.handles, [
+    { x: -7, y: -5 },
+    { x: 7, y: -5 },
+    { x: -7, y: 5 },
+    { x: 7, y: 5 },
   ]);
 });
 
