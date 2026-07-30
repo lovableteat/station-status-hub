@@ -33,6 +33,7 @@ export interface TestPlanSpaceInput {
 
 interface TestPlanSpaceDialogProps {
   busy: boolean;
+  error?: string | null;
   mode: "create" | "edit";
   onOpenChange: (open: boolean) => void;
   onSubmit: (input: TestPlanSpaceInput) => Promise<void>;
@@ -42,6 +43,7 @@ interface TestPlanSpaceDialogProps {
 
 export function TestPlanSpaceDialog({
   busy,
+  error,
   mode,
   onOpenChange,
   onSubmit,
@@ -125,6 +127,16 @@ export function TestPlanSpaceDialog({
               ))}
             </div>
           </fieldset>
+
+          {error ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm leading-6 text-rose-100"
+            >
+              <strong className="block font-semibold">資料空間未儲存</strong>
+              <span>{error}</span>
+            </div>
+          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
