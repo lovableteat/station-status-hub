@@ -79,6 +79,18 @@ test("keeps all four tools mutually exclusive and accessible", () => {
   assert.match(toolbarSource, /aria-label=\{label\}/);
   assert.match(toolbarSource, /TooltipContent[\s\S]*\{label\}/);
   assert.match(toolbarSource, /onResetView/);
+  assert.match(toolbarSource, /label=["']禁制區["'][\s\S]{0,180}showLabel/);
+  assert.match(toolbarSource, /shortcut=["']K["']/);
+});
+
+test("provides a complete keepout workflow with visible creation, resize, and deletion controls", () => {
+  assert.match(canvasSource, /kind:\s*["']keepout-resize["']/);
+  assert.match(canvasSource, /beginKeepoutResize/);
+  assert.match(canvasSource, /pcb-keepout-resize-handle/);
+  assert.match(canvasSource, /workspace\.updateKeepout\(interaction\.id, interaction\.preview\)/);
+  assert.match(canvasSource, /拖曳四角縮放 · Delete 刪除/);
+  assert.match(inspectorSource, /data-selection-kind=["']keepout["'][\s\S]{0,1800}SelectionActions/);
+  assert.match(editorHookSource, /keepout\.x \+ keepout\.width > state\.activeProject\.board\.width/);
 });
 
 test("wires keyboard editing while skipping editable controls", () => {
@@ -169,6 +181,13 @@ test("keeps measurement selection compact without a native SVG focus ring", () =
   assert.match(canvasSource, /event\.preventDefault\(\)[\s\S]{0,160}selectObject\(\{ kind: ["']measurement["']/);
   assert.match(canvasSource, /selectedMeasurement[\s\S]{0,800}strokeDasharray/);
   assert.match(editorCssSource, /pcb-measurement-object:focus[\s\S]{0,180}outline:\s*none\s*!important/);
+});
+
+test("suppresses native SVG focus halos while retaining the custom selection bounds", () => {
+  assert.match(canvasSource, /className=\{`pcb-component-object/);
+  assert.match(editorCssSource, /\[role=["']button["']\]:focus,[\s\S]{0,180}outline:\s*none\s*!important/);
+  assert.match(editorCssSource, /pcb-component-object:focus[\s\S]{0,180}filter:\s*none/);
+  assert.match(canvasSource, /data-layer=["']selection-handles["']/);
 });
 
 test("disables inspector mutation controls while a component is locked", () => {
