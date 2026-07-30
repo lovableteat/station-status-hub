@@ -9,6 +9,24 @@ export function createPresenceSessionId() {
   return `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const PRESENCE_DEVICE_ID_KEY = "station-status-hub:presence-device-id";
+
+export function getOrCreatePresenceDeviceId(storage) {
+  try {
+    const resolvedStorage = storage ?? globalThis.localStorage;
+    const existingDeviceId = resolvedStorage?.getItem(PRESENCE_DEVICE_ID_KEY);
+    if (typeof existingDeviceId === "string" && existingDeviceId.trim()) {
+      return existingDeviceId;
+    }
+
+    const deviceId = createPresenceSessionId();
+    resolvedStorage?.setItem(PRESENCE_DEVICE_ID_KEY, deviceId);
+    return deviceId;
+  } catch {
+    return createPresenceSessionId();
+  }
+}
+
 export function createPresenceKey(userId, sessionId) {
   return `${userId}:${sessionId}`;
 }
@@ -71,4 +89,42 @@ export function selectLatestOnlineUsers(state) {
       "zh-TW",
     ),
   );
+}
+
+export function selectOnlinePresenceSessions(state) {
+  const sessionsById = new Map();
+
+  Object.entries(state ?? {}).forEach(([presenceKey, presences]) => {
+    if (!Array.isArray(presences)) return;
+
+    presences.forEach((candidate) => {
+      if (!candidate?.userId) return;
+      const presencePrefix = `${candidate.userId}:`;
+      const fallbackSessionId = presenceKey.startsWith(presencePrefix)
+        ? presenceKey.slice(presencePrefix.length)
+        : presenceKey;
+      const sessionId =
+        candidate.sessionId || fallbackSessionId || candidate.userId;
+      const identity = createPresenceKey(candidate.userId, sessionId);
+      const normalizedCandidate = candidate.sessionId
+        ? candidate
+        : { ...candidate, sessionId };
+      const existing = sessionsById.get(identity);
+      if (
+        !existing ||
+        getPresenceRecency(normalizedCandidate) > getPresenceRecency(existing)
+      ) {
+        sessionsById.set(identity, normalizedCandidate);
+      }
+    });
+  });
+
+  return [...sessionsById.values()].sort((a, b) => {
+    const nameComparison = (a.displayName || a.username || "").localeCompare(
+      b.displayName || b.username || "",
+      "zh-TW",
+    );
+    if (nameComparison !== 0) return nameComparison;
+    return (a.sessionId || "").localeCompare(b.sessionId || "");
+  });
 }
