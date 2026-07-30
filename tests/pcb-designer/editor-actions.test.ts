@@ -252,6 +252,34 @@ test("moveKeepout previews a snapped origin and returns one committed document",
   );
 });
 
+test("keepout movement stays inside the board and selection delete removes it", () => {
+  const project = createBlankProject("Keepout bounds");
+  const created = editorModule.createKeepout(project, { x: 2, y: 2 }, { x: 12, y: 10 });
+  assert.ok(created);
+
+  const moved = editorModule.moveKeepout(
+    created.project,
+    created.keepout.id,
+    { x: project.board.width + 50, y: project.board.height + 50 },
+    true,
+  );
+  assert.equal(moved.ok, true);
+  assert.deepEqual(
+    { x: moved.keepout.x, y: moved.keepout.y },
+    {
+      x: project.board.width - created.keepout.width,
+      y: project.board.height - created.keepout.height,
+    },
+  );
+
+  const deleted = editorModule.editSelectedObject(
+    moved.project,
+    { kind: "keepout", id: created.keepout.id },
+    { type: "delete" },
+  );
+  assert.equal(deleted.keepouts.length, 0);
+});
+
 test("BOM identity falls back to normalized name and dimensions when no part number exists", () => {
   assert.equal(typeof recordsModule.libraryIdentity, "function");
   const first = {
