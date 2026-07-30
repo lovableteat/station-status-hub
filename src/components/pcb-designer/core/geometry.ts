@@ -103,6 +103,67 @@ function stableCoordinate(value: number): number {
   return Math.abs(value - integer) < EPSILON ? integer : value;
 }
 
+export interface ComponentCanvasGeometry {
+  center: Readonly<Point>;
+  transform: string;
+  localBounds: Readonly<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  handles: readonly Readonly<Point>[];
+}
+
+export function getComponentCanvasTransform(
+  rectangle: Rectangle,
+  center: Point = rectangle,
+): string {
+  const stableCenter = {
+    x: stableCoordinate(center.x),
+    y: stableCoordinate(center.y),
+  };
+  return `translate(${stableCenter.x} ${stableCenter.y}) rotate(${stableCoordinate(rectangle.rotation)})`;
+}
+
+/**
+ * Returns the single visual coordinate model used by both the component body
+ * and its selection frame. Keeping the bounds local to the translated/rotated
+ * group prevents the frame from lagging behind a drag preview.
+ */
+export function getComponentCanvasGeometry(
+  rectangle: Rectangle,
+  center: Point = rectangle,
+): ComponentCanvasGeometry {
+  const stableCenter = {
+    x: stableCoordinate(center.x),
+    y: stableCoordinate(center.y),
+  };
+  const halfWidth = rectangle.width / 2;
+  const halfHeight = rectangle.height / 2;
+  const localBounds = {
+    x: -halfWidth,
+    y: -halfHeight,
+    width: rectangle.width,
+    height: rectangle.height,
+  };
+
+  return {
+    center: stableCenter,
+    transform: getComponentCanvasTransform(rectangle, stableCenter),
+    localBounds,
+    handles: [
+      { x: localBounds.x, y: localBounds.y },
+      { x: localBounds.x + localBounds.width, y: localBounds.y },
+      { x: localBounds.x, y: localBounds.y + localBounds.height },
+      {
+        x: localBounds.x + localBounds.width,
+        y: localBounds.y + localBounds.height,
+      },
+    ],
+  };
+}
+
 export function getRotatedRectangleCorners(rectangle: Rectangle): readonly Readonly<Point>[] {
   const angle = (rectangle.rotation * Math.PI) / 180;
   const cosine = Math.cos(angle);

@@ -190,6 +190,58 @@ test("suppresses native SVG focus halos while retaining the custom selection bou
   assert.match(canvasSource, /data-layer=["']selection-handles["']/);
 });
 
+test("renders a component and its selection frame from the same drag geometry", () => {
+  assert.match(canvasSource, /getComponentCanvasGeometry/);
+  assert.match(canvasSource, /selectedComponentVisual/);
+  assert.match(
+    canvasSource,
+    /data-selection-kind=["']component["'][\s\S]{0,220}transform=\{selectedComponentVisual\.geometry\.transform\}/,
+  );
+  assert.match(
+    canvasSource,
+    /selectedComponentVisual\?\.component\.instanceId === component\.instanceId[\s\S]{0,180}selectedComponentVisual\.geometry\.transform/,
+  );
+  assert.match(
+    canvasSource,
+    /selectedComponentVisual\.geometry\.localBounds[\s\S]{0,900}selectedComponentVisual\.geometry\.handles/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-component-object\s*\{[\s\S]{0,120}transition:\s*none/,
+  );
+  assert.doesNotMatch(
+    canvasSource,
+    /data-selection-kind=["']component["'][\s\S]{0,900}vectorEffect=/,
+  );
+});
+
+test("keeps dense toolbar labels readable and stable across active and disabled states", () => {
+  assert.match(
+    editorCssSource,
+    /\.pcb-tool-button\.is-labeled\s*\{[\s\S]{0,260}font-size:\s*12px/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-tool-button\.is-labeled kbd\s*\{[\s\S]{0,320}font-size:\s*11px/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch button\s*\{[\s\S]{0,320}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
+  );
+  assert.doesNotMatch(
+    editorCssSource,
+    /\.pcb-layer-switch button:disabled\s*\{[\s\S]{0,120}opacity:/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-toolbar \.pcb-tool-button:disabled\s*\{[\s\S]{0,180}opacity:\s*1/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-status-chip,[\s\S]{0,120}\.pcb-save-state,[\s\S]{0,120}\.pcb-read-only\s*\{[\s\S]{0,260}font-size:\s*11px/,
+  );
+});
+
 test("disables inspector mutation controls while a component is locked", () => {
   assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
   assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| component\.locked\}/);
