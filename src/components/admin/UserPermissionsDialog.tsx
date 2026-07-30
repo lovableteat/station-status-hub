@@ -222,10 +222,15 @@ export function UserPermissionsDialog({
   const handleSave = async () => {
     try {
       setIsLoading(true);
+      const synchronizedPermissions = synchronizeWorkspacePermissions(
+        permissions,
+        "station-status",
+        workspaceAccess["station-status"],
+      );
 
       const currentRequest = {
         p_user_id: userId,
-        p_permissions: permissions,
+        p_permissions: synchronizedPermissions,
         p_workspace_access: workspaceAccess as unknown as Record<string, string>,
         p_granted_by: user?.username ?? "admin",
       };
@@ -238,7 +243,7 @@ export function UserPermissionsDialog({
         // Older deployments do not yet know the PCB enum/workspace key. Save
         // the legacy permissions first, then merge the PCB workspace level
         // without replacing account-scoped PCB drafts or other settings.
-        const legacyPermissions = permissions.filter(
+        const legacyPermissions = synchronizedPermissions.filter(
           (permission) => !permission.startsWith("pcb_designer_"),
         );
         const legacyWorkspaceAccess = Object.fromEntries(
@@ -465,7 +470,23 @@ export function UserPermissionsDialog({
               </div>
 
               <div className="grid gap-4">
-                {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS).map(([groupKey, group]) => {
+                <div className="rounded-[28px] border border-cyan-300/25 bg-cyan-400/10 p-5">
+                  <div className="flex items-start gap-3">
+                    <Shield className="mt-0.5 h-5 w-5 text-cyan-200" />
+                    <div>
+                      <h4 className="font-semibold text-foreground">
+                        Test_Plan 隨機台維修紀錄中心啟用
+                      </h4>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        維修中心「檢視」可查看 Test_Plan；「管理」可建立空間、資料夾與上傳檔案，不需要另外勾選。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS)
+                  .filter(([groupKey]) => groupKey !== "test_plan")
+                  .map(([groupKey, group]) => {
                   const groupPermissions = group.permissions.map((permission) => permission.key);
                   const selectedCount = groupPermissions.filter((permission) =>
                     permissions.includes(permission)
@@ -545,7 +566,7 @@ export function UserPermissionsDialog({
                       </div>
                     </div>
                   );
-                })}
+                  })}
               </div>
             </section>
           </div>
