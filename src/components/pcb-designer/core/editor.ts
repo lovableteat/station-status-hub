@@ -45,6 +45,9 @@ export type SelectionEdit =
 
 const clone = <T>(value: T): T => structuredClone(value);
 
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(maximum, Math.max(minimum, value));
+
 export function normalizeRotation(rotation: number): number {
   return ((rotation % 360) + 360) % 360;
 }
@@ -193,14 +196,19 @@ export function moveKeepout(
 ): KeepoutMoveResult {
   const source = project.keepouts.find((keepout) => keepout.id === id);
   if (!source) return { ok: false, reason: "找不到選取的禁制區。" };
+  if (![point.x, point.y].every(Number.isFinite)) {
+    return { ok: false, reason: "禁制區座標無效。" };
+  }
+  const snappedX = project.board.snapToGrid && !bypassSnap
+    ? snapValue(point.x, project.board.gridSize)
+    : point.x;
+  const snappedY = project.board.snapToGrid && !bypassSnap
+    ? snapValue(point.y, project.board.gridSize)
+    : point.y;
   const keepout = {
     ...source,
-    x: project.board.snapToGrid && !bypassSnap
-      ? snapValue(point.x, project.board.gridSize)
-      : point.x,
-    y: project.board.snapToGrid && !bypassSnap
-      ? snapValue(point.y, project.board.gridSize)
-      : point.y,
+    x: clamp(snappedX, 0, Math.max(0, project.board.width - source.width)),
+    y: clamp(snappedY, 0, Math.max(0, project.board.height - source.height)),
   };
   if (keepout.x === source.x && keepout.y === source.y) {
     return { ok: true, project, keepout: source, changed: false };
@@ -240,8 +248,11 @@ export function editSelectedObject(
     } else if (action.type === "nudge") {
       const keepout = next.keepouts.find((item) => item.id === selection.id);
       if (keepout) {
-        keepout.x += action.dx;
-        keepout.y += action.dy;
+        const moved = moveKeepout(next, keepout.id, {
+          x: keepout.x + action.dx,
+          y: keepout.y + action.dy,
+        }, true);
+        return moved.ok ? moved.project : project;
       }
     }
   } else if (action.type === "delete") {

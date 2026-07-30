@@ -190,15 +190,16 @@ function KeepoutInspector({
   const disabled = !workspace.canMutate;
   return (
     <div className="pcb-inspector-form" data-selection-kind="keepout">
-      <h2>{keepout.name}</h2>
-      <InspectorField label="名稱">
+      <h2>禁制區 · {keepout.name}</h2>
+      <p className="pcb-inspector-note">框內拖曳可移動，拖曳四角可縮放；按 Delete 或下方按鈕可刪除。</p>
+      <InspectorField label="禁制區名稱">
         <input key={keepout.name} defaultValue={keepout.name} disabled={disabled} onBlur={(event) => workspace.updateKeepout(keepout.id, { name: event.currentTarget.value.trim() || keepout.name })} />
       </InspectorField>
       <div className="pcb-inspector-field-grid">
         <NumberField label="X (mm)" value={keepout.x} disabled={disabled} onCommit={(x) => workspace.updateKeepout(keepout.id, { x })} />
         <NumberField label="Y (mm)" value={keepout.y} disabled={disabled} onCommit={(y) => workspace.updateKeepout(keepout.id, { y })} />
-        <NumberField label="寬 (mm)" value={keepout.width} disabled={disabled} onCommit={(width) => workspace.updateKeepout(keepout.id, { width })} />
-        <NumberField label="高 (mm)" value={keepout.height} disabled={disabled} onCommit={(height) => workspace.updateKeepout(keepout.id, { height })} />
+        <NumberField label="寬度 (mm)" value={keepout.width} disabled={disabled} onCommit={(width) => workspace.updateKeepout(keepout.id, { width })} />
+        <NumberField label="高度 (mm)" value={keepout.height} disabled={disabled} onCommit={(height) => workspace.updateKeepout(keepout.id, { height })} />
         <InspectorField label="顏色">
           <input type="color" value={keepout.color} disabled={disabled} onChange={(event) => workspace.updateKeepout(keepout.id, { color: event.target.value })} />
         </InspectorField>
