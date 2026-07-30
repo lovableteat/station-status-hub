@@ -27,6 +27,16 @@ test("classifies browser-previewable engineering files without pretending CAD an
   assert.equal(previewModule.getTestPlanPreviewKind(createFile("plan.xlsx")), "unsupported");
 });
 
+test("never treats active SVG content as an inline image preview", () => {
+  const svg = {
+    originalName: "probe-result.svg",
+    extension: "svg",
+    mimeType: "image/svg+xml",
+  };
+
+  assert.equal(previewModule.getTestPlanPreviewKind(svg), "unsupported");
+});
+
 test("classifies Office, 3D, PCB, document, image, archive, and unknown files", () => {
   assert.equal(filesModule.classifyTestPlanFile("plan.pptx"), "presentation");
   assert.equal(filesModule.classifyTestPlanFile("matrix.XLSM"), "spreadsheet");
@@ -37,6 +47,40 @@ test("classifies Office, 3D, PCB, document, image, archive, and unknown files", 
   assert.equal(filesModule.classifyTestPlanFile("photo.webp"), "image");
   assert.equal(filesModule.classifyTestPlanFile("fab.zip"), "archive");
   assert.equal(filesModule.classifyTestPlanFile("notes.custom"), "other");
+});
+
+test("classifies the broader engineering document, CAD, PCB, archive, and raster matrix", () => {
+  const matrix = [
+    ["release-plan.ods", "spreadsheet"],
+    ["qualification-report.odt", "document"],
+    ["mechanical-envelope.dwg", "3d"],
+    ["panel-layout.dxf", "3d"],
+    ["controller.kicad_sch", "pcb"],
+    ["fab-outline.gko", "pcb"],
+    ["drill.drl", "pcb"],
+    ["manufacturing-package.tgz", "archive"],
+    ["inspection-photo.tiff", "image"],
+  ] as const;
+
+  for (const [fileName, category] of matrix) {
+    assert.equal(filesModule.classifyTestPlanFile(fileName), category, fileName);
+  }
+});
+
+test("accepts private engineering source, configuration, firmware, and logs", () => {
+  const result = filesModule.validateTestPlanUpload([
+    { name: "main.cpp", size: 1 },
+    { name: "build.ps1", size: 1 },
+    { name: "flash.sh", size: 1 },
+    { name: "bringup.bat", size: 1 },
+    { name: "board.yaml", size: 1 },
+    { name: "fpga.bit", size: 1 },
+    { name: "bootloader.hex", size: 1 },
+    { name: "test-run.log", size: 1 },
+  ]);
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.valid.length, 8);
 });
 
 test("validates executable extensions, 500 MiB file size, and 20-file batches", () => {
@@ -61,6 +105,38 @@ test("validates executable extensions, 500 MiB file size, and 20-file batches", 
   assert.equal(tooMany.errors.at(-1).code, "batch-limit");
 });
 
+test("blocks OS executables, installers, drivers, and shortcut payloads", () => {
+  const result = filesModule.validateTestPlanUpload([
+    { name: "setup.exe", size: 1 },
+    { name: "installer.msi", size: 1 },
+    { name: "driver.sys", size: 1 },
+    { name: "launch.scr", size: 1 },
+    { name: "shortcut.lnk", size: 1 },
+    { name: "mobile.apk", size: 1 },
+  ]);
+
+  assert.deepEqual(result.valid, []);
+  assert.deepEqual(
+    result.errors.map((error: { code: string }) => error.code),
+    Array.from({ length: 6 }, () => "blocked-extension"),
+  );
+});
+
+test("rejects files that would make the upload batch exceed 1 GiB", () => {
+  const MiB = 1024 ** 2;
+  const result = filesModule.validateTestPlanUpload([
+    { name: "assembly.step", size: 400 * MiB },
+    { name: "mesh.glb", size: 400 * MiB },
+    { name: "render.stl", size: 400 * MiB },
+  ]);
+
+  assert.deepEqual(
+    result.valid.map((file: { name: string }) => file.name),
+    ["assembly.step", "mesh.glb"],
+  );
+  assert.match(result.errors.at(-1)?.message ?? "", /1\s*(?:GiB|GB)/i);
+});
+
 test("rejects executable extensions when an existing file is renamed", () => {
   assert.equal(filesModule.validateTestPlanFileName("safe.brd"), null);
   assert.equal(
@@ -69,16 +145,26 @@ test("rejects executable extensions when an existing file is renamed", () => {
   );
 });
 
-test("builds storage paths that preserve the extension without path traversal", () => {
-  const path = filesModule.buildStoragePath(
+test("builds opaque ASCII-only keys for Unicode, emoji, and multi-dot display names", () => {
+  const pdfPath = filesModule.buildStoragePath(
     "owner-1",
     "space-2",
-    "../../測試 板#1.BRD",
+    "測試報告✅.final.PDF",
     "object-3",
   );
+  const pcbPath = filesModule.buildStoragePath(
+    "owner-1",
+    "space-2",
+    "控制板.rev.2.KICAD_PCB",
+    "object-4",
+  );
 
-  assert.equal(path, "owner-1/space-2/object-3-測試-板-1.brd");
-  assert.doesNotMatch(path, /\.\.|#|\\|\/\//);
+  assert.equal(pdfPath, "owner-1/space-2/object-3.pdf");
+  assert.equal(pcbPath, "owner-1/space-2/object-4.kicad_pcb");
+  for (const path of [pdfPath, pcbPath]) {
+    assert.match(path, /^[a-zA-Z0-9._/-]+$/);
+    assert.doesNotMatch(path, /\.\.|#|%|\\|\/\//);
+  }
 });
 
 test("formats byte sizes for file metadata", () => {
