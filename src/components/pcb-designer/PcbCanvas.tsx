@@ -13,7 +13,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   canPlaceComponent,
   clientPointToBoard,
-  getRotatedRectangleCorners,
+  getComponentCanvasGeometry,
+  getComponentCanvasTransform,
   snapPoint,
 } from "./core/geometry.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
@@ -131,19 +132,6 @@ function resizeKeepout(
 
 function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
   if (!workspace.selection || !workspace.selectedObject) return null;
-  if (workspace.selection.kind === "component") {
-    const component = workspace.selectedObject as PcbPlacedComponent;
-    const center = preview ?? { x: component.x, y: component.y };
-    const points = getRotatedRectangleCorners({ ...component, ...center });
-    const xs = points.map((point) => point.x);
-    const ys = points.map((point) => point.y);
-    return {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys),
-    };
-  }
   if (workspace.selection.kind === "keepout") {
     const keepout = workspace.selectedObject as { x: number; y: number; width: number; height: number };
     return {
@@ -283,19 +271,30 @@ export function PcbCanvas({
     workspace.zoom,
   ]);
 
-  const previewComponent = interaction?.kind === "component" ? interaction : null;
-  const previewSelection = interaction?.kind === "component"
-    ? { id: interaction.instanceId, point: interaction.preview }
-    : interaction?.kind === "keepout-move"
-      ? { id: interaction.id, point: interaction.preview }
-      : null;
+  const selectedComponent = workspace.selection?.kind === "component"
+    ? project.components.find((component) => component.instanceId === workspace.selection?.id) ?? null
+    : null;
+  const selectedComponentVisual = selectedComponent
+    ? {
+      component: selectedComponent,
+      geometry: getComponentCanvasGeometry(
+        selectedComponent,
+        interaction?.kind === "component" && interaction.instanceId === selectedComponent.instanceId
+          ? interaction.preview
+          : selectedComponent,
+      ),
+    }
+    : null;
+  const keepoutPreview = interaction?.kind === "keepout-move"
+    ? { id: interaction.id, point: interaction.preview }
+    : null;
   const selectedBounds = interaction?.kind === "keepout-resize"
     && workspace.selection?.id === interaction.id
     ? interaction.preview
     : selectionBounds(
       workspace,
-      previewSelection && workspace.selection?.id === previewSelection.id
-        ? previewSelection.point
+      keepoutPreview && workspace.selection?.id === keepoutPreview.id
+        ? keepoutPreview.point
         : undefined,
     );
   const selectedKeepout = workspace.selection?.kind === "keepout"
@@ -780,13 +779,17 @@ export function PcbCanvas({
 
         <g data-layer="components">
           {project.components.map((component) => {
-            const preview = previewComponent?.instanceId === component.instanceId
-              ? previewComponent.preview
+            const center = interaction?.kind === "component"
+              && interaction.instanceId === component.instanceId
+              ? interaction.preview
               : component;
+            const transform = selectedComponentVisual?.component.instanceId === component.instanceId
+              ? selectedComponentVisual.geometry.transform
+              : getComponentCanvasTransform(component, center);
             return (
               <g
                 key={component.instanceId}
-                transform={`translate(${preview.x} ${preview.y}) rotate(${component.rotation})`}
+                transform={transform}
                 className={`pcb-component-object${component.locked ? " is-locked" : ""}`}
                 role="button"
                 tabIndex={0}
@@ -823,6 +826,38 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="selection-handles" data-export-hidden>
+          {selectedComponentVisual && (
+            <g
+              data-selection-kind="component"
+              transform={selectedComponentVisual.geometry.transform}
+              pointerEvents="none"
+            >
+              <rect
+                x={selectedComponentVisual.geometry.localBounds.x}
+                y={selectedComponentVisual.geometry.localBounds.y}
+                width={selectedComponentVisual.geometry.localBounds.width}
+                height={selectedComponentVisual.geometry.localBounds.height}
+                rx={Math.min(
+                  0.8,
+                  selectedComponentVisual.geometry.localBounds.width / 6,
+                  selectedComponentVisual.geometry.localBounds.height / 6,
+                )}
+                fill="none"
+                stroke="#f8fafc"
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
+              />
+              {selectedComponentVisual.geometry.handles.map(({ x, y }, index) => (
+                <circle
+                  key={["nw", "ne", "sw", "se"][index]}
+                  cx={x}
+                  cy={y}
+                  r={strokeWidth * 2.1}
+                  fill="#f8fafc"
+                />
+              ))}
+            </g>
+          )}
           {selectedBounds && (
             <>
               <rect
