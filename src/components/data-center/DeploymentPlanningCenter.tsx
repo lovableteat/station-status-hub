@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -15,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleGauge,
+  Cloud,
+  CloudOff,
   Cpu,
   Eye,
   EyeOff,
@@ -36,6 +39,7 @@ import {
   Plus,
   RotateCw,
   Search,
+  Settings2,
   Server,
   ShieldCheck,
   Snowflake,
@@ -71,16 +75,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/components/auth/UserContext";
 import { cn } from "@/lib/utils";
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
 import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
+import {
+  useSharedDataCenterProjects,
+  type DataCenterProjectDocument,
+  type DataCenterProjectSummary,
+  type DataCenterProjectSyncState,
+} from "./useSharedDataCenterProjects";
 import {
   FacilityAisleCreationDialog,
   type FacilityAisleCreationRequest,
@@ -581,6 +593,13 @@ function IconTooltipButton({
 }
 
 interface SceneNavigatorProps {
+  projects: DataCenterProjectSummary[];
+  selectedProjectId: string;
+  syncState: DataCenterProjectSyncState;
+  canEditProjects: boolean;
+  onProjectChange: (projectId: string) => void;
+  onCreateProject: () => void;
+  onEditProject: () => void;
   sites: SitePlan[];
   selectedSiteId: string;
   onSiteChange: (siteId: string) => void;
@@ -597,6 +616,13 @@ interface SceneNavigatorProps {
 }
 
 function SceneNavigator({
+  projects,
+  selectedProjectId,
+  syncState,
+  canEditProjects,
+  onProjectChange,
+  onCreateProject,
+  onEditProject,
   sites,
   selectedSiteId,
   onSiteChange,
@@ -671,6 +697,36 @@ function SceneNavigator({
       </div>
 
       <div className="shrink-0 space-y-3 border-b border-[#163653] px-4 py-4">
+        <div className="rounded-[18px] border border-cyan-200/15 bg-[#0c2235] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-black tracking-[0.08em] text-cyan-100/75">共用專案</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+                {syncState === "synced" ? <Cloud className="h-3 w-3 text-emerald-300" /> : <CloudOff className="h-3 w-3 text-amber-300" />}
+                {syncState === "loading" ? "載入共用資料" : syncState === "saving" ? "儲存變更中" : syncState === "synced" ? "所有登入成員共用" : "本機保護模式"}
+              </div>
+            </div>
+            {canEditProjects ? (
+              <div className="flex gap-1">
+                <IconTooltipButton label="新增專案" icon={Plus} onClick={onCreateProject} className="h-8 w-8" />
+                <IconTooltipButton label="專案設定" icon={Settings2} onClick={onEditProject} className="h-8 w-8" />
+              </div>
+            ) : null}
+          </div>
+          <Select value={selectedProjectId} onValueChange={onProjectChange} disabled={projects.length === 0}>
+            <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#081c2d] px-3 text-sm font-semibold text-slate-100">
+              <SelectValue placeholder="選擇 Data Center 專案" />
+            </SelectTrigger>
+            <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.category} · {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <label className="block">
           <span className="mb-2 block text-[11px] font-black tracking-[0.08em] text-blue-200/70">目前站點</span>
           <Select value={selectedSiteId} onValueChange={onSiteChange}>
@@ -2375,6 +2431,7 @@ function useDesktopDataCenterLayout() {
 
 export function DeploymentPlanningCenter() {
   const { toast } = useToast();
+  const { user, isRealtimeAuthenticated } = useUser();
   const { canEditModule } = usePermissions();
   const canEdit = canEditModule("data");
   const isDesktopLayout = useDesktopDataCenterLayout();
@@ -2391,7 +2448,7 @@ export function DeploymentPlanningCenter() {
   const [searchTerm, setSearchTerm] = useState("");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [showSceneTools, setShowSceneTools] = useState(false);
+  const [showSceneTools, setShowSceneTools] = useState(true);
   const [showRackDetails, setShowRackDetails] = useState(false);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
@@ -2419,6 +2476,34 @@ export function DeploymentPlanningCenter() {
     widthMm: 600,
     depthMm: 1200,
     heightMm: 2200,
+  });
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectDialogMode, setProjectDialogMode] = useState<"create" | "edit">("create");
+  const [projectDraft, setProjectDraft] = useState({ name: "", category: "未分類", description: "" });
+
+  const sharedDocument = useMemo<DataCenterProjectDocument>(() => ({
+    schemaVersion: 1,
+    sites,
+    facilityPlans,
+    modelOverrides: serializeModelCatalogOverrides(models, BUILT_IN_RACK_MODELS) as DataCenterProjectDocument["modelOverrides"],
+  }), [facilityPlans, models, sites]);
+
+  const applySharedDocument = useCallback((document: DataCenterProjectDocument) => {
+    if (document.sites.length === 0) return;
+    const nextSites = document.sites;
+    const nextModels = mergeModelCatalogOverrides(BUILT_IN_RACK_MODELS, document.modelOverrides) as Record<string, RackModelDefinition>;
+    setSites(nextSites);
+    setFacilityPlans(document.facilityPlans);
+    setModels(nextModels);
+    setSelectedSiteId(nextSites[0].id);
+    setSelectedRackId(nextSites[0].racks[0]?.id ?? "");
+  }, []);
+
+  const sharedProjects = useSharedDataCenterProjects({
+    userId: isRealtimeAuthenticated ? user?.userId ?? null : null,
+    canEdit,
+    currentDocument: sharedDocument,
+    onApplyDocument: applySharedDocument,
   });
 
   const selectedSite = useMemo(
@@ -3474,7 +3559,67 @@ export function DeploymentPlanningCenter() {
   const addRackFromSelectedModel = () => addRackUsingModel(selectedModelId, true);
   const addRackFromCurrentModel = () => addRackUsingModel(selectedRack.modelId, false);
 
+  const openCreateProject = () => {
+    setProjectDialogMode("create");
+    setProjectDraft({ name: "", category: sharedProjects.selectedProject?.category ?? "未分類", description: "" });
+    setProjectDialogOpen(true);
+  };
+
+  const openEditProject = () => {
+    const project = sharedProjects.selectedProject;
+    if (!project) return;
+    setProjectDialogMode("edit");
+    setProjectDraft({ name: project.name, category: project.category, description: project.description });
+    setProjectDialogOpen(true);
+  };
+
+  const saveProjectSettings = async () => {
+    if (!projectDraft.name.trim()) {
+      toast({ title: "請輸入專案名稱", variant: "destructive" });
+      return;
+    }
+    try {
+      if (projectDialogMode === "create") {
+        await sharedProjects.createProject(projectDraft.name, projectDraft.category, projectDraft.description);
+        toast({ title: "Data Center 專案已建立", description: "目前場景已作為新專案的初始內容。" });
+      } else if (sharedProjects.selectedProjectId) {
+        await sharedProjects.updateProject(sharedProjects.selectedProjectId, projectDraft.name, projectDraft.category, projectDraft.description);
+        toast({ title: "專案設定已更新" });
+      }
+      setProjectDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "專案設定失敗",
+        description: error instanceof Error ? error.message : "請稍後再試",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const archiveCurrentProject = async () => {
+    const project = sharedProjects.selectedProject;
+    if (!project || !window.confirm(`確定要封存「${project.name}」嗎？`)) return;
+    try {
+      await sharedProjects.archiveProject(project.id);
+      setProjectDialogOpen(false);
+      toast({ title: "專案已封存" });
+    } catch (error) {
+      toast({
+        title: "無法封存專案",
+        description: error instanceof Error ? error.message : "請稍後再試",
+        variant: "destructive",
+      });
+    }
+  };
+
   const navigatorProps: SceneNavigatorProps = {
+    projects: sharedProjects.projects,
+    selectedProjectId: sharedProjects.selectedProjectId,
+    syncState: sharedProjects.syncState,
+    canEditProjects: canEdit,
+    onProjectChange: sharedProjects.selectProject,
+    onCreateProject: openCreateProject,
+    onEditProject: openEditProject,
     sites,
     selectedSiteId,
     onSiteChange: handleSiteChange,
@@ -3973,6 +4118,47 @@ export function DeploymentPlanningCenter() {
               <DialogDescription>查看機櫃狀態並設定 L10 安裝層。</DialogDescription>
             </DialogHeader>
             <RackInspector {...inspectorProps} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
+          <DialogContent className="w-[min(94vw,560px)] max-w-none border border-cyan-300/20 bg-[#0b1b2b] p-0 text-slate-100 sm:max-w-[560px]">
+            <DialogHeader className="border-b border-white/10 px-6 py-5 pr-14 text-left">
+              <DialogTitle className="flex items-center gap-2 text-white">
+                <Settings2 className="h-5 w-5 text-cyan-300" />
+                {projectDialogMode === "create" ? "新增 Data Center 專案" : "Data Center 專案設定"}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                所有獲授權的登入成員會看到同一份專案場景、機櫃與廠房規劃。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 px-6 py-5">
+              <div className="space-y-2">
+                <Label htmlFor="data-center-project-name">專案名稱</Label>
+                <Input id="data-center-project-name" value={projectDraft.name} onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：Taipei AI Lab" className="border-white/12 bg-[#081522]" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="data-center-project-category">專案分類</Label>
+                <Input id="data-center-project-category" value={projectDraft.category} onChange={(event) => setProjectDraft((current) => ({ ...current, category: event.target.value }))} placeholder="例如：正式機房、測試實驗室" className="border-white/12 bg-[#081522]" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="data-center-project-description">專案說明</Label>
+                <textarea id="data-center-project-description" value={projectDraft.description} onChange={(event) => setProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} maxLength={1000} placeholder="用途、負責團隊或規劃階段" className="w-full resize-none rounded-xl border border-white/12 bg-[#081522] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/15" />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                {projectDialogMode === "edit" ? (
+                  <Button type="button" variant="outline" onClick={() => void archiveCurrentProject()} className="border-rose-300/20 bg-rose-400/8 text-rose-100 hover:bg-rose-400/15">
+                    <Trash2 className="mr-2 h-4 w-4" />封存專案
+                  </Button>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setProjectDialogOpen(false)} className="border-white/12 bg-white/[0.03] text-slate-200">取消</Button>
+                  <Button type="button" onClick={() => void saveProjectSettings()} className="bg-cyan-300 font-bold text-[#071421] hover:bg-cyan-200">
+                    {projectDialogMode === "create" ? "建立專案" : "儲存設定"}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
