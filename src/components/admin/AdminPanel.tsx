@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
@@ -51,6 +51,8 @@ interface SystemUser {
   password_hash?: string;
   auth_user_id?: string | null;
   auth_migrated_at?: string | null;
+  registration_requested_at?: string | null;
+  approved_at?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -146,6 +148,20 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
   useEffect(() => {
     void loadSystemUsers();
+  }, [loadSystemUsers]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-system-user-roster")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "system_users" },
+        () => void loadSystemUsers(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [loadSystemUsers]);
 
   const handleAddEngineer = async () => {
@@ -305,6 +321,23 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
   };
 
+  const handleApproveUser = async (id: string) => {
+    if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
+    try {
+      const { data, error } = await supabase.rpc("approve_system_user", { p_user_id: id });
+      if (error) throw error;
+      if (!data) throw new Error("帳號已核准或狀態已變更");
+      toast({ title: "帳號已核准", description: "使用者現在可用原帳號密碼登入。" });
+      await loadSystemUsers();
+    } catch (error) {
+      toast({
+        title: "核准失敗",
+        description: error instanceof Error ? error.message : "無法核准這個帳號",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteUser = async (userId: string) => {
     if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
@@ -391,11 +424,14 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
   };
 
-  const getStatusLabel = (status: string) => (status === "active" ? "啟用" : "停用");
+  const getStatusLabel = (status: string) =>
+    status === "active" ? "啟用" : status === "pending" ? "待核准" : "停用";
 
   const getStatusTone = (status: string) =>
     status === "active"
       ? "border-emerald-200/45 bg-emerald-300/18 text-emerald-50"
+      : status === "pending"
+        ? "border-amber-200/45 bg-amber-300/18 text-amber-50"
       : "border-slate-200/20 bg-slate-200/10 text-slate-300";
 
   const formatCreatedAt = (value: string) => {
@@ -464,9 +500,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
   const totalUsers = systemUsers.length;
   const activeUsers = systemUsers.filter((item) => item.status === "active").length;
-  const privilegedUsers = systemUsers.filter(
-    (item) => item.role === "super_admin" || item.role === "admin"
-  ).length;
+  const pendingUsers = systemUsers.filter((item) => item.status === "pending").length;
   const workspaceConfiguredUsers = systemUsers.filter(
     (item) => getWorkspaceBadges(item.permissions).length > 0
   ).length;
@@ -633,7 +667,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               metrics={[
                 { label: "全部帳號", value: totalUsers, icon: Users, accent: "blue" },
                 { label: "正常啟用", value: activeUsers, icon: Shield, accent: "emerald" },
-                { label: "管理權限", value: privilegedUsers, icon: Lock, accent: "amber" },
+                { label: "待核准註冊", value: pendingUsers, icon: Hourglass, accent: "amber" },
                 {
                   label: "已配置工作區",
                   value: workspaceConfiguredUsers,
@@ -676,6 +710,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   </SelectTrigger>
                   <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
                     <SelectItem value="all-status">全部狀態</SelectItem>
+                    <SelectItem value="pending">待核准</SelectItem>
                     <SelectItem value="active">啟用</SelectItem>
                     <SelectItem value="inactive">停用</SelectItem>
                   </SelectContent>
@@ -761,6 +796,17 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                          {systemUser.status === "pending" ? (
+                            <Button
+                              size="sm"
+                              disabled={!canEditUsers}
+                              className="h-9 rounded-xl bg-emerald-300 font-bold text-[#071421] hover:bg-emerald-200"
+                              onClick={() => void handleApproveUser(systemUser.id)}
+                            >
+                              <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                              核准登入
+                            </Button>
+                          ) : null}
                           {systemUser.username !== "liu52417" ? (
                             <Button
                               variant="outline"
@@ -769,7 +815,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               className="h-9 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-amber-300/20 hover:bg-amber-400/10 hover:text-amber-100"
                               onClick={() => handleToggleUserStatus(systemUser.id, systemUser.status)}
                             >
-                              {systemUser.status === "active" ? "停用帳號" : "重新啟用"}
+                              {systemUser.status === "active"
+                                ? "停用帳號"
+                                : systemUser.status === "pending"
+                                  ? "直接啟用"
+                                  : "重新啟用"}
                             </Button>
                           ) : (
                             <Button variant="outline" size="sm" className="h-9 rounded-xl border-white/10 bg-slate-950/20" disabled>
@@ -815,7 +865,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立者</div>
-                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.created_by}</div>
+                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
+                            {systemUser.created_by === "self-registration" ? "使用者自行註冊" : systemUser.created_by || "系統"}
+                          </div>
                         </div>
                         <div className="min-w-0 sm:pl-4">
                           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
