@@ -3645,6 +3645,11 @@ export type Database = {
         }
       }
       delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
+      dismiss_read_user_notifications: { Args: never; Returns: number }
+      dismiss_user_notification: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
       discard_test_flow_draft: {
         Args: { p_project_id: string }
         Returns: boolean
