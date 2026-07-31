@@ -4,6 +4,7 @@ import {
   LoaderCircle,
   MessageCircle,
   RefreshCw,
+  Search,
   Send,
   Users,
 } from "lucide-react";
@@ -37,15 +38,16 @@ function shortTime(value: string | null) {
   });
 }
 
-function ThreadRow({ thread, onOpen }: { thread: DirectThread; onOpen: () => void }) {
+function ThreadRow({ thread, online, onOpen }: { thread: DirectThread; online: boolean; onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       className="flex w-full items-center gap-3 rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 text-left transition-colors hover:border-cyan-200/35 hover:bg-[#10243a]"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
+      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
         {(thread.otherDisplayName || thread.otherUsername).slice(0, 2).toUpperCase()}
+        <span className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d]", online ? "bg-emerald-400" : "bg-slate-600")} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
@@ -76,6 +78,7 @@ export function DirectMessagesPanel({
   const { threads, loading, error, reload, startDirectChat } = useDirectMessageThreads();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const requestedUserRef = useRef<string | null>(null);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
@@ -94,6 +97,10 @@ export function DirectMessagesPanel({
     sendTyping,
   } = useDirectMessages(selectedThreadId);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const onlineUserIds = useMemo(
+    () => new Set(onlineUsers.map((onlineUser) => onlineUser.userId)),
+    [onlineUsers],
+  );
 
   useEffect(() => {
     if (!requestedUserId || requestedUserRef.current === requestedUserId) return;
@@ -252,9 +259,29 @@ export function DirectMessagesPanel({
     );
   }
 
-  const availableOnlineUsers = onlineUsers.filter((onlineUser) => onlineUser.userId !== user?.userId);
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase("zh-TW");
+  const availableOnlineUsers = onlineUsers.filter((onlineUser) => {
+    if (onlineUser.userId === user?.userId) return false;
+    if (!normalizedSearch) return true;
+    return [onlineUser.displayName, onlineUser.username]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(normalizedSearch));
+  });
+  const filteredThreads = threads.filter((thread) => {
+    if (!normalizedSearch) return true;
+    return [thread.otherDisplayName, thread.otherUsername, thread.lastMessageBody]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(normalizedSearch));
+  });
   return (
-    <ScrollArea className="min-h-0 flex-1 px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-cyan-200/10 px-4 py-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/55" />
+          <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜尋同事或訊息內容" className="h-10 border-cyan-200/15 bg-[#071522] pl-9 text-slate-100" />
+        </div>
+      </div>
+      <ScrollArea className="min-h-0 flex-1 px-4 py-3">
       {availableOnlineUsers.length > 0 ? (
         <section className="mb-5">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200/80">
@@ -270,7 +297,7 @@ export function DirectMessagesPanel({
                   if (existing) setSelectedThreadId(existing.threadId);
                   else void startDirectChat(onlineUser.userId).then(setSelectedThreadId);
                 }}
-                className="min-w-[110px] rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-left hover:bg-emerald-300/10"
+                className="min-w-[110px] rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-left hover:bg-cyan-300/10"
               >
                 <span className="block truncate text-sm font-semibold text-slate-100">
                   {onlineUser.displayName || onlineUser.username}
@@ -301,18 +328,26 @@ export function DirectMessagesPanel({
             <p className="font-semibold text-slate-300">尚無私訊</p>
             <p className="mt-1 text-sm">點選在線成員即可開始對話。</p>
           </div>
+        ) : filteredThreads.length === 0 ? (
+          <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500">
+            <Search className="mb-3 h-9 w-9 opacity-50" />
+            <p className="font-semibold text-slate-300">找不到符合的對話</p>
+            <p className="mt-1 text-sm">可搜尋姓名、帳號或最近訊息。</p>
+          </div>
         ) : (
           <div className="space-y-2.5 pb-3">
-            {threads.map((thread) => (
+            {filteredThreads.map((thread) => (
               <ThreadRow
                 key={thread.threadId}
                 thread={thread}
+                online={onlineUserIds.has(thread.otherUserId)}
                 onOpen={() => setSelectedThreadId(thread.threadId)}
               />
             ))}
           </div>
         )}
       </section>
-    </ScrollArea>
+      </ScrollArea>
+    </div>
   );
 }

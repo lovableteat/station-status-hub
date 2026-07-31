@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   Radio,
   RefreshCw,
+  Search,
   Send,
   Users,
 } from "lucide-react";
@@ -107,6 +108,8 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [expandedAnnouncementId, setExpandedAnnouncementId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -140,6 +143,15 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
 
   const targetCount = audience === "all" ? recipients.length : selectedIds.length;
   const canSubmit = canSend && title.trim().length > 0 && message.trim().length > 0 && targetCount > 0;
+  const filteredRecipients = useMemo(() => {
+    const query = recipientSearch.trim().toLocaleLowerCase("zh-TW");
+    if (!query) return recipients;
+    return recipients.filter((recipient) =>
+      [recipient.display_name, recipient.username, recipient.role]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query)),
+    );
+  }, [recipientSearch, recipients]);
 
   const toggleRecipient = (id: string) => {
     setSelectedIds((current) =>
@@ -232,7 +244,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
 
   return (
     <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-      <section className="rounded-2xl border border-cyan-200/25 bg-[linear-gradient(145deg,#10263a,#0b1b2d)] p-5 shadow-[0_22px_60px_-46px_rgba(34,211,238,0.9)]">
+      <section data-admin-zone="announcement-composer" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-lg font-bold text-slate-50">
@@ -264,9 +276,18 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
           </div>
 
           {audience === "selected" && (
-            <ScrollArea className="h-44 rounded-xl border border-sky-200/15 bg-[#071522] p-2">
-              <div className="grid gap-1 sm:grid-cols-2">
-                {recipients.map((recipient) => (
+            <div className="overflow-hidden rounded-xl border border-cyan-200/15 bg-[#071522]">
+              <div className="flex flex-wrap items-center gap-2 border-b border-cyan-200/10 p-2.5">
+                <div className="relative min-w-[180px] flex-1">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cyan-200/55" />
+                  <Input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="搜尋姓名、帳號或角色" className="h-9 border-cyan-200/15 bg-[#091d2e] pl-9 text-slate-100" />
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds((current) => [...new Set([...current, ...filteredRecipients.map((recipient) => recipient.id)])])} disabled={filteredRecipients.length === 0} className="h-9 text-cyan-200">全選結果</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds([])} disabled={selectedIds.length === 0} className="h-9 text-slate-400">清除</Button>
+              </div>
+              <ScrollArea className="h-44 p-2">
+                <div className="grid gap-1 sm:grid-cols-2">
+                {filteredRecipients.map((recipient) => (
                   <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-sky-300/8">
                     <Checkbox checked={selectedIds.includes(recipient.id)} onCheckedChange={() => toggleRecipient(recipient.id)} />
                     <span className="min-w-0">
@@ -275,8 +296,11 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
                     </span>
                   </label>
                 ))}
-              </div>
-            </ScrollArea>
+                {filteredRecipients.length === 0 ? <p className="col-span-full py-8 text-center text-sm text-slate-500">找不到符合的啟用帳號</p> : null}
+                </div>
+              </ScrollArea>
+              <div className="border-t border-cyan-200/10 px-3 py-2 text-xs text-slate-500">已選 {selectedIds.length} 人</div>
+            </div>
           )}
 
           <label className="grid gap-2 text-sm font-medium text-slate-200">
@@ -299,9 +323,9 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
       </section>
 
       <div className="grid min-h-0 gap-4 lg:grid-cols-2 xl:grid-cols-1">
-        <section className="rounded-2xl border border-emerald-300/20 bg-[#0b1b2d] p-4">
+        <section data-admin-zone="online-locations" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-emerald-300" />在線位置</div>
+            <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-cyan-300" />在線位置</div>
             <Badge className="gap-1.5 bg-emerald-300/15 text-emerald-100"><Radio className="h-3 w-3" />{connectionStatus === "online" ? `${allOnlineUsers.length} 人` : "連線中"}</Badge>
           </div>
           <div className="mt-3 grid gap-2">
@@ -310,13 +334,13 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
             ) : onlineByModule.map(([module, count]) => (
               <div key={module} className="flex items-center justify-between rounded-xl border border-sky-200/10 bg-[#071522] px-3 py-2.5">
                 <span className="text-sm text-slate-300">{moduleLabels[module] || module}</span>
-                <span className="font-mono text-sm font-bold text-emerald-200">{count} 人</span>
+                <span className="font-mono text-sm font-bold text-cyan-200">{count} 人</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="min-h-0 rounded-2xl border border-sky-200/20 bg-[#0b1b2d] p-4">
+        <section data-admin-zone="announcement-history" className="min-h-0 rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 font-bold text-slate-50"><Clock3 className="h-5 w-5 text-sky-300" />發送紀錄</div>
             <Button variant="ghost" size="sm" onClick={() => void loadData()} className="text-slate-400"><RefreshCw className="mr-1.5 h-3.5 w-3.5" />更新</Button>
@@ -325,18 +349,26 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
             <div className="space-y-2">
               {history.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-500">尚未發布管理公告</div>
-              ) : history.map((item) => (
+              ) : history.map((item) => {
+                const readPercent = item.recipientCount > 0 ? Math.round((item.readCount / item.recipientCount) * 100) : 0;
+                const expanded = expandedAnnouncementId === item.id;
+                return (
                 <article key={item.id} className="rounded-xl border border-sky-200/12 bg-[#071522] p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-semibold text-slate-100">{item.title}</h3>
-                    <time className="shrink-0 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
-                  </div>
-                  <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-slate-400">{item.message}</p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />已讀 {item.readCount} / {item.recipientCount}
-                  </div>
+                  <button type="button" onClick={() => setExpandedAnnouncementId(expanded ? null : item.id)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-semibold text-slate-100">{item.title}</h3>
+                      <time className="shrink-0 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+                    </div>
+                    <p className={cn("mt-1.5 text-sm leading-6 text-slate-400", !expanded && "line-clamp-2")}>{item.message}</p>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><span className="block h-full rounded-full bg-cyan-300" style={{ width: `${readPercent}%` }} /></div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+                      <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />已讀 {item.readCount} / {item.recipientCount}</span>
+                      <span>{readPercent}% · {expanded ? "收合內容" : "查看完整內容"}</span>
+                    </div>
+                  </button>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         </section>

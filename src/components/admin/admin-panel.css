@@ -66,9 +66,9 @@
 
 .admin-sidebar-collapse {
   flex: 0 0 auto;
-  border: 1px solid rgb(52 211 153 / 25%);
-  color: #d1fae5;
-  background: rgb(52 211 153 / 10%);
+  border: 1px solid rgb(103 232 249 / 25%);
+  color: #cffafe;
+  background: rgb(103 232 249 / 10%);
 }
 
 .admin-sidebar-mobile-close {
@@ -110,9 +110,9 @@
 }
 
 .admin-sidebar-item.is-active {
-  border-color: rgb(76 141 255 / 70%);
+  border-color: rgb(103 232 249 / 70%);
   color: #06111f;
-  background: #4c8dff;
+  background: #67e8f9;
 }
 
 .admin-sidebar-item > span {

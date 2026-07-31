@@ -330,9 +330,15 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       toast({ title: "帳號已核准", description: "使用者現在可用原帳號密碼登入。" });
       await loadSystemUsers();
     } catch (error) {
+      const rawMessage = error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message || "")
+        : "";
+      const description = rawMessage.includes("Administrator permission required")
+        ? "目前帳號沒有核准使用者的後台管理權限。"
+        : rawMessage || "無法核准這個帳號";
       toast({
         title: "核准失敗",
-        description: error instanceof Error ? error.message : "無法核准這個帳號",
+        description,
         variant: "destructive",
       });
     }
@@ -404,9 +410,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'super_admin': return 'border-rose-200/45 bg-rose-300/18 text-rose-50';
-      case 'admin': return 'border-amber-200/45 bg-amber-300/18 text-amber-50';
-      case 'engineer': return 'border-sky-200/45 bg-sky-300/18 text-sky-50';
+      case 'super_admin': return 'border-cyan-200/45 bg-cyan-300/18 text-cyan-50';
+      case 'admin': return 'border-sky-200/45 bg-sky-300/18 text-sky-50';
+      case 'engineer': return 'border-cyan-200/25 bg-cyan-300/10 text-cyan-100';
       default: return 'border-slate-200/22 bg-white/[0.05] text-slate-200';
     }
   };
@@ -576,7 +582,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               <DialogTrigger asChild>
                 <Button
                   disabled={!canEditUsers}
-                  className="h-10 rounded-lg bg-[#4c8dff] px-4 font-bold text-[#06111f] hover:bg-[#6ba2ff] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="h-10 rounded-lg bg-cyan-300 px-4 font-bold text-[#06111f] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   新增用戶
@@ -622,7 +628,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         <SelectTrigger className="border-cyan-200/22 bg-white/[0.03] text-slate-50">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="border-cyan-200/22 bg-[#213152] text-slate-50">
+                        <SelectContent className="border-cyan-200/22 bg-[#0a2032] text-slate-50">
                           {user?.role === "super_admin" ? (
                             <SelectItem value="super_admin">超級管理員</SelectItem>
                           ) : null}
@@ -695,7 +701,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   <SelectTrigger className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] text-slate-100 shadow-none">
                     <SelectValue placeholder="角色" />
                   </SelectTrigger>
-                  <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
+                  <SelectContent className="border-cyan-200/20 bg-[#0a2032] text-slate-50">
                     <SelectItem value="all-roles">全部角色</SelectItem>
                     <SelectItem value="super_admin">超級管理員</SelectItem>
                     <SelectItem value="admin">管理員</SelectItem>
@@ -708,7 +714,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   <SelectTrigger className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] text-slate-100 shadow-none">
                     <SelectValue placeholder="狀態" />
                   </SelectTrigger>
-                  <SelectContent className="border-cyan-200/20 bg-[#213152] text-slate-50">
+                  <SelectContent className="border-cyan-200/20 bg-[#0a2032] text-slate-50">
                     <SelectItem value="all-status">全部狀態</SelectItem>
                     <SelectItem value="pending">待核准</SelectItem>
                     <SelectItem value="active">啟用</SelectItem>
@@ -739,7 +745,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group relative overflow-hidden rounded-xl border border-[#2a526f] bg-[#0c2539] p-4 transition-colors duration-200 hover:border-[#4c8dff]/70 hover:bg-[#102c43] sm:p-5"
+                      className="group relative overflow-hidden rounded-xl border border-[#2a526f] bg-[#0c2539] p-4 transition-colors duration-200 hover:border-cyan-300/55 hover:bg-[#102c43] sm:p-5"
                     >
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -800,7 +806,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             <Button
                               size="sm"
                               disabled={!canEditUsers}
-                              className="h-9 rounded-xl bg-emerald-300 font-bold text-[#071421] hover:bg-emerald-200"
+                              className="h-9 rounded-xl bg-cyan-300 font-bold text-[#071421] hover:bg-cyan-200"
                               onClick={() => void handleApproveUser(systemUser.id)}
                             >
                               <UserCheck className="mr-1.5 h-3.5 w-3.5" />
