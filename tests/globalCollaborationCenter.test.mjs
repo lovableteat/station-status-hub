@@ -52,6 +52,8 @@ test("the collaboration icon visibly pulses while notifications remain unread", 
   assert.match(source, /notificationUnreadCount > 0/);
   assert.match(source, /motion-safe:animate-pulse/);
   assert.match(source, /BellRing/);
+  assert.match(source, /bg-\[#ff264d\]/);
+  assert.match(source, /aria-live="polite"/);
   assert.match(source, /協作中心有未讀通知/);
 });
 

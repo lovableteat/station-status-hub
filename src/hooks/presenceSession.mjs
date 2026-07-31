@@ -128,3 +128,38 @@ export function selectOnlinePresenceSessions(state) {
     return (a.sessionId || "").localeCompare(b.sessionId || "");
   });
 }
+
+export function selectOnlineAccounts(sessions) {
+  const accountsById = new Map();
+
+  (sessions ?? []).forEach((candidate) => {
+    if (!candidate?.userId) return;
+    const sessionId = candidate.sessionId || candidate.userId;
+    const existing = accountsById.get(candidate.userId);
+
+    if (!existing) {
+      accountsById.set(candidate.userId, {
+        latest: candidate,
+        sessionIds: new Set([sessionId]),
+      });
+      return;
+    }
+
+    existing.sessionIds.add(sessionId);
+    if (getPresenceRecency(candidate) > getPresenceRecency(existing.latest)) {
+      existing.latest = candidate;
+    }
+  });
+
+  return [...accountsById.values()]
+    .map(({ latest, sessionIds }) => ({
+      ...latest,
+      sessionCount: sessionIds.size,
+    }))
+    .sort((a, b) =>
+      (a.displayName || a.username || "").localeCompare(
+        b.displayName || b.username || "",
+        "zh-TW",
+      ),
+    );
+}

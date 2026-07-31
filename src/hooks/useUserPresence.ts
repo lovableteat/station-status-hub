@@ -14,11 +14,11 @@ import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import {
+  createPresenceSessionId,
   createPresenceKey,
   createPresenceTransitionQueue,
-  getOrCreatePresenceDeviceId,
   isCurrentPresenceSession,
-  selectLatestOnlineUsers,
+  selectOnlineAccounts,
   selectOnlinePresenceSessions,
 } from "./presenceSession.mjs";
 
@@ -30,6 +30,7 @@ export interface OnlineUser {
   lastSeen: string;
   currentModule?: string;
   sessionId?: string;
+  sessionCount?: number;
   timestamp?: number;
   isEditing?: {
     module: string;
@@ -51,8 +52,10 @@ type CompatibleConnectionStatus = "connecting" | "online" | "offline" | "error";
 
 interface UserPresenceContextValue {
   allOnlineUsers: OnlineUser[];
+  onlineAccounts: OnlineUser[];
   onlineUsers: OnlineUser[];
   totalOnlineUsers: number;
+  totalOnlineSessions: number;
   otherOnlineUsersCount: number;
   currentSessionId: string;
   connectionState: PresenceConnectionState;
@@ -115,7 +118,7 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
   const currentEditingRef = useRef<OnlineUser["isEditing"]>();
   const currentModuleRef = useRef("dashboard");
   const editingTimerRef = useRef<number>();
-  const sessionIdRef = useRef(getOrCreatePresenceDeviceId());
+  const sessionIdRef = useRef(createPresenceSessionId());
   const presenceGenerationRef = useRef(0);
   const activeUserIdRef = useRef<string | null>(userId);
   const activePresenceRef = useRef<ActivePresenceSession | null>(null);
@@ -357,12 +360,13 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
     };
   }, [retryPresence, userId]);
 
+  const onlineAccounts = useMemo(
+    () => selectOnlineAccounts(allOnlineUsers) as OnlineUser[],
+    [allOnlineUsers],
+  );
   const onlineUsers = useMemo(
-    () =>
-      selectLatestOnlineUsers({
-        online: allOnlineUsers.filter((onlineUser) => onlineUser.userId !== userId),
-      }) as OnlineUser[],
-    [allOnlineUsers, userId],
+    () => onlineAccounts.filter((onlineUser) => onlineUser.userId !== userId),
+    [onlineAccounts, userId],
   );
   const otherOnlineUsersCount = useMemo(
     () =>
@@ -376,8 +380,10 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<UserPresenceContextValue>(
     () => ({
       allOnlineUsers,
+      onlineAccounts,
       onlineUsers,
-      totalOnlineUsers: allOnlineUsers.length,
+      totalOnlineUsers: onlineAccounts.length,
+      totalOnlineSessions: allOnlineUsers.length,
       otherOnlineUsersCount,
       currentSessionId: sessionIdRef.current,
       connectionState,
@@ -391,6 +397,7 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
       allOnlineUsers,
       connectionState,
       connectionStatus,
+      onlineAccounts,
       onlineUsers,
       otherOnlineUsersCount,
       retryPresence,
