@@ -598,8 +598,7 @@ interface SceneNavigatorProps {
   syncState: DataCenterProjectSyncState;
   canEditProjects: boolean;
   onProjectChange: (projectId: string) => void;
-  onCreateProject: () => void;
-  onEditProject: () => void;
+  onManageProjects: () => void;
   sites: SitePlan[];
   selectedSiteId: string;
   onSiteChange: (siteId: string) => void;
@@ -615,14 +614,27 @@ interface SceneNavigatorProps {
   onToggleCollapse?: () => void;
 }
 
+function getDataCenterProjectStats(project: DataCenterProjectSummary) {
+  const sites = project.document.sites ?? [];
+  const facilities = Object.values(project.document.facilityPlans ?? {});
+  return {
+    siteCount: sites.length,
+    rackCount: sites.reduce((sum, site) => sum + site.racks.length, 0),
+    aisleCount: facilities.reduce((sum, facility) => sum + facility.aisles.length, 0),
+    powerFeedCount: facilities.reduce(
+      (sum, facility) => sum + facility.powerFeeds.length,
+      0,
+    ),
+  };
+}
+
 function SceneNavigator({
   projects,
   selectedProjectId,
   syncState,
   canEditProjects,
   onProjectChange,
-  onCreateProject,
-  onEditProject,
+  onManageProjects,
   sites,
   selectedSiteId,
   onSiteChange,
@@ -706,12 +718,16 @@ function SceneNavigator({
                 {syncState === "loading" ? "載入共用資料" : syncState === "saving" ? "儲存變更中" : syncState === "synced" ? "所有登入成員共用" : "本機保護模式"}
               </div>
             </div>
-            {canEditProjects ? (
-              <div className="flex gap-1">
-                <IconTooltipButton label="新增專案" icon={Plus} onClick={onCreateProject} className="h-8 w-8" />
-                <IconTooltipButton label="專案設定" icon={Settings2} onClick={onEditProject} className="h-8 w-8" />
-              </div>
-            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onManageProjects}
+              title={canEditProjects ? "管理與預覽專案" : "預覽專案"}
+              className="h-8 border-cyan-300/20 bg-cyan-400/8 px-2.5 text-[11px] font-bold text-cyan-50 hover:bg-cyan-400/15"
+            >
+              <Settings2 className="mr-1.5 h-3.5 w-3.5" /> 管理專案
+            </Button>
           </div>
           <Select value={selectedProjectId} onValueChange={onProjectChange} disabled={projects.length === 0}>
             <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#081c2d] px-3 text-sm font-semibold text-slate-100">
@@ -757,42 +773,6 @@ function SceneNavigator({
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-4 px-4 py-4">
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-xs font-black text-white">顯示圖層</span>
-              <span className="rounded-full bg-blue-400/10 px-2 py-1 text-[10px] font-bold text-blue-200">{LAYER_OPTIONS.length} 個</span>
-            </div>
-            <div className="space-y-1">
-              {LAYER_OPTIONS.map((layer) => {
-                const Icon = layer.icon;
-                const selected = activeLayer === layer.id;
-                return (
-                  <button
-                    key={layer.id}
-                    type="button"
-                    onClick={() => onLayerChange(layer.id)}
-                    className={cn(
-                      "flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
-                      selected
-                        ? "border-blue-300/45 bg-blue-500/20 text-white shadow-[0_12px_26px_-22px_rgba(59,130,246,0.9)]"
-                        : "border-transparent bg-[#10283d]/55 text-slate-300 hover:border-[#2b5274] hover:bg-[#10283d]"
-                    )}
-                  >
-                    <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border", selected ? "border-blue-200/35 bg-blue-300/15 text-blue-100" : "border-[#214669] bg-[#081c2d] text-blue-200/75")}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">{layer.label}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{layer.description}</span>
-                    </span>
-                    {selected ? <Check className="h-3.5 w-3.5 text-blue-100" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
           <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
             <div className="mb-3 flex items-center justify-between px-1">
               <span className="text-xs font-black text-white">機櫃清單</span>
@@ -1834,10 +1814,13 @@ function ModelLibrary({
         if (!nextOpen) setView("browse");
       }}
     >
-      <DialogContent className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[26px] border border-[#263b59] bg-[#0b1524] p-0 text-slate-100 shadow-[0_34px_100px_-45px_rgba(15,23,42,0.95)] sm:max-w-[1120px]">
-        <DialogHeader className="shrink-0 border-b border-[#20334e] bg-[linear-gradient(135deg,#122238,#0c1728)] px-6 py-5 pr-14 text-left">
+      <DialogContent
+        data-model-catalog="bright-catalog"
+        className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[26px] border border-cyan-200/35 bg-[linear-gradient(145deg,#16334d,#0f253a)] p-0 text-slate-100 shadow-[0_34px_110px_-40px_rgba(34,211,238,0.45)] sm:max-w-[1120px]"
+      >
+        <DialogHeader className="shrink-0 border-b border-cyan-100/20 bg-[linear-gradient(135deg,#214866,#163550)] px-6 py-5 pr-14 text-left">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-blue-300/25 bg-blue-400/12 text-blue-100">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-cyan-100/35 bg-cyan-200/16 text-cyan-50 shadow-[0_10px_28px_-18px_rgba(103,232,249,0.9)]">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
@@ -1849,7 +1832,7 @@ function ModelLibrary({
           </div>
         </DialogHeader>
 
-        <div className="flex shrink-0 gap-1 border-b border-[#20334e] bg-[#0d192a] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
+        <div className="flex shrink-0 gap-1 border-b border-cyan-100/15 bg-[#17344d] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
           {([
             ["browse", "瀏覽與套用"],
             ["import", "匯入新模型"],
@@ -1863,8 +1846,8 @@ function ModelLibrary({
               className={cn(
                 "h-9 cursor-pointer rounded-lg px-4 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                 view === id
-                  ? "bg-blue-500 text-white shadow-[0_8px_24px_-14px_rgba(59,130,246,0.9)]"
-                  : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                  ? "bg-cyan-200 text-cyan-950 shadow-[0_8px_24px_-14px_rgba(103,232,249,0.9)]"
+                  : "text-slate-200 hover:bg-white/[0.10] hover:text-white"
               )}
             >
               {label}
@@ -1872,11 +1855,11 @@ function ModelLibrary({
           ))}
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1 bg-[#102940]">
           <div className="p-5 sm:p-6">
             {view === "browse" ? (
             <section>
-              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-[#20334e] bg-[#0f1d30] p-1.5" role="tablist" aria-label="模型種類">
+              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-cyan-100/20 bg-[#1a3d59] p-1.5" role="tablist" aria-label="模型種類">
                 {([
                   ["rack", `機櫃外框 ${rackModelCount}`],
                   ["l10", `櫃內設備 ${l10ModelCount}`],
@@ -1890,22 +1873,22 @@ function ModelLibrary({
                     className={cn(
                       "h-10 cursor-pointer rounded-lg text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       catalogKind === kind
-                        ? "border border-blue-300/25 bg-blue-500/18 text-blue-50"
-                        : "text-slate-300 hover:bg-white/[0.05] hover:text-white"
+                        ? "border border-cyan-100/35 bg-cyan-200/18 text-cyan-50 shadow-inner"
+                        : "text-slate-200 hover:bg-white/[0.10] hover:text-white"
                     )}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <div className="mb-4 rounded-2xl border border-[#20334e] bg-[#0f1d30] p-3.5">
+              <div className="mb-4 rounded-2xl border border-cyan-100/20 bg-[#1a3d59] p-3.5 shadow-[0_14px_34px_-28px_rgba(103,232,249,0.8)]">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                   <Input
                     value={modelSearch}
                     onChange={(event) => setModelSearch(event.target.value)}
                     placeholder={catalogKind === "rack" ? "搜尋機櫃名稱、廠牌或版本" : "搜尋設備名稱、廠牌、類型或版本"}
-                    className="h-10 border-[#2b405e] bg-[#111f33] pl-9 text-sm text-white placeholder:text-slate-500"
+                    className="h-10 border-cyan-100/25 bg-[#254b66] pl-9 text-sm text-white placeholder:text-slate-300/70 focus-visible:border-cyan-200"
                   />
                 </div>
                 {catalogKind === "l10" ? (
@@ -1920,7 +1903,7 @@ function ModelLibrary({
                           "h-8 shrink-0 rounded-full border px-3 text-[11px] font-black transition-colors",
                           equipmentCategory === option.id
                             ? "border-blue-300/40 bg-blue-500/20 text-blue-50"
-                            : "border-[#2a3d58] bg-[#0b1727] text-slate-400 hover:border-slate-500 hover:text-slate-200",
+                            : "border-cyan-100/15 bg-[#17344d] text-slate-300 hover:border-cyan-100/35 hover:bg-[#204661] hover:text-white",
                         )}
                       >
                         {option.label}
@@ -1948,12 +1931,12 @@ function ModelLibrary({
                         "w-full cursor-pointer rounded-2xl border px-4 py-4 text-left transition-all duration-200",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                         selected
-                          ? "border-blue-300/45 bg-blue-500/14 shadow-[0_18px_42px_-30px_rgba(59,130,246,0.95)]"
-                          : "border-[#20334e] bg-[#0f1d30] hover:border-[#385373] hover:bg-[#13243a]"
+                          ? "border-cyan-100/55 bg-[linear-gradient(135deg,#245b75,#1c4562)] shadow-[0_18px_42px_-28px_rgba(103,232,249,0.85)]"
+                          : "border-cyan-100/18 bg-[#183750] hover:border-cyan-100/40 hover:bg-[#204761]"
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-blue-300/30 bg-blue-400/15 text-blue-100" : "border-[#2a3d58] bg-[#0b1727] text-slate-400")}>
+                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-cyan-100/40 bg-cyan-200/18 text-cyan-50" : "border-cyan-100/20 bg-[#21455f] text-slate-200")}>
                           {model.kind === "l10" ? (() => { const Icon = EQUIPMENT_CATEGORY_ICONS[getEquipmentCategory(model) as RackEquipmentCategory]; return <Icon className="h-5 w-5" />; })() : model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1998,7 +1981,7 @@ function ModelLibrary({
                   );
                 })}
                 {catalogModels.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-dashed border-[#304866] bg-[#0f1d30] px-6 py-12 text-center">
+                  <div className="col-span-full rounded-2xl border border-dashed border-cyan-100/30 bg-[#183750] px-6 py-12 text-center">
                     <Search className="mx-auto h-6 w-6 text-slate-500" />
                     <div className="mt-3 text-sm font-black text-slate-200">找不到符合條件的模型</div>
                     <p className="mt-1 text-xs text-slate-500">清除搜尋或改選其他設備類別。</p>
@@ -2095,14 +2078,14 @@ function ModelLibrary({
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-2 rounded-2xl border border-[#20334e] bg-[#0f1d30] p-3">
+                    <div className="space-y-2 rounded-2xl border border-cyan-100/20 bg-[#183750] p-3">
                       <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
                         <Select
                           value={String(installRackUnit)}
                           onValueChange={(value) => setInstallRackUnit(Number(value))}
                           disabled={!canEdit || availableInstallUnits.length === 0}
                         >
-                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-[#2b405e] bg-[#111f33] font-black text-blue-100">
+                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-cyan-100/25 bg-[#254b66] font-black text-cyan-50">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -2133,7 +2116,7 @@ function ModelLibrary({
                           variant="outline"
                           disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible}
                           onClick={onAssignL10Model}
-                          className="h-10 w-full rounded-xl border-[#2b405e] bg-[#111f33] text-xs font-black text-blue-100 hover:bg-[#182a43]"
+                          className="h-10 w-full rounded-xl border-cyan-100/25 bg-[#254b66] text-xs font-black text-cyan-50 hover:bg-[#2d5a78]"
                         >
                           <Cpu className="mr-2 h-4 w-4" /> 設為整櫃主運算設備
                         </Button>
@@ -2478,6 +2461,10 @@ export function DeploymentPlanningCenter() {
     heightMm: 2200,
   });
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectManagerOpen, setProjectManagerOpen] = useState(false);
+  const [projectPreviewId, setProjectPreviewId] = useState<string | null>(null);
+  const [projectPendingArchive, setProjectPendingArchive] =
+    useState<DataCenterProjectSummary | null>(null);
   const [projectDialogMode, setProjectDialogMode] = useState<"create" | "edit">("create");
   const [projectDraft, setProjectDraft] = useState({ name: "", category: "未分類", description: "" });
 
@@ -3560,17 +3547,29 @@ export function DeploymentPlanningCenter() {
   const addRackFromCurrentModel = () => addRackUsingModel(selectedRack.modelId, false);
 
   const openCreateProject = () => {
+    setProjectManagerOpen(false);
     setProjectDialogMode("create");
     setProjectDraft({ name: "", category: sharedProjects.selectedProject?.category ?? "未分類", description: "" });
     setProjectDialogOpen(true);
   };
 
-  const openEditProject = () => {
-    const project = sharedProjects.selectedProject;
+  const openEditProject = (targetProject?: DataCenterProjectSummary) => {
+    const project = targetProject ?? sharedProjects.selectedProject;
     if (!project) return;
+    setProjectManagerOpen(false);
+    if (project.id !== sharedProjects.selectedProjectId) {
+      sharedProjects.selectProject(project.id);
+    }
     setProjectDialogMode("edit");
     setProjectDraft({ name: project.name, category: project.category, description: project.description });
     setProjectDialogOpen(true);
+  };
+
+  const openProjectManager = () => {
+    setProjectPreviewId(
+      sharedProjects.selectedProjectId || sharedProjects.projects[0]?.id || null
+    );
+    setProjectManagerOpen(true);
   };
 
   const saveProjectSettings = async () => {
@@ -3596,12 +3595,14 @@ export function DeploymentPlanningCenter() {
     }
   };
 
-  const archiveCurrentProject = async () => {
-    const project = sharedProjects.selectedProject;
-    if (!project || !window.confirm(`確定要封存「${project.name}」嗎？`)) return;
+  const archiveProject = async (project: DataCenterProjectSummary) => {
     try {
       await sharedProjects.archiveProject(project.id);
       setProjectDialogOpen(false);
+      setProjectPendingArchive(null);
+      setProjectPreviewId((current) =>
+        current === project.id ? sharedProjects.selectedProjectId : current
+      );
       toast({ title: "專案已封存" });
     } catch (error) {
       toast({
@@ -3612,14 +3613,20 @@ export function DeploymentPlanningCenter() {
     }
   };
 
+  const previewProject = sharedProjects.projects.find(
+    (project) => project.id === projectPreviewId
+  ) ?? sharedProjects.selectedProject ?? sharedProjects.projects[0] ?? null;
+  const previewProjectStats = previewProject
+    ? getDataCenterProjectStats(previewProject)
+    : null;
+
   const navigatorProps: SceneNavigatorProps = {
     projects: sharedProjects.projects,
     selectedProjectId: sharedProjects.selectedProjectId,
     syncState: sharedProjects.syncState,
     canEditProjects: canEdit,
     onProjectChange: sharedProjects.selectProject,
-    onCreateProject: openCreateProject,
-    onEditProject: openEditProject,
+    onManageProjects: openProjectManager,
     sites,
     selectedSiteId,
     onSiteChange: handleSiteChange,
@@ -3659,18 +3666,18 @@ export function DeploymentPlanningCenter() {
 
   const desktopGridClass = leftCollapsed
     ? rightCollapsed
-      ? "lg:grid-cols-[68px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[68px_minmax(0,1fr)_360px]"
+      ? "lg:grid-cols-[76px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[76px_minmax(0,1fr)_360px]"
     : rightCollapsed
-      ? "lg:grid-cols-[304px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[304px_minmax(0,1fr)_360px]";
+      ? "lg:grid-cols-[132px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[132px_minmax(0,1fr)_360px]";
 
   const compactDesktopGridClass = showSceneTools && showRackDetails
     ? desktopGridClass
     : showSceneTools
       ? leftCollapsed
-        ? "lg:grid-cols-[68px_minmax(0,1fr)]"
-        : "lg:grid-cols-[304px_minmax(0,1fr)]"
+        ? "lg:grid-cols-[76px_minmax(0,1fr)]"
+        : "lg:grid-cols-[132px_minmax(0,1fr)]"
       : showRackDetails
         ? rightCollapsed
           ? "lg:grid-cols-[minmax(0,1fr)_68px]"
@@ -3758,9 +3765,58 @@ export function DeploymentPlanningCenter() {
 
         {isDesktopLayout ? (
         <div className={cn("grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3 transition-[grid-template-columns] duration-300 ease-out", compactDesktopGridClass)}>
-          {showSceneTools ? <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
-            <SceneNavigator {...navigatorProps} collapsed={leftCollapsed} onToggleCollapse={() => setLeftCollapsed((value) => !value)} />
-          </aside> : null}
+          {showSceneTools ? (
+            <aside
+              data-testid="data-center-navigation-dock"
+              className="flex min-w-0 flex-col overflow-hidden rounded-[24px] border border-cyan-200/20 bg-[linear-gradient(180deg,#102b42,#0a1d30)] p-2 shadow-[0_24px_70px_rgba(2,8,23,0.42)]"
+            >
+              <div className={cn("flex items-center border-b border-white/10 pb-2", leftCollapsed ? "justify-center" : "justify-between px-1")}>
+                {!leftCollapsed ? (
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-black text-white">操作選單</div>
+                    <div className="mt-0.5 truncate text-[9px] font-semibold text-cyan-100/65">視窗式工具</div>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={leftCollapsed ? "展開 Data Center 選單" : "收合 Data Center 選單"}
+                  onClick={() => setLeftCollapsed((value) => !value)}
+                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-300/10 text-cyan-50 transition-colors hover:bg-cyan-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                >
+                  {leftCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </button>
+              </div>
+
+              <nav aria-label="Data Center 功能選單" className="mt-2 grid gap-2">
+                {[
+                  { id: "scene", label: "場景機櫃", icon: Layers3, tone: "border-cyan-200/25 bg-cyan-300/12 text-cyan-50 hover:bg-cyan-300/22", onClick: () => setMobileLeftOpen(true) },
+                  { id: "projects", label: "專案", icon: FileBox, tone: "border-blue-200/25 bg-blue-300/12 text-blue-50 hover:bg-blue-300/22", onClick: openProjectManager },
+                  { id: "facility", label: "廠房", icon: PencilRuler, tone: "border-emerald-200/25 bg-emerald-300/10 text-emerald-50 hover:bg-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
+                  { id: "models", label: "模型", icon: Boxes, tone: "border-amber-200/25 bg-amber-300/10 text-amber-50 hover:bg-amber-300/20", onClick: () => openModelLibrary("rack") },
+                  { id: "rack", label: "機櫃設定", icon: Server, tone: "border-violet-200/25 bg-violet-300/10 text-violet-50 hover:bg-violet-300/20", onClick: () => setMobileRightOpen(true) },
+                  { id: "plan", label: workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃", icon: Map, tone: workspaceMode === "2d" ? "border-cyan-100/70 bg-cyan-200 text-cyan-950" : "border-slate-200/20 bg-slate-200/10 text-slate-100 hover:bg-slate-200/20", onClick: () => setWorkspaceMode("2d") },
+                ].map((item) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      data-action={item.id}
+                      onClick={item.onClick}
+                      className={cn(
+                        "flex min-h-14 cursor-pointer items-center rounded-2xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                        leftCollapsed ? "justify-center px-2" : "flex-col justify-center gap-1 px-2 py-2 text-center",
+                        item.tone,
+                      )}
+                    >
+                      <ItemIcon className="h-[18px] w-[18px] shrink-0" />
+                      {!leftCollapsed ? <span className="text-[10px] font-black leading-4">{item.label}</span> : null}
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+          ) : null}
 
           <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
             {workspaceMode === "3d" ? (
@@ -4121,6 +4177,198 @@ export function DeploymentPlanningCenter() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={projectManagerOpen} onOpenChange={setProjectManagerOpen}>
+          <DialogContent className="flex h-[min(88dvh,760px)] w-[min(96vw,1040px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#081725] p-0 text-slate-100 sm:max-w-[1040px]">
+            <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
+              <DialogTitle className="flex items-center gap-2 text-white">
+                <FileBox className="h-5 w-5 text-cyan-300" /> Data Center 專案管理
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                在同一個視窗完成新增、預覽、開啟、編輯與封存，避免功能散落在側欄。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid min-h-0 flex-1 md:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="flex min-h-0 flex-col border-b border-white/10 md:border-b-0 md:border-r">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                  <div>
+                    <div className="text-sm font-black text-white">專案清單</div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">共 {sharedProjects.projects.length} 個共用專案</div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!canEdit}
+                    onClick={openCreateProject}
+                    className="h-9 bg-cyan-300 font-bold text-[#071421] hover:bg-cyan-200"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" /> 新增
+                  </Button>
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="space-y-2 p-3">
+                    {sharedProjects.projects.map((project) => {
+                      const active = project.id === sharedProjects.selectedProjectId;
+                      const previewed = project.id === previewProject?.id;
+                      return (
+                        <div
+                          key={project.id}
+                          className={cn(
+                            "rounded-2xl border p-3 transition-colors",
+                            previewed
+                              ? "border-cyan-300/45 bg-cyan-400/10"
+                              : "border-white/10 bg-[#0c2235] hover:border-cyan-300/25"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setProjectPreviewId(project.id)}
+                            className="w-full text-left"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-black text-white">{project.name}</div>
+                                <div className="mt-1 truncate text-[11px] text-cyan-100/70">{project.category}</div>
+                              </div>
+                              {active ? (
+                                <Badge className="border-0 bg-emerald-400/12 text-[10px] text-emerald-200">使用中</Badge>
+                              ) : null}
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">
+                              {project.description || "尚未填寫專案說明"}
+                            </p>
+                          </button>
+                          <div className="mt-3 flex items-center gap-2 border-t border-white/8 pt-3">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                sharedProjects.selectProject(project.id);
+                                setProjectManagerOpen(false);
+                              }}
+                              className="h-8 flex-1 border-cyan-300/20 bg-cyan-400/8 text-xs text-cyan-50 hover:bg-cyan-400/15"
+                            >
+                              <Eye className="mr-1.5 h-3.5 w-3.5" /> 開啟
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              disabled={!canEdit}
+                              aria-label={`編輯 ${project.name}`}
+                              onClick={() => openEditProject(project)}
+                              className="h-8 w-8 border-white/12 bg-white/[0.03] text-slate-200"
+                            >
+                              <Settings2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              disabled={!canEdit || sharedProjects.projects.length <= 1}
+                              aria-label={`封存 ${project.name}`}
+                              onClick={() => setProjectPendingArchive(project)}
+                              className="h-8 w-8 border-rose-300/20 bg-rose-400/8 text-rose-100 hover:bg-rose-400/15"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div className="min-h-0 overflow-y-auto p-5 md:p-6">
+                {previewProject && previewProjectStats ? (
+                  <div className="space-y-5">
+                    <div className="rounded-3xl border border-cyan-300/20 bg-[linear-gradient(145deg,#102c42,#0a1b2b)] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] font-black tracking-[0.14em] text-cyan-200/70">PROJECT PREVIEW</div>
+                          <h3 className="mt-2 text-2xl font-black text-white">{previewProject.name}</h3>
+                          <p className="mt-1 text-sm font-semibold text-cyan-100/75">{previewProject.category}</p>
+                        </div>
+                        <Badge className="border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                          {previewProject.id === sharedProjects.selectedProjectId ? "目前使用中" : "可開啟"}
+                        </Badge>
+                      </div>
+                      <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+                        {previewProject.description || "尚未填寫專案說明。"}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      {[
+                        ["站點", previewProjectStats.siteCount],
+                        ["機櫃", previewProjectStats.rackCount],
+                        ["冷熱通道", previewProjectStats.aisleCount],
+                        ["電力來源", previewProjectStats.powerFeedCount],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                          <div className="text-[11px] font-bold text-slate-400">{label}</div>
+                          <div className="mt-2 text-2xl font-black tabular-nums text-white">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-black text-white">站點內容</div>
+                        <div className="text-[11px] text-slate-500">更新 {new Date(previewProject.updatedAt).toLocaleString("zh-TW")}</div>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {previewProject.document.sites.map((site) => (
+                          <div key={site.id} className="rounded-xl border border-white/8 bg-[#081725] px-3 py-3">
+                            <div className="font-bold text-slate-100">{site.label}</div>
+                            <div className="mt-1 text-xs text-slate-400">{site.racks.length} 座機櫃 · {site.phase}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button type="button" variant="outline" disabled={!canEdit} onClick={() => openEditProject(previewProject)} className="border-white/12 bg-white/[0.03] text-slate-100">
+                        <Settings2 className="mr-2 h-4 w-4" /> 編輯資料
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          sharedProjects.selectProject(previewProject.id);
+                          setProjectManagerOpen(false);
+                        }}
+                        className="bg-cyan-300 font-bold text-[#071421] hover:bg-cyan-200"
+                      >
+                        <Eye className="mr-2 h-4 w-4" /> 開啟此專案
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-400">尚無可預覽專案</div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={Boolean(projectPendingArchive)} onOpenChange={(open) => !open && setProjectPendingArchive(null)}>
+          <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+            <AlertDialogHeader>
+              <AlertDialogTitle>封存「{projectPendingArchive?.name}」？</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-300">
+                封存後會從所有成員的 Data Center 專案清單移除，既有其他專案不受影響。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-white/12 bg-white/[0.04] text-slate-100">取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => projectPendingArchive && void archiveProject(projectPendingArchive)}
+                className="bg-rose-500 text-white hover:bg-rose-400"
+              >
+                確認封存
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
           <DialogContent className="w-[min(94vw,560px)] max-w-none border border-cyan-300/20 bg-[#0b1b2b] p-0 text-slate-100 sm:max-w-[560px]">
             <DialogHeader className="border-b border-white/10 px-6 py-5 pr-14 text-left">
@@ -4147,7 +4395,13 @@ export function DeploymentPlanningCenter() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
                 {projectDialogMode === "edit" ? (
-                  <Button type="button" variant="outline" onClick={() => void archiveCurrentProject()} className="border-rose-300/20 bg-rose-400/8 text-rose-100 hover:bg-rose-400/15">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => sharedProjects.selectedProject && setProjectPendingArchive(sharedProjects.selectedProject)}
+                    disabled={sharedProjects.projects.length <= 1}
+                    className="border-rose-300/20 bg-rose-400/8 text-rose-100 hover:bg-rose-400/15"
+                  >
                     <Trash2 className="mr-2 h-4 w-4" />封存專案
                   </Button>
                 ) : <span />}
