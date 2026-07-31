@@ -24,6 +24,11 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /<DirectMessagesPanel/);
   assert.match(centerSource, /open-global-collaboration/);
   assert.match(centerSource, /全部標為已讀/);
+  assert.match(centerSource, /清除全部已讀/);
+  assert.match(centerSource, /dismiss_user_notification/);
+  assert.match(centerSource, /dismiss_read_user_notifications/);
+  assert.match(centerSource, /已讀後可刪除/);
+  assert.match(centerSource, /搜尋姓名、帳號、角色或所在頁面/);
   assert.match(centerSource, /尚未取得在線名單/);
   assert.doesNotMatch(centerSource, /目前只有您在線上/);
 });
@@ -75,8 +80,24 @@ test("admin can send announcements and inspect live users from one panel", async
   assert.match(panelSource, /isMissingAnnouncementRpc/);
   assert.match(panelSource, /from\("user_notifications"\)\.insert/);
   assert.match(panelSource, /全體啟用帳號/);
+  assert.match(panelSource, /搜尋姓名、帳號或角色/);
+  assert.match(panelSource, /全選結果/);
+  assert.match(panelSource, /查看完整內容/);
   assert.match(panelSource, /發送紀錄/);
   assert.match(panelSource, /在線位置/);
+});
+
+test("recipients can dismiss only their own read notifications without deleting audit history", async () => {
+  const migration = await readSource(
+    "supabase/migrations/20260731150000_secure_notification_dismissal.sql",
+  );
+
+  assert.match(migration, /dismiss_user_notification/i);
+  assert.match(migration, /dismiss_read_user_notifications/i);
+  assert.match(migration, /recipient_id = v_system_user_id/i);
+  assert.match(migration, /is_read = true/i);
+  assert.match(migration, /archived_at = now\(\)/i);
+  assert.doesNotMatch(migration, /DELETE FROM public\.user_notifications/i);
 });
 
 test("admin announcements are inserted server-side with role and recipient checks", async () => {
