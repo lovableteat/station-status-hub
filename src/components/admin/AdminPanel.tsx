@@ -558,9 +558,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           />
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-1 flex-col gap-3">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-col gap-3">
         {/* User Management Tab */}
-        <TabsContent value="users" className="mt-0 flex flex-1 flex-col gap-3">
+        <TabsContent value="users" className="mt-0 flex flex-col gap-3">
           <section className="admin-user-section flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
@@ -1064,12 +1064,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           </Card>
         </TabsContent> : null}
 
-        <TabsContent value="collaboration" className="mt-0 flex-1">
+        <TabsContent value="collaboration" className="mt-0">
           <AdminCollaborationPanel canSend={canEditUsers} />
         </TabsContent>
 
         {canViewApiManagement ? (
-          <TabsContent value="api-management" className="mt-0 flex-1">
+          <TabsContent value="api-management" className="mt-0">
             <ApiManagementPage />
           </TabsContent>
         ) : null}
