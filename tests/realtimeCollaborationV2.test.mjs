@@ -100,7 +100,7 @@ test("stale cached sessions use the same login page before private providers mou
   );
   assert.match(context, /sessionResult\.status !== "fulfilled"/);
   const bootstrapFailureBlock = context.match(
-    /if \(sessionResult\.status !== "fulfilled"\) \{([\s\S]*?)\n\s*\}\n\n\s*if \(sessionResult\.value\.error\)/,
+    /if \(sessionResult\.status !== "fulfilled"\) \{([\s\S]*?)\r?\n\s*\}\r?\n\r?\n\s*if \(sessionResult\.value\.error\)/,
   )?.[1];
   assert.match(
     bootstrapFailureBlock ?? "",

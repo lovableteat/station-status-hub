@@ -31,16 +31,27 @@ export interface AuthenticationResult {
   mode: Exclude<SessionMode, "signed-out">;
 }
 
+export interface RegistrationResult {
+  success: boolean;
+  code: string;
+}
+
 interface UserContextType {
   user: User | null;
   login: (userId: string, username: string, role: string, displayName: string) => void;
   authenticate: (username: string, password: string) => Promise<AuthenticationResult | null>;
+  registerAccount: (
+    displayName: string,
+    username: string,
+    password: string,
+  ) => Promise<RegistrationResult>;
   logout: () => void;
   isLoggedIn: boolean;
   isInitializing: boolean;
   sessionMode: SessionMode;
   isRealtimeAuthenticated: boolean;
   requiresRealtimeUpgrade: boolean;
+  reauthRequired: boolean;
 }
 
 interface AccountLoginPayload {
@@ -57,6 +68,8 @@ interface AccountLoginPayload {
 }
 
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;
+const AUTH_SESSION_VERSION = "2026-07-31-registration-v1";
+const AUTH_SESSION_VERSION_KEY = "bringup-auth-session-version";
 
 async function authorizeRealtime(session: Session) {
   // Private Realtime channels must receive the current JWT before subscribe().
@@ -107,6 +120,25 @@ function storeUser(user: User | null) {
     else window.localStorage.removeItem("user");
   } catch {
     // Session state still works when browser storage is unavailable.
+  }
+}
+
+function hasCurrentSessionVersion() {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(AUTH_SESSION_VERSION_KEY) === AUTH_SESSION_VERSION;
+  } catch {
+    return false;
+  }
+}
+
+function storeCurrentSessionVersion(enabled: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (enabled) window.localStorage.setItem(AUTH_SESSION_VERSION_KEY, AUTH_SESSION_VERSION);
+    else window.localStorage.removeItem(AUTH_SESSION_VERSION_KEY);
+  } catch {
+    // Storage restrictions are handled as a signed-out session on next load.
   }
 }
 
@@ -201,6 +233,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // A cached application user may still have a valid Supabase session waiting
   // to be restored. Keep the global session gate closed until that check ends.
   const [isInitializing, setIsInitializing] = useState(!demoUser);
+  const [reauthRequired, setReauthRequired] = useState(false);
   const authenticatedSessionSeen = useRef(false);
 
   const applyUser = useCallback((nextUser: User, mode: Exclude<SessionMode, "signed-out">) => {
@@ -224,7 +257,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (!active) return;
 
       try {
-        if (!session) return;
+        if (!session) {
+          setUser(null);
+          setSessionMode("signed-out");
+          storeUser(null);
+          return;
+        }
+
+        if (!hasCurrentSessionVersion()) {
+          setUser(null);
+          setSessionMode("signed-out");
+          storeUser(null);
+          setReauthRequired(true);
+          authenticatedSessionSeen.current = false;
+          void supabase.auth.signOut({ scope: "local" });
+          return;
+        }
 
         authenticatedSessionSeen.current = true;
         void authorizeRealtime(session);
@@ -249,6 +297,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (!active) return;
         if (authenticatedUser) {
+          setReauthRequired(false);
           applyUser(authenticatedUser, "authenticated");
           return;
         }
@@ -256,6 +305,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setSessionMode("signed-out");
         storeUser(null);
+        storeCurrentSessionVersion(false);
         void supabase.auth.signOut({ scope: "local" });
       } finally {
         if (active) setIsInitializing(false);
@@ -325,11 +375,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
         );
 
         if (!edgeResult.error && edgeResult.data?.success && edgeResult.data.session) {
+          // Write the version before setSession(), because the auth listener can
+          // run synchronously while the new session is being established.
+          storeCurrentSessionVersion(true);
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: edgeResult.data.session.access_token,
             refresh_token: edgeResult.data.session.refresh_token,
           });
           if (!sessionError) {
+            setReauthRequired(false);
             void authorizeRealtime(edgeResult.data.session);
             const profile = edgeResult.data.system_user;
             if (profile?.user_id && profile.username && profile.role) {
@@ -344,6 +398,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             }
             throw new Error("Authenticated account profile is incomplete");
           } else {
+            storeCurrentSessionVersion(false);
             throw normalizeThrownError(sessionError, "Unable to establish authenticated session");
           }
         }
@@ -382,10 +437,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [applyUser],
   );
 
+  const registerAccount = useCallback(
+    async (displayName: string, username: string, password: string): Promise<RegistrationResult> => {
+      const { data, error } = await supabase.rpc("register_system_user", {
+        display_name_input: displayName.trim(),
+        username_input: username.trim(),
+        password_input: password,
+      });
+      if (error) throw normalizeThrownError(error, "Account registration failed");
+      const result = Array.isArray(data) ? data[0] : null;
+      return {
+        success: result?.success === true,
+        code: result?.code ?? "REGISTRATION_FAILED",
+      };
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     setUser(null);
     setSessionMode("signed-out");
     storeUser(null);
+    storeCurrentSessionVersion(false);
+    setReauthRequired(false);
     void supabase.auth.signOut({ scope: "local" });
   }, []);
 
@@ -422,15 +496,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
         user,
         login,
         authenticate,
+        registerAccount,
         logout,
         isLoggedIn: user !== null,
         isInitializing,
         sessionMode,
         isRealtimeAuthenticated,
         requiresRealtimeUpgrade,
+        reauthRequired,
       };
     },
-    [authenticate, isInitializing, login, logout, sessionMode, user],
+    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, user],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
