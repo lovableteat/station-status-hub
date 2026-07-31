@@ -170,6 +170,9 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {editValues.status === "pending" ? (
+                    <SelectItem value="pending" disabled>待管理員核准</SelectItem>
+                  ) : null}
                   <SelectItem value="active">啟用</SelectItem>
                   <SelectItem value="inactive">停用</SelectItem>
                 </SelectContent>

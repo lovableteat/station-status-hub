@@ -654,6 +654,63 @@ export type Database = {
         }
         Relationships: []
       }
+      data_center_projects: {
+        Row: {
+          archived_at: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          document: Json
+          id: string
+          name: string
+          project_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          document?: Json
+          id?: string
+          name: string
+          project_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          document?: Json
+          id?: string
+          name?: string
+          project_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_center_projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_center_projects_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       engineers: {
         Row: {
           created_at: string | null
@@ -1697,42 +1754,68 @@ export type Database = {
       }
       system_users: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
+          auth_migrated_at: string | null
+          auth_user_id: string | null
           created_at: string
           created_by: string | null
           display_name: string | null
           id: string
+          last_seen_at: string | null
           password_hash: string
           permissions: Json | null
           role: string
+          registration_requested_at: string | null
           status: string | null
           updated_at: string
           username: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          auth_migrated_at?: string | null
+          auth_user_id?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
           id?: string
+          last_seen_at?: string | null
           password_hash: string
           permissions?: Json | null
           role?: string
+          registration_requested_at?: string | null
           status?: string | null
           updated_at?: string
           username: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          auth_migrated_at?: string | null
+          auth_user_id?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
           id?: string
+          last_seen_at?: string | null
           password_hash?: string
           permissions?: Json | null
           role?: string
+          registration_requested_at?: string | null
           status?: string | null
           updated_at?: string
           username?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "system_users_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       systems: {
         Row: {
@@ -3469,6 +3552,10 @@ export type Database = {
       }
     }
     Functions: {
+      approve_system_user: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       authenticate_user: {
         Args: { password_input: string; username_input: string }
         Returns: {
@@ -3479,6 +3566,8 @@ export type Database = {
           username: string
         }[]
       }
+      can_edit_data_center_projects: { Args: never; Returns: boolean }
+      can_view_data_center_projects: { Args: never; Returns: boolean }
       load_pcb_designer_workspace: {
         Args: { p_user_id: string }
         Returns: Json
@@ -3602,6 +3691,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      register_system_user: {
+        Args: {
+          display_name_input: string
+          password_input: string
+          username_input: string
+        }
+        Returns: {
+          code: string
+          success: boolean
+        }[]
       }
       reorder_test_flow_items: {
         Args: {
