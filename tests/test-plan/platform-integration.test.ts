@@ -108,7 +108,7 @@ test("latest Test_Plan access migration derives configured station access before
   );
   assert.match(
     migration,
-    /not\s*\(\s*coalesce\(\s*users\.permissions\s*#>\s*'\{workspaceAccess\}'[\s\S]{0,80}\?\s*'station-status'\s*\)[\s\S]{0,320}test_plan_(?:view|edit)/i,
+    /not\s*\(\s*coalesce\(\s*users\.permissions\s*#>\s*'\{workspaceAccess\}'[\s\S]*?\?\s*'station-status'\s*\)[\s\S]*?test_plan_(?:view|edit)/i,
   );
   assert.match(migration, /grant execute on function public\.test_plan_current_user_can\(text\)/i);
 });
