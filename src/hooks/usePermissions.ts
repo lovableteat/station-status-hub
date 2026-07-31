@@ -167,8 +167,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [reloadPermissions, user?.userId]);
 
   const workspacePermissions = useMemo(
-    () => readWorkspaceAccess(permissionSettings),
-    [permissionSettings]
+    () => readWorkspaceAccess(permissionSettings, permissions),
+    [permissionSettings, permissions]
   );
   const isAdmin =
     accountActive &&

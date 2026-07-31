@@ -15,7 +15,11 @@ const permissionsModule = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
 );
 
-const { canAccessModule, synchronizeWorkspacePermissions } = permissionsModule;
+const {
+  canAccessModule,
+  readWorkspaceAccess,
+  synchronizeWorkspacePermissions,
+} = permissionsModule;
 
 const configured = (workspaceAccess) => ({ workspaceAccess });
 
@@ -230,5 +234,89 @@ test("workspace preset synchronizes station page permissions", () => {
   assert.deepEqual(
     synchronizeWorkspacePermissions(existing, "station-status", "none"),
     ["admin_view"]
+  );
+});
+
+test("permission settings expose the same six workspaces as the home page", () => {
+  const access = readWorkspaceAccess(
+    {},
+    ["dashboard_view", "data_center_edit", "pcb_designer_view", "admin_edit", "comparison_view"],
+  );
+
+  assert.deepEqual(Object.keys(access), [
+    "station-status",
+    "material-requests",
+    "data-center",
+    "pcb-designer",
+    "user-management",
+    "ai-chat",
+  ]);
+  assert.equal(access["station-status"], "view");
+  assert.equal(access["data-center"], "edit");
+  assert.equal(access["user-management"], "edit");
+  assert.equal(access["ai-chat"], "view");
+});
+
+test("backend workspace level still respects its detailed page permissions", () => {
+  const base = {
+    role: "engineer",
+    permissionSettings: configured({ "user-management": "edit" }),
+  };
+
+  assert.equal(
+    canAccessModule({
+      ...base,
+      module: "users",
+      action: "edit",
+      permissions: ["api_management_edit"],
+    }),
+    false,
+  );
+  assert.equal(
+    canAccessModule({
+      ...base,
+      module: "api-management",
+      action: "edit",
+      permissions: ["api_management_edit"],
+    }),
+    true,
+  );
+});
+
+test("explicit AI workspace access is independent from API management", () => {
+  const base = {
+    module: "ai-chat",
+    role: "engineer",
+    permissions: ["api_management_edit"],
+  };
+
+  assert.equal(
+    canAccessModule({
+      ...base,
+      action: "view",
+      permissionSettings: configured({ "ai-chat": "none" }),
+    }),
+    false,
+  );
+  assert.equal(
+    canAccessModule({
+      ...base,
+      action: "view",
+      permissionSettings: configured({ "ai-chat": "view" }),
+    }),
+    true,
+  );
+});
+
+test("legacy AI users keep access until the new workspace is explicitly configured", () => {
+  assert.equal(
+    canAccessModule({
+      module: "ai-chat",
+      action: "view",
+      role: "engineer",
+      permissions: ["api_management_view"],
+      permissionSettings: {},
+    }),
+    true,
   );
 });

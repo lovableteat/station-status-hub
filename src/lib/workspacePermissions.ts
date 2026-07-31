@@ -28,7 +28,9 @@ export type WorkspaceId =
   | "station-status"
   | "material-requests"
   | "data-center"
-  | "pcb-designer";
+  | "pcb-designer"
+  | "user-management"
+  | "ai-chat";
 
 export type WorkspaceAccessLevel = "none" | "view" | "edit";
 
@@ -37,6 +39,8 @@ export interface WorkspaceAccessMap {
   "material-requests": WorkspaceAccessLevel;
   "data-center": WorkspaceAccessLevel;
   "pcb-designer": WorkspaceAccessLevel;
+  "user-management": WorkspaceAccessLevel;
+  "ai-chat": WorkspaceAccessLevel;
 }
 
 export interface UserPermissionSettings {
@@ -49,13 +53,17 @@ export const DEFAULT_WORKSPACE_ACCESS: WorkspaceAccessMap = {
   "material-requests": "none",
   "data-center": "none",
   "pcb-designer": "none",
+  "user-management": "none",
+  "ai-chat": "none",
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   "station-status": "機台維修紀錄中心",
   "material-requests": "料號申請",
-  "data-center": "Data-center",
+  "data-center": "Data Center",
   "pcb-designer": "PCB Designer",
+  "user-management": "後台管理",
+  "ai-chat": "資料查詢空間",
 };
 
 export const WORKSPACE_IDS = Object.keys(WORKSPACE_LABELS) as WorkspaceId[];
@@ -72,6 +80,10 @@ export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   data: "data-center",
   "data-center": "data-center",
   "pcb-designer": "pcb-designer",
+  users: "user-management",
+  collaboration: "user-management",
+  "api-management": "user-management",
+  "ai-chat": "ai-chat",
 };
 
 export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
@@ -82,7 +94,9 @@ export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
   issues: "issues",
   tools: "tools",
   users: "admin",
+  collaboration: "admin",
   "api-management": "api_management",
+  "ai-chat": "comparison",
   comparison: "comparison",
   "material-requests": "data_center",
   data: "data_center",
@@ -202,16 +216,69 @@ export function normalizeWorkspaceAccess(
     "material-requests": value?.["material-requests"] ?? "none",
     "data-center": value?.["data-center"] ?? "none",
     "pcb-designer": pcbAccess,
+    "user-management": value?.["user-management"] ?? "none",
+    "ai-chat": value?.["ai-chat"] ?? "none",
   };
 }
 
-export function readWorkspaceAccess(value: unknown): WorkspaceAccessMap {
-  if (!value || typeof value !== "object") {
-    return DEFAULT_WORKSPACE_ACCESS;
+function getLegacyAccessLevel(
+  permissions: Permission[],
+  prefixes: string[],
+): WorkspaceAccessLevel {
+  if (prefixes.some((prefix) => permissions.includes(`${prefix}_edit` as Permission))) {
+    return "edit";
   }
+  if (prefixes.some((prefix) => permissions.includes(`${prefix}_view` as Permission))) {
+    return "view";
+  }
+  return "none";
+}
 
-  const workspaceAccess = (value as UserPermissionSettings).workspaceAccess;
-  return normalizeWorkspaceAccess(workspaceAccess);
+export function readWorkspaceAccess(
+  value: unknown,
+  permissions: Permission[] = [],
+): WorkspaceAccessMap {
+  const settings = value && typeof value === "object"
+    ? value as UserPermissionSettings
+    : {};
+  const configured = settings.workspaceAccess;
+  const normalized = normalizeWorkspaceAccess(configured);
+  const hasOwn = (workspace: WorkspaceId) => Boolean(
+    configured && Object.prototype.hasOwnProperty.call(configured, workspace),
+  );
+
+  const stationLevel = getLegacyAccessLevel(permissions, [
+    "dashboard",
+    "test_tracker",
+    "flow_info",
+    "issues",
+    "production",
+    "tools",
+    "test_plan",
+  ]);
+  const dataCenterLevel = getLegacyAccessLevel(permissions, ["data_center"]);
+  const apiLevel = getLegacyAccessLevel(permissions, ["api_management"]);
+
+  return {
+    "station-status": hasOwn("station-status")
+      ? normalized["station-status"]
+      : stationLevel,
+    "material-requests": hasOwn("material-requests")
+      ? normalized["material-requests"]
+      : dataCenterLevel,
+    "data-center": hasOwn("data-center")
+      ? normalized["data-center"]
+      : dataCenterLevel,
+    "pcb-designer": hasOwn("pcb-designer") || hasOwn("data-center")
+      ? normalized["pcb-designer"]
+      : getLegacyAccessLevel(permissions, ["pcb_designer", "data_center"]),
+    "user-management": hasOwn("user-management")
+      ? normalized["user-management"]
+      : getLegacyAccessLevel(permissions, ["admin", "api_management"]),
+    "ai-chat": hasOwn("ai-chat")
+      ? normalized["ai-chat"]
+      : getLegacyAccessLevel(permissions, ["comparison", "api_management"]),
+  };
 }
 
 const STATION_STATUS_PERMISSIONS = Object.entries(MODULE_WORKSPACE_MAP)
@@ -222,6 +289,13 @@ const STATION_STATUS_PERMISSIONS = Object.entries(MODULE_WORKSPACE_MAP)
       ? ([`${prefix}_view`, `${prefix}_edit`] as Permission[])
       : [];
   });
+
+const USER_MANAGEMENT_PERMISSIONS: Permission[] = [
+  "admin_view",
+  "admin_edit",
+  "api_management_view",
+  "api_management_edit",
+];
 
 function hasConfiguredWorkspace(
   settings: UserPermissionSettings | null | undefined,
@@ -257,6 +331,19 @@ function hasPagePermission(
   );
 }
 
+function hasCompatiblePagePermission(
+  module: string,
+  action: "view" | "edit",
+  permissions: Permission[],
+) {
+  if (hasPagePermission(module, action, permissions)) return true;
+
+  // 資料查詢空間曾與 API 管理共用權限；未完成新版工作區設定前保留舊帳號入口。
+  return module === "ai-chat"
+    ? hasPagePermission("api-management", action, permissions)
+    : false;
+}
+
 export function canAccessModule({
   module,
   action,
@@ -274,11 +361,11 @@ export function canAccessModule({
 
   const workspace = MODULE_WORKSPACE_MAP[module];
   if (!workspace) {
-    return hasPagePermission(module, action, permissions);
+    return hasCompatiblePagePermission(module, action, permissions);
   }
 
   if (!hasConfiguredWorkspace(permissionSettings, workspace)) {
-    return hasPagePermission(module, action, permissions);
+    return hasCompatiblePagePermission(module, action, permissions);
   }
 
   const level = normalizeWorkspaceAccess(permissionSettings?.workspaceAccess)[workspace];
@@ -290,11 +377,9 @@ export function canAccessModule({
   // its complete permission contract.
   if (module === "test-plan") return true;
 
-  // Material requests, Data-center, and PCB Designer each contain one page, so
-  // the workspace level is their complete permission. Other maintenance pages
-  // retain their existing fine-grained permission checks.
-  if (workspace !== "station-status") return true;
-  return hasPagePermission(module, action, permissions);
+  // 單頁工作區直接以工作區層級為完整權限；維修中心與後台管理仍需符合內頁權限。
+  if (workspace !== "station-status" && workspace !== "user-management") return true;
+  return hasCompatiblePagePermission(module, action, permissions);
 }
 
 export function synchronizeWorkspacePermissions(
@@ -302,17 +387,22 @@ export function synchronizeWorkspacePermissions(
   workspace: WorkspaceId,
   level: WorkspaceAccessLevel
 ) {
-  if (workspace !== "station-status") return current;
+  const workspacePermissions = workspace === "station-status"
+    ? STATION_STATUS_PERMISSIONS
+    : workspace === "user-management"
+      ? USER_MANAGEMENT_PERMISSIONS
+      : null;
+  if (!workspacePermissions) return current;
 
   const outsideWorkspace = current.filter(
-    (permission) => !STATION_STATUS_PERMISSIONS.includes(permission)
+    (permission) => !workspacePermissions.includes(permission)
   );
   if (level === "none") return outsideWorkspace;
 
-  const stationPermissions = STATION_STATUS_PERMISSIONS.filter(
+  const scopedPermissions = workspacePermissions.filter(
     (permission) => level === "edit" || permission.endsWith("_view")
   );
-  return Array.from(new Set([...outsideWorkspace, ...stationPermissions]));
+  return Array.from(new Set([...outsideWorkspace, ...scopedPermissions]));
 }
 
 export function getWorkspaceLevelLabel(level: WorkspaceAccessLevel) {
