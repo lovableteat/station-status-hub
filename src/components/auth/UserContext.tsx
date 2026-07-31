@@ -68,7 +68,7 @@ interface AccountLoginPayload {
 }
 
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;
-const AUTH_SESSION_VERSION = "2026-07-31-registration-v1";
+const AUTH_SESSION_VERSION = "2026-07-31-tab-isolation-v2";
 const AUTH_SESSION_VERSION_KEY = "bringup-auth-session-version";
 
 async function authorizeRealtime(session: Session) {
@@ -88,7 +88,7 @@ function readStoredUser(): User | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const savedUser = window.localStorage.getItem("user");
+    const savedUser = window.sessionStorage.getItem("user");
     if (!savedUser) return null;
 
     const parsed = JSON.parse(savedUser) as Partial<User>;
@@ -98,14 +98,14 @@ function readStoredUser(): User | null {
       typeof parsed.role !== "string" ||
       typeof parsed.displayName !== "string"
     ) {
-      window.localStorage.removeItem("user");
+      window.sessionStorage.removeItem("user");
       return null;
     }
 
     return parsed as User;
   } catch {
     try {
-      window.localStorage.removeItem("user");
+      window.sessionStorage.removeItem("user");
     } catch {
       // Blocked storage must not prevent the application from starting.
     }
@@ -116,8 +116,8 @@ function readStoredUser(): User | null {
 function storeUser(user: User | null) {
   if (typeof window === "undefined") return;
   try {
-    if (user) window.localStorage.setItem("user", JSON.stringify(user));
-    else window.localStorage.removeItem("user");
+    if (user) window.sessionStorage.setItem("user", JSON.stringify(user));
+    else window.sessionStorage.removeItem("user");
   } catch {
     // Session state still works when browser storage is unavailable.
   }
@@ -126,7 +126,7 @@ function storeUser(user: User | null) {
 function hasCurrentSessionVersion() {
   if (typeof window === "undefined") return true;
   try {
-    return window.localStorage.getItem(AUTH_SESSION_VERSION_KEY) === AUTH_SESSION_VERSION;
+    return window.sessionStorage.getItem(AUTH_SESSION_VERSION_KEY) === AUTH_SESSION_VERSION;
   } catch {
     return false;
   }
@@ -135,8 +135,8 @@ function hasCurrentSessionVersion() {
 function storeCurrentSessionVersion(enabled: boolean) {
   if (typeof window === "undefined") return;
   try {
-    if (enabled) window.localStorage.setItem(AUTH_SESSION_VERSION_KEY, AUTH_SESSION_VERSION);
-    else window.localStorage.removeItem(AUTH_SESSION_VERSION_KEY);
+    if (enabled) window.sessionStorage.setItem(AUTH_SESSION_VERSION_KEY, AUTH_SESSION_VERSION);
+    else window.sessionStorage.removeItem(AUTH_SESSION_VERSION_KEY);
   } catch {
     // Storage restrictions are handled as a signed-out session on next load.
   }

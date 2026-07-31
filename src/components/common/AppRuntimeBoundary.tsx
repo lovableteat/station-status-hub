@@ -62,6 +62,7 @@ export class AppRuntimeBoundary extends Component<
   private handleResetSession = () => {
     try {
       window.localStorage.removeItem("user");
+      window.sessionStorage.removeItem("user");
       window.sessionStorage.removeItem(CHUNK_RETRY_KEY);
       window.sessionStorage.removeItem("station-status-hub:boot-retry");
     } catch {

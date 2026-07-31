@@ -6,6 +6,31 @@ import { createBoundedAuthFetch, createBoundedAuthLock } from './authLockPolicy.
 export const SUPABASE_URL = "https://rfppeuzuoxtqkpbwehbq.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "[REMOVED_SUPABASE_PUBLISHABLE_KEY]";
 
+const AUTH_STORAGE_POINTER = "bringup-auth-active-storage-key";
+
+function createTabAuthStorageKey() {
+  if (typeof window === "undefined") return undefined;
+
+  const storage = window.sessionStorage;
+  const previousKey = storage.getItem(AUTH_STORAGE_POINTER);
+  const runtimeId = globalThis.crypto?.randomUUID?.()
+    ?? `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const nextKey = `bringup-auth:${runtimeId}`;
+
+  // Isolate Auth broadcasts between tabs while retaining this tab's session
+  // across a normal refresh.
+  if (previousKey && previousKey !== nextKey) {
+    const previousSession = storage.getItem(previousKey);
+    if (previousSession) storage.setItem(nextKey, previousSession);
+    storage.removeItem(previousKey);
+  }
+  storage.setItem(AUTH_STORAGE_POINTER, nextKey);
+  return nextKey;
+}
+
+const authStorage = typeof window === "undefined" ? undefined : window.sessionStorage;
+const authStorageKey = createTabAuthStorageKey();
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -16,7 +41,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     fetch: createBoundedAuthFetch(),
   },
   auth: {
-    storage: localStorage,
+    storage: authStorage,
+    storageKey: authStorageKey,
     persistSession: true,
     autoRefreshToken: true,
     // Supabase 2.111 forwards this option as `undefined` when a custom lock
