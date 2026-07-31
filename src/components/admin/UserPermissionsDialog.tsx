@@ -48,6 +48,26 @@ const WORKSPACE_OPTIONS: Array<{
   { value: "edit", label: "管理", description: "允許勾選的頁面進行編輯" },
 ];
 
+const DETAIL_PERMISSION_SECTIONS: Array<{
+  workspaceId: "station-status" | "user-management";
+  title: string;
+  description: string;
+  groupKeys: string[];
+}> = [
+  {
+    workspaceId: "station-status",
+    title: "機台維修紀錄中心內頁",
+    description: "控制儀表板、測試流程、產線、問題與工具等維修工作頁面。",
+    groupKeys: ["dashboard", "test_tracker", "flow_info", "issues", "production", "tools"],
+  },
+  {
+    workspaceId: "user-management",
+    title: "後台管理內頁",
+    description: "分開控制帳號與權限設定，以及 API 金鑰與服務設定。",
+    groupKeys: ["admin", "api_management"],
+  },
+];
+
 function getWorkspaceCardTone(level: WorkspaceAccessLevel) {
   switch (level) {
     case "edit":
@@ -90,14 +110,17 @@ export function UserPermissionsDialog({
       if (pagePermissionError) throw pagePermissionError;
       if (userError) throw userError;
 
-      setPermissions(pagePermissions?.map((item) => item.permission as Permission) || []);
+      const loadedPermissions = pagePermissions?.map(
+        (item) => item.permission as Permission,
+      ) || [];
+      setPermissions(loadedPermissions);
 
       const permissionSettings =
         userData?.permissions && typeof userData.permissions === "object"
           ? (userData.permissions as UserPermissionSettings)
           : {};
 
-      setWorkspaceAccess(readWorkspaceAccess(permissionSettings));
+      setWorkspaceAccess(readWorkspaceAccess(permissionSettings, loadedPermissions));
     } catch (error) {
       console.error("Failed to load user permissions:", error);
       setPermissions([]);
@@ -223,9 +246,13 @@ export function UserPermissionsDialog({
     try {
       setIsLoading(true);
       const synchronizedPermissions = synchronizeWorkspacePermissions(
-        permissions,
-        "station-status",
-        workspaceAccess["station-status"],
+        synchronizeWorkspacePermissions(
+          permissions,
+          "station-status",
+          workspaceAccess["station-status"],
+        ),
+        "user-management",
+        workspaceAccess["user-management"],
       );
 
       const currentRequest = {
@@ -240,15 +267,20 @@ export function UserPermissionsDialog({
       );
 
       if (error) {
-        // Older deployments do not yet know the PCB enum/workspace key. Save
-        // the legacy permissions first, then merge the PCB workspace level
-        // without replacing account-scoped PCB drafts or other settings.
+        // Older deployments may only recognize the original workspace keys.
+        // Save the compatible subset first, then merge the complete settings
+        // without replacing account-scoped drafts or other preferences.
         const legacyPermissions = synchronizedPermissions.filter(
           (permission) => !permission.startsWith("pcb_designer_"),
         );
+        const legacyWorkspaceIds = new Set([
+          "station-status",
+          "material-requests",
+          "data-center",
+        ]);
         const legacyWorkspaceAccess = Object.fromEntries(
-          Object.entries(workspaceAccess).filter(
-            ([workspaceId]) => workspaceId !== "pcb-designer",
+          Object.entries(workspaceAccess).filter(([workspaceId]) =>
+            legacyWorkspaceIds.has(workspaceId),
           ),
         );
         const { error: legacyError } = await supabase.rpc(
@@ -315,6 +347,7 @@ export function UserPermissionsDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
         data-admin-dialog="permissions"
+        data-permission-model="live-workspace-matrix"
         className="w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
       >
         <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_28%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.94))] px-6 py-5">
@@ -324,7 +357,7 @@ export function UserPermissionsDialog({
               設定 {username} 的網站權限
             </DialogTitle>
             <DialogDescription>
-              工作區決定可進入與最高操作層級；維修中心內仍依下方勾選的頁面權限逐項生效。
+              權限依首頁六個實際工作區設定；維修中心與後台管理再依下方內頁權限逐項生效。
             </DialogDescription>
           </DialogHeader>
 
@@ -393,11 +426,11 @@ export function UserPermissionsDialog({
                 <div>
                   <h3 className="text-lg font-semibold">工作區權限</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    這裡決定登入後首頁會看見哪些工作區入口；維修中心選「管理」後，仍只開放下方勾選為編輯的頁面。
+                    與首頁六個入口一一對應；單頁工作區直接生效，維修中心與後台管理再套用右側內頁權限。
                   </p>
                 </div>
 
-                <div className="grid gap-4">
+                <div className="grid gap-4 2xl:grid-cols-2">
                   {workspaceSummary.map((workspace) => (
                     <div
                       key={workspace.id}
@@ -423,12 +456,12 @@ export function UserPermissionsDialog({
                             value as WorkspaceAccessLevel
                           )
                         }
-                        className="grid gap-3 md:grid-cols-3"
+                        className="grid grid-cols-3 gap-2"
                       >
                         {WORKSPACE_OPTIONS.map((option) => (
                           <div
                             key={`${workspace.id}-${option.value}`}
-                            className={`rounded-2xl border p-4 transition-colors ${
+                            className={`min-w-0 rounded-2xl border p-3 transition-colors ${
                               workspace.level === option.value
                                 ? "border-primary/45 bg-primary/10"
                                 : "border-border/70 bg-background/50"
@@ -447,7 +480,7 @@ export function UserPermissionsDialog({
                                 <div className="font-medium text-foreground">
                                   {option.label}
                                 </div>
-                                <div className="text-sm text-muted-foreground">
+                                <div className="text-xs leading-5 text-muted-foreground">
                                   {option.description}
                                 </div>
                               </Label>
@@ -465,7 +498,7 @@ export function UserPermissionsDialog({
               <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
                 <h3 className="text-lg font-semibold">細部頁面權限</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  進階控制用。若工作區已開放，這些權限決定進入後是只能看、可以編修，還是連管理設定也能操作。
+                  只有具有多個功能頁的工作區需要細分；其他四個工作區不再重複顯示舊權限。
                 </p>
               </div>
 
@@ -484,19 +517,40 @@ export function UserPermissionsDialog({
                   </div>
                 </div>
 
-                {Object.entries(LEGACY_PAGE_PERMISSION_GROUPS)
-                  .filter(([groupKey]) => groupKey !== "test_plan")
-                  .map(([groupKey, group]) => {
-                  const groupPermissions = group.permissions.map((permission) => permission.key);
-                  const selectedCount = groupPermissions.filter((permission) =>
-                    permissions.includes(permission)
-                  ).length;
+                {DETAIL_PERMISSION_SECTIONS.map((section) => (
+                  <div
+                    key={section.workspaceId}
+                    className="rounded-[28px] border border-cyan-300/15 bg-[#0d2235] p-4"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-semibold text-foreground">{section.title}</h4>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {section.description}
+                        </p>
+                      </div>
+                      <Badge variant="outline">
+                        {WORKSPACE_OPTIONS.find(
+                          (item) => item.value === workspaceAccess[section.workspaceId],
+                        )?.label}
+                      </Badge>
+                    </div>
 
-                  return (
-                    <div
-                      key={groupKey}
-                      className="rounded-[28px] border border-border/70 bg-card/70 p-5"
-                    >
+                    <div className="grid gap-3">
+                      {section.groupKeys.map((groupKey) => {
+                        const group = LEGACY_PAGE_PERMISSION_GROUPS[groupKey];
+                        const groupPermissions = group.permissions.map(
+                          (permission) => permission.key,
+                        );
+                        const selectedCount = groupPermissions.filter((permission) =>
+                          permissions.includes(permission),
+                        ).length;
+
+                        return (
+                          <div
+                            key={groupKey}
+                            className="rounded-2xl border border-white/10 bg-[#102940] p-4"
+                          >
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <h4 className="font-semibold text-foreground">{group.name}</h4>
@@ -564,9 +618,12 @@ export function UserPermissionsDialog({
                           );
                         })}
                       </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                  })}
+                  </div>
+                ))}
               </div>
             </section>
           </div>
