@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
   DragEvent as ReactDragEvent,
@@ -49,6 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
 import {
@@ -152,7 +153,20 @@ interface SavedConversation {
   keyLabel: string;
 }
 
-const SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
+interface PrivateConversationRow {
+  conversation_key: string;
+  draft_message: string;
+  key_label: string;
+  messages: Json;
+  model: string;
+  provider: string;
+  saved_at: number;
+  title: string;
+}
+
+type ConversationCloudState = "loading" | "saving" | "synced" | "error";
+
+const LEGACY_SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
 const AUTO_SAVED_CONVERSATION_ID = "conversation-active-workspace";
 const SHARED_PROMPT_CATEGORY = "ai_prompt";
 const SHARED_PROMPT_PLATFORM = "api-chat";
@@ -395,6 +409,40 @@ function createSavedConversation(params: {
     model: params.model,
     keyLabel: params.keyLabel,
   };
+}
+
+function mapPrivateConversationRow(row: PrivateConversationRow): SavedConversation {
+  return {
+    id: row.conversation_key,
+    title: row.title,
+    savedAt: Number(row.saved_at) || Date.now(),
+    draftMessage: row.draft_message,
+    messages: Array.isArray(row.messages) ? (row.messages as unknown as ChatMessage[]) : [],
+    provider: row.provider,
+    model: row.model,
+    keyLabel: row.key_label,
+  };
+}
+
+function serializePrivateConversations(conversations: SavedConversation[]): Json {
+  return conversations.slice(0, 24).map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    savedAt: conversation.savedAt,
+    draftMessage: conversation.draftMessage,
+    messages: conversation.messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+      state: message.state,
+      attachments: [],
+      images: [],
+    })),
+    provider: conversation.provider,
+    model: conversation.model,
+    keyLabel: conversation.keyLabel,
+  })) as Json;
 }
 
 function readFileAsDataUrl(file: File) {
@@ -828,12 +876,16 @@ export function ApiChatConsole({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
+  const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerDragDepthRef = useRef(0);
   const hasHydratedConversationRef = useRef(false);
+  const conversationRemoteReadyRef = useRef(false);
+  const conversationSyncGenerationRef = useRef(0);
+  const conversationSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
   const previousSelectedApiKeyIdRef = useRef<null | string>(null);
   const { user } = useUser();
 
@@ -923,8 +975,25 @@ export function ApiChatConsole({
   }, [messages, loading]);
 
   useEffect(() => {
-    if (!isChatOnly || typeof window === "undefined") return;
+    if (!isChatOnly) return;
     let mounted = true;
+    const ownerId = user?.userId;
+    const generation = conversationSyncGenerationRef.current + 1;
+    conversationSyncGenerationRef.current = generation;
+    hasHydratedConversationRef.current = false;
+    conversationRemoteReadyRef.current = false;
+    setConversationsLoaded(false);
+    setConversationCloudState("loading");
+    setSavedConversations([]);
+    setMessages([]);
+    setDraftMessage("");
+    setUploadedAttachments([]);
+
+    if (typeof window !== "undefined") {
+      // The legacy key was shared by every account using this browser.
+      // Never read it after account-scoped cloud storage is available.
+      window.localStorage.removeItem(LEGACY_SAVED_CONVERSATIONS_STORAGE_KEY);
+    }
 
     const loadSharedPrompts = async () => {
       try {
@@ -946,18 +1015,47 @@ export function ApiChatConsole({
       }
     };
 
-    try {
-      const conversationPayload = window.localStorage.getItem(SAVED_CONVERSATIONS_STORAGE_KEY);
-      setSavedConversations(
-        conversationPayload ? (JSON.parse(conversationPayload) as SavedConversation[]) : []
-      );
-    } catch (error) {
-      console.error("Failed to load saved conversations:", error);
-      setSavedConversations([]);
-    }
-    setConversationsLoaded(true);
+    const loadPrivateConversations = async () => {
+      if (!ownerId) {
+        if (mounted) {
+          setConversationsLoaded(true);
+          setConversationCloudState("error");
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("ai_workspace_conversations")
+          .select("conversation_key,title,saved_at,draft_message,messages,provider,model,key_label")
+          .eq("owner_id", ownerId)
+          .order("saved_at", { ascending: false })
+          .limit(24);
+
+        if (error) throw error;
+        if (!mounted || conversationSyncGenerationRef.current !== generation) return;
+
+        setSavedConversations(((data ?? []) as PrivateConversationRow[]).map(mapPrivateConversationRow));
+        conversationRemoteReadyRef.current = true;
+        setConversationCloudState("synced");
+      } catch (error) {
+        console.error("Failed to load private AI conversations:", error);
+        if (mounted && conversationSyncGenerationRef.current === generation) {
+          setSavedConversations([]);
+          setConversationCloudState("error");
+          toast.error("個人對話同步失敗", {
+            description: "請檢查連線後重新進入資料查詢空間。",
+          });
+        }
+      } finally {
+        if (mounted && conversationSyncGenerationRef.current === generation) {
+          setConversationsLoaded(true);
+        }
+      }
+    };
 
     void loadSharedPrompts();
+    void loadPrivateConversations();
 
     const channel = supabase
       .channel("api-chat-shared-prompts")
@@ -974,15 +1072,7 @@ export function ApiChatConsole({
       mounted = false;
       void supabase.removeChannel(channel);
     };
-  }, [isChatOnly]);
-
-  useEffect(() => {
-    if (!isChatOnly || typeof window === "undefined") return;
-    window.localStorage.setItem(
-      SAVED_CONVERSATIONS_STORAGE_KEY,
-      JSON.stringify(savedConversations)
-    );
-  }, [isChatOnly, savedConversations]);
+  }, [isChatOnly, user?.userId]);
 
   useEffect(() => {
     if (!isChatOnly || !conversationsLoaded || hasHydratedConversationRef.current) return;
@@ -999,6 +1089,47 @@ export function ApiChatConsole({
 
     hasHydratedConversationRef.current = true;
   }, [conversationsLoaded, isChatOnly, savedConversations]);
+
+  useEffect(() => {
+    const ownerId = user?.userId;
+    if (
+      !isChatOnly ||
+      !ownerId ||
+      !conversationsLoaded ||
+      !conversationRemoteReadyRef.current ||
+      !hasHydratedConversationRef.current
+    ) {
+      return;
+    }
+
+    const generation = conversationSyncGenerationRef.current;
+    const payload = serializePrivateConversations(savedConversations);
+    setConversationCloudState("saving");
+
+    const timer = window.setTimeout(() => {
+      conversationSyncQueueRef.current = conversationSyncQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const { error } = await supabase.rpc("sync_ai_workspace_conversations", {
+            p_owner_id: ownerId,
+            p_items: payload,
+          });
+          if (error) throw error;
+
+          if (conversationSyncGenerationRef.current === generation) {
+            setConversationCloudState("synced");
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to sync private AI conversations:", error);
+          if (conversationSyncGenerationRef.current === generation) {
+            setConversationCloudState("error");
+          }
+        });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [conversationsLoaded, isChatOnly, savedConversations, user?.userId]);
 
   const normalizedProvider = provider.trim().toLowerCase();
   const activeProviderPreset = resolveAiProviderPreset(normalizedProvider);
@@ -1124,6 +1255,25 @@ export function ApiChatConsole({
   const hasConversationContent =
     messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
 
+  const createCurrentConversationSnapshot = useCallback((id?: string): SavedConversation => {
+    const snapshot = createSavedConversation({
+      messages,
+      draftMessage,
+      provider,
+      model,
+      keyLabel: activeKeyLabel,
+    });
+
+    return {
+      ...snapshot,
+      id: id ?? snapshot.id,
+      title:
+        id === AUTO_SAVED_CONVERSATION_ID
+          ? snapshot.title || "目前進行中的對話"
+          : snapshot.title,
+    };
+  }, [activeKeyLabel, draftMessage, messages, model, provider]);
+
   useEffect(() => {
     if (!isChatOnly || !conversationsLoaded || !hasHydratedConversationRef.current) return;
 
@@ -1142,6 +1292,7 @@ export function ApiChatConsole({
   }, [
     activeKeyLabel,
     conversationsLoaded,
+    createCurrentConversationSnapshot,
     draftMessage,
     hasConversationContent,
     isChatOnly,
@@ -1455,25 +1606,6 @@ export function ApiChatConsole({
     return {
       title: titleSource.split(/\r?\n/)[0].slice(0, 32) || fallbackTitle,
       content,
-    };
-  };
-
-  const createCurrentConversationSnapshot = (id?: string): SavedConversation => {
-    const snapshot = createSavedConversation({
-      messages,
-      draftMessage,
-      provider,
-      model,
-      keyLabel: activeKeyLabel,
-    });
-
-    return {
-      ...snapshot,
-      id: id ?? snapshot.id,
-      title:
-        id === AUTO_SAVED_CONVERSATION_ID
-          ? snapshot.title || "目前進行中的對話"
-          : snapshot.title,
     };
   };
 
@@ -2788,12 +2920,32 @@ export function ApiChatConsole({
                         最近對話
                       </p>
                     </div>
-                    <span className="text-xs font-bold tabular-nums text-slate-300">{savedConversations.length}</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[10px] font-black",
+                          conversationCloudState === "synced" && "border-emerald-300/25 bg-emerald-400/10 text-emerald-200",
+                          conversationCloudState === "saving" && "border-amber-300/25 bg-amber-400/10 text-amber-100",
+                          conversationCloudState === "loading" && "border-blue-300/25 bg-blue-400/10 text-blue-100",
+                          conversationCloudState === "error" && "border-rose-300/25 bg-rose-400/10 text-rose-100",
+                        )}
+                        title="對話只會儲存在目前帳號，換電腦登入後會自動載入"
+                      >
+                        {conversationCloudState === "synced"
+                          ? "帳號雲端"
+                          : conversationCloudState === "saving"
+                            ? "儲存中"
+                            : conversationCloudState === "loading"
+                              ? "載入中"
+                              : "同步失敗"}
+                      </span>
+                      <span className="text-xs font-bold tabular-nums text-slate-300">{savedConversations.length}</span>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     {savedConversations.length === 0 ? (
                       <p className="rounded-xl border border-[#173654] bg-[#0C2235] px-3 py-4 text-sm leading-6 text-slate-400">
-                        對話會自動保留在這裡
+                        對話會儲存在您的帳號雲端，換電腦登入也能繼續使用。
                       </p>
                     ) : (
                       savedConversations.map((item) => (
