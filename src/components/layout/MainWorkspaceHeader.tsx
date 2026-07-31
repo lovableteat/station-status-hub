@@ -111,15 +111,15 @@ export function MainWorkspaceHeader({
             className={cn(
               "relative h-12 w-12 shrink-0 rounded-2xl border transition-colors",
               notificationUnreadCount > 0
-                ? "motion-safe:animate-pulse border-cyan-300/80 bg-cyan-300/20 text-cyan-100 shadow-[0_0_28px_rgba(34,211,238,0.55)] hover:bg-cyan-300/30"
+                ? "border-rose-300/90 bg-rose-500/20 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.6)] hover:bg-rose-500/30"
                 : "border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground",
             )}
           >
             {notificationUnreadCount > 0 ? <BellRing className="h-5 w-5" /> : <Bell className="h-4 w-4" />}
             {notificationUnreadCount > 0 && (
               <>
-                <span className="absolute inset-1 rounded-xl border border-cyan-200/60 motion-safe:animate-ping" aria-hidden="true" />
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0d1728] bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                <span className="absolute inset-1 rounded-xl border border-rose-200/70 motion-safe:animate-pulse" aria-hidden="true" />
+                <span aria-live="polite" className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#0d1728] bg-[#ff264d] px-1.5 text-xs font-black leading-none text-white shadow-[0_0_16px_rgba(255,38,77,0.95)]">
                   {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
                 </span>
               </>
