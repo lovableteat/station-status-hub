@@ -30,6 +30,9 @@ test("admin dialogs and API console share the brighter control-room treatment", 
   const apiKeys = await read("../src/components/api-management/ApiKeyManagement.tsx");
 
   assert.match(permissions, /data-admin-dialog="permissions"/);
+  assert.match(permissions, /data-permission-model="live-workspace-matrix"/);
+  assert.match(permissions, /首頁六個實際工作區/);
+  assert.match(permissions, /後台管理內頁/);
   assert.match(userEditor, /data-admin-dialog="user-editor"/);
   assert.match(apiPage, /data-admin-surface="api-control-room"/);
   assert.match(apiKeys, /data-admin-zone="api-key-status"/);

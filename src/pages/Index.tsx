@@ -303,14 +303,17 @@ const Index = () => {
         label: "後台管理",
         description: "配置人員帳號、角色與各工作區的檢視／管理權限，並維護 AI 服務商、API 金鑰與系統存取狀態。",
         icon: ShieldCheck,
-        visible: canViewModule("users") || canViewModule("api-management"),
+        visible:
+          canViewModule("users") ||
+          canViewModule("collaboration") ||
+          canViewModule("api-management"),
       },
       {
         id: "ai-chat" as const,
         label: "資料查詢空間",
         description: "上傳或貼上 PDF、Office、圖片與長文字，透過多家 AI 模型查詢、比較和整理，並用共享提示詞快速執行常用任務。",
         icon: MessageSquareText,
-        visible: canViewModule("api-management"),
+        visible: canViewModule("ai-chat"),
       },
     ],
     [canViewModule]
@@ -585,7 +588,7 @@ const Index = () => {
         );
       case "ai-chat":
         return (
-          <PermissionGuard module="api-management">
+          <PermissionGuard module="ai-chat">
             <ApiChatWorkspacePage />
           </PermissionGuard>
         );
