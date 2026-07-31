@@ -73,7 +73,7 @@ function createAdapter(options: {
     adapter: {
       async listSpaces(ownerId: string) {
         operations.push(`list-spaces:${ownerId}`);
-        return records.spaces.filter((space) => space.ownerId === ownerId);
+        return [...records.spaces];
       },
       async listFolders(spaceId: string) {
         operations.push(`list-folders:${spaceId}`);
@@ -198,7 +198,7 @@ function createAdapter(options: {
   };
 }
 
-test("loads only owner spaces and activates the requested or first available space", async () => {
+test("loads shared spaces and activates the requested or first available space", async () => {
   const fake = createAdapter();
   fake.records.spaces.push({
     ...fake.records.spaces[0],
@@ -210,7 +210,10 @@ test("loads only owner spaces and activates the requested or first available spa
   const loaded = await repository.loadWorkspace("owner-1", "missing");
 
   assert.equal(loaded.activeSpaceId, "space-1");
-  assert.deepEqual(loaded.spaces.map((space: { id: string }) => space.id), ["space-1"]);
+  assert.deepEqual(
+    loaded.spaces.map((space: { id: string }) => space.id),
+    ["space-1", "other-space"],
+  );
   assert.ok(fake.operations.includes("list-spaces:owner-1"));
   assert.ok(fake.operations.includes("list-folders:space-1"));
 });
