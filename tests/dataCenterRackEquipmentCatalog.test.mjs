@@ -67,3 +67,19 @@ test("Data Center uses a window-based navigation dock and a brighter model catal
   assert.match(workspaceSource, /openProjectManager/);
   assert.match(workspaceSource, /data-model-catalog="bright-catalog"/);
 });
+
+test("Data Center navigation and catalog keep aligned semantic color groups", async () => {
+  const workspaceSource = await readFile(
+    new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workspaceSource, /lg:grid-cols-\[188px_minmax\(0,1fr\)_360px\]/);
+  assert.match(workspaceSource, /h-12 w-12 place-items-center justify-self-center/);
+  assert.match(workspaceSource, /border-l-sky-300/);
+  assert.match(workspaceSource, /border-l-emerald-300/);
+  assert.match(workspaceSource, /border-l-amber-300/);
+  assert.match(workspaceSource, /border-l-violet-300/);
+  assert.match(workspaceSource, /border-l-orange-300/);
+  assert.match(workspaceSource, /border-l-cyan-300/);
+});
