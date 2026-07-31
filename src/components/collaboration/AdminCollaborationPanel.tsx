@@ -97,7 +97,12 @@ function isMissingAnnouncementRpc(error: { code?: string; message?: string } | n
 
 export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
   const { user } = useUser();
-  const { allOnlineUsers, connectionStatus } = useUserPresence();
+  const {
+    allOnlineUsers,
+    onlineAccounts,
+    totalOnlineSessions,
+    connectionStatus,
+  } = useUserPresence();
   const { toast } = useToast();
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [history, setHistory] = useState<AnnouncementGroup[]>([]);
@@ -326,7 +331,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
         <section data-admin-zone="online-locations" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-cyan-300" />在線位置</div>
-            <Badge className="gap-1.5 bg-emerald-300/15 text-emerald-100"><Radio className="h-3 w-3" />{connectionStatus === "online" ? `${allOnlineUsers.length} 人` : "連線中"}</Badge>
+            <Badge className="gap-1.5 bg-emerald-300/15 text-emerald-100"><Radio className="h-3 w-3" />{connectionStatus === "online" ? `${totalOnlineSessions} 連線 / ${onlineAccounts.length} 帳號` : "連線中"}</Badge>
           </div>
           <div className="mt-3 grid gap-2">
             {onlineByModule.length === 0 ? (
@@ -338,6 +343,19 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
               </div>
             ))}
           </div>
+          {onlineAccounts.length > 0 ? (
+            <div className="mt-4 border-t border-cyan-200/10 pt-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">帳號連線數</div>
+              <div className="grid gap-2">
+                {onlineAccounts.map((onlineAccount) => (
+                  <div key={onlineAccount.userId} className="flex items-center justify-between rounded-xl border border-sky-200/10 bg-[#071522] px-3 py-2.5">
+                    <span className="min-w-0 truncate text-sm text-slate-300">{onlineAccount.displayName || onlineAccount.username}</span>
+                    <span className="ml-3 shrink-0 font-mono text-sm font-bold text-cyan-200">{onlineAccount.sessionCount || 1} 個連線</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section data-admin-zone="announcement-history" className="min-h-0 rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">

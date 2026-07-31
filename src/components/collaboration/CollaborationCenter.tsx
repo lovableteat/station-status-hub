@@ -85,19 +85,14 @@ function formatTime(value: string) {
 function PresenceCard({
   onlineUser,
   currentUserId,
-  currentSessionId,
   onMessage,
 }: {
   onlineUser: OnlineUser;
   currentUserId?: string;
-  currentSessionId: string;
   onMessage?: () => void;
 }) {
-  const isCurrentSession =
-    onlineUser.userId === currentUserId &&
-    onlineUser.sessionId === currentSessionId;
-  const isSameAccountOtherDevice =
-    onlineUser.userId === currentUserId && !isCurrentSession;
+  const isCurrentAccount = onlineUser.userId === currentUserId;
+  const sessionCount = Math.max(1, onlineUser.sessionCount || 1);
   return (
     <div className="rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-start gap-3">
@@ -110,10 +105,15 @@ function PresenceCard({
             <span className="truncate font-semibold text-slate-50">
               {onlineUser.displayName || onlineUser.username}
             </span>
-            {isCurrentSession && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
-            {isSameAccountOtherDevice && (
-              <Badge className="bg-violet-300/15 text-violet-100">其他裝置</Badge>
-            )}
+            {isCurrentAccount && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
+            <Badge className={cn(
+              "border px-2",
+              sessionCount > 1
+                ? "border-amber-200/25 bg-amber-300/15 text-amber-100"
+                : "border-emerald-200/20 bg-emerald-300/10 text-emerald-100",
+            )}>
+              {sessionCount > 1 ? `同帳號 ${sessionCount} 個連線` : "1 個連線"}
+            </Badge>
             {onlineUser.isEditing && <Badge className="bg-amber-300/15 text-amber-100">編輯中</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
@@ -141,10 +141,10 @@ function PresenceCard({
 export function CollaborationCenter() {
   const { user, isRealtimeAuthenticated } = useUser();
   const {
-    allOnlineUsers,
+    onlineAccounts,
     onlineUsers,
     totalOnlineUsers,
-    currentSessionId,
+    totalOnlineSessions,
     connectionState,
     connectionStatus,
     retryPresence,
@@ -234,14 +234,14 @@ export function CollaborationCenter() {
   );
   const filteredOnlineUsers = useMemo(() => {
     const query = onlineQuery.trim().toLocaleLowerCase("zh-TW");
-    if (!query) return allOnlineUsers;
-    return allOnlineUsers.filter((onlineUser) => {
+    if (!query) return onlineAccounts;
+    return onlineAccounts.filter((onlineUser) => {
       const moduleLabel = moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule || "";
       return [onlineUser.displayName, onlineUser.username, roleLabels[onlineUser.role], moduleLabel]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query));
     });
-  }, [allOnlineUsers, onlineQuery]);
+  }, [onlineAccounts, onlineQuery]);
 
   useEffect(() => {
     if (loading || autoAnnouncementShownRef.current) return;
@@ -424,7 +424,7 @@ export function CollaborationCenter() {
             </TabsTrigger>
             <TabsTrigger value="online" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Users className="h-4 w-4" />在線成員
-              <span className="font-mono text-xs">{totalOnlineUsers}</span>
+              <span className="font-mono text-xs">{totalOnlineSessions}</span>
             </TabsTrigger>
             <TabsTrigger value="messages" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <MessageSquareText className="h-4 w-4" />訊息
@@ -507,7 +507,10 @@ export function CollaborationCenter() {
           <TabsContent value="online" className="absolute inset-0 mt-0 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
             <div className="space-y-3 border-b border-cyan-200/10 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div><div className="font-semibold text-slate-100">全站目前 {totalOnlineUsers} 人在線</div><div className="mt-0.5 text-xs text-slate-500">包含您自己，跨頁面同步顯示。</div></div>
+                <div>
+                  <div className="font-semibold text-slate-100">全站目前 {totalOnlineSessions} 個在線連線</div>
+                  <div className="mt-0.5 text-xs text-slate-500">共 {totalOnlineUsers} 個帳號；同帳號的分頁或裝置會合併顯示。</div>
+                </div>
                 <div className="flex items-center gap-2">
                 <Badge className={cn("gap-1.5", connectionStatus === "online" ? "bg-emerald-300/15 text-emerald-200" : connectionState === "error" ? "bg-rose-300/15 text-rose-200" : "bg-amber-300/15 text-amber-200")}>
                   <Radio className="h-3 w-3" />
@@ -524,12 +527,12 @@ export function CollaborationCenter() {
               </div>
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
-              {allOnlineUsers.length === 0 ? (
+              {onlineAccounts.length === 0 ? (
                 <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">{connectionState === "error" ? "尚未取得在線名單" : "正在同步在線成員"}</p><p className="mt-1 text-sm">{isRealtimeAuthenticated ? "畫面會維持原頁，不會因重新連線而刷新。" : "請重新登入以啟用安全的即時協作。"}</p></div>
               ) : filteredOnlineUsers.length === 0 ? (
                 <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的在線成員</p><p className="mt-1 text-sm">可改用姓名、帳號或頁面名稱搜尋。</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{filteredOnlineUsers.map((onlineUser) => <PresenceCard key={`${onlineUser.userId}:${onlineUser.sessionId || "unknown"}`} onlineUser={onlineUser} currentUserId={user?.userId} currentSessionId={currentSessionId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{filteredOnlineUsers.map((onlineUser) => <PresenceCard key={onlineUser.userId} onlineUser={onlineUser} currentUserId={user?.userId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>

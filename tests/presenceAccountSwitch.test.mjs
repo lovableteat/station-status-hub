@@ -8,6 +8,7 @@ const {
   createPresenceKey,
   getOrCreatePresenceDeviceId,
   isCurrentPresenceSession,
+  selectOnlineAccounts,
   selectOnlinePresenceSessions,
   selectLatestOnlineUsers,
 } = presenceSession;
@@ -18,6 +19,14 @@ const providerSource = await readFile(
 );
 const collaborationSource = await readFile(
   new URL("../src/components/collaboration/CollaborationCenter.tsx", import.meta.url),
+  "utf8",
+);
+const authClientSource = await readFile(
+  new URL("../src/integrations/supabase/client.ts", import.meta.url),
+  "utf8",
+);
+const userContextSource = await readFile(
+  new URL("../src/components/auth/UserContext.tsx", import.meta.url),
   "utf8",
 );
 
@@ -123,6 +132,20 @@ test("online roster keeps separate devices even when they use the same account",
   );
 });
 
+test("online sessions are grouped by account without losing the connection count", () => {
+  const accounts = selectOnlineAccounts([
+    { userId: "user-a", sessionId: "tab-1", displayName: "Alpha", timestamp: 100 },
+    { userId: "user-a", sessionId: "tab-2", displayName: "Alpha", timestamp: 200 },
+    { userId: "user-b", sessionId: "tab-3", displayName: "Beta", timestamp: 150 },
+  ]);
+
+  assert.equal(accounts.length, 2);
+  assert.equal(accounts[0].userId, "user-a");
+  assert.equal(accounts[0].sessionCount, 2);
+  assert.equal(accounts[0].sessionId, "tab-2");
+  assert.equal(accounts[1].sessionCount, 1);
+});
+
 test("latest roster entry wins for the same account", () => {
   const users = selectLatestOnlineUsers({
     "user-a:tab-1": [
@@ -207,8 +230,10 @@ test("the provider shares one topic while guarding per-tab identities", () => {
   assert.match(providerSource, /LEGACY_PRESENCE_TOPIC = "user_presence"/);
   assert.match(providerSource, /private: isRealtimeAuthenticated/);
   assert.match(providerSource, /createPresenceKey/);
-  assert.match(providerSource, /getOrCreatePresenceDeviceId/);
+  assert.match(providerSource, /createPresenceSessionId/);
   assert.match(providerSource, /selectOnlinePresenceSessions/);
+  assert.match(providerSource, /selectOnlineAccounts/);
+  assert.match(providerSource, /totalOnlineSessions/);
   assert.match(providerSource, /currentSessionId/);
   assert.match(providerSource, /presenceGenerationRef/);
   assert.match(providerSource, /createPresenceTransitionQueue/);
@@ -219,15 +244,18 @@ test("the provider shares one topic while guarding per-tab identities", () => {
   assert.doesNotMatch(providerSource, /Keep the signed-in\s+user visible immediately/);
 });
 
-test("collaboration roster distinguishes this device from another device on the same account", () => {
-  assert.match(collaborationSource, /currentSessionId/);
-  assert.match(
-    collaborationSource,
-    /onlineUser\.userId === currentUserId &&\s*onlineUser\.sessionId === currentSessionId/,
-  );
-  assert.match(
-    collaborationSource,
-    /`\$\{onlineUser\.userId\}:\$\{onlineUser\.sessionId \|\| "unknown"\}`/,
-  );
-  assert.match(collaborationSource, /其他裝置/);
+test("collaboration roster groups account sessions and shows the connection count", () => {
+  assert.match(collaborationSource, /onlineAccounts/);
+  assert.match(collaborationSource, /sessionCount/);
+  assert.match(collaborationSource, /同帳號.*個連線/);
+  assert.match(collaborationSource, /totalOnlineSessions/);
+});
+
+test("authentication is isolated per browser tab while surviving a refresh", () => {
+  assert.match(authClientSource, /window\.sessionStorage/);
+  assert.match(authClientSource, /storageKey: authStorageKey/);
+  assert.match(authClientSource, /previousSession/);
+  assert.doesNotMatch(authClientSource, /storage:\s*localStorage/);
+  assert.match(userContextSource, /window\.sessionStorage\.getItem\("user"\)/);
+  assert.doesNotMatch(userContextSource, /window\.localStorage\.getItem\("user"\)/);
 });
