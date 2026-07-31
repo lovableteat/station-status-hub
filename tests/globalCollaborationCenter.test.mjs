@@ -23,6 +23,8 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /value="messages"/);
   assert.match(centerSource, /<DirectMessagesPanel/);
   assert.match(centerSource, /open-global-collaboration/);
+  assert.match(centerSource, /data-collaboration-content-frame="true"/);
+  assert.match(centerSource, /absolute inset-0 mt-0 min-h-0 overflow-hidden data-\[state=active\]:flex/);
   assert.match(centerSource, /全部標為已讀/);
   assert.match(centerSource, /清除全部已讀/);
   assert.match(centerSource, /dismiss_user_notification/);
