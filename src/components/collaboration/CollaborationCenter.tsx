@@ -416,8 +416,8 @@ export function CollaborationCenter() {
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CollaborationTab)} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-4 grid h-11 grid-cols-3 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CollaborationTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <TabsList className="mx-4 mt-4 grid h-11 shrink-0 grid-cols-3 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
             <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Bell className="h-4 w-4" />通知
               {unreadCount > 0 && <Badge className="h-5 min-w-5 bg-rose-500 px-1.5 text-white">{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
@@ -431,7 +431,8 @@ export function CollaborationCenter() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="notifications" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <div data-collaboration-content-frame="true" className="relative mt-3 min-h-0 flex-1 overflow-hidden border-t border-cyan-200/10">
+          <TabsContent value="notifications" className="absolute inset-0 mt-0 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
             <div className="space-y-3 border-b border-cyan-200/10 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm text-slate-400">共 {notifications.length} 則 · {unreadCount} 則未讀</div>
@@ -503,7 +504,7 @@ export function CollaborationCenter() {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="online" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <TabsContent value="online" className="absolute inset-0 mt-0 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
             <div className="space-y-3 border-b border-cyan-200/10 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div><div className="font-semibold text-slate-100">全站目前 {totalOnlineUsers} 人在線</div><div className="mt-0.5 text-xs text-slate-500">包含您自己，跨頁面同步顯示。</div></div>
@@ -533,13 +534,14 @@ export function CollaborationCenter() {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="messages" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <TabsContent value="messages" className="absolute inset-0 mt-0 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
             <DirectMessagesPanel
               onlineUsers={onlineUsers}
               requestedUserId={messageRecipientId}
               onRequestHandled={() => setMessageRecipientId(null)}
             />
           </TabsContent>
+          </div>
         </Tabs>
           </aside>
         </>
