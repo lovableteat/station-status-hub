@@ -73,3 +73,21 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
   assert.match(header, /MaintenancePageHeader/);
   assert.match(metrics, /MaintenanceMetricStrip/);
 });
+
+test("admin desktop layout follows its content without leaving forced empty regions", async () => {
+  const [panel, collaboration, styles] = await Promise.all([
+    read("../src/components/admin/AdminPanel.tsx"),
+    read("../src/components/collaboration/AdminCollaborationPanel.tsx"),
+    read("../src/components/admin/admin-panel.css"),
+  ]);
+
+  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*0;[^}]*align-items:\s*flex-start;/s);
+  assert.match(styles, /\.admin-sidebar\s*\{[^}]*height:\s*auto;[^}]*max-height:/s);
+  assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*0 1 auto;/s);
+  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
+
+  assert.match(panel, /className="flex flex-col gap-3"/);
+  assert.match(panel, /value="collaboration" className="mt-0"/);
+  assert.match(collaboration, /grid min-h-0 items-start gap-4/);
+  assert.match(collaboration, /grid min-h-0 content-start gap-4/);
+});
