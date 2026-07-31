@@ -212,11 +212,10 @@ async function uploadLargeObject(
 
 export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
   return {
-    async listSpaces(ownerId) {
+    async listSpaces(_ownerId) {
       const { data, error } = await supabase
         .from("test_plan_spaces")
         .select("*")
-        .eq("owner_id", ownerId)
         .order("updated_at", { ascending: false });
       throwIfError(error);
       return (data ?? []).map(mapSpace);
@@ -254,7 +253,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       throwIfError(error);
       return mapSpace(data);
     },
-    async updateSpace(spaceId, ownerId, patch) {
+    async updateSpace(spaceId, _ownerId, patch) {
       const payload: TablesUpdate<"test_plan_spaces"> = {
         ...(patch.name === undefined ? {} : { name: patch.name }),
         ...(patch.description === undefined
@@ -266,18 +265,16 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .from("test_plan_spaces")
         .update(payload)
         .eq("id", spaceId)
-        .eq("owner_id", ownerId)
         .select()
         .single();
       throwIfError(error);
       return mapSpace(data);
     },
-    async deleteSpace(spaceId, ownerId) {
+    async deleteSpace(spaceId, _ownerId) {
       const { data, error } = await supabase
         .from("test_plan_spaces")
         .delete()
         .eq("id", spaceId)
-        .eq("owner_id", ownerId)
         .select("id")
         .maybeSingle();
       throwIfError(error);
@@ -401,11 +398,10 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .remove([...paths]);
       throwIfError(error);
     },
-    async listCleanupPaths(ownerId) {
+    async listCleanupPaths(_ownerId) {
       const { data, error } = await supabase
         .from("test_plan_storage_cleanup_queue")
         .select("storage_path")
-        .eq("owner_id", ownerId)
         .order("queued_at", { ascending: true });
       throwIfError(error);
       return (data ?? []).map((row) => row.storage_path);
@@ -421,12 +417,11 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .upsert(payload, { onConflict: "storage_path" });
       throwIfError(error);
     },
-    async completeCleanupPaths(ownerId, paths) {
+    async completeCleanupPaths(_ownerId, paths) {
       if (paths.length === 0) return;
       const { error } = await supabase
         .from("test_plan_storage_cleanup_queue")
         .delete()
-        .eq("owner_id", ownerId)
         .in("storage_path", paths);
       throwIfError(error);
     },

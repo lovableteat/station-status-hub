@@ -113,6 +113,27 @@ test("latest Test_Plan access migration derives configured station access before
   assert.match(migration, /grant execute on function public\.test_plan_current_user_can\(text\)/i);
 });
 
+test("latest Test_Plan sharing migration exposes spaces to permitted accounts without weakening authentication", async () => {
+  const migration = await source(
+    "supabase/migrations/20260731183000_share_test_plan_spaces.sql",
+  );
+  const adapter = await source(
+    "src/components/test-plan/core/supabaseAdapter.ts",
+  );
+
+  assert.match(migration, /test-plan-spaces-shared-read/i);
+  assert.match(migration, /test_plan_current_user_can\('view'\)/i);
+  assert.match(migration, /test_plan_current_user_can_access_space\(space_id, 'edit'\)/i);
+  assert.match(migration, /test_plan_current_user_can_read_storage_object\(name\)/i);
+  assert.match(migration, /test_plan_current_user_can_manage_storage_object\(name\)/i);
+  assert.match(migration, /to authenticated/i);
+  assert.doesNotMatch(migration, /to anon/i);
+  assert.doesNotMatch(
+    adapter,
+    /\.from\("test_plan_spaces"\)[\s\S]{0,140}\.eq\("owner_id"/,
+  );
+});
+
 test("admin permission editor explains inherited Test_Plan access instead of exposing an independent toggle", async () => {
   const dialog = await source(
     "src/components/admin/UserPermissionsDialog.tsx",
