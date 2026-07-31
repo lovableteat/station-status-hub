@@ -256,12 +256,18 @@ serve(async (request) => {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: callerRows, error: callerError } = await caller.rpc("get_current_system_user");
+    const [callerResult, permissionResult] = await Promise.all([
+      caller.rpc("get_current_system_user"),
+      caller.rpc("can_manage_system_users"),
+    ]);
+    const { data: callerRows, error: callerError } = callerResult;
+    const { data: canManageUsers, error: permissionError } = permissionResult;
     const callerProfile = Array.isArray(callerRows) ? callerRows[0] : null;
     if (
       callerError ||
+      permissionError ||
       !callerProfile ||
-      !["admin", "super_admin"].includes(callerProfile.role)
+      canManageUsers !== true
     ) {
       return respond({ success: false, error: "Administrator permission required" }, 403);
     }
