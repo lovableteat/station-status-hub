@@ -54,3 +54,16 @@ test("the model dialog provides category search, U installation, and 3D renderin
   assert.match(plannerSource, /RackCatalogEquipmentModels/);
   assert.match(plannerSource, /catalogModelId/);
 });
+
+test("Data Center uses a window-based navigation dock and a brighter model catalog", async () => {
+  const workspaceSource = await readFile(
+    new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workspaceSource, /data-testid="data-center-navigation-dock"/);
+  assert.match(workspaceSource, /aria-label="Data Center 功能選單"/);
+  assert.match(workspaceSource, /setMobileLeftOpen\(true\)/);
+  assert.match(workspaceSource, /openProjectManager/);
+  assert.match(workspaceSource, /data-model-catalog="bright-catalog"/);
+});
