@@ -248,7 +248,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
   }
 
   return (
-    <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+    <div className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
       <section data-admin-zone="announcement-composer" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -327,7 +327,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
         </div>
       </section>
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-2 xl:grid-cols-1">
+      <div className="grid min-h-0 content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
         <section data-admin-zone="online-locations" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-cyan-300" />在線位置</div>
