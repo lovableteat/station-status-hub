@@ -89,6 +89,56 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_workspace_conversations: {
+        Row: {
+          conversation_key: string
+          created_at: string
+          draft_message: string
+          key_label: string
+          messages: Json
+          model: string
+          owner_id: string
+          provider: string
+          saved_at: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          conversation_key: string
+          created_at?: string
+          draft_message?: string
+          key_label?: string
+          messages?: Json
+          model?: string
+          owner_id: string
+          provider?: string
+          saved_at: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          conversation_key?: string
+          created_at?: string
+          draft_message?: string
+          key_label?: string
+          messages?: Json
+          model?: string
+          owner_id?: string
+          provider?: string
+          saved_at?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_workspace_conversations_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bug_attachments: {
         Row: {
           bug_id: string | null
@@ -3733,6 +3783,10 @@ export type Database = {
           p_workspace_access: Json
         }
         Returns: undefined
+      }
+      sync_ai_workspace_conversations: {
+        Args: { p_items: Json; p_owner_id: string }
+        Returns: number
       }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
