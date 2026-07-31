@@ -1816,11 +1816,11 @@ function ModelLibrary({
     >
       <DialogContent
         data-model-catalog="bright-catalog"
-        className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[26px] border border-cyan-200/35 bg-[linear-gradient(145deg,#16334d,#0f253a)] p-0 text-slate-100 shadow-[0_34px_110px_-40px_rgba(34,211,238,0.45)] sm:max-w-[1120px]"
+        className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[28px] border border-slate-600/75 bg-[#08131f] p-0 text-slate-100 shadow-[0_38px_120px_-38px_rgba(2,8,23,0.95)] sm:max-w-[1120px]"
       >
-        <DialogHeader className="shrink-0 border-b border-cyan-100/20 bg-[linear-gradient(135deg,#214866,#163550)] px-6 py-5 pr-14 text-left">
+        <DialogHeader className="shrink-0 border-b border-slate-700/80 bg-[linear-gradient(135deg,#12283d,#0b1827)] px-6 py-5 pr-14 text-left">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-cyan-100/35 bg-cyan-200/16 text-cyan-50 shadow-[0_10px_28px_-18px_rgba(103,232,249,0.9)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-amber-300/35 bg-amber-300/12 text-amber-200 shadow-[0_12px_30px_-18px_rgba(251,191,36,0.75)]">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
@@ -1832,7 +1832,7 @@ function ModelLibrary({
           </div>
         </DialogHeader>
 
-        <div className="flex shrink-0 gap-1 border-b border-cyan-100/15 bg-[#17344d] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
+        <div className="flex shrink-0 gap-2 border-b border-slate-700/70 bg-[#0a1624] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
           {([
             ["browse", "瀏覽與套用"],
             ["import", "匯入新模型"],
@@ -1844,10 +1844,12 @@ function ModelLibrary({
               aria-selected={view === id}
               onClick={() => setView(id)}
               className={cn(
-                "h-9 cursor-pointer rounded-lg px-4 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
+                "h-9 cursor-pointer rounded-xl border px-4 text-xs font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
                 view === id
-                  ? "bg-cyan-200 text-cyan-950 shadow-[0_8px_24px_-14px_rgba(103,232,249,0.9)]"
-                  : "text-slate-200 hover:bg-white/[0.10] hover:text-white"
+                  ? id === "browse"
+                    ? "border-cyan-300/60 bg-cyan-300 text-cyan-950 shadow-[0_8px_24px_-14px_rgba(103,232,249,0.9)]"
+                    : "border-amber-300/60 bg-amber-300 text-amber-950 shadow-[0_8px_24px_-14px_rgba(251,191,36,0.8)]"
+                  : "border-slate-700 bg-slate-800/45 text-slate-300 hover:border-slate-500 hover:bg-slate-700/55 hover:text-white"
               )}
             >
               {label}
@@ -1855,11 +1857,11 @@ function ModelLibrary({
           ))}
         </div>
 
-        <ScrollArea className="min-h-0 flex-1 bg-[#102940]">
+        <ScrollArea className="min-h-0 flex-1 bg-[radial-gradient(circle_at_top_right,rgba(14,116,144,0.08),transparent_34%),#08131f]">
           <div className="p-5 sm:p-6">
             {view === "browse" ? (
             <section>
-              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-cyan-100/20 bg-[#1a3d59] p-1.5" role="tablist" aria-label="模型種類">
+              <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-700/80 bg-[#0c1928] p-1.5" role="tablist" aria-label="模型種類">
                 {([
                   ["rack", `機櫃外框 ${rackModelCount}`],
                   ["l10", `櫃內設備 ${l10ModelCount}`],
@@ -1873,22 +1875,24 @@ function ModelLibrary({
                     className={cn(
                       "h-10 cursor-pointer rounded-lg text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       catalogKind === kind
-                        ? "border border-cyan-100/35 bg-cyan-200/18 text-cyan-50 shadow-inner"
-                        : "text-slate-200 hover:bg-white/[0.10] hover:text-white"
+                        ? kind === "rack"
+                          ? "border border-cyan-300/45 bg-cyan-300/15 text-cyan-100 shadow-inner"
+                          : "border border-violet-300/45 bg-violet-300/15 text-violet-100 shadow-inner"
+                        : "border border-transparent text-slate-400 hover:border-slate-600 hover:bg-slate-700/35 hover:text-white"
                     )}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <div className="mb-4 rounded-2xl border border-cyan-100/20 bg-[#1a3d59] p-3.5 shadow-[0_14px_34px_-28px_rgba(103,232,249,0.8)]">
+              <div className="mb-4 rounded-2xl border border-slate-700/80 bg-[#0c1928] p-3.5 shadow-[0_16px_38px_-30px_rgba(2,8,23,0.95)]">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/80" />
                   <Input
                     value={modelSearch}
                     onChange={(event) => setModelSearch(event.target.value)}
                     placeholder={catalogKind === "rack" ? "搜尋機櫃名稱、廠牌或版本" : "搜尋設備名稱、廠牌、類型或版本"}
-                    className="h-10 border-cyan-100/25 bg-[#254b66] pl-9 text-sm text-white placeholder:text-slate-300/70 focus-visible:border-cyan-200"
+                    className="h-11 rounded-xl border-slate-600/80 bg-[#111f31] pl-9 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/70 focus-visible:ring-cyan-300/20"
                   />
                 </div>
                 {catalogKind === "l10" ? (
@@ -1902,8 +1906,8 @@ function ModelLibrary({
                         className={cn(
                           "h-8 shrink-0 rounded-full border px-3 text-[11px] font-black transition-colors",
                           equipmentCategory === option.id
-                            ? "border-blue-300/40 bg-blue-500/20 text-blue-50"
-                            : "border-cyan-100/15 bg-[#17344d] text-slate-300 hover:border-cyan-100/35 hover:bg-[#204661] hover:text-white",
+                            ? "border-violet-300/45 bg-violet-400/15 text-violet-100"
+                            : "border-slate-700 bg-[#101d2d] text-slate-400 hover:border-slate-500 hover:bg-slate-700/45 hover:text-white",
                         )}
                       >
                         {option.label}
@@ -1928,15 +1932,24 @@ function ModelLibrary({
                       type="button"
                       onClick={() => onSelectedModelChange(model.id)}
                       className={cn(
-                        "w-full cursor-pointer rounded-2xl border px-4 py-4 text-left transition-all duration-200",
+                        "min-h-[136px] w-full cursor-pointer rounded-2xl border border-l-4 px-4 py-4 text-left transition-all duration-200",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                         selected
-                          ? "border-cyan-100/55 bg-[linear-gradient(135deg,#245b75,#1c4562)] shadow-[0_18px_42px_-28px_rgba(103,232,249,0.85)]"
-                          : "border-cyan-100/18 bg-[#183750] hover:border-cyan-100/40 hover:bg-[#204761]"
+                          ? model.kind === "rack"
+                            ? "border-cyan-300/60 border-l-cyan-300 bg-[linear-gradient(135deg,rgba(8,145,178,0.18),rgba(15,31,49,0.96))] shadow-[0_18px_42px_-28px_rgba(34,211,238,0.75)]"
+                            : "border-violet-300/60 border-l-violet-300 bg-[linear-gradient(135deg,rgba(139,92,246,0.18),rgba(15,31,49,0.96))] shadow-[0_18px_42px_-28px_rgba(167,139,250,0.72)]"
+                          : "border-slate-700/85 border-l-slate-600 bg-[#0d1b2a] hover:border-slate-500 hover:border-l-slate-400 hover:bg-[#122337]"
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", selected ? "border-cyan-100/40 bg-cyan-200/18 text-cyan-50" : "border-cyan-100/20 bg-[#21455f] text-slate-200")}>
+                        <div className={cn(
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+                          selected
+                            ? model.kind === "rack"
+                              ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-100"
+                              : "border-violet-300/40 bg-violet-300/15 text-violet-100"
+                            : "border-slate-600/80 bg-slate-800/70 text-slate-300",
+                        )}>
                           {model.kind === "l10" ? (() => { const Icon = EQUIPMENT_CATEGORY_ICONS[getEquipmentCategory(model) as RackEquipmentCategory]; return <Icon className="h-5 w-5" />; })() : model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1973,7 +1986,14 @@ function ModelLibrary({
                             <span className="rounded-full bg-slate-400/10 px-2 py-1 tabular-nums text-slate-300">{formatDimensions(model.dimensions)}</span>
                           </div>
                         </div>
-                        <span className={cn("mt-1 flex h-5 w-5 items-center justify-center rounded-full border", selected ? "border-blue-300 bg-blue-400 text-white" : "border-white/20 text-transparent")}>
+                        <span className={cn(
+                          "mt-1 flex h-5 w-5 items-center justify-center rounded-full border",
+                          selected
+                            ? model.kind === "rack"
+                              ? "border-cyan-200 bg-cyan-300 text-cyan-950"
+                              : "border-violet-200 bg-violet-300 text-violet-950"
+                            : "border-slate-600 text-transparent",
+                        )}>
                           <Check className="h-3 w-3" />
                         </span>
                       </div>
@@ -1981,7 +2001,7 @@ function ModelLibrary({
                   );
                 })}
                 {catalogModels.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-dashed border-cyan-100/30 bg-[#183750] px-6 py-12 text-center">
+                  <div className="col-span-full rounded-2xl border border-dashed border-slate-600 bg-[#0d1b2a] px-6 py-12 text-center">
                     <Search className="mx-auto h-6 w-6 text-slate-500" />
                     <div className="mt-3 text-sm font-black text-slate-200">找不到符合條件的模型</div>
                     <p className="mt-1 text-xs text-slate-500">清除搜尋或改選其他設備類別。</p>
@@ -1990,7 +2010,7 @@ function ModelLibrary({
               </div>
 
               {selectedModel ? (
-                <div className="mt-5 border-t border-white/10 pt-5">
+                <div className="mt-5 rounded-2xl border border-slate-700/80 bg-[#0b1826] p-4 shadow-[0_18px_46px_-36px_rgba(2,8,23,0.95)] sm:p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="font-semibold text-white">已選擇 {selectedModel.name}</span>
                     <span className="text-xs text-slate-300">
@@ -2008,7 +2028,7 @@ function ModelLibrary({
                       className={cn(
                         "mb-3 rounded-xl border px-3 py-2.5 text-xs leading-5",
                         selectedIsCompatible
-                          ? "border-cyan-300/20 bg-cyan-400/[0.07] text-cyan-50"
+                          ? "border-emerald-300/25 bg-emerald-400/[0.08] text-emerald-100"
                           : "border-amber-300/25 bg-amber-400/[0.08] text-amber-50",
                       )}
                     >
@@ -2020,7 +2040,7 @@ function ModelLibrary({
                       type="button"
                       variant="outline"
                       onClick={() => onPreviewModel(selectedModel.id)}
-                      className="h-11 rounded-xl border-cyan-300/25 bg-cyan-400/[0.08] text-sm font-bold text-cyan-50 hover:bg-cyan-400/[0.15]"
+                      className="h-11 rounded-xl border-cyan-300/35 bg-cyan-400/[0.09] text-sm font-bold text-cyan-100 hover:border-cyan-200/60 hover:bg-cyan-400/[0.17]"
                     >
                       <Eye className="mr-2 h-4 w-4" /> 檢視模型細節
                     </Button>
@@ -2029,7 +2049,7 @@ function ModelLibrary({
                       variant="outline"
                       disabled={!canEdit}
                       onClick={beginEditingSelectedModel}
-                      className="h-11 rounded-xl border-blue-300/25 bg-blue-400/[0.08] text-sm font-bold text-blue-50 hover:bg-blue-400/[0.15]"
+                      className="h-11 rounded-xl border-violet-300/35 bg-violet-400/[0.09] text-sm font-bold text-violet-100 hover:border-violet-200/60 hover:bg-violet-400/[0.17]"
                     >
                       <PencilRuler className="mr-2 h-4 w-4" /> 編輯模型資料
                     </Button>
@@ -2070,22 +2090,22 @@ function ModelLibrary({
                   </AlertDialog>
                   {catalogKind === "rack" ? (
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignModel} className="h-12 rounded-xl bg-cyan-300 text-sm font-bold text-cyan-950 hover:bg-cyan-200 disabled:bg-cyan-950 disabled:text-cyan-100/45">
+                      <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignModel} className="h-12 rounded-xl bg-emerald-300 text-sm font-bold text-emerald-950 hover:bg-emerald-200 disabled:bg-emerald-950/50 disabled:text-emerald-100/40">
                         <Check className="mr-2 h-4 w-4" /> 套用至 {selectedRack.cabinet}
                       </Button>
-                      <Button type="button" disabled={!canEdit} onClick={onAddRack} variant="outline" className="h-12 rounded-xl border-cyan-300/22 bg-cyan-400/8 text-sm text-cyan-50 hover:bg-cyan-400/14">
+                      <Button type="button" disabled={!canEdit} onClick={onAddRack} variant="outline" className="h-12 rounded-xl border-amber-300/35 bg-amber-400/[0.09] text-sm font-bold text-amber-100 hover:border-amber-200/60 hover:bg-amber-400/[0.17]">
                         <PackagePlus className="mr-2 h-4 w-4" /> 以此新增機櫃
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-2 rounded-2xl border border-cyan-100/20 bg-[#183750] p-3">
+                    <div className="space-y-2 rounded-2xl border border-violet-300/20 bg-violet-400/[0.05] p-3">
                       <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
                         <Select
                           value={String(installRackUnit)}
                           onValueChange={(value) => setInstallRackUnit(Number(value))}
                           disabled={!canEdit || availableInstallUnits.length === 0}
                         >
-                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-cyan-100/25 bg-[#254b66] font-black text-cyan-50">
+                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-slate-600/80 bg-[#111f31] font-black text-violet-100">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -2100,7 +2120,7 @@ function ModelLibrary({
                           type="button"
                           disabled={!canEdit || !selectedIsCompatible || availableInstallUnits.length === 0}
                           onClick={() => onInstallCatalogEquipment(selectedModel.id, installRackUnit)}
-                          className="h-11 rounded-xl bg-blue-500 text-sm font-black text-white hover:bg-blue-400 disabled:bg-blue-950 disabled:text-blue-100/40"
+                          className="h-11 rounded-xl bg-emerald-400 text-sm font-black text-emerald-950 hover:bg-emerald-300 disabled:bg-emerald-950/50 disabled:text-emerald-100/40"
                         >
                           <PackagePlus className="mr-2 h-4 w-4" /> 安裝到 {selectedRack.cabinet}
                         </Button>
@@ -2116,7 +2136,7 @@ function ModelLibrary({
                           variant="outline"
                           disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible}
                           onClick={onAssignL10Model}
-                          className="h-10 w-full rounded-xl border-cyan-100/25 bg-[#254b66] text-xs font-black text-cyan-50 hover:bg-[#2d5a78]"
+                          className="h-10 w-full rounded-xl border-violet-300/30 bg-violet-400/[0.08] text-xs font-black text-violet-100 hover:bg-violet-400/[0.16]"
                         >
                           <Cpu className="mr-2 h-4 w-4" /> 設為整櫃主運算設備
                         </Button>
@@ -2385,7 +2405,7 @@ function ModelLibrary({
           </div>
         </ScrollArea>
 
-        <div className="shrink-0 border-t border-white/10 bg-black/20 px-6 py-3">
+        <div className="shrink-0 border-t border-slate-700/80 bg-[#07111d] px-6 py-3">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
             <span>{view === "browse" && selectedModel ? `目前選取：${selectedModel.name}` : view === "edit" && selectedModel ? `正在編輯：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "機櫃外框" : `${getEquipmentCategoryLabel(importEquipmentCategory)}設備`}`}</span>
             {view === "browse" && selectedModel ? <span className="hidden tabular-nums sm:inline">{formatDimensions(selectedModel.dimensions)}</span> : null}
@@ -3666,18 +3686,18 @@ export function DeploymentPlanningCenter() {
 
   const desktopGridClass = leftCollapsed
     ? rightCollapsed
-      ? "lg:grid-cols-[76px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[76px_minmax(0,1fr)_360px]"
+      ? "lg:grid-cols-[72px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[72px_minmax(0,1fr)_360px]"
     : rightCollapsed
-      ? "lg:grid-cols-[132px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[132px_minmax(0,1fr)_360px]";
+      ? "lg:grid-cols-[188px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[188px_minmax(0,1fr)_360px]";
 
   const compactDesktopGridClass = showSceneTools && showRackDetails
     ? desktopGridClass
     : showSceneTools
       ? leftCollapsed
-        ? "lg:grid-cols-[76px_minmax(0,1fr)]"
-        : "lg:grid-cols-[132px_minmax(0,1fr)]"
+        ? "lg:grid-cols-[72px_minmax(0,1fr)]"
+        : "lg:grid-cols-[188px_minmax(0,1fr)]"
       : showRackDetails
         ? rightCollapsed
           ? "lg:grid-cols-[minmax(0,1fr)_68px]"
@@ -3768,33 +3788,33 @@ export function DeploymentPlanningCenter() {
           {showSceneTools ? (
             <aside
               data-testid="data-center-navigation-dock"
-              className="flex min-w-0 flex-col overflow-hidden rounded-[24px] border border-cyan-200/20 bg-[linear-gradient(180deg,#102b42,#0a1d30)] p-2 shadow-[0_24px_70px_rgba(2,8,23,0.42)]"
+              className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-slate-700/80 bg-[linear-gradient(180deg,#111d2e,#09131f)] p-2.5 shadow-[0_24px_70px_rgba(2,8,23,0.46)]"
             >
-              <div className={cn("flex items-center border-b border-white/10 pb-2", leftCollapsed ? "justify-center" : "justify-between px-1")}>
+              <div className={cn("flex h-14 items-center border-b border-slate-700/70 pb-2", leftCollapsed ? "justify-center" : "justify-between px-1")}>
                 {!leftCollapsed ? (
                   <div className="min-w-0">
-                    <div className="truncate text-xs font-black text-white">操作選單</div>
-                    <div className="mt-0.5 truncate text-[9px] font-semibold text-cyan-100/65">視窗式工具</div>
+                    <div className="truncate text-sm font-black tracking-[-0.01em] text-white">操作選單</div>
+                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">場景與規劃工具</div>
                   </div>
                 ) : null}
                 <button
                   type="button"
                   aria-label={leftCollapsed ? "展開 Data Center 選單" : "收合 Data Center 選單"}
                   onClick={() => setLeftCollapsed((value) => !value)}
-                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-300/10 text-cyan-50 transition-colors hover:bg-cyan-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-600/80 bg-slate-800/80 text-cyan-200 transition-all hover:border-cyan-300/50 hover:bg-cyan-300/10 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
                 >
                   {leftCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
                 </button>
               </div>
 
-              <nav aria-label="Data Center 功能選單" className="mt-2 grid gap-2">
+              <nav aria-label="Data Center 功能選單" className="mt-2.5 grid gap-2.5">
                 {[
-                  { id: "scene", label: "場景機櫃", icon: Layers3, tone: "border-cyan-200/25 bg-cyan-300/12 text-cyan-50 hover:bg-cyan-300/22", onClick: () => setMobileLeftOpen(true) },
-                  { id: "projects", label: "專案", icon: FileBox, tone: "border-blue-200/25 bg-blue-300/12 text-blue-50 hover:bg-blue-300/22", onClick: openProjectManager },
-                  { id: "facility", label: "廠房", icon: PencilRuler, tone: "border-emerald-200/25 bg-emerald-300/10 text-emerald-50 hover:bg-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
-                  { id: "models", label: "模型", icon: Boxes, tone: "border-amber-200/25 bg-amber-300/10 text-amber-50 hover:bg-amber-300/20", onClick: () => openModelLibrary("rack") },
-                  { id: "rack", label: "機櫃設定", icon: Server, tone: "border-violet-200/25 bg-violet-300/10 text-violet-50 hover:bg-violet-300/20", onClick: () => setMobileRightOpen(true) },
-                  { id: "plan", label: workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃", icon: Map, tone: workspaceMode === "2d" ? "border-cyan-100/70 bg-cyan-200 text-cyan-950" : "border-slate-200/20 bg-slate-200/10 text-slate-100 hover:bg-slate-200/20", onClick: () => setWorkspaceMode("2d") },
+                  { id: "scene", label: "場景機櫃", icon: Layers3, tone: "border-l-sky-300 hover:border-sky-300/60 hover:bg-sky-400/10", iconTone: "bg-sky-400/15 text-sky-200 ring-sky-300/20", onClick: () => setMobileLeftOpen(true) },
+                  { id: "projects", label: "專案", icon: FileBox, tone: "border-l-blue-300 hover:border-blue-300/60 hover:bg-blue-400/10", iconTone: "bg-blue-400/15 text-blue-200 ring-blue-300/20", onClick: openProjectManager },
+                  { id: "facility", label: "廠房", icon: PencilRuler, tone: "border-l-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/10", iconTone: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
+                  { id: "models", label: "模型", icon: Boxes, tone: "border-l-amber-300 hover:border-amber-300/60 hover:bg-amber-400/10", iconTone: "bg-amber-400/15 text-amber-200 ring-amber-300/20", onClick: () => openModelLibrary("rack") },
+                  { id: "rack", label: "機櫃設定", icon: Server, tone: "border-l-violet-300 hover:border-violet-300/60 hover:bg-violet-400/10", iconTone: "bg-violet-400/15 text-violet-200 ring-violet-300/20", onClick: () => setMobileRightOpen(true) },
+                  { id: "plan", label: workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃", icon: Map, tone: workspaceMode === "2d" ? "border-orange-300/70 border-l-orange-300 bg-orange-300/12 shadow-[0_10px_28px_-22px_rgba(251,146,60,0.9)]" : "border-l-orange-300 hover:border-orange-300/60 hover:bg-orange-400/10", iconTone: workspaceMode === "2d" ? "bg-orange-300 text-orange-950 ring-orange-200/40" : "bg-orange-400/15 text-orange-200 ring-orange-300/20", onClick: () => setWorkspaceMode("2d") },
                 ].map((item) => {
                   const ItemIcon = item.icon;
                   return (
@@ -3802,15 +3822,21 @@ export function DeploymentPlanningCenter() {
                       key={item.id}
                       type="button"
                       data-action={item.id}
+                      aria-label={item.label}
+                      title={leftCollapsed ? item.label : undefined}
                       onClick={item.onClick}
                       className={cn(
-                        "flex min-h-14 cursor-pointer items-center rounded-2xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
-                        leftCollapsed ? "justify-center px-2" : "flex-col justify-center gap-1 px-2 py-2 text-center",
+                        "grid cursor-pointer border border-slate-700/80 border-l-[3px] bg-[#101d2d] text-slate-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                        leftCollapsed
+                          ? "h-12 w-12 place-items-center justify-self-center rounded-[15px]"
+                          : "h-[66px] w-full grid-cols-[42px_minmax(0,1fr)] items-center gap-3 rounded-[17px] px-3 text-left",
                         item.tone,
                       )}
                     >
-                      <ItemIcon className="h-[18px] w-[18px] shrink-0" />
-                      {!leftCollapsed ? <span className="text-[10px] font-black leading-4">{item.label}</span> : null}
+                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl ring-1", item.iconTone)}>
+                        <ItemIcon className="h-[18px] w-[18px] shrink-0" />
+                      </span>
+                      {!leftCollapsed ? <span className="truncate text-xs font-black leading-5">{item.label}</span> : null}
                     </button>
                   );
                 })}
