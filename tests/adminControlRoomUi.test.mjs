@@ -65,7 +65,7 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
   assert.match(styles, /#06111f/i);
   assert.match(styles, /#071522/i);
   assert.match(styles, /#2a526f/i);
-  assert.match(styles, /#4c8dff/i);
+  assert.match(styles, /#67e8f9/i);
   assert.match(styles, /@media \(max-width: 900px\)/);
   assert.match(header, /MaintenancePageHeader/);
   assert.match(metrics, /MaintenanceMetricStrip/);

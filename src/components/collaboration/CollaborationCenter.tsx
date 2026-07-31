@@ -3,16 +3,20 @@ import {
   AlertCircle,
   Bell,
   CheckCheck,
+  Inbox,
   LoaderCircle,
   Megaphone,
   MessageSquareText,
   Radio,
   RefreshCw,
+  Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -30,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { DirectMessagesPanel } from "./DirectMessagesPanel";
 
 type CollaborationTab = "notifications" | "online" | "messages";
+type NotificationFilter = "all" | "unread" | "read";
 type NotificationRow = {
   id: string;
   title: string;
@@ -152,6 +157,10 @@ export function CollaborationCenter() {
   const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
+  const [onlineQuery, setOnlineQuery] = useState("");
+  const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
+  const [clearingRead, setClearingRead] = useState(false);
   const autoAnnouncementShownRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
@@ -215,6 +224,24 @@ export function CollaborationCenter() {
     ).length,
     [notifications],
   );
+  const readCount = notifications.length - unreadCount;
+  const filteredNotifications = useMemo(
+    () => notifications.filter((notification) => (
+      notificationFilter === "all" ||
+      (notificationFilter === "read" ? notification.is_read : !notification.is_read)
+    )),
+    [notificationFilter, notifications],
+  );
+  const filteredOnlineUsers = useMemo(() => {
+    const query = onlineQuery.trim().toLocaleLowerCase("zh-TW");
+    if (!query) return allOnlineUsers;
+    return allOnlineUsers.filter((onlineUser) => {
+      const moduleLabel = moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule || "";
+      return [onlineUser.displayName, onlineUser.username, roleLabels[onlineUser.role], moduleLabel]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query));
+    });
+  }, [allOnlineUsers, onlineQuery]);
 
   useEffect(() => {
     if (loading || autoAnnouncementShownRef.current) return;
@@ -269,6 +296,35 @@ export function CollaborationCenter() {
       .eq("is_read", false)
       .is("archived_at", null);
     if (updateError) void loadNotifications();
+  };
+
+  const dismissNotification = async (notification: NotificationRow) => {
+    if (!notification.is_read || deletingNotificationId) return;
+    setDeletingNotificationId(notification.id);
+    setError(null);
+    const { data, error: dismissError } = await supabase.rpc("dismiss_user_notification", {
+      p_notification_id: notification.id,
+    });
+    setDeletingNotificationId(null);
+    if (dismissError || !data) {
+      setError("通知刪除失敗，請稍後再試。");
+      return;
+    }
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
+  };
+
+  const clearReadNotifications = async () => {
+    if (readCount === 0 || clearingRead) return;
+    setClearingRead(true);
+    setError(null);
+    const { error: dismissError } = await supabase.rpc("dismiss_read_user_notifications");
+    setClearingRead(false);
+    if (dismissError) {
+      setError("已讀通知清除失敗，請稍後再試。");
+      return;
+    }
+    setNotifications((current) => current.filter((item) => !item.is_read));
+    if (notificationFilter === "read") setNotificationFilter("all");
   };
 
   const openNotification = async (notification: NotificationRow) => {
@@ -342,7 +398,8 @@ export function CollaborationCenter() {
           />
           <aside
             aria-label="全站協作中心"
-            className="fixed inset-x-2 bottom-2 top-20 z-[79] flex flex-col overflow-hidden rounded-[22px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(720px,calc(100dvh-92px))] sm:w-[460px]"
+            data-collaboration-center="true"
+            className="fixed inset-x-2 bottom-2 top-20 z-[79] flex flex-col overflow-hidden rounded-[22px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(640px,calc(100dvh-92px))] sm:w-[500px]"
           >
         <header className="border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-5 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -361,11 +418,11 @@ export function CollaborationCenter() {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CollaborationTab)} className="flex min-h-0 flex-1 flex-col">
           <TabsList className="mx-4 mt-4 grid h-11 grid-cols-3 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
-            <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-sky-400 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
+            <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Bell className="h-4 w-4" />通知
               {unreadCount > 0 && <Badge className="h-5 min-w-5 bg-rose-500 px-1.5 text-white">{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="online" className="gap-2 rounded-lg data-[state=active]:bg-emerald-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
+            <TabsTrigger value="online" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Users className="h-4 w-4" />在線成員
               <span className="font-mono text-xs">{totalOnlineUsers}</span>
             </TabsTrigger>
@@ -375,15 +432,32 @@ export function CollaborationCenter() {
           </TabsList>
 
           <TabsContent value="notifications" className="mt-0 flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-cyan-200/10 px-4 py-3">
-              <div className="text-sm text-slate-400">{unreadCount > 0 ? `${unreadCount} 則未讀` : "已讀完所有通知"}</div>
-              <div className="flex gap-1.5">
+            <div className="space-y-3 border-b border-cyan-200/10 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-slate-400">共 {notifications.length} 則 · {unreadCount} 則未讀</div>
+                <div className="flex flex-wrap gap-1.5">
                 <Button variant="ghost" size="sm" onClick={() => void loadNotifications()} disabled={loading} className="rounded-lg text-slate-300">
                   <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loading && "animate-spin")} />重新載入
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => void markAllAsRead()} disabled={unreadCount === 0} className="rounded-lg text-cyan-200">
                   <CheckCheck className="mr-1.5 h-3.5 w-3.5" />全部標為已讀
                 </Button>
+                <Button variant="ghost" size="sm" onClick={() => void clearReadNotifications()} disabled={readCount === 0 || clearingRead} className="rounded-lg text-slate-300 hover:bg-rose-300/10 hover:text-rose-200">
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />清除全部已讀
+                </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-cyan-200/10 bg-[#071522] p-1" aria-label="通知篩選">
+                {(["all", "unread", "read"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setNotificationFilter(filter)}
+                    className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors", notificationFilter === filter ? "bg-cyan-300 text-[#06111f]" : "text-slate-400 hover:bg-cyan-300/10 hover:text-cyan-100")}
+                  >
+                    {filter === "all" ? `全部 ${notifications.length}` : filter === "unread" ? `未讀 ${unreadCount}` : `已讀 ${readCount}`}
+                  </button>
+                ))}
               </div>
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
@@ -393,22 +467,36 @@ export function CollaborationCenter() {
                 <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-rose-300/20 bg-rose-400/5 p-6 text-center">
                   <AlertCircle className="mb-3 h-8 w-8 text-rose-300" /><p className="text-sm text-rose-100">{error}</p><Button onClick={() => void loadNotifications()} className="mt-4">重試</Button>
                 </div>
-              ) : notifications.length === 0 ? (
+              ) : filteredNotifications.length === 0 ? (
                 <div className="flex h-56 flex-col items-center justify-center text-center text-slate-500">
-                  <Bell className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">暫無通知</p><p className="mt-1 text-sm">後台公告與工作通知會顯示在這裡。</p>
+                  <Inbox className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">此分類目前沒有通知</p><p className="mt-1 text-sm">新公告與工作通知會即時顯示，不會刷新頁面。</p>
                 </div>
               ) : (
                 <div className="space-y-2.5 pb-3">
-                  {notifications.map((notification) => (
-                    <button key={notification.id} type="button" onClick={() => void openNotification(notification)} className={cn("w-full rounded-2xl border p-4 text-left transition-colors", notification.is_read ? "border-slate-700/65 bg-[#0b1b2d] hover:border-sky-300/30" : "border-sky-300/40 bg-[linear-gradient(120deg,rgba(14,116,144,0.2),rgba(11,27,45,0.94))] hover:border-sky-200/65")}>
-                      <div className="flex items-start gap-3">
+                  {filteredNotifications.map((notification) => (
+                    <article key={notification.id} className={cn("rounded-2xl border p-4 transition-colors", notification.is_read ? "border-slate-700/65 bg-[#0b1b2d] hover:border-cyan-300/30" : "border-cyan-300/40 bg-cyan-300/[0.08] hover:border-cyan-200/65")}>
+                      <button type="button" onClick={() => void openNotification(notification)} className="w-full text-left">
+                        <div className="flex items-start gap-3">
                         <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", notification.is_read ? "bg-slate-600" : "bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.8)]")} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-start justify-between gap-3"><span className="font-semibold text-slate-50">{notification.title}</span><span className="shrink-0 text-xs text-slate-500">{formatTime(notification.created_at)}</span></span>
                           <span className="mt-1.5 line-clamp-3 block text-sm leading-6 text-slate-300">{notification.message}</span>
                         </span>
+                        </div>
+                      </button>
+                      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5">
+                        <span className="text-xs text-slate-500">{notification.is_read ? "已讀後可刪除" : "點開內容後會標為已讀"}</span>
+                        {notification.is_read ? (
+                          <Button variant="ghost" size="sm" onClick={() => void dismissNotification(notification)} disabled={deletingNotificationId === notification.id} className="h-8 rounded-lg text-slate-400 hover:bg-rose-300/10 hover:text-rose-200">
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />刪除
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => void markAsRead(notification)} className="h-8 rounded-lg text-cyan-200 hover:bg-cyan-300/10">
+                            <CheckCheck className="mr-1.5 h-3.5 w-3.5" />標為已讀
+                          </Button>
+                        )}
                       </div>
-                    </button>
+                    </article>
                   ))}
                 </div>
               )}
@@ -416,9 +504,10 @@ export function CollaborationCenter() {
           </TabsContent>
 
           <TabsContent value="online" className="mt-0 flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-cyan-200/10 px-4 py-3">
-              <div><div className="font-semibold text-slate-100">全站目前 {totalOnlineUsers} 人在線</div><div className="mt-0.5 text-xs text-slate-500">包含您自己，跨頁面同步顯示。</div></div>
-              <div className="flex items-center gap-2">
+            <div className="space-y-3 border-b border-cyan-200/10 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><div className="font-semibold text-slate-100">全站目前 {totalOnlineUsers} 人在線</div><div className="mt-0.5 text-xs text-slate-500">包含您自己，跨頁面同步顯示。</div></div>
+                <div className="flex items-center gap-2">
                 <Badge className={cn("gap-1.5", connectionStatus === "online" ? "bg-emerald-300/15 text-emerald-200" : connectionState === "error" ? "bg-rose-300/15 text-rose-200" : "bg-amber-300/15 text-amber-200")}>
                   <Radio className="h-3 w-3" />
                   {connectionStatus === "online" ? "即時連線" : connectionState === "error" ? "即時功能不可用" : "重新連線中"}
@@ -426,13 +515,20 @@ export function CollaborationCenter() {
                 {connectionState === "error" && user ? (
                   <Button variant="ghost" size="sm" onClick={retryPresence} className="h-7 px-2 text-xs text-cyan-200">重試</Button>
                 ) : null}
+                </div>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/55" />
+                <Input value={onlineQuery} onChange={(event) => setOnlineQuery(event.target.value)} placeholder="搜尋姓名、帳號、角色或所在頁面" className="h-10 border-cyan-200/15 bg-[#071522] pl-9 text-slate-100" />
               </div>
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
               {allOnlineUsers.length === 0 ? (
                 <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">{connectionState === "error" ? "尚未取得在線名單" : "正在同步在線成員"}</p><p className="mt-1 text-sm">{isRealtimeAuthenticated ? "畫面會維持原頁，不會因重新連線而刷新。" : "請重新登入以啟用安全的即時協作。"}</p></div>
+              ) : filteredOnlineUsers.length === 0 ? (
+                <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的在線成員</p><p className="mt-1 text-sm">可改用姓名、帳號或頁面名稱搜尋。</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{allOnlineUsers.map((onlineUser) => <PresenceCard key={`${onlineUser.userId}:${onlineUser.sessionId || "unknown"}`} onlineUser={onlineUser} currentUserId={user?.userId} currentSessionId={currentSessionId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{filteredOnlineUsers.map((onlineUser) => <PresenceCard key={`${onlineUser.userId}:${onlineUser.sessionId || "unknown"}`} onlineUser={onlineUser} currentUserId={user?.userId} currentSessionId={currentSessionId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>
