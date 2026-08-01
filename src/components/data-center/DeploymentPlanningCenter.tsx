@@ -769,7 +769,7 @@ function SceneNavigator({
           </div>
         </section>
 
-        <div className="rounded-[18px] border border-cyan-200/15 bg-[#0c2235] p-3">
+        <div data-section-tone="project-category" className="workspace-dialog-section workspace-dialog-section--violet rounded-[18px] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <div className="text-[11px] font-black tracking-[0.08em] text-cyan-100/75">專案與分類</div>
@@ -803,10 +803,10 @@ function SceneNavigator({
           </Select>
         </div>
 
-        <label className="block">
+        <label data-section-tone="site-selector" className="workspace-dialog-section workspace-dialog-section--success block rounded-[18px] p-3">
           <span className="mb-2 block text-[11px] font-black tracking-[0.08em] text-blue-200/70">目前站點</span>
           <Select value={selectedSiteId} onValueChange={onSiteChange}>
-            <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#10283d] px-3 text-sm font-semibold text-slate-100">
+            <SelectTrigger className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/[0.07] px-3 text-sm font-semibold text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
@@ -819,7 +819,7 @@ function SceneNavigator({
           </Select>
         </label>
 
-        <section data-testid="data-center-layer-control" className="rounded-[18px] border border-[#1d4262] bg-[#071421]/72 p-3">
+        <section data-testid="data-center-layer-control" data-section-tone="view-layers" className="workspace-dialog-section workspace-dialog-section--info rounded-[18px] p-3">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <div className="text-[11px] font-black tracking-[0.08em] text-blue-100/75">視圖模式</div>
@@ -845,7 +845,7 @@ function SceneNavigator({
                       ? "border-sky-300/45 bg-sky-400/16 text-white shadow-[0_12px_32px_-26px_rgba(56,189,248,0.95)]"
                       : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-sky-300/30 hover:bg-sky-400/10 hover:text-white"
                   )}
-                  style={active ? { boxShadow: `inset 3px 0 0 ${layer.color}` } : undefined}
+                  style={active ? { borderColor: `${layer.color}88`, backgroundColor: `${layer.color}1f` } : undefined}
                 >
                   <span
                     className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
@@ -4312,7 +4312,7 @@ export function DeploymentPlanningCenter() {
         </Dialog>
 
         <Dialog open={projectManagerOpen} onOpenChange={setProjectManagerOpen}>
-          <DialogContent className="flex h-[min(88dvh,760px)] w-[min(96vw,1040px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#081725] p-0 text-slate-100 sm:max-w-[1040px]">
+          <DialogContent data-dialog-tone="project-manager" className="flex h-[min(88dvh,760px)] w-[min(96vw,1040px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[1040px]">
             <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <FileBox className="h-5 w-5 text-cyan-300" /> Data Center 專案管理
@@ -4322,7 +4322,7 @@ export function DeploymentPlanningCenter() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid min-h-0 flex-1 md:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="flex min-h-0 flex-col border-b border-white/10 md:border-b-0 md:border-r">
+              <div className="flex min-h-0 flex-col border-b border-violet-300/15 bg-violet-400/[0.035] md:border-b-0 md:border-r">
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
                   <div>
                     <div className="text-sm font-black text-white">專案清單</div>
@@ -4417,7 +4417,7 @@ export function DeploymentPlanningCenter() {
               <div className="min-h-0 overflow-y-auto p-5 md:p-6">
                 {previewProject && previewProjectStats ? (
                   <div className="space-y-5">
-                    <div className="rounded-3xl border border-cyan-300/20 bg-[linear-gradient(145deg,#102c42,#0a1b2b)] p-5">
+                    <div className="workspace-dialog-section workspace-dialog-section--info rounded-3xl p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="text-[11px] font-black tracking-[0.14em] text-cyan-200/70">PROJECT PREVIEW</div>
@@ -4434,25 +4434,25 @@ export function DeploymentPlanningCenter() {
                     </div>
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       {[
-                        ["站點", previewProjectStats.siteCount],
-                        ["機櫃", previewProjectStats.rackCount],
-                        ["冷熱通道", previewProjectStats.aisleCount],
-                        ["電力來源", previewProjectStats.powerFeedCount],
-                      ].map(([label, value]) => (
-                        <div key={label} className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                        ["站點", previewProjectStats.siteCount, "workspace-dialog-section--info", "text-sky-100"],
+                        ["機櫃", previewProjectStats.rackCount, "workspace-dialog-section--success", "text-emerald-100"],
+                        ["冷熱通道", previewProjectStats.aisleCount, "workspace-dialog-section--violet", "text-violet-100"],
+                        ["電力來源", previewProjectStats.powerFeedCount, "workspace-dialog-section--warning", "text-amber-100"],
+                      ].map(([label, value, tone, valueTone]) => (
+                        <div key={label} className={cn("workspace-dialog-section rounded-2xl p-4", tone)}>
                           <div className="text-[11px] font-bold text-slate-400">{label}</div>
-                          <div className="mt-2 text-2xl font-black tabular-nums text-white">{value}</div>
+                          <div className={cn("mt-2 text-2xl font-black tabular-nums", valueTone)}>{value}</div>
                         </div>
                       ))}
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                    <div className="workspace-dialog-section workspace-dialog-section--success rounded-2xl p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-black text-white">站點內容</div>
                         <div className="text-[11px] text-slate-500">更新 {new Date(previewProject.updatedAt).toLocaleString("zh-TW")}</div>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {previewProject.document.sites.map((site) => (
-                          <div key={site.id} className="rounded-xl border border-white/8 bg-[#081725] px-3 py-3">
+                          <div key={site.id} className="rounded-xl border border-emerald-300/15 bg-emerald-400/[0.055] px-3 py-3">
                             <div className="font-bold text-slate-100">{site.label}</div>
                             <div className="mt-1 text-xs text-slate-400">{site.racks.length} 座機櫃 · {site.phase}</div>
                           </div>
@@ -4504,7 +4504,7 @@ export function DeploymentPlanningCenter() {
         </AlertDialog>
 
         <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
-          <DialogContent className="w-[min(94vw,560px)] max-w-none border border-cyan-300/20 bg-[#0b1b2b] p-0 text-slate-100 sm:max-w-[560px]">
+          <DialogContent data-dialog-tone="project-settings" className="w-[min(94vw,560px)] max-w-none border border-violet-300/25 p-0 text-slate-100 sm:max-w-[560px]">
             <DialogHeader className="border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <Settings2 className="h-5 w-5 text-cyan-300" />
@@ -4514,7 +4514,7 @@ export function DeploymentPlanningCenter() {
                 所有獲授權的登入成員會看到同一份專案場景、機櫃與廠房規劃。
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 px-6 py-5">
+            <div className="workspace-dialog-section workspace-dialog-section--violet m-5 space-y-4 rounded-2xl p-4">
               <div className="space-y-2">
                 <Label htmlFor="data-center-project-name">專案名稱</Label>
                 <Input id="data-center-project-name" value={projectDraft.name} onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：Taipei AI Lab" className="border-white/12 bg-[#081522]" />
@@ -4551,7 +4551,7 @@ export function DeploymentPlanningCenter() {
         </Dialog>
 
         <Dialog open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
-          <DialogContent className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[980px]">
+          <DialogContent data-dialog-tone="facility-planner" className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[980px]">
             <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <PencilRuler className="h-5 w-5 text-cyan-300" />
@@ -4564,7 +4564,7 @@ export function DeploymentPlanningCenter() {
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-5 px-6 py-5">
-                <section className="rounded-2xl border border-cyan-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="facility-size" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">廠房尺寸</h2>
@@ -4736,7 +4736,7 @@ export function DeploymentPlanningCenter() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-sky-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="thermal-aisles" className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">冷熱通道</h2>
@@ -4756,14 +4756,23 @@ export function DeploymentPlanningCenter() {
                       新增通道
                     </Button>
                   </div>
-                  <div className="divide-y divide-white/10 border-y border-white/10">
+                  <div className="space-y-2">
                     {selectedFacility.aisles.map((aisle) => {
                       const friendlyPosition = getFriendlyAislePosition(
                         aisle,
                         selectedFacility
                       );
                       return (
-                        <div key={aisle.id} className="py-3">
+                        <div
+                          key={aisle.id}
+                          data-section-tone={aisle.kind === "cold" ? "cold-aisle" : "hot-aisle"}
+                          className={cn(
+                            "rounded-xl border p-3",
+                            aisle.kind === "cold"
+                              ? "border-sky-300/25 bg-sky-400/[0.075]"
+                              : "border-orange-300/25 bg-orange-400/[0.075]"
+                          )}
+                        >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
@@ -4884,7 +4893,7 @@ export function DeploymentPlanningCenter() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-amber-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="power-routing" className="workspace-dialog-section workspace-dialog-section--warning rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">電力佈線</h2>
