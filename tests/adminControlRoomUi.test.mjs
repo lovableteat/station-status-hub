@@ -23,11 +23,16 @@ test("admin workspace exposes clear visual zones without changing user actions",
   assert.match(source, /onDelete=\{handleDeleteUser\}/);
 });
 
-test("admin dialogs and API console share the brighter control-room treatment", async () => {
+test("admin dialogs and API console use the restrained maintenance color system", async () => {
   const permissions = await read("../src/components/admin/UserPermissionsDialog.tsx");
   const userEditor = await read("../src/components/admin/UserEditDialog.tsx");
   const apiPage = await read("../src/components/api-management/ApiManagementPage.tsx");
   const apiKeys = await read("../src/components/api-management/ApiKeyManagement.tsx");
+  const apiPreview = await read("../src/components/api-management/ApiDataPreview.tsx");
+  const apiDocs = await read("../src/components/api-management/ApiDocumentation.tsx");
+  const apiCreateDialog = await read("../src/components/api-management/CreateApiKeyDialog.tsx");
+  const styles = await read("../src/components/admin/admin-panel.css");
+  const apiSurface = [apiPage, apiKeys, apiPreview, apiDocs, apiCreateDialog].join("\n");
 
   assert.match(permissions, /data-admin-dialog="permissions"/);
   assert.match(permissions, /data-permission-model="live-workspace-matrix"/);
@@ -35,8 +40,17 @@ test("admin dialogs and API console share the brighter control-room treatment", 
   assert.match(permissions, /後台管理內頁/);
   assert.match(userEditor, /data-admin-dialog="user-editor"/);
   assert.match(apiPage, /data-admin-surface="api-control-room"/);
+  assert.match(apiPage, /className="admin-api-workspace"/);
+  assert.match(apiPage, /className="admin-api-hero"/);
+  assert.match(styles, /\.admin-api-workspace/);
+  assert.match(styles, /\.admin-api-card/);
+  assert.match(styles, /\.admin-api-primary-action/);
   assert.match(apiKeys, /data-admin-zone="api-key-status"/);
   assert.match(apiKeys, /data-admin-zone="api-key-list"/);
+  assert.doesNotMatch(
+    apiSurface,
+    /radial-gradient|bg-\[linear-gradient|bg-gradient-to-br|#17425d|#16445a|#12413f|#342c59|#443b20|violet-/,
+  );
 
   assert.match(permissions, /set_user_access_permissions/);
   assert.match(userEditor, /\.from\('system_users'\)\s*\.update/);
@@ -68,7 +82,7 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
   assert.match(styles, /#06111f/i);
   assert.match(styles, /#071522/i);
   assert.match(styles, /#2a526f/i);
-  assert.match(styles, /#67e8f9/i);
+  assert.match(styles, /#4f8cff/i);
   assert.match(styles, /@media \(max-width: 900px\)/);
   assert.match(header, /MaintenancePageHeader/);
   assert.match(metrics, /MaintenanceMetricStrip/);

@@ -287,10 +287,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
   if (hasProviderConfiguration && selectedApiKey && selectedMetadata) {
     return (
       <div className="space-y-5">
-        <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
-          <CardHeader className="border-b border-emerald-300/10 pb-5">
+        <Card className="admin-api-panel">
+          <CardHeader className="border-b border-[#2a526f] pb-5">
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-              <Sparkles className="h-6 w-6 text-emerald-300" />
+              <Sparkles className="h-6 w-6 text-[#d8e7ff]" />
               外部 API 測試
             </CardTitle>
             <p className="text-sm leading-6 text-slate-300">
@@ -301,7 +301,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
 
           <CardContent className="space-y-5 pt-5">
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+              <div className="admin-api-card-muted p-4">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   金鑰名稱
                 </p>
@@ -309,7 +309,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   {selectedApiKey.key_name}
                 </p>
               </div>
-              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+              <div className="admin-api-card-muted p-4">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Provider
                 </p>
@@ -317,7 +317,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   {selectedMetadata.provider}
                 </p>
               </div>
-              <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] p-4">
+              <div className="admin-api-card-muted p-4">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Model
                 </p>
@@ -356,9 +356,9 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+              <div className="admin-api-card-muted p-5">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-200">
+                  <div className="admin-api-icon p-3">
                     <Waypoints className="h-5 w-5" />
                   </div>
                   <div>
@@ -371,7 +371,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-cyan-300/12 bg-[#182640] p-4">
+                <div className="mt-5 rounded-xl border border-[#2a526f] bg-[#071522] p-4">
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                     Request URL
                   </p>
@@ -403,9 +403,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
             <div className="flex justify-end">
               <Button
                 type="button"
+                variant="outline"
                 onClick={() => void handleProviderTest()}
                 disabled={providerLoading || !apiKey.trim()}
-                className="bg-emerald-400 text-slate-950 shadow-[0_12px_24px_rgba(74,222,128,0.22)] hover:bg-emerald-300"
+                className="admin-api-primary-action"
               >
                 <Play className="mr-2 h-4 w-4" />
                 {providerLoading ? "測試中..." : `測試 ${selectedMetadata.provider} API`}
@@ -436,10 +437,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
 
   return (
     <div className="space-y-5">
-      <Card className="border-emerald-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
-        <CardHeader className="border-b border-emerald-300/10 pb-5">
+      <Card className="admin-api-panel">
+        <CardHeader className="border-b border-[#2a526f] pb-5">
           <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-            <Database className="h-6 w-6 text-emerald-300" />
+            <Database className="h-6 w-6 text-[#d8e7ff]" />
             內部 API 測試
           </CardTitle>
           <p className="text-sm leading-6 text-slate-300">
@@ -495,9 +496,9 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
               )}
             </div>
 
-            <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+            <div className="admin-api-card-muted p-5">
               <div className="flex items-start gap-3">
-                <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-200">
+                <div className="admin-api-icon p-3">
                   <Waypoints className="h-5 w-5" />
                 </div>
                 <div>
@@ -510,7 +511,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-cyan-300/12 bg-[#182640] p-4">
+              <div className="mt-5 rounded-xl border border-[#2a526f] bg-[#071522] p-4">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                   Response
                 </p>
@@ -545,9 +546,10 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
             </code>
             <Button
               type="button"
+              variant="outline"
               onClick={handleInternalPreview}
               disabled={!apiKey.trim() || !selectedEndpoint}
-              className="bg-emerald-400 text-slate-950 shadow-[0_12px_24px_rgba(74,222,128,0.22)] hover:bg-emerald-300"
+              className="admin-api-primary-action"
             >
               <Play className="mr-2 h-4 w-4" />
               測試內部 API

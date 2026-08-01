@@ -417,10 +417,10 @@ export function CreateApiKeyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92svh] max-w-2xl overflow-y-auto border-cyan-300/20 bg-[#0b1728] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,0.58)]">
-        <DialogHeader className="border-b border-cyan-300/12 bg-[linear-gradient(135deg,rgba(34,211,238,0.10),transparent_55%)] px-6 py-5 text-left">
+      <DialogContent className="max-h-[92svh] max-w-2xl overflow-y-auto border-[#2a526f] bg-[#071522] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,0.58)]">
+        <DialogHeader className="border-b border-[#2a526f] bg-[#0a2032] px-6 py-5 text-left">
           <DialogTitle className="flex items-center gap-3 text-2xl font-black text-slate-50">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-200">
+            <span className="admin-api-icon h-10 w-10 rounded-xl">
               <KeyRound className="h-5 w-5" />
             </span>
             {isEditMode ? "編輯 AI 金鑰" : "新增 AI 金鑰"}
@@ -724,11 +724,12 @@ export function CreateApiKeyDialog({
               </Button>
               <Button
                 type="button"
+                variant="outline"
                 onClick={() => void saveApiKey()}
                 disabled={
                   loading || (!activePreset && !isLegacyRecord) || !formData.apiKey.trim()
                 }
-                className="min-w-32 bg-cyan-400 font-black text-[#04111f] shadow-[0_6px_8px_rgba(34,211,238,0.22)] hover:bg-cyan-300"
+                className="admin-api-primary-action min-w-32 font-black"
               >
                 {loading ? (
                   <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />儲存中...</>

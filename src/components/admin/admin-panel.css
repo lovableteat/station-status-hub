@@ -69,9 +69,9 @@
 
 .admin-sidebar-collapse {
   flex: 0 0 auto;
-  border: 1px solid rgb(103 232 249 / 25%);
-  color: #cffafe;
-  background: rgb(103 232 249 / 10%);
+  border: 1px solid rgb(79 140 255 / 30%);
+  color: #d8e7ff;
+  background: rgb(79 140 255 / 10%);
 }
 
 .admin-sidebar-mobile-close {
@@ -113,9 +113,9 @@
 }
 
 .admin-sidebar-item.is-active {
-  border-color: rgb(103 232 249 / 70%);
-  color: #06111f;
-  background: #67e8f9;
+  border-color: rgb(116 167 255 / 70%);
+  color: #ffffff;
+  background: #4f8cff;
 }
 
 .admin-sidebar-item > span {
@@ -177,6 +177,126 @@
   border: 1px solid #2a526f;
   border-radius: 12px;
   background: #0a2032;
+}
+
+.admin-api-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #2a526f;
+  border-radius: 12px;
+  padding: 14px;
+  color: #e8f3fb;
+  background: #071522;
+}
+
+.admin-api-hero,
+.admin-api-panel,
+.admin-api-card,
+.admin-api-stat,
+.admin-api-card-muted,
+.admin-api-table-frame {
+  border: 1px solid #2a526f;
+  border-radius: 12px;
+  background: #0a2032;
+  box-shadow: none;
+}
+
+.admin-api-hero {
+  padding: 18px;
+}
+
+.admin-api-panel {
+  overflow: hidden;
+}
+
+.admin-api-card,
+.admin-api-stat,
+.admin-api-card-muted {
+  background: #071522;
+}
+
+.admin-api-card-muted {
+  background: #0d263a;
+}
+
+.admin-api-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(79 140 255 / 34%);
+  border-radius: 10px;
+  color: #d8e7ff;
+  background: rgb(79 140 255 / 10%);
+}
+
+.admin-api-chip {
+  border: 1px solid #2a526f;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #071522;
+}
+
+.admin-api-chip-label {
+  color: #8fb1c9;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.admin-api-tabs {
+  border: 1px solid #2a526f;
+  border-radius: 12px;
+  background: #071522;
+  box-shadow: none;
+}
+
+.admin-api-tab {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #a9c0d1;
+}
+
+.admin-api-tab[data-state="active"] {
+  border-color: rgb(116 167 255 / 55%);
+  color: #ffffff;
+  background: rgb(79 140 255 / 22%);
+}
+
+.admin-api-primary-action {
+  border: 1px solid rgb(116 167 255 / 55%);
+  color: #ffffff;
+  background: #4f8cff;
+  box-shadow: none;
+}
+
+.admin-api-primary-action:hover {
+  color: #ffffff;
+  background: #3f7df0;
+}
+
+.admin-api-secondary-action {
+  border: 1px solid #2a526f;
+  color: #d8e7ff;
+  background: #071522;
+}
+
+.admin-api-secondary-action:hover {
+  border-color: rgb(116 167 255 / 45%);
+  color: #ffffff;
+  background: #0d263a;
+}
+
+.admin-api-code {
+  border: 1px solid #2a526f;
+  border-radius: 10px;
+  color: #d8e7ff;
+  background: #071522;
+}
+
+.admin-api-table-frame {
+  overflow: hidden;
 }
 
 .admin-sidebar-backdrop {
