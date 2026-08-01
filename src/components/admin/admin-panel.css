@@ -1,10 +1,20 @@
 .admin-workspace {
+  --admin-accent-blue: #4f8cff;
+  --admin-accent-teal: #40d9c7;
+  --admin-accent-green: #4ade80;
+  --admin-accent-amber: #fbbf24;
+  --admin-accent-violet: #a78bfa;
+  --admin-accent-rose: #fb7185;
   min-height: 100%;
   width: 100%;
   min-width: 0;
   padding: 12px;
   color: #e8f3fb;
-  background: #06111f;
+  background:
+    radial-gradient(circle at 8% 2%, rgb(79 140 255 / 14%), transparent 26rem),
+    radial-gradient(circle at 78% 0%, rgb(64 217 199 / 10%), transparent 28rem),
+    radial-gradient(circle at 92% 88%, rgb(167 139 250 / 9%), transparent 32rem),
+    #06111f;
 }
 
 .admin-shell {
@@ -28,7 +38,9 @@
   overflow: hidden;
   border: 1px solid #2a526f;
   border-radius: 12px;
-  background: #071522;
+  background:
+    linear-gradient(180deg, rgb(7 21 34 / 98%), rgb(6 17 31 / 98%)),
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 16%), transparent 16rem);
   transition: width 180ms ease-out, transform 180ms ease-out;
 }
 
@@ -43,6 +55,9 @@
   gap: 8px;
   border-bottom: 1px solid rgb(42 82 111 / 75%);
   padding: 8px;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 12%), transparent 11rem),
+    linear-gradient(180deg, rgb(16 38 58 / 72%), rgb(7 21 34 / 0%));
 }
 
 .admin-sidebar-heading > div {
@@ -109,13 +124,17 @@
 .admin-sidebar-item:hover {
   border-color: #2a526f;
   color: #f3f8fc;
-  background: #10263a;
+  background:
+    radial-gradient(circle at 0% 50%, rgb(64 217 199 / 12%), transparent 10rem),
+    #10263a;
 }
 
 .admin-sidebar-item.is-active {
   border-color: rgb(116 167 255 / 70%);
   color: #ffffff;
-  background: #4f8cff;
+  background:
+    linear-gradient(135deg, rgb(79 140 255 / 100%), rgb(104 122 255 / 96%)),
+    radial-gradient(circle at 100% 0%, rgb(64 217 199 / 34%), transparent 8rem);
 }
 
 .admin-sidebar-item > span {
@@ -163,7 +182,10 @@
   border: 1px solid #2a526f;
   border-radius: 12px;
   padding: 14px;
-  background: #071522;
+  background:
+    radial-gradient(circle at 8% 0%, rgb(79 140 255 / 12%), transparent 22rem),
+    radial-gradient(circle at 86% 0%, rgb(64 217 199 / 10%), transparent 20rem),
+    #071522;
 }
 
 .admin-mobile-menu {
@@ -176,7 +198,10 @@
 .admin-user-section {
   border: 1px solid #2a526f;
   border-radius: 12px;
-  background: #0a2032;
+  background:
+    radial-gradient(circle at 7% 0%, rgb(64 217 199 / 12%), transparent 20rem),
+    radial-gradient(circle at 88% 12%, rgb(251 191 36 / 7%), transparent 18rem),
+    #0a2032;
 }
 
 .admin-api-workspace {
@@ -187,7 +212,11 @@
   border-radius: 12px;
   padding: 14px;
   color: #e8f3fb;
-  background: #071522;
+  background:
+    radial-gradient(circle at 8% 0%, rgb(64 217 199 / 12%), transparent 28rem),
+    radial-gradient(circle at 70% 12%, rgb(79 140 255 / 10%), transparent 26rem),
+    radial-gradient(circle at 92% 88%, rgb(167 139 250 / 9%), transparent 28rem),
+    #071522;
 }
 
 .admin-api-hero,
@@ -198,12 +227,19 @@
 .admin-api-table-frame {
   border: 1px solid #2a526f;
   border-radius: 12px;
-  background: #0a2032;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 9%), transparent 18rem),
+    #0a2032;
   box-shadow: none;
 }
 
 .admin-api-hero {
   padding: 18px;
+  border-color: rgb(64 217 199 / 34%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 16%), transparent 24rem),
+    radial-gradient(circle at 100% 0%, rgb(79 140 255 / 12%), transparent 22rem),
+    #0a2032;
 }
 
 .admin-api-panel {
@@ -213,11 +249,15 @@
 .admin-api-card,
 .admin-api-stat,
 .admin-api-card-muted {
-  background: #071522;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 8%), transparent 16rem),
+    #071522;
 }
 
 .admin-api-card-muted {
-  background: #0d263a;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 8%), transparent 16rem),
+    #0d263a;
 }
 
 .admin-api-icon {
@@ -234,7 +274,30 @@
   border: 1px solid #2a526f;
   border-radius: 10px;
   padding: 12px 14px;
-  background: #071522;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 10%), transparent 14rem),
+    #071522;
+}
+
+.admin-api-chip:nth-child(1) {
+  border-color: rgb(79 140 255 / 38%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 16%), transparent 14rem),
+    #071522;
+}
+
+.admin-api-chip:nth-child(2) {
+  border-color: rgb(167 139 250 / 36%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(167 139 250 / 14%), transparent 14rem),
+    #071522;
+}
+
+.admin-api-chip:nth-child(3) {
+  border-color: rgb(74 222 128 / 34%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(74 222 128 / 14%), transparent 14rem),
+    #071522;
 }
 
 .admin-api-chip-label {
@@ -248,7 +311,9 @@
 .admin-api-tabs {
   border: 1px solid #2a526f;
   border-radius: 12px;
-  background: #071522;
+  background:
+    radial-gradient(circle at 0% 50%, rgb(79 140 255 / 8%), transparent 18rem),
+    #071522;
   box-shadow: none;
 }
 
@@ -261,13 +326,14 @@
 .admin-api-tab[data-state="active"] {
   border-color: rgb(116 167 255 / 55%);
   color: #ffffff;
-  background: rgb(79 140 255 / 22%);
+  background:
+    linear-gradient(135deg, rgb(79 140 255 / 36%), rgb(167 139 250 / 18%));
 }
 
 .admin-api-primary-action {
   border: 1px solid rgb(116 167 255 / 55%);
   color: #ffffff;
-  background: #4f8cff;
+  background: linear-gradient(135deg, var(--admin-accent-blue), #7c83ff);
   box-shadow: none;
 }
 
@@ -292,7 +358,44 @@
   border: 1px solid #2a526f;
   border-radius: 10px;
   color: #d8e7ff;
-  background: #071522;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 8%), transparent 14rem),
+    #071522;
+}
+
+.admin-api-stat:nth-child(1) {
+  border-color: rgb(79 140 255 / 34%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 14%), transparent 16rem),
+    #071522;
+}
+
+.admin-api-stat:nth-child(2) {
+  border-color: rgb(64 217 199 / 36%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(64 217 199 / 14%), transparent 16rem),
+    #071522;
+}
+
+.admin-api-stat:nth-child(3) {
+  border-color: rgb(251 191 36 / 38%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(251 191 36 / 14%), transparent 16rem),
+    #071522;
+}
+
+.admin-api-stat:nth-child(4) {
+  border-color: rgb(167 139 250 / 38%);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(167 139 250 / 14%), transparent 16rem),
+    #071522;
+}
+
+.admin-api-table-frame {
+  background:
+    radial-gradient(circle at 0% 0%, rgb(79 140 255 / 7%), transparent 20rem),
+    radial-gradient(circle at 100% 100%, rgb(251 191 36 / 5%), transparent 18rem),
+    #0a2032;
 }
 
 .admin-api-table-frame {
