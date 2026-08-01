@@ -249,7 +249,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
 
   return (
     <div className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-      <section data-admin-zone="announcement-composer" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
+      <section data-admin-zone="announcement-composer" className="surface-accent surface-accent--teal rounded-2xl border bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-lg font-bold text-slate-50">
@@ -328,18 +328,18 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
       </section>
 
       <div className="grid min-h-0 content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
-        <section data-admin-zone="online-locations" className="rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
+        <section data-admin-zone="online-locations" className="surface-accent surface-accent--green rounded-2xl border bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-cyan-300" />在線位置</div>
+            <div className="flex items-center gap-2 font-bold text-slate-50"><Users className="h-5 w-5 text-emerald-300" />在線位置</div>
             <Badge className="gap-1.5 bg-emerald-300/15 text-emerald-100"><Radio className="h-3 w-3" />{connectionStatus === "online" ? `${totalOnlineSessions} 連線 / ${onlineAccounts.length} 帳號` : "連線中"}</Badge>
           </div>
           <div className="mt-3 grid gap-2">
             {onlineByModule.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">目前尚未取得在線位置</div>
             ) : onlineByModule.map(([module, count]) => (
-              <div key={module} className="flex items-center justify-between rounded-xl border border-sky-200/10 bg-[#071522] px-3 py-2.5">
+              <div key={module} className="flex items-center justify-between rounded-xl border border-emerald-300/15 bg-emerald-400/[0.045] px-3 py-2.5">
                 <span className="text-sm text-slate-300">{moduleLabels[module] || module}</span>
-                <span className="font-mono text-sm font-bold text-cyan-200">{count} 人</span>
+                <span className="font-mono text-sm font-bold text-emerald-200">{count} 人</span>
               </div>
             ))}
           </div>
@@ -348,9 +348,9 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">帳號連線數</div>
               <div className="grid gap-2">
                 {onlineAccounts.map((onlineAccount) => (
-                  <div key={onlineAccount.userId} className="flex items-center justify-between rounded-xl border border-sky-200/10 bg-[#071522] px-3 py-2.5">
+                  <div key={onlineAccount.userId} className="flex items-center justify-between rounded-xl border border-emerald-300/15 bg-emerald-400/[0.045] px-3 py-2.5">
                     <span className="min-w-0 truncate text-sm text-slate-300">{onlineAccount.displayName || onlineAccount.username}</span>
-                    <span className="ml-3 shrink-0 font-mono text-sm font-bold text-cyan-200">{onlineAccount.sessionCount || 1} 個連線</span>
+                    <span className="ml-3 shrink-0 font-mono text-sm font-bold text-emerald-200">{onlineAccount.sessionCount || 1} 個連線</span>
                   </div>
                 ))}
               </div>
@@ -358,9 +358,9 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
           ) : null}
         </section>
 
-        <section data-admin-zone="announcement-history" className="min-h-0 rounded-2xl border border-[#2a526f] bg-[#0a2032] p-4">
+        <section data-admin-zone="announcement-history" className="surface-accent surface-accent--violet min-h-0 rounded-2xl border bg-[#0a2032] p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 font-bold text-slate-50"><Clock3 className="h-5 w-5 text-sky-300" />發送紀錄</div>
+            <div className="flex items-center gap-2 font-bold text-slate-50"><Clock3 className="h-5 w-5 text-violet-300" />發送紀錄</div>
             <Button variant="ghost" size="sm" onClick={() => void loadData()} className="text-slate-400"><RefreshCw className="mr-1.5 h-3.5 w-3.5" />更新</Button>
           </div>
           <ScrollArea className="mt-3 h-[310px] pr-2">
@@ -371,14 +371,14 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
                 const readPercent = item.recipientCount > 0 ? Math.round((item.readCount / item.recipientCount) * 100) : 0;
                 const expanded = expandedAnnouncementId === item.id;
                 return (
-                <article key={item.id} className="rounded-xl border border-sky-200/12 bg-[#071522] p-3">
+                <article key={item.id} className="rounded-xl border border-violet-300/15 bg-violet-400/[0.045] p-3">
                   <button type="button" onClick={() => setExpandedAnnouncementId(expanded ? null : item.id)} className="w-full text-left">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-semibold text-slate-100">{item.title}</h3>
                       <time className="shrink-0 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
                     </div>
                     <p className={cn("mt-1.5 text-sm leading-6 text-slate-400", !expanded && "line-clamp-2")}>{item.message}</p>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><span className="block h-full rounded-full bg-cyan-300" style={{ width: `${readPercent}%` }} /></div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><span className="block h-full rounded-full bg-violet-300" style={{ width: `${readPercent}%` }} /></div>
                     <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
                       <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />已讀 {item.readCount} / {item.recipientCount}</span>
                       <span>{readPercent}% · {expanded ? "收合內容" : "查看完整內容"}</span>

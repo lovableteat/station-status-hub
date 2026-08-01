@@ -578,6 +578,75 @@ All colors MUST be HSL for proper theming support.
     --surface-accent-color: var(--platform-rose);
   }
 
+  .workspace-dialog-surface {
+    --workspace-dialog-tone: var(--platform-blue);
+    border-color: hsl(var(--workspace-dialog-tone) / 0.34);
+    background:
+      radial-gradient(circle at 12% 0%, hsl(var(--workspace-dialog-tone) / 0.16), transparent 24rem),
+      radial-gradient(circle at 92% 8%, hsl(var(--platform-teal) / 0.08), transparent 20rem),
+      linear-gradient(180deg, hsl(220 38% 15%), hsl(222 48% 9%));
+    color: hsl(var(--foreground));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      0 28px 90px -34px hsl(var(--workspace-dialog-tone) / 0.42),
+      0 36px 120px -42px hsl(222 72% 2% / 0.94);
+  }
+
+  .workspace-dialog-surface:focus-visible {
+    outline: 2px solid hsl(var(--workspace-dialog-tone) / 0.78);
+    outline-offset: 3px;
+  }
+
+  .workspace-dialog-surface[data-dialog-tone="project-manager"] {
+    --workspace-dialog-tone: var(--platform-blue);
+  }
+
+  .workspace-dialog-surface[data-dialog-tone="facility-planner"] {
+    --workspace-dialog-tone: var(--platform-teal);
+  }
+
+  .workspace-dialog-surface[data-dialog-tone="project-settings"],
+  .workspace-dialog-surface[data-dialog-tone="engineering"] {
+    --workspace-dialog-tone: var(--platform-violet);
+  }
+
+  .workspace-dialog-surface[data-dialog-tone="danger"] {
+    --workspace-dialog-tone: var(--platform-rose);
+  }
+
+  .workspace-dialog-section {
+    --workspace-section-tone: var(--platform-blue);
+    border: 1px solid hsl(var(--workspace-section-tone) / 0.28);
+    background:
+      radial-gradient(circle at 92% 0%, hsl(var(--workspace-section-tone) / 0.14), transparent 18rem),
+      hsl(220 42% 12%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.045);
+  }
+
+  .workspace-dialog-section--info {
+    --workspace-section-tone: var(--platform-blue);
+  }
+
+  .workspace-dialog-section--teal {
+    --workspace-section-tone: var(--platform-teal);
+  }
+
+  .workspace-dialog-section--success {
+    --workspace-section-tone: var(--platform-green);
+  }
+
+  .workspace-dialog-section--warning {
+    --workspace-section-tone: var(--platform-amber);
+  }
+
+  .workspace-dialog-section--violet {
+    --workspace-section-tone: var(--platform-violet);
+  }
+
+  .workspace-dialog-section--danger {
+    --workspace-section-tone: var(--platform-rose);
+  }
+
   .maintenance-workspace {
     --background: 212 67% 7%;
     --foreground: 207 60% 97%;
