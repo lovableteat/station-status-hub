@@ -187,15 +187,15 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
       return <Badge variant="destructive">已過期</Badge>;
     }
 
-    return <Badge className="bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/15">啟用</Badge>;
+    return <Badge className="border border-[#4f8cff]/30 bg-[#1a3354] text-[#d8e7ff] hover:bg-[#1f3c63]">啟用</Badge>;
   };
 
   return (
     <div className="space-y-5">
       <div data-admin-zone="api-key-status" className="grid gap-4 lg:grid-cols-4">
-        <Card className="border-cyan-300/35 bg-[linear-gradient(145deg,#16445a,#103048)] shadow-[0_20px_45px_-34px_rgba(34,211,238,0.85)]">
+        <Card className="admin-api-stat">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-100/90">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8fb1c9]">
               Total Keys
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.total}</p>
@@ -203,9 +203,9 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-300/35 bg-[linear-gradient(145deg,#12413f,#0d3035)] shadow-[0_20px_45px_-34px_rgba(52,211,153,0.75)]">
+        <Card className="admin-api-stat">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-100/90">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8fb1c9]">
               Active
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.active}</p>
@@ -213,9 +213,9 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-amber-300/35 bg-[linear-gradient(145deg,#443b20,#27302e)] shadow-[0_20px_45px_-34px_rgba(251,191,36,0.72)]">
+        <Card className="admin-api-stat">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-100/90">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8fb1c9]">
               Expiring Soon
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.expiringSoon}</p>
@@ -223,9 +223,9 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-violet-300/35 bg-[linear-gradient(145deg,#342c59,#1e2943)] shadow-[0_20px_45px_-34px_rgba(167,139,250,0.75)]">
+        <Card className="admin-api-stat">
           <CardContent className="pt-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-100/90">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8fb1c9]">
               Usage Count
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.usageCount}</p>
@@ -234,11 +234,11 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
         </Card>
       </div>
 
-      <Card data-admin-zone="api-key-list" className="border-cyan-300/30 bg-[linear-gradient(145deg,#13354d,#10283d)] shadow-[0_24px_60px_-42px_rgba(34,211,238,0.85)]">
-        <CardHeader className="flex flex-col gap-4 border-b border-cyan-300/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <Card data-admin-zone="api-key-list" className="admin-api-panel">
+        <CardHeader className="flex flex-col gap-4 border-b border-[#2a526f] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-              <ShieldCheck className="h-6 w-6 text-cyan-300" />
+              <ShieldCheck className="h-6 w-6 text-[#d8e7ff]" />
               API 金鑰管理
             </CardTitle>
             <p className="mt-2 text-sm leading-6 text-slate-300">
@@ -248,9 +248,10 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
           <Button
             type="button"
+            variant="outline"
             disabled={!canEditApiManagement}
             onClick={openCreateDialog}
-            className="bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
+            className="admin-api-primary-action"
           >
             <Plus className="mr-2 h-4 w-4" />
             建立新金鑰
@@ -261,27 +262,28 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-300">讀取中...</div>
           ) : apiKeys.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-cyan-300/24 bg-[#111d33] px-6 py-12 text-center">
-              <KeyRound className="mx-auto h-12 w-12 text-cyan-100/60" />
+            <div className="rounded-xl border border-dashed border-[#2a526f] bg-[#071522] px-6 py-12 text-center">
+              <KeyRound className="mx-auto h-12 w-12 text-[#8fb1c9]" />
               <p className="mt-4 text-lg font-bold text-slate-100">目前沒有 API 金鑰</p>
               <p className="mt-2 text-sm text-slate-300">
                 你可以先新增 API key，再補上 provider、model 和 base URL。
               </p>
               <Button
                 type="button"
+                variant="outline"
                 disabled={!canEditApiManagement}
                 onClick={openCreateDialog}
-                className="mt-6 bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
+                className="admin-api-primary-action mt-6"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 立即新增
               </Button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-cyan-200/25 bg-[#0b2235] shadow-inner shadow-cyan-950/30">
+            <div className="admin-api-table-frame">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-cyan-300/10 hover:bg-transparent">
+                  <TableRow className="border-[#2a526f] hover:bg-transparent">
                     <TableHead className="text-slate-300">名稱 / 服務商</TableHead>
                     <TableHead className="text-slate-300">金鑰</TableHead>
                     <TableHead className="text-slate-300">狀態</TableHead>
@@ -298,7 +300,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                     return (
                       <TableRow
                         key={apiKey.id}
-                        className="border-cyan-300/10 text-slate-100 hover:bg-cyan-300/[0.05]"
+                        className="border-[#213f5a] text-slate-100 hover:bg-[#12253a]"
                       >
                         <TableCell className="align-top">
                           <div>
@@ -307,7 +309,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               {permissions.metadata.provider ? (
                                 <Badge
                                   variant="outline"
-                                  className="border-cyan-400/20 text-cyan-100"
+                                  className="border-[#4f8cff]/30 bg-[#142743] text-[#d8e7ff]"
                                 >
                                   {permissions.metadata.provider}
                                 </Badge>
@@ -315,7 +317,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               {permissions.metadata.editable ? (
                                 <Badge
                                   variant="outline"
-                                  className="border-emerald-400/20 text-emerald-100"
+                                  className="border-[#4f8cff]/25 bg-[#102238] text-[#d8e7ff]"
                                 >
                                   可編輯
                                 </Badge>
@@ -329,7 +331,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">
                           <div className="flex items-start gap-2">
-                            <code className="max-w-[26rem] rounded-lg border border-cyan-300/12 bg-[#182640] px-3 py-2 font-mono text-xs leading-6 text-cyan-50">
+                            <code className="admin-api-code max-w-[26rem]">
                               {maskApiKey(apiKey.api_key, visibleKeys.has(apiKey.id))}
                             </code>
                             <div className="flex items-center gap-1">
@@ -338,7 +340,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => toggleKeyVisibility(apiKey.id)}
-                                className="h-8 w-8 text-slate-300 hover:bg-cyan-300/12 hover:text-white"
+                                className="h-8 w-8 text-slate-300 hover:bg-[#183250] hover:text-white"
                               >
                                 {visibleKeys.has(apiKey.id) ? (
                                   <EyeOff className="h-4 w-4" />
@@ -351,7 +353,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => void copyToClipboard(apiKey.api_key)}
-                                className="h-8 w-8 text-slate-300 hover:bg-cyan-300/12 hover:text-white"
+                                className="h-8 w-8 text-slate-300 hover:bg-[#183250] hover:text-white"
                               >
                                 <Copy className="h-4 w-4" />
                               </Button>
@@ -372,7 +374,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                             {permissions.read ? (
                               <Badge
                                 variant="outline"
-                                className="border-cyan-400/20 text-cyan-100"
+                                className="border-[#4f8cff]/30 bg-[#142743] text-[#d8e7ff]"
                               >
                                 讀取
                               </Badge>
@@ -380,7 +382,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                             {permissions.write ? (
                               <Badge
                                 variant="outline"
-                                className="border-emerald-400/20 text-emerald-100"
+                                className="border-[#4f8cff]/25 bg-[#102238] text-[#d8e7ff]"
                               >
                                 寫入
                               </Badge>
@@ -392,7 +394,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">
                             <div className="inline-flex items-center gap-2 text-sm text-slate-200">
-                              <Clock3 className="h-3.5 w-3.5 text-cyan-100/55" />
+                              <Clock3 className="h-3.5 w-3.5 text-[#8fb1c9]" />
                             {formatDateTime(apiKey.last_used_at, "從未使用")}
                           </div>
                         </TableCell>
@@ -404,7 +406,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               variant="ghost"
                               size="sm"
                               onClick={() => onTestKey?.(apiKey)}
-                              className="text-emerald-200 hover:bg-emerald-400/10 hover:text-emerald-100"
+                              className="text-[#d8e7ff] hover:bg-[#183250] hover:text-white"
                             >
                               <Play className="mr-1.5 h-4 w-4" />
                               測試
