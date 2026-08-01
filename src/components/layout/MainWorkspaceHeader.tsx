@@ -66,7 +66,7 @@ export function MainWorkspaceHeader({
   );
 
   return (
-    <header className="sticky top-0 z-50 shrink-0 border-b border-primary/15 bg-[linear-gradient(180deg,hsl(222_42%_11%/0.98),hsl(223_42%_9%/0.95))] shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
+    <header className="platform-color-field sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 px-3 py-3 sm:px-4 xl:grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)] xl:gap-x-4 xl:px-5 2xl:px-6">
         {onBrandClick ? (
           <button
