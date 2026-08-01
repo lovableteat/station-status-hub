@@ -208,7 +208,10 @@ export function PcbDialogs({
 
   return (
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="pcb-dialog max-h-[88vh] max-w-xl gap-4 overflow-y-auto p-5 text-slate-100">
+      <DialogContent
+        data-dialog-tone={dialog?.kind === "confirm" ? "danger" : "engineering"}
+        className="pcb-dialog max-h-[88vh] max-w-xl gap-4 overflow-y-auto p-5 text-slate-100"
+      >
         {dialog?.kind === "confirm" && (
           <>
             <DialogHeader>
@@ -263,7 +266,7 @@ export function PcbDialogs({
         )}
 
         {isForm && (
-          <form onSubmit={submit}>
+          <form onSubmit={submit} className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4">
             <DialogHeader>
               <DialogTitle>
                 {dialog.kind === "new-project" && "新增 PCB 專案"}
