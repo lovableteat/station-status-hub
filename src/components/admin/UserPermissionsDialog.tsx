@@ -246,13 +246,9 @@ export function UserPermissionsDialog({
     try {
       setIsLoading(true);
       const synchronizedPermissions = synchronizeWorkspacePermissions(
-        synchronizeWorkspacePermissions(
-          permissions,
-          "station-status",
-          workspaceAccess["station-status"],
-        ),
-        "user-management",
-        workspaceAccess["user-management"],
+        permissions,
+        "station-status",
+        workspaceAccess["station-status"],
       );
 
       const currentRequest = {
@@ -537,8 +533,10 @@ export function UserPermissionsDialog({
                     </div>
 
                     <div className="grid gap-3">
-                      {section.groupKeys.map((groupKey) => {
-                        const group = LEGACY_PAGE_PERMISSION_GROUPS[groupKey];
+                      {section.groupKeys
+                        .map((groupKey) => [groupKey, LEGACY_PAGE_PERMISSION_GROUPS[groupKey]] as const)
+                        .filter(([groupKey]) => groupKey !== "test_plan")
+                        .map(([groupKey, group]) => {
                         const groupPermissions = group.permissions.map(
                           (permission) => permission.key,
                         );
