@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 import { ApiChatConsole } from "./ApiChatConsole";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
@@ -36,6 +37,7 @@ function sortAvailableApiKeys(records: ApiKeyRecord[]) {
 }
 
 export function ApiChatWorkspacePage() {
+  const { activeProjectId, allProjects } = useTestProject();
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<null | string>(null);
 
@@ -99,6 +101,12 @@ export function ApiChatWorkspacePage() {
     () => apiKeys.find((item) => item.id === selectedApiKeyId) ?? apiKeys[0] ?? null,
     [apiKeys, selectedApiKeyId]
   );
+  const maintenanceProjects = useMemo(
+    () => allProjects
+      .filter((project) => project.status !== "archived" && !project.is_archived)
+      .map((project) => ({ id: project.id, name: project.name, status: project.status })),
+    [allProjects],
+  );
 
   return (
     <div className="min-h-full w-full min-w-0 px-3 py-3 md:px-5 md:py-4">
@@ -108,6 +116,8 @@ export function ApiChatWorkspacePage() {
         selectedApiKeyId={selectedApiKeyId}
         onSelectApiKey={setSelectedApiKeyId}
         mode="chat-only"
+        maintenanceProjects={maintenanceProjects}
+        currentMaintenanceProjectId={activeProjectId}
       />
     </div>
   );
