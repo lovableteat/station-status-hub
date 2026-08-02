@@ -34,6 +34,7 @@ export type DashboardSystemStatus = "active" | "completed" | "waiting";
 export interface DashboardSystemMetric {
   completionAt: string | null;
   completedItems: number;
+  lastActivityAt: string | null;
   nextStationId: string | null;
   nextStationName: string | null;
   progress: number;
@@ -188,6 +189,10 @@ export function calculateDashboardMetrics<
     );
     const isComplete = activeItems.length > 0 && completedItems === activeItems.length;
     const systemProgress = progressBySystem.get(system.id) ?? [];
+    const lastActivityAt = systemProgress
+      .flatMap((entry) => [entry.updated_at, entry.completed_at, entry.started_at])
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => toTimestamp(right) - toTimestamp(left))[0] ?? null;
     const isActive = Boolean(system.actual_started_at) || systemProgress.some(hasStarted);
     const nextStation = sortedStations.find((station) =>
       (itemsByStation.get(station.id) ?? []).some(
@@ -206,6 +211,7 @@ export function calculateDashboardMetrics<
     return {
       completionAt: isComplete ? system.actual_completed_at ?? latestCompletedAt : null,
       completedItems,
+      lastActivityAt,
       nextStationId: nextStation?.id ?? null,
       nextStationName: nextStation?.station_name ?? null,
       progress: activeItems.length
