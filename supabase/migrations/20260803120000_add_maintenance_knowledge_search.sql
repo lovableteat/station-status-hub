@@ -436,29 +436,36 @@ begin
       where char_length(token.value) >= 2
         and position(token.value in lower(chunks.search_text)) > 0
     ) as token_score
+  ),
+  scored as (
+    select
+      ranked.*,
+      max(ranked.calculated_rank) over () as max_rank
+    from ranked
+    where lower(ranked.exact_key) = v_query_lower
+       or position(v_query_lower in lower(ranked.search_text)) > 0
+       or ranked.matches > 0
+       or greatest(
+            extensions.similarity(v_query_lower, lower(ranked.title)),
+            extensions.similarity(v_query_lower, lower(ranked.search_text))
+          ) >= 0.08
   )
   select
-    ranked.chunk_id,
-    ranked.source_type,
-    ranked.source_id,
-    ranked.project_id,
-    ranked.project_name,
-    ranked.title,
-    ranked.content,
-    ranked.source_label,
-    ranked.module,
-    ranked.route_params,
-    ranked.updated_at,
-    ranked.calculated_rank as rank
-  from ranked
-  where lower(ranked.exact_key) = v_query_lower
-     or position(v_query_lower in lower(ranked.search_text)) > 0
-     or ranked.matches > 0
-     or greatest(
-          extensions.similarity(v_query_lower, lower(ranked.title)),
-          extensions.similarity(v_query_lower, lower(ranked.search_text))
-        ) >= 0.08
-  order by ranked.calculated_rank desc, ranked.updated_at desc nulls last, ranked.chunk_id
+    scored.chunk_id,
+    scored.source_type,
+    scored.source_id,
+    scored.project_id,
+    scored.project_name,
+    scored.title,
+    scored.content,
+    scored.source_label,
+    scored.module,
+    scored.route_params,
+    scored.updated_at,
+    scored.calculated_rank as rank
+  from scored
+  where scored.calculated_rank >= scored.max_rank * 0.35
+  order by scored.calculated_rank desc, scored.updated_at desc nulls last, scored.chunk_id
   limit v_limit;
 end;
 $$;
