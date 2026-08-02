@@ -60,6 +60,8 @@ test("maintenance ranking supports machine codes, Chinese fuzzy matches, and rou
   assert.match(sql, /position\(v_query_lower in lower\(chunks\.search_text\)\)/i);
   assert.match(sql, /extensions\.similarity/i);
   assert.match(sql, /regexp_split_to_table/i);
+  assert.match(sql, /max\(ranked\.calculated_rank\) over \(\)\s+as max_rank/i);
+  assert.match(sql, /scored\.calculated_rank >= scored\.max_rank \* 0\.35/i);
   assert.match(sql, /jsonb_build_object\('system'/i);
   assert.match(sql, /jsonb_build_object\('station'/i);
   assert.match(sql, /jsonb_build_object\('openIssue'/i);
