@@ -72,7 +72,20 @@ import {
   splitContentByAttachmentMarkers,
 } from "./apiChatPromptHelpers";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import { MaintenanceCitationList } from "./MaintenanceCitationList";
+import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
 import { MarkdownMessage } from "./MarkdownMessage";
+import {
+  MaintenanceCitation,
+  MaintenanceProjectOption,
+  MaintenanceRpcClient,
+  MaintenanceScopeState,
+  buildMaintenanceContext,
+  createMaintenanceScope,
+  parseMaintenanceCitation,
+  searchMaintenanceKnowledge,
+  syncMaintenanceScope,
+} from "./maintenanceKnowledge";
 import {
   bytesToBase64,
   extractPptxContent,
@@ -86,6 +99,8 @@ interface ApiChatConsoleProps {
   selectedApiKeyId?: null | string;
   onSelectApiKey?: (id: string) => void;
   mode?: "full" | "chat-only";
+  maintenanceProjects?: MaintenanceProjectOption[];
+  currentMaintenanceProjectId?: null | string;
 }
 
 interface GeneratedImage {
@@ -113,6 +128,7 @@ interface ChatMessage {
   createdAt: number;
   state?: "normal" | "error";
   images?: GeneratedImage[];
+  citations?: MaintenanceCitation[];
 }
 
 interface ChatConnectionState {
@@ -294,7 +310,8 @@ function createMessage(
   content: string,
   state: ChatMessage["state"] = "normal",
   images: GeneratedImage[] = [],
-  attachments: UploadedAttachment[] = []
+  attachments: UploadedAttachment[] = [],
+  citations: MaintenanceCitation[] = [],
 ): ChatMessage {
   return {
     attachments,
@@ -304,6 +321,7 @@ function createMessage(
     createdAt: Date.now(),
     state,
     images,
+    citations,
   };
 }
 
@@ -412,12 +430,35 @@ function createSavedConversation(params: {
 }
 
 function mapPrivateConversationRow(row: PrivateConversationRow): SavedConversation {
+  const rawMessages = Array.isArray(row.messages) ? row.messages : [];
   return {
     id: row.conversation_key,
     title: row.title,
     savedAt: Number(row.saved_at) || Date.now(),
     draftMessage: row.draft_message,
-    messages: Array.isArray(row.messages) ? (row.messages as unknown as ChatMessage[]) : [],
+    messages: rawMessages.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const message = value as Record<string, unknown>;
+      if (
+        (message.role !== "user" && message.role !== "assistant") ||
+        typeof message.id !== "string" ||
+        typeof message.content !== "string" ||
+        typeof message.createdAt !== "number"
+      ) return [];
+      const citations = Array.isArray(message.citations)
+        ? message.citations.map(parseMaintenanceCitation).filter((citation): citation is MaintenanceCitation => Boolean(citation))
+        : [];
+      return [{
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        createdAt: message.createdAt,
+        state: message.state === "error" ? "error" as const : "normal" as const,
+        attachments: [],
+        images: [],
+        citations,
+      }];
+    }),
     provider: row.provider,
     model: row.model,
     keyLabel: row.key_label,
@@ -438,6 +479,7 @@ function serializePrivateConversations(conversations: SavedConversation[]): Json
       state: message.state,
       attachments: [],
       images: [],
+      citations: message.citations,
     })),
     provider: conversation.provider,
     model: conversation.model,
@@ -825,6 +867,10 @@ function MessageCard({ message }: { message: ChatMessage }) {
             ))}
           </div>
         ) : null}
+
+        {!isUser && message.citations?.length ? (
+          <MaintenanceCitationList citations={message.citations} />
+        ) : null}
       </div>
 
       {isUser ? (
@@ -842,6 +888,8 @@ export function ApiChatConsole({
   selectedApiKeyId,
   onSelectApiKey,
   mode = "full",
+  maintenanceProjects = [],
+  currentMaintenanceProjectId = null,
 }: ApiChatConsoleProps) {
   const [apiKey, setApiKey] = useState("");
   const [provider, setProvider] = useState("gemini");
@@ -877,6 +925,12 @@ export function ApiChatConsole({
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
+  const [maintenanceSourceEnabled, setMaintenanceSourceEnabled] = useState(mode === "chat-only");
+  const [maintenanceScope, setMaintenanceScope] = useState<MaintenanceScopeState>(() =>
+    createMaintenanceScope(currentMaintenanceProjectId, maintenanceProjects),
+  );
+  const [maintenanceRetrievalError, setMaintenanceRetrievalError] = useState<string | null>(null);
+  const [maintenanceResultCount, setMaintenanceResultCount] = useState<number | null>(null);
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -888,6 +942,12 @@ export function ApiChatConsole({
   const conversationSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
   const previousSelectedApiKeyIdRef = useRef<null | string>(null);
   const { user } = useUser();
+
+  useEffect(() => {
+    setMaintenanceScope((current) =>
+      syncMaintenanceScope(current, currentMaintenanceProjectId, maintenanceProjects),
+    );
+  }, [currentMaintenanceProjectId, maintenanceProjects]);
 
   const isChatOnly = mode === "chat-only";
   const slashPromptQuery = useMemo(() => getSlashPromptQuery(draftMessage), [draftMessage]);
@@ -1302,7 +1362,11 @@ export function ApiChatConsole({
     uploadedAttachments,
   ]);
 
-  const buildProviderMessages = (history: ChatMessage[], targetProvider: string) => {
+  const buildProviderMessages = (
+    history: ChatMessage[],
+    targetProvider: string,
+    ephemeralSystemContext?: string,
+  ) => {
     const targetPreset = resolveAiProviderPreset(targetProvider);
     const providerMessages: ProviderChatMessage[] = [];
     const unsupportedDocuments = history.flatMap((message) =>
@@ -1319,6 +1383,10 @@ export function ApiChatConsole({
 
     if (systemPrompt.trim()) {
       providerMessages.push({ role: "system", text: systemPrompt.trim() });
+    }
+
+    if (ephemeralSystemContext?.trim()) {
+      providerMessages.push({ role: "system", text: ephemeralSystemContext.trim() });
     }
 
     history.forEach((message) => {
@@ -1362,7 +1430,8 @@ export function ApiChatConsole({
   const runProviderRequest = async (
     history: ChatMessage[],
     bannerTitle: string,
-    showSuccessBanner = true
+    showSuccessBanner = true,
+    ephemeralSystemContext?: string,
   ) => {
     const availableTargets = providerTargets.filter(
       (target) =>
@@ -1385,7 +1454,7 @@ export function ApiChatConsole({
         apiKey: target.apiKey,
         baseUrl: target.baseUrl,
         model: target.model,
-        messages: buildProviderMessages(history, target.provider),
+        messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
       });
       const requestUrlForTarget = providerRequest.url;
       const allowRetryOnSameTarget = target.cooldownUntil <= Date.now();
@@ -1549,20 +1618,66 @@ export function ApiChatConsole({
     setUploadedAttachments([]);
     setLoading(true);
 
+    let citations: MaintenanceCitation[] = [];
+    let retrievingMaintenance = false;
     try {
-      const reply = await runProviderRequest(nextHistory, "資料查詢", false);
+      let ephemeralSystemContext: string | undefined;
+      if (maintenanceSourceEnabled && typedContent) {
+        retrievingMaintenance = true;
+        if (!maintenanceScope.selectedProjectIds.length) {
+          throw new Error("請先選擇至少一個機台維修專案，或關閉維修資料來源");
+        }
+        setMaintenanceRetrievalError(null);
+        setMaintenanceResultCount(null);
+        citations = await searchMaintenanceKnowledge(
+          supabase as unknown as MaintenanceRpcClient,
+          { query: typedContent, projectIds: maintenanceScope.selectedProjectIds },
+        );
+        setMaintenanceResultCount(citations.length);
+        retrievingMaintenance = false;
+
+        if (!citations.length) {
+          setMessages((current) => [
+            ...current,
+            createMessage(
+              "assistant",
+              "查無符合的機台維修資料。請調整關鍵字、機台代碼或專案範圍後再試。",
+            ),
+          ]);
+          toast.info("查無符合的機台維修資料");
+          return;
+        }
+        ephemeralSystemContext = buildMaintenanceContext(citations);
+      }
+
+      const reply = await runProviderRequest(
+        nextHistory,
+        "資料查詢",
+        false,
+        ephemeralSystemContext,
+      );
       setMessages((current) => [
         ...current,
-        createMessage("assistant", reply.text, "normal", reply.images),
+        createMessage("assistant", reply.text, "normal", reply.images, [], citations),
       ]);
       toast.success(reply.images.length > 0 ? "結果已回傳並顯示" : "查詢完成");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
+      if (retrievingMaintenance) {
+        setMaintenanceRetrievalError(errorMessage);
+        setMaintenanceResultCount(null);
+      }
       setMessages((current) => [
         ...current,
-        createMessage("assistant", `API 呼叫失敗：${errorMessage}`, "error"),
+        createMessage(
+          "assistant",
+          retrievingMaintenance
+            ? `維修資料檢索失敗：${errorMessage}。系統已停止 AI 查詢，沒有改用無來源回答。`
+            : `API 呼叫失敗：${errorMessage}`,
+          "error",
+        ),
       ]);
-      toast.error("資料查詢失敗");
+      toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
     } finally {
       setLoading(false);
     }
@@ -2566,6 +2681,30 @@ export function ApiChatConsole({
           )}
         </div>
       </div>
+
+      {isChatOnly ? (
+        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-4 py-3 md:px-6">
+          <MaintenanceSourceSelector
+            enabled={maintenanceSourceEnabled}
+            onEnabledChange={(enabled) => {
+              setMaintenanceSourceEnabled(enabled);
+              setMaintenanceRetrievalError(null);
+              setMaintenanceResultCount(null);
+            }}
+            projects={maintenanceProjects}
+            currentProjectId={currentMaintenanceProjectId}
+            scope={maintenanceScope}
+            onScopeChange={(scope) => {
+              setMaintenanceScope(scope);
+              setMaintenanceRetrievalError(null);
+              setMaintenanceResultCount(null);
+            }}
+            loading={loading && maintenanceSourceEnabled}
+            lastResultCount={maintenanceResultCount}
+            retrievalError={maintenanceRetrievalError}
+          />
+        </div>
+      ) : null}
 
       <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly ? "gap-0" : "mt-4 gap-4")}>
         {connectionState ? (
