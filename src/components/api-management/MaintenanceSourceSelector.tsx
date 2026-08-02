@@ -27,7 +27,6 @@ interface MaintenanceSourceSelectorProps {
   lastResultCount?: null | number;
   retrievalError?: null | string;
 }
-
 export function MaintenanceSourceSelector({
   enabled,
   onEnabledChange,
@@ -187,4 +186,3 @@ export function MaintenanceSourceSelector({
     </section>
   );
 }
-
