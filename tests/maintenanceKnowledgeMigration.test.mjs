@@ -65,3 +65,13 @@ test("maintenance ranking supports machine codes, Chinese fuzzy matches, and rou
   assert.match(sql, /jsonb_build_object\('openIssue'/i);
   assert.match(sql, /jsonb_build_object\('assetView'/i);
 });
+
+test("maintenance progress aggregation keeps a valid UUID source id", async () => {
+  const sql = await readFile(migrationPath, "utf8");
+
+  assert.doesNotMatch(sql, /min\(progress\.id\)\s+as source_id/i);
+  assert.match(
+    sql,
+    /\(array_agg\(progress\.id order by progress\.updated_at desc\)\)\[1\]\s+as source_id/i,
+  );
+});

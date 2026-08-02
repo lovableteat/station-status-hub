@@ -248,7 +248,7 @@ begin
     select
       'progress:' || systems.id::text || ':' || stations.id::text as chunk_id,
       'progress'::text as source_type,
-      min(progress.id) as source_id,
+      (array_agg(progress.id order by progress.updated_at desc))[1] as source_id,
       projects.id as project_id,
       projects.name as project_name,
       systems.system_name || ' · ' || stations.station_name as title,
