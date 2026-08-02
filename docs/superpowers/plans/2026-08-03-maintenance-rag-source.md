@@ -229,4 +229,3 @@
   Run: `git push origin HEAD:main`
 
   Expected: a normal non-force push succeeds.
-
