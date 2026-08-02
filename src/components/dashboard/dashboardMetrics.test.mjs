@@ -88,3 +88,42 @@ test("station rows follow station order with a stable name tie breaker", () => {
     ],
   );
 });
+
+test("system metrics expose the latest real progress activity time", () => {
+  assert.equal(typeof metrics.calculateDashboardMetrics, "function");
+
+  const result = metrics.calculateDashboardMetrics({
+    systems: [{ id: "active" }, { id: "waiting" }],
+    stations: [
+      { id: "station-0", station_name: "Function Check", station_order: 0 },
+    ],
+    testItems: [
+      { id: "inspection", station_id: "station-0" },
+      { id: "diagnostics", station_id: "station-0" },
+    ],
+    progress: [
+      {
+        id: "older",
+        system_id: "active",
+        station_id: "station-0",
+        item_id: "inspection",
+        status: "Done",
+        updated_at: "2026-08-03T08:00:00+08:00",
+      },
+      {
+        id: "newer",
+        system_id: "active",
+        station_id: "station-0",
+        item_id: "diagnostics",
+        status: "In Progress",
+        updated_at: "2026-08-03T09:30:00+08:00",
+      },
+    ],
+  });
+
+  assert.equal(
+    result.systemMetricById.get("active")?.lastActivityAt,
+    "2026-08-03T09:30:00+08:00",
+  );
+  assert.equal(result.systemMetricById.get("waiting")?.lastActivityAt, null);
+});
