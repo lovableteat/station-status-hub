@@ -59,7 +59,7 @@ test("maintenance context numbers and bounds untrusted source text", () => {
       projectId: "p1",
       projectName: "Golden",
       title: "GB300-01",
-      content: `<script>alert(1)</script>${"x".repeat(5000)}`,
+      content: `<script>alert(1)</script>\u0000\u0008${"x".repeat(5000)}`,
       sourceLabel: "機台",
       module: "test-tracker",
       routeParams: { system: "GB300-01" },
@@ -70,6 +70,7 @@ test("maintenance context numbers and bounds untrusted source text", () => {
   const context = knowledge.buildMaintenanceContext(citations);
   assert.match(context, /\[M1\] 機台 · GB300-01/);
   assert.doesNotMatch(context, /<script>/);
+  assert.doesNotMatch(context, /\u0000|\u0008/);
   assert.ok(context.length < 4200);
   assert.match(context, /維修事實只能依據/);
 });
