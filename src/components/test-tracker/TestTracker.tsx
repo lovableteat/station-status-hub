@@ -230,6 +230,36 @@ export function TestTracker() {
   const [displayItems, setDisplayItems] = useState(items);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !systems.length) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const requestedSystem = params.get("system");
+    if (!requestedSystem) return;
+
+    const matchedSystem = systems.find(
+      (system) => system.id === requestedSystem || system.system_name === requestedSystem
+    );
+    if (!matchedSystem) return;
+
+    const requestedStationValue = params.get("station");
+    const requestedStation = requestedStationValue
+      ? displayStations.find(
+          (station) =>
+            station.id === requestedStationValue ||
+            station.station_name === requestedStationValue
+        )?.id ?? null
+      : null;
+
+    setLockedStationId(requestedStation);
+    setSelectedSystemId(matchedSystem.id);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("system");
+    url.searchParams.delete("station");
+    window.history.replaceState({}, "", url);
+  }, [displayStations, systems]);
+
+  useEffect(() => {
     if (!selectedVersionId || selectedVersionId === activeVersion?.id) {
       setDisplayStations(stations);
       setDisplayItems(items);

@@ -230,11 +230,27 @@ export function FlowInfo() {
       setItems(snapshot.items);
       setContents(snapshot.contents);
       setSystemCount(systemsResult.count ?? 0);
-      setSelectedStationId((current) =>
-        snapshot.stations.some((station) => station.id === current)
-          ? current
-          : snapshot.stations[0]?.id ?? null
-      );
+      const params = new URLSearchParams(window.location.search);
+      const requestedStation = params.get("station");
+      const requested = requestedStation
+        ? snapshot.stations.find(
+            (station) =>
+              station.id === requestedStation || station.station_name === requestedStation
+          )
+        : null;
+
+      if (requested) {
+        setSelectedStationId(requested.id);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("station");
+        window.history.replaceState({}, "", url);
+      } else {
+        setSelectedStationId((current) =>
+          snapshot.stations.some((station) => station.id === current)
+            ? current
+            : snapshot.stations[0]?.id ?? null
+        );
+      }
     } catch (error) {
       console.error("Failed to load flow workspace:", error);
       toast({

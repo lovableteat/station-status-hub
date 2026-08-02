@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import {
   Download,
@@ -316,7 +316,7 @@ export function ToolsManagement() {
     window.history.replaceState({}, "", url);
   }, [tab]);
 
-  const assets: Asset[] = [
+  const assets = useMemo<Asset[]>(() => [
     ...tools.map<Asset>((tool) => ({
       category: tool.category || "other",
       description: toPlainText(tool.description, "未填寫工具說明"),
@@ -352,7 +352,22 @@ export function ToolsManagement() {
       raw: command,
       updatedAt: command.updated_at,
     })),
-  ];
+  ], [commands, snippets, tools]);
+
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+
+    const requestedAssetId = new URLSearchParams(window.location.search).get("assetId");
+    if (!requestedAssetId) return;
+
+    const requestedAsset = assets.find((asset) => asset.id === requestedAssetId);
+    if (!requestedAsset) return;
+
+    setSelectedAsset(requestedAsset);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("assetId");
+    window.history.replaceState({}, "", url);
+  }, [assets, loading]);
 
   const normalizedSearch = search.trim().toLowerCase();
   const visibleAssets = assets.filter((asset) => {
