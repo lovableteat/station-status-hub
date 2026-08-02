@@ -61,6 +61,20 @@ function buildTrendPoints(values: number[], maxValue: number) {
   }));
 }
 
+function formatActivityTime(value: string | null) {
+  if (!value) return "尚無進度紀錄";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "時間資料異常";
+
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function ExecutiveKpi({
   detail,
   icon: Icon,
@@ -175,7 +189,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               (systemMetricById.get(right.id)?.progress ?? 0) ||
             left.system_name.localeCompare(right.system_name, "zh-Hant")
         )
-        .slice(0, 6),
+        .slice(0, 5),
     [includedSystems, systemMetricById]
   );
 
@@ -760,39 +774,130 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </section>
 
-        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#2a526f]/70 px-4 py-3">
-            <div>
-              <h2 className="text-base font-semibold text-[#f3f8fc]">管理層待辦</h2>
-              <p className="mt-0.5 text-xs text-[#9eb8ca]">優先關注低進度機台</p>
+        <section className="maintenance-panel flex min-h-0 flex-col overflow-hidden" aria-labelledby="attention-machines-title">
+          <div className="flex flex-col gap-3 border-b border-[#2a526f]/70 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 id="attention-machines-title" className="text-base font-semibold text-[#f3f8fc]">需關注機台</h2>
+                <Badge variant="outline" className="border-amber-300/35 bg-amber-300/10 text-amber-100">
+                  {attentionSystems.length} 台
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[#9eb8ca]">依測項完成率由低到高，顯示前 5 台未完成機台。</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate?.("test-tracker")}>查看全部</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 border-cyan-300/30 bg-cyan-300/[0.07] text-cyan-100 hover:bg-cyan-300/[0.13]"
+              onClick={() => onNavigate?.("test-tracker")}
+            >
+              開啟測試追蹤
+            </Button>
           </div>
-          <div className="max-h-64 min-h-0 flex-1 divide-y divide-[#2a526f]/45 overflow-y-auto">
-            {attentionSystems.slice(0, 5).map((system) => {
+
+          <div className="max-h-[23rem] min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+            {attentionSystems.length ? attentionSystems.map((system) => {
               const metric = systemMetricById.get(system.id);
               const calculatedProgress = metric?.progress ?? 0;
+              const totalItems = metric?.totalItems ?? 0;
+              const completedItems = metric?.completedItems ?? 0;
+              const remainingItems = Math.max(0, totalItems - completedItems);
+
               return (
-                <button
-                  key={system.id}
-                  type="button"
-                  className="w-full px-4 py-3 text-left hover:bg-[#10263a]"
-                  onClick={() => onNavigate?.("monitor", { system: system.system_name })}
-                >
+                <article key={system.id} className="rounded-xl border border-[#315d78]/75 bg-[#0a1d2d] p-3" data-testid="attention-machine-row">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
-                    <span className="font-data text-xs text-cyan-100">{calculatedProgress}%</span>
+                    <h3 className="min-w-0 truncate text-sm font-semibold text-[#f3f8fc]" title={system.system_name}>
+                      {system.system_name}
+                    </h3>
+                    <span className="font-data shrink-0 rounded-md bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">
+                      {calculatedProgress}%
+                    </span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-[#8fb0c5]"><span className="truncate">{metric?.nextStationName || "尚未設定待辦站點"}</span><span>{system.assigned_engineer || "未指定"}</span></div>
                   <Progress value={calculatedProgress} className="mt-2 h-1.5" />
-                </button>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                    <span className="text-[#8fb0c5]">未完成測項</span>
+                    <strong className="font-data text-[#dceaf3]">{remainingItems} / {totalItems}</strong>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[#294b63]/55 pt-3 text-[11px]">
+                    <div className="min-w-0">
+                      <dt className="text-[#789ab1]">卡關站點</dt>
+                      <dd className="mt-0.5 truncate font-medium text-[#cfe1ec]" title={metric?.nextStationName || "尚未設定待辦站點"}>
+                        {metric?.nextStationName || "尚未設定待辦站點"}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[#789ab1]">負責人</dt>
+                      <dd className="mt-0.5 truncate font-medium text-[#cfe1ec]" title={system.assigned_engineer || "未指定"}>
+                        {system.assigned_engineer || "未指定"}
+                      </dd>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-[#789ab1]">最近更新</dt>
+                      <dd className="mt-0.5 font-medium text-[#cfe1ec]">{formatActivityTime(metric?.lastActivityAt ?? null)}</dd>
+                    </div>
+                  </dl>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 h-8 w-full justify-between border border-[#315d78]/70 bg-[#10283b] px-3 text-xs text-cyan-100 hover:bg-[#17364d]"
+                    onClick={() => onNavigate?.("monitor", { system: system.system_name })}
+                  >
+                    查看機台
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </article>
               );
-            })}
+            }) : (
+              <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-emerald-300/25 bg-emerald-300/[0.06] px-4 py-6 text-center">
+                <CheckCircle2 className="h-6 w-6 text-emerald-300" aria-hidden="true" />
+                <p className="mt-2 text-sm font-semibold text-emerald-100">目前沒有未完成機台</p>
+                <p className="mt-1 text-xs text-[#9eb8ca]">所有納管機台的有效測項皆已完成。</p>
+              </div>
+            )}
           </div>
-          <button type="button" className="flex w-full items-center justify-between border-t border-rose-300/25 bg-rose-300/[0.07] px-4 py-3 text-left hover:bg-rose-300/10" onClick={() => onNavigate?.("issues")}>
-            <span className="flex items-center gap-2 text-sm text-rose-100"><AlertTriangle className="h-4 w-4" />高優先問題</span>
-            <strong className="font-data text-xl text-rose-100">{issueCounts.critical}</strong>
-          </button>
+
+          <div
+            className={cn(
+              "flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+              issueCounts.critical > 0
+                ? "border-rose-300/30 bg-rose-300/[0.08]"
+                : "border-emerald-300/25 bg-emerald-300/[0.06]"
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                issueCounts.critical > 0 ? "bg-rose-300/15 text-rose-200" : "bg-emerald-300/15 text-emerald-200"
+              )}>
+                {issueCounts.critical > 0
+                  ? <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                  : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+              </span>
+              <div className="min-w-0">
+                <h3 className={cn("text-sm font-semibold", issueCounts.critical > 0 ? "text-rose-100" : "text-emerald-100")}>高風險問題</h3>
+                <p className="mt-0.5 text-xs text-[#a9c0d1]">
+                  {issueCounts.critical > 0
+                    ? `有 ${issueCounts.critical} 件高風險問題待處理`
+                    : "目前沒有高風險問題"}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 shrink-0",
+                issueCounts.critical > 0
+                  ? "border-rose-300/35 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15"
+                  : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/15"
+              )}
+              onClick={() => onNavigate?.("issues")}
+            >
+              查看問題
+            </Button>
+          </div>
         </section>
       </div>
 
