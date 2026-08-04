@@ -263,7 +263,6 @@ const Index = () => {
     getInitialAdminModule
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
   const { logout, user } = useUser();
@@ -429,15 +428,6 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    const handleUnreadChange = (event: Event) => {
-      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
-      setNotificationUnreadCount(typeof count === "number" ? count : 0);
-    };
-    window.addEventListener("collaboration-unread-change", handleUnreadChange);
-    return () => window.removeEventListener("collaboration-unread-change", handleUnreadChange);
-  }, []);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
 
@@ -491,12 +481,6 @@ const Index = () => {
             : undefined;
     pushWorkspaceLocation(nextWorkspace, nextModule);
     setActiveWorkspace(nextWorkspace);
-  };
-
-  const handleOpenNotifications = () => {
-    window.dispatchEvent(
-      new CustomEvent("open-global-collaboration", { detail: { tab: "notifications" } }),
-    );
   };
 
   const handleStationNavigation = (module: string, params?: Record<string, string>) => {
@@ -680,8 +664,6 @@ const Index = () => {
         activeItem={activeWorkspace ?? "workspace-home"}
         onSelect={handleWorkspaceChange}
         onLogout={logout}
-        onOpenNotifications={handleOpenNotifications}
-        notificationUnreadCount={notificationUnreadCount}
         onBrandClick={() => handleWorkspaceChange("workspace-home")}
         onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}

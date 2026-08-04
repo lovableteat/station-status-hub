@@ -1,4 +1,4 @@
-import { Bell, BellRing, ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
@@ -21,8 +21,6 @@ interface MainWorkspaceHeaderProps {
   activeItem?: string;
   onSelect: (id: string) => void;
   onLogout: () => void;
-  onOpenNotifications?: () => void;
-  notificationUnreadCount?: number;
   onBrandClick?: () => void;
   onOpenWorkspaceHome?: () => void;
   userName?: string;
@@ -40,8 +38,6 @@ export function MainWorkspaceHeader({
   activeItem,
   onSelect,
   onLogout,
-  onOpenNotifications,
-  notificationUnreadCount = 0,
   onBrandClick,
   onOpenWorkspaceHome,
   userName,
@@ -103,29 +99,6 @@ export function MainWorkspaceHeader({
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-2 xl:gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onOpenNotifications}
-            aria-label={notificationUnreadCount > 0 ? `協作中心有未讀通知，${notificationUnreadCount} 則，點擊開啟` : "開啟協作中心"}
-            className={cn(
-              "relative h-12 w-12 shrink-0 rounded-2xl border transition-colors",
-              notificationUnreadCount > 0
-                ? "border-rose-300/90 bg-rose-500/20 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.6)] hover:bg-rose-500/30"
-                : "border-primary/15 bg-background/20 text-muted-foreground hover:bg-primary/10 hover:text-foreground",
-            )}
-          >
-            {notificationUnreadCount > 0 ? <BellRing className="h-5 w-5" /> : <Bell className="h-4 w-4" />}
-            {notificationUnreadCount > 0 && (
-              <>
-                <span className="absolute inset-1 rounded-xl border border-rose-200/70 motion-safe:animate-pulse" aria-hidden="true" />
-                <span aria-live="polite" className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#0d1728] bg-[#ff264d] px-1.5 text-xs font-black leading-none text-white shadow-[0_0_16px_rgba(255,38,77,0.95)]">
-                  {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
-                </span>
-              </>
-            )}
-          </Button>
-
           {showOnlineUsers && <OnlineUsersIndicator />}
 
           <DropdownMenu>
