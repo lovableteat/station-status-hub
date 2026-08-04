@@ -62,6 +62,7 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(editor, /getWorkbookThemeColors/);
   assert.match(editor, /INDEXED_COLORS/);
   assert.match(editor, /getPatternBackground/);
+  assert.match(editor, /data-spreadsheet-cell="true"/);
   assert.match(editor, /readFormattedCellValue/);
   assert.match(editor, /cell\.value\.result/);
   assert.match(editor, /getColumnWidth/);
@@ -73,7 +74,8 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(inspector, /onEditSpreadsheet/);
   assert.match(styles, /\.test-plan-sheet-grid-wrap/);
   assert.match(styles, /\.test-plan-sheet-grid-wrap\.is-formatted/);
-  assert.match(styles, /background: inherit !important/);
+  assert.match(styles, /background: transparent !important/);
+  assert.match(styles, /box-shadow: none !important/);
   assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
 });
 
