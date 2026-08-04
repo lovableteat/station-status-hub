@@ -31,9 +31,8 @@ import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { DirectMessagesPanel } from "./DirectMessagesPanel";
 
-type CollaborationTab = "notifications" | "online" | "messages";
+type CollaborationTab = "notifications" | "online";
 type NotificationFilter = "all" | "unread" | "read";
 type NotificationRow = {
   id: string;
@@ -181,7 +180,6 @@ export function CollaborationCenter() {
   const [error, setError] = useState<string | null>(null);
   const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
-  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
   const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
@@ -488,7 +486,7 @@ export function CollaborationCenter() {
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CollaborationTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <TabsList className="mx-4 mt-4 grid h-11 shrink-0 grid-cols-3 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
+          <TabsList className="mx-4 mt-4 grid h-11 shrink-0 grid-cols-2 rounded-xl border border-cyan-200/15 bg-[#091827] p-1">
             <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
               <Bell className="h-4 w-4" />通知
               {unreadCount > 0 && <Badge className="h-5 min-w-5 bg-rose-500 px-1.5 text-white">{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
@@ -497,7 +495,7 @@ export function CollaborationCenter() {
               <Users className="h-4 w-4" />在線成員
               <span className="font-mono text-xs">{totalOnlineSessions}</span>
             </TabsTrigger>
-            <TabsTrigger value="messages" className="gap-2 rounded-lg data-[state=active]:bg-cyan-300 data-[state=active]:font-bold data-[state=active]:text-[#06111f]">
+            <TabsTrigger value="messages" className="hidden">
               <MessageSquareText className="h-4 w-4" />訊息
             </TabsTrigger>
           </TabsList>
@@ -613,18 +611,11 @@ export function CollaborationCenter() {
               ) : filteredMembers.length === 0 ? (
                 <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的帳號</p><p className="mt-1 text-sm">可改用姓名、帳號、角色、頁面或離線狀態搜尋。</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{filteredMembers.map((member) => <MemberCard key={member.userId} member={member} currentUserId={user?.userId} onMessage={member.userId === user?.userId ? undefined : () => { setMessageRecipientId(member.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{filteredMembers.map((member) => <MemberCard key={member.userId} member={member} currentUserId={user?.userId} onMessage={member.userId === user?.userId ? undefined : () => { window.dispatchEvent(new CustomEvent("open-direct-messages", { detail: { recipientId: member.userId } })); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="messages" className="absolute inset-0 mt-0 min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col">
-            <DirectMessagesPanel
-              onlineUsers={onlineUsers}
-              requestedUserId={messageRecipientId}
-              onRequestHandled={() => setMessageRecipientId(null)}
-            />
-          </TabsContent>
           </div>
         </Tabs>
           </aside>

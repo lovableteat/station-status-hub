@@ -16,6 +16,7 @@ import {
 
 import { useUser } from "@/components/auth/UserContext";
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
+import { DirectMessagesDock } from "@/components/collaboration/DirectMessagesDock";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
@@ -657,7 +658,12 @@ const Index = () => {
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
-      {!isDemoMode && <CollaborationCenter />}
+      {!isDemoMode && (
+        <>
+          <CollaborationCenter />
+          <DirectMessagesDock />
+        </>
+      )}
 
       <MainWorkspaceHeader
         items={workspaceItems}
