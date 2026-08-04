@@ -9,6 +9,7 @@ import type {
   TestPlanFileRecord,
   TestPlanFolder,
   TestPlanSpace,
+  TestPlanWorkspaceKind,
 } from "../types";
 import { toTestPlanError } from "./errors";
 import type { TestPlanDataAdapter } from "./repository";
@@ -26,6 +27,7 @@ function mapSpace(row: SpaceRow): TestPlanSpace {
     id: row.id,
     ownerId: row.owner_id,
     projectId: row.project_id,
+    workspaceKind: row.workspace_kind as TestPlanWorkspaceKind,
     name: row.name,
     description: row.description,
     color: row.color,
@@ -211,13 +213,18 @@ async function uploadLargeObject(
   window.localStorage.removeItem(resumeKey);
 }
 
-export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
+export function createSupabaseTestPlanAdapter(options: {
+  workspaceKind?: TestPlanWorkspaceKind;
+} = {}): TestPlanDataAdapter {
+  const workspaceKind = options.workspaceKind ?? "test-plan";
+
   return {
     async listSpaces(_ownerId, projectId) {
       const { data, error } = await supabase
         .from("test_plan_spaces")
         .select("*")
         .eq("project_id", projectId)
+        .eq("workspace_kind", workspaceKind)
         .order("updated_at", { ascending: false });
       throwIfError(error);
       return (data ?? []).map(mapSpace);
@@ -244,6 +251,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       const payload: TablesInsert<"test_plan_spaces"> = {
         owner_id: input.ownerId,
         project_id: input.projectId,
+        workspace_kind: workspaceKind,
         name: input.name,
         description: input.description,
         color: input.color,

@@ -8,12 +8,15 @@ export type TestPlanFileCategory =
   | "archive"
   | "other";
 
+export type TestPlanWorkspaceKind = "test-plan" | "bom-management";
+
 export type TestPlanSort = "name" | "newest" | "oldest" | "largest" | "type";
 
 export interface TestPlanSpace {
   id: string;
   ownerId: string;
   projectId: string;
+  workspaceKind: TestPlanWorkspaceKind;
   name: string;
   description: string | null;
   color: string;
