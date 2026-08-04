@@ -1417,9 +1417,18 @@
   overflow: hidden;
   border: 1px solid var(--pcb-border);
   border-radius: 20px;
-  background: #152238;
+  background:
+    radial-gradient(circle at 90% 0%, rgb(129 92 246 / 16%), transparent 20rem),
+    linear-gradient(180deg, #18263d, #111d31);
   color: #edf4ff;
   box-shadow: 0 30px 90px rgb(1 7 18 / 64%);
+}
+
+.pcb-dialog[data-dialog-tone="danger"] {
+  border-color: rgb(251 113 133 / 42%);
+  background:
+    radial-gradient(circle at 90% 0%, rgb(244 63 94 / 18%), transparent 18rem),
+    linear-gradient(180deg, #261c2c, #151a2b);
 }
 
 .pcb-dialog input,

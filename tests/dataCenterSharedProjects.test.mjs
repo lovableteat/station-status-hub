@@ -15,9 +15,9 @@ const migration = fs.readFileSync(
   "utf8",
 );
 
-test("Data Center exposes project categories and a visible scene navigator", () => {
-  assert.match(planner, /共用專案/);
-  assert.match(planner, /專案分類/);
+test("Data Center exposes project categories inside the unified control panel", () => {
+  assert.match(planner, /專案與分類/);
+  assert.match(planner, /場景總覽/);
   assert.match(planner, /useState\(true\)/);
 });
 
