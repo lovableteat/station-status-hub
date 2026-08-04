@@ -362,6 +362,16 @@ export function useTestPlanWorkspace(
     [repository],
   );
 
+  const replaceFileContents = useCallback(
+    (file: TestPlanFileRecord, contents: Blob) =>
+      runMutation(async () => {
+        const updated = await repository.replaceFileContents(file, contents);
+        await refreshActiveSpace(activeSpaceId, ownerId);
+        return updated;
+      }),
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+  );
+
   return {
     spaces,
     activeSpaceId,
@@ -390,5 +400,6 @@ export function useTestPlanWorkspace(
     updateFileDescription,
     deleteFile,
     downloadFile,
+    replaceFileContents,
   };
 }
