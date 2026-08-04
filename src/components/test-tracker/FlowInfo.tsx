@@ -1072,7 +1072,7 @@ export function FlowInfo() {
       </div>
 
       {view === "overview" ? (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
           <MaintenanceMetricStrip
             metrics={[
               { accent: "blue", icon: Layers3, label: "測試站點", value: stations.length },
@@ -1082,7 +1082,7 @@ export function FlowInfo() {
             ]}
           />
 
-          <div className="grid min-h-[410px] gap-3 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <div className="grid min-h-[410px] flex-1 gap-3 xl:grid-cols-[290px_minmax(0,1fr)]">
             <section className="overflow-hidden rounded-xl border border-[#2f6f92] bg-[#071a2b]">
               <div className="border-b border-[#397b9d]/70 bg-[linear-gradient(135deg,#16405f_0%,#0d2b43_62%,#091d30_100%)] px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -1211,7 +1211,7 @@ export function FlowInfo() {
               )}
             </section>
           </div>
-        </>
+        </div>
       ) : !editingVersionId ? (
         <div className="maintenance-panel flex min-h-[360px] flex-col items-center justify-center gap-4 px-6 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100"><Route className="h-6 w-6" /></div>
