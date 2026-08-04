@@ -1006,12 +1006,49 @@
   gap: 6px;
 }
 
-.test-plan-sheet-formula strong {
-  min-width: 62px;
+.test-plan-sheet-edit-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.test-plan-sheet-edit-tools button {
+  width: 32px;
+  height: 32px;
+}
+
+.test-plan-sheet-tool-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: #31536a;
+}
+
+.test-plan-sheet-selection-name {
+  display: flex;
+  min-width: 118px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
   border-right: 1px solid #31536a;
+  padding-right: 10px;
+}
+
+.test-plan-sheet-selection-name strong {
+  min-width: 42px;
   color: #7dd3fc;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.73rem;
+}
+
+.test-plan-sheet-selection-name span {
+  overflow: hidden;
+  color: #9fb8c8;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .test-plan-sheet-formula input {
@@ -1033,8 +1070,13 @@
 .test-plan-sheet-grid-wrap {
   min-height: 0;
   overflow: auto;
+  outline: none;
   background: #06111d;
   scrollbar-gutter: stable;
+}
+
+.test-plan-sheet-grid-wrap:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(45 212 191 / 44%);
 }
 
 .test-plan-sheet-grid-wrap.is-formatted {
@@ -1049,6 +1091,7 @@
   border-spacing: 0;
   table-layout: fixed;
   font-size: 0.7rem;
+  user-select: none;
 }
 
 .test-plan-sheet-row-number-column {
@@ -1073,6 +1116,25 @@
   text-align: center;
 }
 
+.test-plan-sheet-grid th button {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 31px;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.test-plan-sheet-grid th.is-selected {
+  color: #083344 !important;
+  background: linear-gradient(#a5f3fc, #67e8f9) !important;
+}
+
 .test-plan-sheet-grid tbody th,
 .test-plan-sheet-corner {
   position: sticky;
@@ -1090,11 +1152,22 @@
   top: 0;
 }
 
+.test-plan-sheet-corner button::after {
+  width: 0;
+  height: 0;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid currentColor;
+  content: "";
+  opacity: 0.72;
+}
+
 .test-plan-sheet-grid td {
+  position: relative;
   width: 132px;
   min-width: 132px;
   padding: 0;
   background: #071725;
+  cursor: cell;
 }
 
 .test-plan-sheet-grid.is-formatted td {
@@ -1125,8 +1198,13 @@
   background: linear-gradient(90deg, #f8fafc, #e2e8f0);
 }
 
-.test-plan-sheet-grid td.is-selected {
-  box-shadow: inset 0 0 0 2px #2dd4bf;
+.test-plan-sheet-grid td.is-range-selected {
+  box-shadow: inset 0 0 0 1px rgb(14 165 233 / 72%);
+}
+
+.test-plan-sheet-grid td.is-active {
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px #0d9488, 0 0 0 1px rgb(255 255 255 / 78%);
 }
 
 .test-plan-sheet-grid input,
@@ -1151,7 +1229,24 @@
   line-height: 1.25;
 }
 
-.test-plan-sheet-grid.is-formatted textarea[data-spreadsheet-cell="true"] {
+.test-plan-sheet-cell-display {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 31px;
+  overflow: hidden;
+  padding: 2px 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.test-plan-sheet-grid.is-formatted textarea[data-spreadsheet-editor="true"] {
   height: 100%;
   padding: 2px 4px;
   color: inherit !important;
@@ -1171,8 +1266,14 @@
   background: rgb(45 212 191 / 8%);
 }
 
-.test-plan-sheet-grid.is-formatted textarea[data-spreadsheet-cell="true"]:focus {
-  background: transparent !important;
+.test-plan-sheet-grid textarea[data-spreadsheet-editor="true"] {
+  position: relative;
+  z-index: 3;
+  min-height: 31px;
+  color: inherit;
+  background: #fff !important;
+  box-shadow: inset 0 0 0 2px #0d9488 !important;
+  user-select: text;
 }
 
 .test-plan-sheet-pagination {
@@ -1181,6 +1282,12 @@
   border-bottom: 0;
   color: #8caabd;
   font-size: 0.7rem;
+}
+
+.test-plan-sheet-selection-status {
+  flex: 0 0 auto;
+  color: #a5f3fc;
+  font-weight: 750;
 }
 
 .test-plan-sheet-page-group,
@@ -1328,6 +1435,15 @@
   .test-plan-sheet-pagination {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .test-plan-sheet-edit-tools {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .test-plan-sheet-selection-name {
+    min-width: 90px;
   }
 
   .test-plan-sheet-tools button {
