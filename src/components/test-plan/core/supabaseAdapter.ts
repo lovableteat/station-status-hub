@@ -331,6 +331,16 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       throwIfError(error);
       onProgress?.(file.size, file.size);
     },
+    async replaceObject(path, file) {
+      const { error } = await supabase.storage
+        .from(TEST_PLAN_STORAGE_BUCKET)
+        .update(path, file, {
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream",
+          upsert: true,
+        });
+      throwIfError(error);
+    },
     async createFile(input) {
       const payload: TablesInsert<"test_plan_files"> = {
         space_id: input.spaceId,
@@ -364,6 +374,8 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
           ? {}
           : { extension: patch.extension }),
         ...(patch.category === undefined ? {} : { category: patch.category }),
+        ...(patch.mimeType === undefined ? {} : { mime_type: patch.mimeType }),
+        ...(patch.fileSize === undefined ? {} : { file_size: patch.fileSize }),
       };
       const { data, error } = await supabase
         .from("test_plan_files")

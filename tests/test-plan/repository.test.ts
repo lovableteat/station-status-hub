@@ -137,6 +137,9 @@ function createAdapter(options: {
       async uploadObject(path: string, file: { name: string }) {
         operations.push(`upload:${file.name}:${path}`);
       },
+      async replaceObject(path: string, file: { name: string; size: number }) {
+        operations.push(`replace:${file.name}:${file.size}:${path}`);
+      },
       async createFile(input: Record<string, unknown>) {
         operations.push(`create-file:${String(input.originalName)}`);
         if (input.originalName === options.failInsertName) {
@@ -160,8 +163,12 @@ function createAdapter(options: {
         records.files.push(file);
         return file;
       },
-      async updateFile() {
-        throw new Error("not used");
+      async updateFile(fileId: string, patch: Record<string, unknown>) {
+        operations.push(`update-file:${fileId}`);
+        const file = records.files.find((candidate) => candidate.id === fileId);
+        if (!file) throw new Error("missing file");
+        Object.assign(file, patch, { updatedAt: "2026-07-29T01:00:00.000Z" });
+        return file;
       },
       async deleteFile(fileId: string) {
         operations.push(`delete-file:${fileId}`);
@@ -315,6 +322,36 @@ test("gives same-name Unicode uploads distinct opaque ASCII storage keys", async
     assert.match(path, /^[a-zA-Z0-9._/-]+$/);
     assert.match(path, /\.pdf$/);
   }
+});
+
+test("replaces a spreadsheet in place and updates its metadata", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const originalPath = fake.records.files[0].storagePath;
+  const originalFileCount = fake.records.files.length;
+
+  const updated = await repository.replaceFileContents(
+    fake.records.files[0],
+    new Blob(["updated workbook"], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+  );
+
+  assert.equal(fake.records.files.length, originalFileCount);
+  assert.equal(updated.storagePath, originalPath);
+  assert.equal(updated.fileSize, 16);
+  assert.equal(
+    updated.mimeType,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  assert.ok(
+    fake.operations.includes(`replace:board.brd:16:${originalPath}`),
+  );
+  assert.ok(fake.operations.includes("update-file:file-1"));
+  assert.equal(
+    fake.operations.some((operation) => operation.startsWith("create-file:")),
+    false,
+  );
 });
 
 test("rejects executable file renames before updating metadata", async () => {
