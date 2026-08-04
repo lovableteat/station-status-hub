@@ -59,6 +59,9 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(editor, /import\("exceljs"\)/);
   assert.match(editor, /formattedWorksheet\.model\.merges/);
   assert.match(editor, /getFormattedCellStyle/);
+  assert.match(editor, /getWorkbookThemeColors/);
+  assert.match(editor, /INDEXED_COLORS/);
+  assert.match(editor, /getPatternBackground/);
   assert.match(editor, /readFormattedCellValue/);
   assert.match(editor, /cell\.value\.result/);
   assert.match(editor, /getColumnWidth/);
@@ -69,6 +72,8 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(editor, /ROW_PAGE_SIZE = 100/);
   assert.match(inspector, /onEditSpreadsheet/);
   assert.match(styles, /\.test-plan-sheet-grid-wrap/);
+  assert.match(styles, /\.test-plan-sheet-grid-wrap\.is-formatted/);
+  assert.match(styles, /background: inherit !important/);
   assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
 });
 
