@@ -916,7 +916,7 @@ export function TestPlanWorkspace() {
               >
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={!isAuthenticated || (loading && activeSpaceId === space.id)}
                   onClick={() => {
                     setIsSpaceDrawerOpen(false);
                     void openSpace(space.id);
@@ -1406,12 +1406,14 @@ export function TestPlanWorkspace() {
             {uploadProgress.currentFileName
               ? ` · ${uploadProgress.currentFileName}`
               : ""}
-          </span>
-          <small>
-            {formatTestPlanFileSize(uploadProgress.uploadedBytes)}
-            {" / "}
-            {formatTestPlanFileSize(uploadProgress.totalBytes)}
-          </small>
+            </span>
+            <small>
+              上傳至 {uploadProgress.targetLabel}
+              {" · "}
+              {formatTestPlanFileSize(uploadProgress.uploadedBytes)}
+              {" / "}
+              {formatTestPlanFileSize(uploadProgress.totalBytes)}
+            </small>
           <div>
             <span
               style={{

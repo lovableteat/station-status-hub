@@ -31,6 +31,7 @@ interface UploadProgress {
   uploadedBytes: number;
   totalBytes: number;
   currentFileName: string;
+  targetLabel: string;
 }
 
 interface UseTestPlanWorkspaceOptions {
@@ -153,10 +154,6 @@ export function useTestPlanWorkspace(
 
   const openSpace = useCallback(
     async (spaceId: string) => {
-      if (mutationInFlightRef.current) {
-        setError("目前正在處理檔案，完成後才能切換空間。");
-        return;
-      }
       const requestId = ++requestIdRef.current;
       setLoading(true);
       setError(null);
@@ -323,28 +320,40 @@ export function useTestPlanWorkspace(
         if (!ownerId || !activeSpaceId) {
           throw new Error("請先選擇一個空間。");
         }
+
+        // Keep the upload destination stable while the user continues navigating.
+        const uploadOwnerId = ownerId;
+        const uploadSpaceId = activeSpaceId;
+        const uploadSpaceName =
+          spaces.find((space) => space.id === uploadSpaceId)?.name ?? "目前空間";
+        const uploadFolderName = folderId
+          ? folders.find((folder) => folder.id === folderId)?.name ?? "已選資料夾"
+          : "根目錄";
+        const targetLabel = `${uploadSpaceName} / ${uploadFolderName}`;
+
         setUploadProgress({
           completed: 0,
           total: incoming.length,
           uploadedBytes: 0,
           totalBytes: incoming.reduce((total, file) => total + file.size, 0),
           currentFileName: incoming[0]?.name ?? "",
+          targetLabel,
         });
         try {
           const result = await repository.uploadFiles({
-            ownerId,
-            spaceId: activeSpaceId,
+            ownerId: uploadOwnerId,
+            spaceId: uploadSpaceId,
             folderId,
             files: incoming,
-            onProgress: setUploadProgress,
+            onProgress: (progress) => setUploadProgress({ ...progress, targetLabel }),
           });
-          await refreshActiveSpace(activeSpaceId, ownerId);
+          await refreshActiveSpace(uploadSpaceId, uploadOwnerId);
           return result;
         } finally {
           setUploadProgress(null);
         }
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, folders, ownerId, refreshActiveSpace, repository, runMutation, spaces],
   );
 
   const renameFile = useCallback(

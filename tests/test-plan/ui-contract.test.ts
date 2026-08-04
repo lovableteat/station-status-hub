@@ -112,6 +112,22 @@ test("supports drag-and-drop batch upload with all engineering formats", async (
   assert.match(files, /\.brd/);
 });
 
+test("keeps navigation available while uploads continue in their original folder", async () => {
+  const [workspace, hook] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/hooks/useTestPlanWorkspace.ts"),
+  ]);
+
+  assert.match(hook, /const uploadSpaceId = activeSpaceId/);
+  assert.match(hook, /spaceId: uploadSpaceId/);
+  assert.match(hook, /refreshActiveSpace\(uploadSpaceId, uploadOwnerId\)/);
+  assert.doesNotMatch(hook, /目前正在處理檔案，完成後才能切換空間/);
+  assert.match(
+    workspace,
+    /disabled=\{!isAuthenticated \|\| \(loading && activeSpaceId === space\.id\)\}/,
+  );
+});
+
 test("exposes real rename, move, describe, download, and delete actions", async () => {
   const workspace = await source(
     "src/components/test-plan/TestPlanWorkspace.tsx",
