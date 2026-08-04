@@ -79,6 +79,7 @@
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
+  height: 0;
   grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 320px);
   gap: 12px;
   overflow: hidden;
@@ -1332,6 +1333,7 @@
 
   .test-plan-shell {
     display: block;
+    height: auto;
     overflow: visible;
   }
 

@@ -629,7 +629,11 @@ const Index = () => {
                     <React.Suspense fallback={<MaintenanceLoading label="正在載入維修模組" />}>
                       <div
                         key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}
-                        className={cn(activeStationModule === "flow-info" && "h-full min-h-0")}
+                        className={cn(
+                          (activeStationModule === "flow-info" ||
+                            activeStationModule === "test-plan") &&
+                            "h-full min-h-0",
+                        )}
                       >
                         {renderStationContent()}
                       </div>
