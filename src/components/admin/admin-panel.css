@@ -19,7 +19,7 @@
 
 .admin-shell {
   display: flex;
-  min-height: 0;
+  min-height: calc(100dvh - 110px);
   align-items: flex-start;
   gap: 12px;
 }
@@ -30,7 +30,7 @@
   z-index: 20;
   display: flex;
   width: 220px;
-  height: auto;
+  height: calc(100dvh - 110px);
   max-height: calc(100dvh - 110px);
   flex: 0 0 auto;
   align-self: flex-start;
@@ -95,7 +95,7 @@
 
 .admin-sidebar nav {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 5px;
   overflow-y: auto;
@@ -161,8 +161,10 @@
 
 .admin-sidebar-footer {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   gap: 8px;
+  margin-top: auto;
   border-top: 1px solid rgb(42 82 111 / 75%);
   padding: 12px;
   color: #7695aa;
