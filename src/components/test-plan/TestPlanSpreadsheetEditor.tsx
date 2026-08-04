@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   useEffect,
   useRef,
   useState,
@@ -26,28 +27,161 @@ import { Input } from "@/components/ui/input";
 
 import type { TestPlanFileRecord } from "./types";
 
-type SpreadsheetModule = typeof import("xlsx");
-type SpreadsheetWorkbook = import("xlsx").WorkBook;
-type SpreadsheetWorksheet = import("xlsx").WorkSheet;
-type SpreadsheetCell = import("xlsx").CellObject;
+type ExcelJsWorkbook = import("exceljs").Workbook;
+type ExcelJsWorksheet = import("exceljs").Worksheet;
+type ExcelJsCell = import("exceljs").Cell;
+type ExcelJsBorder = Partial<import("exceljs").Border>;
+type LegacySpreadsheetModule = typeof import("xlsx");
+type LegacyWorkbook = import("xlsx").WorkBook;
+type LegacyWorksheet = import("xlsx").WorkSheet;
+type LegacyCell = import("xlsx").CellObject;
+
+type EditorMode = "formatted" | "legacy";
+type EditorStatus = "idle" | "loading" | "ready" | "saving" | "error";
+
+interface CellPosition {
+  row: number;
+  column: number;
+}
+
+interface MergeRange {
+  start: CellPosition;
+  end: CellPosition;
+  masterAddress: string;
+}
 
 const ROW_PAGE_SIZE = 100;
 const COLUMN_PAGE_SIZE = 26;
 const MIN_VISIBLE_ROWS = 30;
-const MIN_VISIBLE_COLUMNS = 12;
+const MIN_VISIBLE_COLUMNS = 18;
+const THEME_COLORS = [
+  "#ffffff",
+  "#000000",
+  "#e7e6e6",
+  "#44546a",
+  "#4472c4",
+  "#ed7d31",
+  "#a5a5a5",
+  "#ffc000",
+  "#5b9bd5",
+  "#70ad47",
+];
 
-function readCellValue(cell: SpreadsheetCell | undefined): string {
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function encodeColumn(column: number): string {
+  let value = column;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+function encodeAddress(row: number, column: number): string {
+  return `${encodeColumn(column)}${row}`;
+}
+
+function decodeAddress(address: string): CellPosition {
+  const match = address.replace(/\$/g, "").match(/^([A-Za-z]+)(\d+)$/);
+  if (!match) return { row: 1, column: 1 };
+  const column = match[1]
+    .toUpperCase()
+    .split("")
+    .reduce((total, character) => total * 26 + character.charCodeAt(0) - 64, 0);
+  return { row: Number(match[2]), column };
+}
+
+function decodeMergeRange(range: string): MergeRange {
+  const [startAddress, endAddress = startAddress] = range.split(":");
+  return {
+    start: decodeAddress(startAddress),
+    end: decodeAddress(endAddress),
+    masterAddress: startAddress.replace(/\$/g, "").toUpperCase(),
+  };
+}
+
+function findMerge(
+  merges: MergeRange[],
+  row: number,
+  column: number,
+): MergeRange | undefined {
+  return merges.find((merge) => (
+    row >= merge.start.row
+    && row <= merge.end.row
+    && column >= merge.start.column
+    && column <= merge.end.column
+  ));
+}
+
+function isFormulaValue(value: unknown): value is { formula?: string; sharedFormula?: string; result?: unknown } {
+  return Boolean(value && typeof value === "object" && ("formula" in value || "sharedFormula" in value));
+}
+
+function isRichTextValue(value: unknown): value is { richText: Array<{ text: string }> } {
+  return Boolean(value && typeof value === "object" && "richText" in value);
+}
+
+function isHyperlinkValue(value: unknown): value is { text: string; hyperlink: string } {
+  return Boolean(value && typeof value === "object" && "hyperlink" in value);
+}
+
+function valueToText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (value instanceof Date) return value.toLocaleString("zh-TW");
+  if (typeof value === "object") {
+    if ("error" in value) return String(value.error);
+    if (isRichTextValue(value)) return value.richText.map((part) => part.text).join("");
+    if (isHyperlinkValue(value)) return value.text;
+  }
+  return String(value);
+}
+
+function readFormattedCellValue(cell: ExcelJsCell | undefined): string {
+  if (!cell) return "";
+  if (isFormulaValue(cell.value)) {
+    return valueToText(cell.value.result);
+  }
+  return cell.text || valueToText(cell.value);
+}
+
+function readFormattedFormulaValue(cell: ExcelJsCell | undefined): string {
+  if (!cell) return "";
+  if (isFormulaValue(cell.value)) {
+    const formula = cell.value.formula ?? cell.value.sharedFormula;
+    return formula ? `=${formula}` : valueToText(cell.value.result);
+  }
+  return valueToText(cell.value);
+}
+
+function inferFormattedCellValue(value: string): import("exceljs").CellValue {
+  if (value.startsWith("=") && value.length > 1) {
+    return { formula: value.slice(1) };
+  }
+  const normalized = value.trim();
+  if (/^(true|false)$/i.test(normalized)) return normalized.toLowerCase() === "true";
+  const isNumeric = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i.test(normalized);
+  const hasSignificantLeadingZero = /^[-+]?0\d+/.test(normalized);
+  if (isNumeric && !hasSignificantLeadingZero) return Number(normalized);
+  return value;
+}
+
+function readLegacyCellValue(cell: LegacyCell | undefined): string {
   if (!cell) return "";
   if (cell.f) return `=${cell.f}`;
   if (cell.v instanceof Date) return cell.v.toISOString();
   return cell.v === undefined || cell.v === null ? "" : String(cell.v);
 }
 
-function inferCellValue(
+function inferLegacyCellValue(
   value: string,
-  previous: SpreadsheetCell | undefined,
-): SpreadsheetCell {
-  const next: SpreadsheetCell = { ...(previous ?? {}), t: "s", v: value };
+  previous: LegacyCell | undefined,
+): LegacyCell {
+  const next: LegacyCell = { ...(previous ?? {}), t: "s", v: value };
   delete next.w;
   delete next.f;
 
@@ -72,6 +206,78 @@ function inferCellValue(
     next.v = Number(normalized);
   }
   return next;
+}
+
+function resolveColor(color: { argb?: string; theme?: number } | undefined): string | undefined {
+  if (!color) return undefined;
+  if (color.argb) {
+    const normalized = color.argb.replace(/^#/, "");
+    return `#${normalized.length === 8 ? normalized.slice(2) : normalized}`;
+  }
+  if (typeof color.theme === "number") return THEME_COLORS[color.theme];
+  return undefined;
+}
+
+function borderToCss(border: ExcelJsBorder | undefined): string | undefined {
+  if (!border?.style) return undefined;
+  const width = border.style === "thick" || border.style === "double"
+    ? 3
+    : border.style.startsWith("medium")
+      ? 2
+      : 1;
+  const line = border.style.includes("dash") || border.style === "dotted" ? "dashed" : "solid";
+  return `${width}px ${line} ${resolveColor(border.color) ?? "#808080"}`;
+}
+
+function getFormattedCellStyle(cell: ExcelJsCell): CSSProperties {
+  const fill = cell.fill;
+  let background = "#ffffff";
+  if (fill?.type === "pattern" && fill.pattern !== "none") {
+    background = resolveColor(fill.fgColor) ?? resolveColor(fill.bgColor) ?? background;
+  } else if (fill?.type === "gradient" && fill.stops?.length) {
+    background = `linear-gradient(90deg, ${fill.stops
+      .map((stop) => `${resolveColor(stop.color) ?? "#ffffff"} ${Math.round(stop.position * 100)}%`)
+      .join(", ")})`;
+  }
+
+  const font = cell.font ?? {};
+  const alignment = cell.alignment ?? {};
+  const border = cell.border ?? {};
+  const effectiveValue = isFormulaValue(cell.value) ? cell.value.result : cell.value;
+  const horizontal = alignment.horizontal === "centerContinuous" ? "center" : alignment.horizontal;
+
+  return {
+    background,
+    color: resolveColor(font.color) ?? "#111827",
+    fontFamily: font.name ? `"${font.name}", Calibri, sans-serif` : "Calibri, sans-serif",
+    fontSize: font.size ? `${font.size}pt` : "11pt",
+    fontWeight: font.bold ? 700 : 400,
+    fontStyle: font.italic ? "italic" : "normal",
+    textDecoration: [font.underline ? "underline" : "", font.strike ? "line-through" : ""]
+      .filter(Boolean)
+      .join(" ") || undefined,
+    textAlign: horizontal === "fill" || horizontal === "distributed"
+      ? "left"
+      : horizontal ?? (typeof effectiveValue === "number" ? "right" : "left"),
+    verticalAlign: alignment.vertical === "middle" ? "middle" : alignment.vertical ?? "middle",
+    whiteSpace: alignment.wrapText ? "pre-wrap" : "pre",
+    borderTop: borderToCss(border.top),
+    borderRight: borderToCss(border.right),
+    borderBottom: borderToCss(border.bottom),
+    borderLeft: borderToCss(border.left),
+  };
+}
+
+function getColumnWidth(worksheet: ExcelJsWorksheet, column: number): number {
+  const source = worksheet.getColumn(column);
+  if (source.hidden) return 0;
+  return clamp(Math.round((source.width ?? 10) * 7 + 12), 28, 520);
+}
+
+function getRowHeight(worksheet: ExcelJsWorksheet, row: number): number {
+  const source = worksheet.getRow(row);
+  if (source.hidden) return 0;
+  return clamp(Math.round((source.height ?? worksheet.properties.defaultRowHeight ?? 15) * 1.333), 20, 640);
 }
 
 function getOutputFormat(extension: string) {
@@ -120,22 +326,25 @@ export function TestPlanSpreadsheetEditor({
   onSave,
   open,
 }: TestPlanSpreadsheetEditorProps) {
-  const workbookRef = useRef<SpreadsheetWorkbook | null>(null);
-  const moduleRef = useRef<SpreadsheetModule | null>(null);
+  const excelJsWorkbookRef = useRef<ExcelJsWorkbook | null>(null);
+  const legacyWorkbookRef = useRef<LegacyWorkbook | null>(null);
+  const legacyModuleRef = useRef<LegacySpreadsheetModule | null>(null);
+  const [mode, setMode] = useState<EditorMode>("formatted");
   const [sheetName, setSheetName] = useState("");
   const [selectedCell, setSelectedCell] = useState("A1");
   const [rowPage, setRowPage] = useState(0);
   const [columnPage, setColumnPage] = useState(0);
   const [, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "saving" | "error">("idle");
+  const [status, setStatus] = useState<EditorStatus>("idle");
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open || !file) return undefined;
     let active = true;
-    workbookRef.current = null;
-    moduleRef.current = null;
+    excelJsWorkbookRef.current = null;
+    legacyWorkbookRef.current = null;
+    legacyModuleRef.current = null;
     setStatus("loading");
     setError("");
     setDirty(false);
@@ -143,21 +352,35 @@ export function TestPlanSpreadsheetEditor({
     setRowPage(0);
     setColumnPage(0);
 
-    void Promise.all([import("xlsx"), downloadFile(file)])
-      .then(async ([spreadsheet, blob]) => {
-        const workbook = spreadsheet.read(await blob.arrayBuffer(), {
-          type: "array",
-          cellDates: true,
-          cellStyles: true,
-          bookVBA: true,
-        });
-        if (!active) return;
-        if (workbook.SheetNames.length === 0) {
-          throw new Error("這份 Excel 沒有可編輯的工作表。");
+    void downloadFile(file)
+      .then(async (blob) => {
+        const arrayBuffer = await blob.arrayBuffer();
+        if (file.extension.toLowerCase() === "xlsx") {
+          const ExcelJS = await import("exceljs");
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(arrayBuffer as unknown as Buffer);
+          if (!active) return;
+          if (workbook.worksheets.length === 0) throw new Error("這份 Excel 沒有可編輯的工作表。");
+          excelJsWorkbookRef.current = workbook;
+          setMode("formatted");
+          setSheetName(workbook.worksheets[0].name);
+        } else {
+          const spreadsheet = await import("xlsx");
+          const workbook = spreadsheet.read(arrayBuffer, {
+            type: "array",
+            cellDates: true,
+            cellStyles: true,
+            cellFormula: true,
+            cellNF: true,
+            bookVBA: true,
+          });
+          if (!active) return;
+          if (workbook.SheetNames.length === 0) throw new Error("這份試算表沒有可編輯的工作表。");
+          legacyModuleRef.current = spreadsheet;
+          legacyWorkbookRef.current = workbook;
+          setMode("legacy");
+          setSheetName(workbook.SheetNames[0]);
         }
-        moduleRef.current = spreadsheet;
-        workbookRef.current = workbook;
-        setSheetName(workbook.SheetNames[0]);
         setSelectedCell("A1");
         setStatus("ready");
       })
@@ -172,53 +395,88 @@ export function TestPlanSpreadsheetEditor({
     };
   }, [downloadFile, file, open]);
 
-  const worksheet = workbookRef.current?.Sheets[sheetName] ?? null;
+  const formattedWorksheet = mode === "formatted"
+    ? excelJsWorkbookRef.current?.getWorksheet(sheetName) ?? null
+    : null;
+  const legacyWorksheet = mode === "legacy"
+    ? legacyWorkbookRef.current?.Sheets[sheetName] ?? null
+    : null;
   const bounds = (() => {
-    const spreadsheet = moduleRef.current;
-    if (!spreadsheet || !worksheet) {
-      return { rows: MIN_VISIBLE_ROWS, columns: MIN_VISIBLE_COLUMNS };
+    if (formattedWorksheet) {
+      return {
+        rows: Math.max(formattedWorksheet.rowCount, MIN_VISIBLE_ROWS),
+        columns: Math.max(formattedWorksheet.columnCount, MIN_VISIBLE_COLUMNS),
+      };
     }
-    const range = spreadsheet.utils.decode_range(worksheet["!ref"] ?? "A1");
-    return {
-      rows: Math.max(range.e.r + 1, MIN_VISIBLE_ROWS),
-      columns: Math.max(range.e.c + 1, MIN_VISIBLE_COLUMNS),
-    };
+    if (legacyWorksheet && legacyModuleRef.current) {
+      const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
+      return {
+        rows: Math.max(range.e.r + 1, MIN_VISIBLE_ROWS),
+        columns: Math.max(range.e.c + 1, MIN_VISIBLE_COLUMNS),
+      };
+    }
+    return { rows: MIN_VISIBLE_ROWS, columns: MIN_VISIBLE_COLUMNS };
   })();
   const rowPageCount = Math.max(1, Math.ceil(bounds.rows / ROW_PAGE_SIZE));
   const columnPageCount = Math.max(1, Math.ceil(bounds.columns / COLUMN_PAGE_SIZE));
-  const firstRow = rowPage * ROW_PAGE_SIZE;
-  const lastRow = Math.min(bounds.rows, firstRow + ROW_PAGE_SIZE);
-  const firstColumn = columnPage * COLUMN_PAGE_SIZE;
-  const lastColumn = Math.min(bounds.columns, firstColumn + COLUMN_PAGE_SIZE);
-  const rows = Array.from({ length: Math.max(0, lastRow - firstRow) }, (_, index) => firstRow + index);
+  const firstRow = rowPage * ROW_PAGE_SIZE + 1;
+  const lastRow = Math.min(bounds.rows, firstRow + ROW_PAGE_SIZE - 1);
+  const firstColumn = mode === "formatted" ? 1 : columnPage * COLUMN_PAGE_SIZE + 1;
+  const lastColumn = mode === "formatted"
+    ? bounds.columns
+    : Math.min(bounds.columns, firstColumn + COLUMN_PAGE_SIZE - 1);
+  const rows = Array.from({ length: Math.max(0, lastRow - firstRow + 1) }, (_, index) => firstRow + index);
   const columns = Array.from(
-    { length: Math.max(0, lastColumn - firstColumn) },
+    { length: Math.max(0, lastColumn - firstColumn + 1) },
     (_, index) => firstColumn + index,
   );
+  const merges = formattedWorksheet
+    ? (formattedWorksheet.model.merges ?? []).map(decodeMergeRange)
+    : [];
 
   const updateCell = (address: string, value: string) => {
-    const spreadsheet = moduleRef.current;
-    const currentSheet = workbookRef.current?.Sheets[sheetName];
-    if (!spreadsheet || !currentSheet || !canEdit) return;
-    currentSheet[address] = inferCellValue(value, currentSheet[address] as SpreadsheetCell | undefined);
-    const cell = spreadsheet.utils.decode_cell(address);
-    const range = spreadsheet.utils.decode_range(currentSheet["!ref"] ?? "A1");
-    range.e.r = Math.max(range.e.r, cell.r);
-    range.e.c = Math.max(range.e.c, cell.c);
-    currentSheet["!ref"] = spreadsheet.utils.encode_range(range);
-    setSelectedCell(address);
+    if (!canEdit) return;
+    if (formattedWorksheet) {
+      const target = formattedWorksheet.getCell(address);
+      const editableCell = target.isMerged ? target.master : target;
+      editableCell.value = inferFormattedCellValue(value);
+      setSelectedCell(editableCell.address);
+    } else if (legacyWorksheet && legacyModuleRef.current) {
+      legacyWorksheet[address] = inferLegacyCellValue(
+        value,
+        legacyWorksheet[address] as LegacyCell | undefined,
+      );
+      const cell = legacyModuleRef.current.utils.decode_cell(address);
+      const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
+      range.e.r = Math.max(range.e.r, cell.r);
+      range.e.c = Math.max(range.e.c, cell.c);
+      legacyWorksheet["!ref"] = legacyModuleRef.current.utils.encode_range(range);
+      setSelectedCell(address);
+    } else {
+      return;
+    }
     setDirty(true);
     setRevision((current) => current + 1);
   };
 
   const extendSheet = (axis: "row" | "column") => {
-    const spreadsheet = moduleRef.current;
-    const currentSheet = workbookRef.current?.Sheets[sheetName];
-    if (!spreadsheet || !currentSheet || !canEdit) return;
-    const range = spreadsheet.utils.decode_range(currentSheet["!ref"] ?? "A1");
-    if (axis === "row") range.e.r = Math.max(range.e.r, bounds.rows - 1) + 1;
-    else range.e.c = Math.max(range.e.c, bounds.columns - 1) + 1;
-    currentSheet["!ref"] = spreadsheet.utils.encode_range(range);
+    if (!canEdit) return;
+    if (formattedWorksheet) {
+      if (axis === "row") {
+        formattedWorksheet.getRow(bounds.rows + 1).height = formattedWorksheet.properties.defaultRowHeight ?? 15;
+        formattedWorksheet.getCell(bounds.rows + 1, 1).value = "";
+      } else {
+        formattedWorksheet.getColumn(bounds.columns + 1).width = 10;
+        formattedWorksheet.getCell(1, bounds.columns + 1).value = "";
+      }
+    } else if (legacyWorksheet && legacyModuleRef.current) {
+      const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
+      if (axis === "row") range.e.r = Math.max(range.e.r, bounds.rows - 1) + 1;
+      else range.e.c = Math.max(range.e.c, bounds.columns - 1) + 1;
+      legacyWorksheet["!ref"] = legacyModuleRef.current.utils.encode_range(range);
+    } else {
+      return;
+    }
     setDirty(true);
     setRevision((current) => current + 1);
   };
@@ -229,31 +487,46 @@ export function TestPlanSpreadsheetEditor({
   };
 
   const saveWorkbook = async () => {
-    const spreadsheet = moduleRef.current;
-    const workbook = workbookRef.current;
-    if (!spreadsheet || !workbook || !file || !canEdit) return;
+    if (!file || !canEdit) return;
     setStatus("saving");
     setError("");
     try {
-      const outputFormat = getOutputFormat(file.extension);
-      const output = spreadsheet.write(workbook, {
-        type: "array",
-        bookType: outputFormat.bookType,
-        bookVBA: true,
-        cellStyles: true,
-        compression: true,
-      }) as ArrayBuffer;
-      await onSave(file, new Blob([output], { type: outputFormat.mimeType }));
+      let contents: Blob;
+      if (mode === "formatted" && excelJsWorkbookRef.current) {
+        excelJsWorkbookRef.current.calcProperties.fullCalcOnLoad = true;
+        const output = await excelJsWorkbookRef.current.xlsx.writeBuffer();
+        contents = new Blob([new Uint8Array(output)], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+      } else if (legacyModuleRef.current && legacyWorkbookRef.current) {
+        const outputFormat = getOutputFormat(file.extension);
+        const output = legacyModuleRef.current.write(legacyWorkbookRef.current, {
+          type: "array",
+          bookType: outputFormat.bookType,
+          bookVBA: true,
+          cellStyles: true,
+          compression: true,
+        }) as ArrayBuffer;
+        contents = new Blob([output], { type: outputFormat.mimeType });
+      } else {
+        throw new Error("試算表尚未載入完成。");
+      }
+      await onSave(file, contents);
       setDirty(false);
       setStatus("ready");
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "儲存 Excel 失敗，原檔未被替換。");
+      setError(caught instanceof Error ? caught.message : "儲存 Excel 失敗，原檔沒有被覆蓋。");
     }
   };
 
-  const sheetNames = workbookRef.current?.SheetNames ?? [];
-  const selectedValue = readCellValue(worksheet?.[selectedCell] as SpreadsheetCell | undefined);
+  const sheetNames = mode === "formatted"
+    ? excelJsWorkbookRef.current?.worksheets.map((sheet) => sheet.name) ?? []
+    : legacyWorkbookRef.current?.SheetNames ?? [];
+  const selectedFormattedCell = formattedWorksheet?.getCell(selectedCell);
+  const selectedValue = mode === "formatted"
+    ? readFormattedFormulaValue(selectedFormattedCell)
+    : readLegacyCellValue(legacyWorksheet?.[selectedCell] as LegacyCell | undefined);
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && requestClose()}>
@@ -263,10 +536,17 @@ export function TestPlanSpreadsheetEditor({
           <div>
             <DialogTitle>{file?.originalName ?? "Excel 線上編輯"}</DialogTitle>
             <DialogDescription id="test-plan-sheet-description">
-              直接修改儲存格並儲存回原檔，不需要先下載再重新上傳。
+              {mode === "formatted"
+                ? "保留原始工作表的合併儲存格、尺寸、底色、字型與邊框。"
+                : "舊格式使用相容編輯模式；內容可直接修改並儲存回原檔。"}
             </DialogDescription>
           </div>
           <div className="test-plan-sheet-heading-actions">
+            {status !== "loading" && (
+              <span className={`test-plan-sheet-fidelity is-${mode}`}>
+                {mode === "formatted" ? "原始格式" : "相容模式"}
+              </span>
+            )}
             {dirty && <span className="test-plan-sheet-dirty">尚未儲存</span>}
             <Button type="button" variant="outline" onClick={requestClose}>關閉</Button>
             <Button
@@ -283,13 +563,13 @@ export function TestPlanSpreadsheetEditor({
         {status === "loading" ? (
           <div className="test-plan-sheet-state">
             <Loader2 className="h-7 w-7 animate-spin" />
-            <strong>正在開啟試算表</strong>
-            <span>大型檔案可能需要幾秒鐘，畫面不會重新整理。</span>
+            <strong>正在還原 Excel 版面</strong>
+            <span>大型活頁簿或含有大量樣式時，需要稍候幾秒。</span>
           </div>
-        ) : status === "error" && !workbookRef.current ? (
+        ) : status === "error" && !excelJsWorkbookRef.current && !legacyWorkbookRef.current ? (
           <div className="test-plan-sheet-state is-error">
             <FileSpreadsheet className="h-7 w-7" />
-            <strong>無法開啟這份 Excel</strong>
+            <strong>無法開啟這份試算表</strong>
             <span>{error}</span>
           </div>
         ) : (
@@ -328,40 +608,69 @@ export function TestPlanSpreadsheetEditor({
               <strong>{selectedCell}</strong>
               <Input
                 value={selectedValue}
-                disabled={!canEdit}
-                aria-label={`${selectedCell} 儲存格內容`}
+                readOnly={!canEdit}
+                aria-label={`${selectedCell} 內容或公式`}
                 onChange={(event) => updateCell(selectedCell, event.target.value)}
               />
             </div>
 
-            {error && (
-              <div className="test-plan-sheet-error" role="alert">{error}</div>
-            )}
+            {error && <div className="test-plan-sheet-error" role="alert">{error}</div>}
 
             <div className="test-plan-sheet-grid-wrap">
-              <table className="test-plan-sheet-grid">
+              <table className={`test-plan-sheet-grid is-${mode}`}>
+                <colgroup>
+                  <col className="test-plan-sheet-row-number-column" />
+                  {columns.map((column) => (
+                    <col
+                      key={column}
+                      style={formattedWorksheet
+                        ? { width: getColumnWidth(formattedWorksheet, column) }
+                        : undefined}
+                    />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr>
                     <th className="test-plan-sheet-corner" />
-                    {columns.map((columnIndex) => (
-                      <th key={columnIndex}>{moduleRef.current?.utils.encode_col(columnIndex)}</th>
+                    {columns.map((column) => (
+                      <th key={column}>{encodeColumn(column)}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((rowIndex) => (
-                    <tr key={rowIndex}>
-                      <th>{rowIndex + 1}</th>
-                      {columns.map((columnIndex) => {
-                        const address = moduleRef.current?.utils.encode_cell({ r: rowIndex, c: columnIndex }) ?? "A1";
+                  {rows.map((row) => (
+                    <tr
+                      key={row}
+                      style={formattedWorksheet ? { height: getRowHeight(formattedWorksheet, row) } : undefined}
+                    >
+                      <th>{row}</th>
+                      {columns.map((column) => {
+                        const address = encodeAddress(row, column);
+                        const merge = formattedWorksheet ? findMerge(merges, row, column) : undefined;
+                        const renderRow = merge ? Math.max(merge.start.row, firstRow) : row;
+                        const renderColumn = merge ? Math.max(merge.start.column, firstColumn) : column;
+                        if (merge && (row !== renderRow || column !== renderColumn)) return null;
+                        const masterAddress = merge?.masterAddress ?? address;
+                        const formattedCell = formattedWorksheet?.getCell(masterAddress);
+                        const cellStyle = formattedCell ? getFormattedCellStyle(formattedCell) : undefined;
+                        const displayValue = formattedCell
+                          ? readFormattedCellValue(formattedCell)
+                          : readLegacyCellValue(legacyWorksheet?.[address] as LegacyCell | undefined);
                         return (
-                          <td key={columnIndex} className={selectedCell === address ? "is-selected" : undefined}>
-                            <input
-                              value={readCellValue(worksheet?.[address] as SpreadsheetCell | undefined)}
-                              disabled={!canEdit}
-                              aria-label={address}
-                              onFocus={() => setSelectedCell(address)}
-                              onChange={(event) => updateCell(address, event.target.value)}
+                          <td
+                            key={address}
+                            className={selectedCell === masterAddress ? "is-selected" : undefined}
+                            rowSpan={merge ? Math.min(merge.end.row, lastRow) - renderRow + 1 : undefined}
+                            colSpan={merge ? Math.min(merge.end.column, lastColumn) - renderColumn + 1 : undefined}
+                            style={cellStyle}
+                          >
+                            <textarea
+                              value={displayValue}
+                              readOnly={!canEdit}
+                              aria-label={masterAddress}
+                              style={cellStyle}
+                              onFocus={() => setSelectedCell(masterAddress)}
+                              onChange={(event) => updateCell(masterAddress, event.target.value)}
                             />
                           </td>
                         );
@@ -373,20 +682,24 @@ export function TestPlanSpreadsheetEditor({
             </div>
 
             <div className="test-plan-sheet-pagination">
-              <div>
-                <Button type="button" size="sm" variant="outline" disabled={columnPage === 0} onClick={() => setColumnPage((current) => current - 1)}>
-                  <ChevronLeft className="h-4 w-4" />前一組欄
-                </Button>
-                <span>欄 {firstColumn + 1}-{lastColumn} / {bounds.columns}</span>
-                <Button type="button" size="sm" variant="outline" disabled={columnPage + 1 >= columnPageCount} onClick={() => setColumnPage((current) => current + 1)}>
-                  後一組欄<ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              {mode === "legacy" ? (
+                <div>
+                  <Button type="button" size="sm" variant="outline" disabled={columnPage === 0} onClick={() => setColumnPage((current) => current - 1)}>
+                    <ChevronLeft className="h-4 w-4" />上一組欄
+                  </Button>
+                  <span>欄 {firstColumn}-{lastColumn} / {bounds.columns}</span>
+                  <Button type="button" size="sm" variant="outline" disabled={columnPage + 1 >= columnPageCount} onClick={() => setColumnPage((current) => current + 1)}>
+                    下一組欄<ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <span>已依照原檔欄寬顯示，可左右捲動查看完整內容</span>
+              )}
               <div>
                 <Button type="button" size="sm" variant="outline" disabled={rowPage === 0} onClick={() => setRowPage((current) => current - 1)}>
                   <ChevronLeft className="h-4 w-4" />上一頁
                 </Button>
-                <span>列 {firstRow + 1}-{lastRow} / {bounds.rows}</span>
+                <span>列 {firstRow}-{lastRow} / {bounds.rows}</span>
                 <Button type="button" size="sm" variant="outline" disabled={rowPage + 1 >= rowPageCount} onClick={() => setRowPage((current) => current + 1)}>
                   下一頁<ChevronRight className="h-4 w-4" />
                 </Button>

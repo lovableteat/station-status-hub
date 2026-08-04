@@ -56,6 +56,14 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(workspace, /replaceFileContents/);
   assert.match(workspace, /直接編輯 Excel/);
   assert.match(editor, /import\("xlsx"\)/);
+  assert.match(editor, /import\("exceljs"\)/);
+  assert.match(editor, /formattedWorksheet\.model\.merges/);
+  assert.match(editor, /getFormattedCellStyle/);
+  assert.match(editor, /readFormattedCellValue/);
+  assert.match(editor, /cell\.value\.result/);
+  assert.match(editor, /getColumnWidth/);
+  assert.match(editor, /getRowHeight/);
+  assert.match(editor, /原始格式/);
   assert.match(editor, /儲存回原檔/);
   assert.match(editor, /這份 Excel 還沒有儲存/);
   assert.match(editor, /ROW_PAGE_SIZE = 100/);
