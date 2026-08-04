@@ -38,6 +38,30 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
   assert.match(workspace, /sort/);
   assert.match(workspace, /"grid"/);
   assert.match(workspace, /"list"/);
+  assert.match(workspace, /expandedFolderIds/);
+  assert.match(workspace, /aria-expanded=\{isExpanded\}/);
+  assert.match(workspace, /收合 \$\{folder\.name\}/);
+  assert.match(workspace, /個子資料夾/);
+});
+
+test("edits uploaded spreadsheets in place without forcing a download workflow", async () => {
+  const [workspace, editor, inspector, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/TestPlanSpreadsheetEditor.tsx"),
+    source("src/components/test-plan/TestPlanInspector.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
+
+  assert.match(workspace, /TestPlanSpreadsheetEditor/);
+  assert.match(workspace, /replaceFileContents/);
+  assert.match(workspace, /直接編輯 Excel/);
+  assert.match(editor, /import\("xlsx"\)/);
+  assert.match(editor, /儲存回原檔/);
+  assert.match(editor, /這份 Excel 還沒有儲存/);
+  assert.match(editor, /ROW_PAGE_SIZE = 100/);
+  assert.match(inspector, /onEditSpreadsheet/);
+  assert.match(styles, /\.test-plan-sheet-grid-wrap/);
+  assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
 });
 
 test("supports drag-and-drop batch upload with all engineering formats", async () => {
