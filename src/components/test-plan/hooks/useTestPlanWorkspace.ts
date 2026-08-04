@@ -15,6 +15,10 @@ import {
   type TestPlanRepository,
 } from "../core/repository";
 import { createSupabaseTestPlanAdapter } from "../core/supabaseAdapter";
+import {
+  TEST_PLAN_WORKSPACE_CONFIG,
+  type TestPlanWorkspaceConfig,
+} from "../workspaceConfig";
 import type {
   TestPlanFileRecord,
   TestPlanFolder,
@@ -36,26 +40,29 @@ interface UploadProgress {
 
 interface UseTestPlanWorkspaceOptions {
   repository?: TestPlanRepository;
+  config?: TestPlanWorkspaceConfig;
 }
-
-const AUTHENTICATED_SESSION_REQUIRED =
-  "Test_Plan 需要安全登入工作階段，請登出後重新登入。";
 
 export function useTestPlanWorkspace(
   options: UseTestPlanWorkspaceOptions = {},
 ) {
+  const config = options.config ?? TEST_PLAN_WORKSPACE_CONFIG;
   const { user, sessionMode } = useUser();
   const { activeProjectId } = useTestProject();
   const { canEditModule } = usePermissions();
   const repository = useMemo(
     () =>
       options.repository
-      ?? createTestPlanRepository(createSupabaseTestPlanAdapter()),
-    [options.repository],
+      ?? createTestPlanRepository(
+        createSupabaseTestPlanAdapter({ workspaceKind: config.workspaceKind }),
+      ),
+    [config.workspaceKind, options.repository],
   );
   const isAuthenticated = sessionMode === "authenticated";
   const ownerId = isAuthenticated ? user?.userId ?? null : null;
-  const canEdit = isAuthenticated && canEditModule("test-plan");
+  const canEdit = isAuthenticated && canEditModule(config.moduleId);
+  const authenticatedSessionRequired =
+    `${config.title} 需要安全登入工作階段，請登出後重新登入。`;
   const [spaces, setSpaces] = useState<TestPlanSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [folders, setFolders] = useState<TestPlanFolder[]>([]);
@@ -77,12 +84,12 @@ export function useTestPlanWorkspace(
 
   const requireEdit = useCallback(() => {
     if (!isAuthenticated) {
-      throw new Error(AUTHENTICATED_SESSION_REQUIRED);
+      throw new Error(authenticatedSessionRequired);
     }
     if (!canEdit) {
-      throw new Error("目前為唯讀模式，無法修改 Test_Plan。");
+      throw new Error(`目前為唯讀模式，無法修改 ${config.title}。`);
     }
-  }, [canEdit, isAuthenticated]);
+  }, [authenticatedSessionRequired, canEdit, config.title, isAuthenticated]);
 
   const applyWorkspace = useCallback(
     (workspace: Awaited<ReturnType<TestPlanRepository["loadWorkspace"]>>) => {
@@ -104,7 +111,7 @@ export function useTestPlanWorkspace(
           folders: [],
           files: [],
         });
-        setError(user ? AUTHENTICATED_SESSION_REQUIRED : null);
+        setError(user ? authenticatedSessionRequired : null);
         setLoading(false);
         return;
       }
@@ -116,7 +123,7 @@ export function useTestPlanWorkspace(
           folders: [],
           files: [],
         });
-        setError("請先選擇專案後再開啟 Test_Plan。");
+        setError(`請先選擇專案後再開啟 ${config.title}。`);
         setLoading(false);
         return;
       }
@@ -139,13 +146,22 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) applyWorkspace(workspace);
       } catch (caught) {
         if (requestId === requestIdRef.current) {
-          setError(getTestPlanErrorMessage(caught, "Test_Plan 載入失敗。"));
+          setError(getTestPlanErrorMessage(caught, `${config.title} 載入失敗。`));
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [activeProjectId, activeSpaceId, applyWorkspace, ownerId, repository, user],
+    [
+      activeProjectId,
+      activeSpaceId,
+      applyWorkspace,
+      authenticatedSessionRequired,
+      config.title,
+      ownerId,
+      repository,
+      user,
+    ],
   );
 
   useEffect(() => {

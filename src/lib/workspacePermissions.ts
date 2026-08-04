@@ -76,6 +76,7 @@ export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   issues: "station-status",
   tools: "station-status",
   "test-plan": "station-status",
+  "bom-management": "station-status",
   "material-requests": "material-requests",
   data: "data-center",
   "data-center": "data-center",
@@ -103,6 +104,7 @@ export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
   "data-center": "data_center",
   "pcb-designer": "pcb_designer",
   "test-plan": "test_plan",
+  "bom-management": "test_plan",
 };
 
 export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
@@ -375,7 +377,7 @@ export function canAccessModule({
   // Test_Plan is an inherited child of the maintenance workspace rather than
   // an independently assigned page. Configured maintenance access is therefore
   // its complete permission contract.
-  if (module === "test-plan") return true;
+  if (module === "test-plan" || module === "bom-management") return true;
 
   // 單頁工作區直接以工作區層級為完整權限；維修中心與後台管理仍需符合內頁權限。
   if (workspace !== "station-status" && workspace !== "user-management") return true;

@@ -71,6 +71,7 @@ const moduleLabels: Record<string, string> = {
   issues: "問題追蹤",
   tools: "工具與資產",
   "test-plan": "Test_Plan",
+  "bom-management": "BOM 資料管理",
   users: "後台管理",
   "api-management": "API 管理",
   "material-requests": "料號申請",

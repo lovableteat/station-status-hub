@@ -2068,6 +2068,7 @@ export type Database = {
           owner_id: string
           project_id: string
           updated_at: string
+          workspace_kind: string
         }
         Insert: {
           color?: string
@@ -2078,6 +2079,7 @@ export type Database = {
           owner_id: string
           project_id: string
           updated_at?: string
+          workspace_kind?: string
         }
         Update: {
           color?: string
@@ -2088,6 +2090,7 @@ export type Database = {
           owner_id?: string
           project_id?: string
           updated_at?: string
+          workspace_kind?: string
         }
         Relationships: [
           {

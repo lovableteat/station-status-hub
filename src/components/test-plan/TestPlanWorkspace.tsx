@@ -95,6 +95,10 @@ import {
   TestPlanSpaceDialog,
   type TestPlanSpaceInput,
 } from "./TestPlanSpaceDialog";
+import {
+  TEST_PLAN_WORKSPACE_CONFIG,
+  type TestPlanWorkspaceConfig,
+} from "./workspaceConfig";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
@@ -481,8 +485,12 @@ function EntryActions({
   );
 }
 
-export function TestPlanWorkspace() {
-  const workspace = useTestPlanWorkspace();
+export function TestPlanWorkspace({
+  config = TEST_PLAN_WORKSPACE_CONFIG,
+}: {
+  config?: TestPlanWorkspaceConfig;
+}) {
+  const workspace = useTestPlanWorkspace({ config });
   const {
     spaces,
     activeSpaceId,
@@ -793,8 +801,8 @@ export function TestPlanWorkspace() {
     <section className="test-plan-workspace">
       <header className="test-plan-header">
         <MaintenancePageHeader
-          title="Test_Plan"
-          description="集中管理電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案"
+          title={config.title}
+          description={config.description}
           icon={FolderKanban}
           actions={(
             <>
@@ -810,7 +818,7 @@ export function TestPlanWorkspace() {
                 onClick={() => setSpaceDialog({ mode: "create", space: null })}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                新增空間
+                {config.createSpaceLabel}
               </Button>
               {activeSpace && (
                 <Button
@@ -827,7 +835,7 @@ export function TestPlanWorkspace() {
         />
         <MaintenanceMetricStrip
           metrics={[
-            { label: "資料空間", value: spaces.length, icon: FolderKanban, accent: "blue" },
+            { label: config.spaceLabel, value: spaces.length, icon: FolderKanban, accent: "blue" },
             { label: "資料夾", value: folders.length, icon: FolderOpen, accent: "cyan" },
             { label: "工程檔案", value: files.length, icon: File, accent: "emerald" },
             {
@@ -876,12 +884,12 @@ export function TestPlanWorkspace() {
             "test-plan-space-rail",
             isSpaceDrawerOpen && "is-mobile-open",
           )}
-          aria-label="Test_Plan 空間與資料夾"
+          aria-label={config.title + " 空間與資料夾"}
         >
           <div className="test-plan-rail-heading">
             <div>
               <span className="test-plan-eyebrow">MY SPACES</span>
-              <strong>資料空間</strong>
+              <strong>{config.spaceLabel}</strong>
             </div>
             <Button
               type="button"
@@ -1227,7 +1235,7 @@ export function TestPlanWorkspace() {
                 {loading ? (
                   <div className="test-plan-loading">
                     <RefreshCw className="h-5 w-5 animate-spin" />
-                    正在載入 Test_Plan…
+                    正在載入 {config.title}…
                   </div>
                 ) : visibleEntries.length === 0 ? (
                   <div className="test-plan-empty is-compact">

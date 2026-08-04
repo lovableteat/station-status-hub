@@ -79,6 +79,11 @@ const TestPlanWorkspace = React.lazy(() =>
     default: module.TestPlanWorkspace,
   }))
 );
+const BomManagementWorkspace = React.lazy(() =>
+  import("@/components/bom-management/BomManagementWorkspace").then((module) => ({
+    default: module.BomManagementWorkspace,
+  }))
+);
 const ToolsManagement = React.lazy(() =>
   import("@/components/tools/ToolsManagement").then((module) => ({
     default: module.ToolsManagement,
@@ -100,7 +105,8 @@ type StationModuleId =
   | "monitor"
   | "issues"
   | "tools"
-  | "test-plan";
+  | "test-plan"
+  | "bom-management";
 
 type AdminModuleId = "users" | "collaboration" | "api-management";
 
@@ -116,6 +122,7 @@ const stationModuleItems: Array<{
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具管理", icon: Wrench },
   { id: "test-plan", label: "Test_Plan", icon: FolderKanban },
+  { id: "bom-management", label: "BOM 資料管理", icon: Boxes },
 ];
 
 const moduleWorkspaceMap: Record<string, WorkspaceId> = {
@@ -126,6 +133,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   issues: "station-status",
   tools: "station-status",
   "test-plan": "station-status",
+  "bom-management": "station-status",
   users: "user-management",
   collaboration: "user-management",
   "api-management": "user-management",
@@ -222,7 +230,8 @@ function getInitialStationModule(): StationModuleId {
     value === "monitor" ||
     value === "issues" ||
     value === "tools" ||
-    value === "test-plan"
+    value === "test-plan" ||
+    value === "bom-management"
   ) {
     return value;
   }
@@ -549,6 +558,12 @@ const Index = () => {
             <TestPlanWorkspace />
           </PermissionGuard>
         );
+      case "bom-management":
+        return (
+          <PermissionGuard module="bom-management">
+            <BomManagementWorkspace />
+          </PermissionGuard>
+        );
       default:
         return null;
     }
@@ -631,7 +646,8 @@ const Index = () => {
                         key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}
                         className={cn(
                           (activeStationModule === "flow-info" ||
-                            activeStationModule === "test-plan") &&
+                            activeStationModule === "test-plan" ||
+                            activeStationModule === "bom-management") &&
                             "h-full min-h-0",
                         )}
                       >
