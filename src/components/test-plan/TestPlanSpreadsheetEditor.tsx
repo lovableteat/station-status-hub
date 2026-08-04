@@ -762,6 +762,7 @@ export function TestPlanSpreadsheetEditor({
                               value={displayValue}
                               readOnly={!canEdit}
                               aria-label={masterAddress}
+                              data-spreadsheet-cell="true"
                               style={cellStyle}
                               onFocus={() => setSelectedCell(masterAddress)}
                               onChange={(event) => updateCell(masterAddress, event.target.value)}

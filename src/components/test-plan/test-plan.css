@@ -1151,11 +1151,15 @@
   line-height: 1.25;
 }
 
-.test-plan-sheet-grid.is-formatted textarea {
+.test-plan-sheet-grid.is-formatted textarea[data-spreadsheet-cell="true"] {
   height: 100%;
   padding: 2px 4px;
-  color: inherit;
-  background: inherit;
+  color: inherit !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color-scheme: light;
   font: inherit;
   text-align: inherit;
   vertical-align: inherit;
@@ -1167,8 +1171,8 @@
   background: rgb(45 212 191 / 8%);
 }
 
-.test-plan-sheet-grid.is-formatted textarea:focus {
-  background: inherit !important;
+.test-plan-sheet-grid.is-formatted textarea[data-spreadsheet-cell="true"]:focus {
+  background: transparent !important;
 }
 
 .test-plan-sheet-pagination {
