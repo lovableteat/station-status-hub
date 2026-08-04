@@ -30,8 +30,12 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /dismiss_user_notification/);
   assert.match(centerSource, /dismiss_read_user_notifications/);
   assert.match(centerSource, /已讀後可刪除/);
-  assert.match(centerSource, /搜尋姓名、帳號、角色或所在頁面/);
-  assert.match(centerSource, /尚未取得在線名單/);
+  assert.match(centerSource, /list_active_collaboration_members/);
+  assert.match(centerSource, /帳號目錄共/);
+  assert.match(centerSource, /目前離線/);
+  assert.match(centerSource, /帳號目錄載入失敗/);
+  assert.match(centerSource, /directoryMembers/);
+  assert.match(centerSource, /私訊 \$\{memberName\}/);
   assert.doesNotMatch(centerSource, /目前只有您在線上/);
 });
 
@@ -114,4 +118,18 @@ test("admin announcements are inserted server-side with role and recipient check
   assert.match(migration, /status = 'active'/i);
   assert.match(migration, /INSERT INTO public\.user_notifications/i);
   assert.match(migration, /admin_announcement/i);
+});
+
+test("collaboration directory exposes active accounts without exposing sensitive account data", async () => {
+  const migration = await readSource(
+    "supabase/migrations/20260804110000_list_active_collaboration_members.sql",
+  );
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.list_active_collaboration_members/i);
+  assert.match(migration, /auth\.uid\(\) IS NOT NULL/i);
+  assert.match(migration, /account\.status = 'active'/i);
+  assert.match(migration, /SECURITY DEFINER/i);
+  assert.match(migration, /GRANT EXECUTE[\s\S]*TO authenticated, service_role/i);
+  assert.doesNotMatch(migration, /password_hash/i);
+  assert.doesNotMatch(migration, /permissions/i);
 });

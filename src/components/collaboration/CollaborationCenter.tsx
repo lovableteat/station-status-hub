@@ -48,6 +48,21 @@ type NotificationRow = {
   metadata: unknown;
 };
 
+type CollaborationDirectoryMember = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: string;
+};
+
+type CollaborationMember = {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: string;
+  onlineUser?: OnlineUser;
+};
+
 const moduleLabels: Record<string, string> = {
   dashboard: "系統儀表板",
   "test-tracker": "L10 測試追蹤",
@@ -82,44 +97,52 @@ function formatTime(value: string) {
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function PresenceCard({
-  onlineUser,
+function MemberCard({
+  member,
   currentUserId,
   onMessage,
 }: {
-  onlineUser: OnlineUser;
+  member: CollaborationMember;
   currentUserId?: string;
   onMessage?: () => void;
 }) {
-  const isCurrentAccount = onlineUser.userId === currentUserId;
-  const sessionCount = Math.max(1, onlineUser.sessionCount || 1);
+  const { onlineUser } = member;
+  const isCurrentAccount = member.userId === currentUserId;
+  const isOnline = Boolean(onlineUser);
+  const sessionCount = Math.max(1, onlineUser?.sessionCount || 1);
+  const memberName = member.displayName || member.username;
   return (
     <div className="rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-start gap-3">
         <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
-          {(onlineUser.displayName || onlineUser.username).slice(0, 2).toUpperCase()}
-          <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d] bg-emerald-400" />
+          {memberName.slice(0, 2).toUpperCase()}
+          <span className={cn(
+            "absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d]",
+            isOnline ? "bg-emerald-400" : "bg-slate-500",
+          )} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate font-semibold text-slate-50">
-              {onlineUser.displayName || onlineUser.username}
-            </span>
-            {isCurrentAccount && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
-            <Badge className={cn(
-              "border px-2",
-              sessionCount > 1
-                ? "border-amber-200/25 bg-amber-300/15 text-amber-100"
-                : "border-emerald-200/20 bg-emerald-300/10 text-emerald-100",
-            )}>
-              {sessionCount > 1 ? `同帳號 ${sessionCount} 個連線` : "1 個連線"}
-            </Badge>
-            {onlineUser.isEditing && <Badge className="bg-amber-300/15 text-amber-100">編輯中</Badge>}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
-            <span>{roleLabels[onlineUser.role] || onlineUser.role}</span>
-            <span aria-hidden="true">•</span>
-            <span>{moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule}</span>
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-semibold text-slate-50">{memberName}</span>
+              {isCurrentAccount && <Badge className="bg-cyan-300/15 text-cyan-100">您</Badge>}
+              <Badge className={cn(
+                "border px-2",
+                !isOnline
+                  ? "border-slate-500/40 bg-slate-500/10 text-slate-300"
+                  : sessionCount > 1
+                    ? "border-amber-200/25 bg-amber-300/15 text-amber-100"
+                    : "border-emerald-200/20 bg-emerald-300/10 text-emerald-100",
+              )}>
+                {!isOnline ? "離線" : sessionCount > 1 ? `同帳號 ${sessionCount} 個連線` : "1 個連線"}
+              </Badge>
+              {onlineUser?.isEditing && <Badge className="bg-amber-300/15 text-amber-100">編輯中</Badge>}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+              <span>{roleLabels[member.role] || member.role}</span>
+              <span aria-hidden="true">•</span>
+              <span>{isOnline ? moduleLabels[onlineUser?.currentModule || "dashboard"] || onlineUser?.currentModule : "目前離線"}</span>
+            </div>
           </div>
           {onMessage ? (
             <Button
@@ -127,7 +150,9 @@ function PresenceCard({
               variant="ghost"
               size="sm"
               onClick={onMessage}
-              className="mt-2 h-8 rounded-lg px-2.5 text-cyan-200 hover:bg-cyan-300/10 hover:text-cyan-100"
+              aria-label={`私訊 ${memberName}`}
+              title={`私訊 ${memberName}`}
+              className="h-8 shrink-0 rounded-lg px-2.5 text-cyan-200 hover:bg-cyan-300/10 hover:text-cyan-100"
             >
               <MessageSquareText className="mr-1.5 h-3.5 w-3.5" />私訊
             </Button>
@@ -143,7 +168,6 @@ export function CollaborationCenter() {
   const {
     onlineAccounts,
     onlineUsers,
-    totalOnlineUsers,
     totalOnlineSessions,
     connectionState,
     connectionStatus,
@@ -158,7 +182,10 @@ export function CollaborationCenter() {
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
-  const [onlineQuery, setOnlineQuery] = useState("");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
   const [clearingRead, setClearingRead] = useState(false);
   const autoAnnouncementShownRef = useRef(false);
@@ -179,9 +206,32 @@ export function CollaborationCenter() {
     setLoading(false);
   }, [user?.userId]);
 
+  const loadMemberDirectory = useCallback(async () => {
+    if (!user?.userId || !isRealtimeAuthenticated) {
+      setDirectoryMembers([]);
+      setDirectoryError(null);
+      return;
+    }
+
+    setDirectoryLoading(true);
+    setDirectoryError(null);
+    const { data, error: queryError } = await supabase.rpc("list_active_collaboration_members");
+    if (queryError) {
+      setDirectoryMembers([]);
+      setDirectoryError("帳號目錄載入失敗，請重新登入後再試一次。");
+    } else {
+      setDirectoryMembers((data || []) as CollaborationDirectoryMember[]);
+    }
+    setDirectoryLoading(false);
+  }, [isRealtimeAuthenticated, user?.userId]);
+
   useEffect(() => {
     void loadNotifications();
   }, [loadNotifications]);
+
+  useEffect(() => {
+    void loadMemberDirectory();
+  }, [loadMemberDirectory]);
 
   useEffect(() => {
     if (!user?.userId) return;
@@ -232,16 +282,36 @@ export function CollaborationCenter() {
     )),
     [notificationFilter, notifications],
   );
-  const filteredOnlineUsers = useMemo(() => {
-    const query = onlineQuery.trim().toLocaleLowerCase("zh-TW");
-    if (!query) return onlineAccounts;
-    return onlineAccounts.filter((onlineUser) => {
-      const moduleLabel = moduleLabels[onlineUser.currentModule || "dashboard"] || onlineUser.currentModule || "";
-      return [onlineUser.displayName, onlineUser.username, roleLabels[onlineUser.role], moduleLabel]
+  const collaborationMembers = useMemo(() => {
+    const onlineById = new Map(onlineAccounts.map((onlineUser) => [onlineUser.userId, onlineUser]));
+    return directoryMembers
+      .map((member) => ({
+        userId: member.user_id,
+        username: member.username,
+        displayName: member.display_name || member.username,
+        role: member.role,
+        onlineUser: onlineById.get(member.user_id),
+      }))
+      .sort((left, right) => {
+        if (left.userId === user?.userId) return -1;
+        if (right.userId === user?.userId) return 1;
+        if (Boolean(left.onlineUser) !== Boolean(right.onlineUser)) return left.onlineUser ? -1 : 1;
+        return left.displayName.localeCompare(right.displayName, "zh-TW");
+      });
+  }, [directoryMembers, onlineAccounts, user?.userId]);
+
+  const filteredMembers = useMemo(() => {
+    const query = memberQuery.trim().toLocaleLowerCase("zh-TW");
+    if (!query) return collaborationMembers;
+    return collaborationMembers.filter((member) => {
+      const moduleLabel = member.onlineUser
+        ? moduleLabels[member.onlineUser.currentModule || "dashboard"] || member.onlineUser.currentModule || ""
+        : "離線";
+      return [member.displayName, member.username, roleLabels[member.role], moduleLabel]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query));
     });
-  }, [onlineAccounts, onlineQuery]);
+  }, [collaborationMembers, memberQuery]);
 
   useEffect(() => {
     if (loading || autoAnnouncementShownRef.current) return;
@@ -509,7 +579,7 @@ export function CollaborationCenter() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-semibold text-slate-100">全站目前 {totalOnlineSessions} 個在線連線</div>
-                  <div className="mt-0.5 text-xs text-slate-500">共 {totalOnlineUsers} 個帳號；同帳號的分頁或裝置會合併顯示。</div>
+                  <div className="mt-0.5 text-xs text-slate-500">帳號目錄共 {directoryMembers.length} 位啟用同事；同帳號的分頁或裝置會合併顯示。</div>
                 </div>
                 <div className="flex items-center gap-2">
                 <Badge className={cn("gap-1.5", connectionStatus === "online" ? "bg-emerald-300/15 text-emerald-200" : connectionState === "error" ? "bg-rose-300/15 text-rose-200" : "bg-amber-300/15 text-amber-200")}>
@@ -523,16 +593,26 @@ export function CollaborationCenter() {
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/55" />
-                <Input value={onlineQuery} onChange={(event) => setOnlineQuery(event.target.value)} placeholder="搜尋姓名、帳號、角色或所在頁面" className="h-10 border-cyan-200/15 bg-[#071522] pl-9 text-slate-100" />
+                <Input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="搜尋姓名、帳號、角色、頁面或離線狀態" className="h-10 border-cyan-200/15 bg-[#071522] pl-9 text-slate-100" />
               </div>
+              {directoryError ? (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">
+                  <span>{directoryError}</span>
+                  <Button variant="ghost" size="sm" onClick={() => void loadMemberDirectory()} className="h-7 shrink-0 px-2 text-rose-100 hover:bg-rose-300/15">重試</Button>
+                </div>
+              ) : null}
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
-              {onlineAccounts.length === 0 ? (
-                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">{connectionState === "error" ? "尚未取得在線名單" : "正在同步在線成員"}</p><p className="mt-1 text-sm">{isRealtimeAuthenticated ? "畫面會維持原頁，不會因重新連線而刷新。" : "請重新登入以啟用安全的即時協作。"}</p></div>
-              ) : filteredOnlineUsers.length === 0 ? (
-                <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的在線成員</p><p className="mt-1 text-sm">可改用姓名、帳號或頁面名稱搜尋。</p></div>
+              {directoryLoading ? (
+                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><LoaderCircle className="mb-3 h-9 w-9 animate-spin text-cyan-200/60" /><p className="font-semibold text-slate-300">正在載入可私訊的帳號</p><p className="mt-1 text-sm">在線狀態會在不重整頁面的情況下持續更新。</p></div>
+              ) : directoryError ? (
+                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><AlertCircle className="mb-3 h-10 w-10 text-rose-200/60" /><p className="font-semibold text-slate-300">帳號目錄暫時無法使用</p><p className="mt-1 text-sm">請重新登入後重試，系統不會用假資料取代目錄。</p></div>
+              ) : collaborationMembers.length === 0 ? (
+                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><Users className="mb-3 h-10 w-10 opacity-40" /><p className="font-semibold text-slate-300">尚未找到啟用帳號</p><p className="mt-1 text-sm">請由管理員確認帳號已啟用。</p></div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的帳號</p><p className="mt-1 text-sm">可改用姓名、帳號、角色、頁面或離線狀態搜尋。</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{filteredOnlineUsers.map((onlineUser) => <PresenceCard key={onlineUser.userId} onlineUser={onlineUser} currentUserId={user?.userId} onMessage={onlineUser.userId === user?.userId ? undefined : () => { setMessageRecipientId(onlineUser.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{filteredMembers.map((member) => <MemberCard key={member.userId} member={member} currentUserId={user?.userId} onMessage={member.userId === user?.userId ? undefined : () => { setMessageRecipientId(member.userId); setActiveTab("messages"); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>
