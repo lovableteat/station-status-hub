@@ -1,5 +1,7 @@
 import {
+  type ClipboardEvent as ReactClipboardEvent,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useRef,
   useState,
@@ -7,12 +9,18 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  ClipboardPaste,
   Columns3,
+  Copy,
+  Eraser,
   FileSpreadsheet,
   Loader2,
   Plus,
+  Redo2,
   Rows3,
   Save,
+  Scissors,
+  Undo2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +33,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
+import {
+  createSpreadsheetSelection,
+  decodeSpreadsheetAddress as decodeAddress,
+  doSpreadsheetRangesIntersect,
+  encodeSpreadsheetAddress as encodeAddress,
+  encodeSpreadsheetColumn as encodeColumn,
+  getSpreadsheetSelectionLabel,
+  getSpreadsheetSelectionSize,
+  moveSpreadsheetSelection,
+  normalizeSpreadsheetSelection,
+  parseSpreadsheetClipboard,
+  serializeSpreadsheetClipboard,
+  type SpreadsheetCellPosition as CellPosition,
+  type SpreadsheetSelection,
+} from "./spreadsheetInteraction";
 import type { TestPlanFileRecord } from "./types";
 
 type ExcelJsWorkbook = import("exceljs").Workbook;
@@ -38,11 +61,6 @@ type LegacyCell = import("xlsx").CellObject;
 
 type EditorMode = "formatted" | "legacy";
 type EditorStatus = "idle" | "loading" | "ready" | "saving" | "error";
-
-interface CellPosition {
-  row: number;
-  column: number;
-}
 
 interface MergeRange {
   start: CellPosition;
@@ -86,31 +104,6 @@ interface SpreadsheetColor {
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
-}
-
-function encodeColumn(column: number): string {
-  let value = column;
-  let result = "";
-  while (value > 0) {
-    value -= 1;
-    result = String.fromCharCode(65 + (value % 26)) + result;
-    value = Math.floor(value / 26);
-  }
-  return result;
-}
-
-function encodeAddress(row: number, column: number): string {
-  return `${encodeColumn(column)}${row}`;
-}
-
-function decodeAddress(address: string): CellPosition {
-  const match = address.replace(/\$/g, "").match(/^([A-Za-z]+)(\d+)$/);
-  if (!match) return { row: 1, column: 1 };
-  const column = match[1]
-    .toUpperCase()
-    .split("")
-    .reduce((total, character) => total * 26 + character.charCodeAt(0) - 64, 0);
-  return { row: Number(match[2]), column };
 }
 
 function decodeMergeRange(range: string): MergeRange {
@@ -407,6 +400,12 @@ interface TestPlanSpreadsheetEditorProps {
   open: boolean;
 }
 
+interface SpreadsheetCellChange {
+  address: string;
+  before: string;
+  after: string;
+}
+
 export function TestPlanSpreadsheetEditor({
   canEdit,
   downloadFile,
@@ -419,9 +418,17 @@ export function TestPlanSpreadsheetEditor({
   const workbookThemeColorsRef = useRef<string[]>(DEFAULT_THEME_COLORS);
   const legacyWorkbookRef = useRef<LegacyWorkbook | null>(null);
   const legacyModuleRef = useRef<LegacySpreadsheetModule | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const selectingRef = useRef(false);
+  const skipEditCommitRef = useRef(false);
+  const undoStackRef = useRef<SpreadsheetCellChange[][]>([]);
+  const redoStackRef = useRef<SpreadsheetCellChange[][]>([]);
+  const structureDirtyRef = useRef(false);
   const [mode, setMode] = useState<EditorMode>("formatted");
   const [sheetName, setSheetName] = useState("");
-  const [selectedCell, setSelectedCell] = useState("A1");
+  const [selection, setSelection] = useState<SpreadsheetSelection>(() => createSpreadsheetSelection());
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
   const [rowPage, setRowPage] = useState(0);
   const [columnPage, setColumnPage] = useState(0);
   const [, setRevision] = useState(0);
@@ -439,6 +446,9 @@ export function TestPlanSpreadsheetEditor({
     setStatus("loading");
     setError("");
     setDirty(false);
+    structureDirtyRef.current = false;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
     setRevision(0);
     setRowPage(0);
     setColumnPage(0);
@@ -473,7 +483,8 @@ export function TestPlanSpreadsheetEditor({
           setMode("legacy");
           setSheetName(workbook.SheetNames[0]);
         }
-        setSelectedCell("A1");
+        setSelection(createSpreadsheetSelection());
+        setEditingCell(null);
         setStatus("ready");
       })
       .catch((caught) => {
@@ -486,6 +497,14 @@ export function TestPlanSpreadsheetEditor({
       active = false;
     };
   }, [downloadFile, file, open]);
+
+  useEffect(() => {
+    const stopSelecting = () => {
+      selectingRef.current = false;
+    };
+    window.addEventListener("mouseup", stopSelecting);
+    return () => window.removeEventListener("mouseup", stopSelecting);
+  }, []);
 
   const formattedWorksheet = mode === "formatted"
     ? excelJsWorkbookRef.current?.getWorksheet(sheetName) ?? null
@@ -525,30 +544,322 @@ export function TestPlanSpreadsheetEditor({
   const merges = formattedWorksheet
     ? (formattedWorksheet.model.merges ?? []).map(decodeMergeRange)
     : [];
+  const normalizedSelection = normalizeSpreadsheetSelection(selection);
+  const selectedCell = encodeAddress(selection.focus.row, selection.focus.column);
 
-  const updateCell = (address: string, value: string) => {
-    if (!canEdit) return;
+  const getMasterAddress = (row: number, column: number): string => (
+    findMerge(merges, row, column)?.masterAddress ?? encodeAddress(row, column)
+  );
+
+  const normalizeEditableAddress = (address: string): string => {
+    const position = decodeAddress(address);
+    return getMasterAddress(position.row, position.column);
+  };
+
+  const readCellInputValue = (address: string): string => {
+    const editableAddress = normalizeEditableAddress(address);
+    if (formattedWorksheet) return readFormattedFormulaValue(formattedWorksheet.getCell(editableAddress));
+    return readLegacyCellValue(legacyWorksheet?.[editableAddress] as LegacyCell | undefined);
+  };
+
+  const writeCellInputValue = (address: string, value: string) => {
+    const editableAddress = normalizeEditableAddress(address);
     if (formattedWorksheet) {
-      const target = formattedWorksheet.getCell(address);
-      const editableCell = target.isMerged ? target.master : target;
-      editableCell.value = inferFormattedCellValue(value);
-      setSelectedCell(editableCell.address);
-    } else if (legacyWorksheet && legacyModuleRef.current) {
-      legacyWorksheet[address] = inferLegacyCellValue(
-        value,
-        legacyWorksheet[address] as LegacyCell | undefined,
-      );
-      const cell = legacyModuleRef.current.utils.decode_cell(address);
-      const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
-      range.e.r = Math.max(range.e.r, cell.r);
-      range.e.c = Math.max(range.e.c, cell.c);
-      legacyWorksheet["!ref"] = legacyModuleRef.current.utils.encode_range(range);
-      setSelectedCell(address);
-    } else {
+      formattedWorksheet.getCell(editableAddress).value = inferFormattedCellValue(value);
       return;
+    }
+    if (!legacyWorksheet || !legacyModuleRef.current) return;
+    legacyWorksheet[editableAddress] = inferLegacyCellValue(
+      value,
+      legacyWorksheet[editableAddress] as LegacyCell | undefined,
+    );
+    const cell = legacyModuleRef.current.utils.decode_cell(editableAddress);
+    const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
+    range.e.r = Math.max(range.e.r, cell.r);
+    range.e.c = Math.max(range.e.c, cell.c);
+    legacyWorksheet["!ref"] = legacyModuleRef.current.utils.encode_range(range);
+  };
+
+  const commitCellChanges = (
+    requestedChanges: Array<{ address: string; value: string }>,
+    recordHistory = true,
+  ): SpreadsheetCellChange[] => {
+    if (!canEdit && recordHistory) return [];
+    const pending = new Map<string, SpreadsheetCellChange>();
+    requestedChanges.forEach(({ address, value }) => {
+      const editableAddress = normalizeEditableAddress(address);
+      const previous = pending.get(editableAddress);
+      pending.set(editableAddress, {
+        address: editableAddress,
+        before: previous?.before ?? readCellInputValue(editableAddress),
+        after: value,
+      });
+    });
+    const changes = [...pending.values()].filter((change) => change.before !== change.after);
+    if (!changes.length) return [];
+
+    changes.forEach((change) => writeCellInputValue(change.address, change.after));
+    if (recordHistory) {
+      undoStackRef.current.push(changes);
+      redoStackRef.current = [];
     }
     setDirty(true);
     setRevision((current) => current + 1);
+    return changes;
+  };
+
+  const updateCell = (address: string, value: string) => {
+    commitCellChanges([{ address, value }]);
+  };
+
+  const revealSelection = (nextSelection: SpreadsheetSelection) => {
+    const focus = nextSelection.focus;
+    setSelection(nextSelection);
+    setRowPage(Math.floor((focus.row - 1) / ROW_PAGE_SIZE));
+    if (mode === "legacy") setColumnPage(Math.floor((focus.column - 1) / COLUMN_PAGE_SIZE));
+    const address = encodeAddress(focus.row, focus.column);
+    window.requestAnimationFrame(() => {
+      gridRef.current
+        ?.querySelector<HTMLElement>(`[data-cell-address="${address}"]`)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+  };
+
+  const selectPosition = (position: CellPosition, extend = false) => {
+    const master = decodeAddress(getMasterAddress(position.row, position.column));
+    revealSelection({
+      anchor: extend ? selection.anchor : master,
+      focus: master,
+    });
+  };
+
+  const startEditing = (address: string, replacement?: string) => {
+    if (!canEdit) return;
+    const editableAddress = normalizeEditableAddress(address);
+    const position = decodeAddress(editableAddress);
+    skipEditCommitRef.current = false;
+    setSelection({ anchor: position, focus: position });
+    setEditingCell(editableAddress);
+    setEditingValue(replacement ?? readCellInputValue(editableAddress));
+  };
+
+  const commitEditing = () => {
+    if (!editingCell) return;
+    if (skipEditCommitRef.current) {
+      skipEditCommitRef.current = false;
+      setEditingCell(null);
+      return;
+    }
+    const address = editingCell;
+    const value = editingValue;
+    setEditingCell(null);
+    updateCell(address, value);
+  };
+
+  const cancelEditing = () => {
+    skipEditCommitRef.current = true;
+    setEditingCell(null);
+    window.requestAnimationFrame(() => gridRef.current?.focus({ preventScroll: true }));
+  };
+
+  const commitEditingAndMove = (rowDelta: number, columnDelta: number) => {
+    if (!editingCell) return;
+    const position = decodeAddress(editingCell);
+    skipEditCommitRef.current = true;
+    updateCell(editingCell, editingValue);
+    setEditingCell(null);
+    revealSelection(moveSpreadsheetSelection(
+      { anchor: position, focus: position },
+      rowDelta,
+      columnDelta,
+      bounds.rows,
+      bounds.columns,
+      false,
+    ));
+    window.requestAnimationFrame(() => gridRef.current?.focus({ preventScroll: true }));
+  };
+
+  const collectSelectionAddresses = (): string[] => {
+    const addresses = new Set<string>();
+    for (let row = normalizedSelection.startRow; row <= normalizedSelection.endRow; row += 1) {
+      for (let column = normalizedSelection.startColumn; column <= normalizedSelection.endColumn; column += 1) {
+        addresses.add(getMasterAddress(row, column));
+      }
+    }
+    return [...addresses];
+  };
+
+  const clearSelection = () => {
+    if (!canEdit) return;
+    commitCellChanges(collectSelectionAddresses().map((address) => ({ address, value: "" })));
+  };
+
+  const getSelectionClipboardText = (): string => {
+    const matrix: string[][] = [];
+    for (let row = normalizedSelection.startRow; row <= normalizedSelection.endRow; row += 1) {
+      const values: string[] = [];
+      for (let column = normalizedSelection.startColumn; column <= normalizedSelection.endColumn; column += 1) {
+        const address = encodeAddress(row, column);
+        const masterAddress = getMasterAddress(row, column);
+        values.push(address === masterAddress ? readCellInputValue(masterAddress) : "");
+      }
+      matrix.push(values);
+    }
+    return serializeSpreadsheetClipboard(matrix);
+  };
+
+  const applyClipboardMatrix = (matrix: string[][]) => {
+    if (!canEdit || !matrix.length) return;
+    const changes: Array<{ address: string; value: string }> = [];
+    const isSingleValue = matrix.length === 1 && matrix[0]?.length === 1;
+    if (isSingleValue && getSpreadsheetSelectionSize(normalizedSelection) > 1) {
+      collectSelectionAddresses().forEach((address) => changes.push({ address, value: matrix[0][0] }));
+      commitCellChanges(changes);
+      return;
+    }
+
+    const start = selection.focus;
+    matrix.forEach((values, rowOffset) => {
+      values.forEach((value, columnOffset) => {
+        changes.push({
+          address: encodeAddress(start.row + rowOffset, start.column + columnOffset),
+          value,
+        });
+      });
+    });
+    commitCellChanges(changes);
+    const end = {
+      row: start.row + matrix.length - 1,
+      column: start.column + Math.max(1, ...matrix.map((values) => values.length)) - 1,
+    };
+    revealSelection({ anchor: start, focus: end });
+  };
+
+  const copySelectionToClipboard = async (cut = false) => {
+    try {
+      await navigator.clipboard.writeText(getSelectionClipboardText());
+      if (cut) clearSelection();
+      setError("");
+    } catch {
+      setError("瀏覽器拒絕存取剪貼簿；請先點選工作表，再使用 Ctrl+C、Ctrl+X 或 Ctrl+V。");
+    }
+  };
+
+  const pasteFromClipboard = async () => {
+    if (!canEdit) return;
+    try {
+      applyClipboardMatrix(parseSpreadsheetClipboard(await navigator.clipboard.readText()));
+      setError("");
+    } catch {
+      setError("瀏覽器拒絕讀取剪貼簿；請直接在工作表上按 Ctrl+V 貼上。");
+    }
+  };
+
+  const undo = () => {
+    const changes = undoStackRef.current.pop();
+    if (!changes) return;
+    changes.forEach((change) => writeCellInputValue(change.address, change.before));
+    redoStackRef.current.push(changes);
+    setDirty(structureDirtyRef.current || undoStackRef.current.length > 0);
+    setRevision((current) => current + 1);
+  };
+
+  const redo = () => {
+    const changes = redoStackRef.current.pop();
+    if (!changes) return;
+    changes.forEach((change) => writeCellInputValue(change.address, change.after));
+    undoStackRef.current.push(changes);
+    setDirty(true);
+    setRevision((current) => current + 1);
+  };
+
+  const handleGridCopy = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", getSelectionClipboardText());
+  };
+
+  const handleGridCut = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    handleGridCopy(event);
+    clearSelection();
+  };
+
+  const handleGridPaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    if (!canEdit) return;
+    event.preventDefault();
+    applyClipboardMatrix(parseSpreadsheetClipboard(event.clipboardData.getData("text/plain")));
+  };
+
+  const handleGridKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("input, textarea")) return;
+    const command = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+
+    if (command && key === "a") {
+      event.preventDefault();
+      setSelection({
+        anchor: { row: 1, column: 1 },
+        focus: { row: bounds.rows, column: bounds.columns },
+      });
+      return;
+    }
+    if (command && key === "z") {
+      event.preventDefault();
+      if (!canEdit) return;
+      if (event.shiftKey) redo();
+      else undo();
+      return;
+    }
+    if (command && key === "y") {
+      event.preventDefault();
+      if (canEdit) redo();
+      return;
+    }
+    if (key === "delete" || key === "backspace") {
+      event.preventDefault();
+      clearSelection();
+      return;
+    }
+    if (key === "f2") {
+      event.preventDefault();
+      startEditing(selectedCell);
+      return;
+    }
+    if (key === "escape") {
+      event.preventDefault();
+      revealSelection({ anchor: selection.focus, focus: selection.focus });
+      return;
+    }
+
+    let rowDelta = 0;
+    let columnDelta = 0;
+    if (key === "arrowup") rowDelta = command ? 1 - selection.focus.row : -1;
+    else if (key === "arrowdown") rowDelta = command ? bounds.rows - selection.focus.row : 1;
+    else if (key === "arrowleft") columnDelta = command ? 1 - selection.focus.column : -1;
+    else if (key === "arrowright") columnDelta = command ? bounds.columns - selection.focus.column : 1;
+    else if (key === "tab") columnDelta = event.shiftKey ? -1 : 1;
+    else if (key === "enter") rowDelta = event.shiftKey ? -1 : 1;
+    else if (key === "pageup") rowDelta = -Math.min(20, ROW_PAGE_SIZE);
+    else if (key === "pagedown") rowDelta = Math.min(20, ROW_PAGE_SIZE);
+    else if (key === "home") columnDelta = 1 - selection.focus.column;
+    else if (key === "end") columnDelta = bounds.columns - selection.focus.column;
+
+    if (rowDelta || columnDelta) {
+      event.preventDefault();
+      revealSelection(moveSpreadsheetSelection(
+        selection,
+        rowDelta,
+        columnDelta,
+        bounds.rows,
+        bounds.columns,
+        event.shiftKey && key !== "tab" && key !== "enter",
+      ));
+      return;
+    }
+
+    if (!command && !event.altKey && canEdit && event.key.length === 1) {
+      event.preventDefault();
+      startEditing(selectedCell, event.key);
+    }
   };
 
   const extendSheet = (axis: "row" | "column") => {
@@ -569,6 +880,7 @@ export function TestPlanSpreadsheetEditor({
     } else {
       return;
     }
+    structureDirtyRef.current = true;
     setDirty(true);
     setRevision((current) => current + 1);
   };
@@ -604,6 +916,9 @@ export function TestPlanSpreadsheetEditor({
         throw new Error("試算表尚未載入完成。");
       }
       await onSave(file, contents);
+      structureDirtyRef.current = false;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
       setDirty(false);
       setStatus("ready");
     } catch (caught) {
@@ -615,10 +930,13 @@ export function TestPlanSpreadsheetEditor({
   const sheetNames = mode === "formatted"
     ? excelJsWorkbookRef.current?.worksheets.map((sheet) => sheet.name) ?? []
     : legacyWorkbookRef.current?.SheetNames ?? [];
-  const selectedFormattedCell = formattedWorksheet?.getCell(selectedCell);
-  const selectedValue = mode === "formatted"
-    ? readFormattedFormulaValue(selectedFormattedCell)
-    : readLegacyCellValue(legacyWorksheet?.[selectedCell] as LegacyCell | undefined);
+  const selectedValue = readCellInputValue(selectedCell);
+  const selectionLabel = getSpreadsheetSelectionLabel(selection);
+  const selectionSize = getSpreadsheetSelectionSize(normalizedSelection);
+  const isWholeSheetSelected = normalizedSelection.startRow === 1
+    && normalizedSelection.startColumn === 1
+    && normalizedSelection.endRow === bounds.rows
+    && normalizedSelection.endColumn === bounds.columns;
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && requestClose()}>
@@ -677,7 +995,8 @@ export function TestPlanSpreadsheetEditor({
                     className={sheetName === name ? "is-active" : undefined}
                     onClick={() => {
                       setSheetName(name);
-                      setSelectedCell("A1");
+                      setSelection(createSpreadsheetSelection());
+                      setEditingCell(null);
                       setRowPage(0);
                       setColumnPage(0);
                     }}
@@ -685,6 +1004,27 @@ export function TestPlanSpreadsheetEditor({
                     {name}
                   </button>
                 ))}
+              </div>
+              <div className="test-plan-sheet-edit-tools" role="toolbar" aria-label="試算表編輯工具">
+                <Button type="button" size="icon" variant="outline" disabled={!canEdit || undoStackRef.current.length === 0} onClick={undo} title="復原 (Ctrl+Z)" aria-label="復原">
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="outline" disabled={!canEdit || redoStackRef.current.length === 0} onClick={redo} title="重做 (Ctrl+Y)" aria-label="重做">
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <span className="test-plan-sheet-tool-divider" aria-hidden="true" />
+                <Button type="button" size="icon" variant="outline" onClick={() => void copySelectionToClipboard()} title="複製 (Ctrl+C)" aria-label="複製選取範圍">
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="outline" disabled={!canEdit} onClick={() => void copySelectionToClipboard(true)} title="剪下 (Ctrl+X)" aria-label="剪下選取範圍">
+                  <Scissors className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="outline" disabled={!canEdit} onClick={() => void pasteFromClipboard()} title="貼上 (Ctrl+V)" aria-label="貼上">
+                  <ClipboardPaste className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="outline" disabled={!canEdit} onClick={clearSelection} title="清除內容 (Delete)" aria-label="清除選取範圍內容">
+                  <Eraser className="h-4 w-4" />
+                </Button>
               </div>
               <div className="test-plan-sheet-tools">
                 <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={() => extendSheet("row")}>
@@ -697,18 +1037,43 @@ export function TestPlanSpreadsheetEditor({
             </div>
 
             <div className="test-plan-sheet-formula">
-              <strong>{selectedCell}</strong>
+              <div className="test-plan-sheet-selection-name">
+                <strong>{selectedCell}</strong>
+                {selectionSize > 1 && <span>{selectionLabel} · {selectionSize} 格</span>}
+              </div>
               <Input
-                value={selectedValue}
+                key={`${sheetName}-${selectedCell}-${selectedValue}`}
+                defaultValue={selectedValue}
                 readOnly={!canEdit}
                 aria-label={`${selectedCell} 內容或公式`}
-                onChange={(event) => updateCell(selectedCell, event.target.value)}
+                onBlur={(event) => updateCell(selectedCell, event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                    window.requestAnimationFrame(() => gridRef.current?.focus({ preventScroll: true }));
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.value = selectedValue;
+                    event.currentTarget.blur();
+                  }
+                }}
               />
             </div>
 
             {error && <div className="test-plan-sheet-error" role="alert">{error}</div>}
 
-            <div className={`test-plan-sheet-grid-wrap is-${mode}`}>
+            <div
+              ref={gridRef}
+              className={`test-plan-sheet-grid-wrap is-${mode}`}
+              tabIndex={0}
+              role="grid"
+              aria-label={`${sheetName} 工作表，${selectionLabel} 已選取`}
+              onKeyDown={handleGridKeyDown}
+              onCopy={handleGridCopy}
+              onCut={handleGridCut}
+              onPaste={handleGridPaste}
+            >
               <table className={`test-plan-sheet-grid is-${mode}`}>
                 <colgroup>
                   <col className="test-plan-sheet-row-number-column" />
@@ -723,9 +1088,42 @@ export function TestPlanSpreadsheetEditor({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className="test-plan-sheet-corner" />
+                    <th className={`test-plan-sheet-corner ${isWholeSheetSelected ? "is-selected" : ""}`}>
+                      <button
+                        type="button"
+                        title="全選工作表 (Ctrl+A)"
+                        aria-label="全選工作表"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setSelection({
+                            anchor: { row: 1, column: 1 },
+                            focus: { row: bounds.rows, column: bounds.columns },
+                          });
+                          gridRef.current?.focus({ preventScroll: true });
+                        }}
+                      />
+                    </th>
                     {columns.map((column) => (
-                      <th key={column}>{encodeColumn(column)}</th>
+                      <th
+                        key={column}
+                        className={column >= normalizedSelection.startColumn && column <= normalizedSelection.endColumn ? "is-selected" : undefined}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`選取 ${encodeColumn(column)} 欄`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            const anchorColumn = event.shiftKey ? selection.anchor.column : column;
+                            setSelection({
+                              anchor: { row: 1, column: anchorColumn },
+                              focus: { row: bounds.rows, column },
+                            });
+                            gridRef.current?.focus({ preventScroll: true });
+                          }}
+                        >
+                          {encodeColumn(column)}
+                        </button>
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -735,7 +1133,23 @@ export function TestPlanSpreadsheetEditor({
                       key={row}
                       style={formattedWorksheet ? { height: getRowHeight(formattedWorksheet, row) } : undefined}
                     >
-                      <th>{row}</th>
+                      <th className={row >= normalizedSelection.startRow && row <= normalizedSelection.endRow ? "is-selected" : undefined}>
+                        <button
+                          type="button"
+                          aria-label={`選取第 ${row} 列`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            const anchorRow = event.shiftKey ? selection.anchor.row : row;
+                            setSelection({
+                              anchor: { row: anchorRow, column: 1 },
+                              focus: { row, column: bounds.columns },
+                            });
+                            gridRef.current?.focus({ preventScroll: true });
+                          }}
+                        >
+                          {row}
+                        </button>
+                      </th>
                       {columns.map((column) => {
                         const address = encodeAddress(row, column);
                         const merge = formattedWorksheet ? findMerge(merges, row, column) : undefined;
@@ -750,23 +1164,80 @@ export function TestPlanSpreadsheetEditor({
                         const displayValue = formattedCell
                           ? readFormattedCellValue(formattedCell)
                           : readLegacyCellValue(legacyWorksheet?.[address] as LegacyCell | undefined);
+                        const cellStartRow = merge?.start.row ?? row;
+                        const cellEndRow = merge?.end.row ?? row;
+                        const cellStartColumn = merge?.start.column ?? column;
+                        const cellEndColumn = merge?.end.column ?? column;
+                        const isRangeSelected = doSpreadsheetRangesIntersect(
+                          normalizedSelection,
+                          cellStartRow,
+                          cellEndRow,
+                          cellStartColumn,
+                          cellEndColumn,
+                        );
+                        const isActive = selectedCell === masterAddress;
                         return (
                           <td
                             key={address}
-                            className={selectedCell === masterAddress ? "is-selected" : undefined}
+                            className={[
+                              isRangeSelected ? "is-range-selected" : "",
+                              isActive ? "is-active" : "",
+                            ].filter(Boolean).join(" ") || undefined}
+                            data-cell-address={masterAddress}
                             rowSpan={merge ? Math.min(merge.end.row, lastRow) - renderRow + 1 : undefined}
                             colSpan={merge ? Math.min(merge.end.column, lastColumn) - renderColumn + 1 : undefined}
                             style={cellStyle}
+                            onMouseDown={(event) => {
+                              if (event.button !== 0 || editingCell === masterAddress) return;
+                              event.preventDefault();
+                              if (editingCell) commitEditing();
+                              selectingRef.current = true;
+                              selectPosition(decodeAddress(masterAddress), event.shiftKey);
+                              gridRef.current?.focus({ preventScroll: true });
+                            }}
+                            onMouseEnter={(event) => {
+                              if (!selectingRef.current || event.buttons !== 1) return;
+                              const focus = decodeAddress(masterAddress);
+                              setSelection((current) => ({ anchor: current.anchor, focus }));
+                            }}
+                            onDoubleClick={(event) => {
+                              event.preventDefault();
+                              selectingRef.current = false;
+                              startEditing(masterAddress);
+                            }}
                           >
-                            <textarea
-                              value={displayValue}
-                              readOnly={!canEdit}
-                              aria-label={masterAddress}
-                              data-spreadsheet-cell="true"
-                              style={cellStyle}
-                              onFocus={() => setSelectedCell(masterAddress)}
-                              onChange={(event) => updateCell(masterAddress, event.target.value)}
-                            />
+                            {editingCell === masterAddress ? (
+                              <textarea
+                                autoFocus
+                                value={editingValue}
+                                aria-label={`${masterAddress} 編輯內容`}
+                                data-spreadsheet-editor="true"
+                                onChange={(event) => setEditingValue(event.target.value)}
+                                onFocus={(event) => event.currentTarget.select()}
+                                onBlur={commitEditing}
+                                onKeyDown={(event) => {
+                                  event.stopPropagation();
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    cancelEditing();
+                                  } else if (event.key === "Enter" && !event.altKey) {
+                                    event.preventDefault();
+                                    commitEditingAndMove(event.shiftKey ? -1 : 1, 0);
+                                  } else if (event.key === "Tab") {
+                                    event.preventDefault();
+                                    commitEditingAndMove(0, event.shiftKey ? -1 : 1);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className="test-plan-sheet-cell-display"
+                                data-spreadsheet-cell="true"
+                                aria-label={`${masterAddress}: ${displayValue}`}
+                              >
+                                {displayValue}
+                              </div>
+                            )}
                           </td>
                         );
                       })}
@@ -777,6 +1248,9 @@ export function TestPlanSpreadsheetEditor({
             </div>
 
             <div className="test-plan-sheet-pagination">
+              <span className="test-plan-sheet-selection-status">
+                {selectionLabel} · {selectionSize} 格已選取
+              </span>
               {mode === "legacy" ? (
                 <div>
                   <Button type="button" size="sm" variant="outline" disabled={columnPage === 0} onClick={() => setColumnPage((current) => current - 1)}>
