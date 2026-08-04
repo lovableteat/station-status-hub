@@ -363,7 +363,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
             <div className="flex items-center gap-2 font-bold text-slate-50"><Clock3 className="h-5 w-5 text-violet-300" />發送紀錄</div>
             <Button variant="ghost" size="sm" onClick={() => void loadData()} className="text-slate-400"><RefreshCw className="mr-1.5 h-3.5 w-3.5" />更新</Button>
           </div>
-          <ScrollArea className="mt-3 h-[310px] pr-2">
+          <ScrollArea className="mt-3 h-[144px] pr-2">
             <div className="space-y-2">
               {history.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-500">尚未發布管理公告</div>
