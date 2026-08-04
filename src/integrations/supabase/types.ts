@@ -2066,6 +2066,7 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          project_id: string
           updated_at: string
         }
         Insert: {
@@ -2075,6 +2076,7 @@ export type Database = {
           id?: string
           name: string
           owner_id: string
+          project_id: string
           updated_at?: string
         }
         Update: {
@@ -2084,6 +2086,7 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string
+          project_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -2092,6 +2095,13 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_spaces_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
             referencedColumns: ["id"]
           },
         ]

@@ -13,6 +13,7 @@ export type TestPlanSort = "name" | "newest" | "oldest" | "largest" | "type";
 export interface TestPlanSpace {
   id: string;
   ownerId: string;
+  projectId: string;
   name: string;
   description: string | null;
   color: string;

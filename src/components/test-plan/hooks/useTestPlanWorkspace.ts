@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { usePermissions } from "@/hooks/usePermissions";
 
 import {
@@ -43,6 +44,7 @@ export function useTestPlanWorkspace(
   options: UseTestPlanWorkspaceOptions = {},
 ) {
   const { user, sessionMode } = useUser();
+  const { activeProjectId } = useTestProject();
   const { canEditModule } = usePermissions();
   const repository = useMemo(
     () =>
@@ -67,8 +69,10 @@ export function useTestPlanWorkspace(
   const mutationInFlightRef = useRef(false);
   const activeSpaceIdRef = useRef<string | null>(activeSpaceId);
   const ownerIdRef = useRef<string | null>(ownerId);
+  const activeProjectIdRef = useRef<string | null>(activeProjectId);
   activeSpaceIdRef.current = activeSpaceId;
   ownerIdRef.current = ownerId;
+  activeProjectIdRef.current = activeProjectId;
 
   const requireEdit = useCallback(() => {
     if (!isAuthenticated) {
@@ -104,11 +108,31 @@ export function useTestPlanWorkspace(
         return;
       }
 
+      if (!activeProjectId) {
+        applyWorkspace({
+          spaces: [],
+          activeSpaceId: null,
+          folders: [],
+          files: [],
+        });
+        setError("請先選擇專案後再開啟 Test_Plan。");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
+      // Clear the previous project's data before the new project is loaded.
+      applyWorkspace({
+        spaces: [],
+        activeSpaceId: null,
+        folders: [],
+        files: [],
+      });
       try {
         const workspace = await repository.loadWorkspace(
           ownerId,
+          activeProjectId,
           preferredSpaceId ?? activeSpaceId,
         );
         if (requestId === requestIdRef.current) applyWorkspace(workspace);
@@ -120,12 +144,12 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [activeSpaceId, applyWorkspace, ownerId, repository, user],
+    [activeProjectId, activeSpaceId, applyWorkspace, ownerId, repository, user],
   );
 
   useEffect(() => {
     void refreshWorkspace(null);
-  }, [ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProjectId, ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openSpace = useCallback(
     async (spaceId: string) => {
@@ -183,13 +207,15 @@ export function useTestPlanWorkspace(
     expectedSpaceId: string | null,
     expectedOwnerId: string | null,
   ) => {
-    if (!expectedSpaceId || !expectedOwnerId) return;
+    const expectedProjectId = activeProjectIdRef.current;
+    if (!expectedSpaceId || !expectedOwnerId || !expectedProjectId) return;
     const requestId = ++requestIdRef.current;
     const space = await repository.loadSpace(expectedSpaceId);
     if (
       requestId !== requestIdRef.current
       || activeSpaceIdRef.current !== expectedSpaceId
       || ownerIdRef.current !== expectedOwnerId
+      || activeProjectIdRef.current !== expectedProjectId
     ) {
       return;
     }
@@ -201,11 +227,18 @@ export function useTestPlanWorkspace(
     (input: { name: string; description?: string; color?: string }) =>
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再建立空間。");
-        const created = await repository.createSpace(ownerId, input);
+        if (!activeProjectId) {
+          throw new Error("請先選擇專案後再建立資料空間。");
+        }
+        const created = await repository.createSpace(
+          ownerId,
+          activeProjectId,
+          input,
+        );
         await refreshWorkspace(created.id);
         return created;
       }),
-    [ownerId, refreshWorkspace, repository, runMutation],
+    [activeProjectId, ownerId, refreshWorkspace, repository, runMutation],
   );
 
   const updateSpace = useCallback(

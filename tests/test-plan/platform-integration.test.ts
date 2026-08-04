@@ -134,6 +134,41 @@ test("latest Test_Plan sharing migration exposes spaces to permitted accounts wi
   );
 });
 
+test("scopes Test_Plan spaces and storage access to the active project", async () => {
+  const migration = await source(
+    "supabase/migrations/20260804120000_scope_test_plan_spaces_to_projects.sql",
+  );
+  const adapter = await source(
+    "src/components/test-plan/core/supabaseAdapter.ts",
+  );
+  const hook = await source(
+    "src/components/test-plan/hooks/useTestPlanWorkspace.ts",
+  );
+  const databaseTypes = await source("src/integrations/supabase/types.ts");
+
+  assert.match(migration, /add column if not exists project_id uuid/i);
+  assert.match(
+    migration,
+    /references public\.test_projects \(id\)\s+on delete restrict/i,
+  );
+  assert.match(migration, /test_plan_current_user_can_access_project/i);
+  assert.match(
+    migration,
+    /test_plan_current_user_can_access_space\(files\.space_id, 'view'\)/i,
+  );
+  assert.match(adapter, /\.eq\("project_id", projectId\)/);
+  assert.match(hook, /useTestProject/);
+  assert.match(
+    hook,
+    /repository\.loadWorkspace\(\s*ownerId,\s*activeProjectId,/,
+  );
+  assert.match(
+    hook,
+    /repository\.createSpace\(\s*ownerId,\s*activeProjectId,/,
+  );
+  assert.match(databaseTypes, /project_id: string/);
+});
+
 test("admin permission editor explains inherited Test_Plan access instead of exposing an independent toggle", async () => {
   const dialog = await source(
     "src/components/admin/UserPermissionsDialog.tsx",
