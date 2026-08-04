@@ -649,6 +649,22 @@ function SceneNavigator({
   collapsed = false,
   onToggleCollapse,
 }: SceneNavigatorProps) {
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
+  const selectedSite = sites.find((site) => site.id === selectedSiteId) ?? sites[0] ?? null;
+  const activeLayerOption = LAYER_OPTIONS.find((layer) => layer.id === activeLayer) ?? LAYER_OPTIONS[0];
+  const ActiveLayerIcon = activeLayerOption.icon;
+  const projectStats = selectedProject ? getDataCenterProjectStats(selectedProject) : null;
+  const syncLabel =
+    syncState === "loading"
+      ? "載入共用資料"
+      : syncState === "saving"
+        ? "儲存變更中"
+        : syncState === "synced"
+          ? "所有登入成員共用"
+          : syncState === "error"
+            ? "同步異常，已保留本機資料"
+            : "本機保護模式";
+  const healthyRackCount = racks.filter((rack) => getRackHealth(rack) === "healthy").length;
   const filteredRacks = racks.filter((rack) => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return true;
@@ -663,7 +679,7 @@ function SceneNavigator({
     return (
       <div className="flex h-full flex-col items-center gap-2 bg-[#081c2d] py-3">
         {onToggleCollapse ? (
-          <IconTooltipButton label="展開場景導覽" icon={PanelLeftOpen} onClick={onToggleCollapse} />
+          <IconTooltipButton label="展開場景總覽" icon={PanelLeftOpen} onClick={onToggleCollapse} />
         ) : null}
         <div className="my-1 h-px w-8 bg-[#214669]" />
         {LAYER_OPTIONS.map((layer) => (
@@ -687,20 +703,20 @@ function SceneNavigator({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#081c2d]">
+    <div data-testid="data-center-control-panel" className="flex h-full min-h-0 flex-col bg-[#081c2d]">
       <div className="flex min-h-[82px] shrink-0 items-center justify-between border-b border-[#163653] px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-300/30 bg-blue-400/15 text-blue-100">
             <Layers3 className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-[17px] font-black tracking-[-0.02em] text-white">場景導覽</div>
-            <p className="mt-1 truncate text-[11px] font-semibold text-blue-200/65">站點、圖層與機櫃</p>
+            <div className="truncate text-[17px] font-black tracking-[-0.02em] text-white">場景總覽</div>
+            <p className="mt-1 truncate text-[11px] font-semibold text-blue-200/65">專案分類、站點、視圖與機櫃集中控制</p>
           </div>
         </div>
         {onToggleCollapse ? (
           <IconTooltipButton
-            label="收合場景導覽"
+            label="收合場景總覽"
             icon={PanelLeftClose}
             onClick={onToggleCollapse}
             className="h-9 w-9"
@@ -709,13 +725,57 @@ function SceneNavigator({
       </div>
 
       <div className="shrink-0 space-y-3 border-b border-[#163653] px-4 py-4">
-        <div className="rounded-[18px] border border-cyan-200/15 bg-[#0c2235] p-3">
+        <section
+          data-testid="data-center-scene-summary"
+          className="overflow-hidden rounded-[20px] border border-sky-300/20 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.20),transparent_44%),linear-gradient(135deg,rgba(14,165,233,0.12),rgba(15,23,42,0.68))] p-3.5 shadow-[0_18px_42px_-34px_rgba(56,189,248,0.95)]"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-200/75">Data Center 控制台</p>
+              <h3 className="mt-1 truncate text-[18px] font-black tracking-[-0.03em] text-white">
+                {selectedSite?.label ?? "尚未選擇站點"}
+              </h3>
+              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-300">
+                {selectedProject ? `${selectedProject.category} · ${selectedProject.name}` : "尚未建立共用專案"}
+              </p>
+            </div>
+            <Badge className="border border-emerald-300/25 bg-emerald-400/12 text-[10px] font-black text-emerald-100 shadow-none">
+              {syncLabel}
+            </Badge>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+              <div className="text-slate-400">目前視圖</div>
+              <div className="mt-1 flex items-center gap-1.5 font-black text-sky-100">
+                <ActiveLayerIcon className="h-3.5 w-3.5" />
+                {activeLayerOption.label}
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+              <div className="text-slate-400">機櫃狀態</div>
+              <div className="mt-1 font-black text-emerald-100">
+                {healthyRackCount}/{racks.length} 正常
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+              <div className="text-slate-400">專案站點</div>
+              <div className="mt-1 font-black text-white">{projectStats?.siteCount ?? sites.length}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+              <div className="text-slate-400">電源饋線</div>
+              <div className="mt-1 font-black text-amber-100">{projectStats?.powerFeedCount ?? 0}</div>
+            </div>
+          </div>
+        </section>
+
+        <div data-section-tone="project-category" className="workspace-dialog-section workspace-dialog-section--violet rounded-[18px] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <div className="text-[11px] font-black tracking-[0.08em] text-cyan-100/75">共用專案</div>
+              <div className="text-[11px] font-black tracking-[0.08em] text-cyan-100/75">專案與分類</div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
                 {syncState === "synced" ? <Cloud className="h-3 w-3 text-emerald-300" /> : <CloudOff className="h-3 w-3 text-amber-300" />}
-                {syncState === "loading" ? "載入共用資料" : syncState === "saving" ? "儲存變更中" : syncState === "synced" ? "所有登入成員共用" : "本機保護模式"}
+                {syncLabel}
               </div>
             </div>
             <Button
@@ -723,10 +783,10 @@ function SceneNavigator({
               variant="outline"
               size="sm"
               onClick={onManageProjects}
-              title={canEditProjects ? "管理與預覽專案" : "預覽專案"}
+              title={canEditProjects ? "管理專案分類與共享設定" : "查看專案分類"}
               className="h-8 border-cyan-300/20 bg-cyan-400/8 px-2.5 text-[11px] font-bold text-cyan-50 hover:bg-cyan-400/15"
             >
-              <Settings2 className="mr-1.5 h-3.5 w-3.5" /> 管理專案
+              <Settings2 className="mr-1.5 h-3.5 w-3.5" /> 專案與分類
             </Button>
           </div>
           <Select value={selectedProjectId} onValueChange={onProjectChange} disabled={projects.length === 0}>
@@ -743,10 +803,10 @@ function SceneNavigator({
           </Select>
         </div>
 
-        <label className="block">
+        <label data-section-tone="site-selector" className="workspace-dialog-section workspace-dialog-section--success block rounded-[18px] p-3">
           <span className="mb-2 block text-[11px] font-black tracking-[0.08em] text-blue-200/70">目前站點</span>
           <Select value={selectedSiteId} onValueChange={onSiteChange}>
-            <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#10283d] px-3 text-sm font-semibold text-slate-100">
+            <SelectTrigger className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/[0.07] px-3 text-sm font-semibold text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
@@ -758,6 +818,54 @@ function SceneNavigator({
             </SelectContent>
           </Select>
         </label>
+
+        <section data-testid="data-center-layer-control" data-section-tone="view-layers" className="workspace-dialog-section workspace-dialog-section--info rounded-[18px] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-black tracking-[0.08em] text-blue-100/75">視圖模式</div>
+              <p className="mt-0.5 text-[10px] text-slate-400">在同一處切換狀態、電力、網路與冷卻圖層。</p>
+            </div>
+            <Badge className="border border-blue-300/20 bg-blue-400/10 text-[10px] font-black text-blue-100 shadow-none">
+              {activeLayerOption.description}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {LAYER_OPTIONS.map((layer) => {
+              const LayerIcon = layer.icon;
+              const active = activeLayer === layer.id;
+              return (
+                <button
+                  key={layer.id}
+                  type="button"
+                  onClick={() => onLayerChange(layer.id)}
+                  className={cn(
+                    "group flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-200",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/65",
+                    active
+                      ? "border-sky-300/45 bg-sky-400/16 text-white shadow-[0_12px_32px_-26px_rgba(56,189,248,0.95)]"
+                      : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-sky-300/30 hover:bg-sky-400/10 hover:text-white"
+                  )}
+                  style={active ? { borderColor: `${layer.color}88`, backgroundColor: `${layer.color}1f` } : undefined}
+                >
+                  <span
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+                    style={{
+                      borderColor: active ? `${layer.color}66` : "rgba(255,255,255,0.10)",
+                      backgroundColor: active ? `${layer.color}22` : "rgba(255,255,255,0.04)",
+                      color: active ? layer.color : undefined,
+                    }}
+                  >
+                    <LayerIcon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11px] font-black">{layer.label}</span>
+                    <span className="block truncate text-[9px] text-slate-400">{layer.description}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
         <label className="relative block">
           <span className="sr-only">搜尋機櫃</span>
@@ -3760,8 +3868,8 @@ export function DeploymentPlanningCenter() {
               className="h-11 rounded-xl border-cyan-300/22 bg-cyan-400/8 px-4 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15"
             >
               <Box className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">模型目錄</span>
-              <span className="sm:hidden">模型</span>
+              <span className="hidden sm:inline">模型與設備</span>
+              <span className="sm:hidden">設備</span>
             </Button>
             {canEdit ? (
               <Button
@@ -3793,8 +3901,8 @@ export function DeploymentPlanningCenter() {
               <div className={cn("flex h-14 items-center border-b border-slate-700/70 pb-2", leftCollapsed ? "justify-center" : "justify-between px-1")}>
                 {!leftCollapsed ? (
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-black tracking-[-0.01em] text-white">操作選單</div>
-                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">場景與規劃工具</div>
+                    <div className="truncate text-sm font-black tracking-[-0.01em] text-white">Data Center 控制台</div>
+                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">場景、分類與設備集中管理</div>
                   </div>
                 ) : null}
                 <button
@@ -3809,10 +3917,10 @@ export function DeploymentPlanningCenter() {
 
               <nav aria-label="Data Center 功能選單" className="mt-2.5 grid gap-2.5">
                 {[
-                  { id: "scene", label: "場景機櫃", icon: Layers3, tone: "border-l-sky-300 hover:border-sky-300/60 hover:bg-sky-400/10", iconTone: "bg-sky-400/15 text-sky-200 ring-sky-300/20", onClick: () => setMobileLeftOpen(true) },
-                  { id: "projects", label: "專案", icon: FileBox, tone: "border-l-blue-300 hover:border-blue-300/60 hover:bg-blue-400/10", iconTone: "bg-blue-400/15 text-blue-200 ring-blue-300/20", onClick: openProjectManager },
-                  { id: "facility", label: "廠房", icon: PencilRuler, tone: "border-l-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/10", iconTone: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
-                  { id: "models", label: "模型", icon: Boxes, tone: "border-l-amber-300 hover:border-amber-300/60 hover:bg-amber-400/10", iconTone: "bg-amber-400/15 text-amber-200 ring-amber-300/20", onClick: () => openModelLibrary("rack") },
+                  { id: "scene", label: "場景總覽", icon: Layers3, tone: "border-l-sky-300 hover:border-sky-300/60 hover:bg-sky-400/10", iconTone: "bg-sky-400/15 text-sky-200 ring-sky-300/20", onClick: () => setMobileLeftOpen(true) },
+                  { id: "projects", label: "專案與分類", icon: FileBox, tone: "border-l-blue-300 hover:border-blue-300/60 hover:bg-blue-400/10", iconTone: "bg-blue-400/15 text-blue-200 ring-blue-300/20", onClick: openProjectManager },
+                  { id: "facility", label: "廠房與通道", icon: PencilRuler, tone: "border-l-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/10", iconTone: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
+                  { id: "models", label: "模型與設備", icon: Boxes, tone: "border-l-amber-300 hover:border-amber-300/60 hover:bg-amber-400/10", iconTone: "bg-amber-400/15 text-amber-200 ring-amber-300/20", onClick: () => openModelLibrary("rack") },
                   { id: "rack", label: "機櫃設定", icon: Server, tone: "border-l-violet-300 hover:border-violet-300/60 hover:bg-violet-400/10", iconTone: "bg-violet-400/15 text-violet-200 ring-violet-300/20", onClick: () => setMobileRightOpen(true) },
                   { id: "plan", label: workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃", icon: Map, tone: workspaceMode === "2d" ? "border-orange-300/70 border-l-orange-300 bg-orange-300/12 shadow-[0_10px_28px_-22px_rgba(251,146,60,0.9)]" : "border-l-orange-300 hover:border-orange-300/60 hover:bg-orange-400/10", iconTone: workspaceMode === "2d" ? "bg-orange-300 text-orange-950 ring-orange-200/40" : "bg-orange-400/15 text-orange-200 ring-orange-300/20", onClick: () => setWorkspaceMode("2d") },
                 ].map((item) => {
@@ -4015,7 +4123,7 @@ export function DeploymentPlanningCenter() {
                 <Map className="mr-2 h-4 w-4" /> 2D 規劃
               </Button>
               <Button type="button" variant="outline" onClick={() => setMobileLeftOpen(true)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
-                <Layers3 className="mr-2 h-4 w-4" /> 機櫃清單
+                <Layers3 className="mr-2 h-4 w-4" /> 控制台
               </Button>
               <Button type="button" variant="outline" onClick={() => setMobileRightOpen(true)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.09]">
                 <Server className="mr-2 h-4 w-4" /> 機櫃設定
@@ -4186,8 +4294,8 @@ export function DeploymentPlanningCenter() {
         <Dialog open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
           <DialogContent className="h-[min(88dvh,780px)] w-[min(94vw,720px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[720px]">
             <DialogHeader className="sr-only">
-              <DialogTitle>場景導覽</DialogTitle>
-              <DialogDescription>選擇廠區、圖層與機櫃。</DialogDescription>
+              <DialogTitle>場景總覽</DialogTitle>
+              <DialogDescription>在同一個控制台選擇專案分類、廠區、圖層與機櫃。</DialogDescription>
             </DialogHeader>
             <SceneNavigator {...navigatorProps} />
           </DialogContent>
@@ -4204,7 +4312,7 @@ export function DeploymentPlanningCenter() {
         </Dialog>
 
         <Dialog open={projectManagerOpen} onOpenChange={setProjectManagerOpen}>
-          <DialogContent className="flex h-[min(88dvh,760px)] w-[min(96vw,1040px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#081725] p-0 text-slate-100 sm:max-w-[1040px]">
+          <DialogContent data-dialog-tone="project-manager" className="flex h-[min(88dvh,760px)] w-[min(96vw,1040px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[1040px]">
             <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <FileBox className="h-5 w-5 text-cyan-300" /> Data Center 專案管理
@@ -4214,7 +4322,7 @@ export function DeploymentPlanningCenter() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid min-h-0 flex-1 md:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="flex min-h-0 flex-col border-b border-white/10 md:border-b-0 md:border-r">
+              <div className="flex min-h-0 flex-col border-b border-violet-300/15 bg-violet-400/[0.035] md:border-b-0 md:border-r">
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
                   <div>
                     <div className="text-sm font-black text-white">專案清單</div>
@@ -4309,7 +4417,7 @@ export function DeploymentPlanningCenter() {
               <div className="min-h-0 overflow-y-auto p-5 md:p-6">
                 {previewProject && previewProjectStats ? (
                   <div className="space-y-5">
-                    <div className="rounded-3xl border border-cyan-300/20 bg-[linear-gradient(145deg,#102c42,#0a1b2b)] p-5">
+                    <div className="workspace-dialog-section workspace-dialog-section--info rounded-3xl p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="text-[11px] font-black tracking-[0.14em] text-cyan-200/70">PROJECT PREVIEW</div>
@@ -4326,25 +4434,25 @@ export function DeploymentPlanningCenter() {
                     </div>
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       {[
-                        ["站點", previewProjectStats.siteCount],
-                        ["機櫃", previewProjectStats.rackCount],
-                        ["冷熱通道", previewProjectStats.aisleCount],
-                        ["電力來源", previewProjectStats.powerFeedCount],
-                      ].map(([label, value]) => (
-                        <div key={label} className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                        ["站點", previewProjectStats.siteCount, "workspace-dialog-section--info", "text-sky-100"],
+                        ["機櫃", previewProjectStats.rackCount, "workspace-dialog-section--success", "text-emerald-100"],
+                        ["冷熱通道", previewProjectStats.aisleCount, "workspace-dialog-section--violet", "text-violet-100"],
+                        ["電力來源", previewProjectStats.powerFeedCount, "workspace-dialog-section--warning", "text-amber-100"],
+                      ].map(([label, value, tone, valueTone]) => (
+                        <div key={label} className={cn("workspace-dialog-section rounded-2xl p-4", tone)}>
                           <div className="text-[11px] font-bold text-slate-400">{label}</div>
-                          <div className="mt-2 text-2xl font-black tabular-nums text-white">{value}</div>
+                          <div className={cn("mt-2 text-2xl font-black tabular-nums", valueTone)}>{value}</div>
                         </div>
                       ))}
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-[#0c2235] p-4">
+                    <div className="workspace-dialog-section workspace-dialog-section--success rounded-2xl p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-black text-white">站點內容</div>
                         <div className="text-[11px] text-slate-500">更新 {new Date(previewProject.updatedAt).toLocaleString("zh-TW")}</div>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {previewProject.document.sites.map((site) => (
-                          <div key={site.id} className="rounded-xl border border-white/8 bg-[#081725] px-3 py-3">
+                          <div key={site.id} className="rounded-xl border border-emerald-300/15 bg-emerald-400/[0.055] px-3 py-3">
                             <div className="font-bold text-slate-100">{site.label}</div>
                             <div className="mt-1 text-xs text-slate-400">{site.racks.length} 座機櫃 · {site.phase}</div>
                           </div>
@@ -4396,7 +4504,7 @@ export function DeploymentPlanningCenter() {
         </AlertDialog>
 
         <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
-          <DialogContent className="w-[min(94vw,560px)] max-w-none border border-cyan-300/20 bg-[#0b1b2b] p-0 text-slate-100 sm:max-w-[560px]">
+          <DialogContent data-dialog-tone="project-settings" className="w-[min(94vw,560px)] max-w-none border border-violet-300/25 p-0 text-slate-100 sm:max-w-[560px]">
             <DialogHeader className="border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <Settings2 className="h-5 w-5 text-cyan-300" />
@@ -4406,7 +4514,7 @@ export function DeploymentPlanningCenter() {
                 所有獲授權的登入成員會看到同一份專案場景、機櫃與廠房規劃。
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 px-6 py-5">
+            <div className="workspace-dialog-section workspace-dialog-section--violet m-5 space-y-4 rounded-2xl p-4">
               <div className="space-y-2">
                 <Label htmlFor="data-center-project-name">專案名稱</Label>
                 <Input id="data-center-project-name" value={projectDraft.name} onChange={(event) => setProjectDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：Taipei AI Lab" className="border-white/12 bg-[#081522]" />
@@ -4443,7 +4551,7 @@ export function DeploymentPlanningCenter() {
         </Dialog>
 
         <Dialog open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
-          <DialogContent className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[980px]">
+          <DialogContent data-dialog-tone="facility-planner" className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[980px]">
             <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <PencilRuler className="h-5 w-5 text-cyan-300" />
@@ -4456,7 +4564,7 @@ export function DeploymentPlanningCenter() {
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-5 px-6 py-5">
-                <section className="rounded-2xl border border-cyan-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="facility-size" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">廠房尺寸</h2>
@@ -4628,7 +4736,7 @@ export function DeploymentPlanningCenter() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-sky-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="thermal-aisles" className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">冷熱通道</h2>
@@ -4648,14 +4756,23 @@ export function DeploymentPlanningCenter() {
                       新增通道
                     </Button>
                   </div>
-                  <div className="divide-y divide-white/10 border-y border-white/10">
+                  <div className="space-y-2">
                     {selectedFacility.aisles.map((aisle) => {
                       const friendlyPosition = getFriendlyAislePosition(
                         aisle,
                         selectedFacility
                       );
                       return (
-                        <div key={aisle.id} className="py-3">
+                        <div
+                          key={aisle.id}
+                          data-section-tone={aisle.kind === "cold" ? "cold-aisle" : "hot-aisle"}
+                          className={cn(
+                            "rounded-xl border p-3",
+                            aisle.kind === "cold"
+                              ? "border-sky-300/25 bg-sky-400/[0.075]"
+                              : "border-orange-300/25 bg-orange-400/[0.075]"
+                          )}
+                        >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
@@ -4776,7 +4893,7 @@ export function DeploymentPlanningCenter() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-amber-300/15 bg-[#0b2234] p-4">
+                <section data-section-tone="power-routing" className="workspace-dialog-section workspace-dialog-section--warning rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">電力佈線</h2>

@@ -43,7 +43,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-sky-300/22 bg-sky-400/10 text-sky-100 shadow-[0_18px_38px_-28px_rgba(96,165,250,0.85)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(16,31,56,0.94),rgba(8,18,34,0.98))] hover:border-sky-300/34",
+      "surface-accent surface-accent--blue bg-[linear-gradient(180deg,rgba(16,31,56,0.94),rgba(8,18,34,0.98))] hover:border-sky-300/34",
     description: "依專案追蹤每台機台的測試進度、站點瓶頸、問題工單與實際工時。",
     features: ["測試進度", "生產監控", "問題與工時"],
   },
@@ -52,7 +52,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-cyan-300/22 bg-cyan-400/10 text-cyan-100 shadow-[0_18px_38px_-28px_rgba(34,211,238,0.8)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(10,35,53,0.96),rgba(7,20,34,0.98))] hover:border-cyan-300/34",
+      "surface-accent surface-accent--teal bg-[linear-gradient(180deg,rgba(10,35,53,0.96),rgba(7,20,34,0.98))] hover:border-cyan-300/34",
     description: "查詢與維護 BOM 主料、替代料和申請狀態，保留圖片與完整協作紀錄。",
     features: ["BOM／替代料", "狀態追蹤", "主管報表"],
   },
@@ -61,7 +61,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-violet-300/22 bg-violet-400/10 text-violet-100 shadow-[0_18px_38px_-28px_rgba(167,139,250,0.8)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(28,25,52,0.96),rgba(12,17,34,0.98))] hover:border-violet-300/34",
+      "surface-accent surface-accent--violet bg-[linear-gradient(180deg,rgba(28,25,52,0.96),rgba(12,17,34,0.98))] hover:border-violet-300/34",
     description: "以 3D 數位孿生配置不同廠牌機櫃與設備，檢視冷熱通道、電力和負載。",
     features: ["3D 機櫃", "冷熱通道", "電力與散熱"],
   },
@@ -70,7 +70,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-emerald-300/22 bg-emerald-400/10 text-emerald-100 shadow-[0_18px_38px_-28px_rgba(52,211,153,0.8)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(8,41,34,0.96),rgba(7,20,30,0.98))] hover:border-emerald-300/34",
+      "surface-accent surface-accent--green bg-[linear-gradient(180deg,rgba(8,41,34,0.96),rgba(7,20,30,0.98))] hover:border-emerald-300/34",
     description: "規劃板框、元件與走線，集中管理 PCB 專案和 BOM 資料。",
     features: ["板框規劃", "元件配置", "設計規則"],
   },
@@ -79,7 +79,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-emerald-300/22 bg-emerald-400/10 text-emerald-100 shadow-[0_18px_38px_-28px_rgba(52,211,153,0.8)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(19,46,42,0.96),rgba(10,21,29,0.98))] hover:border-emerald-300/34",
+      "surface-accent surface-accent--amber bg-[linear-gradient(180deg,rgba(19,46,42,0.96),rgba(10,21,29,0.98))] hover:border-amber-300/34",
     description: "設定帳號、角色與各工作區的檢視或管理權限，集中維護 AI 服務金鑰。",
     features: ["帳號與角色", "網站權限", "AI／API 金鑰"],
   },
@@ -88,7 +88,7 @@ const workspaceToneMap: Record<
     iconWrap:
       "border-fuchsia-300/22 bg-fuchsia-400/10 text-fuchsia-100 shadow-[0_18px_38px_-28px_rgba(232,121,249,0.8)]",
     panel:
-      "bg-[linear-gradient(180deg,rgba(43,20,60,0.96),rgba(13,17,36,0.98))] hover:border-fuchsia-300/34",
+      "surface-accent surface-accent--rose bg-[linear-gradient(180deg,rgba(43,20,60,0.96),rgba(13,17,36,0.98))] hover:border-rose-300/34",
     description: "貼上或上傳文件、圖片與長文字，交由多家 AI 模型查詢、比較和整理。",
     features: ["100 MB 文件", "圖文貼上", "/ 共享提示詞"],
   },

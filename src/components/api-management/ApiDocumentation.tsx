@@ -178,10 +178,10 @@ export function ApiDocumentation() {
   return (
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[0.96fr_1.04fr]">
-        <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
-          <CardHeader className="border-b border-cyan-300/10 pb-5">
+        <Card className="admin-api-panel">
+          <CardHeader className="border-b border-[#2a526f] pb-5">
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-              <BookOpen className="h-6 w-6 text-violet-300" />
+              <BookOpen className="h-6 w-6 text-[#d8e7ff]" />
               API 文件
             </CardTitle>
             <p className="text-sm leading-6 text-slate-300">
@@ -190,7 +190,7 @@ export function ApiDocumentation() {
           </CardHeader>
 
           <CardContent className="space-y-5 pt-5">
-            <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+            <div className="admin-api-card-muted p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
@@ -205,7 +205,7 @@ export function ApiDocumentation() {
                   size="icon"
                   variant="outline"
                   onClick={() => copyText(API_BASE_URL, "Base URL")}
-                  className="border-cyan-300/20 bg-transparent text-slate-200 hover:bg-cyan-300/12 hover:text-white"
+                  className="admin-api-secondary-action"
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
@@ -213,7 +213,7 @@ export function ApiDocumentation() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+              <div className="admin-api-card-muted p-5">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-emerald-300" />
                   <p className="text-sm font-black text-slate-100">驗證方式</p>
@@ -223,7 +223,7 @@ export function ApiDocumentation() {
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+              <div className="admin-api-card-muted p-5">
                 <div className="flex items-center gap-2">
                   <FileJson className="h-5 w-5 text-cyan-300" />
                   <p className="text-sm font-black text-slate-100">回應格式</p>
@@ -241,7 +241,7 @@ export function ApiDocumentation() {
               <CodePanel title="錯誤回應範例" code={errorExample} tone="error" />
             </div>
 
-            <div className="rounded-3xl border border-cyan-300/14 bg-[#111d33] p-5">
+            <div className="admin-api-card-muted p-5">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-300" />
                 <p className="text-sm font-black text-slate-100">端點清單</p>
@@ -251,7 +251,7 @@ export function ApiDocumentation() {
                 {API_ENDPOINTS.map((endpoint) => (
                   <div
                     key={endpoint.key}
-                    className="rounded-2xl border border-cyan-300/12 bg-[#182640] p-4"
+                    className="rounded-xl border border-[#2a526f] bg-[#071522] p-4"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className="bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/15">
@@ -272,10 +272,10 @@ export function ApiDocumentation() {
           </CardContent>
         </Card>
 
-        <Card className="border-cyan-300/18 bg-[#17253d] shadow-[0_24px_60px_rgba(2,8,23,0.22)]">
-          <CardHeader className="border-b border-cyan-300/10 pb-5">
+        <Card className="admin-api-panel">
+          <CardHeader className="border-b border-[#2a526f] pb-5">
             <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-              <ExternalLink className="h-6 w-6 text-cyan-300" />
+              <ExternalLink className="h-6 w-6 text-[#d8e7ff]" />
               即時測試與範例
             </CardTitle>
             <p className="text-sm leading-6 text-slate-300">
@@ -341,7 +341,7 @@ export function ApiDocumentation() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-cyan-300/14 bg-[#111d33] px-4 py-3">
+            <div className="rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3">
               <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-300">
                 Request URL
               </p>
@@ -351,9 +351,10 @@ export function ApiDocumentation() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
+                variant="outline"
                 onClick={testEndpoint}
                 disabled={isLoading}
-                className="bg-cyan-400 text-slate-950 shadow-[0_12px_24px_rgba(34,211,238,0.24)] hover:bg-cyan-300"
+                className="admin-api-primary-action"
               >
                 {isLoading ? "測試中..." : "測試端點"}
               </Button>
@@ -361,7 +362,7 @@ export function ApiDocumentation() {
                 type="button"
                 variant="outline"
                 onClick={() => copyText(curlExample, "curl 範例")}
-                className="border-cyan-300/20 bg-transparent text-slate-200 hover:bg-cyan-300/12 hover:text-white"
+                className="admin-api-secondary-action"
               >
                 複製 curl
               </Button>
@@ -369,7 +370,7 @@ export function ApiDocumentation() {
                 type="button"
                 variant="outline"
                 onClick={() => copyText(fetchExample, "fetch 範例")}
-                className="border-cyan-300/20 bg-transparent text-slate-200 hover:bg-cyan-300/12 hover:text-white"
+                className="admin-api-secondary-action"
               >
                 複製 fetch
               </Button>
