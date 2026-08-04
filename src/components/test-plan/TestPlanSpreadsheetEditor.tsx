@@ -54,7 +54,7 @@ const ROW_PAGE_SIZE = 100;
 const COLUMN_PAGE_SIZE = 26;
 const MIN_VISIBLE_ROWS = 30;
 const MIN_VISIBLE_COLUMNS = 18;
-const THEME_COLORS = [
+const DEFAULT_THEME_COLORS = [
   "#ffffff",
   "#000000",
   "#e7e6e6",
@@ -66,6 +66,23 @@ const THEME_COLORS = [
   "#5b9bd5",
   "#70ad47",
 ];
+const INDEXED_COLORS = [
+  "#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
+  "#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
+  "#800000", "#008000", "#000080", "#808000", "#800080", "#008080", "#c0c0c0", "#808080",
+  "#9999ff", "#993366", "#ffffcc", "#ccffff", "#660066", "#ff8080", "#0066cc", "#ccccff",
+  "#000080", "#ff00ff", "#ffff00", "#00ffff", "#800080", "#800000", "#008080", "#0000ff",
+  "#00ccff", "#ccffff", "#ccffcc", "#ffff99", "#99ccff", "#ff99cc", "#cc99ff", "#ffcc99",
+  "#3366ff", "#33cccc", "#99cc00", "#ffcc00", "#ff9900", "#ff6600", "#666699", "#969696",
+  "#003366", "#339966", "#003300", "#333300", "#993300", "#993366", "#333399", "#333333",
+];
+
+interface SpreadsheetColor {
+  argb?: string;
+  indexed?: number;
+  theme?: number;
+  tint?: number;
+}
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -208,17 +225,60 @@ function inferLegacyCellValue(
   return next;
 }
 
-function resolveColor(color: { argb?: string; theme?: number } | undefined): string | undefined {
-  if (!color) return undefined;
-  if (color.argb) {
-    const normalized = color.argb.replace(/^#/, "");
-    return `#${normalized.length === 8 ? normalized.slice(2) : normalized}`;
-  }
-  if (typeof color.theme === "number") return THEME_COLORS[color.theme];
-  return undefined;
+function applyTint(color: string, tint = 0): string {
+  if (!tint) return color;
+  const channels = color
+    .replace("#", "")
+    .match(/.{2}/g)
+    ?.map((channel) => Number.parseInt(channel, 16));
+  if (!channels || channels.length !== 3) return color;
+  const adjusted = channels.map((channel) => (
+    tint < 0
+      ? Math.round(channel * (1 + tint))
+      : Math.round(channel + (255 - channel) * tint)
+  ));
+  return `#${adjusted.map((channel) => clamp(channel, 0, 255).toString(16).padStart(2, "0")).join("")}`;
 }
 
-function borderToCss(border: ExcelJsBorder | undefined): string | undefined {
+function getWorkbookThemeColors(workbook: ExcelJsWorkbook): string[] {
+  const themeXml = (workbook.model as { themes?: { theme1?: string } }).themes?.theme1;
+  if (!themeXml) return DEFAULT_THEME_COLORS;
+
+  const readThemeColor = (name: string): string | undefined => {
+    const block = themeXml.match(new RegExp(`<a:${name}>[\\s\\S]*?<\\/a:${name}>`, "i"))?.[0];
+    if (!block) return undefined;
+    const value = block.match(/<a:srgbClr[^>]*val="([0-9a-f]{6,8})"/i)?.[1]
+      ?? block.match(/<a:sysClr[^>]*lastClr="([0-9a-f]{6,8})"/i)?.[1];
+    return value ? `#${value.slice(-6).toLowerCase()}` : undefined;
+  };
+  const names = [
+    "lt1", "dk1", "lt2", "dk2", "accent1", "accent2",
+    "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink",
+  ];
+  return names.map((name, index) => readThemeColor(name) ?? DEFAULT_THEME_COLORS[index] ?? "#000000");
+}
+
+function resolveColor(
+  color: SpreadsheetColor | undefined,
+  themeColors = DEFAULT_THEME_COLORS,
+): string | undefined {
+  if (!color) return undefined;
+  let resolved: string | undefined;
+  if (color.argb) {
+    const normalized = color.argb.replace(/^#/, "");
+    resolved = `#${normalized.length === 8 ? normalized.slice(2) : normalized}`;
+  } else if (typeof color.indexed === "number" && color.indexed !== 64) {
+    resolved = INDEXED_COLORS[color.indexed];
+  } else if (typeof color.theme === "number") {
+    resolved = themeColors[color.theme];
+  }
+  return resolved ? applyTint(resolved.toLowerCase(), color.tint) : undefined;
+}
+
+function borderToCss(
+  border: ExcelJsBorder | undefined,
+  themeColors: string[],
+): string | undefined {
   if (!border?.style) return undefined;
   const width = border.style === "thick" || border.style === "double"
     ? 3
@@ -226,17 +286,46 @@ function borderToCss(border: ExcelJsBorder | undefined): string | undefined {
       ? 2
       : 1;
   const line = border.style.includes("dash") || border.style === "dotted" ? "dashed" : "solid";
-  return `${width}px ${line} ${resolveColor(border.color) ?? "#808080"}`;
+  return `${width}px ${line} ${resolveColor(border.color, themeColors) ?? "#808080"}`;
 }
 
-function getFormattedCellStyle(cell: ExcelJsCell): CSSProperties {
+function getPatternBackground(
+  fill: Extract<import("exceljs").Fill, { type: "pattern" }>,
+  themeColors: string[],
+): string {
+  if (fill.pattern === "none") return "#ffffff";
+  const foreground = resolveColor(fill.fgColor, themeColors);
+  const background = resolveColor(fill.bgColor, themeColors) ?? "#ffffff";
+  if (fill.pattern === "solid") return foreground ?? background;
+
+  const ink = foreground ?? "#4b5563";
+  if (fill.pattern === "mediumGray" || fill.pattern === "darkGray" || fill.pattern === "lightGray") {
+    return `repeating-linear-gradient(45deg, ${ink} 0 1px, ${background} 1px 3px)`;
+  }
+  if (fill.pattern === "gray125" || fill.pattern === "gray0625") {
+    return `radial-gradient(${ink} 0.7px, ${background} 0.8px) 0 0 / 4px 4px`;
+  }
+  if (fill.pattern.includes("Grid")) {
+    return `linear-gradient(${ink} 1px, transparent 1px), linear-gradient(90deg, ${ink} 1px, ${background} 1px)`;
+  }
+  if (fill.pattern.includes("Vertical")) {
+    return `repeating-linear-gradient(90deg, ${ink} 0 1px, ${background} 1px 4px)`;
+  }
+  if (fill.pattern.includes("Horizontal")) {
+    return `repeating-linear-gradient(0deg, ${ink} 0 1px, ${background} 1px 4px)`;
+  }
+  const angle = fill.pattern.includes("Down") ? 45 : -45;
+  return `repeating-linear-gradient(${angle}deg, ${ink} 0 1px, ${background} 1px 4px)`;
+}
+
+function getFormattedCellStyle(cell: ExcelJsCell, themeColors: string[]): CSSProperties {
   const fill = cell.fill;
   let background = "#ffffff";
   if (fill?.type === "pattern" && fill.pattern !== "none") {
-    background = resolveColor(fill.fgColor) ?? resolveColor(fill.bgColor) ?? background;
+    background = getPatternBackground(fill, themeColors);
   } else if (fill?.type === "gradient" && fill.stops?.length) {
     background = `linear-gradient(90deg, ${fill.stops
-      .map((stop) => `${resolveColor(stop.color) ?? "#ffffff"} ${Math.round(stop.position * 100)}%`)
+      .map((stop) => `${resolveColor(stop.color, themeColors) ?? "#ffffff"} ${Math.round(stop.position * 100)}%`)
       .join(", ")})`;
   }
 
@@ -248,7 +337,7 @@ function getFormattedCellStyle(cell: ExcelJsCell): CSSProperties {
 
   return {
     background,
-    color: resolveColor(font.color) ?? "#111827",
+    color: resolveColor(font.color, themeColors) ?? "#111827",
     fontFamily: font.name ? `"${font.name}", Calibri, sans-serif` : "Calibri, sans-serif",
     fontSize: font.size ? `${font.size}pt` : "11pt",
     fontWeight: font.bold ? 700 : 400,
@@ -261,10 +350,10 @@ function getFormattedCellStyle(cell: ExcelJsCell): CSSProperties {
       : horizontal ?? (typeof effectiveValue === "number" ? "right" : "left"),
     verticalAlign: alignment.vertical === "middle" ? "middle" : alignment.vertical ?? "middle",
     whiteSpace: alignment.wrapText ? "pre-wrap" : "pre",
-    borderTop: borderToCss(border.top),
-    borderRight: borderToCss(border.right),
-    borderBottom: borderToCss(border.bottom),
-    borderLeft: borderToCss(border.left),
+    borderTop: borderToCss(border.top, themeColors),
+    borderRight: borderToCss(border.right, themeColors),
+    borderBottom: borderToCss(border.bottom, themeColors),
+    borderLeft: borderToCss(border.left, themeColors),
   };
 }
 
@@ -327,6 +416,7 @@ export function TestPlanSpreadsheetEditor({
   open,
 }: TestPlanSpreadsheetEditorProps) {
   const excelJsWorkbookRef = useRef<ExcelJsWorkbook | null>(null);
+  const workbookThemeColorsRef = useRef<string[]>(DEFAULT_THEME_COLORS);
   const legacyWorkbookRef = useRef<LegacyWorkbook | null>(null);
   const legacyModuleRef = useRef<LegacySpreadsheetModule | null>(null);
   const [mode, setMode] = useState<EditorMode>("formatted");
@@ -343,6 +433,7 @@ export function TestPlanSpreadsheetEditor({
     if (!open || !file) return undefined;
     let active = true;
     excelJsWorkbookRef.current = null;
+    workbookThemeColorsRef.current = DEFAULT_THEME_COLORS;
     legacyWorkbookRef.current = null;
     legacyModuleRef.current = null;
     setStatus("loading");
@@ -362,6 +453,7 @@ export function TestPlanSpreadsheetEditor({
           if (!active) return;
           if (workbook.worksheets.length === 0) throw new Error("這份 Excel 沒有可編輯的工作表。");
           excelJsWorkbookRef.current = workbook;
+          workbookThemeColorsRef.current = getWorkbookThemeColors(workbook);
           setMode("formatted");
           setSheetName(workbook.worksheets[0].name);
         } else {
@@ -616,7 +708,7 @@ export function TestPlanSpreadsheetEditor({
 
             {error && <div className="test-plan-sheet-error" role="alert">{error}</div>}
 
-            <div className="test-plan-sheet-grid-wrap">
+            <div className={`test-plan-sheet-grid-wrap is-${mode}`}>
               <table className={`test-plan-sheet-grid is-${mode}`}>
                 <colgroup>
                   <col className="test-plan-sheet-row-number-column" />
@@ -652,7 +744,9 @@ export function TestPlanSpreadsheetEditor({
                         if (merge && (row !== renderRow || column !== renderColumn)) return null;
                         const masterAddress = merge?.masterAddress ?? address;
                         const formattedCell = formattedWorksheet?.getCell(masterAddress);
-                        const cellStyle = formattedCell ? getFormattedCellStyle(formattedCell) : undefined;
+                        const cellStyle = formattedCell
+                          ? getFormattedCellStyle(formattedCell, workbookThemeColorsRef.current)
+                          : undefined;
                         const displayValue = formattedCell
                           ? readFormattedCellValue(formattedCell)
                           : readLegacyCellValue(legacyWorksheet?.[address] as LegacyCell | undefined);
