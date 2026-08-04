@@ -9,10 +9,11 @@ async function source(path: string): Promise<string> {
 }
 
 test("renders a platform-sized Test_Plan engineering file workspace", async () => {
-  const workspace = await source(
-    "src/components/test-plan/TestPlanWorkspace.tsx",
-  );
-  const styles = await source("src/components/test-plan/test-plan.css");
+  const [workspace, styles, index] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+    source("src/pages/Index.tsx"),
+  ]);
 
   assert.match(workspace, /Test_Plan/);
   assert.match(workspace, /電路板與工程資料/);
@@ -21,6 +22,8 @@ test("renders a platform-sized Test_Plan engineering file workspace", async () =
   assert.match(workspace, /STEP/);
   assert.match(workspace, /BRD/);
   assert.match(styles, /\.test-plan-workspace/);
+  assert.match(styles, /\.test-plan-shell[\s\S]*height: 0/);
+  assert.match(index, /activeStationModule === "test-plan"/);
   assert.match(styles, /@media \(max-width: 1023px\)/);
 });
 
