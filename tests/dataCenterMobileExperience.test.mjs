@@ -46,7 +46,7 @@ test("mobile Data-center fills the dynamic viewport and exposes primary controls
   assert.match(workspaceSource, /id:\s*"plan"/);
   assert.match(workspaceSource, /data-action=\{action\.id\}/);
   assert.match(workspaceSource, /setMobileLeftOpen\(false\)/);
-  assert.match(workspaceSource, /<DialogTitle>場景導覽<\/DialogTitle>/);
+  assert.match(workspaceSource, /<DialogTitle>場景總覽<\/DialogTitle>/);
   assert.match(workspaceSource, /<DialogTitle>機櫃設定<\/DialogTitle>/);
   assert.doesNotMatch(workspaceSource, /<Sheet/);
 });
