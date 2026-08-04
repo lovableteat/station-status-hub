@@ -14,6 +14,7 @@ function createRecordSet() {
     spaces: [{
       id: "space-1",
       ownerId: "owner-1",
+      projectId: "project-1",
       name: "Main",
       description: null,
       color: "#22d3ee",
@@ -71,9 +72,9 @@ function createAdapter(options: {
     records,
     operations,
     adapter: {
-      async listSpaces(ownerId: string) {
-        operations.push(`list-spaces:${ownerId}`);
-        return [...records.spaces];
+      async listSpaces(ownerId: string, projectId: string) {
+        operations.push(`list-spaces:${ownerId}:${projectId}`);
+        return records.spaces.filter((space) => space.projectId === projectId);
       },
       async listFolders(spaceId: string) {
         operations.push(`list-folders:${spaceId}`);
@@ -84,10 +85,11 @@ function createAdapter(options: {
         return records.files.filter((file) => file.spaceId === spaceId);
       },
       async createSpace(input: Record<string, unknown>) {
-        operations.push(`create-space:${input.ownerId}`);
+        operations.push(`create-space:${input.ownerId}:${input.projectId}`);
         const space = {
           id: `space-${records.spaces.length + 1}`,
           ownerId: String(input.ownerId),
+          projectId: String(input.projectId),
           name: String(input.name),
           description: input.description ? String(input.description) : null,
           color: String(input.color),
@@ -205,23 +207,24 @@ function createAdapter(options: {
   };
 }
 
-test("loads shared spaces and activates the requested or first available space", async () => {
+test("loads only spaces that belong to the active project", async () => {
   const fake = createAdapter();
   fake.records.spaces.push({
     ...fake.records.spaces[0],
-    id: "other-space",
+    id: "other-project-space",
     ownerId: "owner-2",
+    projectId: "project-2",
   });
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  const loaded = await repository.loadWorkspace("owner-1", "missing");
+  const loaded = await repository.loadWorkspace("owner-1", "project-1", "missing");
 
   assert.equal(loaded.activeSpaceId, "space-1");
   assert.deepEqual(
     loaded.spaces.map((space: { id: string }) => space.id),
-    ["space-1", "other-space"],
+    ["space-1"],
   );
-  assert.ok(fake.operations.includes("list-spaces:owner-1"));
+  assert.ok(fake.operations.includes("list-spaces:owner-1:project-1"));
   assert.ok(fake.operations.includes("list-folders:space-1"));
 });
 
@@ -230,13 +233,14 @@ test("creating the first personal space returns an immediately activatable recor
   fake.records.spaces.length = 0;
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  const space = await repository.createSpace("owner-1", {
+  const space = await repository.createSpace("owner-1", "project-1", {
     name: "Power board",
     description: "EVT files",
     color: "#38bdf8",
   });
 
   assert.equal(space.ownerId, "owner-1");
+  assert.equal(space.projectId, "project-1");
   assert.equal(space.name, "Power board");
 });
 

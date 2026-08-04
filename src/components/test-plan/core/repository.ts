@@ -13,11 +13,12 @@ import type {
 } from "../types.ts";
 
 export interface TestPlanDataAdapter {
-  listSpaces(ownerId: string): Promise<TestPlanSpace[]>;
+  listSpaces(ownerId: string, projectId: string): Promise<TestPlanSpace[]>;
   listFolders(spaceId: string): Promise<TestPlanFolder[]>;
   listFiles(spaceId: string): Promise<TestPlanFileRecord[]>;
   createSpace(input: {
     ownerId: string;
+    projectId: string;
     name: string;
     description: string | null;
     color: string;
@@ -93,13 +94,17 @@ async function flushCleanupQueue(
 
 export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
   return {
-    async loadWorkspace(ownerId: string, preferredSpaceId?: string | null) {
+    async loadWorkspace(
+      ownerId: string,
+      projectId: string,
+      preferredSpaceId?: string | null,
+    ) {
       try {
         await flushCleanupQueue(adapter, ownerId);
       } catch (cleanupError) {
         console.warn("Test_Plan 延後清理仍待重試。", cleanupError);
       }
-      const spaces = await adapter.listSpaces(ownerId);
+      const spaces = await adapter.listSpaces(ownerId, projectId);
       const activeSpaceId = spaces.some((space) => space.id === preferredSpaceId)
         ? preferredSpaceId!
         : spaces[0]?.id ?? null;
@@ -120,10 +125,12 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     },
     createSpace(
       ownerId: string,
+      projectId: string,
       input: { name: string; description?: string; color?: string },
     ) {
       return adapter.createSpace({
         ownerId,
+        projectId,
         name: input.name.trim(),
         description: input.description?.trim() || null,
         color: input.color ?? "#22d3ee",
