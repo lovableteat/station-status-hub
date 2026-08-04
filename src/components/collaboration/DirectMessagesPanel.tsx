@@ -26,6 +26,7 @@ interface DirectMessagesPanelProps {
   onlineUsers: OnlineUser[];
   requestedUserId: string | null;
   onRequestHandled: () => void;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 function shortTime(value: string | null) {
@@ -73,13 +74,18 @@ export function DirectMessagesPanel({
   onlineUsers,
   requestedUserId,
   onRequestHandled,
+  onUnreadCountChange,
 }: DirectMessagesPanelProps) {
   const { user, isRealtimeAuthenticated } = useUser();
-  const { threads, loading, error, reload, startDirectChat } = useDirectMessageThreads();
+  const { threads, unreadCount, loading, error, reload, startDirectChat } = useDirectMessageThreads();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const requestedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [onUnreadCountChange, unreadCount]);
+
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
     [selectedThreadId, threads],
@@ -103,7 +109,12 @@ export function DirectMessagesPanel({
   );
 
   useEffect(() => {
-    if (!requestedUserId || requestedUserRef.current === requestedUserId) return;
+    if (!requestedUserId) {
+      requestedUserRef.current = null;
+      return;
+    }
+
+    if (requestedUserRef.current === requestedUserId) return;
     requestedUserRef.current = requestedUserId;
     const existing = threads.find((thread) => thread.otherUserId === requestedUserId);
     if (existing) {
