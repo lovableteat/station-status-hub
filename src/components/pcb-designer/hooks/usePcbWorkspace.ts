@@ -12,6 +12,7 @@ import type {
 } from "../core/tabular.ts";
 import type {
   PcbLibraryComponent,
+  PcbModelAssetMetadata,
   PcbProject,
   PcbSaveState,
   PcbTemplate,
@@ -238,6 +239,11 @@ export function usePcbWorkspace({
     (layer: PcbVisibleLayer) => dispatch({ type: "view/layer", layer }),
     [],
   );
+  const assignModelAsset = useCallback(
+    (componentId: string, metadata: PcbModelAssetMetadata) =>
+      dispatch({ type: "model/assign", componentId, metadata }),
+    [],
+  );
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
     [],
@@ -291,6 +297,7 @@ export function usePcbWorkspace({
     setTool,
     setActiveLayer,
     setVisibleLayer,
+    assignModelAsset,
     setZoom,
     setRightTab,
     runDrc,

@@ -1,12 +1,13 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
-import { Box3, Color, Vector3 } from "three";
+import { Box3, BufferGeometry, Color, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
 import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
-import type { PcbVisibleLayer } from "./types.ts";
+import { getDefaultPcbModelAssetStore } from "./core/modelAssets.ts";
+import type { PcbModelAsset, PcbModelAssetPart, PcbVisibleLayer } from "./types.ts";
 
 function safeColor(value: string, fallback: string) {
   try {
@@ -50,6 +51,83 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
   );
 }
 
+function ModelPartMesh({
+  part,
+  positions,
+  color,
+}: {
+  part: PcbModelAssetPart;
+  positions: number[];
+  color: string;
+}) {
+  const geometry = useMemo(() => {
+    const next = new BufferGeometry();
+    next.setAttribute("position", new Float32BufferAttribute(positions, 3));
+    next.setIndex(new Uint32BufferAttribute(part.index, 1));
+    next.computeVertexNormals();
+    return next;
+  }, [part.index, positions]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial color={safeColor(color, "#6bc7d9")} roughness={0.48} metalness={0.12} />
+    </mesh>
+  );
+}
+
+function mapModelPartToComponentSpace(
+  part: PcbModelAssetPart,
+  asset: PcbModelAsset,
+  component: PcbWorkspaceApi["activeProject"]["components"][number],
+): number[] {
+  const { min, max } = asset.metadata.bounds;
+  const spans = [
+    Math.max(max[0] - min[0], 0.001),
+    Math.max(max[1] - min[1], 0.001),
+    Math.max(max[2] - min[2], 0.001),
+  ];
+  const center = [
+    (min[0] + max[0]) / 2,
+    (min[1] + max[1]) / 2,
+    (min[2] + max[2]) / 2,
+  ];
+  const positions: number[] = [];
+  for (let offset = 0; offset < part.position.length; offset += 3) {
+    const raw = [
+      part.position[offset] - center[0],
+      part.position[offset + 1] - center[1],
+      part.position[offset + 2] - center[2],
+    ];
+    const widthAxis = asset.metadata.upAxis === "x" ? 1 : 0;
+    const depthAxis = 2;
+    const heightAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
+    const boardDepthAxis = asset.metadata.upAxis === "z" ? 1 : depthAxis;
+    positions.push(
+      (raw[widthAxis] / spans[widthAxis]) * component.width,
+      (raw[heightAxis] / spans[heightAxis]) * component.maxHeight,
+      (raw[boardDepthAxis] / spans[boardDepthAxis]) * component.height,
+    );
+  }
+  return positions;
+}
+
+function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; component: PcbWorkspaceApi["activeProject"]["components"][number] }) {
+  return (
+    <group data-model-renderer="buffer-geometry">
+      {asset.parts.map((part) => (
+        <ModelPartMesh
+          key={part.id}
+          part={part}
+          positions={mapModelPartToComponentSpace(part, asset, component)}
+          color={component.color}
+        />
+      ))}
+    </group>
+  );
+}
+
 function Scene({
   workspace,
   visibleLayer,
@@ -60,6 +138,25 @@ function Scene({
   selectedObjects: readonly string[];
 }) {
   const project = workspace.activeProject;
+  const modelAssetIds = useMemo(
+    () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
+    [project.components],
+  );
+  const modelAssetKey = modelAssetIds.join("|");
+  const [modelAssets, setModelAssets] = useState<Record<string, PcbModelAsset | null>>({});
+  useEffect(() => {
+    let active = true;
+    const store = getDefaultPcbModelAssetStore();
+    const ids = modelAssetKey ? modelAssetKey.split("|") : [];
+    void Promise.all(ids.map(async (id) => [id, await store.get(id)] as const))
+      .then((entries) => {
+        if (!active) return;
+        setModelAssets(Object.fromEntries(entries));
+      });
+    return () => {
+      active = false;
+    };
+  }, [modelAssetKey]);
   const selectedIds = useMemo(() => new Set([
     ...selectedObjects,
     ...(workspace.selection ? [workspace.selection.id] : []),
@@ -157,6 +254,9 @@ function Scene({
         const selected = selectedIds.has(component.instanceId);
         const yDirection = component.layer === "top" ? 1 : -1;
         const yPosition = yDirection * (boardThickness / 2 + component.maxHeight / 2);
+        const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
+        const useProceduralFallback = !modelAsset;
+        const proceduralFallback = useProceduralFallback;
         return (
           <group
             key={component.instanceId}
@@ -167,7 +267,7 @@ function Scene({
             ]}
             rotation={[0, -(component.rotation * Math.PI) / 180, component.layer === "top" ? 0 : Math.PI]}
           >
-            <mesh
+            <group
               onClick={(event) => {
                 event.stopPropagation();
                 selectObject(
@@ -176,15 +276,24 @@ function Scene({
                 );
               }}
             >
-              <boxGeometry args={[component.width, component.maxHeight, component.height]} />
-              <meshStandardMaterial
-                color={safeColor(component.color, "#6bc7d9")}
-                roughness={0.48}
-                metalness={component.type.toLocaleLowerCase().includes("connector") ? 0.5 : 0.12}
-                emissive={selected ? "#174e58" : "#000000"}
-              />
-              <Edges color={selected ? "#f8fafc" : "#214b60"} threshold={18} />
-            </mesh>
+              {proceduralFallback ? (
+                <mesh>
+                  <boxGeometry args={[component.width, component.maxHeight, component.height]} />
+                  <meshStandardMaterial
+                    color={safeColor(component.color, "#6bc7d9")}
+                    roughness={0.48}
+                    metalness={component.type.toLocaleLowerCase().includes("connector") ? 0.5 : 0.12}
+                    emissive={selected ? "#174e58" : "#000000"}
+                  />
+                  <Edges color={selected ? "#f8fafc" : "#214b60"} threshold={18} />
+                </mesh>
+              ) : <StoredModelMeshes asset={modelAsset} component={component} />}
+            </group>
+            {component.modelAssetId && useProceduralFallback && (
+              <Html center position={[0, component.maxHeight / 2 + 2, 0]} distanceFactor={80}>
+                <span className="pcb-3d-fallback-hint" role="status">3D 模型無法載入，使用程序化外觀</span>
+              </Html>
+            )}
             {selected && (
               <Html center position={[0, component.maxHeight / 2 + 4, 0]} distanceFactor={80}>
                 <span className="pcb-3d-label">{component.reference}</span>

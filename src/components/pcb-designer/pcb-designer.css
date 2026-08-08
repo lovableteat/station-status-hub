@@ -562,6 +562,47 @@
   font-size: 11px;
 }
 
+.pcb-model-import {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(74, 142, 175, 0.35);
+  border-radius: 0.7rem;
+  background: rgba(7, 28, 45, 0.72);
+}
+
+.pcb-model-import-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #d7f5ff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.pcb-model-import-heading small {
+  color: #8dddb0;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.pcb-model-status {
+  margin: 0;
+  color: #a8c6d6;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.pcb-model-status.is-success {
+  color: #8dddb0;
+}
+
+.pcb-model-status.is-error,
+.pcb-3d-fallback-hint {
+  color: #ffc3b0;
+}
+
 .pcb-selection-count {
   display: inline-flex;
   align-items: center;
