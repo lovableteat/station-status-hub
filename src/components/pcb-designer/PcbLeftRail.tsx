@@ -2,6 +2,7 @@ import { useMemo, useState, type ChangeEvent } from "react";
 import {
   Copy,
   FileUp,
+  Filter,
   FolderOpen,
   Pencil,
   Plus,
@@ -178,17 +179,20 @@ export function PcbLeftRail({
           />
         </label>
         {activeTab === "projects" && (
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            aria-label="篩選專案狀態"
-            className="pcb-control mt-2 w-full"
-          >
-            <option value="all">全部狀態</option>
-            <option value="draft">草稿</option>
-            <option value="review">審核中</option>
-            <option value="approved">已核准</option>
-          </select>
+          <label className="relative mt-2 block">
+            <Filter className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="篩選專案狀態"
+              className="pcb-control pcb-status-filter w-full"
+            >
+              <option value="all">全部狀態</option>
+              <option value="draft">草稿</option>
+              <option value="review">審核中</option>
+              <option value="approved">已核准</option>
+            </select>
+          </label>
         )}
         {activeTab === "library" && (
           <div className="mt-2 grid grid-cols-2 gap-2">
