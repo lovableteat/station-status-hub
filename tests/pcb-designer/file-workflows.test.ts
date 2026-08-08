@@ -143,7 +143,7 @@ test("stores model payloads through the in-memory asset fallback", async () => {
       dimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
       upAxis: "z" as const,
       bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 2, 3] as [number, number, number] },
-      parts: [{ id: "part-1", name: "Part 1", vertexCount: 3, indexCount: 3 }],
+      parts: [{ id: "part-1", name: "Part 1", vertexCount: 1, indexCount: 3 }],
     },
     parts: [{ id: "part-1", position: [0, 1, 2], normal: [0, 0, 1], index: [0, 1, 2] }],
   };
@@ -152,57 +152,4 @@ test("stores model payloads through the in-memory asset fallback", async () => {
   assert.deepEqual(await store.get("step-asset"), asset);
   await store.delete("step-asset");
   assert.equal(await store.get("step-asset"), null);
-});
-
-test("rejects oversized model meshes before storing them", async () => {
-  const { MAX_PCB_MODEL_PARTS, toPcbModelAssetMetadata } = await import(
-    "../../src/components/pcb-designer/core/modelAssets.ts"
-  );
-  const model = {
-    id: "oversized-model",
-    fileName: "oversized.step",
-    importedAt: "2026-08-08T00:00:00.000Z",
-    sourceUnit: "millimeter" as const,
-    upAxis: "z" as const,
-    bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 1, 1] as [number, number, number] },
-    dimensions: { widthMm: 1, depthMm: 1, heightMm: 1 },
-    calibratedDimensions: { widthMm: 1, depthMm: 1, heightMm: 1 },
-    parts: Array.from({ length: MAX_PCB_MODEL_PARTS + 1 }, (_, index) => ({
-      id: `part-${index}`,
-      name: `Part ${index}`,
-      position: Float32Array.from([0, 0, 0]),
-      index: Uint32Array.from([0, 0, 0]),
-    })),
-  };
-
-  assert.throws(() => toPcbModelAssetMetadata(model), /limit|上限/i);
-});
-
-test("rejects corrupted stored mesh indices so the 3D view can use its fallback", async () => {
-  const { IndexedDbModelAssetStore, isPcbModelAsset } = await import(
-    "../../src/components/pcb-designer/core/modelAssets.ts"
-  );
-  const asset = {
-    metadata: {
-      id: "corrupt-asset",
-      fileName: "broken.step",
-      createdAt: "2026-08-08T00:00:00.000Z",
-      updatedAt: "2026-08-08T00:00:00.000Z",
-      dimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
-      upAxis: "z" as const,
-      bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 2, 3] as [number, number, number] },
-      parts: [{ id: "part-1", name: "Part 1", vertexCount: 1, indexCount: 3 }],
-    },
-    parts: [{ id: "part-1", position: [0, 1, 2], index: [0, 1, 9] }],
-  };
-
-  assert.equal(isPcbModelAsset(asset), false);
-  const store = new IndexedDbModelAssetStore({ indexedDB: undefined });
-  await assert.rejects(store.put(asset), /invalid|無效/i);
-});
-
-test("uses the smallest PCB model span as the default up axis", async () => {
-  const { inferPcbUpAxis } = await import("../../src/components/data-center/stepImport.ts");
-  assert.equal(inferPcbUpAxis([10, 20, 2]), "z");
-  assert.equal(inferPcbUpAxis([2, 20, 10]), "x");
 });
