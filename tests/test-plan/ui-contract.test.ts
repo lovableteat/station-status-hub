@@ -126,3 +126,31 @@ test("finishes the daily Test_Plan workflow with a full space form, guided start
   assert.match(styles, /\.test-plan-inspector/);
   assert.match(styles, /grid-template-columns:[^;]*minmax\(0,\s*1fr\)[^;]*minmax\(/);
 });
+
+test("renders the lower engineering overview without inventing a second data source", async () => {
+  const [overview, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanOverview.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
+
+  assert.match(overview, /空間摘要/);
+  assert.match(overview, /檔案類型分布/);
+  assert.match(overview, /最近更新/);
+  assert.match(overview, /getTestPlanCategorySummary/);
+  assert.match(overview, /getRecentTestPlanFiles/);
+  assert.match(overview, /onKeyDown/);
+  assert.match(overview, /此空間尚未上傳工程檔案/);
+  assert.match(styles, /\.test-plan-overview/);
+  assert.match(styles, /grid-template-columns:\s*1fr/);
+});
+
+test("places the engineering overview below the file shell and reuses inspector selection", async () => {
+  const workspace = await source("src/components/test-plan/TestPlanWorkspace.tsx");
+
+  assert.match(workspace, /import \{ TestPlanOverview \}/);
+  assert.match(workspace, /<TestPlanOverview/);
+  assert.match(workspace, /activeSpace=\{activeSpace\}/);
+  assert.match(workspace, /files=\{files\}/);
+  assert.match(workspace, /folders=\{folders\}/);
+  assert.match(workspace, /setSelectedEntryKey\(`file:\$\{file\.id\}`\)/);
+});
