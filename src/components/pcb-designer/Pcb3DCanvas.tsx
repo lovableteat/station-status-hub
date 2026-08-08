@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import { Box3, BufferGeometry, Color, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
@@ -54,6 +54,35 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
       </Html>
     </>
   );
+}
+
+interface Pcb3DErrorBoundaryState {
+  error: Error | null;
+}
+
+class Pcb3DErrorBoundary extends Component<{ children: ReactNode }, Pcb3DErrorBoundaryState> {
+  state: Pcb3DErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): Pcb3DErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("PCB 3D view failed:", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="pcb-3d-error" role="alert">
+          <strong>3D 檢視無法啟用</strong>
+          <span>瀏覽器目前無法建立 WebGL 畫面；2D 版面資料仍保留。</span>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function ModelPartMesh({
@@ -373,22 +402,30 @@ export function Pcb3DCanvas({
       data-pcb-top-color={workspace.activeProject.board.layerColors.top}
       data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
     >
-      <Canvas
-        frameloop="demand"
-        dpr={[1, 1.5]}
-        camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
-        onPointerMissed={() => {
-          workspace.selectObject(null);
-          workspace.clearObjectSelection();
-        }}
-      >
-        <Scene
-          workspace={workspace}
-          visibleLayer={visibleLayer}
-          selectedObjects={selectedObjects}
-        />
-      </Canvas>
+      <Pcb3DErrorBoundary>
+        <Canvas
+          fallback={(
+            <div className="pcb-3d-error" role="alert">
+              <strong>3D 檢視無法啟用</strong>
+              <span>瀏覽器目前無法建立 WebGL 畫面；2D 版面資料仍保留。</span>
+            </div>
+          )}
+          frameloop="demand"
+          dpr={[1, 1.5]}
+          camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
+          gl={{ antialias: true, powerPreference: "high-performance" }}
+          onPointerMissed={() => {
+            workspace.selectObject(null);
+            workspace.clearObjectSelection();
+          }}
+        >
+          <Scene
+            workspace={workspace}
+            visibleLayer={visibleLayer}
+            selectedObjects={selectedObjects}
+          />
+        </Canvas>
+      </Pcb3DErrorBoundary>
       <div className="pcb-3d-help">
         <MousePointer2 aria-hidden="true" />
         左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選元件查看屬性
