@@ -89,6 +89,7 @@ import {
 } from "./core/tree";
 import { useTestPlanWorkspace } from "./hooks/useTestPlanWorkspace";
 import { TestPlanInspector } from "./TestPlanInspector";
+import { TestPlanOverview } from "./TestPlanOverview";
 import {
   TestPlanSpaceDialog,
   type TestPlanSpaceInput,
@@ -1288,6 +1289,16 @@ export function TestPlanWorkspace() {
           />
         )}
       </div>
+
+      {activeSpace && (
+        <TestPlanOverview
+          activeSpace={activeSpace}
+          activeFolderLabel={breadcrumbs.at(-1)?.name ?? "根目錄"}
+          files={files}
+          folders={folders}
+          onSelectFile={(file) => setSelectedEntryKey(`file:${file.id}`)}
+        />
+      )}
 
       {uploadProgress && (
         <div className="test-plan-upload-progress" role="status">
