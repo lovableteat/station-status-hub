@@ -65,7 +65,7 @@
 node --test tests/test-plan/*.test.ts
 82 passed, 0 failed
 
-npx.cmd eslint src/components/test-plan/spreadsheetWorkbook.ts tests/test-plan/spreadsheet-workbook.test.ts
+npx.cmd eslint src/components/test-plan/TestPlanSpreadsheetEditor.tsx src/components/test-plan/spreadsheetInteraction.ts src/components/test-plan/spreadsheetWorkbook.ts tests/test-plan/spreadsheet-interaction.test.ts tests/test-plan/spreadsheet-workbook.test.ts tests/test-plan/ui-contract.test.ts
 exit 0
 
 npm.cmd run build
@@ -88,7 +88,7 @@ b1b3180 docs: plan spreadsheet fidelity implementation
 73f2625 fix: preserve spreadsheet insertion formatting
 7cc0ec3 feat: render Excel sheet tabs below grid
 f474108 fix: preserve spreadsheet formulas and metadata
-本次提交 fix: handle spreadsheet formula reference boundaries
+70abbf3 fix: handle spreadsheet formula reference boundaries
 ```
 
 ## GitHub 交付程序
@@ -99,7 +99,14 @@ f474108 fix: preserve spreadsheet formulas and metadata
 4. 用 `git ls-remote origin refs/heads/main` 核對遠端 SHA。
 5. 檢查 GitHub Actions／Pages 發佈結果。
 
-實際遠端 SHA 與發佈結果：`[推送後補登]`
+實際交付結果：
+
+- `git rev-list --left-right --count HEAD...origin/main`：`10 0`，確認遠端沒有尚未整合的新提交。
+- `git push origin HEAD:main`：以 fast-forward 將 `df845b1..70abbf3` 推到 `main`，沒有 force push。
+- `git ls-remote origin refs/heads/main`：`70abbf3e04db9f963a99aee980b151e62cbcf764`。
+- GitHub Actions：[Deploy to GitHub Pages #31269318806](https://github.com/lovableteat/station-status-hub/actions/runs/31269318806) 成功；build 52 秒、deploy 8 秒。
+- 工作流程只有 GitHub Actions 的 Node.js 20 deprecated／強制使用 Node.js 24 警告，沒有建置或部署失敗。
+- 本紀錄以後續純文件提交補登，仍採相同 fast-forward 程序推送，不改動已驗證的程式碼。
 
 ## 已知驗證限制
 
