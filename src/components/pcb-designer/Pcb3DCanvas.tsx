@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/cont
 import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
+import type { PcbVisibleLayer } from "./types.ts";
 
 function safeColor(value: string, fallback: string) {
   try {
@@ -49,9 +50,20 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
   );
 }
 
-function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
+function Scene({
+  workspace,
+  visibleLayer,
+  selectedObjects,
+}: {
+  workspace: PcbWorkspaceApi;
+  visibleLayer: PcbVisibleLayer;
+  selectedObjects: readonly string[];
+}) {
   const project = workspace.activeProject;
-  const selectedId = workspace.selection?.id ?? null;
+  const selectedIds = useMemo(() => new Set([
+    ...selectedObjects,
+    ...(workspace.selection ? [workspace.selection.id] : []),
+  ]), [selectedObjects, workspace.selection]);
   const boardThickness = 1.6;
   const sceneBounds = useMemo(() => {
     const height = Math.max(
@@ -63,6 +75,23 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
       new Vector3(project.board.width / 2, height, project.board.height / 2),
     );
   }, [project]);
+
+  const selectObject = useCallback((
+    selection: { kind: "component" | "keepout"; id: string } | null,
+    additive = false,
+  ) => {
+    if (!selection) {
+      workspace.selectObject(null);
+      workspace.clearObjectSelection();
+      return;
+    }
+    workspace.selectObject(selection);
+    if (additive) {
+      workspace.toggleObjectSelection(selection.id);
+    } else {
+      workspace.clearObjectSelection();
+    }
+  }, [workspace]);
 
   return (
     <>
@@ -89,7 +118,7 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
         position={[0, 0, 0]}
         onClick={(event) => {
           event.stopPropagation();
-          workspace.selectObject(null);
+          selectObject(null);
         }}
       >
         <boxGeometry args={[project.board.width, boardThickness, project.board.height]} />
@@ -98,7 +127,7 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
       </mesh>
 
       {project.keepouts.map((keepout) => {
-        const selected = selectedId === keepout.id;
+        const selected = selectedIds.has(keepout.id);
         return (
           <mesh
             key={keepout.id}
@@ -109,7 +138,10 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
             ]}
             onClick={(event) => {
               event.stopPropagation();
-              workspace.selectObject({ kind: "keepout", id: keepout.id });
+              selectObject(
+                { kind: "keepout", id: keepout.id },
+                event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
+              );
             }}
           >
             <boxGeometry args={[keepout.width, 0.34, keepout.height]} />
@@ -119,8 +151,10 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
         );
       })}
 
-      {project.components.map((component) => {
-        const selected = selectedId === component.instanceId;
+      {project.components
+        .filter((component) => visibleLayer === "all" || component.layer === visibleLayer)
+        .map((component) => {
+        const selected = selectedIds.has(component.instanceId);
         const yDirection = component.layer === "top" ? 1 : -1;
         const yPosition = yDirection * (boardThickness / 2 + component.maxHeight / 2);
         return (
@@ -136,7 +170,10 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
             <mesh
               onClick={(event) => {
                 event.stopPropagation();
-                workspace.selectObject({ kind: "component", id: component.instanceId });
+                selectObject(
+                  { kind: "component", id: component.instanceId },
+                  event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
+                );
               }}
             >
               <boxGeometry args={[component.width, component.maxHeight, component.height]} />
@@ -162,7 +199,15 @@ function Scene({ workspace }: { workspace: PcbWorkspaceApi }) {
   );
 }
 
-export function Pcb3DCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
+export function Pcb3DCanvas({
+  workspace,
+  visibleLayer = workspace.visibleLayer,
+  selectedObjects = workspace.selectedObjects,
+}: {
+  workspace: PcbWorkspaceApi;
+  visibleLayer?: PcbVisibleLayer;
+  selectedObjects?: readonly string[];
+}) {
   const size = Math.max(workspace.activeProject.board.width, workspace.activeProject.board.height, 40);
   return (
     <div className="pcb-3d-host" data-testid="pcb-3d-canvas-host">
@@ -171,9 +216,16 @@ export function Pcb3DCanvas({ workspace }: { workspace: PcbWorkspaceApi }) {
         dpr={[1, 1.5]}
         camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
-        onPointerMissed={() => workspace.selectObject(null)}
+        onPointerMissed={() => {
+          workspace.selectObject(null);
+          workspace.clearObjectSelection();
+        }}
       >
-        <Scene workspace={workspace} />
+        <Scene
+          workspace={workspace}
+          visibleLayer={visibleLayer}
+          selectedObjects={selectedObjects}
+        />
       </Canvas>
       <div className="pcb-3d-help">
         <MousePointer2 aria-hidden="true" />

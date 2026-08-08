@@ -562,6 +562,14 @@
   font-size: 11px;
 }
 
+.pcb-selection-count {
+  display: inline-flex;
+  align-items: center;
+  color: #9fb2c7;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .pcb-danger-action {
   color: #fecdd3;
 }
@@ -1051,7 +1059,8 @@
   background: var(--pcb-border);
 }
 
-.pcb-layer-switch {
+.pcb-layer-switch,
+.pcb-visible-layer-switch {
   display: inline-flex;
   height: 34px;
   flex: none;
@@ -1064,7 +1073,8 @@
   color: #7f95b1;
 }
 
-.pcb-layer-switch button {
+.pcb-layer-switch button,
+.pcb-visible-layer-switch button {
   height: 26px;
   min-width: 58px;
   border-radius: 7px;
@@ -1077,17 +1087,20 @@
   transition: background 130ms ease, color 130ms ease;
 }
 
-.pcb-layer-switch button:hover:not(:disabled) {
+.pcb-layer-switch button:hover:not(:disabled),
+.pcb-visible-layer-switch button:hover:not(:disabled) {
   background: #1b2b42;
   color: #eaf5ff;
 }
 
-.pcb-layer-switch button.is-active {
+.pcb-layer-switch button.is-active,
+.pcb-visible-layer-switch button.is-active {
   background: #29466c;
   color: #bdefff;
 }
 
-.pcb-layer-switch button:disabled {
+.pcb-layer-switch button:disabled,
+.pcb-visible-layer-switch button:disabled {
   cursor: not-allowed;
   background: #101c2e;
   color: #74869d;
