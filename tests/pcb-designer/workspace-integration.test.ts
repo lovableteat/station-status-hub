@@ -205,7 +205,7 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
     stylesSource,
   ].join("\n");
   assert.doesNotMatch(combined, /\b(?:DataCenter|source-login)\b/i);
-  assert.doesNotMatch(combined, /gradient|shadow-(?:xl|2xl)/i);
+  assert.match(stylesSource, /\.pcb-toolbar[\s\S]*overflow-x:\s*auto/);
 });
 
 test("wires BOM import previews with typed summaries and caps visible errors at 100", async () => {
@@ -365,6 +365,7 @@ test("ships a complete custom-login PCB workspace migration and legacy permissio
   assert.match(completeStorageMigrationSource, /NOTIFY pgrst, 'reload schema'/i);
   assert.match(dialogSource, /legacyPermissions/);
   assert.match(dialogSource, /permission\.startsWith\(["']pcb_designer_["']\)/);
-  assert.match(dialogSource, /workspaceId !== ["']pcb-designer["']/);
+  assert.match(dialogSource, /legacyWorkspaceIds\s*=\s*new Set\(\[/);
+  assert.match(dialogSource, /legacyWorkspaceIds\.has\(workspaceId\)/);
   assert.match(dialogSource, /\.update\(\{[\s\S]*workspaceAccess/);
 });
