@@ -36,6 +36,23 @@ function seedLegacyStateWithoutTask1Fields(): PcbSaveState {
   return state;
 }
 
+function seedStateWithSelectedComponent(): PcbSaveState {
+  const state = seedState();
+  state.projects[0].components = [
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[3]),
+      instanceId: "component-a",
+      reference: "R1",
+      x: 10,
+      y: 10,
+      rotation: 0,
+      layer: "top",
+      locked: false,
+    },
+  ];
+  return state;
+}
+
 test("project CRUD keeps an active project and duplicates with fresh identity", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
@@ -274,6 +291,34 @@ test("active placement layer and remote hydration are real workspace state", asy
   assert.equal(bottom.activeLayer, "bottom");
   assert.equal(hydrated.activeProject.name, "Remote project");
   assert.equal(hydrated.canEdit, true);
+});
+
+test("selection duplicate creates a copy and undo restores both selection state and document state", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithSelectedComponent(), true);
+  const selected = reduceWorkspaceState(initial, {
+    type: "selection/set",
+    selection: { kind: "component", id: "component-a" },
+  });
+  const grouped = reduceWorkspaceState(selected, {
+    type: "selection/toggle",
+    objectId: "component-a",
+  });
+  const duplicated = reduceWorkspaceState(grouped, {
+    type: "selection/duplicate",
+  } as never);
+
+  assert.equal(duplicated.activeProject.components.length, 2);
+  assert.equal(duplicated.selectedObjects.length, 1);
+  assert.notEqual(duplicated.selectedObjects[0], "component-a");
+  assert.equal(duplicated.selection?.kind, "component");
+  assert.notEqual(duplicated.selection?.id, "component-a");
+
+  const undone = reduceWorkspaceState(duplicated, { type: "history/undo" });
+
+  assert.equal(undone.activeProject.components.length, 1);
+  assert.deepEqual(undone.selection, { kind: "component", id: "component-a" });
+  assert.deepEqual(undone.selectedObjects, ["component-a"]);
 });
 
 test("one BOM placement transaction restores both the component and queue through undo and redo", async () => {
