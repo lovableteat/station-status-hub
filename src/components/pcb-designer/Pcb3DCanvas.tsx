@@ -8,11 +8,11 @@ import { Focus, MousePointer2 } from "lucide-react";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import { getDefaultPcbModelAssetStore, isPcbModelAsset } from "./core/modelAssets.ts";
 import {
+  getPcbComponentViewState,
   getPcb3DComponentTransform,
   getPcbSelectionIds,
-  isPcbLayerVisible,
 } from "./core/viewSync.ts";
-import type { PcbModelAsset, PcbModelAssetPart, PcbVisibleLayer } from "./types.ts";
+import type { PcbModelAsset, PcbModelAssetPart, PcbSelection, PcbVisibleLayer } from "./types.ts";
 
 function safeColor(value: string, fallback: string) {
   try {
@@ -133,6 +133,22 @@ function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; compone
   );
 }
 
+function getSelectionById(
+  objectId: string,
+  project: PcbWorkspaceApi["activeProject"],
+): PcbSelection | null {
+  if (project.components.some((component) => component.instanceId === objectId)) {
+    return { kind: "component", id: objectId };
+  }
+  if (project.keepouts.some((keepout) => keepout.id === objectId)) {
+    return { kind: "keepout", id: objectId };
+  }
+  if (project.measurements.some((measurement) => measurement.id === objectId)) {
+    return { kind: "measurement", id: objectId };
+  }
+  return null;
+}
+
 function Scene({
   workspace,
   visibleLayer,
@@ -162,9 +178,26 @@ function Scene({
       active = false;
     };
   }, [modelAssetKey]);
+  const selectedSelections = useMemo(
+    () => selectedObjects
+      .map((objectId) => getSelectionById(objectId, project))
+      .filter((selection): selection is PcbSelection => selection !== null),
+    [project, selectedObjects],
+  );
+  const selectionIds = useMemo(
+    () => getPcbSelectionIds(workspace.selection, selectedSelections),
+    [selectedSelections, workspace.selection],
+  );
+  const componentViewStates = useMemo(
+    () => project.components.map((component) => ({
+      component,
+      viewState: getPcbComponentViewState(component, visibleLayer, selectionIds),
+    })),
+    [project.components, selectionIds, visibleLayer],
+  );
   const selectedIds = useMemo(
-    () => new Set(getPcbSelectionIds(workspace.selection, selectedObjects)),
-    [selectedObjects, workspace.selection],
+    () => new Set(selectionIds),
+    [selectionIds],
   );
   const boardThickness = 1.6;
   const sceneBounds = useMemo(() => {
@@ -253,10 +286,10 @@ function Scene({
         );
       })}
 
-      {project.components
-        .filter((component) => isPcbLayerVisible(visibleLayer, component.layer))
-        .map((component) => {
-        const selected = selectedIds.has(component.instanceId);
+      {componentViewStates
+        .filter(({ viewState }) => viewState.visible)
+        .map(({ component, viewState }) => {
+        const selected = viewState.selected;
         const transform = getPcb3DComponentTransform(component, project.board);
         const yDirection = component.layer === "top" ? 1 : -1;
         const yOffset = yDirection * (boardThickness / 2 + component.maxHeight / 2);
@@ -268,10 +301,10 @@ function Scene({
             key={component.instanceId}
             position={transform.position}
             rotation={transform.rotation}
-            data-pcb-coordinate={`${component.x + component.width / 2},${component.y + component.height / 2}`}
-            data-pcb-rotation={String(component.rotation)}
-            data-pcb-layer={component.layer}
-            data-pcb-selected={selected ? "true" : "false"}
+            data-pcb-coordinate={`${viewState.coordinate.x},${viewState.coordinate.y}`}
+            data-pcb-rotation={String(viewState.rotation)}
+            data-pcb-layer={viewState.layer}
+            data-pcb-selected={viewState.selected ? "true" : "false"}
           >
             <group
               position={[0, yOffset, 0]}

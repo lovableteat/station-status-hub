@@ -188,7 +188,8 @@ test("provides a lazy interactive 3D PCB view without replacing the 2D editor", 
   assert.match(canvas3dSource, /<Canvas/);
   assert.match(canvas3dSource, /OrbitControls/);
   assert.match(canvas3dSource, /visibleLayer/);
-  assert.match(canvas3dSource, /project\.components[\s\S]{0,120}\.filter[\s\S]{0,120}\.map/);
+  assert.match(canvas3dSource, /project\.components\.map/);
+  assert.match(canvas3dSource, /componentViewStates[\s\S]{0,120}\.filter[\s\S]{0,120}\.map/);
   assert.match(canvas3dSource, /project\.keepouts\.map/);
   assert.match(canvas3dSource, /workspace\.selectObject/);
   assert.match(canvas3dSource, /重設視角/);
@@ -198,9 +199,12 @@ test("shares 2D and 3D synchronization helpers and inspection attributes", () =>
   assert.match(viewSyncSource, /export function getPcbSelectionIds/);
   assert.match(viewSyncSource, /export function isPcbLayerVisible/);
   assert.match(viewSyncSource, /export function getPcbComponentCenter/);
+  assert.match(viewSyncSource, /export function getPcbComponentViewState/);
   assert.match(viewSyncSource, /export function getPcb3DComponentTransform/);
   assert.match(canvasSource, /from "\.\/core\/viewSync\.ts"/);
   assert.match(canvas3dSource, /from "\.\/core\/viewSync\.ts"/);
+  assert.match(canvasSource, /getPcbComponentViewState/);
+  assert.match(canvas3dSource, /getPcbComponentViewState/);
   assert.match(canvasSource, /data-pcb-coordinate/);
   assert.match(canvasSource, /data-pcb-rotation/);
   assert.match(canvasSource, /data-pcb-layer/);

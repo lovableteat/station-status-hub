@@ -18,9 +18,8 @@ import {
   snapPoint,
 } from "./core/geometry.ts";
 import {
-  getPcbComponentCenter,
+  getPcbComponentViewState,
   getPcbSelectionIds,
-  isPcbLayerVisible,
 } from "./core/viewSync.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
@@ -28,6 +27,7 @@ import type {
   PcbMeasurement,
   PcbPlacedComponent,
   PcbPoint,
+  PcbSelection,
   PcbVisibleLayer,
 } from "./types.ts";
 
@@ -165,6 +165,22 @@ function componentPoint(component: Pick<PcbPlacedComponent, "x" | "y">): PcbPoin
   return { x: component.x, y: component.y };
 }
 
+function getSelectionById(
+  objectId: string,
+  project: PcbWorkspaceApi["activeProject"],
+): PcbSelection | null {
+  if (project.components.some((component) => component.instanceId === objectId)) {
+    return { kind: "component", id: objectId };
+  }
+  if (project.keepouts.some((keepout) => keepout.id === objectId)) {
+    return { kind: "keepout", id: objectId };
+  }
+  if (project.measurements.some((measurement) => measurement.id === objectId)) {
+    return { kind: "measurement", id: objectId };
+  }
+  return null;
+}
+
 export function PcbCanvas({
   workspace,
   visibleLayer = workspace.visibleLayer,
@@ -185,16 +201,33 @@ export function PcbCanvas({
   const zoomFrameRef = useRef<number | null>(null);
   const queuedZoomRef = useRef(workspace.zoom);
   const project = workspace.activeProject;
+  const selectedSelections = useMemo(
+    () => selectedObjects
+      .map((objectId) => getSelectionById(objectId, project))
+      .filter((selection): selection is PcbSelection => selection !== null),
+    [project, selectedObjects],
+  );
+  const selectionIds = useMemo(
+    () => getPcbSelectionIds(workspace.selection, selectedSelections),
+    [selectedSelections, workspace.selection],
+  );
+  const componentViewStates = useMemo(
+    () => project.components.map((component) => ({
+      component,
+      viewState: getPcbComponentViewState(component, visibleLayer, selectionIds),
+    })),
+    [project.components, selectionIds, visibleLayer],
+  );
   const visibleComponents = useMemo(
-    () => project.components.filter((component) => isPcbLayerVisible(visibleLayer, component.layer)),
-    [project.components, visibleLayer],
+    () => componentViewStates.filter(({ viewState }) => viewState.visible),
+    [componentViewStates],
   );
   const selectedComponentIds = useMemo(
     () => new Set(
-      getPcbSelectionIds(workspace.selection, selectedObjects).filter((objectId) =>
+      selectionIds.filter((objectId) =>
         project.components.some((component) => component.instanceId === objectId)),
     ),
-    [project.components, selectedObjects, workspace.selection],
+    [project.components, selectionIds],
   );
   const placementLibraryComponent = placementComponentId
     ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
@@ -337,7 +370,7 @@ export function PcbCanvas({
     ? project.components.find((component) => component.instanceId === workspace.selection?.id) ?? null
     : null;
   const selectedComponentVisible = selectedComponent
-    ? isPcbLayerVisible(visibleLayer, selectedComponent.layer)
+    ? getPcbComponentViewState(selectedComponent, visibleLayer, selectionIds).visible
     : false;
   const selectedComponentVisual = selectedComponent && selectedComponentVisible
     ? {
@@ -886,14 +919,17 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="components">
-          {visibleComponents.map((component) => {
+          {visibleComponents.map(({ component, viewState }) => {
             const center = previewPointForComponent(component);
-            const coordinate = getPcbComponentCenter({
+            const previewViewState = getPcbComponentViewState({
+              instanceId: component.instanceId,
               x: center.x,
               y: center.y,
               width: component.width,
               height: component.height,
-            });
+              rotation: component.rotation,
+              layer: component.layer,
+            }, visibleLayer, selectionIds);
             const transform = selectedComponentVisual?.component.instanceId === component.instanceId
               ? selectedComponentVisual.geometry.transform
               : getComponentCanvasTransform(component, center);
@@ -902,10 +938,10 @@ export function PcbCanvas({
                 key={component.instanceId}
                 transform={transform}
                 className={`pcb-component-object${component.locked ? " is-locked" : ""}`}
-                data-pcb-coordinate={`${coordinate.x},${coordinate.y}`}
-                data-pcb-rotation={String(component.rotation)}
-                data-pcb-layer={component.layer}
-                data-pcb-selected={selectedComponentIds.has(component.instanceId) ? "true" : "false"}
+                data-pcb-coordinate={`${previewViewState.coordinate.x},${previewViewState.coordinate.y}`}
+                data-pcb-rotation={String(viewState.rotation)}
+                data-pcb-layer={viewState.layer}
+                data-pcb-selected={viewState.selected ? "true" : "false"}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) =>
