@@ -45,11 +45,12 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
 });
 
 test("edits uploaded spreadsheets in place without forcing a download workflow", async () => {
-  const [workspace, editor, inspector, styles] = await Promise.all([
+  const [workspace, editor, inspector, styles, workbook] = await Promise.all([
     source("src/components/test-plan/TestPlanWorkspace.tsx"),
     source("src/components/test-plan/TestPlanSpreadsheetEditor.tsx"),
     source("src/components/test-plan/TestPlanInspector.tsx"),
     source("src/components/test-plan/test-plan.css"),
+    source("src/components/test-plan/spreadsheetWorkbook.ts"),
   ]);
 
   assert.match(workspace, /TestPlanSpreadsheetEditor/);
@@ -83,7 +84,9 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(editor, /const \[ExcelJS, spreadsheet\] = await Promise\.all\(\[/);
   assert.match(editor, /spreadsheet\.SSF\.format/);
   assert.match(editor, /formatSpreadsheetNumber/);
-  assert.match(editor, /getSpreadsheetInsertionIndex/);
+  assert.match(editor, /insertFormattedWorksheet/);
+  assert.match(editor, /insertLegacyWorksheet/);
+  assert.match(workbook, /getSpreadsheetInsertionIndex/);
   assert.match(editor, /向下插入列/);
   assert.match(editor, /向右插入欄/);
   assert.match(editor, /revealSelection\(\{ anchor: insertedSelection, focus: insertedSelection \}\)/);
