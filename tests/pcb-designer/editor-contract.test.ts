@@ -21,6 +21,23 @@ const collaboratorsSource = await read("src/components/pcb-designer/PcbCollabora
 const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
 const runtimeBoundarySource = await read("src/components/common/AppRuntimeBoundary.tsx");
 
+test("surfaces shared visible-layer controls and selection utilities through the workspace shell", () => {
+  assert.match(hookSource, /const setVisibleLayer = useCallback/);
+  assert.match(hookSource, /dispatch\(\{ type: "view\/layer", layer \}\)/);
+  assert.match(hookSource, /const toggleObjectSelection = useCallback/);
+  assert.match(hookSource, /dispatch\(\{ type: "selection\/toggle", objectId \}\)/);
+  assert.match(hookSource, /const clearObjectSelection = useCallback/);
+  assert.match(hookSource, /dispatch\(\{ type: "selection\/clear-group" \}\)/);
+  assert.match(hookSource, /visibleLayer:\s*state\.visibleLayer/);
+  assert.match(hookSource, /selectedObjects:\s*state\.selectedObjects/);
+  assert.match(hookSource, /setVisibleLayer,/);
+  assert.match(hookSource, /toggleObjectSelection,/);
+  assert.match(hookSource, /clearObjectSelection,/);
+  assert.match(workspaceSource, /visibleLayer=\{workspace\.visibleLayer\}/);
+  assert.match(workspaceSource, /selectedObjects=\{workspace\.selectedObjects\}/);
+  assert.match(workspaceSource, /onVisibleLayerChange=\{workspace\.setVisibleLayer\}/);
+});
+
 test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts", () => {
   assert.match(canvasSource, /<svg[\s\S]*data-pcb-canvas/);
   assert.match(canvasSource, /onPointerDown/);
@@ -83,6 +100,15 @@ test("keeps all four tools mutually exclusive and accessible", () => {
   assert.match(toolbarSource, /shortcut=["']K["']/);
 });
 
+test("adds separate visible-layer filters without replacing placement-layer controls", () => {
+  assert.match(toolbarSource, /visibleLayer:\s*PcbVisibleLayer/);
+  assert.match(toolbarSource, /onVisibleLayerChange:\s*\(layer:\s*PcbVisibleLayer\)\s*=>\s*void/);
+  assert.match(toolbarSource, /pcb-visible-layer-switch/);
+  assert.match(toolbarSource, /aria-pressed=\{visibleLayer === layer\}/);
+  assert.match(toolbarSource, /onClick=\{\(\) => onVisibleLayerChange\(layer\)\}/);
+  assert.match(toolbarSource, /onClick=\{\(\) => onActiveLayerChange\(layer\)\}/);
+});
+
 test("provides a complete keepout workflow with visible creation, resize, and deletion controls", () => {
   assert.match(canvasSource, /kind:\s*["']keepout-resize["']/);
   assert.match(canvasSource, /beginKeepoutResize/);
@@ -107,6 +133,7 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(combinedHookSource, /history\/undo/);
   assert.match(combinedHookSource, /history\/redo/);
   assert.match(combinedHookSource, /event\.ctrlKey \|\| event\.metaKey/);
+  assert.match(editorHookSource, /key === ["']d["'][\s\S]{0,220}duplicateSelected/);
   assert.match(editorHookSource, /key === ["']v["'] \|\| key === ["']h["']/);
   assert.match(editorHookSource, /key === ["']m["'] \|\| key === ["']k["']/);
   assert.match(editorHookSource, /key === ["']r["'][\s\S]{0,120}rotateSelected/);
@@ -158,10 +185,20 @@ test("provides a lazy interactive 3D PCB view without replacing the 2D editor", 
   assert.match(workspaceSource, /<Pcb3DCanvas/);
   assert.match(canvas3dSource, /<Canvas/);
   assert.match(canvas3dSource, /OrbitControls/);
+  assert.match(canvas3dSource, /visibleLayer/);
   assert.match(canvas3dSource, /project\.components\.map/);
   assert.match(canvas3dSource, /project\.keepouts\.map/);
   assert.match(canvas3dSource, /workspace\.selectObject/);
   assert.match(canvas3dSource, /重設視角/);
+});
+
+test("supports Ctrl or Cmd multi-selection, shared layer filters, and group drag on the 2D canvas", () => {
+  assert.match(canvasSource, /workspace\.visibleLayer/);
+  assert.match(canvasSource, /workspace\.selectedObjects/);
+  assert.match(canvasSource, /event\.ctrlKey \|\| event\.metaKey/);
+  assert.match(canvasSource, /workspace\.toggleObjectSelection/);
+  assert.match(canvasSource, /workspace\.clearObjectSelection/);
+  assert.match(canvasSource, /workspace\.moveComponents/);
 });
 
 test("makes existing canvas objects keyboard-selectable", () => {
@@ -169,16 +206,16 @@ test("makes existing canvas objects keyboard-selectable", () => {
   assert.match(canvasSource, /event\.key === ["']Enter["'] \|\| event\.key === ["'] ["']/);
   assert.match(canvasSource, /role=["']button["']/);
   assert.match(canvasSource, /tabIndex=\{0\}/);
-  assert.match(canvasSource, /selectObject\(\{ kind: ["']component["']/);
-  assert.match(canvasSource, /selectObject\(\{ kind: ["']keepout["']/);
-  assert.match(canvasSource, /selectObject\(\{ kind: ["']measurement["']/);
+  assert.match(canvasSource, /selectObject\([\s\S]{0,40}\{ kind: ["']component["']/);
+  assert.match(canvasSource, /selectObject\([\s\S]{0,40}\{ kind: ["']keepout["']/);
+  assert.match(canvasSource, /selectObject\([\s\S]{0,40}\{ kind: ["']measurement["']/);
   assert.match(editorCssSource, /\[role=["']button["']\]:focus-visible/);
 });
 
 test("keeps measurement selection compact without a native SVG focus ring", () => {
   assert.match(canvasSource, /className=["']pcb-measurement-object["']/);
   assert.match(canvasSource, /className=["']pcb-measurement-hit-target["'][\s\S]{0,350}pointerEvents=["']stroke["']/);
-  assert.match(canvasSource, /event\.preventDefault\(\)[\s\S]{0,160}selectObject\(\{ kind: ["']measurement["']/);
+  assert.match(canvasSource, /event\.preventDefault\(\)[\s\S]{0,200}selectObject\([\s\S]{0,40}\{ kind: ["']measurement["']/);
   assert.match(canvasSource, /selectedMeasurement[\s\S]{0,800}strokeDasharray/);
   assert.match(editorCssSource, /pcb-measurement-object:focus[\s\S]{0,180}outline:\s*none\s*!important/);
 });
@@ -226,11 +263,11 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch button\s*\{[\s\S]{0,320}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
+    /\.pcb-layer-switch button,[\s\S]{0,120}\.pcb-visible-layer-switch button\s*\{[\s\S]{0,320}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
   );
   assert.doesNotMatch(
     editorCssSource,
-    /\.pcb-layer-switch button:disabled\s*\{[\s\S]{0,120}opacity:/,
+    /\.pcb-layer-switch button:disabled,[\s\S]{0,120}\.pcb-visible-layer-switch button:disabled[\s\S]{0,120}opacity:/,
   );
   assert.match(
     editorCssSource,
@@ -246,6 +283,12 @@ test("disables inspector mutation controls while a component is locked", () => {
   assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
   assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| component\.locked\}/);
   assert.match(editorHookSource, /if \(!source \|\| source\.locked\) return false/);
+});
+
+test("shows inspector duplication affordances for grouped selections and keepouts", () => {
+  assert.match(inspectorSource, /workspace\.duplicateSelected/);
+  assert.match(inspectorSource, /workspace\.selectedObjects\.length/);
+  assert.match(inspectorSource, /pcb-selection-count/);
 });
 
 test("provides complete board, selection, DRC, and PNG workflows", () => {

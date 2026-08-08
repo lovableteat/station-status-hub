@@ -18,7 +18,13 @@ import {
   snapPoint,
 } from "./core/geometry.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
-import type { PcbKeepout, PcbMeasurement, PcbPlacedComponent, PcbPoint } from "./types.ts";
+import type {
+  PcbKeepout,
+  PcbMeasurement,
+  PcbPlacedComponent,
+  PcbPoint,
+  PcbVisibleLayer,
+} from "./types.ts";
 
 export const PCB_LIBRARY_DRAG_TYPE = "application/x-pcb-library-component";
 
@@ -36,6 +42,8 @@ type KeepoutResizeHandle = "nw" | "ne" | "sw" | "se";
 
 interface PcbCanvasProps {
   workspace: PcbWorkspaceApi;
+  visibleLayer?: PcbVisibleLayer;
+  selectedObjects?: readonly string[];
   placementComponentId?: string | null;
   onPlacementComplete?: () => void;
   onPlacementCancel?: () => void;
@@ -52,8 +60,12 @@ type PointerInteraction =
     kind: "component";
     pointerId: number;
     instanceId: string;
+    instanceIds: string[];
+    origin: PcbPoint;
+    originById: Record<string, PcbPoint>;
     offset: PcbPoint;
     preview: PcbPoint;
+    delta: PcbPoint;
     bypassSnap: boolean;
   }
   | {
@@ -144,8 +156,18 @@ function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
   return null;
 }
 
+function componentPoint(component: Pick<PcbPlacedComponent, "x" | "y">): PcbPoint {
+  return { x: component.x, y: component.y };
+}
+
+function isLayerVisible(visibleLayer: PcbVisibleLayer, layer: "top" | "bottom") {
+  return visibleLayer === "all" || visibleLayer === layer;
+}
+
 export function PcbCanvas({
   workspace,
+  visibleLayer = workspace.visibleLayer,
+  selectedObjects = workspace.selectedObjects,
   placementComponentId = null,
   onPlacementComplete,
   onPlacementCancel,
@@ -162,6 +184,20 @@ export function PcbCanvas({
   const zoomFrameRef = useRef<number | null>(null);
   const queuedZoomRef = useRef(workspace.zoom);
   const project = workspace.activeProject;
+  const visibleComponents = useMemo(
+    () => project.components.filter((component) => isLayerVisible(visibleLayer, component.layer)),
+    [project.components, visibleLayer],
+  );
+  const selectedComponentIds = useMemo(() => {
+    const ids = new Set(
+      selectedObjects.filter((objectId) =>
+        project.components.some((component) => component.instanceId === objectId)),
+    );
+    if (workspace.selection?.kind === "component") {
+      ids.add(workspace.selection.id);
+    }
+    return ids;
+  }, [project.components, selectedObjects, workspace.selection]);
   const placementLibraryComponent = placementComponentId
     ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
     : null;
@@ -242,6 +278,33 @@ export function PcbCanvas({
     });
   };
 
+  const previewPointForComponent = useCallback((component: PcbPlacedComponent) => {
+    if (interaction?.kind !== "component" || !interaction.originById[component.instanceId]) {
+      return componentPoint(component);
+    }
+    const origin = interaction.originById[component.instanceId];
+    return {
+      x: origin.x + interaction.delta.x,
+      y: origin.y + interaction.delta.y,
+    };
+  }, [interaction]);
+
+  const selectObject = useCallback((
+    selection: Parameters<typeof workspace.selectObject>[0],
+    additive = false,
+  ) => {
+    workspace.selectObject(selection);
+    if (!selection) {
+      workspace.clearObjectSelection();
+      return;
+    }
+    if (additive) {
+      workspace.toggleObjectSelection(selection.id);
+      return;
+    }
+    workspace.clearObjectSelection();
+  }, [workspace]);
+
   const viewBox = useMemo(() => {
     const viewportAspect = size.width / Math.max(1, size.height);
     const boardAspect = project.board.width / project.board.height;
@@ -274,14 +337,15 @@ export function PcbCanvas({
   const selectedComponent = workspace.selection?.kind === "component"
     ? project.components.find((component) => component.instanceId === workspace.selection?.id) ?? null
     : null;
-  const selectedComponentVisual = selectedComponent
+  const selectedComponentVisible = selectedComponent
+    ? isLayerVisible(visibleLayer, selectedComponent.layer)
+    : false;
+  const selectedComponentVisual = selectedComponent && selectedComponentVisible
     ? {
       component: selectedComponent,
       geometry: getComponentCanvasGeometry(
         selectedComponent,
-        interaction?.kind === "component" && interaction.instanceId === selectedComponent.instanceId
-          ? interaction.preview
-          : selectedComponent,
+        previewPointForComponent(selectedComponent),
       ),
     }
     : null;
@@ -329,7 +393,7 @@ export function PcbCanvas({
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       event.stopPropagation();
-      workspace.selectObject(selection);
+      selectObject(selection);
     }
   };
 
@@ -362,7 +426,7 @@ export function PcbCanvas({
         { exact: true, bypassSnap: event.altKey, rotation: placementRotation },
       );
       if (result.ok === true) {
-        workspace.selectObject({ kind: "component", id: result.component.instanceId });
+        selectObject({ kind: "component", id: result.component.instanceId });
         setPlacementPoint(null);
         toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
       } else {
@@ -376,7 +440,7 @@ export function PcbCanvas({
       return;
     }
     if (workspace.tool === "select") {
-      workspace.selectObject(null);
+      selectObject(null);
       return;
     }
     if (!workspace.canMutate) return;
@@ -401,17 +465,43 @@ export function PcbCanvas({
     event.preventDefault();
     event.stopPropagation();
     if (event.button !== 0) return;
-    workspace.selectObject({ kind: "component", id: component.instanceId });
+    const additive = event.ctrlKey || event.metaKey;
+    if (additive) {
+      selectObject({ kind: "component", id: component.instanceId }, true);
+      return;
+    }
+
+    const groupedIds = [...selectedComponentIds];
+    const dragIds = groupedIds.includes(component.instanceId) && groupedIds.length > 1
+      ? groupedIds
+      : [component.instanceId];
+    if (dragIds.length > 1) {
+      workspace.selectObject({ kind: "component", id: component.instanceId });
+    } else {
+      selectObject({ kind: "component", id: component.instanceId });
+    }
     const svg = svgRef.current;
     if (!svg || workspace.tool !== "select" || !workspace.canMutate || component.locked) return;
     const point = pointForEvent(svg, event.clientX, event.clientY);
+    const originById = Object.fromEntries(
+      dragIds
+        .map((instanceId) => {
+          const item = project.components.find((projectComponent) => projectComponent.instanceId === instanceId);
+          return item ? [instanceId, componentPoint(item)] : null;
+        })
+        .filter((entry): entry is [string, PcbPoint] => entry !== null),
+    );
     svg.setPointerCapture(event.pointerId);
     setInteraction({
       kind: "component",
       pointerId: event.pointerId,
       instanceId: component.instanceId,
+      instanceIds: dragIds,
+      origin: componentPoint(component),
+      originById,
       offset: { x: point.x - component.x, y: point.y - component.y },
       preview: { x: component.x, y: component.y },
+      delta: { x: 0, y: 0 },
       bypassSnap: event.altKey,
     });
   };
@@ -462,12 +552,17 @@ export function PcbCanvas({
       const bypassSnap = event.altKey;
       const x = point.x - interaction.offset.x;
       const y = point.y - interaction.offset.y;
+      const preview = project.board.snapToGrid
+        ? snapPoint({ x, y }, gridSize, bypassSnap)
+        : { x, y };
       setInteraction({
         ...interaction,
         bypassSnap,
-        preview: project.board.snapToGrid
-          ? snapPoint({ x, y }, gridSize, bypassSnap)
-          : { x, y },
+        preview,
+        delta: {
+          x: preview.x - interaction.origin.x,
+          y: preview.y - interaction.origin.y,
+        },
       });
     } else if (interaction.kind === "keepout-move") {
       const bypassSnap = event.altKey;
@@ -518,11 +613,17 @@ export function PcbCanvas({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (interaction.kind === "component") {
-      const result = workspace.moveComponent(
-        interaction.instanceId,
-        interaction.preview,
-        interaction.bypassSnap,
-      );
+      const result = interaction.instanceIds.length > 1
+        ? workspace.moveComponents(
+          interaction.instanceIds,
+          interaction.delta,
+          interaction.bypassSnap,
+        )
+        : workspace.moveComponent(
+          interaction.instanceId,
+          interaction.preview,
+          interaction.bypassSnap,
+        );
       if (result.ok === false) toast({ title: "無法移動元件", description: result.reason, variant: "destructive" });
     } else if (interaction.kind === "keepout-move") {
       const result = workspace.moveKeepout(
@@ -577,7 +678,7 @@ export function PcbCanvas({
       bypassSnap: event.altKey,
     });
     if (result.ok === true) {
-      workspace.selectObject({ kind: "component", id: result.component.instanceId });
+      selectObject({ kind: "component", id: result.component.instanceId });
       onPlacementComplete?.();
       setPlacementPoint(null);
       toast({ title: "元件已放置", description: `${result.component.reference} · ${result.component.name}` });
@@ -704,7 +805,12 @@ export function PcbCanvas({
                   event.preventDefault();
                   event.stopPropagation();
                   if (event.button !== 0) return;
-                  workspace.selectObject({ kind: "keepout", id: keepout.id });
+                  const additive = event.ctrlKey || event.metaKey;
+                  if (additive) {
+                    selectObject({ kind: "keepout", id: keepout.id }, true);
+                    return;
+                  }
+                  selectObject({ kind: "keepout", id: keepout.id });
                   const svg = svgRef.current;
                   if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
                   const point = pointForEvent(svg, event.clientX, event.clientY);
@@ -738,7 +844,10 @@ export function PcbCanvas({
                 if (event.button !== 0) return;
                 event.preventDefault();
                 event.stopPropagation();
-                workspace.selectObject({ kind: "measurement", id: measurement.id });
+                selectObject(
+                  { kind: "measurement", id: measurement.id },
+                  event.ctrlKey || event.metaKey,
+                );
               }}
               onKeyDown={(event) =>
                 selectWithKeyboard(event, { kind: "measurement", id: measurement.id })}
@@ -778,11 +887,8 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="components">
-          {project.components.map((component) => {
-            const center = interaction?.kind === "component"
-              && interaction.instanceId === component.instanceId
-              ? interaction.preview
-              : component;
+          {visibleComponents.map((component) => {
+            const center = previewPointForComponent(component);
             const transform = selectedComponentVisual?.component.instanceId === component.instanceId
               ? selectedComponentVisual.geometry.transform
               : getComponentCanvasTransform(component, center);
@@ -805,7 +911,7 @@ export function PcbCanvas({
                   rx={Math.min(0.8, component.width / 6, component.height / 6)}
                   fill={component.color}
                   fillOpacity={component.layer === "bottom" ? 0.48 : 0.9}
-                  stroke={workspace.selection?.kind === "component" && workspace.selection.id === component.instanceId
+                  stroke={selectedComponentIds.has(component.instanceId)
                     ? "#f8fafc"
                     : "#07111d"}
                   strokeWidth={strokeWidth}

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Crosshair, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbPlacedComponent } from "./types.ts";
@@ -59,8 +59,18 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
   const component = workspace.selection?.kind === "component"
     ? workspace.selectedObject as PcbPlacedComponent
     : null;
+  const selectionCount = new Set([
+    ...workspace.selectedObjects,
+    ...(workspace.selection ? [workspace.selection.id] : []),
+  ]).size;
+  const canDuplicate = workspace.selection?.kind === "keepout"
+    || workspace.selection?.kind === "component"
+    || workspace.selectedObjects.length > 0;
   return (
     <div className="pcb-inspector-actions">
+      <span className="pcb-selection-count">
+        Selected {selectionCount || workspace.selectedObjects.length}
+      </span>
       {component && (
         <>
           <Button
@@ -90,6 +100,17 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
           </Button>
         </>
       )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={!workspace.canMutate || !canDuplicate || Boolean(component?.locked)}
+        onClick={workspace.duplicateSelected}
+        aria-label="複製選取項目"
+        title="複製"
+      >
+        <Copy className="mr-1.5 h-3.5 w-3.5" />複製
+      </Button>
       <Button
         type="button"
         variant="outline"
