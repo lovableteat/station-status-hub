@@ -6,7 +6,7 @@ import {
   PCB_REMOTE_FALLBACK_KEY,
   type PcbAccountDatabase,
 } from "../../src/components/pcb-designer/core/accountRemoteSync.ts";
-import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
+import { BUILT_IN_TEMPLATES, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
 function createState(name: string): PcbSaveState {
@@ -85,7 +85,7 @@ test("loads a dedicated account workspace and refreshes built-in catalogs", asyn
   const loaded = await client.load?.();
 
   assert.equal(loaded?.projects[0].name, "Cloud project");
-  assert.equal(loaded?.templates.length, 4);
+  assert.equal(loaded?.templates.length, BUILT_IN_TEMPLATES.length);
   assert.ok((loaded?.library.length ?? 0) > 0);
   assert.deepEqual(mock.calls.map((call) => call.name), [
     "load_pcb_designer_workspace",
