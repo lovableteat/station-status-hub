@@ -3622,6 +3622,15 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Json
       }
+      list_active_collaboration_members: {
+        Args: never
+        Returns: {
+          display_name: string
+          role: string
+          user_id: string
+          username: string
+        }[]
+      }
       save_pcb_designer_workspace: {
         Args: { p_payload: Json; p_user_id: string }
         Returns: undefined
