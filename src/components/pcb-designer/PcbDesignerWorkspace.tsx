@@ -23,6 +23,7 @@ import { parseProjectJson } from "./core/validation.ts";
 import { importStepModel } from "../data-center/stepImport.ts";
 import {
   PCB_MODEL_FILE_ACCEPT,
+  MAX_PCB_MODEL_FILE_BYTES,
   getDefaultPcbModelAssetStore,
   isStepModelFile,
   toPcbModelAsset,
@@ -243,6 +244,9 @@ export function PcbDesignerWorkspace({
 
   const handleModelFile = useCallback(async (file: File, componentId: string) => {
     if (!isStepModelFile(file)) throw new Error(`只接受 STP 或 STEP 模型檔案（${PCB_MODEL_FILE_ACCEPT}）。`);
+    if (file.size > MAX_PCB_MODEL_FILE_BYTES) {
+      throw new Error(`STEP 模型檔案不可超過 ${Math.round(MAX_PCB_MODEL_FILE_BYTES / 1024 / 1024)} MB。`);
+    }
     const component = workspace.activeProject.components.find((item) => item.instanceId === componentId);
     if (!component || component.locked || !workspace.canMutate) {
       throw new Error("請先選取可編輯的元件。");
@@ -250,7 +254,11 @@ export function PcbDesignerWorkspace({
     const model = await importStepModel(file);
     const asset = toPcbModelAsset(model);
     await modelAssetStoreRef.current.put(asset);
-    workspace.assignModelAsset(componentId, asset.metadata);
+    const assigned = workspace.assignModelAsset(componentId, asset.metadata);
+    if (!assigned) {
+      await modelAssetStoreRef.current.delete(asset.metadata.id);
+      throw new Error("元件在匯入期間已被鎖定或不可編輯，模型未套用。 ");
+    }
     return asset.metadata;
   }, [workspace]);
 

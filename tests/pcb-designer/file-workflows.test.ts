@@ -85,8 +85,8 @@ test("serializes STEP parts into JSON-safe PCB model metadata", async () => {
       id: "part-1",
       name: "Housing",
       color: [0.1, 0.2, 0.3],
-      position: Float32Array.from([0, 1, 2]),
-      normal: Float32Array.from([0, 0, 1]),
+      position: Float32Array.from([0, 1, 2, 1, 2, 3, 2, 3, 4]),
+      normal: Float32Array.from([0, 0, 1, 0, 0, 1, 0, 0, 1]),
       index: Uint32Array.from([0, 1, 2]),
     }],
   });
@@ -99,7 +99,7 @@ test("serializes STEP parts into JSON-safe PCB model metadata", async () => {
     id: "part-1",
     name: "Housing",
     color: [0.1, 0.2, 0.3],
-    vertexCount: 1,
+    vertexCount: 3,
     indexCount: 3,
   });
   assert.doesNotThrow(() => JSON.stringify(metadata));
@@ -136,8 +136,60 @@ test("stores model payloads through the in-memory asset fallback", async () => {
   const store = new IndexedDbModelAssetStore({ indexedDB: undefined });
   const asset = {
     metadata: {
+      schemaVersion: 1 as const,
       id: "step-asset",
       fileName: "board.stp",
+      createdAt: "2026-08-08T00:00:00.000Z",
+      updatedAt: "2026-08-08T00:00:00.000Z",
+      dimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
+      calibratedDimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
+      upAxis: "z" as const,
+      bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 2, 3] as [number, number, number] },
+      parts: [{ id: "part-1", name: "Part 1", vertexCount: 3, indexCount: 3 }],
+    },
+    parts: [{ id: "part-1", position: [0, 1, 2, 1, 2, 3, 2, 3, 4], normal: [0, 0, 1, 0, 0, 1, 0, 0, 1], index: [0, 1, 2] }],
+  };
+
+  await store.put(asset);
+  assert.deepEqual(await store.get("step-asset"), asset);
+  await store.delete("step-asset");
+  assert.equal(await store.get("step-asset"), null);
+});
+
+test("rejects oversized model meshes before storing them", async () => {
+  const { MAX_PCB_MODEL_PARTS, toPcbModelAssetMetadata } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const part = {
+    id: "part-1",
+    name: "Part 1",
+    position: Float32Array.from([0, 0, 0]),
+    index: Uint32Array.from([0, 0, 0]),
+  };
+  const model = {
+    id: "oversized-model",
+    fileName: "oversized.step",
+    importedAt: "2026-08-08T00:00:00.000Z",
+    sourceUnit: "millimeter" as const,
+    upAxis: "z" as const,
+    bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 1, 1] as [number, number, number] },
+    dimensions: { widthMm: 1, depthMm: 1, heightMm: 1 },
+    calibratedDimensions: { widthMm: 1, depthMm: 1, heightMm: 1 },
+    parts: Array.from({ length: MAX_PCB_MODEL_PARTS + 1 }, (_, index) => ({ ...part, id: `part-${index}` })),
+  };
+
+  assert.throws(() => toPcbModelAssetMetadata(model), /上限/i);
+});
+
+test("rejects corrupted stored mesh indices so the 3D view can use its fallback", async () => {
+  const { IndexedDbModelAssetStore, isPcbModelAsset } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const asset = {
+    metadata: {
+      schemaVersion: 1 as const,
+      id: "corrupt-asset",
+      fileName: "broken.step",
       createdAt: "2026-08-08T00:00:00.000Z",
       updatedAt: "2026-08-08T00:00:00.000Z",
       dimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
@@ -145,11 +197,16 @@ test("stores model payloads through the in-memory asset fallback", async () => {
       bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 2, 3] as [number, number, number] },
       parts: [{ id: "part-1", name: "Part 1", vertexCount: 1, indexCount: 3 }],
     },
-    parts: [{ id: "part-1", position: [0, 1, 2], normal: [0, 0, 1], index: [0, 1, 2] }],
+    parts: [{ id: "part-1", position: [0, 1, 2], index: [0, 1, 9] }],
   };
 
-  await store.put(asset);
-  assert.deepEqual(await store.get("step-asset"), asset);
-  await store.delete("step-asset");
-  assert.equal(await store.get("step-asset"), null);
+  assert.equal(isPcbModelAsset(asset), false);
+  const store = new IndexedDbModelAssetStore({ indexedDB: undefined });
+  await assert.rejects(store.put(asset), /無效/i);
+});
+
+test("uses the smallest PCB model span as the default up axis", async () => {
+  const { inferPcbUpAxis } = await import("../../src/components/data-center/dataCenterTypes.ts");
+  assert.equal(inferPcbUpAxis([10, 20, 2]), "z");
+  assert.equal(inferPcbUpAxis([2, 20, 10]), "x");
 });

@@ -6,7 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/cont
 import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
-import { getDefaultPcbModelAssetStore } from "./core/modelAssets.ts";
+import { getDefaultPcbModelAssetStore, isPcbModelAsset } from "./core/modelAssets.ts";
 import type { PcbModelAsset, PcbModelAssetPart, PcbVisibleLayer } from "./types.ts";
 
 function safeColor(value: string, fallback: string) {
@@ -151,7 +151,7 @@ function Scene({
     void Promise.all(ids.map(async (id) => [id, await store.get(id)] as const))
       .then((entries) => {
         if (!active) return;
-        setModelAssets(Object.fromEntries(entries));
+        setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [id, asset && isPcbModelAsset(asset) ? asset : null])));
       });
     return () => {
       active = false;

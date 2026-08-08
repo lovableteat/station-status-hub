@@ -240,9 +240,13 @@ export function usePcbWorkspace({
     [],
   );
   const assignModelAsset = useCallback(
-    (componentId: string, metadata: PcbModelAssetMetadata) =>
-      dispatch({ type: "model/assign", componentId, metadata }),
-    [],
+    (componentId: string, metadata: PcbModelAssetMetadata) => {
+      const component = state.activeProject.components.find((item) => item.instanceId === componentId);
+      if (!canEdit || state.documentLocked || !component || component.locked) return false;
+      dispatch({ type: "model/assign", componentId, metadata });
+      return true;
+    },
+    [canEdit, state.activeProject.components, state.documentLocked],
   );
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
