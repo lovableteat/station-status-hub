@@ -202,11 +202,13 @@ test("round-trips model metadata and an assigned component asset id", () => {
   const state = repository.load();
   const projectId = state.activeProjectId!;
   const asset = {
+    schemaVersion: 1 as const,
     id: "step-asset",
     fileName: "housing.step",
     createdAt: "2026-08-08T00:00:00.000Z",
     updatedAt: "2026-08-08T00:00:00.000Z",
     dimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
+    calibratedDimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
     upAxis: "z" as const,
     bounds: { min: [0, 0, 0] as [number, number, number], max: [10, 20, 30] as [number, number, number] },
     parts: [{ id: "part-1", name: "Housing", vertexCount: 1, indexCount: 3 }],

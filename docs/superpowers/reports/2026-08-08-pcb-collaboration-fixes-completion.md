@@ -1,36 +1,54 @@
-# PCB Designer 同仁問題修正完成紀錄
+# PCB Designer 同仁問題修正與提交紀錄
 
 日期：2026-08-08
 
-## 需求對照
+## 任務範圍
 
-本次針對協作中心收到的 PCB Designer 問題完成以下處理：
+依照 Ben 在協作中心提出的問題，補強 PCB Designer 的可用性與資料安全：
 
-- 建立獨立的 Top／Bottom／全部可見層狀態，並讓 2D 與 3D 共用同一個篩選結果。
-- 支援 Ctrl／Cmd 多選、多元件群組拖曳，以及 Ctrl／Cmd+D 複製選取項目。
-- 複製禁制區時產生新識別碼、名稱與合法偏移位置。
-- 群組移動遇到鎖定元件時，保留鎖定元件原位，只移動可編輯成員。
-- 切換可見層時自動清除被隱藏的元件選取，避免檢查器或群組拖曳誤操作隱藏物件。
-- 加入 L10 design 內建模板與模型資產 metadata，保留後續 STEP／STP 匯入的資料結構。
+- PCB 2D 與 3D 共用 Top、Bottom、全部圖層篩選。
+- 支援 Ctrl/Cmd 多選、群組拖曳、群組複製與復原/重做。
+- 鎖定元件不會阻擋同一群組中其他可編輯元件移動。
+- Keepout 可複製，並保留選取狀態與鍵盤操作。
+- L10 設計狀態、圖層與模型 metadata 可持久化，舊資料會安全遷移。
+- 支援 `.stp` / `.step` 匯入 PCB 元件，Inspector 顯示匯入狀態與模型摘要。
+- 3D 使用 BufferGeometry 顯示已匯入模型；模型不存在或損壞時回到程序化外觀。
+- STEP 匯入加入檔案大小、零件數、頂點數、索引數與索引完整性限制。
+- PCB STEP 預設以上下厚度最薄的軸作為 up axis，較符合板上元件的實際幾何。
+- 匯入完成前若元件被鎖定或失去編輯權限，會刪除暫存模型，不留下孤立資產。
 
-## 實作歷程
+## 主要提交順序
 
-1. `9b5cfb0`：保存設計規格。
-2. `81b690e`：保存執行計畫。
-3. `ee98a80`：加入 PCB 可見層、L10 design 與模型資產狀態/遷移。
-4. `1861f65`：加入群組移動、禁制區複製與選取動作。
-5. `eb169f3`：串接工具列、2D/3D 畫布、檢查器與鍵盤操作。
-6. 本次修正提交：補強多選 reducer、可見層選取修剪、混合鎖定群組移動、中文「全部」標籤與行為測試。
+1. `9b5cfb0`：建立設計規格。
+2. `81b690e`：建立執行計畫。
+3. `ee98a80`：加入 PCB 圖層與 L10 設計狀態。
+4. `1861f65`：加入群組移動與 Keepout 複製。
+5. `eb169f3`：加入 2D/3D 圖層篩選與多選 UI。
+6. `bab2432`：修正多選遺失首個選取、隱藏圖層殘留選取、鎖定群組移動與中文介面文字。
+7. `59c1f94`：加入 STEP 模型匯入、IndexedDB/記憶體資產儲存、metadata 持久化與 3D fallback。
+8. `768dd0e`、`e85a5ae`：修正 Task 4 測試資料與測試範圍。
+9. 本次提交：補上模型安全上限、損壞資料驗證、up axis 推論與匯入失敗清理。
 
-## 驗證
+## 驗證方式
 
-- PCB 指定回歸測試（defaults、workspace state、storage、editor actions、editor contract）：72/72 通過。
+- PCB focused tests：`47/47` 通過。
+- TypeScript：`npm.cmd exec tsc -- --noEmit` 通過。
+- ESLint：針對 PCB Designer 原始碼與測試執行並確認通過。
 - Production build：`npm.cmd run build` 通過。
-- 建置包含 PCB Designer 2D chunk 與 lazy-loaded 3D chunk。
-- 第二輪程式碼審查：APPROVED。
+- 完整 PCB 測試：`138/141` 通過；仍保留 3 個既有、與本任務無關的失敗：帳號遠端同步，以及 workspace integration 的 gradient/shadow 與舊權限對話框字串斷言。
 
-完整整合測試仍有兩個既有、與本次 PCB 協作修正無關的契約失敗：舊測試仍要求移除既有的 gradient/shadow 樣式，以及要求 `UserPermissionsDialog` 出現特定舊字串。兩者在本次變更前即已存在，未為了本需求擴大修改範圍。
+## 提交流程
 
-## 發布
+1. 在 `codex/pcb-collaboration-fixes` 分支完成實作。
+2. 執行 focused tests、型別檢查、lint、production build。
+3. 檢查 `git diff --check` 與工作樹，確認沒有暫存或無關檔案。
+4. 建立修正提交並推送功能分支。
+5. 將完成提交推送到 `main`。
+6. 等待 GitHub Pages workflow 完成，再檢查部署後 PCB Designer bundle 是否包含新功能。
 
-完成後將目前分支推送到 `origin/main`，由 GitHub Pages workflow 進行部署；部署結果與 live URL 會在任務回覆中一併確認。
+## 部署位置
+
+- GitHub repository：`lovableteat/station-status-hub`
+- Production：<https://lovableteat.github.io/station-status-hub/?reload=1785421951790&project=1c155356-321f-4f0f-bd2a-c47a4b76549b&workspace=station-status&module=test-plan>
+
+本報告刻意保留在 repository 的 `docs/superpowers/reports/`，作為此次修改、測試、提交與部署的可追溯紀錄。
