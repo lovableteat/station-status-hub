@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download,
   Eye,
+  FileSpreadsheet,
   FileText,
   Folder,
   FolderInput,
@@ -19,6 +20,7 @@ import {
   getTestPlanPreviewKind,
   type TestPlanPreviewKind,
 } from "./core/preview";
+import { isEditableSpreadsheet } from "./core/spreadsheet";
 import type {
   TestPlanEntry,
   TestPlanFileRecord,
@@ -32,6 +34,7 @@ interface TestPlanInspectorProps {
   onDelete: (entry: TestPlanEntry) => void;
   onDescribe: (file: TestPlanFileRecord) => void;
   onDownload: (file: TestPlanFileRecord) => void;
+  onEditSpreadsheet: (file: TestPlanFileRecord) => void;
   onMove: (entry: TestPlanEntry) => void;
   onRename: (entry: TestPlanEntry) => void;
 }
@@ -144,6 +147,7 @@ export function TestPlanInspector({
   onDelete,
   onDescribe,
   onDownload,
+  onEditSpreadsheet,
   onMove,
   onRename,
 }: TestPlanInspectorProps) {
@@ -206,8 +210,22 @@ export function TestPlanInspector({
       </dl>
 
       <div className="test-plan-inspector-actions">
+        {entry.kind === "file" && isEditableSpreadsheet(entry) && (
+          <Button
+            type="button"
+            disabled={!canEdit || busy}
+            onClick={() => onEditSpreadsheet(entry)}
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            直接編輯 Excel
+          </Button>
+        )}
         {entry.kind === "file" && (
-          <Button type="button" onClick={() => onDownload(entry)}>
+          <Button
+            type="button"
+            variant={isEditableSpreadsheet(entry) ? "outline" : "default"}
+            onClick={() => onDownload(entry)}
+          >
             <Download className="mr-2 h-4 w-4" />
             下載檔案
           </Button>
