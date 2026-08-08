@@ -64,6 +64,23 @@ export interface PcbDesignerWorkspaceProps {
   onExportPng?: (options: PcbPngExportOptions) => void | Promise<void>;
 }
 
+type ImportPreviewInput = {
+  title: string;
+  importKind: "library" | "bom";
+  validCount: number;
+  totalCount: number;
+  errors: TabularImportError[];
+  placementCount?: number;
+  onCommit: () => void;
+};
+
+type ProjectImportPreviewInput = {
+  title: string;
+  validCount: number;
+  errors: TabularImportError[];
+  onCommit: () => void;
+};
+
 function statusLabel(status: PcbProject["status"]): string {
   return {
     draft: "草稿",
@@ -173,156 +190,119 @@ export function PcbDesignerWorkspace({
     return () => window.removeEventListener("keydown", saveWithKeyboard);
   }, [handleSave]);
 
-  const previewImport = (
-    title: string,
-    validCountOrKind: number | "library" | "bom",
-    errorsOrValidCount: TabularImportError[] | number,
-    onCommitOrTotalCount: (() => void) | number,
-    importKindOrErrors?: "library" | "bom" | TabularImportError[],
-    totalCountOrPlacementCount?: number,
-    placementCountOrCommit?: number | (() => void),
-  ) => {
-    const nextDialog = typeof validCountOrKind === "string"
-      ? {
-        kind: "import-preview" as const,
-        title,
-        importKind: validCountOrKind,
-        validCount: errorsOrValidCount as number,
-        totalCount: onCommitOrTotalCount as number,
-        errors: importKindOrErrors as TabularImportError[],
-        placementCount: typeof totalCountOrPlacementCount === "number" ? totalCountOrPlacementCount : undefined,
-        onCommit: placementCountOrCommit as () => void,
-      }
-      : {
-        kind: "import-preview" as const,
-        title,
-        importKind: (importKindOrErrors as "library" | "bom" | undefined) ?? "library",
-        validCount: validCountOrKind,
-        totalCount: typeof totalCountOrPlacementCount === "number"
-          ? totalCountOrPlacementCount
-          : validCountOrKind + (errorsOrValidCount as TabularImportError[]).length,
-        errors: errorsOrValidCount as TabularImportError[],
-        placementCount: typeof placementCountOrCommit === "number" ? placementCountOrCommit : undefined,
-        onCommit: onCommitOrTotalCount as () => void,
-      };
-    setDialog(nextDialog);
-  };
+  const previewImport = (input: ImportPreviewInput) => setDialog({
+    kind: "import-preview",
+    ...input,
+  });
+
+  const previewProjectImport = (input: ProjectImportPreviewInput) => setDialog({
+    kind: "project-import-preview",
+    ...input,
+  });
 
   const handleProjectFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file) return;
     if (!file.name.toLocaleLowerCase().endsWith(".json")) {
-      previewImport("匯入專案預覽", 0, [{ row: 1, message: "專案檔案必須是 JSON。" }], () => undefined);
+      previewProjectImport({
+        title: "匯入專案預覽",
+        validCount: 0,
+        errors: [{ row: 1, message: "專案檔案必須是 JSON。" }],
+        onCommit: () => undefined,
+      });
       return;
     }
     try {
       const parsed = parseProjectJson(await file.text());
       if (parsed.ok === false) {
-        previewImport("匯入專案預覽", 0, [{ row: 1, message: parsed.error }], () => undefined);
+        previewProjectImport({
+          title: "匯入專案預覽",
+          validCount: 0,
+          errors: [{ row: 1, message: parsed.error }],
+          onCommit: () => undefined,
+        });
         return;
       }
-      previewImport("匯入專案預覽", 1, [], () => {
-        workspace.importProject(parsed.value);
-        toast({ title: "專案已匯入", description: `${parsed.value.name} 已建立為新專案。` });
+      previewProjectImport({
+        title: "匯入專案預覽",
+        validCount: 1,
+        errors: [],
+        onCommit: () => {
+          workspace.importProject(parsed.value);
+          toast({ title: "專案已匯入", description: `${parsed.value.name} 已建立為新專案。` });
+        },
       });
     } catch (error) {
-      previewImport("匯入專案預覽", 0, [{
-        row: 1,
-        message: error instanceof Error ? error.message : "無法讀取專案檔案。",
-      }], () => undefined);
-    }
-  };
-
-  const handleLibraryFile = async (file: File) => {
-    try {
-      const result = parseComponentRows(await readTabularFile(file));
-      previewImport("元件庫匯入預覽", result.valid.length, result.errors, () => {
-        workspace.uploadLibraryComponents(result.valid);
-        toast({ title: "元件庫已更新", description: `寫入 ${result.valid.length} 筆有效元件。` });
+      previewProjectImport({
+        title: "匯入專案預覽",
+        validCount: 0,
+        errors: [{
+          row: 1,
+          message: error instanceof Error ? error.message : "無法讀取專案檔案。",
+        }],
+        onCommit: () => undefined,
       });
-    } catch (error) {
-      previewImport("元件庫匯入預覽", 0, [{
-        row: 1,
-        message: error instanceof Error ? error.message : "無法解析元件庫檔案。",
-      }], () => undefined);
-    }
-  };
-
-  const handleBomFile = async (file: File) => {
-    try {
-      const result = parseBomRows(await readTabularFile(file));
-      previewImport("BOM 匯入預覽", result.valid.length, result.errors, () => {
-        workspace.importBom(result.valid);
-        toast({ title: "BOM 已匯入", description: `建立 ${result.placementCount} 筆待放置項目。` });
-      });
-    } catch (error) {
-      previewImport("BOM 匯入預覽", 0, [{
-        row: 1,
-        message: error instanceof Error ? error.message : "無法解析 BOM 檔案。",
-      }], () => undefined);
     }
   };
 
   const handleLibraryPreviewFile = async (file: File) => {
     try {
       const result = parseComponentRows(await readTabularFile(file));
-      previewImport(
-        "元件庫匯入預覽",
-        "library",
-        result.valid.length,
-        result.valid.length + result.errors.length,
-        result.errors,
-        undefined,
-        () => {
+      previewImport({
+        title: "元件庫匯入預覽",
+        importKind: "library",
+        validCount: result.valid.length,
+        totalCount: result.valid.length + result.errors.length,
+        errors: result.errors,
+        onCommit: () => {
           workspace.uploadLibraryComponents(result.valid);
           toast({ title: "元件庫已更新", description: `寫入 ${result.valid.length} 筆有效元件。` });
         },
-      );
+      });
     } catch (error) {
-      previewImport(
-        "元件庫匯入預覽",
-        "library",
-        0,
-        0,
-        [{
+      previewImport({
+        title: "元件庫匯入預覽",
+        importKind: "library",
+        validCount: 0,
+        totalCount: 1,
+        errors: [{
           row: 1,
           message: error instanceof Error ? error.message : "無法解析元件庫檔案。",
         }],
-        undefined,
-        () => undefined,
-      );
+        onCommit: () => undefined,
+      });
     }
   };
 
   const handleBomPreviewFile = async (file: File) => {
     try {
       const result = parseBomRows(await readTabularFile(file));
-      previewImport(
-        "BOM 匯入預覽",
-        "bom",
-        result.valid.length,
-        result.valid.length + result.errors.length,
-        result.errors,
-        result.placementCount,
-        () => {
+      previewImport({
+        title: "BOM 匯入預覽",
+        importKind: "bom",
+        validCount: result.valid.length,
+        totalCount: result.valid.length + result.errors.length,
+        errors: result.errors,
+        placementCount: result.placementCount,
+        onCommit: () => {
           workspace.importBom(result.valid);
           toast({ title: "BOM 已匯入", description: `建立 ${result.placementCount} 筆待放置項目。` });
         },
-      );
+      });
     } catch (error) {
-      previewImport(
-        "BOM 匯入預覽",
-        "bom",
-        0,
-        0,
-        [{
+      previewImport({
+        title: "BOM 匯入預覽",
+        importKind: "bom",
+        validCount: 0,
+        totalCount: 1,
+        errors: [{
           row: 1,
           message: error instanceof Error ? error.message : "無法解析 BOM 檔案。",
         }],
-        0,
-        () => undefined,
-      );
+        placementCount: 0,
+        onCommit: () => undefined,
+      });
     }
   };
 
