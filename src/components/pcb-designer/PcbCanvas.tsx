@@ -401,6 +401,13 @@ export function PcbCanvas({
     : null;
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
+  const boardSurfaceColor = visibleLayer === "all"
+    ? project.board.background
+    : visibleLayer === "top"
+      ? project.board.layerColors.top
+      : visibleLayer === "bottom"
+        ? project.board.layerColors.bottom
+        : project.board.background;
   const placementPreview = useMemo(() => {
     if (!placementLibraryComponent || !placementPoint) return null;
     const component: PcbPlacedComponent = {
@@ -730,6 +737,9 @@ export function PcbCanvas({
         ref={svgRef}
         className="pcb-canvas"
         data-pcb-canvas
+        data-pcb-board-color={project.board.background}
+        data-pcb-top-color={project.board.layerColors.top}
+        data-pcb-bottom-color={project.board.layerColors.bottom}
         data-tool={workspace.tool}
         data-placement-active={placementLibraryComponent ? "true" : "false"}
         role="application"
@@ -797,12 +807,15 @@ export function PcbCanvas({
 
         <g data-layer="board">
           <rect
+            data-pcb-board-color={project.board.background}
+            data-pcb-top-color={project.board.layerColors.top}
+            data-pcb-bottom-color={project.board.layerColors.bottom}
             x="0"
             y="0"
             width={project.board.width}
             height={project.board.height}
             rx={Math.min(2, project.board.gridSize)}
-            fill={project.board.background}
+            fill={boardSurfaceColor}
             fillOpacity="0.76"
             stroke="#7ee8f5"
             strokeWidth={strokeWidth}

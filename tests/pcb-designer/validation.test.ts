@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidBoard, parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
+import {
+  isValidBoard,
+  normalizePcbSaveState,
+  parseProjectJson,
+} from "../../src/components/pcb-designer/core/validation.ts";
 import type { PcbProject } from "../../src/components/pcb-designer/types.ts";
 
 function validProject(): PcbProject {
@@ -10,7 +14,15 @@ function validProject(): PcbProject {
     name: "Validation test",
     description: "",
     status: "draft",
-    board: { width: 100, height: 80, gridSize: 1, showGrid: true, snapToGrid: true, background: "#000" },
+    board: {
+      width: 100,
+      height: 80,
+      gridSize: 1,
+      showGrid: true,
+      snapToGrid: true,
+      background: "#000",
+      layerColors: { top: "#114422", bottom: "#221144" },
+    },
     components: [{
       id: "library-u1", name: "IC", type: "IC", manufacturer: "Acme", partNumber: "U1",
       width: 4, height: 4, maxHeight: 1, color: "#fff", source: "custom", createdAt: "2026-01-01T00:00:00.000Z",
@@ -43,11 +55,85 @@ test("rejects unsupported schema versions and invalid board ranges", () => {
 
 test("uses the same strict board ranges for inspector edits and imported projects", () => {
   assert.equal(typeof isValidBoard, "function");
-  assert.equal(isValidBoard({ width: 20, height: 1000, gridSize: 0.1, showGrid: true, snapToGrid: true, background: "#000" }), true);
+  assert.equal(isValidBoard({
+    width: 20,
+    height: 1000,
+    gridSize: 0.1,
+    showGrid: true,
+    snapToGrid: true,
+    background: "#000",
+    layerColors: { top: "#114422", bottom: "#221144" },
+  }), true);
   assert.equal(isValidBoard({ width: 19.99, height: 80, gridSize: 1, showGrid: true, snapToGrid: true, background: "#000" }), false);
   assert.equal(isValidBoard({ width: 100, height: 1001, gridSize: 1, showGrid: true, snapToGrid: true, background: "#000" }), false);
   assert.equal(isValidBoard({ width: 100, height: 80, gridSize: 0.09, showGrid: true, snapToGrid: true, background: "#000" }), false);
   assert.equal(isValidBoard({ width: 100, height: 80, gridSize: 50.01, showGrid: true, snapToGrid: true, background: "#000" }), false);
+});
+
+test("accepts legacy boards without layer colors, but validates them when present", () => {
+  const legacyBoard = {
+    width: 100,
+    height: 80,
+    gridSize: 1,
+    showGrid: true,
+    snapToGrid: true,
+    background: "#000",
+  };
+
+  assert.equal(isValidBoard(legacyBoard), true);
+  assert.equal(isValidBoard({ ...legacyBoard, layerColors: { top: "", bottom: "#221144" } }), false);
+  assert.equal(isValidBoard({ ...legacyBoard, layerColors: { top: "#114422", bottom: "" } }), false);
+});
+
+test("normalizes legacy project boards with default top and bottom colors", () => {
+  const project = validProject();
+  const legacyProject = {
+    ...project,
+    board: {
+      width: project.board.width,
+      height: project.board.height,
+      gridSize: project.board.gridSize,
+      showGrid: project.board.showGrid,
+      snapToGrid: project.board.snapToGrid,
+      background: project.board.background,
+    },
+  };
+
+  const normalized = normalizePcbSaveState({
+    projects: [legacyProject as PcbProject],
+    templates: [],
+    library: [],
+    activeProjectId: legacyProject.id,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  assert.equal(normalized.projects[0].board.background, project.board.background);
+  assert.equal(typeof normalized.projects[0].board.layerColors.top, "string");
+  assert.equal(typeof normalized.projects[0].board.layerColors.bottom, "string");
+  assert.notEqual(normalized.projects[0].board.layerColors.top, normalized.projects[0].board.layerColors.bottom);
+});
+
+test("normalizes legacy project JSON before it reaches the editor", () => {
+  const project = validProject();
+  const legacyProject = {
+    ...project,
+    board: {
+      width: project.board.width,
+      height: project.board.height,
+      gridSize: project.board.gridSize,
+      showGrid: project.board.showGrid,
+      snapToGrid: project.board.snapToGrid,
+      background: project.board.background,
+    },
+  };
+
+  const parsed = parseProjectJson(legacyProject);
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.board.background, project.board.background);
+    assert.notEqual(parsed.value.board.layerColors.top, parsed.value.board.layerColors.bottom);
+  }
 });
 
 test("rejects non-finite dimensions and positions", () => {

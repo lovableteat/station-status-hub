@@ -1,3 +1,8 @@
+export interface PcbBoardLayerColors {
+  top: string;
+  bottom: string;
+}
+
 export interface PcbBoard {
   width: number;
   height: number;
@@ -5,6 +10,7 @@ export interface PcbBoard {
   showGrid: boolean;
   snapToGrid: boolean;
   background: string;
+  layerColors: PcbBoardLayerColors;
 }
 
 export interface PcbLibraryComponent {
