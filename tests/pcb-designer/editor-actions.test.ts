@@ -202,6 +202,47 @@ test("moves multiple unlocked components as one snapped transaction", () => {
   );
 });
 
+test("moves unlocked members while leaving locked members in a mixed group", () => {
+  const project = createBlankProject("Mixed locked group move");
+  const componentA = {
+    ...structuredClone(BUILT_IN_COMPONENTS[3]),
+    instanceId: "component-a",
+    reference: "R1",
+    x: 5,
+    y: 10,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+  };
+  const componentB = {
+    ...structuredClone(BUILT_IN_COMPONENTS[4]),
+    instanceId: "component-b",
+    reference: "C1",
+    x: 30,
+    y: 20,
+    rotation: 0,
+    layer: "top" as const,
+    locked: true,
+  };
+  project.components = [componentA, componentB];
+
+  const result = editorModule.moveComponents(
+    project,
+    ["component-a", "component-b"],
+    { x: 3, y: 2 },
+    false,
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.project.components.map(({ instanceId, x, y }: { instanceId: string; x: number; y: number }) => ({ instanceId, x, y })),
+    [
+      { instanceId: "component-a", x: 8, y: 12 },
+      { instanceId: "component-b", x: 30, y: 20 },
+    ],
+  );
+});
+
 test("releasing a component without moving it is a successful no-op", () => {
   const project = createBlankProject("No-op move");
   const placed = editorModule.placeLibraryComponent(project, BUILT_IN_COMPONENTS[3]);
