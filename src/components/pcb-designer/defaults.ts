@@ -190,4 +190,15 @@ export const BUILT_IN_TEMPLATES: PcbTemplate[] = [
       ],
     },
   ),
+  createTemplate(
+    "template-l10-design",
+    "L10 Design",
+    "L10",
+    "Built-in isolated starter layout for L10 boards.",
+    {
+      width: 120,
+      height: 90,
+      background: "#165e5a",
+    },
+  ),
 ];
